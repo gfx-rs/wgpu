@@ -2333,6 +2333,7 @@ dependencies = [
  "bytemuck",
  "cfg-if",
  "cfg_aliases",
+ "clap",
  "codespan-reporting",
  "diff",
  "env_logger",
@@ -2376,6 +2377,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "which 8.0.4",
 ]
 
 [[package]]

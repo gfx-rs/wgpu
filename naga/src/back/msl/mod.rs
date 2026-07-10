@@ -320,10 +320,7 @@ pub struct Options {
     /// where the developer guarantees non-zero divisors.
     pub emit_int_div_checks: bool,
     /// Options shared across spv/msl/hlsl backends.
-    #[cfg_attr(
-        any(feature = "serialize", feature = "deserialize"),
-        serde(flatten)
-    )]
+    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(flatten))]
     pub common: crate::back::CommonBackendOptions,
 }
 

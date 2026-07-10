@@ -140,7 +140,8 @@ impl Writer {
         self.io_f16_polyfills =
             super::f16_polyfill::F16IoPolyfill::new(options.use_storage_input_output_16);
         self.task_dispatch_limits = options.common.task_dispatch_limits;
-        self.mesh_shader_primitive_indices_clamp = options.common.mesh_shader_primitive_indices_clamp;
+        self.mesh_shader_primitive_indices_clamp =
+            options.common.mesh_shader_primitive_indices_clamp;
         Ok(())
     }
 

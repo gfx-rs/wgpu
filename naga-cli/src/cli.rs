@@ -257,7 +257,9 @@ fn parse_shader_model(s: &str) -> Result<naga::back::hlsl::ShaderModel, String> 
 }
 
 fn parse_spirv_version(s: &str) -> Result<(u8, u8), String> {
-    let dot = s.find('.').ok_or_else(|| "Missing dot separator".to_owned())?;
+    let dot = s
+        .find('.')
+        .ok_or_else(|| "Missing dot separator".to_owned())?;
     let major = s[..dot].parse::<u8>().map_err(|e| e.to_string())?;
     let minor = s[dot + 1..].parse::<u8>().map_err(|e| e.to_string())?;
     Ok((major, minor))
@@ -324,8 +326,12 @@ fn parse_task_limits(s: &str) -> Result<naga::back::TaskDispatchLimits, String> 
         .split_once(',')
         .ok_or_else(|| format!("No comma present for --task-limits value: {s}"))?;
     Ok(naga::back::TaskDispatchLimits {
-        max_mesh_workgroups_per_dim: x.parse().map_err(|e: core::num::ParseIntError| e.to_string())?,
-        max_mesh_workgroups_total: y.parse().map_err(|e: core::num::ParseIntError| e.to_string())?,
+        max_mesh_workgroups_per_dim: x
+            .parse()
+            .map_err(|e: core::num::ParseIntError| e.to_string())?,
+        max_mesh_workgroups_total: y
+            .parse()
+            .map_err(|e: core::num::ParseIntError| e.to_string())?,
     })
 }
 
@@ -350,16 +356,32 @@ mod tests {
         .unwrap();
         assert_eq!(args.validate, Some(1));
         assert_eq!(args.entry_point.as_deref(), Some("main"));
-        assert_eq!(args.index_bounds_check_policy, Some(BoundsCheckPolicyArg::Restrict));
-        assert_eq!(args.files, vec!["in.wgsl".to_string(), "out.spv".to_string()]);
+        assert_eq!(
+            args.index_bounds_check_policy,
+            Some(BoundsCheckPolicyArg::Restrict)
+        );
+        assert_eq!(
+            args.files,
+            vec!["in.wgsl".to_string(), "out.spv".to_string()]
+        );
     }
 
     #[test]
     fn parses_repeated_overrides() {
-        let args =
-            Args::try_parse_from(["naga", "--override", "a=1,b=2", "--override", "c=3", "x.wgsl"])
-                .unwrap();
-        let flat: Vec<_> = args.overrides.iter().flat_map(|o| o.pairs.clone()).collect();
+        let args = Args::try_parse_from([
+            "naga",
+            "--override",
+            "a=1,b=2",
+            "--override",
+            "c=3",
+            "x.wgsl",
+        ])
+        .unwrap();
+        let flat: Vec<_> = args
+            .overrides
+            .iter()
+            .flat_map(|o| o.pairs.clone())
+            .collect();
         assert_eq!(
             flat,
             vec![

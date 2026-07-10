@@ -7047,7 +7047,9 @@ template <typename A>
                     pipeline_options,
                     force_loop_bounding: options.common.force_loop_bounding,
                     emit_int_div_checks: options.emit_int_div_checks,
-                    ray_query_initialization_tracking: options.common.ray_query_initialization_tracking,
+                    ray_query_initialization_tracking: options
+                        .common
+                        .ray_query_initialization_tracking,
                 },
                 result_struct: None,
             };
@@ -8271,7 +8273,9 @@ template <typename A>
                     pipeline_options,
                     force_loop_bounding: options.common.force_loop_bounding,
                     emit_int_div_checks: options.emit_int_div_checks,
-                    ray_query_initialization_tracking: options.common.ray_query_initialization_tracking,
+                    ray_query_initialization_tracking: options
+                        .common
+                        .ray_query_initialization_tracking,
                 },
                 result_struct: if ep.stage == crate::ShaderStage::Task {
                     None
@@ -8439,7 +8443,8 @@ mod workgroup_mem_init {
             fun_info: &valid::FunctionInfo,
         ) -> bool {
             let is_task = ep.stage == crate::ShaderStage::Task;
-            options.zero_initialize_workgroup_memory != back::ZeroInitializeWorkgroupMemoryMode::None
+            options.zero_initialize_workgroup_memory
+                != back::ZeroInitializeWorkgroupMemoryMode::None
                 && ep.stage.compute_like()
                 && module.global_variables.iter().any(|(handle, var)| {
                     let is_right_address_space = var.space == crate::AddressSpace::WorkGroup

@@ -156,10 +156,7 @@ use core::fmt::Error as FmtError;
 
 use thiserror::Error;
 
-use crate::{
-    back,
-    ir, proc, Handle,
-};
+use crate::{back, ir, proc, Handle};
 
 /// Direct3D 12 binding information for a global variable.
 ///
@@ -551,10 +548,7 @@ pub struct Options {
     /// Should we restrict indexing of vectors, matrices and arrays?
     pub restrict_indexing: bool,
     /// Options shared across spv/msl/hlsl backends.
-    #[cfg_attr(
-        any(feature = "serialize", feature = "deserialize"),
-        serde(flatten)
-    )]
+    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(flatten))]
     pub common: back::CommonBackendOptions,
 }
 

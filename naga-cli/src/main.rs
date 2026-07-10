@@ -47,8 +47,8 @@ fn real_main(args: &cli::Args) -> anyhow::Result<bool> {
             .with_context(|| format!("Failed to parse config file: {path}"))?;
         config::apply_config(cfg, &mut params);
     } else if let Some(ref json) = args.config_json {
-        let cfg: config::Config = serde_json::from_str(json)
-            .context("Failed to parse --config-json value")?;
+        let cfg: config::Config =
+            serde_json::from_str(json).context("Failed to parse --config-json value")?;
         config::apply_config(cfg, &mut params);
     }
 

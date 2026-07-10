@@ -122,13 +122,18 @@ impl Reflection {
             })
             .collect();
 
-        Reflection { entry_points, resources, overrides }
+        Reflection {
+            entry_points,
+            resources,
+            overrides,
+        }
     }
 }
 
 /// Build a `Location` from a `naga::Span` against the source.
 fn location_from_span(span: naga::Span, source: &str) -> Option<Location> {
-    span.is_defined().then(|| Location::from(span.location(source)))
+    span.is_defined()
+        .then(|| Location::from(span.location(source)))
 }
 
 pub fn wgsl_parse_error_to_diagnostic(
@@ -251,8 +256,16 @@ mod tests {
             diagnostics: vec![Diagnostic {
                 severity: Severity::Error,
                 message: "boom".into(),
-                location: Some(Location { line: 2, column: 5, byte_offset: 12, length: 3 }),
-                labels: vec![Label { message: "here".into(), location: None }],
+                location: Some(Location {
+                    line: 2,
+                    column: 5,
+                    byte_offset: 12,
+                    length: 3,
+                }),
+                labels: vec![Label {
+                    message: "here".into(),
+                    location: None,
+                }],
                 notes: vec!["note".into()],
             }],
             reflection: None,
@@ -266,9 +279,17 @@ mod tests {
 
     #[test]
     fn location_from_source_location() {
-        let sl = naga::SourceLocation { line_number: 3, line_position: 7, offset: 20, length: 4 };
+        let sl = naga::SourceLocation {
+            line_number: 3,
+            line_position: 7,
+            offset: 20,
+            length: 4,
+        };
         let loc = Location::from(sl);
-        assert_eq!((loc.line, loc.column, loc.byte_offset, loc.length), (3, 7, 20, 4));
+        assert_eq!(
+            (loc.line, loc.column, loc.byte_offset, loc.length),
+            (3, 7, 20, 4)
+        );
     }
 
     #[test]
@@ -285,7 +306,13 @@ mod tests {
         assert_eq!(r.entry_points[0].name, "main");
         assert_eq!(r.entry_points[0].workgroup_size, [8, 4, 1]);
         assert_eq!(r.entry_points[0].stage, naga::ShaderStage::Compute);
-        assert!(r.resources.iter().any(|res| res.group == 0 && res.binding == 1));
-        assert!(r.overrides.iter().any(|o| o.name.as_deref() == Some("scale")));
+        assert!(r
+            .resources
+            .iter()
+            .any(|res| res.group == 0 && res.binding == 1));
+        assert!(r
+            .overrides
+            .iter()
+            .any(|o| o.name.as_deref() == Some("scale")));
     }
 }

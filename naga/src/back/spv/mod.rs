@@ -1069,10 +1069,7 @@ pub struct Options<'a> {
     pub flags: WriterFlags,
 
     /// Options shared across spv/msl/hlsl backends.
-    #[cfg_attr(
-        any(feature = "serialize", feature = "deserialize"),
-        serde(flatten)
-    )]
+    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(flatten))]
     pub common: crate::back::CommonBackendOptions,
 
     /// Map of resources to information about the binding.
@@ -1277,8 +1274,7 @@ mod serde_tests {
     #[test]
     fn spv_options_capabilities_round_trip() {
         // capabilities must survive a serialize/deserialize round-trip.
-        let caps: crate::FastHashSet<Capability> =
-            [Capability::Shader].into_iter().collect();
+        let caps: crate::FastHashSet<Capability> = [Capability::Shader].into_iter().collect();
         let opts = Options {
             capabilities: Some(caps.clone()),
             ..Options::default()
@@ -1301,6 +1297,9 @@ mod schema_tests {
         let json = serde_json::to_string(&schema).unwrap();
         // debug_info is skipped; lang_version must appear.
         assert!(json.contains("lang_version"), "schema: {json}");
-        assert!(!json.contains("debug_info"), "debug_info must be skipped: {json}");
+        assert!(
+            !json.contains("debug_info"),
+            "debug_info must be skipped: {json}"
+        );
     }
 }

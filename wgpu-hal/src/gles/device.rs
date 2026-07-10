@@ -1377,7 +1377,8 @@ impl crate::Device for super::Device {
                 version: self.shared.shading_language_version,
                 writer_flags,
                 binding_map,
-                zero_initialize_workgroup_memory: naga::back::ZeroInitializeWorkgroupMemoryMode::Polyfill,
+                zero_initialize_workgroup_memory:
+                    naga::back::ZeroInitializeWorkgroupMemoryMode::Polyfill,
             },
         })
     }

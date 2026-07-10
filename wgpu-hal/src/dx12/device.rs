@@ -307,11 +307,12 @@ impl super::Device {
         let mut temp_options;
         let naga_options = if needs_temp_options {
             temp_options = layout.naga_options.clone();
-            temp_options.zero_initialize_workgroup_memory = if stage.zero_initialize_workgroup_memory {
-                naga::back::ZeroInitializeWorkgroupMemoryMode::Polyfill
-            } else {
-                naga::back::ZeroInitializeWorkgroupMemoryMode::None
-            };
+            temp_options.zero_initialize_workgroup_memory =
+                if stage.zero_initialize_workgroup_memory {
+                    naga::back::ZeroInitializeWorkgroupMemoryMode::Polyfill
+                } else {
+                    naga::back::ZeroInitializeWorkgroupMemoryMode::None
+                };
             temp_options.restrict_indexing = stage.module.runtime_checks.bounds_checks;
             temp_options.common.force_loop_bounding =
                 stage.module.runtime_checks.force_loop_bounding;
@@ -1490,7 +1491,8 @@ impl crate::Device for super::Device {
                 special_constants_binding,
                 immediates_target,
                 dynamic_storage_buffer_offsets_targets,
-                zero_initialize_workgroup_memory: naga::back::ZeroInitializeWorkgroupMemoryMode::Polyfill,
+                zero_initialize_workgroup_memory:
+                    naga::back::ZeroInitializeWorkgroupMemoryMode::Polyfill,
                 restrict_indexing: true,
                 sampler_heap_target,
                 sampler_buffer_binding_map,

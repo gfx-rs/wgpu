@@ -128,13 +128,9 @@ mod tests {
 
     #[test]
     fn buffer_policy_defaults_to_index_policy() {
-        let args = Args::try_parse_from([
-            "naga",
-            "--index-bounds-check-policy",
-            "restrict",
-            "in.wgsl",
-        ])
-        .unwrap();
+        let args =
+            Args::try_parse_from(["naga", "--index-bounds-check-policy", "restrict", "in.wgsl"])
+                .unwrap();
         let params = build_parameters(&args).unwrap();
         assert_eq!(
             params.bounds_check_policies.buffer,
@@ -169,9 +165,24 @@ mod tests {
         let args_default = Args::try_parse_from(["naga", "in.wgsl"]).unwrap();
         assert!(args_default.validate_mesh_output);
         let params_default = build_parameters(&args_default).unwrap();
-        assert!(params_default.spv_out.common.mesh_shader_primitive_indices_clamp);
-        assert!(params_default.msl.common.mesh_shader_primitive_indices_clamp);
-        assert!(params_default.hlsl.common.mesh_shader_primitive_indices_clamp);
+        assert!(
+            params_default
+                .spv_out
+                .common
+                .mesh_shader_primitive_indices_clamp
+        );
+        assert!(
+            params_default
+                .msl
+                .common
+                .mesh_shader_primitive_indices_clamp
+        );
+        assert!(
+            params_default
+                .hlsl
+                .common
+                .mesh_shader_primitive_indices_clamp
+        );
 
         // explicit true also works
         let args_true =
