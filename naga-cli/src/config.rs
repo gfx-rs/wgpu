@@ -98,6 +98,12 @@ pub fn apply_config(config: Config, params: &mut crate::params::Parameters<'stat
     // SPIR-V frontend options.
     if let Some(spv_in) = config.spv_in {
         params.spv_in = spv_in;
+        // If keep_coordinate_space was also set in the config, apply it on top of the
+        // wholesale spv_in replacement (mirrors build_parameters' relationship:
+        // adjust_coordinate_space = !keep_coordinate_space).
+        if config.keep_coordinate_space.is_some() {
+            params.spv_in.adjust_coordinate_space = !keep_coordinate_space;
+        }
     } else {
         // Mirror build_parameters: spv_in.adjust_coordinate_space follows keep_coordinate_space.
         params.spv_in.adjust_coordinate_space = !keep_coordinate_space;
