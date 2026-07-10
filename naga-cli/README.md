@@ -116,10 +116,10 @@ To see every configurable key and its type, print the JSON Schema:
 naga --print-config-schema
 ```
 
-> **Note:** `--print-config-schema` omits a few fields that cannot be expressed in JSON Schema —
-> specifically the SPIR-V capabilities set (`spv_out.capabilities`) and the GLSL preprocessor
-> defines map (`defines`) — but those fields are still accepted by `--config` and
-> `--config-json`.
+> **Note:** `--print-config-schema` omits one field that cannot be expressed in JSON Schema —
+> the SPIR-V capabilities set (`spv_out.capabilities`, type `FastHashSet<spirv::Capability>`) —
+> but it is still accepted by `--config` and `--config-json`. All other fields, including the
+> top-level `defines` map, are present in the schema.
 
 ---
 
@@ -133,7 +133,7 @@ editor integrations, CI pipelines, and tooling that needs to inspect entry point
 naga examples/triangle.wgsl --format json
 ```
 
-Real output (trimmed here for readability, but the full document is printed to stdout):
+Real output (the full document is printed to stdout):
 
 ```json
 {
@@ -206,22 +206,31 @@ DXIL binary to `<hlsl-stem>.<entry-point-name>.dxil`. For example, a shader with
   per-backend `spv_out.flags` bitmask. Setting `ADJUST_COORDINATE_SPACE` directly in
   `spv_out.flags` will be overwritten by the top-level flag.
 
-- **Task/mesh shader limits.** `--task-limits` and `--validate-mesh-output` apply to all
-  applicable backends. To set these via config, use the per-backend `common` fields:
+- **Task/mesh shader limits.** `--task-limits` and `--validate-mesh-output` are convenience
+  flags that set options across all applicable backends. The underlying config keys are flat
+  fields directly under each backend (there is no `common` sub-object in the JSON):
+  - `--task-limits` sets `task_dispatch_limits`, which is a struct with two required fields:
+    `max_mesh_workgroups_per_dim` (u32) and `max_mesh_workgroups_total` (u32).
+  - `--validate-mesh-output` controls `mesh_shader_primitive_indices_clamp` (bool).
+
+  Example (set these directly under the backend key):
   ```json
   {
     "spv_out": {
-      "task_shader_dispatch_limits": [8, 8, 8],
-      "validate_mesh_output": false
+      "task_dispatch_limits": {
+        "max_mesh_workgroups_per_dim": 65535,
+        "max_mesh_workgroups_total": 65535
+      },
+      "mesh_shader_primitive_indices_clamp": true
     }
   }
   ```
 
 - **`--print-config-schema` omissions.** The SPIR-V capabilities set
-  (`spv_out.capabilities`, type `FastHashSet<spirv::Capability>`) and the GLSL defines map
-  (`defines`, type `BTreeMap<String, String>`) are excluded from the printed schema because
-  their types lack a `JsonSchema` impl. Both are fully accepted by `--config` and
-  `--config-json`.
+  (`spv_out.capabilities`, type `FastHashSet<spirv::Capability>`) is excluded from the
+  printed schema because its type lacks a `JsonSchema` impl. It is still accepted by `--config`
+  and `--config-json`. The top-level `defines` map and all other fields are present in the
+  schema.
 
 - **JSON diagnostics detail.** In `--format json` output, every diagnostic has severity
   `"error"` or `"warning"`. The `notes` array may be empty for validation errors. SPIR-V
