@@ -280,11 +280,20 @@ impl<'a> BindingParser<'a> {
 
 /// Configuration for the whole parser run.
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
 pub struct Options {
     /// Controls whether the parser should parse doc comments.
     pub parse_doc_comments: bool,
     /// Capabilities to enable during parsing.
     pub capabilities: crate::valid::Capabilities,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Options {
@@ -2419,4 +2428,27 @@ impl Parser {
 
 const fn is_start_of_compound_statement<'a>(token: Token<'a>) -> bool {
     matches!(token, Token::Attribute | Token::Paren('{'))
+}
+
+#[cfg(all(test, feature = "serialize", feature = "deserialize"))]
+mod serde_tests {
+    use super::Options;
+    use crate::valid::Capabilities;
+
+    #[test]
+    fn empty_object_yields_capabilities_all() {
+        // serde(default) falls back to Options::new() which sets capabilities = Capabilities::all().
+        let opts: Options = serde_json::from_str("{}").unwrap();
+        assert_eq!(opts.capabilities, Capabilities::all());
+        assert_eq!(opts.parse_doc_comments, false);
+    }
+
+    #[test]
+    fn options_round_trip() {
+        let original = Options::new();
+        let json = serde_json::to_string(&original).unwrap();
+        let back: Options = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.capabilities, original.capabilities);
+        assert_eq!(back.parse_doc_comments, original.parse_doc_comments);
+    }
 }

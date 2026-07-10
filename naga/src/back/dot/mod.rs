@@ -22,6 +22,9 @@ use crate::{
 
 /// Configuration options for the dot backend
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
 pub struct Options {
     /// Only emit function bodies
     pub cfg_only: bool,
