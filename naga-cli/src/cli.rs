@@ -45,8 +45,9 @@ OPTIONS: FLAGS vs CONFIG
   --config-json <string>); the two are mutually exclusive — passing any option flag
   (including --compact, -g, --spirv-val, --spirv-opt, --dxc) alongside --config is an error.
   Each of those is a key in the config JSON instead. Run `naga --print-config-schema` to see
-  every config key and its type. Only I/O (the input/output paths, --before-compaction) and
-  --format are orthogonal and compose with either mode.
+  every config key and its type. Only I/O — where data comes from and goes to — composes with
+  either mode: the input/output paths, --input-kind, --shader-stage, --output-kind,
+  --before-compaction, and --format. Everything else is an option (a config key).
 
 STRUCTURED OUTPUT
   --format json emits one JSON document on stdout with `diagnostics`
@@ -115,12 +116,14 @@ pub struct Args {
     #[arg(long, value_parser = parse_spirv_version, group = "options")]
     pub spirv_version: Option<(u8, u8)>,
 
-    /// Shader stage; derived from the file extension if unspecified.
-    #[arg(long, group = "options")]
+    /// Shader stage; derived from the file extension if unspecified. Selects the input
+    /// stage for GLSL (an input concern, so it composes with `--config`).
+    #[arg(long)]
     pub shader_stage: Option<ShaderStageArg>,
 
-    /// Kind of input: `glsl`, `wgsl`, `spv`, or `bin`.
-    #[arg(long, group = "options")]
+    /// Kind of input: `glsl`, `wgsl`, `spv`, or `bin` (overrides extension detection;
+    /// required for stdin `-`). An input concern, so it composes with `--config`.
+    #[arg(long)]
     pub input_kind: Option<InputKind>,
 
     /// Output format when writing to stdout (output path `-`), which has no extension

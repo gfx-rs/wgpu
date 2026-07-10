@@ -739,6 +739,33 @@ fn stdin_requires_input_kind() {
 }
 
 #[test]
+fn stdin_input_composes_with_config() {
+    // --input-kind / --shader-stage are I/O concerns, so they must compose with --config
+    // (needed to read stdin at all). This must NOT be a clap conflict.
+    use std::io::Write;
+    let mut child = naga()
+        .args(["-", "--input-kind", "wgsl", "--config-json", "{}"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"@compute @workgroup_size(1) fn main() {}")
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("cannot be used with"));
+}
+
+#[test]
 fn generates_debug_symbols_spv() {
     let dir = std::env::temp_dir().join("naga_cli_phase1_debug_spv");
     std::fs::create_dir_all(&dir).unwrap();
