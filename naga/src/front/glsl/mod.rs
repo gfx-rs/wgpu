@@ -49,6 +49,8 @@ type Result<T> = core::result::Result<T, Error>;
 /// Options::from(ShaderStage::Vertex);
 /// ```
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Options {
     /// The shader stage in the pipeline.
     pub stage: ShaderStage,
@@ -230,5 +232,20 @@ impl Frontend {
     /// current shader, the previous shader or both.
     pub const fn metadata(&self) -> &ShaderMetadata {
         &self.meta
+    }
+}
+
+#[cfg(all(test, feature = "serialize", feature = "deserialize"))]
+mod serde_tests {
+    use super::Options;
+    use crate::ShaderStage;
+
+    #[test]
+    fn options_round_trip() {
+        let original = Options::from(ShaderStage::Vertex);
+        let json = serde_json::to_string(&original).unwrap();
+        let back: Options = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.stage, ShaderStage::Vertex);
+        assert!(back.defines.is_empty());
     }
 }
