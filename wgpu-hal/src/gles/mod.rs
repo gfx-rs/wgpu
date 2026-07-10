@@ -1,7 +1,9 @@
 /*!
 # OpenGL ES3 API (aka GLES3).
 
-Designed to work on Linux and Android, with context provided by EGL.
+Designed to work on platforms with context provided by EGL or WGL, including
+Linux and Android via EGL, and Windows via WGL by default or ANGLE/EGL with
+`cfg(windows_angle)`.
 
 ## Texture views
 
@@ -79,39 +81,33 @@ we don't bother with that combination.
 
 */
 
-///cbindgen:ignore
-#[cfg(not(any(windows, webgl)))]
-mod egl;
-#[cfg(Emscripten)]
-mod emscripten;
-#[cfg(webgl)]
-mod web;
-#[cfg(windows)]
-mod wgl;
-
 mod adapter;
 mod command;
 mod conv;
 mod device;
+///cbindgen:ignore
+#[cfg(all(not(webgl), any(not(windows), windows_angle)))]
+mod egl;
+#[cfg(all(not(webgl), any(not(windows), windows_angle)))]
+pub use self::egl::{AdapterContext, AdapterContextLock, Instance, Surface};
+
+#[cfg(Emscripten)]
+mod emscripten;
+
 mod fence;
 mod queue;
 
+#[cfg(webgl)]
+mod web;
+#[cfg(webgl)]
+pub use self::web::{AdapterContext, Instance, Surface};
+
+#[cfg(all(windows, not(webgl), not(windows_angle)))]
+mod wgl;
+#[cfg(all(windows, not(webgl), not(windows_angle)))]
+pub use self::wgl::{AdapterContext, AdapterContextLock, Instance, Surface};
+
 pub use fence::Fence;
-
-#[cfg(not(any(windows, webgl)))]
-pub use self::egl::{AdapterContext, AdapterContextLock};
-#[cfg(not(any(windows, webgl)))]
-pub use self::egl::{Instance, Surface};
-
-#[cfg(webgl)]
-pub use self::web::AdapterContext;
-#[cfg(webgl)]
-pub use self::web::{Instance, Surface};
-
-#[cfg(windows)]
-use self::wgl::AdapterContext;
-#[cfg(windows)]
-pub use self::wgl::{Instance, Surface};
 
 use alloc::{boxed::Box, string::String, string::ToString as _, sync::Arc, vec::Vec};
 use core::{
@@ -168,6 +164,7 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type RayTracingPipeline = RayTracingPipeline;
 }
 
 crate::impl_dyn_resource!(
@@ -187,6 +184,7 @@ crate::impl_dyn_resource!(
     QuerySet,
     Queue,
     RenderPipeline,
+    RayTracingPipeline,
     Sampler,
     ShaderModule,
     Surface,
@@ -234,6 +232,19 @@ bitflags::bitflags! {
         const FULLY_FEATURED_INSTANCING = 1 << 16;
         /// Supports direct multisampled rendering to a texture without needing a resolve texture.
         const MULTISAMPLED_RENDER_TO_TEXTURE = 1 << 17;
+        /// Supports norm16 sized internal formats as filterable sampled
+        /// textures, with UNORM variants also color-renderable. SNORM
+        /// renderability is gated on `TEXTURE_FORMAT_SNORM16_RENDERABLE`.
+        const TEXTURE_FORMAT_NORM16 = 1 << 18;
+        /// Supports SNORM 16-bit formats as color attachments. Requires
+        /// `GL_EXT_render_snorm` (in addition to `GL_EXT_texture_norm16`
+        /// on GLES) - desktop GL alone only "optionally" renders SNORM 16.
+        const TEXTURE_FORMAT_SNORM16_RENDERABLE = 1 << 19;
+        /// Supports norm16 sized internal formats as image-load/store targets.
+        /// Desktop GL >= 4.2 (core image-format list) or pre-4.2 with
+        /// `GL_ARB_shader_image_load_store`; GLES needs `GL_NV_image_formats`
+        /// (which itself depends on `GL_EXT_texture_norm16`).
+        const TEXTURE_FORMAT_NORM16_STORAGE = 1 << 20;
     }
 }
 
@@ -288,10 +299,41 @@ struct AdapterShared {
     max_msaa_samples: i32,
 }
 
+impl fmt::Debug for AdapterShared {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {
+            context: _, // may or may not implement Debug depending on platform
+            private_caps,
+            features,
+            limits,
+            workarounds,
+            options,
+            shading_language_version,
+            next_shader_id,
+            program_cache: _,
+            es,
+            max_msaa_samples,
+        } = self;
+        f.debug_struct("AdapterShared")
+            .field("private_caps", private_caps)
+            .field("features", features)
+            .field("limits", limits)
+            .field("workarounds", workarounds)
+            .field("options", options)
+            .field("shading_language_version", shading_language_version)
+            .field("next_shader_id", next_shader_id)
+            .field("es", es)
+            .field("max_msaa_samples", max_msaa_samples)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug)]
 pub struct Adapter {
     shared: Arc<AdapterShared>,
 }
 
+#[derive(Debug)]
 pub struct Device {
     shared: Arc<AdapterShared>,
     main_vao: glow::VertexArray,
@@ -307,11 +349,13 @@ impl Drop for Device {
     }
 }
 
+#[derive(Debug)]
 pub struct ShaderClearProgram {
     pub program: glow::Program,
     pub color_uniform_location: glow::UniformLocation,
 }
 
+#[derive(Debug)]
 pub struct Queue {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
@@ -348,6 +392,12 @@ pub struct Buffer {
     ///
     /// If locked concurrently with the GL context, the GL context should be locked first.
     map_state: Arc<MaybeMutex<BufferMapState>>,
+    /// Set when the buffer wraps an externally-owned GL name created via
+    /// [`Device::buffer_from_raw`](crate::gles::Device::buffer_from_raw).
+    ///
+    /// `Buffer` is `Clone`, so the guard is shared via `Arc`
+    /// and only fires its callback once every clone is dropped.
+    drop_guard: Option<Arc<crate::DropGuard>>,
 }
 
 #[derive(Clone, Debug)]
@@ -669,7 +719,7 @@ struct VertexBufferDesc {
 #[derive(Clone, Debug)]
 struct ImmediateDesc {
     location: glow::UniformLocation,
-    ty: naga::TypeInner,
+    ty: nt::glsl::GlslUniformType,
     offset: u32,
     size_bytes: u32,
 }
@@ -722,7 +772,7 @@ struct ColorTargetDesc {
     blend: Option<BlendDesc>,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct ProgramStage {
     naga_stage: naga::ShaderStage,
     shader_id: ShaderId,
@@ -731,7 +781,7 @@ struct ProgramStage {
     constant_hash: Vec<u8>,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct ProgramCacheKey {
     stages: ArrayVec<ProgramStage, 3>,
     group_to_binding_to_slot: Box<[Option<Box<[u8]>>]>,
@@ -763,6 +813,11 @@ pub struct ComputePipeline {
 }
 
 impl crate::DynComputePipeline for ComputePipeline {}
+
+#[derive(Debug)]
+pub struct RayTracingPipeline {}
+
+impl crate::DynRayTracingPipeline for RayTracingPipeline {}
 
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);

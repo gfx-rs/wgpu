@@ -525,6 +525,9 @@ pub(crate) struct ConcretizationFailedError {
 impl<'a> Error<'a> {
     #[cold]
     #[inline(never)]
+    // This function is not recursive, so it can exceed our conservatively-set
+    // `stack-frame-limit` without causing problems.
+    #[allow(clippy::large_stack_frames)]
     pub(crate) fn as_parse_error(&self, source: &'a str) -> ParseError {
         match *self {
             Error::Unexpected(unexpected_span, expected) => {

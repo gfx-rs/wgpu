@@ -419,9 +419,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
             list.set_name(label)?;
         }
 
-        self.list = Some(list);
+        // Ensure clean state even if the last encoding did not complete normally.
         self.temp.clear();
         self.pass.clear();
+        self.end_of_pass_timer_query = None;
+
+        self.list = Some(list);
         Ok(())
     }
     unsafe fn discard_encoding(&mut self) {
@@ -1454,30 +1457,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        if self
-            .pass
-            .layout
-            .special_constants
-            .as_ref()
-            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
-            .is_some()
-        {
-            self.update_root_elements();
-        } else {
-            self.prepare_dispatch([0; 3]);
-        }
-
+        self.prepare_dispatch([0; 3]);
         let cmd_list6: Direct3D12::ID3D12GraphicsCommandList6 =
             self.list.as_ref().unwrap().cast().unwrap();
-        let Some(cmd_signature) = &self
-            .pass
-            .layout
-            .special_constants
-            .as_ref()
-            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
-            .unwrap_or_else(|| &self.shared.cmd_signatures)
-            .draw_mesh
-        else {
+        let Some(cmd_signature) = &self.shared.cmd_signatures.draw_mesh else {
             panic!("Feature `MESH_SHADING` not enabled");
         };
         unsafe {
@@ -1856,5 +1839,30 @@ impl crate::CommandEncoder for super::CommandEncoder {
         _command_buffers: &[&super::CommandBuffer],
         _dependencies: &[&super::AccelerationStructure],
     ) {
+    }
+
+    unsafe fn begin_ray_tracing_pass(&mut self, _desc: &crate::RayTracingPassDescriptor) {
+        unreachable!("Ray tracing pipelines not supported")
+    }
+
+    unsafe fn end_ray_tracing_pass(&mut self) {
+        unreachable!("Ray tracing pipelines not supported")
+    }
+
+    unsafe fn set_ray_tracing_pipeline(
+        &mut self,
+        _pipeline: &<Self::A as crate::Api>::RayTracingPipeline,
+    ) {
+        unreachable!("Ray tracing pipelines not supported")
+    }
+
+    unsafe fn trace_rays(
+        &mut self,
+        _count: [u32; 3],
+        _ray_generation_group_data: crate::PipelineGroupData<super::Buffer>,
+        _miss_group_data: crate::PipelineGroupData<super::Buffer>,
+        _intersection_group_data: crate::PipelineGroupData<super::Buffer>,
+    ) {
+        unreachable!("Ray tracing pipelines not supported")
     }
 }

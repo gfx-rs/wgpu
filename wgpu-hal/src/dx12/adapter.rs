@@ -207,7 +207,7 @@ impl super::Adapter {
             driver_info: String::new(),
             subgroup_min_size: features1.WaveLaneCountMin,
             subgroup_max_size: features1.WaveLaneCountMax,
-            transient_saves_memory: false,
+            transient_saves_memory: Some(false),
             limit_bucket: None,
         };
 
@@ -918,7 +918,7 @@ impl super::Adapter {
                     // 65536
                     max_uniform_buffer_binding_size:
                         Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT as u64 * 16,
-                    // 254
+                    // 256
                     min_uniform_buffer_offset_alignment:
                         Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
                     // 16
@@ -1013,9 +1013,14 @@ impl super::Adapter {
                         0
                     },
                     max_acceleration_structures_per_shader_stage,
+                    max_buffers_and_acceleration_structures_per_shader_stage: u32::MAX,
                     max_binding_array_acceleration_structure_elements_per_shader_stage:
                         max_acceleration_structures_per_shader_stage,
                     max_multiview_view_count,
+
+                    // not yet implemented
+                    max_ray_dispatch_count: 0,
+                    max_ray_recursion_depth: 0,
                 }),
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
@@ -1035,6 +1040,10 @@ impl super::Adapter {
                     .unwrap(),
                     ray_tracing_scratch_buffer_alignment:
                         Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
+                    // Not yet implemented
+                    ray_tracing_pipeline_group_data_size: 0,
+                    ray_tracing_pipeline_group_data_alignment: 0,
+                    ray_tracing_pipeline_data_offset_alignment: 0,
                 },
                 downlevel,
                 cooperative_matrix_properties: Vec::new(),
@@ -1310,14 +1319,41 @@ impl crate::Adapter for super::Adapter {
         }
 
         Some(crate::SurfaceCapabilities {
-            formats: vec![
+            // `Surface::configure` applies the requested color space with
+            // `IDXGISwapChain3::SetColorSpace1`. fp16 buffers keep DXGI's
+            // scRGB interpretation (`DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709`)
+            // and `Rgb10a2Unorm` additionally supports BT.2100 PQ (HDR10).
+            //
+            // These color spaces are advertised unconditionally, not gated on
+            // whether the output is currently in HDR mode: Windows always
+            // composites in scRGB and tone-maps PQ down to an SDR output, so the
+            // color space is configurable regardless, and `CheckColorSpaceSupport`
+            // returning false does not mean it won't present. Whether HDR is
+            // actually *visible* is a separate, live question (the upcoming
+            // display-HDR query, #9739), not a configuration gate. Display-P3 and
+            // HLG are never reported: DXGI has no RGB HLG swapchain color space,
+            // and P3 isn't a DXGI swapchain color space.
+            formats: [
                 wgt::TextureFormat::Bgra8UnormSrgb,
                 wgt::TextureFormat::Bgra8Unorm,
                 wgt::TextureFormat::Rgba8UnormSrgb,
                 wgt::TextureFormat::Rgba8Unorm,
                 wgt::TextureFormat::Rgb10a2Unorm,
                 wgt::TextureFormat::Rgba16Float,
-            ],
+            ]
+            .map(|format| wgt::SurfaceFormatCapabilities {
+                format,
+                color_spaces: match format {
+                    wgt::TextureFormat::Rgba16Float => {
+                        wgt::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR
+                    }
+                    wgt::TextureFormat::Rgb10a2Unorm => {
+                        wgt::SurfaceColorSpaces::SRGB | wgt::SurfaceColorSpaces::BT2100_PQ
+                    }
+                    _ => wgt::SurfaceColorSpaces::SRGB,
+                },
+            })
+            .to_vec(),
             // See https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgidevice1-setmaximumframelatency
             maximum_frame_latency: 1..=16,
             current_extent,
@@ -1339,6 +1375,13 @@ impl crate::Adapter for super::Adapter {
                 ],
             },
         })
+    }
+
+    unsafe fn surface_display_hdr_info(
+        &self,
+        surface: &super::Surface,
+    ) -> Option<wgt::DisplayHdrInfo> {
+        surface.hdr_source.as_ref()?.display_hdr_info()
     }
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {

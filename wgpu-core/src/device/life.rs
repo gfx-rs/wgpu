@@ -9,7 +9,7 @@ use crate::{
         DeviceError,
     },
     ray_tracing::BlasCompactReadyPendingClosure,
-    resource::{Blas, Buffer, Texture, Trackable},
+    resource::{Blas, Buffer, QuerySet, Texture, Trackable},
     snatch::SnatchGuard,
     SubmissionIndex,
 };
@@ -115,6 +115,16 @@ impl ActiveSubmission {
             }
 
             if encoder.pending_blas_s.contains_key(&blas.tracker_index()) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn contains_query_set(&self, query_set: &QuerySet) -> bool {
+        for encoder in &self.encoders {
+            if encoder.trackers.query_sets.contains(query_set) {
                 return true;
             }
         }
@@ -283,6 +293,23 @@ impl LifetimeTracker {
         })
     }
 
+    /// Returns the submission index of the most recent submission that uses the
+    /// given query set.
+    pub fn get_query_set_latest_submission_index(
+        &self,
+        query_set: &QuerySet,
+    ) -> Option<SubmissionIndex> {
+        // We iterate in reverse order, so that we can bail out early as soon
+        // as we find a hit.
+        self.active.iter().rev().find_map(|submission| {
+            if submission.contains_query_set(query_set) {
+                Some(submission.index)
+            } else {
+                None
+            }
+        })
+    }
+
     /// Sort out the consequences of completed submissions.
     ///
     /// Assume that all submissions up through `last_done` have completed.
@@ -304,13 +331,8 @@ impl LifetimeTracker {
     ) -> SmallVec<[SubmittedWorkDoneClosure; 1]> {
         profiling::scope!("triage_submissions");
 
-        //TODO: enable when `is_sorted_by_key` is stable
-        //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
-        let done_count = self
-            .active
-            .iter()
-            .position(|a| a.index > last_done)
-            .unwrap_or(self.active.len());
+        debug_assert!(self.active.is_sorted_by_key(|a| a.index));
+        let done_count = self.active.partition_point(|a| a.index <= last_done);
 
         let mut work_done_closures: SmallVec<_> = self.work_done_closures.drain(..).collect();
         for a in self.active.drain(..done_count) {

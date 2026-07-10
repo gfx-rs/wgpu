@@ -404,10 +404,15 @@ impl super::Instance {
                 .dpy(dpy);
 
             unsafe { xlib_loader.create_xlib_surface(&info, None) }
-                .expect("XlibSurface::create_xlib_surface() failed")
-        };
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(
+                String::from("XlibSurface::create_xlib_surface() failed"),
+                err,
+            )
+        })?;
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
 
     fn create_surface_from_xcb(
@@ -429,10 +434,15 @@ impl super::Instance {
                 .connection(connection);
 
             unsafe { xcb_loader.create_xcb_surface(&info, None) }
-                .expect("XcbSurface::create_xcb_surface() failed")
-        };
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(
+                String::from("XcbSurface::create_xcb_surface() failed"),
+                err,
+            )
+        })?;
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
 
     fn create_surface_from_wayland(
@@ -454,10 +464,13 @@ impl super::Instance {
                 .display(display)
                 .surface(surface);
 
-            unsafe { w_loader.create_wayland_surface(&info, None) }.expect("WaylandSurface failed")
-        };
+            unsafe { w_loader.create_wayland_surface(&info, None) }
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(String::from("WaylandSurface failed"), err)
+        })?;
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
 
     fn create_surface_android(
@@ -477,10 +490,13 @@ impl super::Instance {
                 .flags(vk::AndroidSurfaceCreateFlagsKHR::empty())
                 .window(window);
 
-            unsafe { a_loader.create_android_surface(&info, None) }.expect("AndroidSurface failed")
-        };
+            unsafe { a_loader.create_android_surface(&info, None) }
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(String::from("AndroidSurface failed"), err)
+        })?;
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
 
     fn create_surface_from_hwnd(
@@ -501,14 +517,21 @@ impl super::Instance {
                 .hwnd(hwnd);
             let win32_loader =
                 khr::win32_surface::Instance::new(&self.shared.entry, &self.shared.raw);
-            unsafe {
-                win32_loader
-                    .create_win32_surface(&info, None)
-                    .expect("Unable to create Win32 surface")
-            }
-        };
+            unsafe { win32_loader.create_win32_surface(&info, None) }
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(String::from("Unable to create Win32 surface"), err)
+        })?;
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        // Wrap ash's `isize` `HWND` in `WindowHandle`; on Windows the
+        // `NativeSurface` builds its DXGI HDR source from it.
+        #[cfg(windows)]
+        let window_handle = Some(crate::vulkan::swapchain::WindowHandle(
+            windows::Win32::Foundation::HWND(hwnd as *mut c_void),
+        ));
+        #[cfg(not(windows))]
+        let window_handle: Option<crate::vulkan::swapchain::WindowHandle> = None;
+        Ok(self.create_surface_from_vk_surface_khr(surface, window_handle))
     }
 
     #[cfg(target_vendor = "apple")]
@@ -534,15 +557,16 @@ impl super::Instance {
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
 
     pub(super) fn create_surface_from_vk_surface_khr(
         &self,
         surface: vk::SurfaceKHR,
+        hwnd: Option<crate::vulkan::swapchain::WindowHandle>,
     ) -> super::Surface {
         let native_surface =
-            crate::vulkan::swapchain::NativeSurface::from_vk_surface_khr(self, surface);
+            crate::vulkan::swapchain::NativeSurface::from_vk_surface_khr(self, surface, hwnd);
 
         super::Surface {
             swapchain: RwLock::new(None),
@@ -566,7 +590,13 @@ impl super::Instance {
 
         let entry = unsafe {
             profiling::scope!("Load vk library");
-            ash::Entry::load()
+            // ohos support is already fixed on ash main, but it's unclear when
+            // a new release can happen.
+            #[cfg(target_env = "ohos")]
+            let loaded = ash::Entry::load_from("libvulkan.so");
+            #[cfg(not(target_env = "ohos"))]
+            let loaded = ash::Entry::load();
+            loaded
         }
         .map_err(|err| {
             crate::InstanceError::with_source(String::from("missing Vulkan entry points"), err)

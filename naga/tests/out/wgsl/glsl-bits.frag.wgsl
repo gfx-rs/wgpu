@@ -15,9 +15,9 @@ fn main_1() {
     let _e30 = f4_;
     u = pack4x8unorm(_e30);
     let _e32 = f2_;
-    u = pack2x16unorm(_e32);
+    u = pack2x16snorm(_e32);
     let _e34 = f2_;
-    u = pack2x16snorm(_e34);
+    u = pack2x16unorm(_e34);
     let _e36 = f2_;
     u = pack2x16float(_e36);
     let _e38 = u;

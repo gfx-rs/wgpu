@@ -236,6 +236,7 @@ use crate::diagnostic_filter::DiagnosticFilterNode;
 use crate::{FastIndexMap, NamedExpressions};
 
 pub use block::Block;
+pub use naga_types::{ResourceBinding, ShaderStage};
 
 /// Explicitly allows early depth/stencil tests.
 ///
@@ -313,40 +314,6 @@ pub enum ConservativeDepth {
 
     /// Shader may not rewrite depth value.
     Unchanged,
-}
-
-/// Stage of the programmable pipeline.
-#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum ShaderStage {
-    /// A vertex shader, in a render pipeline.
-    Vertex,
-
-    /// A task shader, in a mesh render pipeline.
-    Task,
-
-    /// A mesh shader, in a mesh render pipeline.
-    Mesh,
-
-    /// A fragment shader, in a render pipeline.
-    Fragment,
-
-    /// Compute pipeline shader.
-    Compute,
-
-    /// A ray generation shader, in a ray tracing pipeline.
-    RayGeneration,
-
-    /// A miss shader, in a ray tracing pipeline.
-    Miss,
-
-    /// A any hit shader, in a ray tracing pipeline.
-    AnyHit,
-
-    /// A closest hit shader, in a ray tracing pipeline.
-    ClosestHit,
 }
 
 /// Addressing space of variables.
@@ -1159,18 +1126,6 @@ pub enum Binding {
         /// non-interpolated normal vector.
         per_primitive: bool,
     },
-}
-
-/// Pipeline binding information for global resources.
-#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub struct ResourceBinding {
-    /// The bind group index.
-    pub group: u32,
-    /// Binding number within the group.
-    pub binding: u32,
 }
 
 /// Variable defined at module level.

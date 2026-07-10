@@ -34,6 +34,7 @@ use alloc::{
     vec::Vec,
 };
 use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
+use std::sync::OnceLock;
 
 use bitflags::bitflags;
 use hashbrown::HashMap;
@@ -55,7 +56,7 @@ use objc2_metal::{
     MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Condvar, Mutex, RwLock};
 
 #[derive(Clone, Debug)]
 pub struct Api;
@@ -87,6 +88,7 @@ impl crate::Api for Api {
     type PipelineLayout = PipelineLayout;
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
+    type RayTracingPipeline = RayTracingPipeline;
     type ComputePipeline = ComputePipeline;
     type PipelineCache = PipelineCache;
 
@@ -110,6 +112,7 @@ crate::impl_dyn_resource!(
     QuerySet,
     Queue,
     RenderPipeline,
+    RayTracingPipeline,
     Sampler,
     ShaderModule,
     Surface,
@@ -133,7 +136,10 @@ impl OsFeatures {
     }
 }
 
-pub struct Instance {}
+#[derive(Debug)]
+pub struct Instance {
+    flags: wgt::InstanceFlags,
+}
 
 impl Instance {
     pub fn create_surface_from_layer(&self, layer: &CAMetalLayer) -> Surface {
@@ -144,11 +150,11 @@ impl Instance {
 impl crate::Instance for Instance {
     type A = Api;
 
-    unsafe fn init(_desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
+    unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init Metal Backend");
         // We do not enable metal validation based on the validation flags as it affects the entire
         // process. Instead, we enable the validation inside the test harness itself in tests/src/native.rs.
-        Ok(Instance {})
+        Ok(Instance { flags: desc.flags })
     }
 
     unsafe fn create_surface(
@@ -186,8 +192,11 @@ impl crate::Instance for Instance {
         _surface_hint: Option<&Surface>,
     ) -> Vec<crate::ExposedAdapter<Api>> {
         let devices = objc2_metal::MTLCopyAllDevices();
-        let mut adapters: Vec<crate::ExposedAdapter<Api>> =
-            devices.into_iter().map(AdapterShared::expose).collect();
+        let instance_flags = self.flags;
+        let mut adapters: Vec<crate::ExposedAdapter<Api>> = devices
+            .into_iter()
+            .map(|d| AdapterShared::expose(d, instance_flags))
+            .collect();
         adapters.sort_by_key(|ad| {
             (
                 ad.adapter.shared.private_caps.low_power,
@@ -383,6 +392,7 @@ impl Default for Settings {
     }
 }
 
+#[derive(Debug)]
 struct AdapterShared {
     device: Retained<ProtocolObject<dyn MTLDevice>>,
     disabilities: PrivateDisabilities,
@@ -415,13 +425,16 @@ impl AdapterShared {
         }
     }
 
-    fn expose(device: Retained<ProtocolObject<dyn MTLDevice>>) -> crate::ExposedAdapter<Api> {
+    fn expose(
+        device: Retained<ProtocolObject<dyn MTLDevice>>,
+        instance_flags: wgt::InstanceFlags,
+    ) -> crate::ExposedAdapter<Api> {
         autoreleasepool(|_| {
             let name = device.name().to_string();
             let capabilities_query = CapabilitiesQuery::new(&device);
             let shared = AdapterShared::new(device, &capabilities_query);
             let features = capabilities_query.features();
-            let capabilities = capabilities_query.capabilities();
+            let capabilities = capabilities_query.capabilities(instance_flags);
             crate::ExposedAdapter {
                 info: wgt::AdapterInfo {
                     name,
@@ -431,7 +444,7 @@ impl AdapterShared {
                     // for more information.
                     subgroup_min_size: 4,
                     subgroup_max_size: 64,
-                    transient_saves_memory: shared.private_caps.supports_memoryless_storage,
+                    transient_saves_memory: Some(shared.private_caps.supports_memoryless_storage),
                     ..wgt::AdapterInfo::new(shared.private_caps.device_type(), wgt::Backend::Metal)
                 },
                 features,
@@ -442,6 +455,7 @@ impl AdapterShared {
     }
 }
 
+#[derive(Debug)]
 pub struct Adapter {
     shared: Arc<AdapterShared>,
 }
@@ -449,6 +463,7 @@ pub struct Adapter {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Adapter: Send, Sync);
 
+#[derive(Debug)]
 pub struct Queue {
     shared: Arc<QueueShared>,
     timestamp_period: f32,
@@ -466,6 +481,9 @@ impl Queue {
             shared: Arc::new(QueueShared {
                 raw,
                 command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
+                pending_waits: Mutex::new(Vec::new()),
+                pending_signals: Mutex::new(Vec::new()),
+                relay: OnceLock::new(),
             }),
             timestamp_period,
         }
@@ -474,6 +492,127 @@ impl Queue {
     pub fn as_raw(&self) -> &ProtocolObject<dyn MTLCommandQueue> {
         &self.shared.raw
     }
+
+    /// Enable strict GPU-side ordering for [`Self::add_wait_event`].
+    ///
+    /// By default, `add_wait_event` encodes the wait on a separate
+    /// internal command buffer. Metal allows independent command
+    /// buffers in a queue to overlap on the GPU, so a wait CB does
+    /// not strictly gate subsequent user command buffers when those
+    /// CBs share no Metal-tracked resources with it. Single-stream
+    /// pipelines often serialize anyway because the GPU has no other
+    /// concurrent work to fill the slot, but mixed workloads (decode
+    /// + compute + render) can race.
+    ///
+    /// When enabled, every [`crate::CommandEncoder::begin_encoding`]
+    /// pre-encodes a wait on an internal `MTLSharedEvent` at the start
+    /// of the new command buffer; every [`crate::Queue::submit`] then
+    /// signals that event after draining the staged external waits.
+    /// All command buffers since the previous submit are released in
+    /// lockstep once the foreign signals arrive, regardless of GPU
+    /// concurrency.
+    ///
+    /// Costs one extra `encodeWaitForEvent` per command buffer plus
+    /// one extra internal command buffer per submit on this queue.
+    /// Other queues are unaffected.
+    ///
+    /// Idempotent. Cannot be disabled - once enabled, the queue stays
+    /// in strict mode for its lifetime, since command buffers already
+    /// encoded would be stranded if the relay stopped firing.
+    pub fn enable_strict_event_sync(&self) -> Result<(), crate::DeviceError> {
+        if self.shared.relay.get().is_some() {
+            return Ok(());
+        }
+        let event = self
+            .shared
+            .raw
+            .device()
+            .newSharedEvent()
+            .ok_or(crate::DeviceError::OutOfMemory)?;
+        let _ = self.shared.relay.set(Relay {
+            event,
+            next_release_value: atomic::AtomicU64::new(1),
+            commit_lock: Mutex::new(()),
+        });
+        Ok(())
+    }
+
+    /// Stage an `MTLCommandBuffer::encodeWaitForEvent(event, value)` for
+    /// the next [`crate::Queue::submit`]. Lets external producers be waited
+    /// on without a CPU block.
+    ///
+    /// By default the wait is encoded onto a dedicated internal command
+    /// buffer committed before the submit's user CBs - best-effort under
+    /// cross-CB GPU concurrency, see [`Self::enable_strict_event_sync`]
+    /// for strict gating. With strict mode enabled, the wait is chained
+    /// through an internal relay event that gates every user command
+    /// buffer encoded since the previous submit.
+    ///
+    /// Staging is queue-wide, not per-thread or per-submit: any
+    /// `add_wait_event` call is consumed by whichever
+    /// [`crate::Queue::submit`] runs next on this queue. If you stage
+    /// events from multiple threads, coordinate the staging and the
+    /// submit yourself, or another thread's submit may drain your
+    /// pending waits.
+    pub fn add_wait_event(&self, event: Retained<ProtocolObject<dyn MTLSharedEvent>>, value: u64) {
+        self.shared.pending_waits.lock().push((event, value));
+    }
+
+    /// Remove `event` from the pending wait list if it is still present.
+    /// Returns `true` if it was found and removed.
+    pub fn remove_wait_event(&self, event: &ProtocolObject<dyn MTLSharedEvent>) -> bool {
+        let target: *const ProtocolObject<dyn MTLSharedEvent> = event;
+        let mut waits = self.shared.pending_waits.lock();
+        let before = waits.len();
+        waits.retain(|(e, _)| Retained::as_ptr(e) != target);
+        waits.len() != before
+    }
+
+    /// Stage an `MTLCommandBuffer::encodeSignalEvent(event, value)` for
+    /// the next [`crate::Queue::submit`]. The signal is encoded after
+    /// the submit's own completion signal, so a foreign API waiting on
+    /// `(event, value)` observes the wgpu work as done.
+    ///
+    /// Staging is queue-wide, not per-thread or per-submit: see
+    /// [`Self::add_wait_event`] for the threading caveat.
+    pub fn add_signal_event(
+        &self,
+        event: Retained<ProtocolObject<dyn MTLSharedEvent>>,
+        value: u64,
+    ) {
+        self.shared.pending_signals.lock().push((event, value));
+    }
+
+    /// Remove `event` from the pending signal list if it is still present.
+    /// Returns `true` if it was found and removed.
+    pub fn remove_signal_event(&self, event: &ProtocolObject<dyn MTLSharedEvent>) -> bool {
+        let target: *const ProtocolObject<dyn MTLSharedEvent> = event;
+        let mut signals = self.shared.pending_signals.lock();
+        let before = signals.len();
+        signals.retain(|(e, _)| Retained::as_ptr(e) != target);
+        signals.len() != before
+    }
+}
+
+type PendingEvents = Mutex<Vec<(Retained<ProtocolObject<dyn MTLSharedEvent>>, u64)>>;
+
+/// Internal relay used by [`Queue::enable_strict_event_sync`] to chain
+/// staged waits across all CBs in a submit.
+///
+/// `begin_encoding` reads `next_release_value` and pre-encodes
+/// `encodeWaitForEvent(event, expected)` at the start of each CB.
+/// `submit` claims the value via `fetch_add`, encodes the foreign
+/// waits + `encodeSignalEvent(event, claimed)` on a wait CB, and
+/// commits it. `commit_lock` serializes the claim+commit pair so
+/// concurrent submits land their signals in monotonic *commit* order
+/// on the CPU. GPU-side execution of the resulting wait CBs may still
+/// reorder under concurrency; see the comment in `submit` for why
+/// that's harmless.
+#[derive(Debug)]
+struct Relay {
+    event: Retained<ProtocolObject<dyn MTLSharedEvent>>,
+    next_release_value: atomic::AtomicU64,
+    commit_lock: Mutex<()>,
 }
 
 #[derive(Debug)]
@@ -487,8 +626,12 @@ pub struct QueueShared {
     // to create command buffers for internal purposes. In those cases we always
     // commit the buffer immediately, so we don't adjust the counter for them.)
     command_buffer_created_not_submitted: atomic::AtomicUsize,
+    pending_waits: PendingEvents,
+    pending_signals: PendingEvents,
+    relay: OnceLock<Relay>,
 }
 
+#[derive(Debug)]
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
@@ -496,6 +639,7 @@ pub struct Device {
     limits: wgt::Limits,
 }
 
+#[derive(Debug)]
 pub struct Surface {
     render_layer: Mutex<Retained<CAMetalLayer>>,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,
@@ -541,10 +685,60 @@ impl crate::Queue for Queue {
         (signal_fence, signal_value): (&Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
         autoreleasepool(|_| {
+            // Drain caller-staged waits onto a dedicated command buffer
+            // committed before the user CBs.
+            //
+            // When strict event sync is enabled, this CB also signals
+            // the relay event to release every user CB encoded since
+            // the previous submit (see `Queue::enable_strict_event_sync`).
+            // The `commit_lock` is held across `fetch_add` + `commit` so
+            // concurrent submits land their relay signals in monotonic
+            // *commit* order on the CPU side; otherwise a later-claimed
+            // signal could commit first and the subsequent backward
+            // signal would temporarily regress the relay's signaledValue.
+            //
+            // GPU-side ordering across independent wait CBs remains
+            // best-effort: Metal may run them in parallel, so a wait CB
+            // with foreign waits can fire its signal after a later
+            // submit's wait-free signal. CBs already released stay
+            // released (`MTLSharedEvent` waits are `>=`), and future
+            // submits' signals catch the value back up, so the regression
+            // is harmless - but users wanting strict GPU-side ordering
+            // across concurrent submits must serialize submits themselves.
+            //
+            // Without strict mode, we only emit a wait CB when there are
+            // pending waits - keeps the common-case submit overhead-free.
+            {
+                let relay = self.shared.relay.get();
+                let mut waits = self.shared.pending_waits.lock();
+                if relay.is_some() || !waits.is_empty() {
+                    let _commit_guard = relay.map(|r| r.commit_lock.lock());
+                    // We do not bother adjusting `command_buffer_created_not_submitted`
+                    // because we immediately commit this buffer.
+                    let wait_cb = self
+                        .shared
+                        .raw
+                        .commandBufferWithUnretainedReferences()
+                        .ok_or(crate::DeviceError::Lost)?;
+                    wait_cb.setLabel(Some(ns_string!("(wgpu internal) Wait")));
+                    for (event, value) in waits.drain(..) {
+                        wait_cb.encodeWaitForEvent_value(event.as_ref(), value);
+                    }
+                    if let Some(relay) = relay {
+                        let release = relay
+                            .next_release_value
+                            .fetch_add(1, atomic::Ordering::AcqRel);
+                        wait_cb.encodeSignalEvent_value(relay.event.as_ref(), release);
+                    }
+                    wait_cb.commit();
+                }
+            }
+
             let extra_command_buffer = {
-                let completed_value = Arc::clone(&signal_fence.completed_value);
+                let fence_sync = Arc::clone(&signal_fence.sync);
                 let block = block2::RcBlock::new(move |_cmd_buf| {
-                    completed_value.store(signal_value, atomic::Ordering::Release);
+                    *fence_sync.0.lock() = signal_value;
+                    fence_sync.1.notify_all();
                 });
 
                 let raw = match command_buffers.last() {
@@ -555,7 +749,7 @@ impl crate::Queue for Queue {
                         self.shared
                             .raw
                             .commandBufferWithUnretainedReferences()
-                            .unwrap()
+                            .ok_or(crate::DeviceError::Lost)?
                     }
                 };
                 raw.setLabel(Some(ns_string!("(wgpu internal) Signal")));
@@ -570,6 +764,16 @@ impl crate::Queue for Queue {
                 if let Some(shared_event) = &signal_fence.shared_event {
                     raw.encodeSignalEvent_value(shared_event.as_ref(), signal_value);
                 }
+
+                // Drain caller-staged signals after our own signal so each
+                // additional event value publishes once the submit completes.
+                {
+                    let mut signals = self.shared.pending_signals.lock();
+                    for (event, value) in signals.drain(..) {
+                        raw.encodeSignalEvent_value(event.as_ref(), value);
+                    }
+                }
+
                 // only return an extra one if it's extra
                 match command_buffers.last() {
                     Some(_) => None,
@@ -592,8 +796,8 @@ impl crate::Queue for Queue {
             if let Some(raw) = extra_command_buffer {
                 raw.commit();
             }
-        });
-        Ok(())
+            Ok(())
+        })
     }
     unsafe fn present(
         &self,
@@ -670,6 +874,10 @@ pub struct Texture {
     array_layers: u32,
     mip_levels: u32,
     copy_size: crate::CopyExtent,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
+    _drop_guard: Option<crate::DropGuard>,
 }
 
 impl Texture {
@@ -820,6 +1028,7 @@ pub struct PipelineLayout {
     immediates_infos: MultiStageData<Option<ImmediateDataInfo>>,
     total_immediates: u32,
     per_stage_map: MultiStageResources,
+    binding_array_length_map: FastHashMap<naga::ResourceBinding, u32>,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}
@@ -841,6 +1050,16 @@ enum BufferLikeResource {
         /// [`Storage`]: wgt::BufferBindingType::Storage
         binding_size: Option<wgt::BufferSize>,
 
+        binding_location: u32,
+    },
+
+    /// Bindless storage `binding_array`: one argument [`MTLBuffer`] (pointer table) plus element
+    /// byte sizes `(array index, size)` for `_buffer_sizes` / runtime-sized arrays.
+    ///
+    /// [`MTLBuffer`]: objc2_metal::MTLBuffer
+    StorageBindingArray {
+        ptr: NonNull<ProtocolObject<dyn MTLBuffer>>,
+        array_element_sizes: Vec<(u32, wgt::BufferSize)>,
         binding_location: u32,
     },
     AccelerationStructure(NonNull<ProtocolObject<dyn MTLAccelerationStructure>>),
@@ -916,7 +1135,7 @@ struct PipelineStageInfo {
     /// Bindings of all WGSL `storage` globals that contain runtime-sized arrays.
     ///
     /// See `device::CompiledShader::sized_bindings` for more details.
-    sized_bindings: Vec<naga::ResourceBinding>,
+    sized_bindings: Vec<(naga::ResourceBinding, u32)>,
 
     /// Info on all bound vertex buffers.
     vertex_buffer_mappings: Vec<naga::back::msl::VertexBufferMapping>,
@@ -1013,6 +1232,11 @@ static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
 
 impl crate::DynComputePipeline for ComputePipeline {}
 
+#[derive(Debug)]
+pub struct RayTracingPipeline {}
+
+impl crate::DynRayTracingPipeline for RayTracingPipeline {}
+
 #[derive(Debug, Clone)]
 pub struct QuerySet {
     raw_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
@@ -1028,7 +1252,7 @@ unsafe impl Sync for QuerySet {}
 
 #[derive(Debug)]
 pub struct Fence {
-    completed_value: Arc<atomic::AtomicU64>,
+    sync: Arc<(Mutex<crate::FenceValue>, Condvar)>,
     /// The pending fence values have to be ascending.
     pending_command_buffers: RwLock<Vec<PendingCommandBuffer>>,
     shared_event: Option<Retained<ProtocolObject<dyn MTLSharedEvent>>>,
@@ -1046,11 +1270,14 @@ unsafe impl Sync for Fence {}
 
 impl Fence {
     fn get_latest(&self) -> crate::FenceValue {
-        let mut max_value = self.completed_value.load(atomic::Ordering::Acquire);
+        let mut max_value = *self.sync.0.lock();
         let pending_command_buffers = self.pending_command_buffers.read();
         for &(value, ref cmd_buf) in pending_command_buffers.iter() {
-            if cmd_buf.status() == MTLCommandBufferStatus::Completed {
-                max_value = value;
+            match cmd_buf.status() {
+                MTLCommandBufferStatus::Completed | MTLCommandBufferStatus::Error => {
+                    max_value = value;
+                }
+                _ => {}
             }
         }
         max_value
@@ -1080,6 +1307,8 @@ struct Temp {
     binding_sizes: Vec<u32>,
 }
 
+// Any state in this struct that may be dirty after an abandoned encoding must
+// be reset in `discard_encoding` for possible encoder reuse.
 struct CommandState {
     blit: Option<Retained<ProtocolObject<dyn MTLBlitCommandEncoder>>>,
     acceleration_structure_builder:
@@ -1109,7 +1338,7 @@ struct CommandState {
     /// See `device::CompiledShader::sized_bindings` for more details.
     ///
     /// [`ResourceBinding`]: naga::ResourceBinding
-    storage_buffer_length_map: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    storage_buffer_length_map: FastHashMap<(naga::ResourceBinding, u32), wgt::BufferSize>,
 
     vertex_buffer_size_map: FastHashMap<u32, wgt::BufferSize>,
 
@@ -1119,6 +1348,8 @@ struct CommandState {
     pending_timer_queries: Vec<(QuerySet, u32)>,
 }
 
+// Any state in this struct that may be dirty after an abandoned encoding must
+// be reset in `discard_encoding` for possible encoder reuse.
 pub struct CommandEncoder {
     shared: Arc<AdapterShared>,
     queue_shared: Arc<QueueShared>,

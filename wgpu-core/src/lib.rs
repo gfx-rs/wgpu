@@ -7,6 +7,8 @@
 //!
 
 #![no_std]
+// `-Znext-solver` requires deeper recursion limits (at least for now) to prove Send/Sync
+#![recursion_limit = "256"]
 // When we have no backends, we end up with a lot of dead or otherwise unreachable code.
 #![cfg_attr(
     all(
@@ -38,6 +40,7 @@
     // `wgpu-core` isn't entirely user-facing, so it's useful to document internal items.
     rustdoc::private_intra_doc_links,
 )]
+#![expect(missing_debug_implementations, reason = "TODO")]
 #![warn(
     clippy::alloc_instead_of_core,
     clippy::ptr_as_ptr,
@@ -60,7 +63,8 @@
 #![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
 
 extern crate alloc;
-#[cfg(feature = "std")]
+extern crate naga_types as nt;
+#[cfg(any(feature = "std", test))]
 extern crate std;
 extern crate wgpu_hal as hal;
 extern crate wgpu_types as wgt;
@@ -72,7 +76,6 @@ mod conv;
 pub mod device;
 pub mod error;
 pub mod global;
-mod hash_utils;
 pub mod hub;
 pub mod id;
 pub mod identity;
@@ -110,7 +113,7 @@ use alloc::{
     string::String,
 };
 
-pub(crate) use hash_utils::*;
+pub(crate) use nt::{FastHashMap, FastHashSet, FastIndexMap};
 
 /// The index of a queue submission.
 ///

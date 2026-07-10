@@ -1,5 +1,6 @@
 use alloc::{
     borrow::Cow,
+    boxed::Box,
     string::{String, ToString},
     vec::Vec,
 };
@@ -40,7 +41,7 @@ pub enum PipelineConstantError {
     #[error(transparent)]
     ConstantEvaluatorError(#[from] ConstantEvaluatorError),
     #[error(transparent)]
-    ValidationError(#[from] WithSpan<ValidationError>),
+    ValidationError(#[from] Box<WithSpan<ValidationError>>),
     #[error("workgroup_size override isn't strictly positive")]
     NegativeWorkgroupSize,
     #[error("max vertices or max primitives is negative")]
@@ -145,7 +146,7 @@ pub fn process_overrides<'a>(
 
     // An iterator through the original overrides table, consumed in
     // approximate tandem with the global expressions.
-    let mut overrides = mem::take(&mut module.overrides);
+    let mut overrides = module.overrides.take();
     let mut override_iter = overrides.iter_mut_span();
 
     // Do two things in tandem:
@@ -264,7 +265,7 @@ pub fn process_overrides<'a>(
         }
     }
 
-    let mut functions = mem::take(&mut module.functions);
+    let mut functions = module.functions.take();
     for (_, function) in functions.iter_mut() {
         process_function(&mut module, &override_map, &mut layouter, function)?;
     }
@@ -424,7 +425,7 @@ fn process_function(
 
     let mut local_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
 
-    let mut expressions = mem::take(&mut function.expressions);
+    let mut expressions = function.expressions.take();
 
     // Dummy `emitter` and `block` for the constant evaluator.
     // We can ignore the concept of emitting expressions here since

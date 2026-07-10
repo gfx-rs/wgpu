@@ -12,6 +12,8 @@ mod params;
 mod poll;
 mod report;
 mod run;
+pub mod wasm;
+pub mod wasm_manager;
 
 #[cfg(target_arch = "wasm32")]
 pub use init::initialize_html_canvas;
@@ -117,8 +119,15 @@ pub fn did_oom<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool,
 #[macro_export]
 macro_rules! gpu_test_main {
     ($tests: expr) => {
-        #[cfg(target_arch = "wasm32")]
-        wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+        #[cfg(all(
+            target_arch = "wasm32",
+            any(target_os = "emscripten", feature = "webgl")
+        ))]
+        #[wasm_bindgen::prelude::wasm_bindgen]
+        pub fn run_test(test_name: String) {
+            $crate::wasm::main($tests, test_name);
+        }
+
         #[cfg(target_arch = "wasm32")]
         fn main() {
             // Ensure that value is used so that warnings don't happen.
@@ -127,7 +136,11 @@ macro_rules! gpu_test_main {
 
         #[cfg(not(target_arch = "wasm32"))]
         fn main() -> $crate::native::MainResult {
-            $crate::native::main($tests)
+            if cfg!(wasm_test) {
+                $crate::wasm_manager::run_wasm_browser_tests($tests)
+            } else {
+                $crate::native::main($tests)
+            }
         }
     };
 }

@@ -1,6 +1,6 @@
 //! [`Backend`], [`Backends`], and backend-specific options.
 
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use core::{hash::Hash, str::FromStr};
 
 #[cfg(any(feature = "serde", test))]
@@ -97,8 +97,8 @@ bitflags::bitflags! {
         const VULKAN = 1 << Backend::Vulkan as u32;
 
         /// [`Backend::Gl`].
-        /// Supported on Linux/Android, the web through webassembly via WebGL, and Windows and
-        /// macOS/iOS via ANGLE
+        /// Supported on Linux/Android, the web through webassembly via WebGL, and
+        /// Windows through native OpenGL by default or ANGLE with `cfg(windows_angle)`.
         const GL = 1 << Backend::Gl as u32;
 
         /// [`Backend::Metal`].
@@ -852,7 +852,9 @@ impl FromStr for Dx12Compiler {
             "staticdxc" => Self::StaticDxc,
             "fxc" => Self::Fxc,
             "auto" => Self::Auto,
-            _ => return Err("Expected `dynamicdxc` (alias `dxc`), `staticdxc`, `fxc`, or `auto`."),
+            path => Self::DynamicDxc {
+                dxc_path: path.to_string(),
+            },
         })
     }
 }

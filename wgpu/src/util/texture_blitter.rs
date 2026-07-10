@@ -14,6 +14,7 @@ use crate::{
 
 /// A builder for the [`TextureBlitter`] utility.
 /// If you want the default [`TextureBlitter`] use [`TextureBlitter::new`] instead.
+#[derive(Debug)]
 pub struct TextureBlitterBuilder<'a> {
     device: &'a Device,
     format: TextureFormat,
@@ -148,6 +149,7 @@ impl<'a> TextureBlitterBuilder<'a> {
 /// - Textures are in incompatible formats.
 /// - Textures are of different sizes.
 /// - Your copy destination is the surface texture and does not have the `COPY_DST` usage.
+#[derive(Debug)]
 pub struct TextureBlitter {
     pipeline: RenderPipeline,
     bind_group_layout: BindGroupLayout,

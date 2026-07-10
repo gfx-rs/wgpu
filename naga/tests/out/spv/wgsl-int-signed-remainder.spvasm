@@ -1,0 +1,83 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 67
+OpCapability Shader
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %55 "main"
+OpExecutionMode %55 LocalSize 1 1 1
+%2 = OpTypeVoid
+%3 = OpTypeInt 32 1
+%5 = OpTypeFunction %3 %3 %3
+%9 = OpTypeBool
+%10 = OpConstant  %3  0
+%12 = OpConstant  %3  -2147483648
+%13 = OpConstant  %3  -1
+%18 = OpConstant  %3  1
+%23 = OpTypeVector %3 2
+%25 = OpTypeFunction %23 %23 %23
+%29 = OpTypeVector %9 2
+%30 = OpConstantComposite  %23  %10 %10
+%32 = OpConstantComposite  %23  %12 %12
+%33 = OpConstantComposite  %23  %13 %13
+%38 = OpConstantComposite  %23  %18 %18
+%43 = OpTypeInt 32 0
+%45 = OpTypeFunction %43 %43 %43
+%49 = OpConstant  %43  0
+%51 = OpConstant  %43  1
+%56 = OpTypeFunction %2
+%57 = OpConstant  %3  5
+%58 = OpConstant  %3  2
+%59 = OpConstantComposite  %23  %57 %57
+%60 = OpConstantComposite  %23  %58 %58
+%61 = OpConstant  %43  5
+%62 = OpConstant  %43  2
+%4 = OpFunction  %3  None %5
+%6 = OpFunctionParameter  %3
+%7 = OpFunctionParameter  %3
+%8 = OpLabel
+%11 = OpIEqual  %9  %7 %10
+%14 = OpIEqual  %9  %6 %12
+%15 = OpIEqual  %9  %7 %13
+%16 = OpLogicalAnd  %9  %14 %15
+%17 = OpLogicalOr  %9  %11 %16
+%19 = OpSelect  %3  %17 %18 %7
+%20 = OpSDiv  %3  %6 %19
+%21 = OpIMul  %3  %20 %19
+%22 = OpISub  %3  %6 %21
+OpReturnValue %22
+OpFunctionEnd
+%24 = OpFunction  %23  None %25
+%26 = OpFunctionParameter  %23
+%27 = OpFunctionParameter  %23
+%28 = OpLabel
+%31 = OpIEqual  %29  %27 %30
+%34 = OpIEqual  %29  %26 %32
+%35 = OpIEqual  %29  %27 %33
+%36 = OpLogicalAnd  %29  %34 %35
+%37 = OpLogicalOr  %29  %31 %36
+%39 = OpSelect  %23  %37 %38 %27
+%40 = OpSDiv  %23  %26 %39
+%41 = OpIMul  %23  %40 %39
+%42 = OpISub  %23  %26 %41
+OpReturnValue %42
+OpFunctionEnd
+%44 = OpFunction  %43  None %45
+%46 = OpFunctionParameter  %43
+%47 = OpFunctionParameter  %43
+%48 = OpLabel
+%50 = OpIEqual  %9  %47 %49
+%52 = OpSelect  %43  %50 %51 %47
+%53 = OpUMod  %43  %46 %52
+OpReturnValue %53
+OpFunctionEnd
+%55 = OpFunction  %2  None %56
+%54 = OpLabel
+OpBranch %63
+%63 = OpLabel
+%64 = OpFunctionCall  %3  %4 %57 %58
+%65 = OpFunctionCall  %23  %24 %59 %60
+%66 = OpFunctionCall  %43  %44 %61 %62
+OpReturn
+OpFunctionEnd
