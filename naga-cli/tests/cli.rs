@@ -902,6 +902,31 @@ fn config_schema_matches_snapshot() {
 }
 
 #[test]
+fn invalid_wgsl_error_json_matches_snapshot() {
+    // Pins the structured `--format json` output for an invalid WGSL file (severity,
+    // message, location {line,column,byte_offset,length}, labels, notes). The JSON carries
+    // no file path or version, so it is stable across machines.
+    let expected = include_str!("snapshots/invalid-wgsl-error.json");
+    let src = write_tmp("naga_cli_invalid_err", "invalid.wgsl", "fn f( {");
+    let out = naga()
+        .arg(&src)
+        .args(["--format", "json"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let actual = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(
+        actual.trim_end(),
+        expected.trim_end(),
+        "structured error JSON changed. If intentional (e.g. a naga diagnostic message or span \
+         changed), regenerate:\n\
+         printf 'fn f( {{' > /tmp/invalid.wgsl && \
+         cargo run -q -p naga-cli -- /tmp/invalid.wgsl --format json > \
+         naga-cli/tests/snapshots/invalid-wgsl-error.json"
+    );
+}
+
+#[test]
 fn json_format_valid_shader_reflection() {
     let dir = std::env::temp_dir().join("naga_cli_p4_ok");
     std::fs::create_dir_all(&dir).unwrap();
