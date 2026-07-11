@@ -4579,7 +4579,7 @@ impl Device {
             None => validation::BindingLayoutSource::new_derived(&self.limits),
         };
         let mut shader_binding_sizes = FastHashMap::default();
-        let io = validation::StageIo::default();
+        let mut io = validation::StageIo::default();
 
         let final_entry_point_name;
 
@@ -4592,7 +4592,7 @@ impl Device {
             )?;
 
             if let Some(interface) = shader_module_state.interface.interface() {
-                let _ = interface.check_stage(
+                io = interface.check_stage(
                     &mut binding_layout_source,
                     &mut shader_binding_sizes,
                     &final_entry_point_name,
@@ -4603,28 +4603,18 @@ impl Device {
             }
         }
 
-        let (immediate_size, immediate_slots_required) = shader_module
-            .interface
-            .interface()
-            .map_or(Default::default(), |iface| {
-                iface.immediate_size_and_slots_required(
-                    naga::ShaderStage::Compute,
-                    &final_entry_point_name,
-                )
-            });
-
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => {
-                if pipeline_layout.immediate_size < immediate_size {
+                if pipeline_layout.immediate_size < io.immediate_size_required {
                     return Err(pipeline::CreateComputePipelineError::ImmediateSize {
                         layout: pipeline_layout.immediate_size,
-                        required: immediate_size,
+                        required: io.immediate_size_required,
                     });
                 }
                 pipeline_layout
             }
             validation::BindingLayoutSource::Derived(entries) => {
-                self.create_derived_pipeline_layout(entries, immediate_size)?
+                self.create_derived_pipeline_layout(entries, io.immediate_size_required)?
             }
         };
 
@@ -4680,7 +4670,7 @@ impl Device {
             }),
             device: self.clone(),
             late_sized_buffer_groups,
-            immediate_slots_required,
+            immediate_slots_required: io.immediate_slots_required,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.compute_pipelines.clone()),
         };
@@ -5158,8 +5148,6 @@ impl Device {
         let mut _vertex_entry_point_name = String::new();
         let mut _task_entry_point_name = String::new();
         let mut _mesh_entry_point_name = String::new();
-        let mut immediate_slots_required = naga::valid::ImmediateSlots::default();
-        let mut immediate_size_required = 0u32;
         let mut passthrough_stages = wgt::ShaderStages::empty();
         match desc.vertex {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
@@ -5193,14 +5181,7 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = vertex_shader_module.interface.interface() {
-                        let (_immediate_size, _immediate_slots_required) = interface
-                            .immediate_size_and_slots_required(
-                                stage.to_naga(),
-                                &_vertex_entry_point_name,
-                            );
-                        immediate_slots_required |= _immediate_slots_required;
-                        immediate_size_required = immediate_size_required.max(_immediate_size);
+                    if let Some(interface) = vertex_shader_module_state.interface.interface() {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5252,14 +5233,7 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = task_shader_module.interface.interface() {
-                        let (_immediate_size, _immediate_slots_required) = interface
-                            .immediate_size_and_slots_required(
-                                stage.to_naga(),
-                                &_task_entry_point_name,
-                            );
-                        immediate_slots_required |= _immediate_slots_required;
-                        immediate_size_required = immediate_size_required.max(_immediate_size);
+                    if let Some(interface) = task_shader_module_state.interface.interface() {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5309,14 +5283,7 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = mesh_shader_module.interface.interface() {
-                        let (_immediate_size, _immediate_slots_required) = interface
-                            .immediate_size_and_slots_required(
-                                stage.to_naga(),
-                                &_mesh_entry_point_name,
-                            );
-                        immediate_slots_required |= _immediate_slots_required;
-                        immediate_size_required = immediate_size_required.max(_immediate_size);
+                    if let Some(interface) = mesh_shader_module_state.interface.interface() {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5375,14 +5342,7 @@ impl Device {
                     )
                     .map_err(stage_err)?;
 
-                if let Some(interface) = shader_module.interface.interface() {
-                    let (_immediate_size, _immediate_slots_required) = interface
-                        .immediate_size_and_slots_required(
-                            stage.to_naga(),
-                            &fragment_entry_point_name,
-                        );
-                    immediate_slots_required |= _immediate_slots_required;
-                    immediate_size_required = immediate_size_required.max(_immediate_size);
+                if let Some(interface) = shader_module_state.interface.interface() {
                     io = interface
                         .check_stage(
                             &mut binding_layout_source,
@@ -5452,16 +5412,16 @@ impl Device {
 
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => {
-                if pipeline_layout.immediate_size < immediate_size_required {
+                if pipeline_layout.immediate_size < io.immediate_size_required {
                     return Err(pipeline::CreateRenderPipelineError::ImmediateSize {
                         layout: pipeline_layout.immediate_size,
-                        required: immediate_size_required,
+                        required: io.immediate_size_required,
                     });
                 }
                 pipeline_layout
             }
             validation::BindingLayoutSource::Derived(entries) => {
-                self.create_derived_pipeline_layout(entries, immediate_size_required)?
+                self.create_derived_pipeline_layout(entries, io.immediate_size_required)?
             }
         };
 
@@ -5642,7 +5602,7 @@ impl Device {
             strip_index_format: desc.primitive.strip_index_format,
             vertex_steps,
             late_sized_buffer_groups,
-            immediate_slots_required,
+            immediate_slots_required: io.immediate_slots_required,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.render_pipelines.clone()),
             is_mesh,

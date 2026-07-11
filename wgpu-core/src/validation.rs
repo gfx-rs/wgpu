@@ -1078,6 +1078,8 @@ pub struct StageIo {
     ///
     /// This is Some if it was a mesh shader.
     pub primitive_index: Option<bool>,
+    pub immediate_slots_required: naga::valid::ImmediateSlots,
+    pub immediate_size_required: u32,
 }
 
 impl Interface {
@@ -1345,7 +1347,7 @@ impl Interface {
         }
     }
 
-    pub fn immediate_size_and_slots_required(
+    fn immediate_size_and_slots_required(
         &self,
         stage: naga::ShaderStage,
         entry_point_name: &str,
@@ -1896,6 +1898,10 @@ impl Interface {
             })
             .collect();
 
+        let (immediate_size_required, immediate_slots_required) =
+            self.immediate_size_and_slots_required(shader_stage.to_naga(), entry_point_name);
+        let immediate_slots_required = immediate_slots_required | inputs.immediate_slots_required;
+        let immediate_size_required = immediate_size_required.max(inputs.immediate_size_required);
         Ok(StageIo {
             task_payload_size: entry_point.task_payload_size,
             varyings: outputs,
@@ -1904,6 +1910,8 @@ impl Interface {
             } else {
                 None
             },
+            immediate_slots_required,
+            immediate_size_required,
         })
     }
 }
