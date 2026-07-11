@@ -2154,6 +2154,7 @@ impl TextureView {
                     wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
                 }),
                 range: desc.range,
+                swizzle: desc.swizzle,
             },
             format_features: texture.format_features,
             samples: texture.desc.sample_count,
