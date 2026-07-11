@@ -885,7 +885,7 @@ impl ApplicationHandler for App {
                     self.accum_time += self.last_frame_inst.elapsed().as_secs_f32();
                     self.last_frame_inst = Instant::now();
                     self.frame_count += 1;
-                    if self.frame_count == 100 && !ex.is_empty() {
+                    if self.frame_count >= 100 && !ex.is_empty() {
                         println!(
                             "Avg frame time {}ms",
                             self.accum_time * 1000.0 / self.frame_count as f32
