@@ -4467,8 +4467,8 @@ impl Device {
         immediate_size: u32,
     ) -> Result<Arc<binding_model::PipelineLayout>, pipeline::ImplicitLayoutError> {
         // <https://gpuweb.github.io/gpuweb/#abstract-opdef-default-pipeline-layout>
-        // Round immediate size up to 4
-        let immediate_size = immediate_size.next_multiple_of(4);
+        // Round up the immediate size for pipeline layout as it is required to be a multiple of 4
+        let immediate_size = align_to(immediate_size, wgt::IMMEDIATE_DATA_ALIGNMENT);
 
         while derived_group_layouts
             .last()
