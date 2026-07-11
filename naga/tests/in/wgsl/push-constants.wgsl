@@ -1,6 +1,6 @@
 struct ImmediateDataVert {
-    multiplier: f32,
     position_clip: f32,
+    matrix: mat3x3<f32>,
 }
 var<immediate> im_vert: ImmediateDataVert;
 

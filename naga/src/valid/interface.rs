@@ -1433,14 +1433,14 @@ impl super::Validator {
                 .filter(|&(_, var)| var.space == crate::AddressSpace::Immediate)
                 .map(|(handle, _)| handle)
                 .filter(|&handle| !info[handle].is_empty());
-            let used_immediate0 = used_immediates.next();
+            let first_used_immediate = used_immediates.next();
             // Check if there is more than one immediate data, and error if so.
             // Use a loop for when returning multiple errors is supported.
             if let Some(handle) = used_immediates.next() {
                 return Err(EntryPointError::MoreThanOneImmediateUsed
                     .with_span_handle(handle, &module.global_variables));
             }
-            if let Some(immediate) = used_immediate0 {
+            if let Some(immediate) = first_used_immediate {
                 let ty = &module.types[module.global_variables[immediate].ty];
                 immediate_size = ty.inner.size(module.to_ctx());
             }

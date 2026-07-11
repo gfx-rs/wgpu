@@ -4466,6 +4466,10 @@ impl Device {
         mut derived_group_layouts: Box<ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>>,
         immediate_size: u32,
     ) -> Result<Arc<binding_model::PipelineLayout>, pipeline::ImplicitLayoutError> {
+        // <https://gpuweb.github.io/gpuweb/#abstract-opdef-default-pipeline-layout>
+        // Round immediate size up to 4
+        let immediate_size = immediate_size.next_multiple_of(4);
+
         while derived_group_layouts
             .last()
             .is_some_and(|map| map.is_empty())

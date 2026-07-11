@@ -6,8 +6,12 @@ struct NagaConstants {
 ConstantBuffer<NagaConstants> _NagaConstants: register(b0, space1);
 
 struct ImmediateDataVert {
-    float multiplier;
     float position_clip;
+    int _pad1_0;
+    int _pad1_1;
+    int _pad1_2;
+    row_major float3x3 matrix_;
+    int _end_pad_0;
 };
 
 struct ImmediateDataFrag {

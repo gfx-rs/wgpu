@@ -6,8 +6,8 @@ precision highp int;
 uniform uint naga_vs_first_instance;
 
 struct ImmediateDataVert {
-    float multiplier;
     float position_clip;
+    mat3x3 matrix;
 };
 struct ImmediateDataFrag {
     float multiplier;

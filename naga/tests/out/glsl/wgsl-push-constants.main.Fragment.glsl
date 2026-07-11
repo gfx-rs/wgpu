@@ -4,8 +4,8 @@ precision highp float;
 precision highp int;
 
 struct ImmediateDataVert {
-    float multiplier;
     float position_clip;
+    mat3x3 matrix;
 };
 struct ImmediateDataFrag {
     float multiplier;
