@@ -544,6 +544,8 @@ pub enum StageError {
     PerVertexNotTriangles,
     #[error("Mesh shader pipelines must have primitive topology of TriangleList, LineList or PointList, and this must match with what the mesh shader declares.")]
     MeshTopologyMismatch,
+    #[error("Pipeline layout immediate size ({layout}) must be >= the required immediate size ({required}) of the shader entry point")]
+    LayoutImmediateSize { layout: u32, required: u32 },
 }
 
 impl WebGpuError for StageError {
@@ -580,7 +582,8 @@ impl WebGpuError for StageError {
             | Self::InvalidDualSourceBlending
             | Self::MissingFragDepthAttachment
             | Self::PerVertexNotTriangles
-            | Self::MeshTopologyMismatch => ErrorType::Validation,
+            | Self::MeshTopologyMismatch
+            | Self::LayoutImmediateSize { .. } => ErrorType::Validation,
         }
     }
 }
@@ -1902,6 +1905,17 @@ impl Interface {
             self.immediate_size_and_slots_required(shader_stage.to_naga(), entry_point_name);
         let immediate_slots_required = immediate_slots_required | inputs.immediate_slots_required;
         let immediate_size_required = immediate_size_required.max(inputs.immediate_size_required);
+
+        // Check pipeline layout immediate size
+        if let BindingLayoutSource::Provided(pipeline_layout) = layouts {
+            if pipeline_layout.immediate_size < immediate_size_required {
+                return Err(StageError::LayoutImmediateSize {
+                    layout: pipeline_layout.immediate_size,
+                    required: immediate_size_required,
+                });
+            }
+        }
+
         Ok(StageIo {
             task_payload_size: entry_point.task_payload_size,
             varyings: outputs,

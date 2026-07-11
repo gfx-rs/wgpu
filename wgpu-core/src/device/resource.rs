@@ -4608,15 +4608,7 @@ impl Device {
         }
 
         let pipeline_layout = match binding_layout_source {
-            validation::BindingLayoutSource::Provided(pipeline_layout) => {
-                if pipeline_layout.immediate_size < io.immediate_size_required {
-                    return Err(pipeline::CreateComputePipelineError::ImmediateSize {
-                        layout: pipeline_layout.immediate_size,
-                        required: io.immediate_size_required,
-                    });
-                }
-                pipeline_layout
-            }
+            validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
                 self.create_derived_pipeline_layout(entries, io.immediate_size_required)?
             }
@@ -5415,15 +5407,7 @@ impl Device {
         }
 
         let pipeline_layout = match binding_layout_source {
-            validation::BindingLayoutSource::Provided(pipeline_layout) => {
-                if pipeline_layout.immediate_size < io.immediate_size_required {
-                    return Err(pipeline::CreateRenderPipelineError::ImmediateSize {
-                        layout: pipeline_layout.immediate_size,
-                        required: io.immediate_size_required,
-                    });
-                }
-                pipeline_layout
-            }
+            validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
                 self.create_derived_pipeline_layout(entries, io.immediate_size_required)?
             }

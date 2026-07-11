@@ -386,9 +386,9 @@ webgpu:shader,validation,decl,immediate:binding_attributes:*
 webgpu:shader,validation,decl,immediate:entry_point_interface:*
 webgpu:shader,validation,decl,immediate:pointers:*
 webgpu:shader,validation,decl,immediate:scope:*
-webgpu:shader,validation,decl,immediate:store_type,valid:*
-//FAIL: Should disallow fixed array in immediates
+//FAIL: Fixed array should be disallowed in immediates
 // webgpu:shader,validation,decl,immediate:store_type,invalid:*
+webgpu:shader,validation,decl,immediate:store_type,valid:*
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_neg"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_one"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_zero_signed"
