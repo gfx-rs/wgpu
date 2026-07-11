@@ -111,7 +111,7 @@ naga shader.wgsl out.metal --metal-version 2.0
 ```
 
 **Config file** — provides access to the full set of options via a JSON document.
-Flags and config are **mutually exclusive**: passing *any* flag alongside `--config` is a hard
+Flags and config are **mutually exclusive**: passing _any_ flag alongside `--config` is a hard
 error (clap enforces it at parse time). In config mode only the positional input/output file
 paths are accepted on the command line — everything else goes in the JSON.
 
