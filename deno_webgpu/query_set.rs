@@ -55,9 +55,7 @@ impl GPUQuerySet {
   #[fast]
   #[undefined]
   fn destroy(&self) -> Result<(), JsErrorBox> {
-    // TODO(https://github.com/gfx-rs/wgpu/issues/6495): Destroy the query
-    // set. Until that is supported, it is okay to do nothing here, the
-    // query set will be garbage collected and dropped eventually.
+    self.instance.query_set_destroy(self.id);
     Ok(())
   }
 

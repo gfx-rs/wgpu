@@ -767,6 +767,17 @@ pub struct WriteOnlyIter<'a, T> {
     slice: WriteOnly<'a, [T]>,
 }
 
+impl<T> fmt::Debug for WriteOnlyIter<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "WriteOnlyIter([{ty}], len = {len})",
+            ty = core::any::type_name::<T>(),
+            len = self.len(),
+        )
+    }
+}
+
 impl<'a, T> Iterator for WriteOnlyIter<'a, T> {
     type Item = WriteOnly<'a, T>;
 

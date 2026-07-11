@@ -457,6 +457,11 @@ impl GPUSupportedLimits {
   fn maxComputeWorkgroupsPerDimension(&self) -> u32 {
     self.0.max_compute_workgroups_per_dimension
   }
+
+  #[getter]
+  fn maxImmediateSize(&self) -> u32 {
+    self.0.max_immediate_size
+  }
 }
 
 pub struct GPUSupportedFeatures(v8::Global<v8::Value>);

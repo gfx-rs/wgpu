@@ -46,3 +46,6 @@ features = [
 
 [dev-dependencies]
 serde.workspace = true
+
+[lints]
+workspace = true

@@ -57,8 +57,7 @@ _12 _126(rayQueryEXT _127, uint _128)
         uint _141 = rayQueryGetIntersectionTypeEXT(_127, bool(0u));
         uint _143 = (_141 == 0u) ? 1u : 3u;
         _131._m0 = _143;
-        bool _145 = _143 != 0u;
-        if (_145)
+        if (_143 != 0u)
         {
             uint _148 = rayQueryGetIntersectionInstanceCustomIndexEXT(_127, bool(0u));
             uint _149 = rayQueryGetIntersectionInstanceIdEXT(_127, bool(0u));
@@ -74,7 +73,7 @@ _12 _126(rayQueryEXT _127, uint _128)
             _131._m6 = _152;
             _131._m9 = _153;
             _131._m10 = _154;
-            if (_145)
+            if (_143 == 1u)
             {
                 float _169 = rayQueryGetIntersectionTEXT(_127, bool(0u));
                 _131._m1 = _169;

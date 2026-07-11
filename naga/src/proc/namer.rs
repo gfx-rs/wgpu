@@ -86,7 +86,7 @@ pub enum NameKey {
 
 /// This processor assigns names to all the things in a module
 /// that may need identifiers in a textual backend.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Namer {
     /// The last numeric suffix used for each base name. Zero means "no suffix".
     unique: FastHashMap<String, u32>,

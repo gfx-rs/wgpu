@@ -230,9 +230,11 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
             .enable_noop(),
     )
     .run_sync(|ctx| {
+        // Deliberately non-square so a width/height swap is caught. Both
+        // dimensions stay even, as required by NV12/P010 (chroma is half-res).
         let size = wgpu::Extent3d {
             width: 256,
-            height: 256,
+            height: 128,
             depth_or_array_layers: 1,
         };
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -271,9 +273,11 @@ static P010_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
             .enable_noop(),
     )
     .run_sync(|ctx| {
+        // Deliberately non-square so a width/height swap is caught. Both
+        // dimensions stay even, as required by NV12/P010 (chroma is half-res).
         let size = wgpu::Extent3d {
             width: 256,
-            height: 256,
+            height: 128,
             depth_or_array_layers: 1,
         };
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -309,9 +313,11 @@ static NV12_TEXTURE_RENDERING: GpuTestConfiguration = GpuTestConfiguration::new(
             .enable_noop(),
     )
     .run_sync(|ctx| {
+        // Deliberately non-square so a width/height swap is caught. Both
+        // dimensions stay even, as required by NV12/P010 (chroma is half-res).
         let size = wgpu::Extent3d {
             width: 256,
-            height: 256,
+            height: 128,
             depth_or_array_layers: 1,
         };
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -351,9 +357,11 @@ static NV12_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
             .enable_noop(),
     )
     .run_sync(|ctx| {
+        // Deliberately non-square so a width/height swap is caught. Both
+        // dimensions stay even, as required by NV12/P010 (chroma is half-res).
         let size = wgpu::Extent3d {
             width: 256,
-            height: 256,
+            height: 128,
             depth_or_array_layers: 1,
         };
         let input_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -399,8 +407,9 @@ static NV12_PLANE_TO_SINGLE_PLANE_COPY: GpuTestConfiguration = GpuTestConfigurat
         // Width chosen so that bytes-per-row is 256-aligned for both planes:
         //   luma   R8Unorm:  256 px * 1 byte/px = 256
         //   chroma Rg8Unorm: 128 px * 2 byte/px = 256
+        // Height is deliberately different from width so a swap is caught.
         const WIDTH: u32 = 256;
-        const HEIGHT: u32 = 256;
+        const HEIGHT: u32 = 128;
         let luma_size = wgpu::Extent3d {
             width: WIDTH,
             height: HEIGHT,
@@ -424,10 +433,23 @@ static NV12_PLANE_TO_SINGLE_PLANE_COPY: GpuTestConfiguration = GpuTestConfigurat
         });
 
         // Distinct patterns per plane so a swap or plane-0-fallback would fail
-        // the assertion at the end.
-        let luma_bytes: Vec<u8> = (0..(WIDTH * HEIGHT) as usize).map(|i| i as u8).collect();
-        let chroma_bytes: Vec<u8> = (0..(WIDTH / 2 * HEIGHT / 2 * 2) as usize)
-            .map(|i| (i ^ 0xA5) as u8)
+        // the assertion at the end. Each pattern depends on both `x` and `y`
+        // with different per-axis weights, so it is asymmetric under transpose,
+        // horizontal mirror, and vertical mirror — a row/column mix-up changes
+        // the bytes and fails the comparison.
+        let luma_bytes: Vec<u8> = (0..HEIGHT)
+            .flat_map(|y| {
+                (0..WIDTH).map(move |x| x.wrapping_mul(3).wrapping_add(y.wrapping_mul(101)) as u8)
+            })
+            .collect();
+        let chroma_bytes: Vec<u8> = (0..HEIGHT / 2)
+            .flat_map(|y| {
+                (0..WIDTH / 2).flat_map(move |x| {
+                    let r = x.wrapping_mul(7).wrapping_add(y.wrapping_mul(53)) as u8;
+                    let g = (x.wrapping_mul(29).wrapping_add(y.wrapping_mul(13)) ^ 0xA5) as u8;
+                    [r, g]
+                })
+            })
             .collect();
 
         ctx.queue.write_texture(
@@ -593,9 +615,11 @@ static P010_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
             .enable_noop(),
     )
     .run_sync(|ctx| {
+        // Deliberately non-square so a width/height swap is caught. Both
+        // dimensions stay even, as required by NV12/P010 (chroma is half-res).
         let size = wgpu::Extent3d {
             width: 256,
-            height: 256,
+            height: 128,
             depth_or_array_layers: 1,
         };
         let input_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {

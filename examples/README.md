@@ -1,6 +1,6 @@
 > [!NOTE]  
 > These are the examples for the development version of wgpu. If you want to see the examples for the latest crates.io release
-> of wgpu, go to the [latest release branch](https://github.com/gfx-rs/wgpu/tree/v29/examples#readme).
+> of wgpu, go to the [latest release branch](https://github.com/gfx-rs/wgpu/tree/v30/examples#readme).
 
 # Examples
 
@@ -17,13 +17,14 @@ be cloned out of the repository to serve as a starting point for your own projec
 | ---                                              | Introductory Examples                                                                                         | ---         |
 | [1. hello compute](standalone/01_hello_compute/) | Simplest example and shows how to run a compute shader on a given set of input data and get the results back. | Native-Only |
 | [2. hello window](standalone/02_hello_window/)   | Shows how to create a window and render into it.                                                              | Native-Only |
+| [3. hdr surface](standalone/03_hdr_surface/)     | Prints a surface's (format, color space) capabilities and renders an HDR luminance test pattern.              | All         |
 | ---                                              | Special Examples                                                                                              | ---         |
 | [custom backend](standalone/custom_backend/)     | Shows how to implement and use custom wgpu context                                                            | All         |
 
 You can also use [`cargo-generate`](https://github.com/cargo-generate/cargo-generate) to easily use these as a basis for your own projects.
 
 ```sh
-cargo generate gfx-rs/wgpu --branch v29
+cargo generate gfx-rs/wgpu --branch v30
 ```
 
 ## Framework Examples

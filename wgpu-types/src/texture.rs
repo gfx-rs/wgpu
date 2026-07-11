@@ -186,8 +186,18 @@ bitflags::bitflags! {
         const STORAGE_BINDING = 1 << 3;
         /// Allows a texture to be an output attachment of a render pass.
         ///
-        /// Consider adding [`TextureUsages::TRANSIENT`] if the contents are not reused.
+        /// Consider adding [`TextureUsages::TRANSIENT_ATTACHMENT`] if the contents are not reused.
         const RENDER_ATTACHMENT = 1 << 4;
+
+        /// Specifies the contents of this texture will not be used in another pass to potentially reduce memory usage and bandwidth.
+        ///
+        /// No-op on platforms on platforms that do not benefit from transient textures.
+        /// Generally mobile and Apple chips care about this.
+        ///
+        /// Incompatible with ALL other usages except [`TextureUsages::RENDER_ATTACHMENT`] and requires it.
+        ///
+        /// Requires [`LoadOp::Clear`] or [`LoadOp::DontCare`] (if it is available) and [`StoreOp::Discard`].
+        const TRANSIENT_ATTACHMENT = 1 << 5;
 
         //
         // ---- Restart Numbering for Native Features ---
@@ -196,15 +206,6 @@ bitflags::bitflags! {
         //
         /// Allows a texture to be used with image atomics. Requires [`Features::TEXTURE_ATOMIC`].
         const STORAGE_ATOMIC = 1 << 16;
-        /// Specifies the contents of this texture will not be used in another pass to potentially reduce memory usage and bandwidth.
-        ///
-        /// No-op on platforms on platforms that do not benefit from transient textures.
-        /// Generally mobile and Apple chips care about this.
-        ///
-        /// Incompatible with ALL other usages except [`TextureUsages::RENDER_ATTACHMENT`] and requires it.
-        ///
-        /// Requires [`StoreOp::Discard`].
-        const TRANSIENT = 1 << 17;
     }
 }
 

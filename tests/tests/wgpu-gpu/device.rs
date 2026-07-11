@@ -12,15 +12,12 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         DIFFERENT_BGL_ORDER_BW_SHADER_AND_API,
         DEVICE_DESTROY_THEN_BUFFER_CLEANUP,
         DEVICE_AND_QUEUE_HAVE_DIFFERENT_IDS,
+        REQUEST_DEVICE_ERROR_MESSAGE_NATIVE,
     ]);
 
-    #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
+    #[cfg(not(wasm_test))]
     {
-        vec.extend([
-            DEVICE_LIFETIME_CHECK,
-            MULTIPLE_DEVICES,
-            REQUEST_DEVICE_ERROR_MESSAGE_NATIVE,
-        ]);
+        vec.extend([DEVICE_LIFETIME_CHECK, MULTIPLE_DEVICES]);
     }
 }
 
@@ -54,7 +51,7 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
         ctx.async_poll(wgpu::PollType::Poll).await.unwrap();
     });
 
-#[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
+#[cfg(not(wasm_test))]
 #[gpu_test]
 static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
@@ -81,7 +78,7 @@ static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
         );
     });
 
-#[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
+#[cfg(not(wasm_test))]
 #[gpu_test]
 static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
@@ -105,7 +102,6 @@ static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
             .expect("failed to create device");
     });
 
-#[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 #[gpu_test]
 static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters({
@@ -128,9 +124,6 @@ static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration = GpuTestConfig
     .run_async(|_ctx| request_device_error_message());
 
 /// Check that `RequestDeviceError`s produced have some diagnostic information.
-///
-/// Note: this is a wasm *and* native test. On wasm it is run directly; on native, indirectly
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
 async fn request_device_error_message() {
     // Not using initialize_test() because that doesn't let us catch the error
     // nor .await anything
