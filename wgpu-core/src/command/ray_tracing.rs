@@ -320,7 +320,11 @@ pub(crate) fn build_acceleration_structures(
                 ));
             }
             let blas = &instance.blas;
-            state.tracker.blas_s.insert_single(blas.clone());
+            let is_new_dependency = seen_dependencies.insert(blas.tracker_index());
+
+            if is_new_dependency {
+                state.tracker.blas_s.insert_single(blas.clone());
+            }
 
             instance_buffer_staging_source.extend(state.device.raw().tlas_instance_to_bytes(
                 hal::TlasInstance {
@@ -349,7 +353,7 @@ pub(crate) fn build_acceleration_structures(
 
             instance_count += 1;
 
-            if seen_dependencies.insert(blas.tracker_index()) {
+            if is_new_dependency {
                 dependencies.push(blas.clone());
             }
         }
