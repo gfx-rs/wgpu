@@ -873,14 +873,20 @@ fn prints_config_schema() {
     );
 }
 
+/// Normalize line endings + trailing whitespace so snapshot comparisons are stable across
+/// platforms (git may check the golden files out as CRLF on Windows, while the binary emits LF).
+fn norm(s: &str) -> String {
+    s.replace("\r\n", "\n").trim_end().to_string()
+}
+
 #[test]
 fn help_matches_snapshot() {
     let expected = include_str!("snapshots/help.txt");
     let out = naga().arg("--help").output().unwrap();
     let actual = String::from_utf8(out.stdout).unwrap();
     assert_eq!(
-        actual.trim_end(),
-        expected.trim_end(),
+        norm(&actual),
+        norm(expected),
         "--help output changed. If intentional, regenerate:\n\
          cargo run -q -p naga-cli -- --help > naga-cli/tests/snapshots/help.txt"
     );
@@ -893,8 +899,8 @@ fn config_schema_matches_snapshot() {
     assert!(out.status.success());
     let actual = String::from_utf8(out.stdout).unwrap();
     assert_eq!(
-        actual.trim_end(),
-        expected.trim_end(),
+        norm(&actual),
+        norm(expected),
         "--print-config-schema output changed (a naga Options field or schemars derive moved). \
          If intentional, regenerate:\n\
          cargo run -q -p naga-cli -- --print-config-schema > naga-cli/tests/snapshots/config-schema.json"
@@ -916,8 +922,8 @@ fn invalid_wgsl_error_json_matches_snapshot() {
     assert!(!out.status.success());
     let actual = String::from_utf8(out.stdout).unwrap();
     assert_eq!(
-        actual.trim_end(),
-        expected.trim_end(),
+        norm(&actual),
+        norm(expected),
         "structured error JSON changed. If intentional (e.g. a naga diagnostic message or span \
          changed), regenerate:\n\
          printf 'fn f( {{' > /tmp/invalid.wgsl && \
