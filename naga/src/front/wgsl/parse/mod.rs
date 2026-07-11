@@ -2441,7 +2441,7 @@ mod serde_tests {
         // serde(default) falls back to Options::new() which sets capabilities = Capabilities::all().
         let opts: Options = serde_json::from_str("{}").unwrap();
         assert_eq!(opts.capabilities, Capabilities::all());
-        assert_eq!(opts.parse_doc_comments, false);
+        assert!(!opts.parse_doc_comments);
     }
 
     #[test]

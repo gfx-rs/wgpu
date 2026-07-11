@@ -3291,13 +3291,13 @@ mod serde_tests {
         };
         let json = serde_json::to_string(&opts).unwrap();
         let back: Options = serde_json::from_str(&json).unwrap();
-        assert_eq!(back.strict_capabilities, true);
+        assert!(back.strict_capabilities);
         assert_eq!(back.block_ctx_dump_prefix.as_deref(), Some("dump"));
 
         // serde(default): empty object deserializes to defaults (adjust_coordinate_space=true, strict_capabilities=true).
         let def: Options = serde_json::from_str("{}").unwrap();
-        assert_eq!(def.adjust_coordinate_space, true);
-        assert_eq!(def.strict_capabilities, true);
+        assert!(def.adjust_coordinate_space);
+        assert!(def.strict_capabilities);
         assert!(def.block_ctx_dump_prefix.is_none());
     }
 }

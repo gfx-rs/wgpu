@@ -1260,7 +1260,7 @@ mod serde_tests {
         let json = serde_json::to_string(&opts).unwrap();
         let back: Options = serde_json::from_str(&json).unwrap();
         assert_eq!(back.lang_version, (1, 5));
-        assert_eq!(back.common.force_loop_bounding, false);
+        assert!(!back.common.force_loop_bounding);
         assert!(back.debug_info.is_none());
 
         // partial JSON works via serde(default)
