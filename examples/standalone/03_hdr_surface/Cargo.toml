@@ -1,0 +1,36 @@
+[package]
+name = "wgpu-example-03-hdr-surface"
+edition = "2021"
+rust-version = "1.87"
+publish = false
+
+[dependencies]
+wgpu = "30.0.0"
+winit = { version = "0.30.8", features = ["android-native-activity"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger = "0.11"
+pollster = "0.4"
+
+# macOS: observe screen-parameter changes to re-query HDR info (winit has no event for it).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.3"
+objc2-foundation = { version = "0.3.2", features = [
+    "NSNotification",
+    "NSOperation",
+    "NSString",
+] }
+block2 = "0.6.2"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.5"
+wasm-bindgen = "0.2.108"
+wasm-bindgen-futures = "0.4.58"
+web-sys = { version = "0.3.85", features = [
+    "console",
+    "Document",
+    "Element",
+    "HtmlCanvasElement",
+    "Location",
+    "Window",
+] }

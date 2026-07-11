@@ -2279,6 +2279,178 @@ impl crate::Device for super::Device {
         self.counters.compute_pipelines.sub(1);
     }
 
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        desc: &crate::RayTracingPipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
+    ) -> Result<super::RayTracingPipeline, crate::PipelineError> {
+        let mut stages = Vec::new();
+        let mut groups = Vec::new();
+
+        let compiled_ray_gen = self.compile_stage(
+            &desc.ray_generation,
+            naga::ShaderStage::RayGeneration,
+            &desc.layout.binding_map,
+        )?;
+
+        groups.push(
+            vk::RayTracingShaderGroupCreateInfoKHR::default()
+                .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR)
+                .general_shader(0) // stages is empty so next index is 0.
+                .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL),
+        );
+
+        stages.push(compiled_ray_gen.create_info);
+
+        let compiled_miss = self.compile_stage(
+            &desc.miss,
+            naga::ShaderStage::Miss,
+            &desc.layout.binding_map,
+        )?;
+
+        groups.push(
+            vk::RayTracingShaderGroupCreateInfoKHR::default()
+                .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR)
+                .general_shader(1) // stages always has one element so next index is 1.
+                .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL),
+        );
+
+        stages.push(compiled_miss.create_info);
+
+        // This is to keep alive the CStrings, as the ones in the loop would be deallocated
+        // causing UB otherwise.
+        let mut compiled_stages = Vec::new();
+
+        for group in desc.intersection {
+            let compiled_closest_hits = self.compile_stage(
+                &group.closest_hit,
+                naga::ShaderStage::ClosestHit,
+                &desc.layout.binding_map,
+            )?;
+
+            let closest_idx = stages.len();
+
+            stages.push(compiled_closest_hits.create_info);
+
+            compiled_stages.push(compiled_closest_hits);
+
+            let mut raw_hit: vk::RayTracingShaderGroupCreateInfoKHR<'_> =
+                vk::RayTracingShaderGroupCreateInfoKHR::default()
+                    .closest_hit_shader(closest_idx as _)
+                    .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                    .intersection_shader(vk::SHADER_UNUSED_KHR)
+                    .general_shader(vk::SHADER_UNUSED_KHR)
+                    .ty(vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP);
+
+            if let Some(any_hit) = &group.any_hit {
+                let compiled_any_hit = self.compile_stage(
+                    any_hit,
+                    naga::ShaderStage::AnyHit,
+                    &desc.layout.binding_map,
+                )?;
+
+                let any_idx = stages.len();
+
+                stages.push(compiled_any_hit.create_info);
+
+                compiled_stages.push(compiled_any_hit);
+
+                raw_hit = raw_hit.any_hit_shader(any_idx as _);
+            }
+
+            groups.push(raw_hit);
+        }
+
+        let create_infos = [{
+            vk::RayTracingPipelineCreateInfoKHR::default()
+                .layout(desc.layout.raw)
+                .max_pipeline_ray_recursion_depth(desc.max_recursion_depth)
+                .stages(&stages)
+                .groups(&groups)
+        }];
+
+        let pipeline_cache = desc
+            .cache
+            .map(|it| it.raw)
+            .unwrap_or(vk::PipelineCache::null());
+
+        let fns = self
+            .shared
+            .extension_fns
+            .ray_tracing_pipelines
+            .as_ref()
+            .unwrap();
+        let pipelines = unsafe {
+            fns.create_ray_tracing_pipelines(
+                vk::DeferredOperationKHR::null(),
+                pipeline_cache,
+                &create_infos,
+                None,
+            )
+            .map_err(|(_, e)| super::map_pipeline_err(e))
+        }?;
+
+        if let Some(raw_module) = compiled_ray_gen.temp_raw_module {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+
+        if let Some(raw_module) = compiled_miss.temp_raw_module {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+
+        for raw_module in compiled_stages
+            .into_iter()
+            .flat_map(|stage| stage.temp_raw_module)
+        {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+
+        self.counters.ray_tracing_pipelines.add(1);
+
+        Ok(super::RayTracingPipeline { raw: pipelines[0] })
+    }
+
+    unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: super::RayTracingPipeline) {
+        unsafe { self.shared.raw.destroy_pipeline(pipeline.raw, None) };
+
+        self.counters.ray_tracing_pipelines.sub(1);
+    }
+
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        pipeline: &super::RayTracingPipeline,
+        groups: core::ops::Range<u32>,
+    ) -> Result<Vec<u8>, crate::DeviceError> {
+        let fns = self
+            .shared
+            .extension_fns
+            .ray_tracing_pipelines
+            .as_ref()
+            .unwrap();
+
+        let num = groups.end - groups.start;
+
+        unsafe {
+            fns.get_ray_tracing_shader_group_handles(
+                pipeline.raw,
+                groups.start,
+                num,
+                (num * self
+                    .shared
+                    .private_caps
+                    .ray_tracing_pipeline_group_data_size) as usize,
+            )
+        }
+        .map_err(super::map_host_device_oom_err)
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,
@@ -2818,7 +2990,9 @@ impl crate::Device for super::Device {
             transform: instance.transform,
             custom_data_and_mask: (instance.custom_data & MAX_U24)
                 | (u32::from(instance.mask) << 24),
-            shader_binding_table_record_offset_and_flags: 0,
+            shader_binding_table_record_offset_and_flags: (instance
+                .pipeline_intersection_data_offset
+                & MAX_U24),
             acceleration_structure_reference: instance.blas_address,
         };
         bytemuck::bytes_of(&temp).to_vec()

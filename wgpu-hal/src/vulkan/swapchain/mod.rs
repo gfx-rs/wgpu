@@ -7,6 +7,21 @@ pub(super) use native::*;
 
 mod native;
 
+/// Win32 `HWND`, handed to a Win32 [`NativeSurface`] at construction so it can
+/// build its [`DxgiHdrSource`](crate::auxil::dxgi::hdr::DxgiHdrSource) for the
+/// display-HDR query. Borrowed from the app's window.
+///
+/// A newtype rather than a bare `isize` so the cfg lives in one place: off Windows
+/// it is an uninhabited enum, so the non-Windows surface paths can't construct one
+/// and the constructor signatures stay cfg-free.
+#[cfg(windows)]
+#[derive(Clone, Copy)]
+pub(crate) struct WindowHandle(pub(crate) windows::Win32::Foundation::HWND);
+
+#[cfg(not(windows))]
+#[derive(Clone, Copy)]
+pub(crate) enum WindowHandle {}
+
 pub(super) trait Surface: Send + Sync + 'static {
     /// Returns the surface capabilities for the given adapter.
     ///
@@ -24,6 +39,14 @@ pub(super) trait Surface: Send + Sync + 'static {
         config: &crate::SurfaceConfiguration,
         provided_old_swapchain: Option<Box<dyn Swapchain>>,
     ) -> Result<Box<dyn Swapchain>, crate::SurfaceError>;
+
+    /// This surface's current display HDR info, if it can report it.
+    ///
+    /// `Some` only for Win32 surfaces (read through DXGI); `None` otherwise
+    /// (Wayland / X11 / Android / Metal), which is the default.
+    fn display_hdr_info(&self) -> Option<wgt::DisplayHdrInfo> {
+        None
+    }
 
     /// Allows downcasting to the concrete type.
     fn as_any(&self) -> &dyn Any;

@@ -16,5 +16,7 @@ static STRICT_WEBGPU_COMPLIANCE_ADAPTER: GpuTestConfiguration = GpuTestConfigura
             .adapter
             .get_downlevel_capabilities()
             .is_webgpu_compliant());
-        assert!(wgpu::Limits::defaults().check_limits(&ctx.adapter.limits()));
+        let mut limits = wgpu::Limits::defaults();
+        limits.zero_native_only();
+        assert!(limits.check_limits(&ctx.adapter.limits()));
     });

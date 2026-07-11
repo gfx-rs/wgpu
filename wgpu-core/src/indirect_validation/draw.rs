@@ -547,7 +547,7 @@ fn create_validation_module(
         CreateShaderModuleError::Validation(naga::error::ShaderError {
             source: src.to_string(),
             label: None,
-            inner: Box::new(inner),
+            inner,
         })
     })?;
     let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {

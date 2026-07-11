@@ -324,6 +324,8 @@ pub struct Options {
     /// overflow. Set to false to emit raw division for faster compute shaders
     /// where the developer guarantees non-zero divisors.
     pub emit_int_div_checks: bool,
+    /// Whether to validate ray query calls
+    pub ray_query_initialization_tracking: bool,
 }
 
 impl Default for Options {
@@ -339,6 +341,7 @@ impl Default for Options {
             force_loop_bounding: true,
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,
+            ray_query_initialization_tracking: true,
             emit_int_div_checks: true,
         }
     }
@@ -424,6 +427,39 @@ pub struct PipelineOptions {
     /// vertex_buffer_mappings are used during shader translation to
     /// support vertex pulling.
     pub vertex_buffer_mappings: Vec<VertexBufferMapping>,
+
+    /// For each storage `binding_array` in the pipeline layout, the number of
+    /// elements that layout declares, keyed by `ResourceBinding`.
+    /// The MSL writer uses this to report the number of elements in an unbounded `binding_array`.
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_binding_array_length_map")
+    )]
+    pub binding_array_length_map: crate::FastHashMap<crate::ResourceBinding, u32>,
+}
+
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
+struct BindingArrayLengthMapSerialization {
+    resource_binding: crate::ResourceBinding,
+    count: u32,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_binding_array_length_map<'de, D>(
+    deserializer: D,
+) -> Result<crate::FastHashMap<crate::ResourceBinding, u32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<BindingArrayLengthMapSerialization>::deserialize(deserializer)?;
+    let mut map = crate::FastHashMap::default();
+    for item in vec {
+        map.insert(item.resource_binding, item.count);
+    }
+    Ok(map)
 }
 
 impl Options {
@@ -774,6 +810,7 @@ const WRAPPED_ARRAY_FIELD: &str = "inner";
 
 /// Information about a translated module that is required
 /// for the use of the result.
+#[derive(Debug)]
 pub struct TranslationInfo {
     /// Mapping of the entry point names. Each item in the array
     /// corresponds to an entry point index.

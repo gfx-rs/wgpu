@@ -1,4 +1,5 @@
 use alloc::boxed::Box;
+use core::fmt;
 use core::ops::RangeBounds;
 
 use crate::{api::DeferredCommandBufferActions, *};
@@ -32,6 +33,15 @@ impl Queue {
         Self {
             inner: dispatch::DispatchQueue::custom(queue),
         }
+    }
+
+    /// Returns the underlying [`webgpu::GpuQueue`] handle if this `Queue`
+    /// is on the WebGPU backend, otherwise `None`.
+    ///
+    /// [`webgpu::GpuQueue`]: crate::webgpu::GpuQueue
+    #[cfg(webgpu)]
+    pub fn as_webgpu(&self) -> Option<&webgpu::GpuQueue> {
+        self.inner.as_webgpu_opt().map(|wq| &wq.inner)
     }
 }
 
@@ -70,6 +80,15 @@ impl QueueWriteBufferView {
     /// Returns custom implementation of QueueWriteBufferView (if custom backend and is internally T)
     pub fn as_custom<T: custom::QueueWriteBufferInterface>(&self) -> Option<&T> {
         self.inner.as_custom()
+    }
+}
+
+impl fmt::Debug for QueueWriteBufferView {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("QueueWriteBufferView")
+            .field("buffer", &self.buffer)
+            .field("offset", &self.offset)
+            .finish_non_exhaustive()
     }
 }
 
@@ -326,6 +345,8 @@ impl Queue {
     /// This method will return None if:
     /// - The queue is not from the backend specified by `A`.
     /// - The queue is from the `webgpu` or `custom` backend.
+    ///
+    /// On the `webgpu` backend, use `as_webgpu` instead.
     ///
     /// # Safety
     ///

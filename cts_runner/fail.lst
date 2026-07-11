@@ -39,9 +39,7 @@ webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoder
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20bundle";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20pass";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,setBindGroup:u32array_start_and_length:* // deno unwrap
-webgpu:api,validation,encoding,cmds,setImmediates:* // 62%, https://github.com/gfx-rs/wgpu/issues/8556
 webgpu:api,validation,encoding,encoder_open_state:* // https://github.com/gfx-rs/wgpu/issues/7857
-webgpu:api,validation,encoding,programmable,pipeline_immediate:* // 27%, https://github.com/gfx-rs/wgpu/issues/8556
 webgpu:api,validation,encoding,queries,resolveQuerySet:* // 93%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,render_bundle:* // 81%, readonly flag normalization mismatch
 webgpu:api,validation,image_copy,buffer_texture_copies:* // https://github.com/gfx-rs/wgpu/issues/7946
@@ -69,6 +67,7 @@ webgpu:api,validation,texture,destroy:submit_a_destroyed_texture_as_attachment:*
 webgpu:shader,execution,expression,call,builtin,atan2:f16:* // dx12, fails with dxc, passes with fxc, https://github.com/gfx-rs/wgpu/issues/9179
 webgpu:shader,execution,expression,call,builtin,textureDimensions:* // dx12, https://github.com/gfx-rs/wgpu/issues/9541
 webgpu:shader,execution,expression,call,builtin,textureNumSamples:* // dx12, fails intermittently on WARP < 1.0.17
+webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:* // metal paravirt GPU only, https://github.com/gfx-rs/wgpu/issues/8023
 
 webgpu:shader,validation,decl,let:* // texture/sampler let
 webgpu:shader,validation,decl,override:* // 93%, unrestricted_pointer_parameters not implemented, https://github.com/gfx-rs/wgpu/issues/5158
