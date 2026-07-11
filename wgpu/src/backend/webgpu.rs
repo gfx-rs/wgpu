@@ -1752,6 +1752,9 @@ impl dispatch::InstanceInterface for ContextWebGpu {
                     "pointer_composite_access" => {
                         Some(crate::WgslLanguageFeatures::PointerCompositeAccess)
                     }
+                    "immediate_address_space" => {
+                        Some(crate::WgslLanguageFeatures::ImmediateAddressSpace)
+                    }
                     _ => None,
                 })
                 .for_each(|wlf| {
