@@ -1,3 +1,7 @@
 *.mtl binary
 *.obj binary
 wgpu/src/backend/webgpu/webgpu_sys/** linguist-generated=true
+
+# naga-cli snapshot goldens are compared byte-for-byte against LF output; keep them LF
+# on all platforms (Windows checkout would otherwise use CRLF and break the tests).
+naga-cli/tests/snapshots/** text eol=lf
