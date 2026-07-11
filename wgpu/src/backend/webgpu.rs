@@ -734,8 +734,10 @@ fn map_component_swizzle(swizzle: wgt::ComponentSwizzle) -> char {
         wgt::ComponentSwizzle::A => 'a',
     }
 }
-fn map_texture_component_swizzle(swizzle: wgt::TextureComponentSwizzle) -> String {
-    let mut s = String::with_capacity(4);
+fn map_texture_component_swizzle(
+    swizzle: wgt::TextureComponentSwizzle,
+) -> arrayvec::ArrayString<4> {
+    let mut s = arrayvec::ArrayString::new();
     for component in [swizzle.r, swizzle.g, swizzle.b, swizzle.a] {
         s.push(map_component_swizzle(component));
     }
