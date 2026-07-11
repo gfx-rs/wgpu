@@ -873,10 +873,14 @@ fn prints_config_schema() {
     );
 }
 
-/// Normalize line endings + trailing whitespace so snapshot comparisons are stable across
-/// platforms (git may check the golden files out as CRLF on Windows, while the binary emits LF).
+/// Normalize snapshot output so comparisons are stable across platforms:
+/// - line endings (git may check the golden files out as CRLF on Windows, binary emits LF),
+/// - the binary name in clap's `Usage:` line, which is `naga.exe` on Windows.
 fn norm(s: &str) -> String {
-    s.replace("\r\n", "\n").trim_end().to_string()
+    s.replace("\r\n", "\n")
+        .replace("naga.exe", "naga")
+        .trim_end()
+        .to_string()
 }
 
 #[test]
