@@ -43,7 +43,7 @@ void ts_main(uint local_invocation_index : SV_GroupIndex) {
         gridSize.x > 256 ||
         gridSize.y > 256 ||
         gridSize.z > 256 ||
-        ((uint64_t)gridSize.x) * ((uint64_t)gridSize.y) > 0xffffffffull ||
+        ((uint64_t)gridSize.x) * ((uint64_t)gridSize.y) > 1024 ||
         ((uint64_t)gridSize.x) * ((uint64_t)gridSize.y) * ((uint64_t)gridSize.z) > 1024
     ) {
         gridSize = uint3(0, 0, 0);

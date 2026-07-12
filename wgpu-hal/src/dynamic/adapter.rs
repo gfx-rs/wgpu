@@ -6,6 +6,7 @@ use crate::{
 
 use super::{DynDevice, DynQueue, DynResource, DynResourceExt, DynSurface};
 
+#[expect(missing_debug_implementations, reason = "dyn")]
 pub struct DynOpenDevice {
     pub device: Box<dyn DynDevice>,
     pub queue: Box<dyn DynQueue>,
@@ -34,6 +35,11 @@ pub trait DynAdapter: DynResource {
     ) -> TextureFormatCapabilities;
 
     unsafe fn surface_capabilities(&self, surface: &dyn DynSurface) -> Option<SurfaceCapabilities>;
+
+    unsafe fn surface_display_hdr_info(
+        &self,
+        surface: &dyn DynSurface,
+    ) -> Option<wgt::DisplayHdrInfo>;
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 
@@ -65,6 +71,14 @@ impl<A: Adapter + DynResource> DynAdapter for A {
     unsafe fn surface_capabilities(&self, surface: &dyn DynSurface) -> Option<SurfaceCapabilities> {
         let surface = surface.expect_downcast_ref();
         unsafe { A::surface_capabilities(self, surface) }
+    }
+
+    unsafe fn surface_display_hdr_info(
+        &self,
+        surface: &dyn DynSurface,
+    ) -> Option<wgt::DisplayHdrInfo> {
+        let surface = surface.expect_downcast_ref();
+        unsafe { A::surface_display_hdr_info(self, surface) }
     }
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {

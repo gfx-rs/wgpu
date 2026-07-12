@@ -134,6 +134,7 @@ static_assertions::assert_impl_all!(BlasTriangleGeometry<'_>: WasmNotSendSync);
 ///
 /// Buffer data must contain `size.primitive_count` primitives at `primitive_offset`, each `size.stride` bytes,
 /// with `stride` at least [`AABB_GEOMETRY_MIN_STRIDE`] and a multiple of 8.
+#[derive(Debug)]
 pub struct BlasAabbGeometry<'a> {
     /// Sub descriptor for the size defining attributes of this geometry.
     pub size: &'a BlasAABBGeometrySizeDescriptor,
@@ -148,6 +149,7 @@ pub struct BlasAabbGeometry<'a> {
 static_assertions::assert_impl_all!(BlasAabbGeometry<'_>: WasmNotSendSync);
 
 /// Contains the sets of geometry that go into a [Blas].
+#[derive(Debug)]
 pub enum BlasGeometries<'a> {
     /// Triangle geometry variant.
     TriangleGeometries(Vec<BlasTriangleGeometry<'a>>),
@@ -157,6 +159,7 @@ pub enum BlasGeometries<'a> {
 static_assertions::assert_impl_all!(BlasGeometries<'_>: WasmNotSendSync);
 
 /// Builds the given sets of geometry into the given [Blas].
+#[derive(Debug)]
 pub struct BlasBuildEntry<'a> {
     /// Reference to the acceleration structure.
     pub blas: &'a Blas,
@@ -165,7 +168,6 @@ pub struct BlasBuildEntry<'a> {
 }
 static_assertions::assert_impl_all!(BlasBuildEntry<'_>: WasmNotSendSync);
 
-#[derive(Debug, Clone)]
 /// Bottom Level Acceleration Structure (BLAS).
 ///
 /// A BLAS is a device-specific raytracing acceleration structure that contains geometry data.
@@ -173,6 +175,7 @@ static_assertions::assert_impl_all!(BlasBuildEntry<'_>: WasmNotSendSync);
 /// These BLASes are combined with transform in a [TlasInstance] to create a [Tlas].
 ///
 /// [Tlas]: crate::Tlas
+#[derive(Debug, Clone)]
 pub struct Blas {
     pub(crate) handle: Option<u64>,
     pub(crate) inner: dispatch::DispatchBlas,
@@ -240,6 +243,7 @@ impl Blas {
 }
 
 /// Context version of [BlasTriangleGeometry].
+#[expect(missing_debug_implementations)]
 pub struct ContextBlasTriangleGeometry<'a> {
     #[expect(dead_code)]
     pub(crate) size: &'a BlasTriangleGeometrySizeDescriptor,
@@ -260,6 +264,7 @@ pub struct ContextBlasTriangleGeometry<'a> {
 }
 
 /// Context version of [BlasGeometries].
+#[expect(missing_debug_implementations)]
 pub enum ContextBlasGeometries<'a> {
     /// Triangle geometries.
     TriangleGeometries(Box<dyn Iterator<Item = ContextBlasTriangleGeometry<'a>> + 'a>),
@@ -268,6 +273,7 @@ pub enum ContextBlasGeometries<'a> {
 }
 
 /// Context version of [BlasAabbGeometry].
+#[expect(missing_debug_implementations)]
 pub struct ContextBlasAabbGeometry<'a> {
     #[expect(dead_code)]
     pub(crate) size: &'a BlasAABBGeometrySizeDescriptor,
@@ -280,6 +286,7 @@ pub struct ContextBlasAabbGeometry<'a> {
 }
 
 /// Context version see [BlasBuildEntry].
+#[expect(missing_debug_implementations)]
 pub struct ContextBlasBuildEntry<'a> {
     #[expect(dead_code)]
     pub(crate) blas: &'a dispatch::DispatchBlas,

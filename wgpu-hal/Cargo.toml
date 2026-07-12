@@ -34,15 +34,16 @@ targets = [
 ignored = ["cfg_aliases"]
 
 [lints.rust]
+missing_debug_implementations = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(feature, values("cargo-clippy"))', # objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
-    'cfg(web_sys_unstable_apis)',           # web-sys uses this
+    'cfg(web_sys_unstable_apis)', # web-sys uses this
+    'cfg(windows_angle)',
 ] }
 
 [lib]
 
 [features]
-
 ########################
 ### Backend Features ###
 ########################
@@ -58,7 +59,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 # wgpu-core's features are defined to enable the backends on their "default" platforms. For example we
 # exclude the Vulkan backend on MacOS unless a separate feature `vulkan-portability` is enabled. In response
 # to these features, it enables features of platform specific crates. For example, the `vulkan` feature in wgpu-core
-# enables the `vulkan` feature in `wgpu-core-deps-windows-linux-android` which in turn enables the
+# enables the `vulkan` feature in `wgpu-core-deps-linux-android-bsd` which in turn enables the
 # `vulkan` feature in `wgpu-hal` _only_ on those platforms. If you enable the `vulkan-portability` feature, it
 # will enable the `vulkan` feature in `wgpu-core-deps-apple`. The only way to do this is unfortunately to have
 # a separate crate for each platform category that participates in the feature unification.
@@ -76,9 +77,10 @@ metal = [
     "dep:arrayvec",
     "dep:block2",
     "dep:bytemuck",
-    "dep:libc",
+    "dep:libloading",
     "dep:objc2",
     "dep:objc2-core-foundation",
+    "dep:objc2-core-graphics",
     "dep:objc2-foundation",
     "dep:objc2-metal",
     "dep:objc2-quartz-core",
@@ -101,8 +103,14 @@ vulkan = [
     "dep:raw-window-metal",
     "dep:smallvec",
     "dep:windows",
+    "dep:windows-core",
     "gpu-allocator/vulkan",
     "windows/Win32",
+    "windows/Win32_Devices_Display",
+    "windows/Win32_Foundation",
+    "windows/Win32_Graphics_Dxgi",
+    "windows/Win32_Graphics_Dxgi_Common",
+    "windows/Win32_Graphics_Gdi",
 ]
 gles = [
     "dep:arrayvec",
@@ -122,7 +130,7 @@ gles = [
     "dep:windows-result",
     "naga/glsl-out",
     "wgpu-types/web",
-    "windows-result/std",                   # Need to enable this for the `Error` impl on `windows_result::Error` to work.
+    "windows-result/std", # Need to enable this for the `Error` impl on `windows_result::Error` to work.
     "windows/Win32_Graphics_Gdi",
     "windows/Win32_Graphics_OpenGL",
     "windows/Win32_System_LibraryLoader",
@@ -145,12 +153,14 @@ dx12 = [
     "naga/hlsl-out",
     "once_cell/std",
     "windows/Win32_Devices_DeviceAndDriverInstallation",
+    "windows/Win32_Devices_Display",
     "windows/Win32_Graphics_Direct3D_Dxc",
     "windows/Win32_Graphics_Direct3D_Fxc",
     "windows/Win32_Graphics_Direct3D",
     "windows/Win32_Graphics_Direct3D12",
     "windows/Win32_Graphics_DirectComposition",
     "windows/Win32_Graphics_Dxgi_Common",
+    "windows/Win32_Graphics_Gdi",
     "windows/Win32_Security",
     "windows/Win32_System_Diagnostics_Debug",
     "windows/Win32_System_Kernel",
@@ -288,6 +298,7 @@ block2 = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true }
 objc2 = { workspace = true, optional = true }
 objc2-core-foundation = { workspace = true, optional = true }
+objc2-core-graphics = { workspace = true, optional = true }
 objc2-foundation = { workspace = true, optional = true }
 objc2-metal = { workspace = true, optional = true }
 objc2-quartz-core = { workspace = true, optional = true }
@@ -346,9 +357,9 @@ cfg_aliases.workspace = true
 
 [dev-dependencies]
 env_logger.workspace = true
-glam.workspace = true                                            # for ray-traced-triangle example
+glam.workspace = true # for ray-traced-triangle example
 naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
-winit.workspace = true                                           # for "halmark" example
+winit.workspace = true # for "halmark" example
 
 ### Platform: Windows + MacOS + Linux for "raw-gles" example ###
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos", target_env = "ohos")))'.dev-dependencies]

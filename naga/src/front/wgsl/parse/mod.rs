@@ -279,6 +279,7 @@ impl<'a> BindingParser<'a> {
 }
 
 /// Configuration for the whole parser run.
+#[derive(Debug)]
 pub struct Options {
     /// Controls whether the parser should parse doc comments.
     pub parse_doc_comments: bool,
@@ -296,6 +297,7 @@ impl Options {
     }
 }
 
+#[derive(Debug)]
 pub struct Parser {
     rules: Vec<(Rule, usize)>,
     recursion_depth: u32,

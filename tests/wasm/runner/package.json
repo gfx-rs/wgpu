@@ -1,0 +1,20 @@
+{
+  "name": "runner",
+  "type": "module",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "MIT OR Apache-2.0",
+  "description": "",
+  "dependencies": {
+    "@playwright/browser-chromium": "^1.61.0",
+    "express": "^5.2.1",
+    "playwright": "^1.61.0"
+  },
+  "allowScripts": {
+    "@playwright/browser-chromium@1.61.0": true,
+    "fsevents@2.3.2": true
+  }
+}
