@@ -677,7 +677,7 @@ impl crate::Device for super::Device {
                 break 'b false;
             }
             // Subresource doesn't need a texture view as we use `setLevel` and `setSlice` of `MTLRenderPassDescriptor`.
-            if !(type_equal && range_full_resource && swizzle.is_none()) {
+            if !type_equal || !range_full_resource || swizzle.is_some() {
                 break 'b true;
             }
             false
