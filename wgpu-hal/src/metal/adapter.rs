@@ -1427,8 +1427,8 @@ impl super::CapabilitiesQuery {
             // "Maximum number of entries in the sampler state argument table, per graphics or kernel function"
             max_samplers_per_shader_stage: 16,
             max_sampled_textures_per_shader_stage,
-            max_storage_textures_per_shader_stage,
             max_storage_buffers_per_shader_stage,
+            max_storage_textures_per_shader_stage,
             max_uniform_buffers_per_shader_stage,
             max_vertex_buffers,
             max_buffer_size: self.max_buffer_size,
