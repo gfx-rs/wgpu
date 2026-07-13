@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-core-deps-emscripten"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Feature unification helper crate for the Emscripten platform"
 homepage.workspace = true

@@ -1,7 +1,6 @@
 [package]
 name = "naga-fuzz"
 version.workspace = true
-authors.workspace = true
 publish = false
 edition.workspace = true
 license.workspace = true
