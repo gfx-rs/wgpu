@@ -1101,7 +1101,7 @@ impl super::Device {
 #[derive(Debug)]
 pub struct Swapchain {
     surface: khronos_egl::Surface,
-    wl_window: Option<*mut ffi::c_void>,
+    wl_window: Option<wayland_egl::WlEglSurface>,
     framebuffer: glow::Framebuffer,
     renderbuffer: glow::Renderbuffer,
     /// Extent because the window lies
@@ -1209,7 +1209,7 @@ impl Surface {
     unsafe fn unconfigure_impl(
         &self,
         device: &super::Device,
-    ) -> Option<(khronos_egl::Surface, Option<*mut ffi::c_void>)> {
+    ) -> Option<(khronos_egl::Surface, Option<wayland_egl::WlEglSurface>)> {
         let gl = &device.shared.context.lock();
         match self.swapchain.write().take() {
             Some(sc) => {
@@ -1242,11 +1242,8 @@ impl crate::Surface for Surface {
         let (surface, wl_window) = match unsafe { self.unconfigure_impl(device) } {
             Some((sc, wl_window)) => {
                 #[cfg(unix)]
-                if let Some(window) = wl_window {
-                    wayland_sys::ffi_dispatch!(
-                        wayland_sys::egl::wayland_egl_handle(),
-                        wl_egl_window_resize,
-                        window.cast(),
+                if let Some(window) = &wl_window {
+                    window.resize(
                         config.extent.width as i32,
                         config.extent.height as i32,
                         0,
@@ -1279,15 +1276,17 @@ impl crate::Surface for Surface {
                     (WindowKind::Unknown, Rwh::OhosNdk(handle)) => handle.native_window.as_ptr(),
                     #[cfg(unix)]
                     (WindowKind::Wayland, Rwh::Wayland(handle)) => {
-                        let window = wayland_sys::ffi_dispatch!(
-                            wayland_sys::egl::wayland_egl_handle(),
-                            wl_egl_window_create,
-                            handle.surface.as_ptr().cast(),
-                            config.extent.width as i32,
-                            config.extent.height as i32,
-                        );
-                        wl_window = Some(window.cast());
-                        window.cast()
+                        let window = unsafe {
+                            wayland_egl::WlEglSurface::new_from_raw(
+                                handle.surface.cast(),
+                                config.extent.width as i32,
+                                config.extent.height as i32,
+                            )
+                            .unwrap()
+                        };
+                        let ptr = window.ptr();
+                        wl_window = Some(window);
+                        ptr.as_ptr()
                     }
                     #[cfg(Emscripten)]
                     (WindowKind::Unknown, Rwh::Web(handle)) => handle.id as *mut ffi::c_void,
@@ -1439,19 +1438,11 @@ impl crate::Surface for Surface {
     }
 
     unsafe fn unconfigure(&self, device: &super::Device) {
-        if let Some((surface, wl_window)) = unsafe { self.unconfigure_impl(device) } {
+        if let Some((surface, _wl_window)) = unsafe { self.unconfigure_impl(device) } {
             self.egl
                 .instance
                 .destroy_surface(self.egl.display, surface)
                 .unwrap();
-            if let Some(_window) = wl_window {
-                #[cfg(unix)]
-                wayland_sys::ffi_dispatch!(
-                    wayland_sys::egl::wayland_egl_handle(),
-                    wl_egl_window_destroy,
-                    _window.cast(),
-                );
-            }
         }
     }
 
