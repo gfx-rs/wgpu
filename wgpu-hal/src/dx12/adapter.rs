@@ -906,8 +906,8 @@ impl super::Adapter {
                     max_bindings_per_bind_group: u32::MAX,
                     max_sampled_textures_per_shader_stage,
                     max_samplers_per_shader_stage,
-                    max_storage_textures_per_shader_stage,
                     max_storage_buffers_per_shader_stage,
+                    max_storage_textures_per_shader_stage,
                     max_uniform_buffers_per_shader_stage,
                     // See `InputSlot` param docs: https://learn.microsoft.com/en-ca/windows/win32/api/d3d12/ns-d3d12-d3d12_input_element_desc
                     max_vertex_buffers: 16,
