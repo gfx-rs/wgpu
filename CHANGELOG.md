@@ -48,6 +48,10 @@ Bottom level categories:
 
 - Add `BufferBinding::buffer`, a public read accessor for the bound buffer, which was previously inaccessible to out-of-tree `wgpu_hal::Api` implementations. By @danlehmann in [#9820](https://github.com/gfx-rs/wgpu/pull/9820).
 
+#### Metal
+
+- Fix Naga's Metal backend crashing when a storage texture was used as a function argument. By @ErichDonGubler in [#9867](https://github.com/gfx-rs/wgpu/pull/9867).
+
 #### GLES
 
 - Add ANGLE as an opt-in OpenGL backend on Windows via `cfg(windows_angle)`, while keeping the `angle` feature for ANGLE on macOS/iOS. By @csmoe in [#9422](https://github.com/gfx-rs/wgpu/pull/9422).

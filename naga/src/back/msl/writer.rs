@@ -6989,7 +6989,13 @@ template <typename A>
                     handle: arg.ty,
                     gctx: module.to_ctx(),
                     names: &self.names,
-                    access: crate::StorageAccess::empty(),
+                    access: match module.types[arg.ty].inner {
+                        crate::TypeInner::Image {
+                            class: crate::ImageClass::Storage { access, .. },
+                            ..
+                        } => access,
+                        _ => crate::StorageAccess::empty(),
+                    },
                     first_time: false,
                 };
                 let separator = separate(
