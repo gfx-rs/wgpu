@@ -1321,10 +1321,6 @@ impl ModuleInfo {
     pub fn get_entry_point(&self, index: usize) -> &FunctionInfo {
         &self.entry_points[index]
     }
-
-    pub fn get_entry_point_immediate_size(&self, index: usize) -> u32 {
-        self.entry_point_immediate_sizes[index]
-    }
 }
 
 #[test]

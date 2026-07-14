@@ -293,7 +293,7 @@ struct EntryPoint {
     dual_source_blending: bool,
     task_payload_size: Option<u32>,
     mesh_info: Option<EntryPointMeshInfo>,
-    immediate_slots_required: naga::valid::ImmediateSlots,
+    immediate_slots: naga::valid::ImmediateSlots,
     immediate_size: u32,
 }
 
@@ -1303,8 +1303,23 @@ impl Interface {
             }
             ep.dual_source_blending = func_info.dual_source_blending;
             ep.workgroup_size = entry_point.workgroup_size;
-            ep.immediate_slots_required = func_info.immediate_slots_used;
-            ep.immediate_size = info.get_entry_point_immediate_size(index);
+            ep.immediate_slots = func_info.immediate_slots_used;
+
+            // Find the used immediates. Naga should have validated that
+            // at most one immediate is used by the entry point.
+            let mut used_immediates = module
+                .global_variables
+                .iter()
+                .filter(|&(_, var)| var.space == naga::AddressSpace::Immediate)
+                .map(|(handle, _)| handle)
+                .filter(|&handle| !func_info[handle].is_empty());
+            ep.immediate_size = if let Some(immediate) = used_immediates.next() {
+                let ty = &module.types[module.global_variables[immediate].ty];
+                ty.inner.size(module.to_ctx())
+            } else {
+                0
+            };
+            assert!(used_immediates.next().is_none());
 
             if let Some(task_payload) = entry_point.task_payload {
                 ep.task_payload_size = Some(
@@ -1358,7 +1373,7 @@ impl Interface {
         self.entry_points
             .get(&EntryPointKeyRef(stage, entry_point_name))
             .map_or(Default::default(), |ep| {
-                (ep.immediate_size, ep.immediate_slots_required)
+                (ep.immediate_size, ep.immediate_slots)
             })
     }
 

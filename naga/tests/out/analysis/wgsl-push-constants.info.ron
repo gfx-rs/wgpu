@@ -238,9 +238,5 @@
             immediate_slots_used: (240),
         ),
     ],
-    entry_point_immediate_sizes: [
-        64,
-        32,
-    ],
     const_expression_types: [],
 )

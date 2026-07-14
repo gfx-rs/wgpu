@@ -1690,9 +1690,6 @@
             immediate_slots_used: (0),
         ),
     ],
-    entry_point_immediate_sizes: [
-        0,
-    ],
     const_expression_types: [
         Value(Scalar((
             kind: Float,
