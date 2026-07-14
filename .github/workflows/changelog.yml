@@ -47,5 +47,7 @@ jobs:
 
       # NOTE: Keep label name(s) in sync. with `xtask`'s implementation.
       - name: Run `cargo xtask changelog …`
+        env:
+          GITHUB_EVENT_PULL_REQUEST_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
-          cargo xtask changelog "origin/${{ github.event.pull_request.base.ref }}" ${{ contains(github.event.pull_request.labels.*.name, 'changelog: released entry changed') && '--allow-released-changes' || ''  }}
+          cargo xtask changelog "origin/${GITHUB_EVENT_PULL_REQUEST_BASE_REF}" ${{ contains(github.event.pull_request.labels.*.name, 'changelog: released entry changed') && '--allow-released-changes' || ''  }}
