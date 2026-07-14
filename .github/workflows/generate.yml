@@ -102,13 +102,18 @@ jobs:
           tool: cargo-generate
 
       - name: Run `cargo-generate`
+        env:
+          MATRIX_NAME: ${{ matrix.name }}
+          MATRIX_PATH: ${{ matrix.path }}
         run: |
           cd ..
-          cargo generate --path wgpu --name ${{ matrix.name }} ${{ matrix.path }}
+          cargo generate --path wgpu --name ${MATRIX_NAME} ${MATRIX_PATH}
 
       - name: Check generated files
+        env:
+          MATRIX_NAME: ${{ matrix.name }}
         run: |
-          cd ../${{ matrix.name }}/
+          cd ../${MATRIX_NAME}/
           cat <<EOF >> Cargo.toml
             [patch.crates-io]
             wgpu = { path = "../wgpu/wgpu" }
