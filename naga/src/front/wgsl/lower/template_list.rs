@@ -113,6 +113,7 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
         let (enumerant, span) = ctx.enumerant(expr)?;
         conv::map_address_space(enumerant, span, &ctx.enable_extensions)
     }
+
     pub fn maybe_address_space(
         &mut self,
         ctx: &ExpressionContext<'source, '_, '_>,
