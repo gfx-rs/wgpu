@@ -69,6 +69,11 @@ Bottom level categories:
 #### General
 
 - Zero-initialize padding (if any) at the end of a buffer allocation. This was application-visible in rare cases on Vulkan when a shader read beyond the valid range of a vertex buffer. By @andyleiserson in [#9791](https://github.com/gfx-rs/wgpu/pull/9791).
+- Fix required immediate slots calculation and remove `naga::valid::FunctionInfo::immediate_slots_required`. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
+
+#### naga
+
+- Fix panics when shader `var<immediate>` size is larger than 256 bytes. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
 
 #### GLES
 

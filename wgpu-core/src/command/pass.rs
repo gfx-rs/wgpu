@@ -75,7 +75,8 @@ impl ImmediateState {
         self.immediates[offset_bytes_usize / size_per_elem..end_offset_bytes / size_per_elem]
             .copy_from_slice(data);
         self.immediate_slots_set |=
-            naga::valid::ImmediateSlots::from_range(offset_bytes, size_bytes.try_into().unwrap());
+            naga::valid::ImmediateSlots::from_range(offset_bytes, size_bytes.try_into().unwrap())
+                .unwrap();
         self.immediates_dirty = true;
 
         Ok(())

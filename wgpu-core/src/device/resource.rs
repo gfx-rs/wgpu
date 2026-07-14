@@ -4666,7 +4666,7 @@ impl Device {
             }),
             device: self.clone(),
             late_sized_buffer_groups,
-            immediate_slots_required: io.immediate_slots_required,
+            immediate_slots_required: io.immediate_slots_required.unwrap(),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.compute_pipelines.clone()),
         };
@@ -5590,7 +5590,7 @@ impl Device {
             strip_index_format: desc.primitive.strip_index_format,
             vertex_steps,
             late_sized_buffer_groups,
-            immediate_slots_required: io.immediate_slots_required,
+            immediate_slots_required: io.immediate_slots_required.unwrap(),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.render_pipelines.clone()),
             is_mesh,

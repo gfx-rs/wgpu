@@ -1,10 +1,15 @@
-use core::{fmt, ops};
+use core::{
+    fmt::{self, Debug},
+    ops,
+};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("Immediate size {0} overflows the bitmask")]
+pub struct ImmediateSlotsOverflowError(pub u64);
 
 /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
 /// Bit N corresponds to bytes [N*4 .. N*4+4).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub struct ImmediateSlots(u64);
 
 impl ImmediateSlots {
@@ -13,23 +18,35 @@ impl ImmediateSlots {
     }
 
     /// Compute the bitmask for a byte range [offset .. offset + size_bytes).
-    pub const fn from_range(offset: u32, size_bytes: u32) -> Self {
+    pub const fn from_range(
+        offset: u32,
+        size_bytes: u32,
+    ) -> Result<Self, ImmediateSlotsOverflowError> {
+        let Some(end) = offset.checked_add(size_bytes) else {
+            return Err(ImmediateSlotsOverflowError(
+                offset as u64 + size_bytes as u64,
+            ));
+        };
+        if end > u64::BITS * 4 {
+            return Err(ImmediateSlotsOverflowError(end as u64));
+        }
         if size_bytes == 0 {
-            return Self(0);
+            return Ok(Self(0));
         }
         let lo = offset / 4;
         let hi = (offset + size_bytes).div_ceil(4);
-        Self(u64::MAX << lo & u64::MAX >> (64 - hi))
+        Ok(Self(u64::MAX << lo & u64::MAX >> (64 - hi)))
     }
 
     /// Compute the slots occupied by a type at a given byte offset,
     /// excluding padding between struct members.
+    /// Return `None` if the bitmask overflows.
     pub fn from_type(
         ty: &crate::TypeInner,
         offset: u32,
         types: &crate::UniqueArena<crate::Type>,
         gctx: crate::proc::GlobalCtx,
-    ) -> Self {
+    ) -> Result<Self, ImmediateSlotsOverflowError> {
         // <https://www.w3.org/TR/WGSL/#accessible-bytes>
         match *ty {
             crate::TypeInner::Matrix {
@@ -40,17 +57,17 @@ impl ImmediateSlots {
                 let mut slots = Self::default();
                 let stride = crate::proc::Alignment::from(rows) * scalar.width as u32;
                 for col in 0..u32::from(columns) {
-                    slots |= Self::from_range(col * stride, u32::from(rows) * scalar.width as u32);
+                    slots |= Self::from_range(col * stride, u32::from(rows) * scalar.width as u32)?;
                 }
-                slots
+                Ok(slots)
             }
             crate::TypeInner::Struct { ref members, .. } => {
                 let mut slots = Self::default();
                 for member in members {
                     let member_ty = &types[member.ty].inner;
-                    slots |= Self::from_type(member_ty, offset + member.offset, types, gctx);
+                    slots |= Self::from_type(member_ty, offset + member.offset, types, gctx)?;
                 }
-                slots
+                Ok(slots)
             }
             _ => Self::from_range(offset, ty.size(gctx)),
         }
@@ -64,46 +81,6 @@ impl ImmediateSlots {
     /// Returns the bits in `self` that are not set in `other`.
     pub const fn difference(self, other: Self) -> Self {
         Self(self.0 & !other.0)
-    }
-
-    /// Compute the immediate slot bitmask for a pointer expression that
-    /// refers to (part of) an immediate global variable.
-    ///
-    /// `global` is the handle of the immediate global variable that this
-    /// pointer derives from (obtained from `assignable_global`).
-    pub(crate) fn for_pointer(
-        pointer: crate::arena::Handle<crate::Expression>,
-        global: crate::arena::Handle<crate::GlobalVariable>,
-        expression_arena: &crate::Arena<crate::Expression>,
-        global_vars: &crate::Arena<crate::GlobalVariable>,
-        types: &crate::UniqueArena<crate::Type>,
-    ) -> Self {
-        use crate::Expression as E;
-        use crate::TypeInner;
-
-        let gctx = crate::proc::GlobalCtx {
-            types,
-            constants: &crate::Arena::new(),
-            overrides: &crate::Arena::new(),
-            global_expressions: &crate::Arena::new(),
-        };
-
-        let global_ty = &types[global_vars[global].ty].inner;
-
-        match expression_arena[pointer] {
-            E::GlobalVariable(_) => Self::from_type(global_ty, 0, types, gctx),
-            E::AccessIndex { base, index } => {
-                if let E::GlobalVariable(_) = expression_arena[base] {
-                    if let TypeInner::Struct { ref members, .. } = *global_ty {
-                        let member = &members[index as usize];
-                        let member_ty = &types[member.ty].inner;
-                        return Self::from_type(member_ty, member.offset, types, gctx);
-                    }
-                }
-                Self::from_type(global_ty, 0, types, gctx)
-            }
-            _ => Self::from_type(global_ty, 0, types, gctx),
-        }
     }
 }
 
@@ -147,22 +124,30 @@ impl fmt::Display for ImmediateSlots {
     }
 }
 
+impl Debug for ImmediateSlots {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::valid::ImmediateSlotsOverflowError;
+
     use super::ImmediateSlots;
 
     #[test]
     fn range_single() {
         assert_eq!(
-            ImmediateSlots::from_range(0, 4),
+            ImmediateSlots::from_range(0, 4).unwrap(),
             ImmediateSlots::from_raw(0b1)
         );
         assert_eq!(
-            ImmediateSlots::from_range(4, 4),
+            ImmediateSlots::from_range(4, 4).unwrap(),
             ImmediateSlots::from_raw(0b10)
         );
         assert_eq!(
-            ImmediateSlots::from_range(8, 4),
+            ImmediateSlots::from_range(8, 4).unwrap(),
             ImmediateSlots::from_raw(0b100)
         );
     }
@@ -170,11 +155,11 @@ mod tests {
     #[test]
     fn range_vec4() {
         assert_eq!(
-            ImmediateSlots::from_range(0, 16),
+            ImmediateSlots::from_range(0, 16).unwrap(),
             ImmediateSlots::from_raw(0b1111)
         );
         assert_eq!(
-            ImmediateSlots::from_range(16, 16),
+            ImmediateSlots::from_range(16, 16).unwrap(),
             ImmediateSlots::from_raw(0b1111_0000)
         );
     }
@@ -182,9 +167,36 @@ mod tests {
     #[test]
     fn range_full_256() {
         assert_eq!(
-            ImmediateSlots::from_range(0, 256),
+            ImmediateSlots::from_range(0, 256).unwrap(),
             ImmediateSlots::from_raw(u64::MAX)
         );
+    }
+
+    #[test]
+    fn range_overflow() {
+        assert_eq!(
+            ImmediateSlots::from_range(0, 257),
+            Err(ImmediateSlotsOverflowError(257))
+        );
+    }
+
+    #[test]
+    fn from_type_overflow() {
+        let module = crate::front::wgsl::parse_str(
+            "struct S { \
+            e64: mat4x4<f32>, \
+            e128: mat4x4<f32>, \
+            e192: mat4x4<f32>, \
+            e256: mat4x4<f32>, \
+            e260: f32\
+            }",
+        )
+        .unwrap();
+        let struct_ty = (module.types.iter().map(|ty| ty.1))
+            .find(|ty| ty.name.as_deref() == Some("S"))
+            .unwrap();
+        let slots = ImmediateSlots::from_type(&struct_ty.inner, 0, &module.types, module.to_ctx());
+        assert_eq!(slots, Err(ImmediateSlotsOverflowError(260)));
     }
 
     #[test]
@@ -193,7 +205,8 @@ mod tests {
         let struct_ty = (module.types.iter().map(|ty| ty.1))
             .find(|ty| ty.name.as_deref() == Some("S"))
             .unwrap();
-        let slots = ImmediateSlots::from_type(&struct_ty.inner, 0, &module.types, module.to_ctx());
+        let slots =
+            ImmediateSlots::from_type(&struct_ty.inner, 0, &module.types, module.to_ctx()).unwrap();
         assert_eq!(slots, ImmediateSlots::from_raw(0b1111_0001));
     }
 
@@ -203,18 +216,19 @@ mod tests {
         let struct_ty = (module.types.iter().map(|ty| ty.1))
             .find(|ty| ty.name.as_deref() == Some("S"))
             .unwrap();
-        let slots = ImmediateSlots::from_type(&struct_ty.inner, 0, &module.types, module.to_ctx());
+        let slots =
+            ImmediateSlots::from_type(&struct_ty.inner, 0, &module.types, module.to_ctx()).unwrap();
         assert_eq!(slots, ImmediateSlots::from_raw(0b0111_0111_0111));
     }
 
     #[test]
     fn range_unaligned() {
         assert_eq!(
-            ImmediateSlots::from_range(0, 3),
+            ImmediateSlots::from_range(0, 3).unwrap(),
             ImmediateSlots::from_raw(0b1)
         );
         assert_eq!(
-            ImmediateSlots::from_range(0, 5),
+            ImmediateSlots::from_range(0, 5).unwrap(),
             ImmediateSlots::from_raw(0b11)
         );
     }
@@ -224,16 +238,16 @@ mod tests {
         let required = ImmediateSlots::from_raw(0b1111_0001);
         let mut set = ImmediateSlots::default();
         assert!(!set.contains(required));
-        set |= ImmediateSlots::from_range(0, 4);
+        set |= ImmediateSlots::from_range(0, 4).unwrap();
         assert!(!set.contains(required));
-        set |= ImmediateSlots::from_range(16, 16);
+        set |= ImmediateSlots::from_range(16, 16).unwrap();
         assert!(set.contains(required));
     }
 
     #[test]
     fn difference() {
         let required = ImmediateSlots::from_raw(0b1111_0001);
-        let set = ImmediateSlots::from_range(0, 4);
+        let set = ImmediateSlots::from_range(0, 4).unwrap();
         assert_eq!(
             required.difference(set),
             ImmediateSlots::from_raw(0b1111_0000)
