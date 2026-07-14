@@ -32,8 +32,6 @@ webgpu:api,validation,createTexture:new_usages,* // https://github.com/denoland/
 webgpu:api,validation,createView:texture_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,debug:* // 92%, https://github.com/gfx-rs/wgpu/issues/8039
 webgpu:api,validation,encoding,cmds,render,draw:max_draw_count:* // https://github.com/gfx-rs/wgpu/issues/8737
-webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_offset_alignment:* // render bundle
-webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_offset_oob:* // unwrap on None in wgpu-core/src/indirect_validation/draw.rs:432:18
 webgpu:api,validation,encoding,cmds,setBindGroup:dynamic_offsets_match_expectations_in_pass_encoder:* // deno unwrap
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="compute%20pass";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20bundle";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881

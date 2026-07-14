@@ -1195,11 +1195,23 @@ fn multi_draw_indirect(
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
 
+    if !offset.is_multiple_of(4) {
+        return Err(RenderCommandError::UnalignedIndirectBufferOffset(offset).into());
+    }
+
     let stride = super::get_src_stride_of_indirect_args(family);
-    // TODO(https://github.com/gfx-rs/wgpu/issues/8051): It would be better to report this
-    // as a validation error, but it's pathological, so let's do the simpler thing for now
-    // and do the better thing as part of eliminating pass/bundle duplication.
-    assert!(offset <= wgt::BufferAddress::MAX - stride);
+    match offset.checked_add(stride) {
+        Some(end_offset) if end_offset <= buffer.size => {}
+        _ => {
+            return Err(RenderCommandError::IndirectBufferOverrun {
+                count: 1,
+                offset,
+                args_size: stride,
+                buffer_size: buffer.size,
+            }
+            .into());
+        }
+    }
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
