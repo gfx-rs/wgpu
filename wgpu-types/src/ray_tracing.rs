@@ -122,6 +122,49 @@ impl<L> CreateTlasDescriptor<L> {
     }
 }
 
+/// A single top-level acceleration structure instance in the raw byte layout that a
+/// TLAS build reads out of a [`BufferUsages::TLAS_INPUT`](crate::BufferUsages::TLAS_INPUT)
+/// instance buffer.
+///
+/// **This layout is Vulkan/DX12 only.**
+///
+/// The equivalent WGSL struct
+/// ```wgsl
+/// struct RawTlasInstance {
+///     transform: array<f32, 12>,      // row-major 3x4 affine (VkTransformMatrixKHR)
+///     custom_data_and_mask: u32,      // custom_data (low 24 bits) | mask << 24
+///     sbt_offset_and_flags: u32,      // shader-binding-table offset (low 24 bits) | flags << 24
+///     blas_address: vec2<u32>,        // Blas::handle(), low u32 then high u32
+/// }
+/// ```
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct RawTlasInstance {
+    /// Row-major 3x4 affine transform, in `VkTransformMatrixKHR` layout.
+    pub transform: [f32; 12],
+    /// `custom_data` in the low 24 bits, ray-hit `mask` in the high 8 bits.
+    pub custom_data_and_mask: u32,
+    /// Shader-binding-table record offset in the low 24 bits, instance flags in the high 8 bits.
+    pub sbt_offset_and_flags: u32,
+    /// BLAS device address, from [`Blas::handle()`](../wgpu/struct.Blas.html#method.handle).
+    pub blas_address: u64,
+}
+
+impl RawTlasInstance {
+    /// Pack the high-level instance fields into the raw layout. `custom_data` is masked to its
+    /// low 24 bits; `sbt_offset_and_flags` is left zero.
+    #[must_use]
+    pub fn new(transform: [f32; 12], custom_data: u32, mask: u8, blas_address: u64) -> Self {
+        const MAX_U24: u32 = (1 << 24) - 1;
+        Self {
+            transform,
+            custom_data_and_mask: (custom_data & MAX_U24) | ((mask as u32) << 24),
+            sbt_offset_and_flags: 0,
+            blas_address,
+        }
+    }
+}
+
 bitflags::bitflags!(
     /// Flags for acceleration structures
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

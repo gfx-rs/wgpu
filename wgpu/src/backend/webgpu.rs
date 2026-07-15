@@ -3442,6 +3442,14 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         unimplemented!("Raytracing not implemented for web");
     }
 
+    fn build_tlas_from_instances_buffer(
+        &self,
+        _tlas: &crate::Tlas,
+        _instances: &crate::TlasInstancesBuffer<'_>,
+    ) {
+        unimplemented!("Raytracing not implemented for web");
+    }
+
     fn transition_resources<'a>(
         &mut self,
         _buffer_transitions: &mut dyn Iterator<

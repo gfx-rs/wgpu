@@ -13,6 +13,7 @@ use wgpu_test::TestingContext;
 
 mod as_aabb;
 mod as_build;
+mod as_build_from_buffer;
 mod as_create;
 mod as_use_after_free;
 mod limits;
@@ -22,6 +23,7 @@ mod shader;
 pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     as_aabb::all_tests(tests);
     as_build::all_tests(tests);
+    as_build_from_buffer::all_tests(tests);
     as_create::all_tests(tests);
     as_use_after_free::all_tests(tests);
     limits::all_tests(tests);

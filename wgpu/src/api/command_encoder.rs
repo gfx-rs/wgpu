@@ -381,6 +381,33 @@ impl CommandEncoder {
             .build_acceleration_structures(&mut blas.into_iter(), &mut tlas.into_iter());
     }
 
+    /// Build a top-level acceleration structure directly from a GPU buffer of instance records,
+    /// instead of the CPU `Vec<TlasInstance>` path of [`build_acceleration_structures`].
+    ///
+    /// The buffer holds instance records in the backend's native layout see
+    /// [`wgt::RawTlasInstance`] for the Vulkan/DX12 layout and is typically filled by a compute
+    /// shader from your own transform and BLAS-address data. Each record's BLAS device address
+    /// comes from [`Blas::handle`](crate::Blas::handle). This skips all per-instance CPU work,
+    /// which matters for scenes with very large instance counts.
+    ///
+    /// The referenced BLASes must be listed in [`TlasInstancesBuffer::dependencies`] and must have
+    /// been built in an earlier submission, or earlier in this one before this build runs.
+    ///
+    /// If the device does not have [`Features::EXPERIMENTAL_RAY_QUERY`] enabled a validation error
+    /// is generated.
+    ///
+    /// [`build_acceleration_structures`]: CommandEncoder::build_acceleration_structures
+    /// [`TlasInstancesBuffer::dependencies`]: crate::TlasInstancesBuffer::dependencies
+    /// [`Features::EXPERIMENTAL_RAY_QUERY`]: wgt::Features::EXPERIMENTAL_RAY_QUERY
+    pub fn build_tlas_from_instances_buffer(
+        &mut self,
+        tlas: &Tlas,
+        instances: crate::TlasInstancesBuffer<'_>,
+    ) {
+        self.inner
+            .build_tlas_from_instances_buffer(tlas, &instances);
+    }
+
     /// Transition resources to an underlying hal resource state.
     ///
     /// This is an advanced, native-only API (no-op on web) that has two main use cases:

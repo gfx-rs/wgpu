@@ -134,6 +134,41 @@ fn render(/*whatever args you need to render*/) {
 [`Blas::ready_for_compaction`]: https://wgpu.rs/doc/wgpu/struct.Blas.html#method.ready_for_compaction
 [`Queue::compact_blas`]: https://wgpu.rs/doc/wgpu/struct.Queue.html#method.compact_blas
 
+### Building a [`Tlas`] from an instances buffer
+
+The [`TlasInstance`] path above serializes each instance on the CPU. For scenes whose instances are
+produced on the GPU (or are simply too numerous to touch per-frame on the CPU), you can instead build a TLAS straight from a buffer of instance records with
+[`CommandEncoder::build_tlas_from_instances_buffer`]. The buffer holds records in the backend's native
+instance layout [`RawTlasInstance`], which is the Vulkan (`VkAccelerationStructureInstanceKHR`) / DX12 (`D3D12_RAYTRACING_INSTANCE_DESC`) layout and must be created with [`BufferUsages::TLAS_INPUT`]. Each record's BLAS device address comes from [`Blas::handle`].
+
+**This layout is Vulkan/DX12 only.** Metal uses a different instance descriptor, so this build is rejected with a validation error on other backends. The referenced BLASes cannot be recovered from the opaque buffer, so they must be listed in [`TlasInstancesBuffer::dependencies`] (to keep them resident
+and to order the TLAS build after their builds), and `offset` must be a multiple of 16.
+
+The buffer can be filled on the CPU (e.g. `bytemuck`-cast a slice of [`RawTlasInstance`]) or by a
+compute shader. [`wgpu::util::TlasInstancePacker`] is a ready-made compute helper that packs per-instance transforms, BLAS addresses, and custom data into [`RawTlasInstance`] records.
+The packer can be used in an earlier encoder or in the same encoder as the TLAS build command.
+
+```rust
+// `instance_buf` was created with `BufferUsages::TLAS_INPUT` and filled with `RawTlasInstance`s
+encoder.build_tlas_from_instances_buffer(
+    &tlas,
+    wgpu::TlasInstancesBuffer {
+        buffer: &instance_buf,
+        offset: 0,
+        count: instance_count,
+        dependencies: &[&blas],
+    },
+);
+queue.submit([encoder.finish()]);
+```
+
+[`CommandEncoder::build_tlas_from_instances_buffer`]: https://wgpu.rs/doc/wgpu/struct.CommandEncoder.html#method.build_tlas_from_instances_buffer
+[`RawTlasInstance`]: https://wgpu.rs/doc/wgpu/struct.RawTlasInstance.html
+[`TlasInstancesBuffer::dependencies`]: https://wgpu.rs/doc/wgpu/struct.TlasInstancesBuffer.html#structfield.dependencies
+[`Blas::handle`]: https://wgpu.rs/doc/wgpu/struct.Blas.html#method.handle
+[`BufferUsages::TLAS_INPUT`]: https://wgpu.rs/doc/wgpu/struct.BufferUsages.html#associatedconstant.TLAS_INPUT
+[`wgpu::util::TlasInstancePacker`]: https://wgpu.rs/doc/wgpu/util/struct.TlasInstancePacker.html
+
 ## `naga`'s raytracing API:
 
 `naga` supports ray queries (also known as inline raytracing). To enable basic ray query functions you must add
