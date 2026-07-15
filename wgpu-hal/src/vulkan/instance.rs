@@ -160,6 +160,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
 
     #[cfg(feature = "internal_error_panic")]
     if level == log::Level::Error
+        && message_type.contains(vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION)
         && !error_is_waived(cd.message_id_number)
         && !cts_error_is_waived(cd.message_id_number)
     {
