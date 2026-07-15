@@ -98,7 +98,7 @@ jobs:
           cargo -V
 
       - name: Install `cargo-llvm-cov`
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@v2.83.2
         with:
           tool: cargo-llvm-cov
 
