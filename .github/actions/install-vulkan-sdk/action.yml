@@ -15,7 +15,10 @@ runs:
       env:
         VULKAN_SDK_VERSION: ${{ inputs.version }}
         VULKAN_FULL_SDK_VERSION: ${{ inputs.full-version }}
-      run: |
+      # NOTE: We ignore the `github-env` lint because we trust:
+      #
+      # - The contents of the Vulkan SDK we are downloading.
+      run: | # zizmor: ignore[github-env]
         set -e
 
         curl -L --retry 5 https://sdk.lunarg.com/sdk/download/${{ env.VULKAN_FULL_SDK_VERSION }}/linux/vulkansdk-linux-x86_64-${{ env.VULKAN_FULL_SDK_VERSION }}.tar.xz -o vulkan-sdk.tar.xz
@@ -34,7 +37,10 @@ runs:
       env:
         VULKAN_SDK_VERSION: ${{ inputs.version }}
         VULKAN_FULL_SDK_VERSION: ${{ inputs.full-version }}
-      run: |
+      # NOTE: We ignore the `github-env` lint because we trust:
+      #
+      # - The contents of the Vulkan SDK we are downloading.
+      run: | # zizmor: ignore[github-env]
         set -e
 
         curl.exe -L --retry 5 https://sdk.lunarg.com/sdk/download/${{ env.VULKAN_FULL_SDK_VERSION }}/windows/vulkansdk-windows-X64-${{ env.VULKAN_FULL_SDK_VERSION }}.exe -o vulkan-sdk-installer.exe
@@ -49,7 +55,10 @@ runs:
       env:
         VULKAN_SDK_VERSION: ${{ inputs.version }}
         VULKAN_FULL_SDK_VERSION: ${{ inputs.full-version }}
-      run: |
+      # NOTE: We ignore the `github-env` lint because we trust:
+      #
+      # - The contents of the Vulkan SDK we are downloading.
+      run: | # zizmor: ignore[github-env]
         set -e
 
         curl -L --retry 5 https://sdk.lunarg.com/sdk/download/${{ env.VULKAN_FULL_SDK_VERSION }}/mac/vulkansdk-macos-${{ env.VULKAN_FULL_SDK_VERSION }}.zip -o vulkan-sdk.zip
