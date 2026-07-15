@@ -611,7 +611,7 @@ jobs:
         run: cargo +stable install wasm-bindgen-cli --version=$WASM_BINDGEN_VERSION
 
       - name: Install `cargo-nextest`
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@v2.83.2
         with:
           tool: cargo-nextest
 
@@ -652,7 +652,7 @@ jobs:
           cargo -V
 
       - name: Install `cargo-nextest` and `cargo-llvm-cov`
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@v2.83.2
         with:
           tool: cargo-nextest,cargo-llvm-cov
 

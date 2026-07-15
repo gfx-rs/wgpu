@@ -93,7 +93,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Install `cargo-generate`
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@v2.83.2
         with:
           tool: cargo-generate
 
