@@ -17,11 +17,13 @@ pub static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
                 max_binding_array_elements_per_shader_stage: 8,
                 ..Default::default()
             })
-            // https://github.com/gfx-rs/wgpu/issues/9184
             .expect_fail(
                 wgpu_test::FailureCase::molten_vk()
+                    // https://github.com/gfx-rs/wgpu/issues/9184
                     .validation_error("Shader library compile failed")
-                    .validation_error("could not be compiled into pipeline"),
+                    .validation_error("could not be compiled into pipeline")
+                    // https://github.com/gfx-rs/wgpu/issues/9849
+                    .panic("assertion failed: produced"),
             ),
     )
     .run_async(|ctx| {
