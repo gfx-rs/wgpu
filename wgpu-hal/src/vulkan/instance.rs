@@ -159,12 +159,31 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     }
 
     #[cfg(feature = "internal_error_panic")]
-    if level == log::Level::Error && !cts_error_is_waived(cd.message_id_number) {
+    if level == log::Level::Error
+        && !error_is_waived(cd.message_id_number)
+        && !cts_error_is_waived(cd.message_id_number)
+    {
         use alloc::string::ToString as _;
         panic!("{}", message.to_string());
     }
 
     vk::FALSE
+}
+
+/// Validation errors known to fire, not just in the CTS.
+///
+/// These never panic.
+#[cfg(feature = "internal_error_panic")]
+fn error_is_waived(message_id_number: i32) -> bool {
+    const WAIVED_MESSAGE_IDS: &[i32] = &[
+        // SYNC-HAZARD-WRITE-AFTER-WRITE
+        // e.g. webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:*
+        // https://github.com/gfx-rs/wgpu/issues/5231
+        // https://github.com/gfx-rs/wgpu/issues/8705
+        0x5c0ec5d6_u32 as i32,
+    ];
+
+    WAIVED_MESSAGE_IDS.contains(&message_id_number)
 }
 
 /// Validation errors known to fire when running the CTS.
@@ -189,9 +208,6 @@ fn cts_error_is_waived(message_id_number: i32) -> bool {
         // VUID-SampleMask-SampleMask-04359
         // e.g. webgpu:api,validation,render_pipeline,inter_stage:max_variables_count,*
         0x34d444b2_u32 as i32,
-        // SYNC-HAZARD-WRITE-AFTER-WRITE
-        // e.g. webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:*
-        0x5c0ec5d6_u32 as i32,
         // VUID-vkCmdCopyImage-srcImage-01728
         // e.g. webgpu:api,validation,encoding,cmds,copyTextureToTexture:*
         0x6b654496_u32 as i32,
