@@ -29,6 +29,25 @@ static_assertions::assert_impl_all!(Tlas: WasmNotSendSync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(Tlas => .inner);
 
+/// Instance source for [`CommandEncoder::build_tlas_from_instances_buffer`]: a GPU buffer of
+/// instance records in the backend's native layout, see [`wgt::RawTlasInstance`] for the
+/// Vulkan/DX12 layout, plus the BLASes those records reference.
+///
+/// [`CommandEncoder::build_tlas_from_instances_buffer`]: crate::CommandEncoder::build_tlas_from_instances_buffer
+#[derive(Debug, Clone)]
+pub struct TlasInstancesBuffer<'a> {
+    /// Buffer of instance records, created with
+    /// [`BufferUsages::TLAS_INPUT`](crate::BufferUsages::TLAS_INPUT) and filled before the build.
+    pub buffer: &'a crate::Buffer,
+    /// Byte offset of the first instance record within `buffer`.
+    pub offset: u64,
+    /// Number of instance records to build the TLAS from.
+    pub count: u32,
+    /// The BLASes referenced by the instance records. wgpu cannot recover these from the opaque
+    /// buffer, but needs them to keep the BLASes alive and to order the TLAS build after theirs.
+    pub dependencies: &'a [&'a crate::Blas],
+}
+
 impl Tlas {
     /// Get the [`wgpu_hal`] acceleration structure from this `Tlas`.
     ///

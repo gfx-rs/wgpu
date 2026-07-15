@@ -383,6 +383,12 @@ pub trait CommandEncoderInterface: CommonTraits {
         tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
     );
 
+    fn build_tlas_from_instances_buffer(
+        &self,
+        tlas: &crate::Tlas,
+        instances: &crate::TlasInstancesBuffer<'_>,
+    );
+
     fn transition_resources<'a>(
         &mut self,
         buffer_transitions: &mut dyn Iterator<Item = wgt::BufferTransition<&'a DispatchBuffer>>,

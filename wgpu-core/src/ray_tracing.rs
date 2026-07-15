@@ -129,6 +129,19 @@ pub enum BuildAccelerationStructureError {
         stride: BufferAddress,
     },
 
+    #[error(
+        "Tlas instances buffer {buffer_ident:?} offset {offset} B must be a multiple of 16 (the required alignment of the acceleration structure instances data)"
+    )]
+    UnalignedInstancesBufferOffset {
+        buffer_ident: ResourceErrorIdent,
+        offset: BufferAddress,
+    },
+
+    #[error(
+        "Building a Tlas from an instances buffer uses the Vulkan/DX12 `RawTlasInstance` layout, which is not supported on the {0:?} backend"
+    )]
+    UnsupportedBackendForRawTlasInstances(wgt::Backend),
+
     #[error("Buffer {0:?} associated offset doesn't align with the index type")]
     UnalignedIndexBufferOffset(ResourceErrorIdent),
 
@@ -226,6 +239,8 @@ impl WebGpuError for BuildAccelerationStructureError {
             Self::MissingFeatures(e) => e.webgpu_error_type(),
             Self::InsufficientBufferSize { .. }
             | Self::OffsetLimitedTo4GB { .. }
+            | Self::UnalignedInstancesBufferOffset { .. }
+            | Self::UnsupportedBackendForRawTlasInstances(..)
             | Self::UnalignedIndexBufferOffset(..)
             | Self::UnalignedTransformBufferOffset(..)
             | Self::InvalidIndexCount(..)

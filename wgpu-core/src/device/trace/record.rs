@@ -279,6 +279,11 @@ impl IntoTrace for ArcCommand {
                     tlas: tlas.into_iter().map(|b| b.into_trace()).collect(),
                 }
             }
+            ArcCommand::BuildTlasFromInstancesBuffer { .. } => {
+                // No Command equivalent yet: the instances live in an opaque GPU buffer, so this
+                // build cannot be replayed from a serialized trace.
+                panic!("BuildTlasFromInstancesBuffer cannot be converted to Command");
+            }
             ArcCommand::TransitionResources {
                 buffer_transitions: _,
                 texture_transitions: _,

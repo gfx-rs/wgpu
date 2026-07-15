@@ -14,6 +14,7 @@ mod mutex;
 mod panicking;
 mod spirv;
 mod texture_blitter;
+mod tlas_instance_packer;
 
 use alloc::{format, string::String};
 
@@ -25,6 +26,8 @@ pub use init::*;
 pub use spirv::*;
 #[cfg(feature = "wgsl")]
 pub use texture_blitter::{TextureBlitter, TextureBlitterBuilder};
+#[cfg(feature = "wgsl")]
+pub use tlas_instance_packer::{TlasInstancePackParams, TlasInstancePacker};
 pub use wgt::{
     math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs, TextureDataOrder,
 };

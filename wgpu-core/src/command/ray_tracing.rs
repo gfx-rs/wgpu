@@ -4,6 +4,7 @@ use core::{
     num::NonZeroU64,
     ops::{Deref, Range},
 };
+use nt::FastHashSet;
 
 use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 
@@ -13,7 +14,8 @@ use crate::{
         AsAction, AsBuild, BlasAabbGeometry, BlasTriangleGeometry, TlasBuild, TlasInstance,
         ValidateAsActionsError,
     },
-    resource::{Buffer, InvalidResourceError},
+    resource::{Buffer, InvalidResourceError, Trackable},
+    track::TrackerIndex,
 };
 use crate::{command::EncoderStateError, device::resource::CommandIndices};
 use crate::{
@@ -33,7 +35,7 @@ use crate::{
 };
 use crate::{lock::RwLockWriteGuard, resource::RawResourceAccess};
 
-use crate::id::{BlasId, TlasId};
+use crate::id::{BlasId, BufferId, TlasId};
 
 struct BlasStore<'a> {
     blas: Arc<Blas>,
@@ -189,6 +191,36 @@ impl super::CommandEncoder {
             Ok(ArcCommand::BuildAccelerationStructures { blas, tlas })
         })
     }
+
+    /// Record a TLAS build whose instances come from `instances_buffer`, they cannot
+    /// be read out of the opaque buffer but are needed for lifetime tracking and build ordering.
+    pub fn build_tlas_from_instances_buffer(
+        self: &Arc<Self>,
+        tlas: Arc<Tlas>,
+        instances_buffer: Arc<Buffer>,
+        offset: u64,
+        count: u32,
+        dependencies: Vec<Arc<Blas>>,
+    ) -> Result<(), EncoderStateError> {
+        profiling::scope!("CommandEncoder::build_tlas_from_instances_buffer");
+
+        let mut cmd_buf_data = self.data.lock();
+
+        cmd_buf_data.push_with(|| -> Result<_, BuildAccelerationStructureError> {
+            tlas.check_is_valid()?;
+            instances_buffer.check_is_valid()?;
+            for blas in &dependencies {
+                blas.check_is_valid()?;
+            }
+            Ok(ArcCommand::BuildTlasFromInstancesBuffer {
+                tlas,
+                instances_buffer,
+                offset,
+                count,
+                dependencies,
+            })
+        })
+    }
 }
 
 impl Global {
@@ -266,6 +298,32 @@ impl Global {
             lowest_unmodified: e.lowest_unmodified,
         });
         cmd_enc.build_acceleration_structures(blases.into_iter(), tlases.into_iter())
+    }
+
+    pub fn command_encoder_build_tlas_from_instances_buffer(
+        &self,
+        command_encoder_id: CommandEncoderId,
+        tlas_id: TlasId,
+        instances_buffer_id: BufferId,
+        offset: u64,
+        count: u32,
+        dependency_ids: &[BlasId],
+    ) -> Result<(), EncoderStateError> {
+        let hub = &self.hub;
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let tlas = hub.tlas_s.get(tlas_id);
+        let instances_buffer = hub.buffers.get(instances_buffer_id);
+        let dependencies = dependency_ids
+            .iter()
+            .map(|&id| hub.blas_s.get(id))
+            .collect();
+        cmd_enc.build_tlas_from_instances_buffer(
+            tlas,
+            instances_buffer,
+            offset,
+            count,
+            dependencies,
+        )
     }
 }
 
@@ -540,6 +598,171 @@ pub(crate) fn build_acceleration_structures(
         .temp_resources
         .push(TempResource::ScratchBuffer(scratch_buffer));
 
+    state.as_actions.push(AsAction::Build(build_command));
+
+    Ok(())
+}
+
+pub(crate) fn build_tlas_from_instances_buffer(
+    state: &mut EncodingState,
+    tlas: Arc<Tlas>,
+    instances_buffer: Arc<Buffer>,
+    offset: u64,
+    count: u32,
+    mut dependencies: Vec<Arc<Blas>>,
+) -> Result<(), BuildAccelerationStructureError> {
+    state
+        .device
+        .require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
+
+    match state.device.backend() {
+        wgt::Backend::Vulkan | wgt::Backend::Dx12 => {}
+        backend => {
+            return Err(
+                BuildAccelerationStructureError::UnsupportedBackendForRawTlasInstances(backend),
+            );
+        }
+    }
+
+    if count > tlas.max_instance_count {
+        return Err(BuildAccelerationStructureError::TlasInstanceCountExceeded(
+            tlas.error_ident(),
+            count,
+            tlas.max_instance_count,
+        ));
+    }
+
+    instances_buffer.check_usage(BufferUsages::TLAS_INPUT)?;
+    let instance_stride = u64::from(state.device.alignments.raw_tlas_instance_size);
+    let region_size = u64::from(count).saturating_mul(instance_stride);
+    if instances_buffer.size < offset.saturating_add(region_size) {
+        return Err(BuildAccelerationStructureError::InsufficientBufferSize {
+            buffer_ident: instances_buffer.error_ident(),
+            offset,
+            region_size,
+            buffer_size: instances_buffer.size,
+        });
+    }
+
+    if !offset.is_multiple_of(16) {
+        return Err(
+            BuildAccelerationStructureError::UnalignedInstancesBufferOffset {
+                buffer_ident: instances_buffer.error_ident(),
+                offset,
+            },
+        );
+    }
+
+    // `hal::AccelerationStructureInstances::offset` is a `u32`.
+    let Ok(hal_offset) = u32::try_from(offset) else {
+        return Err(BuildAccelerationStructureError::OffsetLimitedTo4GB {
+            buffer_ident: instances_buffer.error_ident(),
+            offset,
+            count: u64::from(count),
+            stride: instance_stride,
+        });
+    };
+
+    // Track the TLAS and its caller-declared BLAS dependencies: we cannot read them out of the
+    // opaque instance buffer, but they must be kept alive and built before this TLAS.
+    state.tracker.tlas_s.insert_single(tlas.clone());
+    let mut seen_dependencies = FastHashSet::<TrackerIndex>::default();
+    dependencies.retain(|blas| seen_dependencies.insert(blas.tracker_index()));
+    for blas in &dependencies {
+        state.tracker.blas_s.insert_single(blas.clone());
+        if tlas
+            .flags
+            .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
+            && !blas
+                .flags
+                .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
+        {
+            return Err(
+                BuildAccelerationStructureError::TlasDependentMissingVertexReturn(
+                    tlas.error_ident(),
+                    blas.error_ident(),
+                ),
+            );
+        }
+    }
+
+    let scratch_size = align_to(
+        tlas.size_info.build_scratch_size,
+        u64::from(state.device.alignments.ray_tracing_scratch_buffer_alignment),
+    );
+    let Some(scratch_size) = wgt::BufferSize::new(scratch_size) else {
+        // Nothing to build.
+        return Ok(());
+    };
+    if scratch_size.get() == u64::MAX {
+        return Err(crate::device::DeviceError::OutOfMemory.into());
+    }
+    let scratch_buffer = ScratchBuffer::new(state.device, scratch_size)?;
+
+    state.buffer_memory_init_actions.extend(
+        instances_buffer.initialization_status.read().create_action(
+            &instances_buffer,
+            offset..offset + region_size,
+            MemoryInitKind::NeedsInitializedMemory,
+        ),
+    );
+
+    let instances_pending = state.tracker.buffers.set_single(
+        &instances_buffer,
+        BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+    );
+
+    let instances_raw = instances_buffer.try_raw(state.snatch_guard)?;
+    let entries =
+        hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
+            buffer: Some(instances_raw),
+            offset: hal_offset,
+            count,
+        });
+    let tlas_descriptors = [hal::BuildAccelerationStructureDescriptor {
+        entries: &entries,
+        mode: hal::AccelerationStructureBuildMode::Build,
+        flags: tlas.flags,
+        source_acceleration_structure: None,
+        destination_acceleration_structure: tlas.try_raw(state.snatch_guard)?,
+        scratch_buffer: scratch_buffer.raw(),
+        scratch_buffer_offset: 0,
+    }];
+
+    let mut input_barriers = Vec::new();
+    if let Some(barrier) = instances_pending
+        .map(|pending| pending.into_hal(instances_buffer.as_ref(), state.snatch_guard))
+    {
+        input_barriers.push(barrier);
+    }
+
+    let raw_encoder = &mut state.raw_encoder;
+    unsafe {
+        raw_encoder.transition_buffers(&input_barriers);
+        raw_encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
+            usage: hal::StateTransition {
+                from: hal::AccelerationStructureUses::SHADER_INPUT,
+                to: hal::AccelerationStructureUses::BUILD_OUTPUT,
+            },
+        });
+        raw_encoder.build_acceleration_structures(&tlas_descriptors);
+        raw_encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
+            usage: hal::StateTransition {
+                from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                to: hal::AccelerationStructureUses::SHADER_INPUT,
+            },
+        });
+    }
+
+    let mut build_command = AsBuild::with_capacity(0, 1);
+    build_command.tlas_s_built.push(TlasBuild {
+        tlas: tlas.clone(),
+        dependencies,
+    });
+
+    state
+        .temp_resources
+        .push(TempResource::ScratchBuffer(scratch_buffer));
     state.as_actions.push(AsAction::Build(build_command));
 
     Ok(())

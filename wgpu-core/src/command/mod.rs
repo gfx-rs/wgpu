@@ -1285,6 +1285,22 @@ impl CommandEncoder {
                     ArcCommand::BuildAccelerationStructures { blas, tlas } => {
                         ray_tracing::build_acceleration_structures(&mut state, blas, tlas)?;
                     }
+                    ArcCommand::BuildTlasFromInstancesBuffer {
+                        tlas,
+                        instances_buffer,
+                        offset,
+                        count,
+                        dependencies,
+                    } => {
+                        ray_tracing::build_tlas_from_instances_buffer(
+                            &mut state,
+                            tlas,
+                            instances_buffer,
+                            offset,
+                            count,
+                            dependencies,
+                        )?;
+                    }
                     ArcCommand::TransitionResources {
                         buffer_transitions,
                         texture_transitions,

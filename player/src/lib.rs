@@ -921,6 +921,9 @@ impl Player {
                     .map(|trans| self.resolve_texture_transition(trans))
                     .collect(),
             },
+            Command::BuildTlasFromInstancesBuffer { .. } => {
+                unimplemented!("BuildTlasFromInstancesBuffer is not supported by trace replay")
+            }
         }
     }
 

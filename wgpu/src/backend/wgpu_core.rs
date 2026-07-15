@@ -2910,6 +2910,36 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         }
     }
 
+    fn build_tlas_from_instances_buffer(
+        &self,
+        tlas: &crate::Tlas,
+        instances: &crate::TlasInstancesBuffer<'_>,
+    ) {
+        let dependencies: Vec<_> = instances
+            .dependencies
+            .iter()
+            .map(|blas| blas.inner.as_core().id)
+            .collect();
+        if let Err(cause) = self
+            .context
+            .0
+            .command_encoder_build_tlas_from_instances_buffer(
+                self.id,
+                tlas.inner.as_core().id,
+                instances.buffer.inner.as_core().id,
+                instances.offset,
+                instances.count,
+                &dependencies,
+            )
+        {
+            self.context.handle_error_nolabel(
+                &self.error_sink,
+                cause,
+                "CommandEncoder::build_tlas_from_instances_buffer",
+            );
+        }
+    }
+
     fn transition_resources<'a>(
         &mut self,
         buffer_transitions: &mut dyn Iterator<

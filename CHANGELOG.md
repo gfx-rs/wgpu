@@ -44,6 +44,10 @@ Bottom level categories:
 
 ### Added/New Features
 
+#### General
+
+- Add `CommandEncoder::build_tlas_from_instances_buffer`, which builds a TLAS directly from a GPU buffer of instance records instead of the CPU `Vec<TlasInstance>` path. Adds `RawTlasInstance` as the raw Vulkan/DX12 instance layout, with `RawTlasInstance::new` and the `wgpu::util::TlasInstancePacker` helper for GPU-packing those records. The raw instance layout is only supported on the Vulkan and DX12 backends. By @AntonWagnerCau in [#9877](https://github.com/gfx-rs/wgpu/pull/9877).
+
 #### Hal
 
 - Add `BufferBinding::buffer`, a public read accessor for the bound buffer, which was previously inaccessible to out-of-tree `wgpu_hal::Api` implementations. By @danlehmann in [#9820](https://github.com/gfx-rs/wgpu/pull/9820).

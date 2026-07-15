@@ -177,6 +177,13 @@ pub enum Command<R: ReferenceType> {
         blas: Vec<crate::ray_tracing::OwnedBlasBuildEntry<R>>,
         tlas: Vec<crate::ray_tracing::OwnedTlasPackage<R>>,
     },
+    BuildTlasFromInstancesBuffer {
+        tlas: R::Tlas,
+        instances_buffer: R::Buffer,
+        offset: u64,
+        count: u32,
+        dependencies: Vec<R::Blas>,
+    },
     TransitionResources {
         buffer_transitions: Vec<wgt::BufferTransition<R::Buffer>>,
         texture_transitions: Vec<wgt::TextureTransition<R::Texture>>,
