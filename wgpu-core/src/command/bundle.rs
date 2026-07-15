@@ -29,11 +29,11 @@ Render passes are also isolated from the effects of bundles. After executing a
 render bundle, a render pass's pipeline, bind groups, and vertex and index
 buffers are are unset, so the bundle cannot affect later draw calls in the pass.
 
-A render pass is not fully isolated from a bundle's effects on immediate data
-values. Draw calls following a bundle's execution will see whatever values the
-bundle writes to immediate data storage. Setting a pipeline initializes any push
-constant storage it could access to zero, and this initialization may also be
-visible after bundle execution.
+A render pass is isolated from a bundle's effects on immediate data
+values. When encoding a render bundle, calls to `set_immediates` snapshot the immediate data
+content at encoding time, and the immediate values cannot be changed after `finish`.
+Before and after executing each individual bundle, all required immediate slots are cleared/reset,
+therefore immediate data must be set again.
 
 ## Render Bundle Lifecycle
 
@@ -103,11 +103,13 @@ use wgt::error::{ErrorType, WebGpuError};
 use crate::command::ArcReferences;
 use crate::{
     api_log,
-    binding_model::{BindError, BindGroup, PipelineLayout},
+    binding_model::{BindError, BindGroup, ImmediateUploadError, PipelineLayout},
     command::{
-        bind::Binder, pass::validate_immediates_alignment, pass_base, BasePass,
-        BindGroupStateChange, ColorAttachmentError, DrawError, EncoderStateError, IdReferences,
-        MapPassErr, PassErrorScope, PassStateError, RenderCommand, RenderCommandError, StateChange,
+        bind::Binder,
+        pass::{validate_immediates_alignment, ImmediateState},
+        pass_base, BasePass, BindGroupStateChange, ColorAttachmentError, DrawError,
+        EncoderStateError, IdReferences, MapPassErr, PassErrorScope, PassStateError, RenderCommand,
+        RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -165,7 +167,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct RenderBundleEncoder {
-    base: BasePass<RenderCommand<IdReferences>, Infallible>,
+    pub(crate) base: BasePass<RenderCommand<IdReferences>, Infallible>,
     parent_id: id::DeviceId,
     /// State of the render bundle encoder. Encoded to be compatible with pass macros.
     ///
@@ -308,6 +310,10 @@ impl RenderBundleEncoder {
         self.parent_id
     }
 
+    pub fn label(&self) -> Option<&str> {
+        self.base.label.as_deref()
+    }
+
     /// Convert this encoder's commands into a [`RenderBundle`].
     ///
     /// We want executing a [`RenderBundle`] to be quick, so we take
@@ -417,7 +423,7 @@ impl RenderBundleEncoder {
             texture_memory_init_actions: Vec::new(),
             next_dynamic_offset: 0,
             binder: Binder::new(),
-            immediate_slots_set: Default::default(),
+            immediate_state: ImmediateState::default(),
         };
 
         let indices = &state.device.tracker_indices;
@@ -483,14 +489,9 @@ impl RenderBundleEncoder {
                     set_vertex_buffer(&mut state, &buffer_guard, slot, buffer, offset, size)
                         .map_pass_err(scope)?;
                 }
-                &RenderCommand::SetImmediate {
-                    offset,
-                    size_bytes,
-                    values_offset,
-                } => {
+                &RenderCommand::SetImmediate { offset, ref data } => {
                     let scope = PassErrorScope::SetImmediate;
-                    set_immediates(&mut state, offset, size_bytes, values_offset)
-                        .map_pass_err(scope)?;
+                    set_immediates(&mut state, offset, data).map_pass_err(scope)?;
                 }
                 &RenderCommand::Draw {
                     vertex_count,
@@ -605,7 +606,6 @@ impl RenderBundleEncoder {
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
 
         let string_data = mem::take(&mut self.base.string_data);
-        let immediates_data = mem::take(&mut self.base.immediates_data);
         let context = mem::take(&mut self.context);
         let render_bundle = RenderBundle {
             state: ResourceState::Valid(RenderBundleState {
@@ -618,7 +618,6 @@ impl RenderBundleEncoder {
                 commands,
                 dynamic_offsets: flat_dynamic_offsets,
                 string_data,
-                immediates_data,
             },
             is_depth_read_only: self.is_depth_read_only,
             is_stencil_read_only: self.is_stencil_read_only,
@@ -712,18 +711,16 @@ impl RenderBundleEncoder {
 
     pub fn set_immediates(&mut self, offset: u32, data: &[u8]) -> Result<(), PassStateError> {
         pass_base!(self, PassErrorScope::SetImmediate);
-        let value_offset = self.base.immediates_data.len().try_into().expect(
-            "Ran out of immediate data space. Don't set 4gb of immediates per RenderBundle.",
-        );
-        self.base.immediates_data.extend(
-            data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
-                .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
-        );
+
+        // This should have been validated in content timeline
+        assert!(data.len().is_multiple_of(4));
 
         self.base.commands.push(RenderCommand::SetImmediate {
             offset,
-            size_bytes: data.len() as u32,
-            values_offset: Some(value_offset),
+            data: data
+                .chunks_exact(size_of::<u32>())
+                .map(|ck| u32::from_le_bytes(ck.try_into().unwrap()))
+                .collect(),
         });
         Ok(())
     }
@@ -1052,26 +1049,13 @@ fn set_vertex_buffer(
 fn set_immediates(
     state: &mut State,
     offset: u32,
-    size_bytes: u32,
-    values_offset: Option<u32>,
-) -> Result<(), RenderBundleErrorInner> {
-    validate_immediates_alignment(offset, size_bytes)?;
+    data: &[u32],
+) -> Result<(), ImmediateUploadError> {
+    validate_immediates_alignment(offset, size_of_val(data))?;
 
-    let pipeline = state
-        .pipeline
-        .as_deref()
-        .ok_or(DrawError::MissingPipeline(pass::MissingPipeline))?;
-
-    pipeline
-        .layout()?
-        .validate_immediates_ranges(offset, size_bytes)?;
-
-    state.commands.push(ArcRenderCommand::SetImmediate {
-        offset,
-        size_bytes,
-        values_offset,
-    });
-    state.immediate_slots_set |= naga::valid::ImmediateSlots::from_range(offset, size_bytes);
+    state
+        .immediate_state
+        .set_immediates::<ImmediateUploadError>(&state.device.limits, offset, data)?;
     Ok(())
 }
 
@@ -1096,6 +1080,7 @@ fn draw(
     if instance_count > 0 && vertex_count > 0 {
         state.flush_vertex_buffers();
         state.flush_bindings();
+        state.flush_immediates();
         state.commands.push(ArcRenderCommand::Draw {
             vertex_count,
             instance_count,
@@ -1136,6 +1121,7 @@ fn draw_indexed(
         state.flush_index();
         state.flush_vertex_buffers();
         state.flush_bindings();
+        state.flush_immediates();
         state.commands.push(ArcRenderCommand::DrawIndexed {
             index_count,
             instance_count,
@@ -1181,6 +1167,7 @@ fn draw_mesh_tasks(
 
     if total_count > 0 {
         state.flush_bindings();
+        state.flush_immediates();
         state.commands.push(ArcRenderCommand::DrawMeshTasks {
             group_count_x,
             group_count_y,
@@ -1242,6 +1229,7 @@ fn multi_draw_indirect(
 
     state.flush_vertex_buffers();
     state.flush_bindings();
+    state.flush_immediates();
     state.commands.push(ArcRenderCommand::DrawIndirect {
         buffer,
         offset,
@@ -1381,7 +1369,6 @@ impl RenderBundle {
                 commands: Vec::new(),
                 dynamic_offsets: Vec::new(),
                 string_data: Vec::new(),
-                immediates_data: Vec::new(),
             },
             is_depth_read_only: false,
             is_stencil_read_only: false,
@@ -1486,45 +1473,11 @@ impl RenderBundle {
                     let bb = hal::BufferBinding::new_unchecked(buffer, *offset, *size);
                     unsafe { raw.set_vertex_buffer(*slot, bb) };
                 }
-                Cmd::SetImmediate {
-                    offset,
-                    size_bytes,
-                    values_offset,
-                } => {
+                Cmd::SetImmediate { offset, data } => {
                     let pipeline_layout = pipeline_layout.as_ref().unwrap();
 
-                    if let Some(values_offset) = *values_offset {
-                        let values_end_offset =
-                            (values_offset + size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
-                        let data_slice =
-                            &self.base.immediates_data[(values_offset as usize)..values_end_offset];
-
-                        unsafe {
-                            raw.set_immediates(
-                                pipeline_layout
-                                    .raw()
-                                    .expect("PipelineLayout should be valid at this point"),
-                                *offset,
-                                data_slice,
-                            )
-                        }
-                    } else {
-                        super::immediates_clear(
-                            *offset,
-                            *size_bytes,
-                            |clear_offset, clear_data| {
-                                unsafe {
-                                    raw.set_immediates(
-                                        pipeline_layout
-                                            .raw()
-                                            .expect("PipelineLayout should be valid at this point"),
-                                        clear_offset,
-                                        clear_data,
-                                    )
-                                };
-                            },
-                        );
-                    }
+                    // SAFETY: The range of immediates written was validated in `is_ready` before each `flush_immediates`.
+                    unsafe { raw.set_immediates(pipeline_layout.raw().unwrap(), *offset, data) }
                 }
                 Cmd::Draw {
                     vertex_count,
@@ -1743,9 +1696,7 @@ struct State {
     texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     next_dynamic_offset: usize,
     binder: Binder,
-    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
-    /// Checked against the pipeline's required slots before each draw call.
-    immediate_slots_set: naga::valid::ImmediateSlots,
+    immediate_state: ImmediateState,
 }
 
 impl State {
@@ -1773,6 +1724,16 @@ impl State {
             range,
             is_dirty: true,
         });
+    }
+
+    fn flush_immediates(&mut self) {
+        if !self.immediate_state.immediates.is_empty() && self.immediate_state.immediates_dirty {
+            self.commands.push(ArcRenderCommand::SetImmediate {
+                offset: 0,
+                data: self.immediate_state.immediates.clone(),
+            });
+            self.immediate_state.immediates_dirty = false;
+        }
     }
 
     /// Generate a `SetIndexBuffer` command to prepare for an indexed draw
@@ -1822,13 +1783,14 @@ impl State {
             }
 
             if !self
+                .immediate_state
                 .immediate_slots_set
                 .contains(pipeline.immediate_slots_required)
             {
                 return Err(DrawError::MissingImmediateData {
                     missing: pipeline
                         .immediate_slots_required
-                        .difference(self.immediate_slots_set),
+                        .difference(self.immediate_state.immediate_slots_set),
                 });
             }
 

@@ -113,8 +113,6 @@ pub type TexelCopyTextureInfo = ffi::TexelCopyTextureInfo;
 /// cbindgen:ignore
 pub type CopyExternalImageDestInfo = ffi::CopyExternalImageDestInfo;
 
-const IMMEDIATES_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
-
 pub(crate) struct EncoderErrorState {
     error: CommandEncoderError,
 
@@ -1482,12 +1480,6 @@ pub struct BasePass<C, E> {
     /// Each successive [`PushDebugGroup`] or [`InsertDebugMarker`]
     /// instruction consumes the next `len` bytes from this vector.
     pub string_data: Vec<u8>,
-
-    /// Data used by `SetImmediate` instructions.
-    ///
-    /// See the documentation for [`RenderCommand::SetImmediate`]
-    /// and [`ComputeCommand::SetImmediate`] for details.
-    pub immediates_data: Vec<u32>,
 }
 
 impl<C: Clone, E: Clone> BasePass<C, E> {
@@ -1498,7 +1490,6 @@ impl<C: Clone, E: Clone> BasePass<C, E> {
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
-            immediates_data: Vec::new(),
         }
     }
 
@@ -1509,7 +1500,6 @@ impl<C: Clone, E: Clone> BasePass<C, E> {
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
-            immediates_data: Vec::new(),
         }
     }
 
@@ -1528,7 +1518,6 @@ impl<C: Clone, E: Clone> BasePass<C, E> {
                 commands: mem::take(&mut self.commands),
                 dynamic_offsets: mem::take(&mut self.dynamic_offsets),
                 string_data: mem::take(&mut self.string_data),
-                immediates_data: mem::take(&mut self.immediates_data),
             }),
         }
     }
@@ -1912,27 +1901,7 @@ pub(crate) fn pop_debug_group(state: &mut EncodingState) -> Result<(), CommandEn
     Ok(())
 }
 
-fn immediates_clear<PushFn>(offset: u32, size_bytes: u32, mut push_fn: PushFn)
-where
-    PushFn: FnMut(u32, &[u32]),
-{
-    let mut count_words = 0_u32;
-    let size_words = size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT;
-    while count_words < size_words {
-        let count_bytes = count_words * wgt::IMMEDIATE_DATA_ALIGNMENT;
-        let size_to_write_words =
-            (size_words - count_words).min(IMMEDIATES_CLEAR_ARRAY.len() as u32);
-
-        push_fn(
-            offset + count_bytes,
-            &IMMEDIATES_CLEAR_ARRAY[0..size_to_write_words as usize],
-        );
-
-        count_words += size_to_write_words;
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 struct StateChange<T> {
     last_state: Option<T>,
 }

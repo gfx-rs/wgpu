@@ -30,7 +30,20 @@ impl ImmediateSlots {
         types: &crate::UniqueArena<crate::Type>,
         gctx: crate::proc::GlobalCtx,
     ) -> Self {
+        // <https://www.w3.org/TR/WGSL/#accessible-bytes>
         match *ty {
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => {
+                let mut slots = Self::default();
+                let stride = crate::proc::Alignment::from(rows) * scalar.width as u32;
+                for col in 0..u32::from(columns) {
+                    slots |= Self::from_range(col * stride, u32::from(rows) * scalar.width as u32);
+                }
+                slots
+            }
             crate::TypeInner::Struct { ref members, .. } => {
                 let mut slots = Self::default();
                 for member in members {
@@ -51,17 +64,6 @@ impl ImmediateSlots {
     /// Returns the bits in `self` that are not set in `other`.
     pub const fn difference(self, other: Self) -> Self {
         Self(self.0 & !other.0)
-    }
-
-    /// Returns the byte size of the `var<immediate>` type in a module.
-    /// Zero if the module has no `var<immediate>`.
-    pub fn size_for_module(module: &crate::Module) -> u32 {
-        module
-            .global_variables
-            .iter()
-            .find(|&(_, var)| var.space == crate::AddressSpace::Immediate)
-            .map(|(_, var)| module.types[var.ty].inner.size(module.to_ctx()))
-            .unwrap_or(0)
     }
 
     /// Compute the immediate slot bitmask for a pointer expression that
@@ -193,6 +195,16 @@ mod tests {
             .unwrap();
         let slots = ImmediateSlots::from_type(&struct_ty.inner, 0, &module.types, module.to_ctx());
         assert_eq!(slots, ImmediateSlots::from_raw(0b1111_0001));
+    }
+
+    #[test]
+    fn from_type_excludes_matrix_padding() {
+        let module = crate::front::wgsl::parse_str("struct S { mat: mat3x3<f32> }").unwrap();
+        let struct_ty = (module.types.iter().map(|ty| ty.1))
+            .find(|ty| ty.name.as_deref() == Some("S"))
+            .unwrap();
+        let slots = ImmediateSlots::from_type(&struct_ty.inner, 0, &module.types, module.to_ctx());
+        assert_eq!(slots, ImmediateSlots::from_raw(0b0111_0111_0111));
     }
 
     #[test]

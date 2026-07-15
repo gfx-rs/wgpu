@@ -350,11 +350,11 @@ dependencies = [
 
 [[package]]
 name = "bit-set"
-version = "0.10.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09ec2f926cc3060f09db9ebc5b52823d85268d24bb917e472c0c4bea35780a7d"
+checksum = "56d87354e4229f54a44f7bf2435906a4656dba36026ab6eaca629a2c436a691c"
 dependencies = [
- "bit-vec 0.9.1",
+ "bit-vec 0.10.1",
 ]
 
 [[package]]
@@ -365,9 +365,9 @@ checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
 
 [[package]]
 name = "bit-vec"
-version = "0.9.1"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b71798fca2c1fe1086445a7258a4bc81e6e49dcd24c8d0dd9a1e57395b603f51"
+checksum = "5727b15fa97d4f4fee0a3b7c3d550ed0269f54329207b86388de918604e31269"
 
 [[package]]
 name = "bitflags"
@@ -2353,7 +2353,7 @@ version = "30.0.0"
 dependencies = [
  "arbitrary",
  "arrayvec",
- "bit-set 0.10.0",
+ "bit-set 0.11.1",
  "bitflags 2.13.0",
  "bytemuck",
  "cfg-if",
@@ -4696,8 +4696,8 @@ name = "wgpu-core"
 version = "30.0.0"
 dependencies = [
  "arrayvec",
- "bit-set 0.10.0",
- "bit-vec 0.9.1",
+ "bit-set 0.11.1",
+ "bit-vec 0.10.1",
  "bitflags 2.13.0",
  "bytemuck",
  "cfg_aliases",
@@ -4845,7 +4845,7 @@ dependencies = [
  "android_system_properties",
  "arrayvec",
  "ash",
- "bit-set 0.10.0",
+ "bit-set 0.11.1",
  "bitflags 2.13.0",
  "block2 0.6.2",
  "bytemuck",

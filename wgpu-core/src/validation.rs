@@ -293,15 +293,27 @@ struct EntryPoint {
     dual_source_blending: bool,
     task_payload_size: Option<u32>,
     mesh_info: Option<EntryPointMeshInfo>,
-    immediate_slots_required: naga::valid::ImmediateSlots,
+    immediate_slots: naga::valid::ImmediateSlots,
+    immediate_size: u32,
+}
+
+#[derive(Debug, Hash, PartialEq, Eq)]
+struct EntryPointKey(naga::ShaderStage, String);
+
+#[derive(Debug, Hash, PartialEq, Eq)]
+struct EntryPointKeyRef<'a>(naga::ShaderStage, &'a str);
+
+impl hashbrown::Equivalent<EntryPointKey> for EntryPointKeyRef<'_> {
+    fn equivalent(&self, key: &EntryPointKey) -> bool {
+        self.0 == key.0 && self.1 == key.1
+    }
 }
 
 #[derive(Debug)]
 pub struct Interface {
     limits: wgt::Limits,
     resources: naga::Arena<Resource>,
-    entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
-    pub(crate) immediate_size: u32,
+    entry_points: FastHashMap<EntryPointKey, EntryPoint>,
 }
 
 #[derive(Debug)]
@@ -532,6 +544,8 @@ pub enum StageError {
     PerVertexNotTriangles,
     #[error("Mesh shader pipelines must have primitive topology of TriangleList, LineList or PointList, and this must match with what the mesh shader declares.")]
     MeshTopologyMismatch,
+    #[error("Pipeline layout immediate size ({layout}) must be >= the required immediate size ({required}) of the shader entry point")]
+    LayoutImmediateSize { layout: u32, required: u32 },
 }
 
 impl WebGpuError for StageError {
@@ -568,7 +582,8 @@ impl WebGpuError for StageError {
             | Self::InvalidDualSourceBlending
             | Self::MissingFragDepthAttachment
             | Self::PerVertexNotTriangles
-            | Self::MeshTopologyMismatch => ErrorType::Validation,
+            | Self::MeshTopologyMismatch
+            | Self::LayoutImmediateSize { .. } => ErrorType::Validation,
         }
     }
 }
@@ -1066,6 +1081,8 @@ pub struct StageIo {
     ///
     /// This is Some if it was a mesh shader.
     pub primitive_index: Option<bool>,
+    pub immediate_slots_required: naga::valid::ImmediateSlots,
+    pub immediate_size_required: u32,
 }
 
 impl Interface {
@@ -1256,12 +1273,10 @@ impl Interface {
             resource_mapping.insert(var_handle, handle);
         }
 
-        let immediate_size = naga::valid::ImmediateSlots::size_for_module(module);
-
         let mut entry_points = FastHashMap::default();
         entry_points.reserve(module.entry_points.len());
         for (index, entry_point) in module.entry_points.iter().enumerate() {
-            let info = info.get_entry_point(index);
+            let func_info = info.get_entry_point(index);
             let mut ep = EntryPoint::default();
             for arg in entry_point.function.arguments.iter() {
                 Self::populate(&mut ep.inputs, arg.binding.as_ref(), arg.ty, &module.types);
@@ -1276,19 +1291,35 @@ impl Interface {
             }
 
             for (var_handle, var) in module.global_variables.iter() {
-                let usage = info[var_handle];
+                let usage = func_info[var_handle];
                 if !usage.is_empty() && var.binding.is_some() {
                     ep.resources.push(resource_mapping[&var_handle]);
                 }
             }
 
-            for key in info.sampling_set.iter() {
+            for key in func_info.sampling_set.iter() {
                 ep.sampling_pairs
                     .insert((resource_mapping[&key.image], resource_mapping[&key.sampler]));
             }
-            ep.dual_source_blending = info.dual_source_blending;
+            ep.dual_source_blending = func_info.dual_source_blending;
             ep.workgroup_size = entry_point.workgroup_size;
-            ep.immediate_slots_required = info.immediate_slots_used;
+            ep.immediate_slots = func_info.immediate_slots_used;
+
+            // Find the used immediates. Naga should have validated that
+            // at most one immediate is used by the entry point.
+            let mut used_immediates = module
+                .global_variables
+                .iter()
+                .filter(|&(_, var)| var.space == naga::AddressSpace::Immediate)
+                .map(|(handle, _)| handle)
+                .filter(|&handle| !func_info[handle].is_empty());
+            ep.immediate_size = if let Some(immediate) = used_immediates.next() {
+                let ty = &module.types[module.global_variables[immediate].ty];
+                ty.inner.size(module.to_ctx())
+            } else {
+                0
+            };
+            assert!(used_immediates.next().is_none());
 
             if let Some(task_payload) = entry_point.task_payload {
                 ep.task_payload_size = Some(
@@ -1321,25 +1352,29 @@ impl Interface {
                 );
             }
 
-            entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
+            entry_points.insert(
+                EntryPointKey(entry_point.stage, entry_point.name.clone()),
+                ep,
+            );
         }
 
         Self {
             limits,
             resources,
             entry_points,
-            immediate_size,
         }
     }
 
-    pub fn immediate_slots_required(
+    fn immediate_size_and_slots_required(
         &self,
         stage: naga::ShaderStage,
         entry_point_name: &str,
-    ) -> naga::valid::ImmediateSlots {
+    ) -> (u32, naga::valid::ImmediateSlots) {
         self.entry_points
-            .get(&(stage, entry_point_name.to_string()))
-            .map_or(Default::default(), |ep| ep.immediate_slots_required)
+            .get(&EntryPointKeyRef(stage, entry_point_name))
+            .map_or(Default::default(), |ep| {
+                (ep.immediate_size, ep.immediate_slots)
+            })
     }
 
     pub fn finalize_entry_point_name(
@@ -1351,10 +1386,12 @@ impl Interface {
             .map(|ep| ep.to_string())
             .map(Ok)
             .unwrap_or_else(|| {
-                let mut entry_points = self
-                    .entry_points
-                    .keys()
-                    .filter_map(|(ep_stage, name)| (ep_stage == &stage).then_some(name));
+                let mut entry_points =
+                    self.entry_points
+                        .keys()
+                        .filter_map(|EntryPointKey(ep_stage, name)| {
+                            (ep_stage == &stage).then_some(name)
+                        });
                 let first = entry_points.next().ok_or(StageError::NoEntryPointFound)?;
                 if entry_points.next().is_some() {
                     return Err(StageError::MultipleEntryPointsFound);
@@ -1376,12 +1413,12 @@ impl Interface {
     ) -> Result<StageIo, StageError> {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
-        let pair = (shader_stage.to_naga(), entry_point_name.to_string());
+        let pair = EntryPointKeyRef(shader_stage.to_naga(), entry_point_name);
         let entry_point = match self.entry_points.get(&pair) {
             Some(some) => some,
-            None => return Err(StageError::MissingEntryPoint(pair.1)),
+            None => return Err(StageError::MissingEntryPoint(pair.1.to_string())),
         };
-        let (_, entry_point_name) = pair;
+        let EntryPointKeyRef(_, entry_point_name) = pair;
 
         let stage_bit = shader_stage.to_wgt_bit();
 
@@ -1879,6 +1916,21 @@ impl Interface {
             })
             .collect();
 
+        let (immediate_size_required, immediate_slots_required) =
+            self.immediate_size_and_slots_required(shader_stage.to_naga(), entry_point_name);
+        let immediate_slots_required = immediate_slots_required | inputs.immediate_slots_required;
+        let immediate_size_required = immediate_size_required.max(inputs.immediate_size_required);
+
+        // Check pipeline layout immediate size
+        if let BindingLayoutSource::Provided(pipeline_layout) = layouts {
+            if pipeline_layout.immediate_size < immediate_size_required {
+                return Err(StageError::LayoutImmediateSize {
+                    layout: pipeline_layout.immediate_size,
+                    required: immediate_size_required,
+                });
+            }
+        }
+
         Ok(StageIo {
             task_payload_size: entry_point.task_payload_size,
             varyings: outputs,
@@ -1887,18 +1939,9 @@ impl Interface {
             } else {
                 None
             },
+            immediate_slots_required,
+            immediate_size_required,
         })
-    }
-
-    pub fn fragment_uses_dual_source_blending(
-        &self,
-        entry_point_name: &str,
-    ) -> Result<bool, StageError> {
-        let pair = (naga::ShaderStage::Fragment, entry_point_name.to_string());
-        self.entry_points
-            .get(&pair)
-            .ok_or(StageError::MissingEntryPoint(pair.1))
-            .map(|ep| ep.dual_source_blending)
     }
 }
 
