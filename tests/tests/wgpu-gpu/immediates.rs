@@ -167,6 +167,14 @@ static RENDER_PASS_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
             .limits(wgpu::Limits {
                 max_immediate_size: 64,
                 ..Default::default()
+            })
+            // https://github.com/gfx-rs/wgpu/issues/8612
+            .expect_fail(wgpu_test::FailureCase {
+                backends: Some(wgpu::Backends::VULKAN),
+                driver: Some("radv"),
+                reasons: vec![wgpu_test::FailureReason::panic()
+                    .with_message("assertion `left == right` failed")],
+                ..Default::default()
             }),
     )
     .run_async(move |ctx| async move {
