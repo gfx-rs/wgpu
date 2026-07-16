@@ -123,7 +123,7 @@ bytemuck = { version = "1.22", features = [
     "min_const_generics",
 ] }
 cargo_metadata = "0.23"
-cfg_aliases = "0.2.1"
+cfg_aliases = "0.2.2"
 cfg-if = "1"
 codespan-reporting = { version = "0.13", default-features = false }
 diff = "0.1"

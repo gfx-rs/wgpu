@@ -1,8 +1,3 @@
-#![allow(
-    semicolon_in_expressions_from_macros,
-    reason = "work around <https://github.com/katharostech/cfg_aliases/issues/16>"
-)]
-
 fn main() {
     cfg_aliases::cfg_aliases! {
         native: { not(target_family = "wasm") },
