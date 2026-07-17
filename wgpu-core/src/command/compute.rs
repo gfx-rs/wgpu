@@ -466,7 +466,7 @@ fn transition_resources(
 }
 
 impl CommandEncoder {
-    fn begin_compute_pass(
+    pub fn begin_compute_pass(
         self: &Arc<Self>,
         desc: &ComputePassDescriptor<'_, PassTimestampWrites<Arc<QuerySet>>>,
     ) -> (ComputePass, Option<CommandEncoderError>) {
@@ -557,7 +557,7 @@ impl CommandEncoder {
 
 // Running the compute pass.
 impl ComputePass {
-    fn end(&mut self) -> Result<(), EncoderStateError> {
+    pub fn end(&mut self) -> Result<(), EncoderStateError> {
         profiling::scope!(
             "CommandEncoder::run_compute_pass {}",
             self.base.label.as_deref().unwrap_or("")
