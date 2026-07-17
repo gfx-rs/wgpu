@@ -38,39 +38,49 @@ impl ImmediateSlots {
         Ok(Self(u64::MAX << lo & u64::MAX >> (64 - hi)))
     }
 
-    /// Compute the slots occupied by a type at a given byte offset,
-    /// excluding padding between struct members.
-    /// Return `None` if the bitmask overflows.
+    /// Compute the slots occupied by a type,
+    /// excluding padding between matrix columns or struct members.
     pub fn from_type(
         ty: &crate::TypeInner,
-        offset: u32,
         types: &crate::UniqueArena<crate::Type>,
         gctx: crate::proc::GlobalCtx,
     ) -> Result<Self, ImmediateSlotsOverflowError> {
-        // <https://www.w3.org/TR/WGSL/#accessible-bytes>
-        match *ty {
-            crate::TypeInner::Matrix {
-                columns,
-                rows,
-                scalar,
-            } => {
-                let mut slots = Self::default();
-                let stride = crate::proc::Alignment::from(rows) * scalar.width as u32;
-                for col in 0..u32::from(columns) {
-                    slots |= Self::from_range(col * stride, u32::from(rows) * scalar.width as u32)?;
+        fn from_type_recursive(
+            ty: &crate::TypeInner,
+            offset: u32,
+            types: &crate::UniqueArena<crate::Type>,
+            gctx: crate::proc::GlobalCtx,
+        ) -> Result<ImmediateSlots, ImmediateSlotsOverflowError> {
+            // <https://www.w3.org/TR/WGSL/#accessible-bytes>
+            match *ty {
+                crate::TypeInner::Matrix {
+                    columns,
+                    rows,
+                    scalar,
+                } => {
+                    let mut slots = ImmediateSlots::default();
+                    let stride = crate::proc::Alignment::from(rows) * u32::from(scalar.width);
+                    for col in 0..u32::from(columns) {
+                        slots |= ImmediateSlots::from_range(
+                            offset + col * stride,
+                            u32::from(rows) * u32::from(scalar.width),
+                        )?;
+                    }
+                    Ok(slots)
                 }
-                Ok(slots)
-            }
-            crate::TypeInner::Struct { ref members, .. } => {
-                let mut slots = Self::default();
-                for member in members {
-                    let member_ty = &types[member.ty].inner;
-                    slots |= Self::from_type(member_ty, offset + member.offset, types, gctx)?;
+                crate::TypeInner::Struct { ref members, .. } => {
+                    let mut slots = ImmediateSlots::default();
+                    for member in members {
+                        let member_ty = &types[member.ty].inner;
+                        slots |=
+                            from_type_recursive(member_ty, offset + member.offset, types, gctx)?;
+                    }
+                    Ok(slots)
                 }
-                Ok(slots)
+                _ => ImmediateSlots::from_range(offset, ty.size(gctx)),
             }
-            _ => Self::from_range(offset, ty.size(gctx)),
         }
+        from_type_recursive(ty, 0, types, gctx)
     }
 
     /// Returns true if `self` contains all bits in `other`.
@@ -195,7 +205,7 @@ mod tests {
         let struct_ty = (module.types.iter().map(|ty| ty.1))
             .find(|ty| ty.name.as_deref() == Some("S"))
             .unwrap();
-        let slots = ImmediateSlots::from_type(&struct_ty.inner, 0, &module.types, module.to_ctx());
+        let slots = ImmediateSlots::from_type(&struct_ty.inner, &module.types, module.to_ctx());
         assert_eq!(slots, Err(ImmediateSlotsOverflowError(260)));
     }
 
@@ -206,7 +216,7 @@ mod tests {
             .find(|ty| ty.name.as_deref() == Some("S"))
             .unwrap();
         let slots =
-            ImmediateSlots::from_type(&struct_ty.inner, 0, &module.types, module.to_ctx()).unwrap();
+            ImmediateSlots::from_type(&struct_ty.inner, &module.types, module.to_ctx()).unwrap();
         assert_eq!(slots, ImmediateSlots::from_raw(0b1111_0001));
     }
 
@@ -217,8 +227,17 @@ mod tests {
             .find(|ty| ty.name.as_deref() == Some("S"))
             .unwrap();
         let slots =
-            ImmediateSlots::from_type(&struct_ty.inner, 0, &module.types, module.to_ctx()).unwrap();
+            ImmediateSlots::from_type(&struct_ty.inner, &module.types, module.to_ctx()).unwrap();
         assert_eq!(slots, ImmediateSlots::from_raw(0b0111_0111_0111));
+
+        let module =
+            crate::front::wgsl::parse_str("struct S { f: f32, mat: mat2x2<f32> }").unwrap();
+        let struct_ty = (module.types.iter().map(|ty| ty.1))
+            .find(|ty| ty.name.as_deref() == Some("S"))
+            .unwrap();
+        let slots =
+            ImmediateSlots::from_type(&struct_ty.inner, &module.types, module.to_ctx()).unwrap();
+        assert_eq!(slots, ImmediateSlots::from_raw(0b11_11_01));
     }
 
     #[test]

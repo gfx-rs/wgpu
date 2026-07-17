@@ -1350,7 +1350,6 @@ impl Interface {
                         ty.inner.size(module.to_ctx()),
                         naga::valid::ImmediateSlots::from_type(
                             &ty.inner,
-                            0,
                             &module.types,
                             module.to_ctx(),
                         ),
