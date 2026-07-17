@@ -1,23 +1,17 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+use std::sync::Arc;
+
 use deno_core::op2;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 
 use crate::error::GPUGenericError;
-use crate::Instance;
 
 pub struct GPUSampler {
-  pub instance: Instance,
-  pub id: wgpu_core::id::SamplerId,
+  pub wgpu_sampler: Arc<wgpu_core::resource::Sampler>,
   pub label: String,
-}
-
-impl Drop for GPUSampler {
-  fn drop(&mut self) {
-    self.instance.sampler_drop(self.id);
-  }
 }
 
 impl WebIdlInterfaceConverter for GPUSampler {
