@@ -1076,7 +1076,7 @@ impl Global {
         let device = self.hub.devices.get(device_id);
         let surface = self.surfaces.get(surface_id);
 
-        device.configure_surface(&surface, config)
+        surface.configure(&device, config)
     }
 
     /// Check `device_id` for freeable resources and completed buffer mappings.
