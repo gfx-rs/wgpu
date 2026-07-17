@@ -158,7 +158,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         crate::VALIDATION_CANARY.add(message.to_string());
     }
 
-    #[cfg(feature = "internal_error_panic")]
+    #[cfg(all(debug_assertions, feature = "internal_error_panic"))]
     if level == log::Level::Error
         && message_type.contains(vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION)
         && !error_is_waived(cd.message_id_number)
@@ -190,7 +190,7 @@ fn error_is_waived(message_id_number: i32) -> bool {
 /// Validation errors known to fire when running the CTS.
 ///
 /// These waivers are keyed off the `WGPU_CTS_XTASK` environment variable, which
-/// is set by in `xtask/src/cts.rs`.
+/// is set in `xtask/src/cts.rs`.
 #[cfg(feature = "internal_error_panic")]
 fn cts_error_is_waived(message_id_number: i32) -> bool {
     use std::sync::LazyLock;

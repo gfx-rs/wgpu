@@ -186,10 +186,11 @@ portable-atomic = ["dep:portable-atomic", "dep:portable-atomic-util"]
 # Panic when running into a device lost error (for debugging purposes).
 # Only affects the d3d12 and vulkan backends.
 device_lost_panic = []
-# Panic when running into an internal error other than out-of-memory and device lost
-# (for debugging purposes).
-#
-# Only affects the d3d12 and vulkan backends.
+# Panic on unexpected errors (does _not_ include out-of-memory errors or device
+# loss) from platform APIs, for debugging purposes. Such errors likely indicate
+# bug(s) in wgpu, platform components, or drivers. Despite the name, this is not
+# related to the spec's `GPUInternalError`. Only affects the d3d12 and vulkan
+# backends.
 internal_error_panic = []
 # Tracks validation errors in a `VALIDATION_CANARY` static.
 validation_canary = ["dep:parking_lot"]
