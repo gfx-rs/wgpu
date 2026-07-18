@@ -203,9 +203,6 @@ fn cts_error_is_waived(message_id_number: i32) -> bool {
     }
 
     const WAIVED_MESSAGE_IDS: &[i32] = &[
-        // VUID-vkCmdPushConstants-offset-01795
-        // e.g. webgpu:api,operation,command_buffer,programmable,immediate:*
-        0x27bc88c6_u32 as i32,
         // VUID-SampleMask-SampleMask-04359
         // e.g. webgpu:api,validation,render_pipeline,inter_stage:max_variables_count,*
         0x34d444b2_u32 as i32,
