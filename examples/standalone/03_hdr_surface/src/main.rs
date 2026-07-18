@@ -320,7 +320,7 @@ impl State {
         // mode, encode_srgb
         let params: [u32; 2] = [
             choice.shader_mode,
-            u32::from(choice.shader_mode == 0 && !choice.format.is_srgb()),
+            u32::from(choice.shader_mode == 0 && !choice.format.has_srgb_suffix()),
         ];
         let params_buffer = wgpu::util::DeviceExt::create_buffer_init(
             &device,

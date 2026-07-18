@@ -779,7 +779,9 @@ impl Surface {
         profiling::scope!("Surface::get_capabilities");
         let mut hal_caps = self.get_hal_capabilities(adapter)?;
 
-        hal_caps.formats.sort_by_key(|fc| !fc.format.is_srgb());
+        hal_caps
+            .formats
+            .sort_by_key(|fc| !fc.format.has_srgb_suffix());
 
         let usages = crate::conv::map_texture_usage_from_hal(hal_caps.usage);
 

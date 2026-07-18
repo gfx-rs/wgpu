@@ -158,7 +158,78 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         crate::VALIDATION_CANARY.add(message.to_string());
     }
 
+    #[cfg(all(debug_assertions, feature = "internal_error_panic"))]
+    if level == log::Level::Error
+        && message_type.contains(vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION)
+        && !error_is_waived(cd.message_id_number)
+        && !cts_error_is_waived(cd.message_id_number)
+    {
+        use alloc::string::ToString as _;
+        panic!("{}", message.to_string());
+    }
+
     vk::FALSE
+}
+
+/// Validation errors known to fire, not just in the CTS.
+///
+/// These never panic.
+#[cfg(feature = "internal_error_panic")]
+fn error_is_waived(message_id_number: i32) -> bool {
+    const WAIVED_MESSAGE_IDS: &[i32] = &[
+        // SYNC-HAZARD-WRITE-AFTER-WRITE
+        // e.g. webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:*
+        // https://github.com/gfx-rs/wgpu/issues/5231
+        // https://github.com/gfx-rs/wgpu/issues/8705
+        0x5c0ec5d6_u32 as i32,
+    ];
+
+    WAIVED_MESSAGE_IDS.contains(&message_id_number)
+}
+
+/// Validation errors known to fire when running the CTS.
+///
+/// These waivers are keyed off the `WGPU_CTS_XTASK` environment variable, which
+/// is set in `xtask/src/cts.rs`.
+#[cfg(feature = "internal_error_panic")]
+fn cts_error_is_waived(message_id_number: i32) -> bool {
+    use std::sync::LazyLock;
+
+    static WGPU_CTS_XTASK: LazyLock<bool> =
+        LazyLock::new(|| std::env::var_os("WGPU_CTS_XTASK").is_some());
+
+    if !*WGPU_CTS_XTASK {
+        return false;
+    }
+
+    const WAIVED_MESSAGE_IDS: &[i32] = &[
+        // VUID-vkCmdPushConstants-offset-01795
+        // e.g. webgpu:api,operation,command_buffer,programmable,immediate:*
+        0x27bc88c6_u32 as i32,
+        // VUID-SampleMask-SampleMask-04359
+        // e.g. webgpu:api,validation,render_pipeline,inter_stage:max_variables_count,*
+        0x34d444b2_u32 as i32,
+        // VUID-vkCmdCopyImage-srcImage-01728
+        // e.g. webgpu:api,validation,encoding,cmds,copyTextureToTexture:*
+        0x6b654496_u32 as i32,
+        // VUID-StandaloneSpirv-OpImageQuerySizeLod-04659
+        // e.g. webgpu:shader,execution,expression,call,builtin,textureNumLayers:*
+        0x82396078_u32 as i32,
+        // VUID-RuntimeSpirv-Location-06272
+        // e.g. webgpu:api,validation,render_pipeline,inter_stage:max_variables_count,*
+        0xa3614f8b_u32 as i32,
+        // VUID-VkViewport-width-01770
+        // e.g. webgpu:api,validation,encoding,cmds,render,dynamic_state:*
+        0xa4164ba5_u32 as i32,
+        // VUID-VkImageViewCreateInfo-image-04441
+        // e.g. webgpu:api,validation,createView:texture_view_usage:*
+        0xb75da543_u32 as i32,
+        // VUID-VkBufferCreateInfo-None-09500
+        // e.g. webgpu:api,validation,buffer,create:usage,*
+        0xf6d454db_u32 as i32,
+    ];
+
+    WAIVED_MESSAGE_IDS.contains(&message_id_number)
 }
 
 impl super::DebugUtilsCreateInfo {

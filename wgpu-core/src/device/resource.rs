@@ -2121,6 +2121,13 @@ impl Device {
             });
         }
 
+        if desc.range.aspect == wgt::TextureAspect::All && resolved_format.is_multi_planar_format()
+        {
+            return Err(resource::CreateTextureViewError::MultiplanarFullTexture(
+                resolved_format,
+            ));
+        }
+
         let format_is_good = if desc.range.aspect == wgt::TextureAspect::All {
             resolved_format == texture.desc.format
                 || texture.desc.view_formats.contains(&resolved_format)
@@ -3069,6 +3076,22 @@ impl Device {
         let cmd_enc = Arc::new(cmd_enc);
 
         Ok(cmd_enc)
+    }
+
+    pub fn create_render_bundle_encoder(
+        self: &Arc<Self>,
+        desc: &command::RenderBundleEncoderDescriptor,
+    ) -> (
+        Box<command::RenderBundleEncoder>,
+        Option<command::CreateRenderBundleError>,
+    ) {
+        profiling::scope!("Device::create_render_bundle_encoder");
+        api_log!("Device::create_render_bundle_encoder");
+        let (encoder, error) = match command::RenderBundleEncoder::new(self, desc) {
+            Ok(encoder) => (encoder, None),
+            Err(e) => (command::RenderBundleEncoder::dummy(self), Some(e)),
+        };
+        (Box::new(encoder), error)
     }
 
     /// Generate information about late-validated buffer bindings for pipelines.
@@ -5938,7 +5961,7 @@ impl Device {
                     Ok(wgt::PollStatus::Poll) => {
                         unreachable!("Cannot get a Poll result from a Wait action.")
                     }
-                    Err(WaitIdleError::Timeout) if cfg!(target_arch = "wasm32") => {
+                    Err(WaitIdleError::Timeout) if cfg!(target_family = "wasm") => {
                         // On wasm, you cannot actually successfully wait for the surface.
                         // However WebGL does not actually require you do this, so ignoring
                         // the failure is totally fine. See

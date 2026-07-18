@@ -4,7 +4,6 @@ use core::ptr::NonNull;
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    api_log,
     binding_model::{
         self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,
         ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
@@ -699,15 +698,8 @@ impl Global {
         Box<command::RenderBundleEncoder>,
         Option<command::CreateRenderBundleError>,
     ) {
-        profiling::scope!("Device::create_render_bundle_encoder");
-        api_log!("Device::device_create_render_bundle_encoder");
         let device = self.hub.devices.get(device_id);
-        let (encoder, error) =
-            match command::RenderBundleEncoder::new(desc, Some(&device), device_id) {
-                Ok(encoder) => (encoder, None),
-                Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
-            };
-        (Box::new(encoder), error)
+        device.create_render_bundle_encoder(desc)
     }
 
     pub fn device_create_render_bundle_encoder_with_id(
@@ -738,15 +730,11 @@ impl Global {
         desc: &command::RenderBundleDescriptor,
         id_in: Option<id::RenderBundleId>,
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
-        profiling::scope!("RenderBundleEncoder::finish");
-
         let hub = &self.hub;
 
         let fid = hub.render_bundles.prepare(id_in);
 
-        let device = self.hub.devices.get(bundle_encoder.parent());
-
-        let (render_bundle, error) = bundle_encoder.finish(desc, &device, hub);
+        let (render_bundle, error) = bundle_encoder.finish(desc);
 
         let id = fid.assign(render_bundle);
 

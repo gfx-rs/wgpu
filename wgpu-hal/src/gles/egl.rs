@@ -1335,7 +1335,7 @@ impl crate::Surface for Surface {
                         khronos_egl::SINGLE_BUFFER
                     },
                 ];
-                if config.format.is_srgb() {
+                if config.format.has_srgb_suffix() {
                     match self.srgb_kind {
                         SrgbFrameBufferKind::None => {}
                         SrgbFrameBufferKind::Core => {

@@ -1,7 +1,6 @@
 [package]
 name = "player"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "WebGPU trace player"
 homepage.workspace = true
