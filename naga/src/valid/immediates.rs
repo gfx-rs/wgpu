@@ -12,6 +12,59 @@ pub struct ImmediateSlotsOverflowError(pub u64);
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub struct ImmediateSlots(u64);
 
+#[derive(Clone, Copy, Debug)]
+pub enum ImmediateUsage {
+    Valid { slots: ImmediateSlots, size: u32 },
+    // Used when a shader's immediate data type exceeds the maximum of 256 bytes and cannot
+    // be represented in the `ImmediateSlots` bitmask.
+    Invalid { size: u32 },
+}
+
+impl Default for ImmediateUsage {
+    fn default() -> Self {
+        ImmediateUsage::Valid {
+            slots: ImmediateSlots::default(),
+            size: 0,
+        }
+    }
+}
+
+impl ImmediateUsage {
+    pub const fn size(&self) -> u32 {
+        match *self {
+            ImmediateUsage::Valid { size, .. } => size,
+            ImmediateUsage::Invalid { size } => size,
+        }
+    }
+
+    pub fn from_type(
+        ty: &crate::TypeInner,
+        types: &crate::UniqueArena<crate::Type>,
+        gctx: crate::proc::GlobalCtx,
+    ) -> Self {
+        let size = ty.size(gctx);
+        ImmediateSlots::from_type(ty, types, gctx)
+            .map(|slots| Self::Valid { slots, size })
+            .unwrap_or(Self::Invalid { size })
+    }
+
+    pub fn merge(&self, other: &ImmediateUsage) -> Self {
+        let size = self.size().max(other.size());
+        match (*self, *other) {
+            (
+                ImmediateUsage::Valid { slots, .. },
+                ImmediateUsage::Valid {
+                    slots: other_slots, ..
+                },
+            ) => Self::Valid {
+                slots: slots | other_slots,
+                size,
+            },
+            _ => Self::Invalid { size },
+        }
+    }
+}
+
 impl ImmediateSlots {
     pub const fn from_raw(raw: u64) -> Self {
         Self(raw)
