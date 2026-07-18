@@ -76,7 +76,7 @@ impl ImmediateState {
             .copy_from_slice(data);
         self.immediate_slots_set |=
             naga::valid::ImmediateSlots::from_range(offset_bytes, size_bytes.try_into().unwrap())
-                .unwrap();
+                .expect("maxImmediateSize should not exceed 256");
         self.immediates_dirty = true;
 
         Ok(())
