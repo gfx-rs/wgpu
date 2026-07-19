@@ -1,0 +1,5 @@
+capabilities = "RAY_QUERY"
+targets = "METAL | SPIRV"
+
+[msl]
+lang_version = [2, 4]
