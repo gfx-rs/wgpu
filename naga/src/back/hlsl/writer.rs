@@ -2911,6 +2911,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     RayQueryFunction::Terminate => {
                         self.write_terminate(module, level, query, &tracker_expr_name, func_ctx)?;
                     }
+                    RayQueryFunction::Begin => {
+                        writeln!(self.out, "{level}{tracker_expr_name} = 0u;")?;
+                    }
                 }
             }
             Statement::SubgroupBallot { result, predicate } => {

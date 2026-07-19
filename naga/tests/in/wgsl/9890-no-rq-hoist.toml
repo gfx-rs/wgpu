@@ -1,5 +1,5 @@
 capabilities = "RAY_QUERY"
-targets = "METAL | SPIRV"
+targets = "METAL | SPIRV | HLSL"
 
 [msl]
 lang_version = [2, 4]

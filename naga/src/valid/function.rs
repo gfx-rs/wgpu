@@ -1577,6 +1577,7 @@ impl super::Validator {
                         }
                         crate::RayQueryFunction::ConfirmIntersection => {}
                         crate::RayQueryFunction::Terminate => {}
+                        crate::RayQueryFunction::Begin => {}
                     }
                 }
                 S::SubgroupBallot { result, predicate } => {

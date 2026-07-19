@@ -26,8 +26,8 @@ struct RayDesc {
         if (metal::all(loop_bound == uint2(0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
-            uint _e22 = i;
-            i = _e22 + 1u;
+            uint _e21 = i;
+            i = _e21 + 1u;
         }
         loop_init = false;
         uint _e2 = i;
@@ -36,11 +36,11 @@ struct RayDesc {
             break;
         }
         {
-            sq = metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> {};
-            uint _e10 = i;
-            RayDesc _e19 = RayDesc {1u, 255u, 0.001, 1000.0, metal::float3(static_cast<float>(_e10)), metal::float3(0.0, -1.0, 0.0)};
+            naga_query_init_tracker_for_sq = 0u;
+            uint _e9 = i;
+            RayDesc _e18 = RayDesc {1u, 255u, 0.001, 1000.0, metal::float3(static_cast<float>(_e9)), metal::float3(0.0, -1.0, 0.0)};
             {
-                RayDesc desc = _e19;
+                RayDesc desc = _e18;
                 metal::raytracing::intersection_params params;
                 metal::raytracing::opacity_cull_mode cull_mode = 
                     (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
@@ -66,10 +66,10 @@ struct RayDesc {
                     naga_query_tmax_tracker_for_sq = desc.tmax;
                 }
             }
-            bool _e20 = false;
+            bool _e19 = false;
             if (((naga_query_init_tracker_for_sq & 1) == 1) && !((naga_query_init_tracker_for_sq & 4) == 4)) {
-                _e20 = sq.next();
-                naga_query_init_tracker_for_sq = naga_query_init_tracker_for_sq | (_e20 ? 2: 6);
+                _e19 = sq.next();
+                naga_query_init_tracker_for_sq = naga_query_init_tracker_for_sq | (_e19 ? 2: 6);
             }
         }
     }

@@ -1584,6 +1584,19 @@ impl BlockContext<'_> {
                     &[query_id, tracker_ids.initialized_tracker],
                 ));
             }
+            crate::RayQueryFunction::Begin => {
+                // Reset the ray query initialization tracker to zero as this is equivalent to it being a new variable.
+
+                let zero_value = self.writer.get_constant_scalar(crate::Literal::U32(
+                    spirv::RayQueryIntersection::RayQueryCandidateIntersectionKHR as _,
+                ));
+
+                block.body.push(Instruction::store(
+                    tracker_ids.initialized_tracker,
+                    zero_value,
+                    None,
+                ));
+            }
         }
     }
 

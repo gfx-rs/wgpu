@@ -597,6 +597,7 @@ pub(crate) enum Error<'a> {
     UnexpectedExprForTypeExpression(Span),
     MissingIncomingPayload(Span),
     UnterminatedBlockComment(Span),
+    RayQueryWithInitializer(Span),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -1659,6 +1660,14 @@ impl<'a> Error<'a> {
                     "must be closed with `*/`".into(),
                 )],
                 message: "unterminated block comment".into(),
+                notes: vec![],
+            },
+            Error::RayQueryWithInitializer(span) => ParseError {
+                message: "Ray query with initialize".to_string(),
+                labels: vec![(
+                    span,
+                    "variables with type `ray_query` are special and so cannot have initializers".into(),
+                )],
                 notes: vec![],
             }
         }

@@ -1916,27 +1916,48 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let handle = ctx
                         .as_expression(block, &mut emitter)
                         .interrupt_emitter(ir::Expression::LocalVariable(var), Span::UNDEFINED)?;
-                    let initializer = if is_inside_loop {
-                        match initializer {
-                            Some(initializer) => Some(initializer),
-                            None => Some(
-                                ctx.as_expression(block, &mut emitter)
-                                    .append_expression(ir::Expression::ZeroValue(ty), stmt.span)?,
-                            ),
-                        }
-                    } else {
-                        initializer
-                    };
+
                     block.extend(emitter.finish(&ctx.function.expressions));
                     ctx.local_table
                         .insert(v.handle, Declared::Runtime(Typed::Reference(handle)));
 
-                    match initializer {
-                        Some(initializer) => ir::Statement::Store {
-                            pointer: handle,
-                            value: initializer,
-                        },
-                        None => return Ok(()),
+                    match ctx.module.types[ty].inner {
+                        crate::TypeInner::RayQuery { .. } => {
+                            // Initializers are disallowed for ray queries as any store is disallowed.
+                            // However, in loops ray queries need to be reset using a special piece of
+                            // IR which makes checking this any later impossible.
+                            if let Some(expr) = initializer {
+                                return Err(Box::new(Error::RayQueryWithInitializer(ctx.function.expressions.get_span(expr))))
+                            }
+
+                            if is_inside_loop {
+                                ir::Statement::RayQuery { query: handle, fun: ir::RayQueryFunction::Begin }
+                            } else {
+                                return Ok(());
+                            }
+                        }
+                        _ => {
+                            let initializer = if is_inside_loop {
+                                match initializer {
+                                    Some(initializer) => Some(initializer),
+                                    None => Some(
+                                        ctx.as_expression(block, &mut emitter)
+                                            .append_expression(ir::Expression::ZeroValue(ty), stmt.span)?,
+                                    ),
+                                }
+                            } else {
+                                initializer
+                            };
+        
+                            match initializer {
+                                Some(initializer) => ir::Statement::Store {
+                                    pointer: handle,
+                                    value: initializer,
+                                },
+                                None => return Ok(()),
+                            }
+
+                        }
                     }
                 }
                 ast::LocalDecl::Const(ref c) => {
