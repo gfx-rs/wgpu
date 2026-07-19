@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-naga-bridge"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Conversions between naga and wgpu-types. Part of the wgpu project"
 homepage.workspace = true

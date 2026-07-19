@@ -2151,11 +2151,8 @@ impl TextureView {
             format_features: texture.format_features,
             samples: texture.desc.sample_count,
             selector: TextureSelector {
-                mips: desc.range.base_mip_level
-                    ..(desc.range.base_mip_level + desc.range.mip_level_count.unwrap_or_default()),
-                layers: desc.range.base_array_layer
-                    ..(desc.range.base_array_layer
-                        + desc.range.array_layer_count.unwrap_or_default()),
+                mips: desc.range.mip_range(texture.desc.mip_level_count),
+                layers: desc.range.layer_range(texture.desc.array_layer_count()),
             },
             label: desc.label.to_string(),
         })
@@ -2246,6 +2243,8 @@ pub enum CreateTextureViewError {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+    #[error("TextureAspect::All cannot be used in texture views on multi-planar formats")]
+    MultiplanarFullTexture(wgt::TextureFormat),
 }
 
 impl From<InvalidOrDestroyedResourceError> for CreateTextureViewError {
@@ -2280,7 +2279,8 @@ impl WebGpuError for CreateTextureViewError {
             | Self::TextureViewFormatNotStorage(_)
             | Self::InvalidTextureViewUsage { .. }
             | Self::InvalidTransientTextureViewUsage { .. }
-            | Self::MissingFeatures(_) => ErrorType::Validation,
+            | Self::MissingFeatures(_)
+            | Self::MultiplanarFullTexture(_) => ErrorType::Validation,
         }
     }
 }

@@ -1,7 +1,6 @@
 [package]
 name = "naga-test"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "common code for naga tests"
 homepage.workspace = true

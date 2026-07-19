@@ -896,7 +896,9 @@ impl Validator {
             }
 
             match self.validate_entry_point(ep, module, &mod_info) {
-                Ok(info) => mod_info.entry_points.push(info),
+                Ok(info) => {
+                    mod_info.entry_points.push(info);
+                }
                 Err(error) => {
                     return Err(Box::new(error.and_then(|source| {
                         ValidationError::EntryPoint {

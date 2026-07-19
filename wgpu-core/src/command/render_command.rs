@@ -1,9 +1,9 @@
-use wgt::{BufferAddress, BufferSize, Color};
-
 use super::{DrawCommandFamily, Rect};
 #[cfg(feature = "serde")]
 use crate::command::serde_object_reference_struct;
 use crate::command::{ArcReferences, ReferenceType};
+use alloc::vec::Vec;
+use wgt::{BufferAddress, BufferSize, Color};
 
 #[cfg(feature = "serde")]
 use macro_rules_attribute::apply;
@@ -50,20 +50,8 @@ pub enum RenderCommand<R: ReferenceType> {
         /// must be a multiple of four.
         offset: u32,
 
-        /// The number of bytes to write. This must be a multiple of four.
-        size_bytes: u32,
-
-        /// Index in [`BasePass::immediates_data`] of the start of the data
-        /// to be written.
-        ///
-        /// Note: this is not a byte offset like `offset`. Rather, it is the
-        /// index of the first `u32` element in `immediates_data` to read.
-        ///
-        /// `None` means zeros should be written to the destination range, and
-        /// there is no corresponding data in `immediates_data`. This is used
-        /// by render bundles, which explicitly clear out any state that
-        /// post-bundle code might see.
-        values_offset: Option<u32>,
+        /// The immediate data to be written.
+        data: Vec<u32>,
     },
     Draw {
         vertex_count: u32,

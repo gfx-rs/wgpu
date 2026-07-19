@@ -16,7 +16,7 @@ use crate::{
         compute_command::ArcComputeCommand,
         encoder::EncodingState,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
-        pass::{self, flush_bindings_helper},
+        pass::{self, flush_bindings_helper, ImmediateState},
         pass_base, pass_try,
         query::{
             end_pipeline_statistics_query, record_pass_timestamp_writes,
@@ -200,9 +200,6 @@ pub enum ComputePassErrorInner {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     TimestampWrites(#[from] TimestampWritesError),
-    // This one is unreachable, but required for generic pass support
-    #[error(transparent)]
-    InvalidValuesOffset(#[from] pass::InvalidValuesOffset),
 }
 
 impl From<InvalidOrDestroyedResourceError> for ComputePassErrorInner {
@@ -261,7 +258,6 @@ impl WebGpuError for ComputePassError {
             ComputePassErrorInner::MissingDownlevelFlags(e) => e.webgpu_error_type(),
             ComputePassErrorInner::InvalidResource(e) => e.webgpu_error_type(),
             ComputePassErrorInner::TimestampWrites(e) => e.webgpu_error_type(),
-            ComputePassErrorInner::InvalidValuesOffset(e) => e.webgpu_error_type(),
 
             ComputePassErrorInner::InvalidParentEncoder
             | ComputePassErrorInner::BindGroupIndexOutOfRange { .. }
@@ -279,12 +275,6 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     active_query: Option<(Arc<QuerySet>, u32)>,
 
-    immediates: Vec<u32>,
-
-    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
-    /// Checked against the pipeline's required slots before each dispatch.
-    immediate_slots_set: naga::valid::ImmediateSlots,
-
     intermediate_trackers: Tracker,
 }
 
@@ -294,18 +284,36 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
             self.pass.binder.check_compatibility(pipeline.as_ref())?;
             self.pass.binder.check_late_buffer_bindings()?;
             if !self
+                .pass
+                .immediate_state
                 .immediate_slots_set
                 .contains(pipeline.immediate_slots_required)
             {
                 return Err(DispatchError::MissingImmediateData {
                     missing: pipeline
                         .immediate_slots_required
-                        .difference(self.immediate_slots_set),
+                        .difference(self.pass.immediate_state.immediate_slots_set),
                 });
             }
             Ok(())
         } else {
             Err(DispatchError::MissingPipeline(pass::MissingPipeline))
+        }
+    }
+
+    fn flush_immediates(&mut self) {
+        // SAFETY: The range of immediates written was validated in `is_ready`.
+        unsafe {
+            self.pass.immediate_state.flush_immediates(
+                self.pipeline
+                    .as_ref()
+                    .unwrap()
+                    .layout()
+                    .unwrap()
+                    .raw()
+                    .unwrap(),
+                self.pass.base.raw_encoder,
+            );
         }
     }
 
@@ -716,12 +724,9 @@ pub(super) fn encode_compute_pass(
             pending_discard_init_fixups: SurfacesInDiscardState::new(),
             scope: device.new_usage_scope(),
             string_offset: 0,
+            immediate_state: ImmediateState::default(),
         },
         active_query: None,
-
-        immediates: Vec::new(),
-
-        immediate_slots_set: Default::default(),
 
         intermediate_trackers: Tracker::new(
             device.ordered_buffer_usages,
@@ -823,29 +828,17 @@ pub(super) fn encode_compute_pass(
                 let scope = PassErrorScope::SetPipelineCompute;
                 set_pipeline(&mut state, device, pipeline).map_pass_err(scope)?;
             }
-            ArcComputeCommand::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => {
+            ArcComputeCommand::SetImmediate { offset, data } => {
                 let scope = PassErrorScope::SetImmediate;
-                pass::set_immediates::<ComputePassErrorInner, _>(
-                    &mut state.pass,
-                    &base.immediates_data,
-                    offset,
-                    size_bytes,
-                    Some(values_offset),
-                    |data_slice| {
-                        let offset_in_elements = (offset / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
-                        let size_in_elements =
-                            (size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
-                        state.immediates[offset_in_elements..][..size_in_elements]
-                            .copy_from_slice(data_slice);
-                    },
-                )
-                .map_pass_err(scope)?;
-                state.immediate_slots_set |=
-                    naga::valid::ImmediateSlots::from_range(offset, size_bytes);
+                state
+                    .pass
+                    .immediate_state
+                    .set_immediates::<ComputePassErrorInner>(
+                        &state.pass.base.device.limits,
+                        offset,
+                        &data,
+                    )
+                    .map_pass_err(scope)?;
             }
             ArcComputeCommand::DispatchWorkgroups(groups) => {
                 let scope = PassErrorScope::Dispatch { indirect: false };
@@ -1001,22 +994,10 @@ fn set_pipeline(
 
     // Rebind resources
     let pipeline_layout = pipeline.layout()?;
-    pass::change_pipeline_layout::<ComputePassErrorInner, _>(
+    pass::change_pipeline_layout::<ComputePassErrorInner>(
         &mut state.pass,
         pipeline_layout,
         &pipeline.late_sized_buffer_groups,
-        || {
-            // This only needs to be here for compute pipelines because they use immediates for
-            // validating indirect draws.
-            state.immediates.clear();
-            // Note that can only be one range for each stage. See the `MoreThanOneImmediateRangePerStage` error.
-            if pipeline_layout.immediate_size != 0 {
-                // Note that non-0 range start doesn't work anyway https://github.com/gfx-rs/wgpu/issues/4502
-                let len = pipeline_layout.immediate_size as usize
-                    / wgt::IMMEDIATE_DATA_ALIGNMENT as usize;
-                state.immediates.extend(core::iter::repeat_n(0, len));
-            }
-        },
     )
 }
 
@@ -1026,6 +1007,7 @@ fn dispatch_workgroups(state: &mut State, groups: [u32; 3]) -> Result<(), Comput
     state.is_ready()?;
 
     state.flush_bindings(None, false)?;
+    state.flush_immediates();
 
     let groups_size_limit = state
         .pass
@@ -1172,33 +1154,23 @@ fn dispatch_workgroups_indirect(
 
         // reset state
         {
-            let pipeline = state.pipeline.as_ref().unwrap();
-
             unsafe {
                 state
                     .pass
                     .base
                     .raw_encoder
-                    .set_compute_pipeline(pipeline.raw()?);
+                    .set_compute_pipeline(state.pipeline.as_ref().unwrap().raw()?);
             }
 
-            let pipeline_layout = pipeline.layout()?;
-
-            if !state.immediates.is_empty() {
-                unsafe {
-                    state.pass.base.raw_encoder.set_immediates(
-                        pipeline_layout.raw()?,
-                        0,
-                        &state.immediates,
-                    );
-                }
-            }
+            // Immediates are dirty because we used them for the validation pipeline
+            state.pass.immediate_state.immediates_dirty = true;
+            state.flush_immediates();
 
             for (i, group, dynamic_offsets) in state.pass.binder.list_valid() {
                 let raw_bg = group.try_raw(state.pass.base.snatch_guard)?;
                 unsafe {
                     state.pass.base.raw_encoder.set_bind_group(
-                        pipeline_layout.raw()?,
+                        state.pipeline.as_ref().unwrap().layout()?.raw()?,
                         i as u32,
                         raw_bg,
                         dynamic_offsets,
@@ -1231,7 +1203,7 @@ fn dispatch_workgroups_indirect(
         }
     } else {
         state.flush_bindings(Some(&buffer), true)?;
-
+        state.flush_immediates();
         let buf_raw = buffer.try_raw(state.pass.base.snatch_guard)?;
         unsafe {
             state
@@ -1326,28 +1298,18 @@ impl ComputePass {
         let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(self, scope);
 
-        let size_bytes = pass_try!(
-            base,
-            scope,
-            u32::try_from(data.len()).map_err(|_| ImmediateUploadError::ImmediateOutOfMemory)
-        );
         pass_try!(
             base,
             scope,
-            pass::validate_immediates_alignment(offset, size_bytes)
-        );
-
-        let values_offset = base.immediates_data.len().try_into().unwrap();
-
-        base.immediates_data.extend(
-            data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
-                .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
+            pass::validate_immediates_alignment(offset, data.len())
         );
 
         base.commands.push(ArcComputeCommand::SetImmediate {
             offset,
-            size_bytes: data.len() as u32,
-            values_offset,
+            data: data
+                .chunks_exact(size_of::<u32>())
+                .map(|ck| u32::from_le_bytes(ck.try_into().unwrap()))
+                .collect(),
         });
 
         Ok(())

@@ -24,7 +24,6 @@ env:
   RUST_BACKTRACE: full
   RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
-  DENO_WEBGPU_STRICT_COMPLIANCE: 1
 
   #
   # Runtime configuration

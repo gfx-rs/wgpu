@@ -2121,6 +2121,13 @@ impl Device {
             });
         }
 
+        if desc.range.aspect == wgt::TextureAspect::All && resolved_format.is_multi_planar_format()
+        {
+            return Err(resource::CreateTextureViewError::MultiplanarFullTexture(
+                resolved_format,
+            ));
+        }
+
         let format_is_good = if desc.range.aspect == wgt::TextureAspect::All {
             resolved_format == texture.desc.format
                 || texture.desc.view_formats.contains(&resolved_format)
@@ -3069,6 +3076,22 @@ impl Device {
         let cmd_enc = Arc::new(cmd_enc);
 
         Ok(cmd_enc)
+    }
+
+    pub fn create_render_bundle_encoder(
+        self: &Arc<Self>,
+        desc: &command::RenderBundleEncoderDescriptor,
+    ) -> (
+        Box<command::RenderBundleEncoder>,
+        Option<command::CreateRenderBundleError>,
+    ) {
+        profiling::scope!("Device::create_render_bundle_encoder");
+        api_log!("Device::create_render_bundle_encoder");
+        let (encoder, error) = match command::RenderBundleEncoder::new(self, desc) {
+            Ok(encoder) => (encoder, None),
+            Err(e) => (command::RenderBundleEncoder::dummy(self), Some(e)),
+        };
+        (Box::new(encoder), error)
     }
 
     /// Generate information about late-validated buffer bindings for pipelines.
@@ -4466,6 +4489,10 @@ impl Device {
         mut derived_group_layouts: Box<ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>>,
         immediate_size: u32,
     ) -> Result<Arc<binding_model::PipelineLayout>, pipeline::ImplicitLayoutError> {
+        // <https://gpuweb.github.io/gpuweb/#abstract-opdef-default-pipeline-layout>
+        // Round up the immediate size for pipeline layout as it is required to be a multiple of 4
+        let immediate_size = align_to(immediate_size, wgt::IMMEDIATE_DATA_ALIGNMENT);
+
         while derived_group_layouts
             .last()
             .is_some_and(|map| map.is_empty())
@@ -4579,7 +4606,7 @@ impl Device {
             None => validation::BindingLayoutSource::new_derived(&self.limits),
         };
         let mut shader_binding_sizes = FastHashMap::default();
-        let io = validation::StageIo::default();
+        let mut io = validation::StageIo::default();
 
         let final_entry_point_name;
 
@@ -4592,7 +4619,7 @@ impl Device {
             )?;
 
             if let Some(interface) = shader_module_state.interface.interface() {
-                let _ = interface.check_stage(
+                io = interface.check_stage(
                     &mut binding_layout_source,
                     &mut shader_binding_sizes,
                     &final_entry_point_name,
@@ -4606,11 +4633,7 @@ impl Device {
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                let immediate_size = shader_module_state
-                    .interface
-                    .interface()
-                    .map_or(0, |i| i.immediate_size);
-                self.create_derived_pipeline_layout(entries, immediate_size)?
+                self.create_derived_pipeline_layout(entries, io.immediate_size_required)?
             }
         };
 
@@ -4658,17 +4681,6 @@ impl Device {
                 },
             )?;
 
-        let immediate_slots_required =
-            shader_module_state
-                .interface
-                .interface()
-                .map_or(Default::default(), |iface| {
-                    iface.immediate_slots_required(
-                        naga::ShaderStage::Compute,
-                        &final_entry_point_name,
-                    )
-                });
-
         let pipeline = pipeline::ComputePipeline {
             state: ResourceState::Valid(pipeline::ComputePipelineState {
                 raw: ManuallyDrop::new(raw),
@@ -4677,7 +4689,7 @@ impl Device {
             }),
             device: self.clone(),
             late_sized_buffer_groups,
-            immediate_slots_required,
+            immediate_slots_required: io.immediate_slots_required,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.compute_pipelines.clone()),
         };
@@ -5155,7 +5167,6 @@ impl Device {
         let mut _vertex_entry_point_name = String::new();
         let mut _task_entry_point_name = String::new();
         let mut _mesh_entry_point_name = String::new();
-        let mut immediate_slots_required = naga::valid::ImmediateSlots::default();
         let mut passthrough_stages = wgt::ShaderStages::empty();
         match desc.vertex {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
@@ -5190,8 +5201,6 @@ impl Device {
                         .map_err(stage_err)?;
 
                     if let Some(interface) = vertex_shader_module_state.interface.interface() {
-                        immediate_slots_required |= interface
-                            .immediate_slots_required(stage.to_naga(), &_vertex_entry_point_name);
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5244,8 +5253,6 @@ impl Device {
                         .map_err(stage_err)?;
 
                     if let Some(interface) = task_shader_module_state.interface.interface() {
-                        immediate_slots_required |= interface
-                            .immediate_slots_required(stage.to_naga(), &_task_entry_point_name);
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5296,8 +5303,6 @@ impl Device {
                         .map_err(stage_err)?;
 
                     if let Some(interface) = mesh_shader_module_state.interface.interface() {
-                        immediate_slots_required |= interface
-                            .immediate_slots_required(stage.to_naga(), &_mesh_entry_point_name);
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5357,8 +5362,6 @@ impl Device {
                     .map_err(stage_err)?;
 
                 if let Some(interface) = shader_module_state.interface.interface() {
-                    immediate_slots_required |= interface
-                        .immediate_slots_required(stage.to_naga(), &fragment_entry_point_name);
                     io = interface
                         .check_stage(
                             &mut binding_layout_source,
@@ -5429,30 +5432,7 @@ impl Device {
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                let immediate_size = {
-                    let immediate_size_of = |sm: &pipeline::ShaderModule| {
-                        sm.state()
-                            .expect("Should be validated above")
-                            .interface
-                            .interface()
-                            .map(|i| i.immediate_size)
-                    };
-                    let vertex = match desc.vertex {
-                        pipeline::RenderPipelineVertexProcessor::Vertex(ref v) => {
-                            immediate_size_of(&v.stage.module)
-                        }
-                        pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => task
-                            .as_ref()
-                            .and_then(|t| immediate_size_of(&t.stage.module))
-                            .max(immediate_size_of(&mesh.stage.module)),
-                    };
-                    let fragment = desc
-                        .fragment
-                        .as_ref()
-                        .and_then(|f| immediate_size_of(&f.stage.module));
-                    vertex.max(fragment).unwrap_or(0)
-                };
-                self.create_derived_pipeline_layout(entries, immediate_size)?
+                self.create_derived_pipeline_layout(entries, io.immediate_size_required)?
             }
         };
 
@@ -5633,7 +5613,7 @@ impl Device {
             strip_index_format: desc.primitive.strip_index_format,
             vertex_steps,
             late_sized_buffer_groups,
-            immediate_slots_required,
+            immediate_slots_required: io.immediate_slots_required,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.render_pipelines.clone()),
             is_mesh,
@@ -5981,7 +5961,7 @@ impl Device {
                     Ok(wgt::PollStatus::Poll) => {
                         unreachable!("Cannot get a Poll result from a Wait action.")
                     }
-                    Err(WaitIdleError::Timeout) if cfg!(target_arch = "wasm32") => {
+                    Err(WaitIdleError::Timeout) if cfg!(target_family = "wasm") => {
                         // On wasm, you cannot actually successfully wait for the surface.
                         // However WebGL does not actually require you do this, so ignoring
                         // the failure is totally fine. See

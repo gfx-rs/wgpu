@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-test"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "common code for wgpu tests"
 homepage.workspace = true

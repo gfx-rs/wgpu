@@ -188,6 +188,13 @@ jobs:
             tier: 2
             kind: web
 
+          - name: WebAssembly 64-bit
+            os: ubuntu-24.04
+            target: wasm64-unknown-unknown
+            kind: wgpu-only
+            tier: 3
+            extra-flags: -Zbuild-std=std,panic_abort
+
           - name: Emscripten
             os: ubuntu-24.04
             target: wasm32-unknown-emscripten
@@ -843,7 +850,7 @@ jobs:
           cargo --locked fmt -- --check
 
       - name: Install Tombi
-        uses: tombi-toml/setup-tombi@v1.1.3
+        uses: tombi-toml/setup-tombi@v1.2.0
         with:
           version: "1.1.3"
 

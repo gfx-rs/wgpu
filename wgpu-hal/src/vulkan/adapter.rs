@@ -3543,7 +3543,7 @@ fn query_cooperative_matrix_properties(
         });
     }
 
-    log::info!(
+    log::debug!(
         "Found {} cooperative matrix configurations supported by wgpu",
         result.len()
     );

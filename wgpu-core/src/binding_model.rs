@@ -40,7 +40,7 @@ use crate::{
 pub enum BindGroupLayoutEntryError {
     #[error("Cube dimension is not expected for texture storage")]
     StorageTextureCube,
-    #[error("Atomic storage textures are not allowed by baseline webgpu, they require the native only feature TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES")]
+    #[error("Atomic storage textures are not allowed by baseline webgpu, they require the native only feature TEXTURE_ATOMIC")]
     StorageTextureAtomic,
     #[error("Arrays of bindings unsupported for this type of binding")]
     ArrayUnsupported,
@@ -955,8 +955,6 @@ impl WebGpuError for CreatePipelineLayoutError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImmediateUploadError {
-    #[error("Ran out of immediate data space. Don't set 4gb of immediates per pass")]
-    ImmediateOutOfMemory,
     #[error(
         "Provided immediate data start offset {start_offset} overruns the range with a size of {immediate_size}"
     )]
@@ -975,18 +973,17 @@ pub enum ImmediateUploadError {
         `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
         ida = wgt::IMMEDIATE_DATA_ALIGNMENT
     )]
-    SizeUnaligned(u32),
+    SizeUnaligned(usize),
     #[error(
-        "Provided immediate data start offset {} + size {} overruns the immediate data range \
-        with a size of {}",
+        "Provided immediate data start offset {} + size {} overruns `max_immediate_size` {}",
         start_offset,
-        size,
-        immediate_size
+        size_bytes,
+        limit
     )]
-    EndOffsetOverrun {
+    EndOffsetBeyondLimit {
         start_offset: u32,
-        size: u32,
-        immediate_size: u32,
+        size_bytes: usize,
+        limit: u32,
     },
 }
 
@@ -1111,34 +1108,6 @@ impl PipelineLayout {
         let bgl = self.bind_group_layouts.get(group as usize)?;
         let bgl = bgl.as_ref()?;
         bgl.entries.get(binding)
-    }
-
-    /// Validate immediates match up with expected ranges.
-    pub(crate) fn validate_immediates_ranges(
-        &self,
-        offset: u32,
-        size_bytes: u32,
-    ) -> Result<(), ImmediateUploadError> {
-        // Don't need to validate size against the immediate data size limit here,
-        // as immediate data ranges are already validated to be within bounds,
-        // and we validate that they are within the ranges.
-
-        if offset > self.immediate_size {
-            return Err(ImmediateUploadError::StartOffsetOverrun {
-                start_offset: offset,
-                immediate_size: self.immediate_size,
-            });
-        }
-
-        if size_bytes > self.immediate_size - offset {
-            return Err(ImmediateUploadError::EndOffsetOverrun {
-                start_offset: offset,
-                size: size_bytes,
-                immediate_size: self.immediate_size,
-            });
-        }
-
-        Ok(())
     }
 
     pub(crate) fn invalid(device: Arc<Device>, label: String) -> Arc<Self> {
