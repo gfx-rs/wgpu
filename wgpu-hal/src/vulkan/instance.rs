@@ -11,6 +11,13 @@ use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
 use parking_lot::RwLock;
 
+/// Name of the `VK_OHOS_surface` extension.
+///
+/// `ash` does not generate OpenHarmony bindings, so this mirrors
+/// `VK_OHOS_SURFACE_EXTENSION_NAME` from the OpenHarmony SDK's `vulkan_ohos.h`.
+#[cfg(target_env = "ohos")]
+const OHOS_SURFACE_EXTENSION_NAME: &CStr = c"VK_OHOS_surface";
+
 unsafe extern "system" fn debug_utils_messenger_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
@@ -309,10 +316,15 @@ impl super::Instance {
         extensions.push(khr::surface::NAME);
 
         // Platform-specific WSI extensions
+        //
+        // Note: OpenHarmony (`target_env = "ohos"`) reports `target_os = "linux"` and is
+        // unix, but has neither X11 nor Wayland. It must be excluded here and uses
+        // `VK_OHOS_surface` instead (see below).
         if cfg!(all(
             unix,
             not(target_os = "android"),
-            not(target_os = "macos")
+            not(target_os = "macos"),
+            not(target_env = "ohos")
         )) {
             // VK_KHR_xlib_surface
             extensions.push(khr::xlib_surface::NAME);
@@ -324,6 +336,11 @@ impl super::Instance {
         if cfg!(target_os = "android") {
             // VK_KHR_android_surface
             extensions.push(khr::android_surface::NAME);
+        }
+        #[cfg(target_env = "ohos")]
+        {
+            // VK_OHOS_surface: surfaces are created from an XComponent's `OHNativeWindow`.
+            extensions.push(OHOS_SURFACE_EXTENSION_NAME);
         }
         if cfg!(target_os = "windows") {
             // VK_KHR_win32_surface
@@ -566,6 +583,74 @@ impl super::Instance {
         .map_err(|err| {
             crate::InstanceError::with_source(String::from("AndroidSurface failed"), err)
         })?;
+
+        Ok(self.create_surface_from_vk_surface_khr(surface, None))
+    }
+
+    /// OpenHarmony window-system integration.
+    ///
+    /// `ash` has no `VK_OHOS_surface` bindings, so the `vkCreateSurfaceOHOS` entry point is
+    /// resolved manually and `VkSurfaceCreateInfoOHOS` is declared here, matching the
+    /// OpenHarmony SDK's `vulkan_ohos.h` (`VK_STRUCTURE_TYPE_SURFACE_CREATE_INFO_OHOS`
+    /// is 1000685000).
+    ///
+    /// `window` is the `OHNativeWindow*` handed out by an XComponent.
+    #[cfg(target_env = "ohos")]
+    fn create_surface_ohos(
+        &self,
+        window: *mut c_void,
+    ) -> Result<super::Surface, crate::InstanceError> {
+        if !self
+            .shared
+            .extensions
+            .contains(&OHOS_SURFACE_EXTENSION_NAME)
+        {
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_OHOS_surface",
+            )));
+        }
+
+        #[repr(C)]
+        struct VkSurfaceCreateInfoOHOS {
+            s_type: vk::StructureType,
+            p_next: *const c_void,
+            flags: vk::Flags,
+            window: *mut c_void,
+        }
+        const S_TYPE_SURFACE_CREATE_INFO_OHOS: vk::StructureType =
+            vk::StructureType::from_raw(1000685000);
+        type PfnCreateSurfaceOHOS = unsafe extern "system" fn(
+            vk::Instance,
+            *const VkSurfaceCreateInfoOHOS,
+            *const vk::AllocationCallbacks,
+            *mut vk::SurfaceKHR,
+        ) -> vk::Result;
+
+        let raw_instance = self.shared.raw.handle();
+        let Some(pfn) = (unsafe {
+            self.shared
+                .entry
+                .get_instance_proc_addr(raw_instance, c"vkCreateSurfaceOHOS".as_ptr())
+        }) else {
+            return Err(crate::InstanceError::new(String::from(
+                "vkCreateSurfaceOHOS not exposed by Vulkan driver",
+            )));
+        };
+        let create: PfnCreateSurfaceOHOS = unsafe { core::mem::transmute(pfn) };
+
+        let info = VkSurfaceCreateInfoOHOS {
+            s_type: S_TYPE_SURFACE_CREATE_INFO_OHOS,
+            p_next: core::ptr::null(),
+            flags: 0,
+            window,
+        };
+        let mut surface = vk::SurfaceKHR::null();
+        let result = unsafe { create(raw_instance, &info, core::ptr::null(), &mut surface) };
+        if result != vk::Result::SUCCESS {
+            return Err(crate::InstanceError::new(format!(
+                "vkCreateSurfaceOHOS failed: {result:?}"
+            )));
+        }
 
         Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
@@ -995,6 +1080,8 @@ impl crate::Instance for super::Instance {
             (Rwh::AndroidNdk(handle), _) => {
                 self.create_surface_android(handle.a_native_window.as_ptr())
             }
+            #[cfg(target_env = "ohos")]
+            (Rwh::OhosNdk(handle), _) => self.create_surface_ohos(handle.native_window.as_ptr()),
             (Rwh::Win32(handle), _) => {
                 let hinstance = handle.hinstance.ok_or_else(|| {
                     crate::InstanceError::new(String::from(
