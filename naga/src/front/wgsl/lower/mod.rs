@@ -1927,11 +1927,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             // However, in loops ray queries need to be reset using a special piece of
                             // IR which makes checking this any later impossible.
                             if let Some(expr) = initializer {
-                                return Err(Box::new(Error::RayQueryWithInitializer(ctx.function.expressions.get_span(expr))))
+                                return Err(Box::new(Error::RayQueryWithInitializer(
+                                    ctx.function.expressions.get_span(expr),
+                                )));
                             }
 
                             if is_inside_loop {
-                                ir::Statement::RayQuery { query: handle, fun: ir::RayQueryFunction::Begin }
+                                ir::Statement::RayQuery {
+                                    query: handle,
+                                    fun: ir::RayQueryFunction::Begin,
+                                }
                             } else {
                                 return Ok(());
                             }
@@ -1941,14 +1946,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 match initializer {
                                     Some(initializer) => Some(initializer),
                                     None => Some(
-                                        ctx.as_expression(block, &mut emitter)
-                                            .append_expression(ir::Expression::ZeroValue(ty), stmt.span)?,
+                                        ctx.as_expression(block, &mut emitter).append_expression(
+                                            ir::Expression::ZeroValue(ty),
+                                            stmt.span,
+                                        )?,
                                     ),
                                 }
                             } else {
                                 initializer
                             };
-        
+
                             match initializer {
                                 Some(initializer) => ir::Statement::Store {
                                     pointer: handle,
@@ -1956,7 +1963,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 },
                                 None => return Ok(()),
                             }
-
                         }
                     }
                 }

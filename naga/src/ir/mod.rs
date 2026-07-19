@@ -2007,7 +2007,7 @@ pub enum RayQueryFunction {
     Terminate,
 
     /// Resets a variable's to appear as though it was previously unused.
-    /// 
+    ///
     /// For most types in variables which don't have initialisers, a zero store
     /// is fine when resetting a variable in a loop (as functions always have
     /// their variables outside all blocks while wgsl and others can have blocks
