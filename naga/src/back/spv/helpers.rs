@@ -29,7 +29,7 @@ pub(super) fn debug_str_bytes_to_words(bytes: &[u8]) -> Vec<Word> {
         sanitized = bytes
             .iter()
             .map(|&b| if b == 0 { b'?' } else { b })
-            .collect::<Vec<u8>>();
+            .collect::<Vec<_>>();
         &sanitized[..]
     } else {
         bytes
