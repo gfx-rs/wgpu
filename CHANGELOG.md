@@ -85,7 +85,7 @@ Bottom level categories:
 
 #### Naga
 
-- Sanitize embedded NUL characters when writing debug strings to SPIR-V. By @andyleiserson in TBD.
+- Sanitize embedded NUL characters when writing debug strings to SPIR-V. By @andyleiserson in [#9904](https://github.com/gfx-rs/wgpu/pull/9904).
 
 #### Vulkan
 
