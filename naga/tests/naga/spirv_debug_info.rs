@@ -18,8 +18,7 @@ fn words_to_bytes(words: &[u32]) -> Vec<u8> {
 /// Emit SPIR-V for a trivial compute shader with debug info forced on, then run
 /// the result through `spirv-val`. Panics if `spirv-val` rejects the module.
 fn write_and_validate(file_name: &str, source_code: &str) {
-    let module =
-        naga::front::wgsl::parse_str("@compute @workgroup_size(1) fn main() {}").unwrap();
+    let module = naga::front::wgsl::parse_str("@compute @workgroup_size(1) fn main() {}").unwrap();
 
     let mut validator = naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
