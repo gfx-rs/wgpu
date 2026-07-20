@@ -922,6 +922,8 @@ impl Queue {
 
         self.same_device_as(dst.as_ref())?;
 
+        dst.check_valid()?;
+
         dst.check_usage(wgt::TextureUsages::COPY_DST)
             .map_err(TransferError::MissingTextureUsage)?;
 
@@ -1170,6 +1172,8 @@ impl Queue {
             origin: destination.origin,
             aspect: destination.aspect,
         };
+
+        dst.check_valid()?;
 
         if !conv::is_valid_external_image_copy_dst_texture_format(dst.desc.format) {
             return Err(

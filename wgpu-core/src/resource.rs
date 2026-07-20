@@ -2645,7 +2645,7 @@ impl QuerySet {
             desc: desc.clone().map_label(|_| ()),
             initialized_slots: Mutex::new(
                 rank::QUERY_SET_INITIALIZED_SLOTS,
-                bit_vec::BitVec::from_elem(desc.count as usize, false),
+                bit_vec::BitVec::new(),
             ),
             device,
         })

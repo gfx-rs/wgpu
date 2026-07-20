@@ -3816,6 +3816,7 @@ impl Device {
         use crate::binding_model::CreateBindGroupError as Error;
 
         view.same_device(self)?;
+        view.check_valid()?;
 
         let internal_use = self.texture_use_parameters(binding, decl, view, "SampledTexture")?;
         used.views.insert_single(view.clone(), internal_use);
