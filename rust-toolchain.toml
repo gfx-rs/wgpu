@@ -1,4 +1,5 @@
-[toolchain]
+<conf>[toolchain]
 channel = "1.93"
 components = ["cargo", "rustfmt", "clippy"]
 targets = ["wasm32-unknown-unknown"]
+</conf>
