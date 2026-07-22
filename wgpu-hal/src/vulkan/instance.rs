@@ -627,16 +627,25 @@ impl super::Instance {
         ) -> vk::Result;
 
         let raw_instance = self.shared.raw.handle();
-        let Some(pfn) = (unsafe {
+
+        // SAFETY: This is safe because:
+        //
+        // - `raw_instance` is a valid Vulkan instance, and the string we're asking for is
+        //   properly encoded and NUL-terminated.
+        let create = unsafe {
             self.shared
                 .entry
                 .get_instance_proc_addr(raw_instance, c"vkCreateSurfaceOHOS".as_ptr())
-        }) else {
+        };
+        let create =
+            // SAFETY: This function is safe, because we `transmute` between two function pointers
+            // with the same ABI, with the same validity, size, and alignment before and after.
+            unsafe { core::mem::transmute::<vk::PFN_vkVoidFunction, Option<PfnCreateSurfaceOHOS>>(create) };
+        let Some(create) = create else {
             return Err(crate::InstanceError::new(String::from(
                 "vkCreateSurfaceOHOS not exposed by Vulkan driver",
             )));
         };
-        let create: PfnCreateSurfaceOHOS = unsafe { core::mem::transmute(pfn) };
 
         let info = VkSurfaceCreateInfoOHOS {
             s_type: S_TYPE_SURFACE_CREATE_INFO_OHOS,
@@ -645,6 +654,11 @@ impl super::Instance {
             window,
         };
         let mut surface = vk::SurfaceKHR::null();
+        // SAFETY: This is safe because:
+        //
+        // - This function signature is specced to match the signature we casted it to.
+        // - During the previous `transmute` operation, we took care to keep the same ABI (see also
+        // <https://doc.rust-lang.org/nightly/std/primitive.fn.html#abi-compatibility>).
         let result = unsafe { create(raw_instance, &info, core::ptr::null(), &mut surface) };
         if result != vk::Result::SUCCESS {
             return Err(crate::InstanceError::new(format!(
