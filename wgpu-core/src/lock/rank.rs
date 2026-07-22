@@ -108,6 +108,7 @@ define_lock_ranks! {
     // Non-leaf ranks, in topological order.
     rank COMMAND_BUFFER_DATA "CommandBuffer::data" followed by {
         DEVICE_SNATCHABLE_LOCK,
+        DEVICE_SCRATCH_BUFFER_CACHE,
         BUFFER_MAP_STATE,
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         BUFFER_POOL,
@@ -123,6 +124,7 @@ define_lock_ranks! {
         TEXTURE_INITIALIZATION_STATUS,
         QUEUE_LIFE_TRACKER,
         BLAS_COMPACTION_STATE,
+        DEVICE_SCRATCH_BUFFER_CACHE,
         BUFFER_BIND_GROUPS,
         BUFFER_INITIALIZATION_STATUS,
         BUFFER_POOL,
@@ -143,10 +145,12 @@ define_lock_ranks! {
         QUEUE_LIFE_TRACKER,
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         DEVICE_DEFERRED_DESTROY,
+        DEVICE_SCRATCH_BUFFER_CACHE,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
     rank QUEUE_PENDING_WRITES "Queue::pending_writes" followed by {
         BUFFER_MAP_STATE,
+        DEVICE_SCRATCH_BUFFER_CACHE,
         DEVICE_TRACKERS,
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         BUFFER_INITIALIZATION_STATUS,
@@ -165,6 +169,7 @@ define_lock_ranks! {
         BUFFER_POOL,
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         DEVICE_DEFERRED_DESTROY,
+        DEVICE_SCRATCH_BUFFER_CACHE,
         DEVICE_TRACE,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
@@ -184,6 +189,7 @@ define_lock_ranks! {
     rank BUFFER_INITIALIZATION_STATUS "Buffer::initialization_status" followed by { }
     rank BUFFER_POOL "BufferPool::buffers" followed by { }
     rank DEVICE_DEFERRED_DESTROY "Device::deferred_destroy" followed by { }
+    rank DEVICE_SCRATCH_BUFFER_CACHE "Device::scratch_buffer_cache" followed by { }
     rank DEVICE_TRACE "Device::trace" followed by { }
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
     rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }

@@ -291,6 +291,12 @@ pub struct Device {
     pub(crate) ordered_texture_usages: wgt::TextureUses,
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
+    /// The most recent acceleration-structure build scratch buffer, parked here
+    /// by [`ScratchBuffer::drop`] for reuse by the next build (largest kept).
+    /// Holds no `Arc<Device>` (no cycle); destroyed in [`Device`]'s `Drop`.
+    ///
+    /// [`ScratchBuffer::drop`]: crate::scratch::ScratchBuffer
+    pub(crate) scratch_buffer_cache: Mutex<Option<crate::scratch::CachedScratchBuffer>>,
     /// This closures were created in [`Buffer::drop`] where we do not run them to prevent locking problems.
     pub(crate) deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures,
     pub(crate) usage_scopes: UsageScopePool,
@@ -347,6 +353,7 @@ impl Drop for Device {
         if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
             timestamp_normalizer.dispose(self.raw.as_ref());
         }
+        self.destroy_cached_scratch_buffer();
         unsafe {
             self.raw.destroy_buffer(zero_buffer);
             self.raw.destroy_bind_group_layout(empty_bgl);
@@ -627,6 +634,7 @@ impl Device {
                 ordered_texture_usages,
                 instance_flags,
                 deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
+                scratch_buffer_cache: Mutex::new(rank::DEVICE_SCRATCH_BUFFER_CACHE, None),
                 usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
                 timestamp_normalizer: OnceCell::new(),
                 indirect_validation,
@@ -5719,6 +5727,22 @@ impl Device {
         }
         for texture in textures {
             texture.destroy();
+        }
+
+        // The parked scratch buffer can be large, and a lost device will not build again.
+        self.destroy_cached_scratch_buffer();
+    }
+
+    /// Destroy the acceleration-structure build scratch buffer parked in
+    /// [`Device::scratch_buffer_cache`], if there is one.
+    fn destroy_cached_scratch_buffer(&self) {
+        // Taking it under the lock means a concurrent build either takes it first, or misses it
+        // and allocates its own; nothing can observe the buffer after this point.
+        if let Some(cached) = self.scratch_buffer_cache.lock().take() {
+            resource_log!("Destroy raw ScratchBuffer");
+            // SAFETY: A parked buffer is idle - it is parked only once its submission retired, or
+            // before it was ever submitted.
+            unsafe { self.raw.destroy_buffer(cached.raw) };
         }
     }
 
