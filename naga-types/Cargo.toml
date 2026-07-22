@@ -22,6 +22,7 @@ std = []
 
 [dependencies]
 arbitrary = { workspace = true, features = ["derive"], optional = true }
+bytemuck = { workspace = true, features = ["derive"] }
 hashbrown.workspace = true
 indexmap.workspace = true
 rustc-hash.workspace = true
