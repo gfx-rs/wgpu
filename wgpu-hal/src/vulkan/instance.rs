@@ -600,16 +600,6 @@ impl super::Instance {
         &self,
         window: *mut c_void,
     ) -> Result<super::Surface, crate::InstanceError> {
-        if !self
-            .shared
-            .extensions
-            .contains(&OHOS_SURFACE_EXTENSION_NAME)
-        {
-            return Err(crate::InstanceError::new(String::from(
-                "Vulkan driver does not support VK_OHOS_surface",
-            )));
-        }
-
         #[repr(C)]
         struct VkSurfaceCreateInfoOHOS {
             s_type: vk::StructureType,
@@ -625,6 +615,16 @@ impl super::Instance {
             *const vk::AllocationCallbacks,
             *mut vk::SurfaceKHR,
         ) -> vk::Result;
+
+        if !self
+            .shared
+            .extensions
+            .contains(&OHOS_SURFACE_EXTENSION_NAME)
+        {
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_OHOS_surface",
+            )));
+        }
 
         let raw_instance = self.shared.raw.handle();
 
