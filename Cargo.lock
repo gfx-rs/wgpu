@@ -2491,6 +2491,7 @@ name = "naga-types"
 version = "30.0.0"
 dependencies = [
  "arbitrary",
+ "bytemuck",
  "hashbrown 0.17.1",
  "indexmap",
  "rustc-hash 1.1.0",
