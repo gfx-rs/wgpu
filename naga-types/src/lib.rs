@@ -200,6 +200,32 @@ pub struct TaskDispatchLimits {
     pub max_mesh_workgroups_total: u32,
 }
 
+/// Parameters describing a gamma encoding transfer function in the form
+/// tf = { k * linear                   | linear < b
+///      { a * pow(linear, 1/g) - (a-1) | linear >= b
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Zeroable, bytemuck::Pod)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[allow(missing_docs)]
+pub struct ExternalTextureTransferFunction {
+    pub a: f32,
+    pub b: f32,
+    pub g: f32,
+    pub k: f32,
+}
+
+impl Default for ExternalTextureTransferFunction {
+    fn default() -> Self {
+        Self {
+            a: 1.0,
+            b: 1.0,
+            g: 1.0,
+            k: 1.0,
+        }
+    }
+}
+
 /// Corresponds to [WebGPU `GPUVertexFormat`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat).
 #[repr(u32)]
