@@ -11,10 +11,7 @@ use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
 use parking_lot::RwLock;
 
-/// Name of the `VK_OHOS_surface` extension.
-///
-/// `ash` does not generate OpenHarmony bindings, so this mirrors
-/// `VK_OHOS_SURFACE_EXTENSION_NAME` from the OpenHarmony SDK's `vulkan_ohos.h`.
+/// Name of the `VK_OHOS_surface` extension. Used with [`create_surface_ohos`].
 #[cfg(target_env = "ohos")]
 const OHOS_SURFACE_EXTENSION_NAME: &CStr = c"VK_OHOS_surface";
 
@@ -587,12 +584,12 @@ impl super::Instance {
         Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
 
-    /// OpenHarmony window-system integration.
+    /// OpenHarmony window-system integration, using the `VK_OHOS_surface` extension.
     ///
-    /// `ash` has no `VK_OHOS_surface` bindings, so the `vkCreateSurfaceOHOS` entry point is
-    /// resolved manually and `VkSurfaceCreateInfoOHOS` is declared here, matching the
-    /// OpenHarmony SDK's `vulkan_ohos.h` (`VK_STRUCTURE_TYPE_SURFACE_CREATE_INFO_OHOS`
-    /// is 1000685000).
+    /// `ash` has no bindings for this, so we create bindings ad-hoc as needed. See also:
+    ///
+    /// - <https://docs.vulkan.org/refpages/latest/refpages/source/VK_OHOS_surface.html>
+    /// - [`vulkan_ohos.h`](https://github.com/KhronosGroup/Vulkan-Headers/blob/e3b1eec08173d6b825cd3ac88c885a63b621504a/include/vulkan/vulkan_ohos.h)
     ///
     /// `window` is the `OHNativeWindow*` handed out by an XComponent.
     #[cfg(target_env = "ohos")]
@@ -600,6 +597,8 @@ impl super::Instance {
         &self,
         window: *mut c_void,
     ) -> Result<super::Surface, crate::InstanceError> {
+        // - Upstream docs:
+        // <https://docs.vulkan.org/refpages/latest/refpages/source/VkSurfaceCreateInfoOHOS.html>
         #[repr(C)]
         struct VkSurfaceCreateInfoOHOS {
             s_type: vk::StructureType,
@@ -607,8 +606,14 @@ impl super::Instance {
             flags: vk::Flags,
             window: *mut c_void,
         }
+
+        // - Upstream docs: Search for term `VK_STRUCTURE_TYPE_SURFACE_CREATE_INFO_OHOS` in
+        // <https://docs.vulkan.org/refpages/latest/refpages/source/VkStructureType.html>.
         const S_TYPE_SURFACE_CREATE_INFO_OHOS: vk::StructureType =
             vk::StructureType::from_raw(1000685000);
+
+        // - Upstream docs:
+        // <https://docs.vulkan.org/refpages/latest/refpages/source/vkCreateSurfaceOHOS.html>
         type PfnCreateSurfaceOHOS = unsafe extern "system" fn(
             vk::Instance,
             *const VkSurfaceCreateInfoOHOS,
