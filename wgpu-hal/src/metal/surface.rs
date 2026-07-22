@@ -268,7 +268,7 @@ impl crate::Surface for super::Surface {
 
         match config.composite_alpha_mode {
             wgt::CompositeAlphaMode::Opaque => render_layer.setOpaque(true),
-            wgt::CompositeAlphaMode::PostMultiplied => render_layer.setOpaque(false),
+            wgt::CompositeAlphaMode::PreMultiplied => render_layer.setOpaque(false),
             _ => (),
         }
 

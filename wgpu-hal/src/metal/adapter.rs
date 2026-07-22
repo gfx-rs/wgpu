@@ -471,7 +471,7 @@ impl crate::Adapter for super::Adapter {
             },
             composite_alpha_modes: vec![
                 wgt::CompositeAlphaMode::Opaque,
-                wgt::CompositeAlphaMode::PostMultiplied,
+                wgt::CompositeAlphaMode::PreMultiplied,
             ],
 
             current_extent: Some(surface.dimensions()),
