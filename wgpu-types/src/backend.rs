@@ -389,13 +389,13 @@ impl ForceShaderModelToken {
     /// # Safety
     /// Do not make use in runtime-compiled shaders of any features that may not be supported by the FXC or DXC
     /// version you use.
-    pub unsafe fn with_shader_model(sm: DxcShaderModel) -> Self {
+    pub const unsafe fn with_shader_model(sm: DxcShaderModel) -> Self {
         Self { inner: Some(sm) }
     }
 
     /// Returns the shader model version, if any, in this token.
-    pub fn get(&self) -> Option<DxcShaderModel> {
-        self.inner.clone()
+    pub const fn get(&self) -> Option<DxcShaderModel> {
+        self.inner
     }
 }
 
@@ -740,7 +740,7 @@ impl Dx12SwapchainKind {
 }
 
 /// DXC shader model.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 #[allow(missing_docs)]
 pub enum DxcShaderModel {
     V6_0,
