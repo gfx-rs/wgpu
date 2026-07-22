@@ -48,8 +48,6 @@ pub enum CreateBlasError {
         "Limit `max_blas_primitive_count` is {0}, but the BLAS had a maximum of {1} primitives"
     )]
     TooManyPrimitives(u32, u32),
-    #[error("AABB geometry stride {0} is invalid (must be >= {1} and a multiple of 8)")]
-    InvalidAabbStride(BufferAddress, BufferAddress),
 }
 
 impl WebGpuError for CreateBlasError {
@@ -60,8 +58,7 @@ impl WebGpuError for CreateBlasError {
             Self::MissingIndexData
             | Self::InvalidVertexFormat(..)
             | Self::TooManyGeometries(..)
-            | Self::TooManyPrimitives(..)
-            | Self::InvalidAabbStride(..) => ErrorType::Validation,
+            | Self::TooManyPrimitives(..) => ErrorType::Validation,
         }
     }
 }
