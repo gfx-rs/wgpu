@@ -313,14 +313,12 @@ impl super::Instance {
         extensions.push(khr::surface::NAME);
 
         // Platform-specific WSI extensions
-        //
-        // Note: OpenHarmony (`target_env = "ohos"`) reports `target_os = "linux"` and is
-        // unix, but has neither X11 nor Wayland. It must be excluded here and uses
-        // `VK_OHOS_surface` instead (see below).
         if cfg!(all(
             unix,
             not(target_os = "android"),
             not(target_os = "macos"),
+            // NOTE: OpenHarmony (`target_env = "ohos"`) reports `target_os = "linux"` and is
+            // unix, but has neither X11 nor Wayland.
             not(target_env = "ohos")
         )) {
             // VK_KHR_xlib_surface
