@@ -1,5 +1,9 @@
 use core::ops::Range;
 
+use macro_rules_attribute::derive;
+
+use crate::ConstDefault;
+
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
 
@@ -52,11 +56,11 @@ impl<L> DeviceDescriptor<L> {
 /// Hints to the device about the memory allocation strategy.
 ///
 /// Some backends may ignore these hints.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, ConstDefault!)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum MemoryHints {
     /// Favor performance over memory usage (the default value).
-    #[default]
+    #[custom(default)]
     Performance,
     /// Favor memory usage over performance.
     MemoryUsage,
@@ -83,13 +87,13 @@ pub enum MemoryHints {
 }
 
 /// Controls API call tracing and specifies where the trace is written.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, ConstDefault!)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 // This enum must be non-exhaustive so that enabling the "trace" feature is not a semver break.
 #[non_exhaustive]
 pub enum Trace {
     /// Tracing disabled.
-    #[default]
+    #[custom(default)]
     Off,
 
     /// Write trace to disk.

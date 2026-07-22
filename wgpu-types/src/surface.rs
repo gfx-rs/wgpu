@@ -6,7 +6,9 @@
 
 use alloc::{vec, vec::Vec};
 
-use crate::{link_to_wgpu_docs, link_to_wgpu_item, TextureFormat, TextureUsages};
+use macro_rules_attribute::derive;
+
+use crate::{link_to_wgpu_docs, link_to_wgpu_item, ConstDefault, TextureFormat, TextureUsages};
 
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
@@ -23,7 +25,7 @@ use serde::{Deserialize, Serialize};
 #[doc = link_to_wgpu_docs!(["presented"]: "struct.SurfaceTexture.html#method.present")]
 #[doc = link_to_wgpu_docs!(["`SurfaceTexture::present()`"]: "struct.SurfaceTexture.html#method.present")]
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, ConstDefault!, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PresentMode {
     /// Chooses the first supported mode out of:
@@ -60,7 +62,7 @@ pub enum PresentMode {
     /// If you don't know what mode to choose, choose this mode.
     ///
     #[doc = link_to_wgpu_docs!(["`Surface::get_current_texture()`"]: "struct.Surface.html#method.get_current_texture")]
-    #[default]
+    #[custom(default)]
     Fifo = 2,
 
     /// Presentation frames are kept in a First-In-First-Out queue approximately 3 frames
@@ -107,13 +109,13 @@ pub enum PresentMode {
 /// Specifies how the alpha channel of the textures should be handled during
 /// compositing.
 #[repr(C)]
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, ConstDefault!, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum CompositeAlphaMode {
     /// Chooses either `Opaque` or `Inherit` automatically, depending on the
     /// `alpha_mode` that the current surface can support.
-    #[default]
+    #[custom(default)]
     Auto = 0,
     /// The alpha channel, if it exists, of the textures is ignored in the
     /// compositing process. Instead, the textures is treated as if it has a
@@ -237,7 +239,7 @@ pub enum CompositeAlphaMode {
 /// [`toneMapping`]: https://www.w3.org/TR/webgpu/#gpucanvastonemappingmode
 #[doc = link_to_wgpu_docs!(["color space and HDR primer"]: "index.html#surface-color-spaces-and-hdr-output")]
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, ConstDefault!, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SurfaceColorSpace {
     /// Let the backend choose a color space, reproducing wgpu's historical
@@ -264,7 +266,7 @@ pub enum SurfaceColorSpace {
     /// [`TextureFormat::Rgba16Float`]; request
     /// [`ExtendedSrgb`](Self::ExtendedSrgb) explicitly for HDR canvas output
     /// ([`ExtendedSrgbLinear`](Self::ExtendedSrgbLinear) is native-only).
-    #[default]
+    #[custom(default)]
     Auto = 0,
 
     /// The sRGB color space: BT.709 primaries, D65 white point, sRGB transfer
@@ -582,7 +584,7 @@ impl Default for SurfaceCapabilities {
 /// optimistic and report the panel's claim, not what survives the compositor.
 ///
 #[doc = link_to_wgpu_item!(struct Surface)]
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, ConstDefault!, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DisplayHdrInfo {
     /// Absolute-nit luminance levels. `Some` only on platforms that report
@@ -618,7 +620,7 @@ pub struct DisplayHdrInfo {
 /// `Some(0.0)`; absence is `None`. These are achromatic (luminance = CIE Y), not a
 /// per-color ceiling: a display can't reach [`max_nits`](Self::max_nits) at a
 /// saturated chromaticity. Pair them with [`DisplayChromaticity`] for gamut mapping.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, ConstDefault!, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DisplayLuminance {
     /// Peak luminance of a small patch, nits. DXGI `MaxLuminance`.
@@ -644,7 +646,7 @@ pub struct DisplayLuminance {
 /// so this is separate from [`DisplayLuminance`] and can't be converted to nits.
 ///
 /// Populated only on macOS; `None` on iOS, tvOS, and visionOS.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, ConstDefault!, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DisplayHeadroom {
     /// Headroom available *right now* (`maximumExtendedDynamicRangeColorComponentValue`
@@ -663,7 +665,7 @@ pub struct DisplayHeadroom {
 
 /// CIE 1931 xy chromaticity of a display's primaries and white point. Each
 /// coordinate is `[x, y]`; a coordinate the platform omits is `None`.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, ConstDefault!, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DisplayChromaticity {
     /// xy of the red primary.
@@ -680,7 +682,7 @@ pub struct DisplayChromaticity {
 ///
 /// This is the only luminance-adjacent data the web exposes, and a useful
 /// cross-check on other platforms.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, ConstDefault!, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DisplayCoarseRange {
     /// CSS `@media (dynamic-range: high)`: the display *can* present HDR-range
