@@ -48,6 +48,7 @@ Bottom level categories:
 
 - Support the `wasm64-unknown-unknown` target for the web backend. Building for wasm64 requires a nightly toolchain with `-Z build-std=std,panic_abort`. By @nickbabcock in [#9836](https://github.com/gfx-rs/wgpu/pull/9836).
 - `wgpu-core` now exposes a `validate_device_descriptor` function that validates a device descriptor as `request_device` would. This may be useful in conjunction with `create_device_from_hal`. By @andyleiserson in [#9967](https://github.com/gfx-rs/wgpu/pull/9967).
+- Many types now offer `pub const fn default()` in addition to implementing the `Default` trait, allowing constants to make use of default values. By @kpreid in [#9929](https://github.com/gfx-rs/wgpu/pull/9929).
 
 #### Hal
 

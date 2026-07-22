@@ -4980,6 +4980,7 @@ dependencies = [
  "hashbrown 0.17.1",
  "js-sys",
  "log",
+ "macro_rules_attribute",
  "naga-types",
  "raw-window-handle",
  "serde",

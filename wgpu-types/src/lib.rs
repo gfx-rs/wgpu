@@ -39,6 +39,7 @@ pub mod error;
 mod features;
 pub mod instance;
 mod limits;
+mod macros;
 pub mod math;
 mod origin_extent;
 mod ray_tracing;
@@ -77,6 +78,7 @@ pub use transfers::*;
 pub use vertex::*;
 pub use write_only::*;
 
+pub(crate) use macros::ConstDefault;
 pub(crate) use naga_types::{link_to_wgc_docs, link_to_wgpu_docs, link_to_wgpu_item};
 
 /// Integral type used for [`Buffer`] offsets and sizes.
