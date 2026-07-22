@@ -352,6 +352,11 @@ portable-atomic-util = { workspace = true, features = [
     "alloc",
 ], optional = true }
 
+### Platform: Windows + MacOS + Linux for "raw-gles" example ###
+[target.'cfg(not(any(target_family = "wasm", target_os = "ios", target_os = "visionos", target_env = "ohos")))'.dev-dependencies]
+glutin-winit = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
+glutin = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
+
 [build-dependencies]
 cfg_aliases.workspace = true
 
@@ -360,8 +365,3 @@ env_logger.workspace = true
 glam.workspace = true # for ray-traced-triangle example
 naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
 winit.workspace = true # for "halmark" example
-
-### Platform: Windows + MacOS + Linux for "raw-gles" example ###
-[target.'cfg(not(any(target_family = "wasm", target_os = "ios", target_os = "visionos", target_env = "ohos")))'.dev-dependencies]
-glutin-winit = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
-glutin = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
