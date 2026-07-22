@@ -8,14 +8,15 @@ use crate::command::{
 };
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::pipeline::LateSizedBufferGroup;
-use crate::resource::{DestroyedResourceError, Labeled, ParentDevice, QuerySet};
+use crate::resource::{
+    DestroyedResourceError, InvalidOrDestroyedResourceError, Labeled, ParentDevice, QuerySet,
+};
 use crate::track::{ResourceUsageCompatibilityError, UsageScope};
 use crate::{api_log, binding_model};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::str;
 use thiserror::Error;
-use wgt::error::{ErrorType, WebGpuError};
 use wgt::DynamicOffset;
 
 #[derive(Clone, Debug, Error)]
@@ -31,13 +32,75 @@ pub struct BindGroupIndexOutOfRange {
 #[error("Pipeline must be set")]
 pub struct MissingPipeline;
 
-#[derive(Clone, Debug, Error)]
-#[error("Setting `values_offset` to be `None` is only for internal use in render bundles")]
-pub struct InvalidValuesOffset;
+#[derive(Debug, Default)]
+pub(crate) struct ImmediateState {
+    pub(crate) immediates: Vec<u32>,
+    pub(crate) immediates_dirty: bool,
+    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
+    /// Checked against the pipeline's required slots before each draw call.
+    pub(crate) immediate_slots_set: naga::valid::ImmediateSlots,
+}
 
-impl WebGpuError for InvalidValuesOffset {
-    fn webgpu_error_type(&self) -> ErrorType {
-        ErrorType::Validation
+impl ImmediateState {
+    pub(crate) fn set_immediates<E>(
+        &mut self,
+        limits: &wgt::Limits,
+        offset_bytes: u32,
+        data: &[u32],
+    ) -> Result<(), E>
+    where
+        E: From<ImmediateUploadError>,
+    {
+        // Alignment has been validated when pushing `SetImmediate` commands.
+
+        let offset_bytes_usize = offset_bytes as usize;
+        let size_bytes = data.len().saturating_mul(size_of::<u32>());
+        if size_bytes
+            .checked_add(offset_bytes_usize)
+            .is_none_or(|end_offset| end_offset > limits.max_immediate_size as usize)
+        {
+            return Err(ImmediateUploadError::EndOffsetBeyondLimit {
+                start_offset: offset_bytes,
+                size_bytes,
+                limit: limits.max_immediate_size,
+            }
+            .into());
+        }
+
+        let end_offset_bytes = offset_bytes_usize + size_bytes;
+        let size_per_elem = size_of::<u32>();
+        if self.immediates.len() < end_offset_bytes / size_per_elem {
+            self.immediates.resize(end_offset_bytes / size_per_elem, 0);
+        }
+        self.immediates[offset_bytes_usize / size_per_elem..end_offset_bytes / size_per_elem]
+            .copy_from_slice(data);
+        self.immediate_slots_set |=
+            naga::valid::ImmediateSlots::from_range(offset_bytes, size_bytes.try_into().unwrap())
+                .expect("maxImmediateSize should not exceed 256");
+        self.immediates_dirty = true;
+
+        Ok(())
+    }
+
+    pub(crate) fn flush_immediates(
+        &mut self,
+        layout: &Arc<binding_model::PipelineLayout>,
+        raw_encoder: &mut dyn hal::DynCommandEncoder,
+    ) {
+        if !self.immediates.is_empty() && self.immediates_dirty {
+            // SAFETY: The range of immediates written is within layout immediate size.
+            unsafe {
+                raw_encoder.set_immediates(
+                    layout.raw().unwrap(),
+                    0,
+                    &self.immediates[..(self
+                        .immediates
+                        .len()
+                        .min(layout.immediate_size as usize / size_of::<u32>()))],
+                );
+            }
+            self.immediates_dirty = false;
+        }
     }
 }
 
@@ -57,6 +120,8 @@ pub(crate) struct PassState<'scope, 'snatch_guard, 'cmd_enc> {
     pub(crate) dynamic_offset_count: usize,
 
     pub(crate) string_offset: usize,
+
+    pub(crate) immediate_state: ImmediateState,
 }
 
 pub(crate) fn set_bind_group<E>(
@@ -141,7 +206,9 @@ where
 ///
 /// See the compute pass version of `State::flush_bindings` for an explanation
 /// of some differences in handling the two types of passes.
-pub(super) fn flush_bindings_helper(state: &mut PassState) -> Result<(), DestroyedResourceError> {
+pub(super) fn flush_bindings_helper(
+    state: &mut PassState,
+) -> Result<(), InvalidOrDestroyedResourceError> {
     let start = state.binder.take_rebind_start_index();
     let entries = state.binder.list_valid_with_start(start);
     let pipeline_layout = state.binder.pipeline_layout.as_ref().unwrap();
@@ -189,11 +256,10 @@ pub(super) fn flush_bindings_helper(state: &mut PassState) -> Result<(), Destroy
     Ok(())
 }
 
-pub(super) fn change_pipeline_layout<E, F: FnOnce()>(
+pub(super) fn change_pipeline_layout<E>(
     state: &mut PassState,
     pipeline_layout: &Arc<binding_model::PipelineLayout>,
     late_sized_buffer_groups: &[LateSizedBufferGroup],
-    f: F,
 ) -> Result<(), E>
 where
     E: From<DestroyedResourceError>,
@@ -202,104 +268,23 @@ where
         .binder
         .change_pipeline_layout(pipeline_layout, late_sized_buffer_groups)
     {
-        f();
-
-        super::immediates_clear(
-            0,
-            pipeline_layout.immediate_size,
-            |clear_offset, clear_data| unsafe {
-                state.base.raw_encoder.set_immediates(
-                    pipeline_layout
-                        .raw()
-                        .expect("Pipeline layout should be valid at this point"),
-                    clear_offset,
-                    clear_data,
-                );
-            },
-        );
+        state.immediate_state.immediates_dirty = true;
     }
     Ok(())
 }
 
 pub(crate) fn validate_immediates_alignment(
     offset: u32,
-    size_bytes: u32,
+    size_bytes: usize,
 ) -> Result<(), ImmediateUploadError> {
     if !offset.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
         return Err(ImmediateUploadError::StartOffsetUnaligned(offset));
     }
 
-    if !size_bytes.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
+    if !size_bytes.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT as usize) {
         return Err(ImmediateUploadError::SizeUnaligned(size_bytes));
     }
 
-    Ok(())
-}
-
-pub(crate) fn set_immediates<E, F: FnOnce(&[u32])>(
-    state: &mut PassState,
-    immediates_data: &[u32],
-    offset: u32,
-    size_bytes: u32,
-    values_offset: Option<u32>,
-    f: F,
-) -> Result<(), E>
-where
-    E: From<ImmediateUploadError> + From<InvalidValuesOffset> + From<MissingPipeline>,
-{
-    api_log!("Pass::set_immediates");
-
-    // Alignment has been validated by `validate_immediates_alignment` when pushing `SetImmediate` commands.
-
-    let values_offset = values_offset.ok_or(InvalidValuesOffset)?;
-
-    let pipeline_layout = state
-        .binder
-        .pipeline_layout
-        .as_ref()
-        .ok_or(MissingPipeline)?;
-
-    pipeline_layout.validate_immediates_ranges(offset, size_bytes)?;
-
-    let values_offset_usize = usize::try_from(values_offset)
-        .expect("`values_offset` is outside the bounds of `usize` (!?)");
-    if values_offset_usize > immediates_data.len() {
-        panic!(
-            "Internal error: `set_immediates` values offset ({}) \
-            overruns the immediates data length ({})",
-            values_offset,
-            immediates_data.len()
-        );
-    }
-
-    let size_immediate_elements = size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT;
-    let size_immediate_elements_usize = usize::try_from(size_immediate_elements)
-        .expect("`size_immediate_elements` is outside the bounds of `usize` (!?)");
-    if size_immediate_elements_usize > immediates_data.len() - values_offset_usize {
-        panic!(
-            "Internal error: `set_immediates` values offset + count ({} + {}) \
-            overruns the immediates data length ({})",
-            values_offset,
-            size_immediate_elements,
-            immediates_data.len()
-        );
-    }
-
-    // NOTE: These additions are will not overflow, because we've validated the range above.
-    let values_end_offset = values_offset_usize + size_immediate_elements_usize;
-    let data_slice = &immediates_data[(values_offset_usize)..values_end_offset];
-
-    f(data_slice);
-
-    unsafe {
-        state.base.raw_encoder.set_immediates(
-            pipeline_layout
-                .raw()
-                .expect("Pipeline layout should be valid at this point"),
-            offset,
-            data_slice,
-        )
-    }
     Ok(())
 }
 

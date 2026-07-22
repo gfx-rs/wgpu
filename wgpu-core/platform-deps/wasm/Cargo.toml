@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-core-deps-wasm"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Feature unification helper crate for the WebAssembly platform"
 homepage.workspace = true
@@ -20,7 +19,7 @@ rust-version = "1.76"
 webgl = ["wgpu-hal/gles"]
 
 # Depend on wgpu-hal conditionally, so that the above features only apply to wgpu-hal on this set of platforms.
-[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
+[target.'cfg(all(target_family = "wasm", not(target_os = "emscripten")))'.dependencies]
 wgpu-hal.workspace = true
 
 [lints]

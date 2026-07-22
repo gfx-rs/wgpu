@@ -907,6 +907,8 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_tlas_instance_count: wgt::Limits::default().max_tlas_instance_count,
         max_acceleration_structures_per_shader_stage: wgt::Limits::default()
             .max_acceleration_structures_per_shader_stage,
+        max_buffers_and_acceleration_structures_per_shader_stage: wgt::Limits::default()
+            .max_buffers_and_acceleration_structures_per_shader_stage,
 
         max_multiview_view_count: wgt::Limits::default().max_multiview_view_count,
 
@@ -1750,6 +1752,9 @@ impl dispatch::InstanceInterface for ContextWebGpu {
                     "pointer_composite_access" => {
                         Some(crate::WgslLanguageFeatures::PointerCompositeAccess)
                     }
+                    "immediate_address_space" => {
+                        Some(crate::WgslLanguageFeatures::ImmediateAddressSpace)
+                    }
                     _ => None,
                 })
                 .for_each(|wlf| {
@@ -2005,7 +2010,7 @@ impl dispatch::DeviceInterface for WebDevice {
                 crate::CompilationInfo::from(naga::error::ShaderError {
                     source: source.to_string(),
                     label: desc.label.map(|s| s.to_string()),
-                    inner: Box::new(err),
+                    inner: err,
                 })
             })?;
 

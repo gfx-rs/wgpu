@@ -449,7 +449,6 @@ impl<C: IntoTrace> IntoTrace for BasePass<C, Infallible> {
                 .collect(),
             dynamic_offsets: self.dynamic_offsets,
             string_data: self.string_data,
-            immediates_data: self.immediates_data,
         }
     }
 }
@@ -469,15 +468,7 @@ impl IntoTrace for ArcComputeCommand {
                 bind_group: bind_group.map(|bg| bg.into_trace()),
             },
             C::SetPipeline(id) => C::SetPipeline(id.into_trace()),
-            C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            },
+            C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::DispatchWorkgroups(groups) => C::DispatchWorkgroups(groups),
             C::DispatchWorkgroupsIndirect { buffer, offset } => C::DispatchWorkgroupsIndirect {
                 buffer: buffer.into_trace(),
@@ -574,15 +565,7 @@ impl IntoTrace for ArcRenderCommand {
                 depth_max,
             },
             C::SetScissor(rect) => C::SetScissor(rect),
-            C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            },
+            C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::Draw {
                 vertex_count,
                 instance_count,

@@ -904,6 +904,7 @@ impl super::Adapter {
             max_blas_geometry_count: 0,
             max_tlas_instance_count: 0,
             max_acceleration_structures_per_shader_stage: 0,
+            max_buffers_and_acceleration_structures_per_shader_stage: u32::MAX,
 
             max_multiview_view_count: 0,
 
@@ -940,7 +941,7 @@ impl super::Adapter {
         // Drop the GL guard so we can move the context into AdapterShared
         // ( on Wasm the gl handle is just a ref so we tell clippy to allow
         // dropping the ref )
-        #[cfg_attr(target_arch = "wasm32", allow(dropping_references))]
+        #[cfg_attr(target_family = "wasm", allow(dropping_references))]
         drop(gl);
 
         Some(crate::ExposedAdapter {

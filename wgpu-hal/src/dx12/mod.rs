@@ -116,39 +116,12 @@ use self::dcomp::DCompLib;
 use crate::auxil::{
     self,
     dxgi::{
+        dxgi_lib::DxgiLib,
         factory::{DxgiAdapter, DxgiFactory},
         result::HResult,
     },
+    dyn_lib::DynLib,
 };
-
-#[derive(Debug)]
-struct DynLib {
-    inner: libloading::Library,
-}
-
-impl DynLib {
-    unsafe fn new<P>(filename: P) -> Result<Self, libloading::Error>
-    where
-        P: AsRef<std::ffi::OsStr>,
-    {
-        unsafe { libloading::Library::new(filename) }.map(|inner| Self { inner })
-    }
-
-    unsafe fn get<T>(
-        &self,
-        symbol: &[u8],
-    ) -> Result<libloading::Symbol<'_, T>, crate::DeviceError> {
-        unsafe { self.inner.get(symbol) }.map_err(|e| match e {
-            libloading::Error::GetProcAddress { .. } | libloading::Error::GetProcAddressUnknown => {
-                crate::DeviceError::Unexpected
-            }
-            libloading::Error::IncompatibleSize
-            | libloading::Error::CreateCString { .. }
-            | libloading::Error::CreateCStringWithTrailing { .. } => crate::hal_internal_error(e),
-            _ => crate::DeviceError::Unexpected, // could be unreachable!() but we prefer to be more robust
-        })
-    }
-}
 
 #[derive(Debug)]
 struct D3D12Lib {
@@ -320,91 +293,6 @@ impl fmt::Display for GetInterfaceError {
 }
 
 impl core::error::Error for GetInterfaceError {}
-
-#[derive(Debug)]
-pub(super) struct DxgiLib {
-    lib: DynLib,
-}
-
-impl DxgiLib {
-    pub fn new() -> Result<Self, libloading::Error> {
-        unsafe { DynLib::new("dxgi.dll").map(|lib| Self { lib }) }
-    }
-
-    /// Will error with crate::DeviceError::Unexpected if DXGI 1.3 is not available.
-    pub fn debug_interface1(&self) -> Result<Option<Dxgi::IDXGIInfoQueue>, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Dxgi::DXGIGetDebugInterface1 on dxgi.dll
-        type Fun = extern "system" fn(
-            flags: u32,
-            riid: *const windows_core::GUID,
-            pdebug: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"DXGIGetDebugInterface1".to_bytes()) }?;
-
-        let mut result__ = None;
-
-        let res = (func)(0, &Dxgi::IDXGIInfoQueue::IID, <*mut _>::cast(&mut result__)).ok();
-
-        if let Err(ref err) = res {
-            match err.code() {
-                Dxgi::DXGI_ERROR_SDK_COMPONENT_MISSING => return Ok(None),
-                _ => {}
-            }
-        }
-
-        res.into_device_result("debug_interface1")?;
-
-        result__.ok_or(crate::DeviceError::Unexpected).map(Some)
-    }
-
-    /// Will error with crate::DeviceError::Unexpected if DXGI 1.4 is not available.
-    pub fn create_factory4(
-        &self,
-        factory_flags: Dxgi::DXGI_CREATE_FACTORY_FLAGS,
-    ) -> Result<Dxgi::IDXGIFactory4, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Dxgi::CreateDXGIFactory2 on dxgi.dll
-        type Fun = extern "system" fn(
-            flags: Dxgi::DXGI_CREATE_FACTORY_FLAGS,
-            riid: *const windows_core::GUID,
-            ppfactory: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"CreateDXGIFactory2".to_bytes()) }?;
-
-        let mut result__ = None;
-
-        (func)(
-            factory_flags,
-            &Dxgi::IDXGIFactory4::IID,
-            <*mut _>::cast(&mut result__),
-        )
-        .ok()
-        .into_device_result("create_factory4")?;
-
-        result__.ok_or(crate::DeviceError::Unexpected)
-    }
-
-    /// Will error with crate::DeviceError::Unexpected if DXGI 1.3 is not available.
-    pub fn create_factory_media(&self) -> Result<Dxgi::IDXGIFactoryMedia, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Dxgi::CreateDXGIFactory1 on dxgi.dll
-        type Fun = extern "system" fn(
-            riid: *const windows_core::GUID,
-            ppfactory: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"CreateDXGIFactory1".to_bytes()) }?;
-
-        let mut result__ = None;
-
-        // https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nn-dxgi1_3-idxgifactorymedia
-        (func)(&Dxgi::IDXGIFactoryMedia::IID, <*mut _>::cast(&mut result__))
-            .ok()
-            .into_device_result("create_factory_media")?;
-
-        result__.ok_or(crate::DeviceError::Unexpected)
-    }
-}
 
 /// Create a temporary "owned" copy inside a [`mem::ManuallyDrop`] without increasing the refcount or
 /// moving away the source variable.

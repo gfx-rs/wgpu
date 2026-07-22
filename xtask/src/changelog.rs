@@ -1,4 +1,4 @@
-use std::{cmp, sync::OnceLock};
+use std::sync::OnceLock;
 
 use pico_args::Arguments;
 use regex_lite::Regex;
@@ -31,8 +31,16 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
         .read()
         .unwrap();
 
+    let old_changelog_contents = shell
+        .cmd("git")
+        .arg("show")
+        .arg(format!("{from_commit}:{CHANGELOG_PATH_RELATIVE}"))
+        .arg("--")
+        .read()
+        .unwrap();
+
     // NOTE: If `to_commit` is not specified, we fetch from the file system, instead of `git show`.
-    let changelog_contents = if let Some(to_commit) = to_commit.as_ref() {
+    let new_changelog_contents = if let Some(to_commit) = to_commit.as_ref() {
         shell
             .cmd("git")
             .arg("show")
@@ -46,7 +54,8 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
 
     let mut failed = false;
 
-    let hunks_in_a_released_section = hunks_in_a_released_section(&changelog_contents, &diff);
+    let hunks_in_a_released_section =
+        hunks_in_a_released_section(&old_changelog_contents, &new_changelog_contents, &diff);
     log::info!(
         "# of hunks in a released section of `{CHANGELOG_PATH_RELATIVE}`: {}",
         hunks_in_a_released_section.len()
@@ -91,29 +100,29 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
     }
 }
 
-/// Given some `changelog_contents` (in Markdown) containing the full end state of the provided
-/// `diff` (in [unified diff format]), return all hunks that are (1) below a `## Unreleased` section
-/// _and_ (2) above all other second-level (i.e., `## …`) headings.
+/// Given some `old_changelog_contents` and `new_changelog_contents` (in Markdown) containing the
+/// full start and end states of the provided `diff` (in [unified diff format]), return all hunks
+/// that modify content that is (1) below a `## Unreleased` section _and_ (2) above all other
+/// second-level (i.e., `## …`) headings.
 ///
 /// [unified diff format]: https://www.gnu.org/software/diffutils/manual/html_node/Detailed-Unified.html
 ///
 /// This function makes a few assumptions that are necessary to uphold for correctness, in the
 /// interest of a simple implementation:
 ///
-/// - The provided `diff`'s end state _must_ correspond to `changelog_contents`.
+/// - The provided `diff`'s start and end states _must_ correspond to `old_changelog_contents` and
+///   `new_changelog_contents`.
 /// - The provided `diff` must _only_ contain a single entry for the file containing
-///   `changelog_contents`. using hunk information to compare against `changelog_contents`.
+///   `old_changelog_contents` and `new_changelog_contents`.
 ///
 /// Failing to uphold these assumptons is not unsafe, but will yield incorrect results.
-fn hunks_in_a_released_section<'a>(changelog_contents: &str, diff: &'a str) -> Vec<&'a str> {
-    let mut changelog_lines = changelog_contents.lines();
-
-    let changelog_unreleased_line_num =
-        changelog_lines.position(|l| l == "## Unreleased").unwrap() as u64;
-
-    let changelog_first_release_section_line_num = changelog_unreleased_line_num
-        + 1
-        + changelog_lines.position(|l| l.starts_with("## ")).unwrap() as u64;
+fn hunks_in_a_released_section<'a>(
+    old_changelog_contents: &str,
+    new_changelog_contents: &str,
+    diff: &'a str,
+) -> Vec<&'a str> {
+    let old_first_release_section_line_num = first_release_section_line_num(old_changelog_contents);
+    let new_first_release_section_line_num = first_release_section_line_num(new_changelog_contents);
 
     let hunks = {
         let first_hunk_match = diff.match_indices("\n@@").next();
@@ -129,33 +138,47 @@ fn hunks_in_a_released_section<'a>(changelog_contents: &str, diff: &'a str) -> V
 
             // Reference: This is of the format `@@ -86,6 +88,10 @@ …`.
             static HUNK_HEADER_RE: OnceLock<Regex> = OnceLock::new();
-            let hunk_header_re =
-                HUNK_HEADER_RE.get_or_init(|| Regex::new(r"@@ -\d+,\d+ \+(\d+),\d+ @@.*").unwrap());
+            let hunk_header_re = HUNK_HEADER_RE
+                .get_or_init(|| Regex::new(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@.*").unwrap());
             let captures = hunk_header_re.captures_at(hunk_header, 0).unwrap();
-            let post_change_hunk_start_offset =
-                captures.get(1).unwrap().as_str().parse::<u64>().unwrap();
+            let mut old_line_num = captures.get(1).unwrap().as_str().parse::<u64>().unwrap();
+            let mut new_line_num = captures.get(2).unwrap().as_str().parse::<u64>().unwrap();
 
-            let lines_until_first_change = hunk_contents
-                .lines()
-                .take_while(|l| l.starts_with(' '))
-                .count()
-                // NOTE: First line is the one-based index in the header, assume there's at least
-                // one line and ignore it.
-                .checked_sub(1)
-                .unwrap() as u64;
-
-            let first_hunk_change_start_offset =
-                post_change_hunk_start_offset + lines_until_first_change;
-
-            match first_hunk_change_start_offset.cmp(&changelog_first_release_section_line_num) {
-                cmp::Ordering::Greater => true,
-                cmp::Ordering::Equal => hunk_contents.lines().any(|l| l.starts_with('+')),
-                _ => false,
+            for line in hunk_contents.lines() {
+                match line.as_bytes().first().copied() {
+                    Some(b' ') => {
+                        old_line_num += 1;
+                        new_line_num += 1;
+                    }
+                    Some(b'-') => {
+                        if old_line_num >= old_first_release_section_line_num {
+                            return true;
+                        }
+                        old_line_num += 1;
+                    }
+                    Some(b'+') => {
+                        if new_line_num >= new_first_release_section_line_num {
+                            return true;
+                        }
+                        new_line_num += 1;
+                    }
+                    _ => {}
+                }
             }
+
+            false
         })
         .collect::<Vec<_>>();
 
     hunks_in_a_released_section
+}
+
+fn first_release_section_line_num(changelog_contents: &str) -> u64 {
+    let mut changelog_lines = changelog_contents.lines();
+
+    let unreleased_line_num =
+        changelog_lines.position(|l| l == "## Unreleased").unwrap() as u64 + 1;
+    unreleased_line_num + 1 + changelog_lines.position(|l| l.starts_with("## ")).unwrap() as u64
 }
 
 struct SplitPrefixInclusive<'haystack, 'prefix> {
@@ -279,7 +302,20 @@ mod test_hunks_in_a_released_section {
     macro_rules! assert_released_section_changes {
         ($changelog_contents: expr, $diff: expr, $expected: expr $(,)?) => {
             assert_eq!(
-                super::hunks_in_a_released_section($changelog_contents, $diff),
+                super::hunks_in_a_released_section($changelog_contents, $changelog_contents, $diff),
+                $expected
+                    .map(|h: &str| h.to_owned())
+                    .into_iter()
+                    .collect::<Vec<_>>(),
+            );
+        };
+        ($old_changelog_contents: expr, $new_changelog_contents: expr, $diff: expr, $expected: expr $(,)?) => {
+            assert_eq!(
+                super::hunks_in_a_released_section(
+                    $old_changelog_contents,
+                    $new_changelog_contents,
+                    $diff,
+                ),
                 $expected
                     .map(|h: &str| h.to_owned())
                     .into_iter()
@@ -595,6 +631,19 @@ index a6bf3614a..5c2dcdc4e 100644
 
 WHADDUP FOLKS
 
+HERE'S SOME STUFF THAT'S GONNA GET DELETED
+
+## Released
+
+- Blah blah blah.
+",
+        "\
+<!-- Some explanatory comment -->
+
+## Unreleased
+
+WHADDUP FOLKS
+
 ## Released
 
 - Blah blah blah.
@@ -659,6 +708,61 @@ WHADDUP FOLKS
 
     #[test]
     fn deletion_of_released_section() {
-        // TODO: https://github.com/gfx-rs/wgpu/issues/9245
+        assert_released_section_changes! {
+        "\
+## Unreleased
+
+Release summary
+
+## Release 2
+
+- Previously released note.
+
+## Release 1
+
+- Existing released entry.
+",
+        "\
+## Unreleased
+
+Release summary
+
+## Release 1
+
+- Existing released entry.
+",
+        "\
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 908e22ab6..a7eb3c978 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -2,10 +2,6 @@
+\u{0020}
+ Release summary
+\u{0020}
+-## Release 2
+-
+- Previously released note.
+-
+ ## Release 1
+\u{0020}
+ - Existing released entry.
+",
+            [
+                "\
+@@ -2,10 +2,6 @@
+\u{0020}
+ Release summary
+\u{0020}
+-## Release 2
+-
+- Previously released note.
+-
+ ## Release 1
+\u{0020}
+ - Existing released entry.
+",
+            ],
+        }
     }
 }

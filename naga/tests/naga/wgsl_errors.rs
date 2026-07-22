@@ -1145,10 +1145,10 @@ macro_rules! check_extension_validation {
         // Don't check with explicitly allowed caps, as certain things (currently just
         // `acceleration_structure`s) can be enabled by multiple extensions
         let error = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), !(caps | other_caps))
-            .validate(&module)
-            .map_err(|e| e.into_inner()); // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
+            .validate(&module).map_err(|e|e.into_inner());
+        let error = error.as_ref(); // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
         #[allow(clippy::redundant_pattern_matching)]
-        if !matches!(&error, $val_err_pat) {
+        if !matches!(error, $val_err_pat) {
             eprintln!(
                 concat!(
                     "validation error without {:?} does not match pattern:\n",
@@ -1212,6 +1212,16 @@ macro_rules! check_validation {
     }
 }
 
+#[cfg_attr(
+    not(target_pointer_width = "32"),
+    expect(
+        clippy::result_large_err,
+        reason = "`ValidationError` is large enough that it should usually be boxed, \
+              but this is only a test, and it makes the `match` expressions \
+              in the callers a bit cleaner. \
+              This lint does not trigger on 32-bit builds."
+    )
+)]
 #[track_caller]
 fn validation_error(
     source: &str,
@@ -1552,26 +1562,6 @@ fn int16_in_immediate() {
             ..
         }),
         naga::valid::Capabilities::SHADER_INT16 | naga::valid::Capabilities::IMMEDIATES
-    }
-}
-
-#[test]
-fn float16_in_immediate() {
-    check_validation! {
-        "enable f16; var<immediate> input: f16;",
-        "enable f16; var<immediate> input: vec2<f16>;",
-        "enable f16; var<immediate> input: mat4x4<f16>;",
-        "enable f16; struct S { a: f16 }; var<immediate> input: S;",
-        "enable f16; struct S1 { a: f16 }; struct S2 { a : S1 } var<immediate> input: S2;":
-        Err(naga::valid::ValidationError::GlobalVariable {
-            source: naga::valid::GlobalVariableError::InvalidImmediateType(
-                naga::valid::ImmediateError::InvalidScalar(
-                    naga::Scalar::F16
-                )
-            ),
-            ..
-        }),
-        naga::valid::Capabilities::SHADER_FLOAT16 | naga::valid::Capabilities::IMMEDIATES
     }
 }
 
@@ -5078,7 +5068,7 @@ fn binding_array_requires_capability() {
 
     check_validation! {
         r#"
-            enable wgpu_binding_array; 
+            enable wgpu_binding_array;
             struct Buffer { data: u32 }
             @group(0) @binding(0)
             var<uniform> uniform_array: binding_array<Buffer, 10>;

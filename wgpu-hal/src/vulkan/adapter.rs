@@ -700,7 +700,8 @@ impl PhysicalDeviceFeatures {
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
-            caps.supports_extension(khr::swapchain_mutable_format::NAME),
+            caps.supports_extension(khr::swapchain_mutable_format::NAME)
+                || !caps.supports_extension(khr::swapchain::NAME),
         );
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
@@ -1800,6 +1801,7 @@ impl PhysicalDeviceProperties {
             max_blas_geometry_count,
             max_tlas_instance_count,
             max_acceleration_structures_per_shader_stage,
+            max_buffers_and_acceleration_structures_per_shader_stage: u32::MAX,
 
             max_multiview_view_count,
 
@@ -3566,7 +3568,7 @@ fn query_cooperative_matrix_properties(
         });
     }
 
-    log::info!(
+    log::debug!(
         "Found {} cooperative matrix configurations supported by wgpu",
         result.len()
     );

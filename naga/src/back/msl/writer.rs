@@ -4957,6 +4957,7 @@ template <typename A>
         &mut self,
         level: back::Level,
         sampler: &sm::InlineSampler,
+        options: &Options,
     ) -> BackendResult {
         for (&letter, address) in ['s', 't', 'r'].iter().zip(sampler.address.iter()) {
             writeln!(
@@ -5001,17 +5002,26 @@ template <typename A>
                 sampler.border_color.as_str(),
             )?;
         }
-        //TODO: I'm not able to feed this in a way that MSL likes:
-        //>error: use of undeclared identifier 'lod_clamp'
-        //>error: no member named 'max_anisotropy' in namespace 'metal'
-        if false {
+
+        if options.lang_version >= (1, 2) {
             if let Some(ref lod) = sampler.lod_clamp {
-                writeln!(self.out, "{}lod_clamp({},{}),", level, lod.start, lod.end,)?;
+                writeln!(
+                    self.out,
+                    "{}{}::lod_clamp({},{}),",
+                    level, NAMESPACE, lod.start, lod.end,
+                )?;
             }
             if let Some(aniso) = sampler.max_anisotropy {
-                writeln!(self.out, "{}max_anisotropy({}),", level, aniso.get(),)?;
+                writeln!(
+                    self.out,
+                    "{}{}::max_anisotropy({}),",
+                    level,
+                    NAMESPACE,
+                    aniso.get(),
+                )?;
             }
         }
+
         if sampler.compare_func != sm::CompareFunc::Never {
             writeln!(
                 self.out,
@@ -6989,7 +6999,13 @@ template <typename A>
                     handle: arg.ty,
                     gctx: module.to_ctx(),
                     names: &self.names,
-                    access: crate::StorageAccess::empty(),
+                    access: match module.types[arg.ty].inner {
+                        crate::TypeInner::Image {
+                            class: crate::ImageClass::Storage { access, .. },
+                            ..
+                        } => access,
+                        _ => crate::StorageAccess::empty(),
+                    },
                     first_time: false,
                 };
                 let separator = separate(
@@ -8113,7 +8129,7 @@ template <typename A>
                             NAMESPACE,
                             name
                         )?;
-                        self.put_inline_sampler_properties(back::Level(2), sampler)?;
+                        self.put_inline_sampler_properties(back::Level(2), sampler, options)?;
                         writeln!(self.out, "{});", back::INDENT)?;
                     } else if let crate::TypeInner::Image {
                         class: crate::ImageClass::External,

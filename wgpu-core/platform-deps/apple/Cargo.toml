@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-core-deps-apple"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Feature unification helper crate for Apple platforms"
 homepage.workspace = true

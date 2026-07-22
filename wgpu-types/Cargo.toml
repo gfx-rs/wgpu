@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-types"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Common types and utilities for wgpu, the cross-platform, safe, pure-rust graphics API"
 homepage.workspace = true
@@ -69,7 +68,7 @@ serde = { workspace = true, default-features = false, features = [
 ], optional = true }
 static_assertions.workspace = true
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+[target.'cfg(target_family = "wasm")'.dependencies]
 js-sys = { workspace = true, optional = true, default-features = false }
 web-sys = { workspace = true, optional = true, default-features = false, features = [
     "ImageBitmap",

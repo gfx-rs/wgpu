@@ -350,11 +350,11 @@ dependencies = [
 
 [[package]]
 name = "bit-set"
-version = "0.10.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09ec2f926cc3060f09db9ebc5b52823d85268d24bb917e472c0c4bea35780a7d"
+checksum = "56d87354e4229f54a44f7bf2435906a4656dba36026ab6eaca629a2c436a691c"
 dependencies = [
- "bit-vec 0.9.1",
+ "bit-vec 0.10.1",
 ]
 
 [[package]]
@@ -365,9 +365,9 @@ checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
 
 [[package]]
 name = "bit-vec"
-version = "0.9.1"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b71798fca2c1fe1086445a7258a4bc81e6e49dcd24c8d0dd9a1e57395b603f51"
+checksum = "5727b15fa97d4f4fee0a3b7c3d550ed0269f54329207b86388de918604e31269"
 
 [[package]]
 name = "bitflags"
@@ -571,9 +571,9 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
 name = "cfg_aliases"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
+checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
 name = "cgl"
@@ -800,7 +800,7 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "cts_runner"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "deno_console",
  "deno_core",
@@ -815,6 +815,7 @@ dependencies = [
  "tempfile",
  "termcolor",
  "tokio",
+ "wgpu-hal",
 ]
 
 [[package]]
@@ -1236,8 +1237,9 @@ dependencies = [
 
 [[package]]
 name = "env_filter"
-version = "1.0.0"
-source = "git+https://github.com/rust-cli/env_logger.git?rev=d550741#d550741cdcd1d64f8a564158d9d0b2554f5d900d"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "900d271a03799a1ee8d1ca9b19893b48ca674a9284fefcfb85f05e74ed314217"
 dependencies = [
  "log",
  "regex",
@@ -1245,8 +1247,9 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.11.9"
-source = "git+https://github.com/rust-cli/env_logger.git?rev=d550741#d550741cdcd1d64f8a564158d9d0b2554f5d900d"
+version = "0.11.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de671bd27a75a797dc9ae289ba1e77276e75e2026408aab65185384e2d5cd3f6"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1622,9 +1625,9 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "glow"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29038e1c483364cc6bb3cf78feee1816002e127c331a1eec55a4d202b9e1adb5"
+checksum = "263218b0ba2b0715c3370fb04674f5f8aa331594b521c94ff0a8e4a8472d1386"
 dependencies = [
  "js-sys",
  "slotmap",
@@ -1770,7 +1773,7 @@ checksum = "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c"
 
 [[package]]
 name = "hlsl-snapshots"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "anyhow",
  "nanoserde",
@@ -2179,8 +2182,9 @@ dependencies = [
 
 [[package]]
 name = "libtest-mimic"
-version = "0.8.1"
-source = "git+https://github.com/cwfitzgerald/libtest-mimic.git?rev=9979b3c#9979b3c1aa932bd210505029e4639aafa6e3d4f3"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14e6ba06f0ade6e504aff834d7c34298e5155c6baca353cc6a4aaff2f9fd7f33"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2220,7 +2224,7 @@ checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
 
 [[package]]
 name = "lock-analyzer"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "anyhow",
  "ron",
@@ -2346,11 +2350,11 @@ checksum = "add0ac067452ff1aca8c5002111bd6b1c895baee6e45fcbc44e0193aea17be56"
 
 [[package]]
 name = "naga"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "arbitrary",
  "arrayvec",
- "bit-set 0.10.0",
+ "bit-set 0.11.1",
  "bitflags 2.13.0",
  "bytemuck",
  "cfg-if",
@@ -2384,7 +2388,7 @@ dependencies = [
 
 [[package]]
 name = "naga-cli"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "anyhow",
  "argh",
@@ -2397,7 +2401,7 @@ dependencies = [
 
 [[package]]
 name = "naga-fuzz"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "arbitrary",
  "cfg_aliases",
@@ -2407,7 +2411,7 @@ dependencies = [
 
 [[package]]
 name = "naga-test"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "bitflags 2.13.0",
  "naga",
@@ -2420,7 +2424,7 @@ dependencies = [
 
 [[package]]
 name = "naga-types"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "arbitrary",
  "hashbrown 0.17.1",
@@ -3090,7 +3094,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "player"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "bytemuck",
  "env_logger",
@@ -4621,7 +4625,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "arrayvec",
  "bitflags 2.13.0",
@@ -4649,7 +4653,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-benchmark"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "anyhow",
  "bincode 2.0.1",
@@ -4690,11 +4694,11 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "arrayvec",
- "bit-set 0.10.0",
- "bit-vec 0.9.1",
+ "bit-set 0.11.1",
+ "bit-vec 0.10.1",
  "bitflags 2.13.0",
  "bytemuck",
  "cfg_aliases",
@@ -4717,8 +4721,9 @@ dependencies = [
  "thiserror 2.0.18",
  "wgpu-core-deps-apple",
  "wgpu-core-deps-emscripten",
+ "wgpu-core-deps-linux-android-bsd",
  "wgpu-core-deps-wasm",
- "wgpu-core-deps-windows-linux-android",
+ "wgpu-core-deps-windows",
  "wgpu-hal",
  "wgpu-naga-bridge",
  "wgpu-types",
@@ -4726,28 +4731,35 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core-deps-apple"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-emscripten"
-version = "29.0.0"
+version = "30.0.0"
+dependencies = [
+ "wgpu-hal",
+]
+
+[[package]]
+name = "wgpu-core-deps-linux-android-bsd"
+version = "30.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-wasm"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
-name = "wgpu-core-deps-windows-linux-android"
-version = "29.0.0"
+name = "wgpu-core-deps-windows"
+version = "30.0.0"
 dependencies = [
  "wgpu-hal",
 ]
@@ -4799,7 +4811,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-examples"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -4829,12 +4841,12 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "android_system_properties",
  "arrayvec",
  "ash",
- "bit-set 0.10.0",
+ "bit-set 0.11.1",
  "bitflags 2.13.0",
  "block2 0.6.2",
  "bytemuck",
@@ -4890,7 +4902,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-info"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "anyhow",
  "bitflags 2.13.0",
@@ -4906,7 +4918,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-macros"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "heck",
  "quote",
@@ -4915,7 +4927,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-naga-bridge"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "naga",
  "wgpu-types",
@@ -4923,7 +4935,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-test"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "anyhow",
  "approx",
@@ -4968,7 +4980,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-types"
-version = "29.0.0"
+version = "30.0.0"
 dependencies = [
  "bitflags 2.13.0",
  "bytemuck",

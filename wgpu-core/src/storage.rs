@@ -116,6 +116,7 @@ where
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn iter(&self) -> impl Iterator<Item = (Id<T::Marker>, &T)> {
         self.map
             .iter()

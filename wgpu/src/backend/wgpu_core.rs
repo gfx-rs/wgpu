@@ -548,6 +548,7 @@ pub struct CoreCommandBuffer {
 #[derive(Debug)]
 pub struct CoreRenderBundleEncoder {
     pub(crate) context: ContextWgpuCore,
+    error_sink: ErrorSink,
     encoder: Box<wgc::command::RenderBundleEncoder>,
     id: crate::cmp::Identifier,
 }
@@ -904,6 +905,9 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                     }
                     ImplementedLanguageExtension::PointerCompositeAccess => {
                         crate::WgslLanguageFeatures::PointerCompositeAccess
+                    }
+                    ImplementedLanguageExtension::ImmediateAddressSpace => {
+                        crate::WgslLanguageFeatures::ImmediateAddressSpace
                     }
                 }
             },
@@ -1825,6 +1829,7 @@ impl dispatch::DeviceInterface for CoreDevice {
 
         CoreRenderBundleEncoder {
             context: self.context.clone(),
+            error_sink: Arc::clone(&self.error_sink),
             encoder,
             id: crate::cmp::Identifier::create(),
         }
@@ -2866,7 +2871,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 }
             };
             wgc::ray_tracing::BlasBuildEntry {
-                blas_id: e.blas.inner.as_core().id,
+                blas: e.blas.inner.as_core().id,
                 geometries,
             }
         });
@@ -2879,14 +2884,14 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                     instance
                         .as_ref()
                         .map(|instance| wgc::ray_tracing::TlasInstance {
-                            blas_id: instance.blas.as_core().id,
+                            blas: instance.blas.as_core().id,
                             transform: &instance.transform,
                             custom_data: instance.custom_data,
                             mask: instance.mask,
                         })
                 });
             wgc::ray_tracing::TlasPackage {
-                tlas_id: e.inner.as_core().id,
+                tlas: e.inner.as_core().id,
                 instances: Box::new(instances),
                 lowest_unmodified: e.lowest_unmodified,
             }
@@ -3852,6 +3857,19 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     }
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        if !data
+            .len()
+            .is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
+        {
+            self.context.handle_error(
+                &self.error_sink,
+                wgc::binding_model::ImmediateUploadError::SizeUnaligned(data.len()),
+                self.encoder.label(),
+                "RenderBundleEncoder::set_immediates",
+            );
+            return;
+        }
+
         self.context
             .0
             .render_bundle_encoder_set_immediates(&mut self.encoder, offset, data)
@@ -3923,14 +3941,19 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     where
         Self: Sized,
     {
+        let label = self.encoder.label().map(alloc::string::ToString::to_string);
         let (id, error) = self.context.0.render_bundle_encoder_finish(
             &mut self.encoder,
             &desc.map_label(|l| l.map(Borrowed)),
             None,
         );
         if let Some(err) = error {
-            self.context
-                .handle_error_fatal(err, "RenderBundleEncoder::finish");
+            self.context.handle_error(
+                &self.error_sink,
+                err,
+                label.as_deref(),
+                "RenderBundleEncoder::finish",
+            );
         }
         CoreRenderBundle {
             context: self.context.clone(),

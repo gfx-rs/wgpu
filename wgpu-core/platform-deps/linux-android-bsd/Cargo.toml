@@ -1,9 +1,8 @@
 [package]
-name = "wgpu-core-deps-windows-linux-android"
+name = "wgpu-core-deps-linux-android-bsd"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
-description = "Feature unification helper crate for the Windows/Linux/Android platforms"
+description = "Feature unification helper crate for the Linux/Android/BSD platforms"
 homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
@@ -19,15 +18,11 @@ rust-version = "1.76"
 [features]
 gles = ["wgpu-hal/gles"]
 vulkan = ["wgpu-hal/vulkan"]
-dx12 = ["wgpu-hal/dx12"]
 renderdoc = ["wgpu-hal/renderdoc"]
 
 ## Support creating textures from DRM display/window handles.
 drm = ["wgpu-hal/drm"]
 
 # Depend on wgpu-hal conditionally, so that the above features only apply to wgpu-hal on this set of platforms.
-[target.'cfg(any(windows, target_os = "linux", target_os = "android", target_os = "freebsd", target_os = "netbsd"))'.dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd", target_os = "netbsd"))'.dependencies]
 wgpu-hal.workspace = true
-
-[lints]
-workspace = true
