@@ -146,15 +146,12 @@ fn make_error_state<E: Into<CommandEncoderError>>(error: E) -> CommandEncoderSta
 pub(crate) enum CommandEncoderStatus {
     /// Ready to record commands. An encoder's initial state.
     ///
-    /// Command building methods like [`command_encoder_clear_buffer`] and
-    /// [`compute_pass_end`] require the encoder to be in this
+    /// Command building methods like [`CommandEncoder::clear_buffer`] and
+    /// [`ComputePass::end`] require the encoder to be in this
     /// state.
     ///
     /// This corresponds to WebGPU's "open" state.
     /// See <https://www.w3.org/TR/webgpu/#encoder-state-open>
-    ///
-    /// [`command_encoder_clear_buffer`]: Global::command_encoder_clear_buffer
-    /// [`compute_pass_end`]: Global::compute_pass_end
     Recording(CommandBufferMutable),
 
     /// Locked by a render or compute pass.
@@ -171,14 +168,16 @@ pub(crate) enum CommandEncoderStatus {
 
     /// Command recording is complete, and the buffer is ready for submission.
     ///
-    /// [`Global::command_encoder_finish`] transitions a
+    /// [`CommandEncoder::finish`] transitions a
     /// `CommandBuffer` from the `Recording` state into this state.
     ///
-    /// [`Global::queue_submit`] requires that command buffers are
+    /// [`Queue::submit`] requires that command buffers are
     /// in this state.
     ///
     /// This corresponds to WebGPU's "ended" state.
     /// See <https://www.w3.org/TR/webgpu/#encoder-state-ended>
+    ///
+    /// [`Queue::submit`]: crate::device::queue::Queue::submit
     Finished(CommandBufferMutable),
 
     /// The command encoder is invalid.

@@ -196,12 +196,7 @@ webgpu:api,validation,encoding,encoder_state:*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:*
 // On dx12, Error: Unexpected internal error occurred: undefined
 // https://github.com/gfx-rs/wgpu/issues/8556
-fails-if(dx12) webgpu:api,validation,encoding,programmable,pipeline_immediate:overprovisioned_immediate_data:*
-fails-if(dx12) webgpu:api,validation,encoding,programmable,pipeline_immediate:render_bundle_execution_state_invalidation:*
-//FAIL: webgpu:api,validation,encoding,programmable,pipeline_immediate:required_slots_set:*
-// Naga `immediate_slots_required` is not quite correct.
-// https://github.com/gfx-rs/wgpu/issues/9724
-fails-if(dx12) webgpu:api,validation,encoding,programmable,pipeline_immediate:unused_variable:*
+fails-if(dx12) webgpu:api,validation,encoding,programmable,pipeline_immediate:*
 webgpu:api,validation,encoding,queries,begin_end:nesting:*
 webgpu:api,validation,encoding,queries,begin_end:occlusion_query,*
 webgpu:api,validation,encoding,queries,general:occlusion_query,*
