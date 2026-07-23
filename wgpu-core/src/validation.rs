@@ -16,7 +16,8 @@ use wgt::{
 };
 
 use crate::{
-    command::ColorAttachmentError, device::bgl, resource::InvalidResourceError,
+    command::ColorAttachmentError, device::bgl, pipeline::ColorStateError,
+    resource::InvalidResourceError,
     validation::shader_io_deductions::MaxFragmentShaderInputDeduction, FastHashMap, FastHashSet,
 };
 
@@ -1016,7 +1017,7 @@ impl NumericType {
         }
     }
 
-    fn is_subtype_of(&self, other: &NumericType) -> bool {
+    fn is_subtype_of(self, other: NumericType) -> bool {
         if self.scalar.width > other.scalar.width {
             return false;
         }
@@ -1036,16 +1037,34 @@ impl NumericType {
 }
 
 /// Return true if the fragment `format` is covered by the provided `output`.
-pub fn check_texture_format(
-    format: wgt::TextureFormat,
-    output: &NumericType,
-) -> Result<(), NumericType> {
-    let nt = NumericType::from_texture_format(format);
-    if nt.is_subtype_of(output) {
-        Ok(())
-    } else {
-        Err(nt)
+pub fn check_color_attachment_compatibility(
+    state: &wgt::ColorTargetState,
+    output_ty: NumericType,
+) -> Result<(), ColorStateError> {
+    let pipeline_ty = NumericType::from_texture_format(state.format);
+    if !pipeline_ty.is_subtype_of(output_ty) {
+        return Err(ColorStateError::IncompatibleFormat {
+            pipeline: pipeline_ty,
+            shader: output_ty,
+        });
     }
+    if let Some(blend) = state.blend {
+        for (factor, name) in [
+            (blend.color.src_factor, "source"),
+            (blend.color.dst_factor, "destination"),
+        ] {
+            if factor.uses_source_alpha()
+                && output_ty.dim != NumericDimension::Vector(naga::VectorSize::Quad)
+            {
+                return Err(ColorStateError::InvalidAlphaBlend {
+                    which: name,
+                    factor,
+                });
+            }
+        }
+    }
+
+    Ok(())
 }
 
 pub enum BindingLayoutSource {
@@ -1617,7 +1636,7 @@ impl Interface {
                                         ));
                                     }
                                     (
-                                        iv.ty.is_subtype_of(&provided.ty),
+                                        iv.ty.is_subtype_of(provided.ty),
                                         iv.per_primitive == provided.per_primitive,
                                     )
                                 }

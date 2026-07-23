@@ -17,7 +17,8 @@ use arrayvec::ArrayVec;
 use bitflags::Flags;
 use smallvec::SmallVec;
 use wgt::{
-    math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
+    math::align_to, ColorWrites, DeviceLostReason, TextureFormat, TextureSampleType,
+    TextureViewDimension,
 };
 
 #[cfg(feature = "trace")]
@@ -4631,6 +4632,10 @@ impl Device {
         }
 
         let mut target_specified = false;
+        let mut required_color_outputs = 0u64;
+        const _: () = {
+            assert!(hal::MAX_COLOR_ATTACHMENTS <= 64);
+        };
 
         for (i, cs) in color_targets.iter().enumerate() {
             if let Some(cs) = cs.as_ref() {
@@ -4641,6 +4646,8 @@ impl Device {
                     // on the device timeline.
                     if cs.write_mask.contains_unknown_bits() {
                         break 'error Some(ColorStateError::InvalidWriteMask(cs.write_mask));
+                    } else if cs.write_mask != ColorWrites::NONE {
+                        required_color_outputs |= 1 << i;
                     }
 
                     let format_features = self.describe_format_features(cs.format)?;
@@ -4679,7 +4686,7 @@ impl Device {
                     if let Some(blend_mode) = cs.blend {
                         for component in [&blend_mode.color, &blend_mode.alpha] {
                             for factor in [component.src_factor, component.dst_factor] {
-                                if factor.ref_second_blend_source() {
+                                if factor.uses_second_blend_source() {
                                     self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
                                     if i == 0 {
                                         dual_source_blending = true;
@@ -5079,21 +5086,16 @@ impl Device {
             ));
         }
 
+        let mut active_color_outputs = 0u64;
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, output) in io.varyings.iter() {
+                active_color_outputs |= 1 << i;
                 match color_targets.get(*i as usize) {
                     Some(Some(state)) => {
-                        validation::check_texture_format(state.format, &output.ty).map_err(
-                            |pipeline| {
-                                pipeline::CreateRenderPipelineError::ColorState(
-                                    *i as u8,
-                                    ColorStateError::IncompatibleFormat {
-                                        pipeline,
-                                        shader: output.ty,
-                                    },
-                                )
-                            },
-                        )?;
+                        validation::check_color_attachment_compatibility(state, output.ty)
+                            .map_err(|err| {
+                                pipeline::CreateRenderPipelineError::ColorState(*i as u8, err)
+                            })?;
                     }
                     _ => {
                         log::debug!(
@@ -5106,7 +5108,16 @@ impl Device {
                     }
                 }
             }
+
+            let missing_color_outputs = required_color_outputs & !active_color_outputs;
+            if missing_color_outputs != 0 {
+                return Err(pipeline::CreateRenderPipelineError::ColorState(
+                    missing_color_outputs.trailing_zeros() as u8,
+                    ColorStateError::OutputNotPresent,
+                ));
+            }
         }
+
         let last_stage = match desc.fragment {
             Some(_) => wgt::ShaderStages::FRAGMENT,
             None => wgt::ShaderStages::VERTEX,
