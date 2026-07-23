@@ -11,7 +11,7 @@ use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
 use parking_lot::RwLock;
 
-/// Name of the `VK_OHOS_surface` extension. Used with [`create_surface_ohos`].
+/// Name of the `VK_OHOS_surface` extension. Used with [`super::Instance::create_surface_ohos`].
 #[cfg(target_env = "ohos")]
 const OHOS_SURFACE_EXTENSION_NAME: &CStr = c"VK_OHOS_surface";
 
