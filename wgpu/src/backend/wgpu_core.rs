@@ -104,6 +104,28 @@ impl ContextWgpuCore {
         unsafe { self.0.buffer_as_hal::<A>(buffer.id) }
     }
 
+    #[doc(hidden)]
+    pub unsafe fn buffer_mark_external_write_initialized(
+        &self,
+        buffer: &CoreBuffer,
+        range: Range<crate::BufferAddress>,
+    ) -> Result<(), crate::ExternalWriteInitializationError> {
+        match unsafe {
+            self.0
+                .buffer_mark_external_write_initialized(buffer.id, range)
+        } {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                self.handle_error_nolabel(
+                    &buffer.error_sink,
+                    error,
+                    "Buffer::mark_external_write_initialized",
+                );
+                Err(crate::ExternalWriteInitializationError { _private: () })
+            }
+        }
+    }
+
     pub unsafe fn create_device_from_hal<A: hal::Api>(
         &self,
         adapter: &CoreAdapter,

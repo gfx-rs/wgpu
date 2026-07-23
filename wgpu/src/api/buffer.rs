@@ -291,6 +291,42 @@ impl Buffer {
         unsafe { buffer.context.buffer_as_hal::<A>(buffer) }
     }
 
+    /// Tell wgpu that a completed external GPU producer initialized a byte range of this buffer.
+    ///
+    /// This updates only wgpu's lazy initialization tracker. It does not submit work, transition
+    /// the resource, or synchronize the external producer with wgpu.
+    ///
+    /// # Safety
+    ///
+    /// - The caller must hold exclusive allocation ownership of `bounds` for the external write,
+    ///   and every semantically accessible byte in the range must have been initialized.
+    /// - Every prior wgpu use must be resolved before the raw write begins.
+    /// - The external write must complete, or an equivalent GPU dependency must be registered,
+    ///   before a later wgpu use can observe the range.
+    /// - The raw resource must not have been destroyed or replaced.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `bounds` is empty, reversed, overflows, or lies outside this buffer.
+    #[cfg(wgpu_core)]
+    #[doc(hidden)]
+    pub unsafe fn mark_external_write_initialized<S: RangeBounds<BufferAddress>>(
+        &self,
+        bounds: S,
+    ) -> Result<(), ExternalWriteInitializationError> {
+        let (offset, size) = range_to_offset_size(bounds, self.size);
+        check_buffer_bounds(self.size, offset, size);
+        let buffer = self
+            .inner
+            .as_core_opt()
+            .ok_or(ExternalWriteInitializationError { _private: () })?;
+        unsafe {
+            buffer
+                .context
+                .buffer_mark_external_write_initialized(buffer, offset..offset + size.get())
+        }
+    }
+
     /// Returns a [`BufferSlice`] referring to the portion of `self`'s contents
     /// indicated by `bounds`. Regardless of what sort of data `self` stores,
     /// `bounds` start and end are given in bytes.
@@ -859,6 +895,22 @@ impl fmt::Display for BufferAsyncError {
 
 impl error::Error for BufferAsyncError {}
 
+/// Wgpu could not accept an external-write initialization handoff.
+#[doc(hidden)]
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ExternalWriteInitializationError {
+    pub(crate) _private: (),
+}
+static_assertions::assert_impl_all!(ExternalWriteInitializationError: Send, Sync);
+
+impl fmt::Display for ExternalWriteInitializationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("wgpu rejected an external-write initialization handoff")
+    }
+}
+
+impl error::Error for ExternalWriteInitializationError {}
+
 /// Type of buffer mapping.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum MapMode {
@@ -1035,14 +1087,22 @@ pub(crate) fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
 ) -> (BufferAddress, BufferSize) {
     let offset = match bounds.start_bound() {
         Bound::Included(&bound) => bound,
-        Bound::Excluded(&bound) => bound + 1,
+        Bound::Excluded(&bound) => bound
+            .checked_add(1)
+            .expect("buffer slice range start overflow"),
         Bound::Unbounded => 0,
     };
-    let size = BufferSize::new(match bounds.end_bound() {
-        Bound::Included(&bound) => bound + 1 - offset,
-        Bound::Excluded(&bound) => bound - offset,
-        Bound::Unbounded => whole_size - offset,
-    })
+    let end = match bounds.end_bound() {
+        Bound::Included(&bound) => bound
+            .checked_add(1)
+            .expect("buffer slice range end overflow"),
+        Bound::Excluded(&bound) => bound,
+        Bound::Unbounded => whole_size,
+    };
+    let size = BufferSize::new(
+        end.checked_sub(offset)
+            .expect("buffer slice range start exceeds end"),
+    )
     .expect("buffer slices can not be empty");
 
     (offset, size)
@@ -1053,6 +1113,7 @@ mod tests {
     use super::{
         check_buffer_bounds, range_overlaps, range_to_offset_size, BufferAddress, BufferSize,
     };
+    use core::ops::Bound;
 
     fn bs(value: BufferAddress) -> BufferSize {
         BufferSize::new(value).unwrap()
@@ -1080,6 +1141,24 @@ mod tests {
     #[should_panic = "buffer slices can not be empty"]
     fn range_to_offset_size_panics_for_unbounded_empty_range() {
         range_to_offset_size(..0, 100);
+    }
+
+    #[test]
+    #[should_panic = "buffer slice range start overflow"]
+    fn range_to_offset_size_panics_for_excluded_start_overflow() {
+        range_to_offset_size((Bound::Excluded(u64::MAX), Bound::Unbounded), u64::MAX);
+    }
+
+    #[test]
+    #[should_panic = "buffer slice range end overflow"]
+    fn range_to_offset_size_panics_for_included_end_overflow() {
+        range_to_offset_size((Bound::Unbounded, Bound::Included(u64::MAX)), u64::MAX);
+    }
+
+    #[test]
+    #[should_panic = "buffer slice range start exceeds end"]
+    fn range_to_offset_size_panics_for_reversed_range() {
+        range_to_offset_size((Bound::Included(5), Bound::Excluded(4)), 100);
     }
 
     #[test]

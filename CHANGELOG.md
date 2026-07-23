@@ -42,6 +42,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Added/New Features
+
+#### Metal
+
+- Add retained native device, queue, and buffer handles plus guarded external buffer-write initialization registration. By @jcwal1516 in [#9928](https://github.com/gfx-rs/wgpu/issues/9928).
+
 ## v29.0.4 (2026-07-01)
 
 ### New Features

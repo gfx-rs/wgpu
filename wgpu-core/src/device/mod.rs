@@ -21,6 +21,7 @@ use wgt::{
 };
 
 pub(crate) mod bgl;
+mod external_write;
 pub mod global;
 mod life;
 pub mod queue;

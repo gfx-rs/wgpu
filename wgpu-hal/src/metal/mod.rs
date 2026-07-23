@@ -31,7 +31,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
+use core::{ffi::c_void, fmt, iter, ops, ptr::NonNull, sync::atomic};
 
 use bitflags::bitflags;
 use hashbrown::HashMap;
@@ -481,6 +481,14 @@ impl Queue {
     pub fn as_raw(&self) -> &ProtocolObject<dyn MTLCommandQueue> {
         &self.shared.raw
     }
+
+    /// Clone the native command queue and transfer one strong retain to the caller.
+    ///
+    /// The caller must adopt or release the returned retain exactly once.
+    #[doc(hidden)]
+    pub fn retained_raw_handle(&self) -> NonNull<c_void> {
+        retained_raw_handle(self.shared.raw.clone())
+    }
 }
 
 #[derive(Debug)]
@@ -500,6 +508,16 @@ pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
     counters: Arc<wgt::HalCounters>,
+}
+
+impl Device {
+    /// Clone the native device and transfer one strong retain to the caller.
+    ///
+    /// The caller must adopt or release the returned retain exactly once.
+    #[doc(hidden)]
+    pub fn retained_raw_handle(&self) -> NonNull<c_void> {
+        retained_raw_handle(self.shared.device.clone())
+    }
 }
 
 pub struct Surface {
@@ -646,6 +664,19 @@ impl Buffer {
     fn as_raw(&self) -> NonNull<ProtocolObject<dyn MTLBuffer>> {
         unsafe { NonNull::new_unchecked(Retained::as_ptr(&self.raw) as *mut _) }
     }
+
+    /// Clone the native buffer and transfer one strong retain to the caller.
+    ///
+    /// The caller must adopt or release the returned retain exactly once.
+    #[doc(hidden)]
+    pub fn retained_raw_handle(&self) -> NonNull<c_void> {
+        retained_raw_handle(self.raw.clone())
+    }
+}
+
+fn retained_raw_handle<T: objc2::Message>(object: Retained<T>) -> NonNull<c_void> {
+    NonNull::new(Retained::into_raw(object).cast())
+        .expect("retained Objective-C objects are non-null")
 }
 
 impl crate::BufferBinding<'_, Buffer> {
@@ -1168,4 +1199,51 @@ pub enum OsType {
     Ios,
     Tvos,
     VisionOs,
+}
+
+#[cfg(test)]
+mod tests {
+    use objc2::{
+        rc::{Retained, Weak},
+        runtime::ProtocolObject,
+    };
+    use objc2_metal::{
+        MTLBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLResourceOptions,
+    };
+
+    use super::{Buffer, Queue};
+
+    #[test]
+    fn retained_queue_and_buffer_handles_outlive_their_hal_wrappers() {
+        let device = MTLCreateSystemDefaultDevice().expect("system Metal device");
+        let queue = device.newCommandQueue().expect("Metal command queue");
+        let buffer = device
+            .newBufferWithLength_options(64, MTLResourceOptions::empty())
+            .expect("Metal buffer");
+        let buffer_weak = Weak::from_retained(&buffer);
+
+        let queue = unsafe { Queue::queue_from_raw(queue, 1.0) };
+        let buffer = Buffer {
+            raw: buffer,
+            size: 64,
+        };
+        let queue_ptr = queue.retained_raw_handle();
+        let buffer_ptr = buffer.retained_raw_handle();
+        drop(queue);
+        drop(buffer);
+
+        assert!(buffer_weak.load().is_some());
+        let queue = unsafe {
+            Retained::<ProtocolObject<dyn MTLCommandQueue>>::from_raw(queue_ptr.cast().as_ptr())
+                .expect("retained queue")
+        };
+        let buffer = unsafe {
+            Retained::<ProtocolObject<dyn MTLBuffer>>::from_raw(buffer_ptr.cast().as_ptr())
+                .expect("retained buffer")
+        };
+        assert_eq!(queue.device(), device);
+        assert_eq!(buffer.length(), 64);
+        drop(buffer);
+        assert!(buffer_weak.load().is_none());
+    }
 }

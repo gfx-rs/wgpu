@@ -300,6 +300,11 @@ pub enum BufferAccessError {
         size: wgt::BufferAddress,
         max: wgt::BufferAddress,
     },
+    #[error("Buffer access range {start}..{end} must be non-empty and ordered")]
+    InvalidRange {
+        start: wgt::BufferAddress,
+        end: wgt::BufferAddress,
+    },
     #[error("Buffer map aborted")]
     MapAborted,
     #[error(transparent)]
@@ -340,6 +345,7 @@ impl WebGpuError for BufferAccessError {
             | Self::OutOfBoundsStartOffsetUnderrun { .. }
             | Self::OutOfBoundsStartOffsetOverrun { .. }
             | Self::OutOfBoundsEndOffsetOverrun { .. }
+            | Self::InvalidRange { .. }
             | Self::MapAborted
             | Self::MapStartOffsetOverrun { .. }
             | Self::MapEndOffsetOverrun { .. } => ErrorType::Validation,

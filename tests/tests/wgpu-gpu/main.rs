@@ -38,6 +38,8 @@ mod instance;
 mod life_cycle;
 mod mem_leaks;
 mod mesh_shader;
+#[cfg(target_vendor = "apple")]
+mod metal_external_write;
 mod multiview;
 mod naga_capabilities;
 mod occlusion_query;
@@ -105,6 +107,8 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     image_atomics::all_tests(&mut tests);
     instance::all_tests(&mut tests);
     life_cycle::all_tests(&mut tests);
+    #[cfg(target_vendor = "apple")]
+    metal_external_write::all_tests(&mut tests);
     mem_leaks::all_tests(&mut tests);
     mesh_shader::all_tests(&mut tests);
     multiview::all_tests(&mut tests);

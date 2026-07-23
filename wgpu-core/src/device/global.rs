@@ -1,5 +1,5 @@
 use alloc::{borrow::Cow, boxed::Box, string::String, sync::Arc, vec::Vec};
-use core::{ptr::NonNull, sync::atomic::Ordering};
+use core::{ops::Range, ptr::NonNull, sync::atomic::Ordering};
 
 #[cfg(feature = "trace")]
 use crate::device::trace::{self, IntoTrace};
@@ -11,7 +11,10 @@ use crate::{
     },
     command::{self, CommandEncoder},
     conv,
-    device::{life::WaitIdleError, DeviceError, DeviceLostClosure},
+    device::{
+        external_write::mark_buffer_range_initialized, life::WaitIdleError, DeviceError,
+        DeviceLostClosure,
+    },
     global::Global,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
@@ -34,6 +37,32 @@ use wgt::{BufferAddress, TextureFormat};
 use super::UserClosures;
 
 impl Global {
+    /// Record that a completed external GPU producer fully initialized a buffer range.
+    ///
+    /// # Safety
+    ///
+    /// The caller must own the range exclusively, resolve every prior wgpu use, and prevent
+    /// later wgpu access until the external write completes or an equivalent GPU dependency is
+    /// installed. Every semantically accessible byte in `range` must have been written.
+    #[doc(hidden)]
+    pub unsafe fn buffer_mark_external_write_initialized(
+        &self,
+        buffer_id: id::BufferId,
+        range: Range<BufferAddress>,
+    ) -> BufferAccessResult {
+        let buffer = self.hub.buffers.get(buffer_id).get()?;
+        let snatch_guard = buffer.device.snatchable_lock.read();
+        buffer.check_destroyed(&snatch_guard)?;
+        drop(snatch_guard);
+        buffer.device.check_is_valid()?;
+
+        let result = {
+            let mut initialization_status = buffer.initialization_status.write();
+            mark_buffer_range_initialized(buffer.size, &mut initialization_status, range)
+        };
+        result
+    }
+
     pub fn adapter_is_surface_supported(
         &self,
         adapter_id: AdapterId,
