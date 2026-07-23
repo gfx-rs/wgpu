@@ -458,11 +458,15 @@ impl Swapchain for NativeSwapchain {
         // will block if no image is available
         let (index, suboptimal) = match unsafe {
             profiling::scope!("vkAcquireNextImageKHR");
+            #[cfg(target_os = "windows")]
+            let fence = self.fence;
+            #[cfg(not(target_os = "windows"))]
+            let fence = vk::Fence::null();
             self.functor.acquire_next_image(
                 self.raw,
                 timeout_ns,
                 acquire_semaphore_guard.acquire,
-                self.fence,
+                fence
             )
         } {
             // We treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android.
