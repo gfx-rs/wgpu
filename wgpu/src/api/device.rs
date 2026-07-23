@@ -441,6 +441,25 @@ impl Device {
         }
     }
 
+    /// Imports a video source as an [`ExternalTexture`] on the WebGPU backend,
+    /// without a copy.
+    ///
+    /// This is the WebGPU counterpart of [`Self::create_external_texture`]: the
+    /// browser performs the YCbCr-to-RGB conversion internally, so no plane
+    /// textures or conversion matrices are supplied. The result is valid only
+    /// while `source` is: a `VideoFrame` until it is closed, an
+    /// `HTMLVideoElement` for the current task. [`ExternalTexture::destroy`] is
+    /// a no-op.
+    #[cfg(webgpu)]
+    #[must_use]
+    pub fn import_external_texture(
+        &self,
+        source: &webgpu::ExternalTextureSource,
+    ) -> ExternalTexture {
+        let inner = self.inner.as_webgpu().import_external_texture(source);
+        ExternalTexture { inner }
+    }
+
     /// Creates a [`Buffer`] from a wgpu-hal Buffer.
     ///
     /// # Types
