@@ -46,8 +46,8 @@ OpMemberName %6 0 "data"
 OpName %6 "PrimeIndices"
 OpName %8 "v_indices"
 OpName %10 "naga_mod"
-OpName %12 "lhs"
-OpName %13 "rhs"
+OpName %11 "lhs"
+OpName %12 "rhs"
 OpName %21 "naga_div"
 OpName %22 "lhs"
 OpName %23 "rhs"
@@ -71,7 +71,7 @@ OpDecorate %81 BuiltIn GlobalInvocationId
 %7 = OpTypeVector %4 3
 %9 = OpTypePointer StorageBuffer %6
 %8 = OpVariable  %9  StorageBuffer
-%11 = OpTypeFunction %4 %4 %4
+%13 = OpTypeFunction %4 %4 %4
 %15 = OpTypeBool
 %16 = OpConstant  %4  0
 %18 = OpConstant  %4  1
@@ -91,16 +91,16 @@ OpDecorate %81 BuiltIn GlobalInvocationId
 %85 = OpTypeFunction %2
 %87 = OpTypePointer StorageBuffer %5
 %89 = OpTypePointer StorageBuffer %4
-%10 = OpFunction  %4  None %11
+%10 = OpFunction  %4  None %13
+%11 = OpFunctionParameter  %4
 %12 = OpFunctionParameter  %4
-%13 = OpFunctionParameter  %4
 %14 = OpLabel
-%17 = OpIEqual  %15  %13 %16
-%19 = OpSelect  %4  %17 %18 %13
-%20 = OpUMod  %4  %12 %19
+%17 = OpIEqual  %15  %12 %16
+%19 = OpSelect  %4  %17 %18 %12
+%20 = OpUMod  %4  %11 %19
 OpReturnValue %20
 OpFunctionEnd
-%21 = OpFunction  %4  None %11
+%21 = OpFunction  %4  None %13
 %22 = OpFunctionParameter  %4
 %23 = OpFunctionParameter  %4
 %24 = OpLabel

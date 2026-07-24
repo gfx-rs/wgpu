@@ -80,34 +80,34 @@ layout(set = 3, binding = 1, std140) uniform u_sasm
     std140_StructWithArrayOfStructOfMat _m0;
 } u_sasm_1;
 
-f16mat4x2 mat4x2_f16_from_std140(std140_mat4x2_f16_ _45)
+f16mat4x2 mat4x2_f16_from_std140(std140_mat4x2_f16_ value)
 {
-    return f16mat4x2(_45.col0, _45.col1, _45.col2, _45.col3);
+    return f16mat4x2(value.col0, value.col1, value.col2, value.col3);
 }
 
-f16vec2 mat4x2_f16_get_column(f16mat4x2 _53, uint _54)
+f16vec2 mat4x2_f16_get_column(f16mat4x2 matrix, uint column_index)
 {
     f16vec2 _67;
-    switch (_54)
+    switch (column_index)
     {
         case 0u:
         {
-            _67 = _53[0];
+            _67 = matrix[0];
             break;
         }
         case 1u:
         {
-            _67 = _53[1];
+            _67 = matrix[1];
             break;
         }
         case 2u:
         {
-            _67 = _53[2];
+            _67 = matrix[2];
             break;
         }
         case 3u:
         {
-            _67 = _53[3];
+            _67 = matrix[3];
             break;
         }
         default:
@@ -131,9 +131,9 @@ void access_m()
     s_m_1._m0[idx][idx] = mat4x2_f16_get_column(mat4x2_f16_from_std140(u_m_1._m0), uint(idx))[idx];
 }
 
-StructWithMat StructWithMat_from_std140(std140_StructWithMat _145)
+StructWithMat StructWithMat_from_std140(std140_StructWithMat value)
 {
-    return StructWithMat(f16mat4x2(_145.m_col0, _145.m_col1, _145.m_col2, _145.m_col3));
+    return StructWithMat(f16mat4x2(value.m_col0, value.m_col1, value.m_col2, value.m_col3));
 }
 
 void access_sm()
@@ -150,9 +150,9 @@ void access_sm()
     s_sm_1._m0.m[idx][idx] = mat4x2_f16_get_column(f16mat4x2(u_sm_1._m0.m_col0, u_sm_1._m0.m_col1, u_sm_1._m0.m_col2, u_sm_1._m0.m_col3), uint(idx))[idx];
 }
 
-f16mat4x2[4] array_mat4x2_f16_4_from_std140(std140_mat4x2_f16_ _258[4])
+f16mat4x2[4] array_mat4x2_f16_4_from_std140(std140_mat4x2_f16_ value[4])
 {
-    return f16mat4x2[](mat4x2_f16_from_std140(_258[0]), mat4x2_f16_from_std140(_258[1]), mat4x2_f16_from_std140(_258[2]), mat4x2_f16_from_std140(_258[3]));
+    return f16mat4x2[](mat4x2_f16_from_std140(value[0]), mat4x2_f16_from_std140(value[1]), mat4x2_f16_from_std140(value[2]), mat4x2_f16_from_std140(value[3]));
 }
 
 void access_am()
@@ -176,14 +176,14 @@ void access_am()
     s_am_1._m0[idx][idx][idx] = mat4x2_f16_get_column(mat4x2_f16_from_std140(u_am_1._m0[idx]), uint(idx))[idx];
 }
 
-StructWithMat[4] array_StructWithMat_4_from_std140(std140_StructWithMat _435[4])
+StructWithMat[4] array_StructWithMat_4_from_std140(std140_StructWithMat value[4])
 {
-    return StructWithMat[](StructWithMat_from_std140(_435[0]), StructWithMat_from_std140(_435[1]), StructWithMat_from_std140(_435[2]), StructWithMat_from_std140(_435[3]));
+    return StructWithMat[](StructWithMat_from_std140(value[0]), StructWithMat_from_std140(value[1]), StructWithMat_from_std140(value[2]), StructWithMat_from_std140(value[3]));
 }
 
-StructWithArrayOfStructOfMat StructWithArrayOfStructOfMat_from_std140(std140_StructWithArrayOfStructOfMat _430)
+StructWithArrayOfStructOfMat StructWithArrayOfStructOfMat_from_std140(std140_StructWithArrayOfStructOfMat value)
 {
-    return StructWithArrayOfStructOfMat(array_StructWithMat_4_from_std140(_430.a));
+    return StructWithArrayOfStructOfMat(array_StructWithMat_4_from_std140(value.a));
 }
 
 void access_sasm()

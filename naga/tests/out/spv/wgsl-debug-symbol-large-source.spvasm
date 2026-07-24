@@ -7551,8 +7551,8 @@ OpName %282 "p"
 OpName %283 "min_max_height"
 OpName %284 "terrain_vertex"
 OpName %313 "naga_div"
-OpName %315 "lhs"
-OpName %316 "rhs"
+OpName %314 "lhs"
+OpName %315 "rhs"
 OpName %322 "vert_index"
 OpName %323 "chunk_size"
 OpName %324 "chunk_corner"
@@ -7772,7 +7772,7 @@ OpDecorate %614 Location 0
 %289 = OpConstant  %4  -0.1
 %290 = OpConstantComposite  %6  %289 %74
 %291 = OpConstantComposite  %6  %74 %289
-%314 = OpTypeFunction %8 %8 %8
+%316 = OpTypeFunction %8 %8 %8
 %326 = OpTypeFunction %6 %8 %10 %11
 %343 = OpTypeFunction %5 %6
 %344 = OpConstant  %4  23
@@ -8181,13 +8181,13 @@ OpLine %3 7239 12
 %312 = OpCompositeConstruct  %14  %293 %311
 OpReturnValue %312
 OpFunctionEnd
-%313 = OpFunction  %8  None %314
+%313 = OpFunction  %8  None %316
+%314 = OpFunctionParameter  %8
 %315 = OpFunctionParameter  %8
-%316 = OpFunctionParameter  %8
 %317 = OpLabel
-%318 = OpIEqual  %112  %316 %135
-%319 = OpSelect  %8  %318 %126 %316
-%320 = OpUDiv  %8  %315 %319
+%318 = OpIEqual  %112  %315 %135
+%319 = OpSelect  %8  %318 %126 %315
+%320 = OpUDiv  %8  %314 %319
 OpReturnValue %320
 OpFunctionEnd
 %325 = OpFunction  %6  None %326
@@ -8342,7 +8342,7 @@ OpLine %3 7275 5
 OpStore %426 %408
 OpReturn
 OpFunctionEnd
-%427 = OpFunction  %8  None %314
+%427 = OpFunction  %8  None %316
 %428 = OpFunctionParameter  %8
 %429 = OpFunctionParameter  %8
 %430 = OpLabel

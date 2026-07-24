@@ -124,8 +124,8 @@ OpDecorate %138 BuiltIn LocalInvocationIndex
 %73 = OpTypePointer Function %23
 %75 = OpTypePointer StorageBuffer %8
 %77 = OpTypePointer StorageBuffer %4
-%97 = OpTypeFunction %20 %26
-%106 = OpTypeFunction %15 %25
+%98 = OpTypeFunction %20 %26
+%107 = OpTypeFunction %15 %25
 %116 = OpTypePointer StorageBuffer %11
 %118 = OpTypePointer Uniform %13
 %120 = OpTypePointer Uniform %8
@@ -196,22 +196,22 @@ OpStore %81 %70
 %95 = OpVectorTimesScalar  %8  %94 %69
 OpReturn
 OpFunctionEnd
-%96 = OpFunction  %20  None %97
-%98 = OpFunctionParameter  %26
+%96 = OpFunction  %20  None %98
+%97 = OpFunctionParameter  %26
 %99 = OpLabel
-%100 = OpCompositeExtract  %10  %98 0
-%101 = OpCompositeExtract  %10  %98 1
-%102 = OpCompositeExtract  %10  %98 2
-%103 = OpCompositeExtract  %10  %98 3
+%100 = OpCompositeExtract  %10  %97 0
+%101 = OpCompositeExtract  %10  %97 1
+%102 = OpCompositeExtract  %10  %97 2
+%103 = OpCompositeExtract  %10  %97 3
 %104 = OpCompositeConstruct  %20  %100 %101 %102 %103
 OpReturnValue %104
 OpFunctionEnd
-%105 = OpFunction  %15  None %106
-%107 = OpFunctionParameter  %25
+%105 = OpFunction  %15  None %107
+%106 = OpFunctionParameter  %25
 %108 = OpLabel
-%109 = OpCompositeExtract  %10  %107 0
-%110 = OpCompositeExtract  %10  %107 1
-%111 = OpCompositeExtract  %10  %107 2
+%109 = OpCompositeExtract  %10  %106 0
+%110 = OpCompositeExtract  %10  %106 1
+%111 = OpCompositeExtract  %10  %106 2
 %112 = OpCompositeConstruct  %15  %109 %110 %111
 OpReturnValue %112
 OpFunctionEnd
