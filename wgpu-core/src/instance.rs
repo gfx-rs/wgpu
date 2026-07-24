@@ -13,7 +13,7 @@ use crate::{
     id::{markers, AdapterId, DeviceId, QueueId, SurfaceId},
     limits::{self, check_limits, FailedLimit},
     lock::{rank, Mutex},
-    present::Presentation,
+    present::{ConfigureSurfaceError, Presentation},
     resource::ResourceType,
     resource_log,
     timestamp_normalization::TimestampNormalizerInitError,
@@ -857,6 +857,171 @@ impl Surface {
         self.surface_per_backend
             .get(&backend)
             .map(|surface| surface.as_ref())
+    }
+
+    pub fn configure(
+        self: &Arc<Self>,
+        device: &Arc<Device>,
+        config: &wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
+    ) -> Option<ConfigureSurfaceError> {
+        use ConfigureSurfaceError as E;
+        profiling::scope!("Surface::configure");
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *device.trace.lock() {
+            use crate::device::trace::{Action, IntoTrace};
+
+            trace.add(Action::ConfigureSurface(self.to_trace(), config.clone()));
+        }
+
+        log::debug!("configuring surface with {config:?}");
+
+        let error = 'error: {
+            // User callbacks must not be called while we are holding locks.
+            let user_callbacks;
+            {
+                if let Err(e) = device.check_is_valid() {
+                    break 'error e.into();
+                }
+
+                let caps = match self.get_hal_capabilities(&device.adapter) {
+                    Ok(caps) => caps,
+                    Err(_) => break 'error E::UnsupportedQueueFamily,
+                };
+
+                let mut hal_view_formats = Vec::new();
+                for format in config.view_formats.iter() {
+                    if *format == config.format {
+                        continue;
+                    }
+                    if !caps.formats.iter().any(|fc| fc.format == config.format) {
+                        break 'error E::UnsupportedFormat {
+                            requested: config.format,
+                            available: caps.texture_formats().collect(),
+                        };
+                    }
+                    if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                        break 'error E::InvalidViewFormat(*format, config.format);
+                    }
+                    hal_view_formats.push(*format);
+                }
+
+                if !hal_view_formats.is_empty() {
+                    if let Err(missing_flag) =
+                        device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
+                    {
+                        break 'error E::MissingDownlevelFlags(missing_flag);
+                    }
+                }
+
+                let maximum_frame_latency = config.desired_maximum_frame_latency.clamp(
+                    *caps.maximum_frame_latency.start(),
+                    *caps.maximum_frame_latency.end(),
+                );
+                let mut hal_config = hal::SurfaceConfiguration {
+                    maximum_frame_latency,
+                    present_mode: config.present_mode,
+                    composite_alpha_mode: config.alpha_mode,
+                    format: config.format,
+                    color_space: config.color_space,
+                    extent: wgt::Extent3d {
+                        width: config.width,
+                        height: config.height,
+                        depth_or_array_layers: 1,
+                    },
+                    usage: crate::conv::map_texture_usage(
+                        config.usage,
+                        hal::FormatAspects::COLOR,
+                        wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
+                            | wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
+                            | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+                    ),
+                    view_formats: hal_view_formats,
+                };
+
+                if let Err(error) = crate::device::surface_config::validate_surface_configuration(
+                    &mut hal_config,
+                    &caps,
+                    device.limits.max_texture_dimension_2d,
+                ) {
+                    break 'error error;
+                }
+
+                // Wait for all work to finish before configuring the surface.
+                let snatch_guard = device.snatchable_lock.read();
+
+                let maintain_result;
+                (user_callbacks, maintain_result) =
+                    device.maintain(wgt::PollType::wait_indefinitely(), snatch_guard);
+
+                match maintain_result {
+                    // We're happy
+                    Ok(wgt::PollStatus::QueueEmpty) => {}
+                    Ok(wgt::PollStatus::WaitSucceeded) => {
+                        // After the wait, the queue should be empty. It can only be non-empty
+                        // if another thread is submitting at the same time.
+                        break 'error E::GpuWaitTimeout;
+                    }
+                    Ok(wgt::PollStatus::Poll) => {
+                        unreachable!("Cannot get a Poll result from a Wait action.")
+                    }
+                    Err(WaitIdleError::Timeout) if cfg!(target_family = "wasm") => {
+                        // On wasm, you cannot actually successfully wait for the surface.
+                        // However WebGL does not actually require you do this, so ignoring
+                        // the failure is totally fine. See
+                        // https://github.com/gfx-rs/wgpu/issues/7363
+                    }
+                    Err(e) => {
+                        break 'error e.into();
+                    }
+                }
+
+                // All textures must be destroyed before the surface can be re-configured.
+                if let Some(present) = self.presentation.lock().take() {
+                    if present.acquired_texture.is_some() {
+                        break 'error E::PreviousOutputExists;
+                    }
+                }
+
+                // TODO: Texture views may still be alive that point to the texture.
+                // this will allow the user to render to the surface texture, long after
+                // it has been removed.
+                //
+                // https://github.com/gfx-rs/wgpu/issues/4105
+
+                let surface_raw = self.raw(device.backend()).unwrap();
+                match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
+                    Ok(()) => (),
+                    Err(error) => {
+                        break 'error match error {
+                            hal::SurfaceError::Outdated
+                            | hal::SurfaceError::Lost
+                            | hal::SurfaceError::Occluded
+                            | hal::SurfaceError::Timeout => E::InvalidSurface,
+                            hal::SurfaceError::Device(error) => {
+                                E::Device(device.handle_hal_error(error))
+                            }
+                            hal::SurfaceError::Other(message) => {
+                                log::error!("surface configuration failed: {message}");
+                                E::InvalidSurface
+                            }
+                        }
+                    }
+                }
+
+                let mut presentation = self.presentation.lock();
+                *presentation = Some(Presentation {
+                    device: Arc::clone(device),
+                    config: config.clone(),
+                    acquired_texture: None,
+                });
+            }
+
+            user_callbacks.fire();
+            return None;
+        };
+
+        Some(error)
     }
 }
 

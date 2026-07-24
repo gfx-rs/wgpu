@@ -45,7 +45,6 @@ use crate::{
     lock::{rank, Mutex, RwLock},
     pipeline::{self, ColorStateError},
     pool::ResourcePool,
-    present,
     resource::{
         self, Buffer, BufferState, ExternalTexture, ExternalTextureState, Labeled, ParentDevice,
         QuerySet, QuerySetState, RawResourceAccess, ResourceState, Sampler, StagingBuffer, Texture,
@@ -61,8 +60,8 @@ use crate::{
 };
 
 use super::{
-    queue::Queue, surface_config::validate_surface_configuration, DeviceDescriptor, DeviceError,
-    DeviceLostClosure, UserClosures, ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
+    queue::Queue, DeviceDescriptor, DeviceError, DeviceLostClosure, UserClosures,
+    ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
 
 #[cfg(supports_64bit_atomics)]
@@ -839,9 +838,11 @@ impl Device {
     /// Poll the device, returning any `UserClosures` that need to be executed.
     ///
     /// The caller must invoke the `UserClosures` even if this function returns
-    /// an error. This is an internal helper, used by `Device::poll` and
-    /// `Global::poll_all_devices`, so that `poll_all_devices` can invoke
+    /// an error. This is an internal helper, used by [`Device::poll`] and
+    /// [`Instance::poll_all_devices`], so that `poll_all_devices` can invoke
     /// closures once after all devices have been polled.
+    ///
+    /// [`Instance::poll_all_devices`]: crate::instance::Instance::poll_all_devices
     pub(crate) fn poll_and_return_closures(
         &self,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
@@ -1479,6 +1480,7 @@ impl Device {
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
     ) -> (Arc<Buffer>, Option<resource::CreateBufferError>) {
+        profiling::scope!("Device::create_buffer");
         let (buffer, error) = match unsafe { self.create_buffer_from_hal_inner(hal_buffer, desc) } {
             Ok(buffer) => (buffer, None),
             Err(e) => (Buffer::invalid(Arc::clone(self), desc), Some(e)),
@@ -3816,6 +3818,7 @@ impl Device {
         use crate::binding_model::CreateBindGroupError as Error;
 
         view.same_device(self)?;
+        view.check_valid()?;
 
         let internal_use = self.texture_use_parameters(binding, decl, view, "SampledTexture")?;
         used.views.insert_single(view.clone(), internal_use);
@@ -4633,8 +4636,16 @@ impl Device {
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                self.create_derived_pipeline_layout(entries, io.immediate_size_required)?
+                self.create_derived_pipeline_layout(entries, io.immediates.size())?
             }
+        };
+
+        let naga::valid::ImmediateUsage::Valid {
+            slots: immediate_slots_required,
+            size: _,
+        } = io.immediates
+        else {
+            unreachable!("Immediates exceeding maxImmediateSize should have been rejected");
         };
 
         let late_sized_buffer_groups =
@@ -4689,7 +4700,7 @@ impl Device {
             }),
             device: self.clone(),
             late_sized_buffer_groups,
-            immediate_slots_required: io.immediate_slots_required,
+            immediate_slots_required,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.compute_pipelines.clone()),
         };
@@ -5432,8 +5443,16 @@ impl Device {
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
             validation::BindingLayoutSource::Derived(entries) => {
-                self.create_derived_pipeline_layout(entries, io.immediate_size_required)?
+                self.create_derived_pipeline_layout(entries, io.immediates.size())?
             }
+        };
+
+        let naga::valid::ImmediateUsage::Valid {
+            slots: immediate_slots_required,
+            size: _,
+        } = io.immediates
+        else {
+            unreachable!("Immediates exceeding maxImmediateSize should have been rejected");
         };
 
         if let pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) = desc.vertex {
@@ -5613,7 +5632,7 @@ impl Device {
             strip_index_format: desc.primitive.strip_index_format,
             vertex_steps,
             late_sized_buffer_groups,
-            immediate_slots_required: io.immediate_slots_required,
+            immediate_slots_required,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.render_pipelines.clone()),
             is_mesh,
@@ -5639,7 +5658,7 @@ impl Device {
 
     /// # Safety
     /// The `data` field on `desc` must have previously been returned from
-    /// [`crate::global::Global::pipeline_cache_get_data`]
+    /// [`pipeline::PipelineCache::get_data`]
     pub unsafe fn create_pipeline_cache(
         self: &Arc<Self>,
         desc: &pipeline::PipelineCacheDescriptor,
@@ -5669,7 +5688,7 @@ impl Device {
 
     /// # Safety
     /// The `data` field on `desc` must have previously been returned from
-    /// [`crate::global::Global::pipeline_cache_get_data`]
+    /// [`pipeline::PipelineCache::get_data`]
     pub(crate) unsafe fn create_pipeline_cache_inner(
         self: &Arc<Self>,
         desc: &pipeline::PipelineCacheDescriptor,
@@ -5850,174 +5869,6 @@ impl Device {
         let query_set = Arc::new(query_set);
 
         Ok(query_set)
-    }
-
-    pub fn configure_surface(
-        self: &Arc<Self>,
-        surface: &Arc<crate::instance::Surface>,
-        config: &wgt::SurfaceConfiguration<Vec<TextureFormat>>,
-    ) -> Option<present::ConfigureSurfaceError> {
-        use present::ConfigureSurfaceError as E;
-        profiling::scope!("surface_configure");
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *self.trace.lock() {
-            use trace::IntoTrace;
-
-            trace.add(trace::Action::ConfigureSurface(
-                surface.to_trace(),
-                config.clone(),
-            ));
-        }
-
-        log::debug!("configuring surface with {config:?}");
-
-        let error = 'error: {
-            // User callbacks must not be called while we are holding locks.
-            let user_callbacks;
-            {
-                if let Err(e) = self.check_is_valid() {
-                    break 'error e.into();
-                }
-
-                let caps = match surface.get_hal_capabilities(&self.adapter) {
-                    Ok(caps) => caps,
-                    Err(_) => break 'error E::UnsupportedQueueFamily,
-                };
-
-                let mut hal_view_formats = Vec::new();
-                for format in config.view_formats.iter() {
-                    if *format == config.format {
-                        continue;
-                    }
-                    if !caps.formats.iter().any(|fc| fc.format == config.format) {
-                        break 'error E::UnsupportedFormat {
-                            requested: config.format,
-                            available: caps.texture_formats().collect(),
-                        };
-                    }
-                    if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
-                        break 'error E::InvalidViewFormat(*format, config.format);
-                    }
-                    hal_view_formats.push(*format);
-                }
-
-                if !hal_view_formats.is_empty() {
-                    if let Err(missing_flag) =
-                        self.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
-                    {
-                        break 'error E::MissingDownlevelFlags(missing_flag);
-                    }
-                }
-
-                let maximum_frame_latency = config.desired_maximum_frame_latency.clamp(
-                    *caps.maximum_frame_latency.start(),
-                    *caps.maximum_frame_latency.end(),
-                );
-                let mut hal_config = hal::SurfaceConfiguration {
-                    maximum_frame_latency,
-                    present_mode: config.present_mode,
-                    composite_alpha_mode: config.alpha_mode,
-                    format: config.format,
-                    color_space: config.color_space,
-                    extent: wgt::Extent3d {
-                        width: config.width,
-                        height: config.height,
-                        depth_or_array_layers: 1,
-                    },
-                    usage: conv::map_texture_usage(
-                        config.usage,
-                        hal::FormatAspects::COLOR,
-                        wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
-                            | wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
-                            | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
-                    ),
-                    view_formats: hal_view_formats,
-                };
-
-                if let Err(error) = validate_surface_configuration(
-                    &mut hal_config,
-                    &caps,
-                    self.limits.max_texture_dimension_2d,
-                ) {
-                    break 'error error;
-                }
-
-                // Wait for all work to finish before configuring the surface.
-                let snatch_guard = self.snatchable_lock.read();
-
-                let maintain_result;
-                (user_callbacks, maintain_result) =
-                    self.maintain(wgt::PollType::wait_indefinitely(), snatch_guard);
-
-                match maintain_result {
-                    // We're happy
-                    Ok(wgt::PollStatus::QueueEmpty) => {}
-                    Ok(wgt::PollStatus::WaitSucceeded) => {
-                        // After the wait, the queue should be empty. It can only be non-empty
-                        // if another thread is submitting at the same time.
-                        break 'error E::GpuWaitTimeout;
-                    }
-                    Ok(wgt::PollStatus::Poll) => {
-                        unreachable!("Cannot get a Poll result from a Wait action.")
-                    }
-                    Err(WaitIdleError::Timeout) if cfg!(target_family = "wasm") => {
-                        // On wasm, you cannot actually successfully wait for the surface.
-                        // However WebGL does not actually require you do this, so ignoring
-                        // the failure is totally fine. See
-                        // https://github.com/gfx-rs/wgpu/issues/7363
-                    }
-                    Err(e) => {
-                        break 'error e.into();
-                    }
-                }
-
-                // All textures must be destroyed before the surface can be re-configured.
-                if let Some(present) = surface.presentation.lock().take() {
-                    if present.acquired_texture.is_some() {
-                        break 'error E::PreviousOutputExists;
-                    }
-                }
-
-                // TODO: Texture views may still be alive that point to the texture.
-                // this will allow the user to render to the surface texture, long after
-                // it has been removed.
-                //
-                // https://github.com/gfx-rs/wgpu/issues/4105
-
-                let surface_raw = surface.raw(self.backend()).unwrap();
-                match unsafe { surface_raw.configure(self.raw(), &hal_config) } {
-                    Ok(()) => (),
-                    Err(error) => {
-                        break 'error match error {
-                            hal::SurfaceError::Outdated
-                            | hal::SurfaceError::Lost
-                            | hal::SurfaceError::Occluded
-                            | hal::SurfaceError::Timeout => E::InvalidSurface,
-                            hal::SurfaceError::Device(error) => {
-                                E::Device(self.handle_hal_error(error))
-                            }
-                            hal::SurfaceError::Other(message) => {
-                                log::error!("surface configuration failed: {message}");
-                                E::InvalidSurface
-                            }
-                        }
-                    }
-                }
-
-                let mut presentation = surface.presentation.lock();
-                *presentation = Some(present::Presentation {
-                    device: Arc::clone(self),
-                    config: config.clone(),
-                    acquired_texture: None,
-                });
-            }
-
-            user_callbacks.fire();
-            return None;
-        };
-
-        Some(error)
     }
 
     fn lose(&self, message: &str) {

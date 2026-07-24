@@ -326,13 +326,15 @@ jobs:
 
           # check with no features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga-types --no-default-features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features
 
           # Check with all compatible features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
-          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features dot-out,spv-in,spv-out
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga-types --no-default-features --features serialize,deserialize
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features dot-out,spv-in,spv-out,glsl-out,msl-out,serialize,deserialize,wgsl-in,wgsl-out,hlsl-out
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features fragile-send-sync-non-atomic-wasm
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features --features serde
 
@@ -842,8 +844,10 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
+      # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
+      # files, even ones this step doesn't modify.
       - name: "Format `**/*.{md,js,html,yml}` files"
-        run: npx --yes prettier@3.8.1 --check .
+        run: "npx --yes prettier@3.8.1 --check --write . && git diff --exit-code"
 
       - name: Run `cargo fmt`
         run: |

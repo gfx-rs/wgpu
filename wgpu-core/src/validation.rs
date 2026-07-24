@@ -293,8 +293,7 @@ struct EntryPoint {
     dual_source_blending: bool,
     task_payload_size: Option<u32>,
     mesh_info: Option<EntryPointMeshInfo>,
-    immediate_slots: naga::valid::ImmediateSlots,
-    immediate_size: u32,
+    immediate_usage: naga::valid::ImmediateUsage,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -1081,8 +1080,7 @@ pub struct StageIo {
     ///
     /// This is Some if it was a mesh shader.
     pub primitive_index: Option<bool>,
-    pub immediate_slots_required: naga::valid::ImmediateSlots,
-    pub immediate_size_required: u32,
+    pub immediates: naga::valid::ImmediateUsage,
 }
 
 impl Interface {
@@ -1303,7 +1301,6 @@ impl Interface {
             }
             ep.dual_source_blending = func_info.dual_source_blending;
             ep.workgroup_size = entry_point.workgroup_size;
-            ep.immediate_slots = func_info.immediate_slots_used;
 
             // Find the used immediates. Naga should have validated that
             // at most one immediate is used by the entry point.
@@ -1313,12 +1310,16 @@ impl Interface {
                 .filter(|&(_, var)| var.space == naga::AddressSpace::Immediate)
                 .map(|(handle, _)| handle)
                 .filter(|&handle| !func_info[handle].is_empty());
-            ep.immediate_size = if let Some(immediate) = used_immediates.next() {
-                let ty = &module.types[module.global_variables[immediate].ty];
-                ty.inner.size(module.to_ctx())
-            } else {
-                0
-            };
+            ep.immediate_usage = used_immediates
+                .next()
+                .map(|handle| {
+                    naga::valid::ImmediateUsage::from_type(
+                        &module.types[module.global_variables[handle].ty].inner,
+                        &module.types,
+                        module.to_ctx(),
+                    )
+                })
+                .unwrap_or_default();
             assert!(used_immediates.next().is_none());
 
             if let Some(task_payload) = entry_point.task_payload {
@@ -1365,16 +1366,15 @@ impl Interface {
         }
     }
 
-    fn immediate_size_and_slots_required(
+    fn immediate_usage(
         &self,
         stage: naga::ShaderStage,
         entry_point_name: &str,
-    ) -> (u32, naga::valid::ImmediateSlots) {
+    ) -> naga::valid::ImmediateUsage {
         self.entry_points
             .get(&EntryPointKeyRef(stage, entry_point_name))
-            .map_or(Default::default(), |ep| {
-                (ep.immediate_size, ep.immediate_slots)
-            })
+            .map(|ep| ep.immediate_usage)
+            .unwrap_or_default()
     }
 
     pub fn finalize_entry_point_name(
@@ -1916,17 +1916,16 @@ impl Interface {
             })
             .collect();
 
-        let (immediate_size_required, immediate_slots_required) =
-            self.immediate_size_and_slots_required(shader_stage.to_naga(), entry_point_name);
-        let immediate_slots_required = immediate_slots_required | inputs.immediate_slots_required;
-        let immediate_size_required = immediate_size_required.max(inputs.immediate_size_required);
+        let immediate_usage = self
+            .immediate_usage(shader_stage.to_naga(), entry_point_name)
+            .merge(&inputs.immediates);
 
         // Check pipeline layout immediate size
         if let BindingLayoutSource::Provided(pipeline_layout) = layouts {
-            if pipeline_layout.immediate_size < immediate_size_required {
+            if pipeline_layout.immediate_size < immediate_usage.size() {
                 return Err(StageError::LayoutImmediateSize {
                     layout: pipeline_layout.immediate_size,
-                    required: immediate_size_required,
+                    required: immediate_usage.size(),
                 });
             }
         }
@@ -1939,8 +1938,7 @@ impl Interface {
             } else {
                 None
             },
-            immediate_slots_required,
-            immediate_size_required,
+            immediates: immediate_usage,
         })
     }
 }
