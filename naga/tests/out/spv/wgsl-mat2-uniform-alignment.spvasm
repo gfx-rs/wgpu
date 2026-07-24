@@ -28,18 +28,18 @@ OpMemberDecorate %10 0 Offset 0
 %10 = OpTypeStruct %8
 %11 = OpTypePointer Uniform %10
 %9 = OpVariable  %11  Uniform
-%13 = OpTypeFunction %7 %8
+%14 = OpTypeFunction %7 %8
 %23 = OpTypeFunction %2
 %24 = OpTypePointer Uniform %8
 %26 = OpTypeInt 32 0
 %25 = OpConstant  %26  0
 %28 = OpTypePointer Uniform %7
-%12 = OpFunction  %7  None %13
-%14 = OpFunctionParameter  %8
+%12 = OpFunction  %7  None %14
+%13 = OpFunctionParameter  %8
 %15 = OpLabel
-%16 = OpCompositeExtract  %3  %14 0
-%18 = OpCompositeExtract  %5  %14 1
-%19 = OpCompositeExtract  %5  %14 2
+%16 = OpCompositeExtract  %3  %13 0
+%18 = OpCompositeExtract  %5  %13 1
+%19 = OpCompositeExtract  %5  %13 2
 %17 = OpCompositeConstruct  %4  %18 %19
 %20 = OpCompositeConstruct  %7  %16 %17
 OpReturnValue %20
