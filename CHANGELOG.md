@@ -79,6 +79,7 @@ Bottom level categories:
 
 - Zero-initialize padding (if any) at the end of a buffer allocation. This was application-visible in rare cases on Vulkan when a shader read beyond the valid range of a vertex buffer. By @andyleiserson in [#9791](https://github.com/gfx-rs/wgpu/pull/9791).
 - Fix required immediate slots calculation and remove `naga::valid::FunctionInfo::immediate_slots_used`. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
+- Fix separate depth/stencil read-only state and `SYNC-HAZARD-WRITE-AFTER-WRITE` Vulkan validation error. By @beicause in [#9763](https://github.com/gfx-rs/wgpu/pull/9763).
 
 #### naga
 
@@ -346,7 +347,6 @@ By @inner-daemons in [#9434](https://github.com/gfx-rs/wgpu/pull/9434).
 - Fixed missing initialization of other aspects when writing to a single aspect of a multi-aspect texture. By @andyleiserson in [#9626](https://github.com/gfx-rs/wgpu/pull/9626).
 - Fix process abort when a `SurfaceTexture` is dropped during panic unwind between `get_current_texture` and `Queue::present`. The acquired texture reference is now released without calling HAL discard. By @hack3rmann in [#9678](https://github.com/gfx-rs/wgpu/pull/9678).
 - Fixed incorrect initialization tracking for 3D textures. By @andyleiserson in [#9765](https://github.com/gfx-rs/wgpu/pull/9765).
-- Fix separate depth/stencil read-only state and `SYNC-HAZARD-WRITE-AFTER-WRITE` on Vulkan. By @beicause in [#9763](https://github.com/gfx-rs/wgpu/pull/9763).
 
 #### naga
 

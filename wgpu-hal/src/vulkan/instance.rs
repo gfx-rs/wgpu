@@ -161,7 +161,6 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     #[cfg(all(debug_assertions, feature = "internal_error_panic"))]
     if level == log::Level::Error
         && message_type.contains(vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION)
-        && !error_is_waived(cd.message_id_number)
         && !cts_error_is_waived(cd.message_id_number)
     {
         use alloc::string::ToString as _;
@@ -169,22 +168,6 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     }
 
     vk::FALSE
-}
-
-/// Validation errors known to fire, not just in the CTS.
-///
-/// These never panic.
-#[cfg(feature = "internal_error_panic")]
-fn error_is_waived(message_id_number: i32) -> bool {
-    const WAIVED_MESSAGE_IDS: &[i32] = &[
-        // SYNC-HAZARD-WRITE-AFTER-WRITE
-        // e.g. webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:*
-        // https://github.com/gfx-rs/wgpu/issues/5231
-        // https://github.com/gfx-rs/wgpu/issues/8705
-        0x5c0ec5d6_u32 as i32,
-    ];
-
-    WAIVED_MESSAGE_IDS.contains(&message_id_number)
 }
 
 /// Validation errors known to fire when running the CTS.
