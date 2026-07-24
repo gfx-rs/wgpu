@@ -94,6 +94,7 @@ Bottom level categories:
 
 #### Vulkan
 
+- Add OpenHarmony surface support via `VK_OHOS_surface`. Previously the Vulkan backend could not create a surface on OpenHarmony, leaving GLES as the only usable backend. By @ozongzi in [#9908](https://github.com/gfx-rs/wgpu/pull/9908).
 - Stop passing an un-waited fence to `vkAcquireNextImageKHR` on non-Windows platforms, which triggered `VUID-vkAcquireNextImageKHR-fence-10066` validation errors every frame since v30.0.0. By @ErichDonGubler in [#9855](https://github.com/gfx-rs/wgpu/issues/9855).
 
 #### GLES
