@@ -25,9 +25,9 @@ layout(set = 0, binding = 2) uniform sampler _19;
 
 layout(location = 0) out vec3 _44;
 
-int _21(int _23, int _24)
+int _21(int _22, int _23)
 {
-    return _23 / (((_24 == 0) || ((_23 == int(0x80000000)) && (_24 == (-1)))) ? 1 : _24);
+    return _22 / (((_23 == 0) || ((_22 == int(0x80000000)) && (_23 == (-1)))) ? 1 : _23);
 }
 
 void main()

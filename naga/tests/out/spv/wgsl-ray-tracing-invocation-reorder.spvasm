@@ -93,7 +93,7 @@ OpDecorate %31 BuiltIn LaunchSizeKHR
 %49 = OpConstant  %8  4
 %51 = OpTypePointer Function %13
 %53 = OpTypePointer Function %8
-%61 = OpTypeFunction %2 %51 %11 %14
+%65 = OpTypeFunction %2 %51 %11 %14
 %67 = OpTypeVector %15 3
 %88 = OpConstant  %8  256
 %91 = OpConstant  %8  512
@@ -101,7 +101,7 @@ OpDecorate %31 BuiltIn LaunchSizeKHR
 %99 = OpConstant  %8  32
 %112 = OpConstant  %8  64
 %115 = OpConstant  %8  128
-%144 = OpTypeFunction %17 %51
+%146 = OpTypeFunction %17 %51
 %152 = OpConstant  %8  254
 %167 = OpConstantNull  %3
 %170 = OpConstantNull  %17
@@ -109,30 +109,30 @@ OpDecorate %31 BuiltIn LaunchSizeKHR
 %176 = OpTypePointer StorageBuffer %4
 %183 = OpTypePointer StorageBuffer %3
 %188 = OpConstant  %8  5
-%194 = OpTypeFunction %2 %51 %14
+%197 = OpTypeFunction %2 %51 %14
 %213 = OpTypeVector %8 2
 %214 = OpTypePointer Function %213
 %215 = OpTypeVector %15 2
 %216 = OpConstantComposite  %213  %37 %37
 %217 = OpConstant  %8  4294967295
 %218 = OpConstantComposite  %213  %217 %217
-%240 = OpTypeFunction %2 %51
+%242 = OpTypeFunction %2 %51
 %250 = OpTypePointer HitAttributeKHR %3
 %249 = OpVariable  %250  HitAttributeKHR
 %254 = OpConstantComposite  %14  %37 %39 %43 %44 %45 %42
 %257 = OpTypePointer IncomingRayPayloadKHR %7
 %342 = OpTypePointer IncomingRayPayloadKHR %8
-%62 = OpFunction  %2  None %61
-%63 = OpFunctionParameter  %51
-%64 = OpFunctionParameter  %11
-%65 = OpFunctionParameter  %14
+%61 = OpFunction  %2  None %65
+%62 = OpFunctionParameter  %51
+%63 = OpFunctionParameter  %11
+%64 = OpFunctionParameter  %14
 %66 = OpLabel
-%68 = OpCompositeExtract  %8  %65 0
-%69 = OpCompositeExtract  %8  %65 1
-%70 = OpCompositeExtract  %4  %65 2
-%71 = OpCompositeExtract  %4  %65 3
-%72 = OpCompositeExtract  %7  %65 4
-%73 = OpCompositeExtract  %7  %65 5
+%68 = OpCompositeExtract  %8  %64 0
+%69 = OpCompositeExtract  %8  %64 1
+%70 = OpCompositeExtract  %4  %64 2
+%71 = OpCompositeExtract  %4  %64 3
+%72 = OpCompositeExtract  %7  %64 4
+%73 = OpCompositeExtract  %7  %64 5
 %74 = OpFOrdLessThanEqual  %15  %70 %71
 %75 = OpFOrdGreaterThanEqual  %15  %70 %40
 %76 = OpIsInf  %67  %72
@@ -192,37 +192,37 @@ OpDecorate %31 BuiltIn LaunchSizeKHR
 OpSelectionMerge %136 None
 OpBranchConditional %135 %138 %137
 %138 = OpLabel
-OpHitObjectTraceRayEXT %63 %64 %68 %69 %37 %37 %37 %72 %70 %73 %71 %18
+OpHitObjectTraceRayEXT %62 %63 %68 %69 %37 %37 %37 %72 %70 %73 %71 %18
 OpBranch %136
 %137 = OpLabel
-OpHitObjectRecordEmptyEXT %63
+OpHitObjectRecordEmptyEXT %62
 OpBranch %136
 %136 = OpLabel
 OpReturn
 OpFunctionEnd
-%145 = OpFunction  %17  None %144
-%146 = OpFunctionParameter  %51
+%144 = OpFunction  %17  None %146
+%145 = OpFunctionParameter  %51
 %147 = OpLabel
-%148 = OpHitObjectIsHitEXT  %15  %146
+%148 = OpHitObjectIsHitEXT  %15  %145
 OpSelectionMerge %150 None
 OpBranchConditional %148 %149 %150
 %149 = OpLabel
-%151 = OpHitObjectGetHitKindEXT  %8  %146
+%151 = OpHitObjectGetHitKindEXT  %8  %145
 %153 = OpUGreaterThanEqual  %15  %151 %152
 %154 = OpSelect  %8  %153 %46 %47
 %155 = OpIEqual  %15  %151 %152
-%156 = OpHitObjectGetRayTMaxEXT  %4  %146
-%157 = OpHitObjectGetInstanceCustomIndexEXT  %8  %146
-%158 = OpHitObjectGetInstanceIdEXT  %8  %146
-%159 = OpHitObjectGetShaderBindingTableRecordIndexEXT  %8  %146
-%160 = OpHitObjectGetGeometryIndexEXT  %8  %146
-%161 = OpHitObjectGetPrimitiveIndexEXT  %8  %146
-%162 = OpHitObjectGetObjectToWorldEXT  %16  %146
-%163 = OpHitObjectGetWorldToObjectEXT  %16  %146
+%156 = OpHitObjectGetRayTMaxEXT  %4  %145
+%157 = OpHitObjectGetInstanceCustomIndexEXT  %8  %145
+%158 = OpHitObjectGetInstanceIdEXT  %8  %145
+%159 = OpHitObjectGetShaderBindingTableRecordIndexEXT  %8  %145
+%160 = OpHitObjectGetGeometryIndexEXT  %8  %145
+%161 = OpHitObjectGetPrimitiveIndexEXT  %8  %145
+%162 = OpHitObjectGetObjectToWorldEXT  %16  %145
+%163 = OpHitObjectGetWorldToObjectEXT  %16  %145
 OpSelectionMerge %165 None
 OpBranchConditional %153 %164 %165
 %164 = OpLabel
-OpHitObjectGetAttributesEXT %146 %6
+OpHitObjectGetAttributesEXT %145 %6
 %166 = OpLoad  %3  %6
 OpBranch %165
 %165 = OpLabel
@@ -233,23 +233,23 @@ OpBranch %150
 %171 = OpPhi  %17  %170 %147 %169 %165
 OpReturnValue %171
 OpFunctionEnd
-%195 = OpFunction  %2  None %194
-%196 = OpFunctionParameter  %51
-%197 = OpFunctionParameter  %14
+%194 = OpFunction  %2  None %197
+%195 = OpFunctionParameter  %51
+%196 = OpFunctionParameter  %14
 %198 = OpLabel
-%199 = OpCompositeExtract  %8  %197 0
-%200 = OpCompositeExtract  %8  %197 1
-%201 = OpCompositeExtract  %4  %197 2
-%202 = OpCompositeExtract  %4  %197 3
-%203 = OpCompositeExtract  %7  %197 4
-%204 = OpCompositeExtract  %7  %197 5
-OpHitObjectRecordMissEXT %196 %199 %37 %203 %201 %204 %202
+%199 = OpCompositeExtract  %8  %196 0
+%200 = OpCompositeExtract  %8  %196 1
+%201 = OpCompositeExtract  %4  %196 2
+%202 = OpCompositeExtract  %4  %196 3
+%203 = OpCompositeExtract  %7  %196 4
+%204 = OpCompositeExtract  %7  %196 5
+OpHitObjectRecordMissEXT %195 %199 %37 %203 %201 %204 %202
 OpReturn
 OpFunctionEnd
-%241 = OpFunction  %2  None %240
-%242 = OpFunctionParameter  %51
+%240 = OpFunction  %2  None %242
+%241 = OpFunctionParameter  %51
 %243 = OpLabel
-OpHitObjectExecuteShaderEXT %242 %18
+OpHitObjectExecuteShaderEXT %241 %18
 OpReturn
 OpFunctionEnd
 %33 = OpFunction  %2  None %34
@@ -271,7 +271,7 @@ OpBranch %55
 %58 = OpFDiv  %7  %56 %57
 %59 = OpFAdd  %7  %42 %58
 %60 = OpCompositeConstruct  %14  %37 %39 %43 %44 %45 %59
-%139 = OpFunctionCall  %2  %62 %50 %35 %60
+%139 = OpFunctionCall  %2  %61 %50 %35 %60
 OpReorderThreadWithHitObjectEXT %50
 OpReorderThreadWithHitObjectEXT %50 %46 %47
 OpReorderThreadWithHintEXT %48 %49
@@ -279,7 +279,7 @@ OpReorderThreadWithHintEXT %48 %49
 OpSelectionMerge %141 None
 OpBranchConditional %140 %142 %143
 %142 = OpLabel
-%172 = OpFunctionCall  %17  %145 %50
+%172 = OpFunctionCall  %17  %144 %50
 %174 = OpCompositeExtract  %8  %172 0
 %175 = OpAccessChain  %173  %38 %37
 OpStore %175 %174
@@ -305,7 +305,7 @@ OpBranch %141
 OpSelectionMerge %191 None
 OpBranchConditional %190 %192 %193
 %192 = OpLabel
-%205 = OpFunctionCall  %2  %195 %50 %60
+%205 = OpFunctionCall  %2  %194 %50 %60
 OpBranch %191
 %193 = OpLabel
 %206 = OpHitObjectIsEmptyEXT  %15  %50
@@ -352,10 +352,10 @@ OpHitObjectRecordEmptyEXT %54
 OpSelectionMerge %237 None
 OpBranchConditional %236 %238 %237
 %238 = OpLabel
-%239 = OpFunctionCall  %2  %62 %54 %35 %60
+%239 = OpFunctionCall  %2  %61 %54 %35 %60
 OpBranch %237
 %237 = OpLabel
-%244 = OpFunctionCall  %2  %241 %54
+%244 = OpFunctionCall  %2  %240 %54
 OpBranch %235
 %235 = OpLabel
 OpBranch %212
@@ -365,10 +365,10 @@ OpBranch %212
 OpStore %52 %246
 OpBranch %209
 %210 = OpLabel
-%247 = OpFunctionCall  %2  %241 %50
+%247 = OpFunctionCall  %2  %240 %50
 OpReturn
 OpFunctionEnd
-%264 = OpFunction  %2  None %61
+%264 = OpFunction  %2  None %65
 %265 = OpFunctionParameter  %51
 %266 = OpFunctionParameter  %11
 %267 = OpFunctionParameter  %14
@@ -446,7 +446,7 @@ OpBranch %331
 %331 = OpLabel
 OpReturn
 OpFunctionEnd
-%335 = OpFunction  %2  None %240
+%335 = OpFunction  %2  None %242
 %336 = OpFunctionParameter  %51
 %337 = OpLabel
 OpHitObjectExecuteShaderEXT %336 %20

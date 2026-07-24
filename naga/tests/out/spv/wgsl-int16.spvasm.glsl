@@ -58,9 +58,9 @@ layout(set = 0, binding = 4, std430) buffer _39_38
 int16_t _24 = 1s;
 shared uint16_t _41;
 
-uint16_t _242(uint16_t _244, uint16_t _245)
+uint16_t _242(uint16_t _243, uint16_t _244)
 {
-    return _244 / ((_245 == 0us) ? 1us : _245);
+    return _243 / ((_244 == 0us) ? 1us : _244);
 }
 
 uint16_t _251(uint16_t _252, uint16_t _253)
@@ -99,9 +99,9 @@ uint16_t _260(uint16_t _259)
     return _273;
 }
 
-int16_t _43(int16_t _45, int16_t _46)
+int16_t _43(int16_t _44, int16_t _45)
 {
-    return _45 / (((_46 == 0s) || ((_45 == (-32768s)) && (_46 == (-1s)))) ? 1s : _46);
+    return _44 / (((_45 == 0s) || ((_44 == (-32768s)) && (_45 == (-1s)))) ? 1s : _45);
 }
 
 int16_t _59(int16_t _60, int16_t _61)
