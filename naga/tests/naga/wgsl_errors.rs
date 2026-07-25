@@ -5636,3 +5636,28 @@ fn unterminated_block_comment_errors() {
         "unterminated block comment",
     )
 }
+
+#[test]
+fn ray_query_store() {
+    // ray queries cannot be stored to despite them being a `var`
+    check_validation! {
+        r#"
+            enable wgpu_ray_query;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                var rq: ray_query;
+                var rq_2: ray_query;
+                rq = rq_2;
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Compute,
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::RayQueryStore(_)
+            ),
+            ..
+        }),
+        Capabilities::RAY_QUERY
+    }
+}

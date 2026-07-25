@@ -236,6 +236,8 @@ pub enum FunctionError {
     MismatchedPayloadType(Handle<crate::Type>, Handle<crate::Type>),
     #[error("The payload passed to `traceRay` must be a pointer directly to a global variable")]
     PayloadPointerNotGlobal,
+    #[error("Tried to store to pointer {0:?} which is a ray query and so cannot be assigned to")]
+    RayQueryStore(Handle<crate::Expression>),
 }
 
 bitflags::bitflags! {
@@ -1095,6 +1097,13 @@ impl super::Validator {
                     let good = if let Some(&Ti::Atomic(ref scalar)) = pointer_base_ty {
                         // The Naga IR allows storing a scalar to an atomic.
                         *value_ty == Ti::Scalar(*scalar)
+                    } else if let Some(Ti::RayQuery { .. }) = pointer_base_ty {
+                        return Err(FunctionError::RayQueryStore(pointer)
+                            .with_span_context((
+                                context.expressions.get_span(pointer),
+                                format!("this pointer has a base type of {pointer_base_ty:?} which cannot be stored to"),
+                            ))
+                            .with_span(span, "store to a type which is not allowed to be stored to"));
                     } else if let Some(tr) = pointer_base_tr {
                         context.compare_types(value_tr, &tr)
                     } else {
