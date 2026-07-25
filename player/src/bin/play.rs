@@ -148,7 +148,7 @@ fn main() {
                 }
                 .unwrap();
                 self.window = Some(window);
-                self.surface = Some(Arc::new(surface));
+                self.surface = Some(surface);
             }
 
             fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
