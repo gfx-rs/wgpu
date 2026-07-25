@@ -1097,7 +1097,7 @@ impl super::Validator {
                     let good = if let Some(&Ti::Atomic(ref scalar)) = pointer_base_ty {
                         // The Naga IR allows storing a scalar to an atomic.
                         *value_ty == Ti::Scalar(*scalar)
-                    } else if let Some(Ti::RayQuery { .. }) = pointer_base_ty {
+                    } else if let Some(&Ti::RayQuery { .. }) = pointer_base_ty {
                         return Err(FunctionError::RayQueryStore(pointer)
                             .with_span_context((
                                 context.expressions.get_span(pointer),
