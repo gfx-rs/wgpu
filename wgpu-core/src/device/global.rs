@@ -332,9 +332,8 @@ impl Global {
         let fid = hub.texture_views.prepare(id_in);
 
         let texture = hub.textures.get(texture_id);
-        let device = &texture.device;
 
-        let (view, error) = device.create_texture_view(&texture, desc);
+        let (view, error) = texture.create_view(desc);
 
         let id = fid.assign(view);
 
