@@ -531,7 +531,7 @@ impl Instance {
                         }
                     })
                     .map(|raw| {
-                        let adapter = Adapter::new(raw, self.devices.clone());
+                        let adapter = Adapter::new(raw, self.devices.clone(), self.flags);
                         api_log_debug!("Adapter {:?}", adapter.raw.info);
                         adapter
                     }),
@@ -681,7 +681,7 @@ impl Instance {
 
         if let Some(adapter) = adapters.into_iter().next() {
             api_log_debug!("Request adapter result {:?}", adapter.info);
-            let adapter = Adapter::new(adapter, self.devices.clone());
+            let adapter = Adapter::new(adapter, self.devices.clone(), self.flags);
             Ok(adapter)
         } else {
             Err(wgt::RequestAdapterError::NotFound {
@@ -736,7 +736,7 @@ impl Instance {
     ) -> Arc<Adapter> {
         profiling::scope!("Instance::create_adapter_from_hal");
 
-        let adapter = Adapter::new(hal_adapter, self.devices.clone());
+        let adapter = Adapter::new(hal_adapter, self.devices.clone(), self.flags);
 
         resource_log!("Created Adapter {:?}", Arc::as_ptr(&adapter));
         adapter
@@ -1044,11 +1044,20 @@ impl Drop for Surface {
 pub struct Adapter {
     pub(crate) raw: hal::DynExposedAdapter,
     pub(crate) devices: InstanceDevices,
+    pub(crate) instance_flags: InstanceFlags,
 }
 
 impl Adapter {
-    pub(crate) fn new(raw: hal::DynExposedAdapter, devices: InstanceDevices) -> Arc<Self> {
-        Arc::new(Self { raw, devices })
+    pub(crate) fn new(
+        raw: hal::DynExposedAdapter,
+        devices: InstanceDevices,
+        flags: InstanceFlags,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            raw,
+            devices,
+            instance_flags: flags,
+        })
     }
 
     /// Returns the backend this adapter is using.
@@ -1186,15 +1195,14 @@ impl Adapter {
         self: &Arc<Self>,
         hal_device: hal::DynOpenDevice,
         desc: &DeviceDescriptor,
-        instance_flags: InstanceFlags,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         profiling::scope!("Adapter::create_device_and_queue_from_hal");
         api_log!("Adapter::create_device_and_queue_from_hal");
 
-        let device = Device::new(hal_device.device, self, desc, instance_flags)?;
+        let device = Device::new(hal_device.device, self, desc, self.instance_flags)?;
         let device = Arc::new(device);
 
-        let queue = Queue::new(device.clone(), hal_device.queue, instance_flags)?;
+        let queue = Queue::new(device.clone(), hal_device.queue, self.instance_flags)?;
         let queue = Arc::new(queue);
 
         device.set_queue(&queue);
@@ -1211,13 +1219,12 @@ impl Adapter {
     pub fn request_device(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
-        instance_flags: InstanceFlags,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         profiling::scope!("Adapter::request_device");
         api_log!("Adapter::request_device");
         let mut desc = desc.clone();
         filter_features_and_limits(
-            instance_flags,
+            self.instance_flags,
             &mut desc.required_features,
             &mut desc.required_limits,
         );
@@ -1275,7 +1282,7 @@ impl Adapter {
         }
         .map_err(DeviceError::from_hal)?;
 
-        unsafe { self.create_device_and_queue_from_hal(open, &desc, instance_flags) }
+        unsafe { self.create_device_and_queue_from_hal(open, &desc) }
     }
 }
 
@@ -1587,7 +1594,7 @@ impl Global {
         let queue_fid = self.hub.queues.prepare(queue_id_in);
 
         let adapter = self.hub.adapters.get(adapter_id);
-        let (device, queue) = adapter.request_device(desc, self.instance.flags)?;
+        let (device, queue) = adapter.request_device(desc)?;
 
         let device_id = device_fid.assign(device);
         resource_log!("Created Device {:?}", device_id);
@@ -1614,9 +1621,8 @@ impl Global {
         let queues_fid = self.hub.queues.prepare(queue_id_in);
 
         let adapter = self.hub.adapters.get(adapter_id);
-        let (device, queue) = unsafe {
-            adapter.create_device_and_queue_from_hal(hal_device, desc, self.instance.flags)
-        }?;
+        let (device, queue) =
+            unsafe { adapter.create_device_and_queue_from_hal(hal_device, desc) }?;
 
         let device_id = devices_fid.assign(device);
 
