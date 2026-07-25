@@ -76,7 +76,8 @@ static RESOLVE_WITH_TRANSIENT: GpuTestConfiguration = GpuTestConfiguration::new(
             sample_count: 4,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             view_formats: &[],
         });
 

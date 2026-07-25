@@ -13,3 +13,6 @@ test = false
 [dependencies]
 anyhow.workspace = true
 nanoserde.workspace = true
+
+[lints]
+workspace = true

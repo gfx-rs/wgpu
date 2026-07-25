@@ -1,7 +1,6 @@
 [package]
 name = "naga-cli"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "CLI for the naga shader translator and validator. Part of the wgpu project"
 repository.workspace = true
@@ -50,3 +49,6 @@ env_logger.workspace = true
 argh.workspace = true
 anyhow = { workspace = true, features = ["std"] }
 log.workspace = true
+
+[lints]
+workspace = true

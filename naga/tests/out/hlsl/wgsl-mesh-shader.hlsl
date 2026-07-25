@@ -102,7 +102,7 @@ void ts_main(uint local_invocation_index : SV_GroupIndex) {
         gridSize.x > 256 ||
         gridSize.y > 256 ||
         gridSize.z > 256 ||
-        ((uint64_t)gridSize.x) * ((uint64_t)gridSize.y) > 0xffffffffull ||
+        ((uint64_t)gridSize.x) * ((uint64_t)gridSize.y) > 1024 ||
         ((uint64_t)gridSize.x) * ((uint64_t)gridSize.y) * ((uint64_t)gridSize.z) > 1024
     ) {
         gridSize = uint3(0, 0, 0);
@@ -131,7 +131,7 @@ void ts_divergent(uint3 thread_id : SV_GroupThreadID, uint local_invocation_inde
         gridSize_1.x > 256 ||
         gridSize_1.y > 256 ||
         gridSize_1.z > 256 ||
-        ((uint64_t)gridSize_1.x) * ((uint64_t)gridSize_1.y) > 0xffffffffull ||
+        ((uint64_t)gridSize_1.x) * ((uint64_t)gridSize_1.y) > 1024 ||
         ((uint64_t)gridSize_1.x) * ((uint64_t)gridSize_1.y) * ((uint64_t)gridSize_1.z) > 1024
     ) {
         gridSize_1 = uint3(0, 0, 0);

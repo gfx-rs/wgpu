@@ -12,6 +12,7 @@ members = [
     "lock-analyzer",
     "naga-cli",
     "naga-test",
+    "naga-types",
     "naga",
     "naga/fuzz",
     "naga/hlsl-snapshots",
@@ -37,6 +38,7 @@ default-members = [
     "lock-analyzer",
     "naga-cli",
     "naga-test",
+    "naga-types",
     "naga",
     "naga/fuzz",
     "naga/hlsl-snapshots",
@@ -54,6 +56,11 @@ default-members = [
     "xtask",
 ]
 
+# NOTE: many packages have non-inherited [lints] sections (Cargo does not support combining
+# workspace inheritance with customization) and must be updated separately.
+[workspace.lints.rust]
+missing_debug_implementations = "warn"
+
 [workspace.lints.clippy]
 ref_as_ptr = "warn"
 # NOTE: clippy configuration values (disallowed-types and
@@ -66,13 +73,13 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "29.0.0"
-authors = ["gfx-rs developers"]
+version = "30.0.0"
 
 [workspace.dependencies]
-naga = { version = "29.0.0", path = "./naga" }
+naga = { version = "30.0.0", path = "./naga" }
 naga-test = { path = "./naga-test" }
-wgpu = { version = "29.0.0", path = "./wgpu", default-features = false, features = [
+naga-types = { version = "30.0.0", path = "./naga-types" }
+wgpu = { version = "30.0.0", path = "./wgpu", default-features = false, features = [
     "std",
     "serde",
     "wgsl",
@@ -84,22 +91,23 @@ wgpu = { version = "29.0.0", path = "./wgpu", default-features = false, features
     "angle",
     "static-dxc",
 ] }
-wgpu-core = { version = "29.0.0", path = "./wgpu-core" }
-wgpu-hal = { version = "29.0.0", path = "./wgpu-hal" }
-wgpu-macros = { version = "29.0.0", path = "./wgpu-macros" }
-wgpu-naga-bridge = { version = "29.0.0", path = "./wgpu-naga-bridge" }
-wgpu-test = { version = "29.0.0", path = "./tests" }
-wgpu-types = { version = "29.0.0", path = "./wgpu-types", default-features = false }
+wgpu-core = { version = "30.0.0", path = "./wgpu-core" }
+wgpu-hal = { version = "30.0.0", path = "./wgpu-hal" }
+wgpu-macros = { version = "30.0.0", path = "./wgpu-macros" }
+wgpu-naga-bridge = { version = "30.0.0", path = "./wgpu-naga-bridge" }
+wgpu-test = { version = "30.0.0", path = "./tests" }
+wgpu-types = { version = "30.0.0", path = "./wgpu-types", default-features = false }
 
 # These _cannot_ have a version specified. If it does, crates.io will look
 # for a version of the package on crates when we publish naga. Path dependencies
 # are allowed through though.
 hlsl-snapshots = { path = "naga/hlsl-snapshots" }
 
-wgpu-core-deps-windows-linux-android = { version = "29.0.0", path = "./wgpu-core/platform-deps/windows-linux-android" }
-wgpu-core-deps-apple = { version = "29.0.0", path = "./wgpu-core/platform-deps/apple" }
-wgpu-core-deps-wasm = { version = "29.0.0", path = "./wgpu-core/platform-deps/wasm" }
-wgpu-core-deps-emscripten = { version = "29.0.0", path = "./wgpu-core/platform-deps/emscripten" }
+wgpu-core-deps-linux-android-bsd = { version = "30.0.0", path = "./wgpu-core/platform-deps/linux-android-bsd" }
+wgpu-core-deps-windows = { version = "30.0.0", path = "./wgpu-core/platform-deps/windows" }
+wgpu-core-deps-apple = { version = "30.0.0", path = "./wgpu-core/platform-deps/apple" }
+wgpu-core-deps-wasm = { version = "30.0.0", path = "./wgpu-core/platform-deps/wasm" }
+wgpu-core-deps-emscripten = { version = "30.0.0", path = "./wgpu-core/platform-deps/emscripten" }
 
 anyhow = { version = "1.0.87", default-features = false }
 approx = "0.5"
@@ -107,15 +115,15 @@ arbitrary = "1.4.2"
 argh = "0.1.13"
 arrayvec = { version = "0.7.1", default-features = false }
 bincode = "2"
-bit-set = { version = "0.10", default-features = false }
-bit-vec = { version = "0.9.1", default-features = false }
+bit-set = { version = "0.11", default-features = false }
+bit-vec = { version = "0.10", default-features = false }
 bitflags = "2.9"
 bytemuck = { version = "1.22", features = [
     "extern_crate_alloc",
     "min_const_generics",
 ] }
 cargo_metadata = "0.23"
-cfg_aliases = "0.2.1"
+cfg_aliases = "0.2.2"
 cfg-if = "1"
 codespan-reporting = { version = "0.13", default-features = false }
 diff = "0.1"
@@ -129,7 +137,7 @@ futures-lite = "2"
 glam = "0.33.0"
 glob = "0.3"
 half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
-hashbrown = { version = "0.16", default-features = false, features = [
+hashbrown = { version = "0.17", default-features = false, features = [
     "default-hasher",
     "inline-more",
 ] }
@@ -140,7 +148,7 @@ indicatif = "0.18"
 itertools = { version = "0.14" }
 jobserver = "0.1"
 ktx2 = "0.5"
-libc = { version = "0.2.172", default-features = false }
+libc = { version = "0.2.183", default-features = false }
 # See https://github.com/rust-fuzz/libfuzzer/issues/126
 libfuzzer-sys = ">0.4.0,<=0.4.7"
 libloading = "0.8"
@@ -197,6 +205,7 @@ toml = "1.0.0"
 trybuild = "1"
 tracy-client = "0.18"
 thiserror = { version = "2.0.12", default-features = false }
+ureq = { version = "3.2.0", default-features = false }
 unicode-ident = "1.0.5"
 walkdir = "2.3"
 winit = { version = "0.30.8", features = ["android-native-activity"] }
@@ -209,6 +218,10 @@ objc2 = "0.6.3"
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
     "CFCGTypes",
+] }
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "CGColorSpace",
 ] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
@@ -257,6 +270,7 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "std",
     "objc2-core-foundation",
+    "objc2-core-graphics",
     "CALayer",
     "CAMetalLayer",
     "objc2-metal",
@@ -280,7 +294,7 @@ gpu-allocator = { version = "0.28", default-features = false, features = [
 
 # Gles dependencies
 khronos-egl = "6"
-glow = "0.17"
+glow = "0.18"
 glutin = { version = "0.32", default-features = false }
 glutin-winit = { version = "0.5", default-features = false }
 glutin_wgl_sys = "0.6"
@@ -288,14 +302,13 @@ glutin_wgl_sys = "0.6"
 # DX12 and GLES dependencies
 windows = { version = "0.62", default-features = false }
 
-# wasm32 dependencies
+# wasm dependencies
 console_error_panic_hook = "0.1.5"
 console_log = "1"
-js-sys = { version = "0.3.85", default-features = false }
-wasm-bindgen = { version = "0.2.108", default-features = false }
-wasm-bindgen-futures = { version = "0.4.58", default-features = false }
-wasm-bindgen-test = "0.3"
-web-sys = { version = "0.3.85", default-features = false }
+js-sys = { version = "0.3.100", default-features = false }
+wasm-bindgen = { version = "0.2.123", default-features = false }
+wasm-bindgen-futures = { version = "0.4.73", default-features = false }
+web-sys = { version = "0.3.100", default-features = false }
 web-time = "1.1.0"
 
 # deno dependencies
@@ -317,9 +330,6 @@ ndk-sys = "0.6"
 # These overrides allow our examples to explicitly depend on release crates
 [patch.crates-io]
 wgpu = { path = "./wgpu" }
-
-env_logger = { version = "0.11", git = "https://github.com/rust-cli/env_logger.git", rev = "d550741" }
-libtest-mimic = { version = "0.8", git = "https://github.com/cwfitzgerald/libtest-mimic.git", rev = "9979b3c" }
 
 [profile.release]
 lto = "thin"

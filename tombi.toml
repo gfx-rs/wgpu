@@ -1,0 +1,24 @@
+toml-version = "v1.0.0"
+
+[format]
+[format.rules]
+indent-width = 4
+line-width = 120
+string-quote-style = "preserve"
+trailing-comment-space-width = 1
+
+# By default, `tombi` assumes TOML 1.1's features, particularly the ability to write inline tables over
+# multiple lines. This breaks Cargo in Rust versions older than 1.93.
+#
+# See also:
+#
+# - https://github.com/zed-industries/zed/issues/58311
+# - https://github.com/tombi-toml/tombi/issues/1927#issuecomment-4580404934
+[[schemas]]
+toml-version = "v1.0.0"
+path = "tombi://www.schemastore.org/cargo.json"
+include = ["Cargo.toml"]
+
+[schemas.format.rules]
+array-values-order.enabled = false
+table-keys-order.enabled = false

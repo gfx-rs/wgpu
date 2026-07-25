@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-types"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Common types and utilities for wgpu, the cross-platform, safe, pure-rust graphics API"
 homepage.workspace = true
@@ -26,6 +25,7 @@ targets = [
 ]
 
 [lints.rust]
+missing_debug_implementations = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
 
 [lints.clippy]
@@ -37,10 +37,15 @@ alloc_instead_of_core = "warn"
 
 [features]
 default = ["std"]
-std = ["js-sys?/std", "web-sys?/std"]
+std = ["js-sys?/std", "web-sys?/std", "naga-types/std"]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
-serde = ["dep:serde", "bitflags/serde"]
+serde = [
+    "dep:serde",
+    "bitflags/serde",
+    "naga-types/serialize",
+    "naga-types/deserialize",
+]
 # Enables some internal instrumentation for debugging purposes.
 counters = []
 # Enables variants of `Trace` other than `Trace::Off`
@@ -50,6 +55,8 @@ web = ["dep:js-sys", "dep:web-sys"]
 exhaust = ["dep:exhaust"]
 
 [dependencies]
+naga-types = { workspace = true, features = [] }
+
 bitflags.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 exhaust = { workspace = true, optional = true }
@@ -61,7 +68,7 @@ serde = { workspace = true, default-features = false, features = [
 ], optional = true }
 static_assertions.workspace = true
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+[target.'cfg(target_family = "wasm")'.dependencies]
 js-sys = { workspace = true, optional = true, default-features = false }
 web-sys = { workspace = true, optional = true, default-features = false, features = [
     "ImageBitmap",

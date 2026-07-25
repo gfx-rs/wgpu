@@ -283,16 +283,17 @@ impl ShaderModel {
     }
 }
 
-impl crate::ShaderStage {
-    pub const fn to_hlsl_str(self) -> &'static str {
-        match self {
-            Self::Vertex => "vs",
-            Self::Fragment => "ps",
-            Self::Compute => "cs",
-            Self::Task => "as",
-            Self::Mesh => "ms",
-            Self::RayGeneration | Self::AnyHit | Self::ClosestHit | Self::Miss => "lib",
-        }
+pub const fn shader_stage_to_hlsl_str(st: nt::ShaderStage) -> &'static str {
+    match st {
+        nt::ShaderStage::Vertex => "vs",
+        nt::ShaderStage::Fragment => "ps",
+        nt::ShaderStage::Compute => "cs",
+        nt::ShaderStage::Task => "as",
+        nt::ShaderStage::Mesh => "ms",
+        nt::ShaderStage::RayGeneration
+        | nt::ShaderStage::AnyHit
+        | nt::ShaderStage::ClosestHit
+        | nt::ShaderStage::Miss => "lib",
     }
 }
 
@@ -628,7 +629,7 @@ impl Options {
 }
 
 /// Reflection info for entry point names.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ReflectionInfo {
     /// Mapping of the entry point names.
     ///
@@ -719,6 +720,7 @@ impl Wrapped {
 /// If this is provided, vertex outputs will be removed if they are not inputs of this fragment
 /// entry point. This is necessary for generating correct HLSL when some of the vertex shader
 /// outputs are not consumed by the fragment shader.
+#[derive(Debug)]
 pub struct FragmentEntryPoint<'a> {
     module: &'a crate::Module,
     func: &'a crate::Function,
@@ -740,6 +742,7 @@ impl<'a> FragmentEntryPoint<'a> {
     }
 }
 
+#[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct Writer<'a, W> {
     out: W,
     names: crate::FastHashMap<proc::NameKey, String>,

@@ -14,9 +14,10 @@ use wgc::{
     binding_model::BindingResource,
     command::{ArcCommand, ArcReferences, BasePass, Command, PointerReferences},
     device::trace::{self, DataKind, DataLoader},
-    id::{Marker, PointerId},
+    id::PointerId,
 };
 
+#[derive(Debug)]
 pub struct Player {
     pipeline_layouts: HashMap<
         wgc::id::PointerId<wgc::id::markers::PipelineLayout>,
@@ -88,28 +89,6 @@ impl Default for Player {
     }
 }
 
-fn process_result<T: Marker, U>(
-    op: &str,
-    map: &mut HashMap<PointerId<T>, U>,
-    id: Option<PointerId<T>>,
-    value: Result<U, impl std::error::Error>,
-) {
-    match (id, value) {
-        (Some(id), Ok(value)) => {
-            map.insert(id, value);
-        }
-        (Some(_), Err(err)) => {
-            panic!("{op} succeeded when recording, but failed on playback: {err}");
-        }
-        (None, Ok(_)) => {
-            panic!("{op} failed when recording, but succeeded on playback");
-        }
-        (None, Err(err)) => {
-            panic!("{op} failed when recording, and failed on playback: {err}");
-        }
-    }
-}
-
 impl Player {
     pub fn process(
         &mut self,
@@ -126,44 +105,45 @@ impl Player {
             }
             Action::ConfigureSurface { .. }
             | Action::Present(_)
-            | Action::DiscardSurfaceTexture(_) => {
+            | Action::DiscardSurfaceTexture(_)
+            | Action::ReleaseSurfaceTexture(_) => {
                 panic!("Unexpected Surface action: winit feature is not enabled")
             }
             Action::CreateBuffer(id, desc) => {
-                let buffer = device.create_buffer(&desc).expect("create_buffer error");
+                let (buffer, _error) = device.create_buffer(&desc);
                 self.buffers.insert(id, buffer);
             }
-            Action::FreeBuffer(id) => {
-                // Note: buffer remains in the HashMap. "Free" and "Destroy"
-                // mean the opposite from WebGPU.
+            Action::DestroyBuffer(id) => {
                 let buffer = self.buffers.get(&id).expect("invalid buffer");
                 buffer.destroy();
             }
-            Action::DestroyBuffer(id) => {
+            Action::DropBuffer(id) => {
                 let buffer = self.buffers.remove(&id).expect("invalid buffer");
                 let _ = buffer.unmap();
             }
             Action::CreateTexture(id, desc) => {
-                let texture = device.create_texture(&desc).expect("create_texture error");
+                let (texture, _) = device.create_texture(&desc);
+
                 self.textures.insert(id, texture);
             }
-            Action::FreeTexture(id) => {
-                // Note: texture remains in the HashMap. "Free" and "Destroy"
-                // mean the opposite from WebGPU.
+            Action::CreateTextureError(id, desc) => {
+                let texture = device.create_texture_error(&desc);
+
+                self.textures.insert(id, texture);
+            }
+            Action::DestroyTexture(id) => {
                 let texture = self.textures.get(&id).expect("invalid texture");
                 texture.destroy();
             }
-            Action::DestroyTexture(id) => {
+            Action::DropTexture(id) => {
                 self.textures.remove(&id).expect("invalid texture");
             }
             Action::CreateTextureView { id, parent, desc } => {
                 let parent_texture = self.resolve_texture_id(parent);
-                let texture_view = device
-                    .create_texture_view(&parent_texture, &desc)
-                    .expect("create_texture_view error");
+                let (texture_view, _error) = device.create_texture_view(&parent_texture, &desc);
                 self.texture_views.insert(id, texture_view);
             }
-            Action::DestroyTextureView(id) => {
+            Action::DropTextureView(id) => {
                 self.texture_views
                     .remove(&id)
                     .expect("invalid texture view");
@@ -173,39 +153,33 @@ impl Player {
                     .iter()
                     .map(|&id| self.resolve_texture_view_id(id))
                     .collect::<Vec<_>>();
-                let external_texture = device
-                    .create_external_texture(&desc, &planes)
-                    .expect("create_external_texture error");
+                let (external_texture, _error) = device.create_external_texture(&desc, &planes);
                 self.external_textures.insert(id, external_texture);
             }
-            Action::FreeExternalTexture(id) => {
-                // Note: external texture remains in the HashMap. "Free" and "Destroy"
-                // mean the opposite from WebGPU.
+            Action::DestroyExternalTexture(id) => {
                 let external_texture = self
                     .external_textures
                     .get(&id)
                     .expect("invalid external texture");
                 external_texture.destroy();
             }
-            Action::DestroyExternalTexture(id) => {
+            Action::DropExternalTexture(id) => {
                 self.external_textures
                     .remove(&id)
                     .expect("invalid external texture");
             }
             Action::CreateSampler(id, desc) => {
-                let sampler = device.create_sampler(&desc).expect("create_sampler error");
+                let (sampler, _error) = device.create_sampler(&desc);
                 self.samplers.insert(id, sampler);
             }
-            Action::DestroySampler(id) => {
+            Action::DropSampler(id) => {
                 self.samplers.remove(&id).expect("invalid sampler");
             }
             Action::GetSurfaceTexture { .. } => {
                 unimplemented!()
             }
             Action::CreateBindGroupLayout(id, desc) => {
-                let bind_group_layout = device
-                    .create_bind_group_layout(&desc)
-                    .expect("create_bind_group_layout error");
+                let (bind_group_layout, _error) = device.create_bind_group_layout(&desc);
                 self.bind_group_layouts.insert(id, bind_group_layout);
             }
             Action::GetRenderPipelineBindGroupLayout {
@@ -214,9 +188,7 @@ impl Player {
                 index,
             } => {
                 let pipeline = self.resolve_render_pipeline_id(pipeline);
-                let bgl = pipeline
-                    .get_bind_group_layout(index)
-                    .expect("invalid render pipeline");
+                let (bgl, _error) = pipeline.get_bind_group_layout(index);
                 self.bind_group_layouts.insert(id, bgl);
             }
             Action::GetComputePipelineBindGroupLayout {
@@ -225,12 +197,10 @@ impl Player {
                 index,
             } => {
                 let pipeline = self.resolve_compute_pipeline_id(pipeline);
-                let bgl = pipeline
-                    .get_bind_group_layout(index)
-                    .expect("invalid compute pipeline");
+                let (bgl, _error) = pipeline.get_bind_group_layout(index);
                 self.bind_group_layouts.insert(id, bgl);
             }
-            Action::DestroyBindGroupLayout(id) => {
+            Action::DropBindGroupLayout(id) => {
                 self.bind_group_layouts
                     .remove(&id)
                     .expect("invalid bind group layout");
@@ -249,24 +219,20 @@ impl Player {
                     immediate_size: desc.immediate_size,
                 };
 
-                let pipeline_layout = device
-                    .create_pipeline_layout(&resolved_desc)
-                    .expect("create_pipeline_layout error");
+                let (pipeline_layout, _error) = device.create_pipeline_layout(&resolved_desc);
                 self.pipeline_layouts.insert(id, pipeline_layout);
             }
-            Action::DestroyPipelineLayout(id) => {
+            Action::DropPipelineLayout(id) => {
                 self.pipeline_layouts
                     .remove(&id)
                     .expect("invalid pipeline layout");
             }
             Action::CreateBindGroup(id, desc) => {
                 let resolved_desc = self.resolve_bind_group_descriptor(desc);
-                let bind_group = device
-                    .create_bind_group(resolved_desc)
-                    .expect("create_bind_group error");
+                let (bind_group, _error) = device.create_bind_group(&resolved_desc);
                 self.bind_groups.insert(id, bind_group);
             }
-            Action::DestroyBindGroup(id) => {
+            Action::DropBindGroup(id) => {
                 let _bind_group = self.bind_groups.remove(&id).expect("invalid bind group");
             }
             Action::CreateShaderModule { id, desc, data } => {
@@ -282,10 +248,11 @@ impl Player {
                         data.kind()
                     );
                 };
-                match device.create_shader_module(&desc, source) {
-                    Ok(module) => self.shader_modules.insert(id, module),
-                    Err(e) => panic!("shader compilation error:\n---{code}\n---\n{e}"),
-                };
+                let (shader, error) = device.create_shader_module(&desc, source);
+                if let Some(e) = error {
+                    panic!("shader compilation error:\n---{code}\n---\n{e}");
+                }
+                self.shader_modules.insert(id, shader);
             }
             Action::CreateShaderModulePassthrough {
                 id,
@@ -339,27 +306,23 @@ impl Player {
                     glsl,
                     wgsl,
                 };
-                match unsafe { device.create_shader_module_passthrough(&desc) } {
-                    Ok(module) => self.shader_modules.insert(id, module),
-                    Err(e) => panic!("shader compilation error:\n{e}"),
-                };
+                let (shader, error) = unsafe { device.create_shader_module_passthrough(&desc) };
+                if let Some(e) = error {
+                    panic!("shader compilation error:\n{e}");
+                }
+                self.shader_modules.insert(id, shader);
             }
-            Action::DestroyShaderModule(id) => {
+            Action::DropShaderModule(id) => {
                 self.shader_modules
                     .remove(&id)
                     .expect("invalid shader module");
             }
             Action::CreateComputePipeline { id, desc } => {
                 let resolved_desc = self.resolve_compute_pipeline_descriptor(desc);
-                let pipeline = device.create_compute_pipeline(resolved_desc);
-                process_result(
-                    "create_compute_pipeline",
-                    &mut self.compute_pipelines,
-                    id,
-                    pipeline,
-                );
+                let (pipeline, _error) = device.create_compute_pipeline(resolved_desc);
+                self.compute_pipelines.insert(id, pipeline);
             }
-            Action::DestroyComputePipeline(id) => {
+            Action::DropComputePipeline(id) => {
                 self.compute_pipelines
                     .remove(&id)
                     .expect("invalid compute pipeline");
@@ -369,24 +332,19 @@ impl Player {
                 // pipeline descriptor that can represent either a conventional
                 // pipeline or a mesh shading pipeline.
                 let resolved_desc = self.resolve_render_pipeline_descriptor(desc);
-                let pipeline = device.create_render_pipeline(resolved_desc);
-                process_result(
-                    "create_render_pipeline",
-                    &mut self.render_pipelines,
-                    id,
-                    pipeline,
-                );
+                let (pipeline, _error) = device.create_render_pipeline(resolved_desc);
+                self.render_pipelines.insert(id, pipeline);
             }
-            Action::DestroyRenderPipeline(id) => {
+            Action::DropRenderPipeline(id) => {
                 self.render_pipelines
                     .remove(&id)
                     .expect("invalid render pipeline");
             }
             Action::CreatePipelineCache { id, desc } => {
-                let cache = unsafe { device.create_pipeline_cache(&desc) }.unwrap();
+                let (cache, _error) = unsafe { device.create_pipeline_cache(&desc) };
                 self.pipeline_caches.insert(id, cache);
             }
-            Action::DestroyPipelineCache(id) => {
+            Action::DropPipelineCache(id) => {
                 self.pipeline_caches
                     .remove(&id)
                     .expect("invalid pipeline cache");
@@ -394,18 +352,20 @@ impl Player {
             Action::CreateRenderBundle { .. } => {
                 unimplemented!("traced render bundles are not supported");
             }
-            Action::DestroyRenderBundle(id) => {
+            Action::DropRenderBundle(id) => {
                 self.render_bundles
                     .remove(&id)
                     .expect("invalid render bundle");
             }
             Action::CreateQuerySet { id, desc } => {
-                let query_set = device
-                    .create_query_set(&desc)
-                    .expect("create_query_set error");
+                let (query_set, _error) = device.create_query_set(&desc);
                 self.query_sets.insert(id, query_set);
             }
             Action::DestroyQuerySet(id) => {
+                let query_set = self.query_sets.get(&id).expect("invalid query set");
+                query_set.destroy();
+            }
+            Action::DropQuerySet(id) => {
                 self.query_sets.remove(&id).expect("invalid query set");
             }
             Action::WriteBuffer {
@@ -468,17 +428,17 @@ impl Player {
                 panic!("Error recorded in trace: {error}");
             }
             Action::CreateBlas { id, desc, sizes } => {
-                let blas = device.create_blas(&desc, sizes).expect("create_blas error");
+                let (blas, _error) = device.create_blas(&desc, sizes);
                 self.blas_s.insert(id, blas);
             }
-            Action::DestroyBlas(id) => {
+            Action::DropBlas(id) => {
                 self.blas_s.remove(&id).expect("invalid blas");
             }
             Action::CreateTlas { id, desc } => {
-                let tlas = device.create_tlas(&desc).expect("create_tlas error");
+                let (tlas, _error) = device.create_tlas(&desc);
                 self.tlas_s.insert(id, tlas);
             }
-            Action::DestroyTlas(id) => {
+            Action::DropTlas(id) => {
                 self.tlas_s.remove(&id).expect("invalid tlas");
             }
         }
@@ -490,7 +450,7 @@ impl Player {
     pub fn get_surface_texture(
         &mut self,
         id: wgc::id::PointerId<wgc::id::markers::Texture>,
-        surface: &wgc::instance::Surface,
+        surface: &Arc<wgc::instance::Surface>,
     ) {
         let frame = surface
             .get_current_texture()
@@ -988,7 +948,6 @@ impl Player {
             error,
             commands,
             dynamic_offsets,
-            immediates_data,
             string_data,
         } = pass;
 
@@ -1000,7 +959,6 @@ impl Player {
                 .map(|cmd| self.resolve_compute_command(cmd))
                 .collect(),
             dynamic_offsets,
-            immediates_data,
             string_data,
         }
     }
@@ -1014,7 +972,6 @@ impl Player {
             error,
             commands,
             dynamic_offsets,
-            immediates_data,
             string_data,
         } = pass;
 
@@ -1026,7 +983,6 @@ impl Player {
                 .map(|cmd| self.resolve_render_command(cmd))
                 .collect(),
             dynamic_offsets,
-            immediates_data,
             string_data,
         }
     }
@@ -1047,15 +1003,7 @@ impl Player {
                 bind_group: bind_group.map(|bg| self.resolve_bind_group_id(bg)),
             },
             C::SetPipeline(id) => C::SetPipeline(self.resolve_compute_pipeline_id(id)),
-            C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            },
+            C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::DispatchWorkgroups(groups) => C::DispatchWorkgroups(groups),
             C::DispatchWorkgroupsIndirect { buffer, offset } => C::DispatchWorkgroupsIndirect {
                 buffer: self.resolve_buffer_id(buffer),
@@ -1152,15 +1100,7 @@ impl Player {
                 depth_max,
             },
             C::SetScissor(rect) => C::SetScissor(rect),
-            C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            },
+            C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::Draw {
                 vertex_count,
                 instance_count,

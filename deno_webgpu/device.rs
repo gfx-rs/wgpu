@@ -394,7 +394,7 @@ impl GPUDevice {
     let wgpu_descriptor = wgpu_core::binding_model::PipelineLayoutDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
       bind_group_layouts: Cow::Owned(bind_group_layouts),
-      immediate_size: 0,
+      immediate_size: descriptor.immediate_size,
     };
 
     let (id, err) = self.instance.device_create_pipeline_layout(
@@ -688,7 +688,7 @@ impl GPUDevice {
     GPURenderBundleEncoder {
       instance: self.instance.clone(),
       error_handler: self.error_handler.clone(),
-      encoder: RefCell::new(Some(encoder)),
+      encoder: RefCell::new(encoder),
       label: descriptor.label,
     }
   }

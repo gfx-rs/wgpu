@@ -87,7 +87,7 @@ fn populate_atomic_result() {
     // the differences between the test cases.
     fn try_variant(
         variant: Variant,
-    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, Box<naga::WithSpan<naga::valid::ValidationError>>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -189,7 +189,7 @@ fn populate_call_result() {
     // the differences between the test cases.
     fn try_variant(
         variant: Variant,
-    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, Box<naga::WithSpan<naga::valid::ValidationError>>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -265,7 +265,9 @@ fn emit_workgroup_uniform_load_result() {
     //
     // Looking at uses of the `wg_load` makes it easy to identify the
     // differences between the two variants.
-    fn variant(wg_load: bool) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    fn variant(
+        wg_load: bool,
+    ) -> Result<ModuleInfo, Box<naga::WithSpan<naga::valid::ValidationError>>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -337,7 +339,7 @@ fn builtin_cross_product_args() {
     fn variant(
         size: VectorSize,
         arity: usize,
-    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, Box<naga::WithSpan<naga::valid::ValidationError>>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_vec3f = module.types.insert(
@@ -754,7 +756,7 @@ error: Function [1] 'main' is invalid
 
 #[test]
 fn bad_texture_dimensions_level() {
-    fn validate(level: &str) -> Result<ModuleInfo, naga::valid::ValidationError> {
+    fn validate(level: &str) -> Result<ModuleInfo, Box<naga::valid::ValidationError>> {
         let source = format!(
             r#"
             @group(0) @binding(0)
@@ -767,12 +769,12 @@ fn bad_texture_dimensions_level() {
         let module = naga::front::wgsl::parse_str(&source).expect("module should parse");
         valid::Validator::new(Default::default(), valid::Capabilities::all())
             .validate(&module)
-            .map_err(|err| err.into_inner()) // discard spans
+            .map_err(|err| Box::new(err.into_inner())) // discard spans
     }
 
-    fn is_bad_level_error(result: Result<ModuleInfo, naga::valid::ValidationError>) -> bool {
+    fn is_bad_level_error(result: Result<ModuleInfo, Box<naga::valid::ValidationError>>) -> bool {
         matches!(
-            result,
+            result.map_err(|e| *e),
             Err(naga::valid::ValidationError::Function {
                 handle: _,
                 name: _,
@@ -1203,7 +1205,7 @@ fn arity_check() {
     use naga::Span;
     let _ = env_logger::builder().is_test(true).try_init();
 
-    type Result = core::result::Result<ModuleInfo, naga::valid::ValidationError>;
+    type Result = core::result::Result<ModuleInfo, Box<naga::valid::ValidationError>>;
 
     fn validate(fun: ir::MathFunction, args: &[usize]) -> Result {
         let nowhere = Span::default();
@@ -1244,7 +1246,7 @@ fn arity_check() {
         module.functions.append(f, nowhere);
         valid::Validator::new(Default::default(), valid::Capabilities::all())
             .validate(&module)
-            .map_err(|err| err.into_inner()) // discard spans
+            .map_err(|err| Box::new(err.into_inner())) // discard spans
     }
 
     assert!(validate(Mf::Sin, &[]).is_ok());

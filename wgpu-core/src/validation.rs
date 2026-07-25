@@ -293,15 +293,26 @@ struct EntryPoint {
     dual_source_blending: bool,
     task_payload_size: Option<u32>,
     mesh_info: Option<EntryPointMeshInfo>,
-    immediate_slots_required: naga::valid::ImmediateSlots,
+    immediate_usage: naga::valid::ImmediateUsage,
+}
+
+#[derive(Debug, Hash, PartialEq, Eq)]
+struct EntryPointKey(naga::ShaderStage, String);
+
+#[derive(Debug, Hash, PartialEq, Eq)]
+struct EntryPointKeyRef<'a>(naga::ShaderStage, &'a str);
+
+impl hashbrown::Equivalent<EntryPointKey> for EntryPointKeyRef<'_> {
+    fn equivalent(&self, key: &EntryPointKey) -> bool {
+        self.0 == key.0 && self.1 == key.1
+    }
 }
 
 #[derive(Debug)]
 pub struct Interface {
     limits: wgt::Limits,
     resources: naga::Arena<Resource>,
-    entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
-    pub(crate) immediate_size: u32,
+    entry_points: FastHashMap<EntryPointKey, EntryPoint>,
 }
 
 #[derive(Debug)]
@@ -532,6 +543,8 @@ pub enum StageError {
     PerVertexNotTriangles,
     #[error("Mesh shader pipelines must have primitive topology of TriangleList, LineList or PointList, and this must match with what the mesh shader declares.")]
     MeshTopologyMismatch,
+    #[error("Pipeline layout immediate size ({layout}) must be >= the required immediate size ({required}) of the shader entry point")]
+    LayoutImmediateSize { layout: u32, required: u32 },
 }
 
 impl WebGpuError for StageError {
@@ -568,7 +581,8 @@ impl WebGpuError for StageError {
             | Self::InvalidDualSourceBlending
             | Self::MissingFragDepthAttachment
             | Self::PerVertexNotTriangles
-            | Self::MeshTopologyMismatch => ErrorType::Validation,
+            | Self::MeshTopologyMismatch
+            | Self::LayoutImmediateSize { .. } => ErrorType::Validation,
         }
     }
 }
@@ -1066,6 +1080,7 @@ pub struct StageIo {
     ///
     /// This is Some if it was a mesh shader.
     pub primitive_index: Option<bool>,
+    pub immediates: naga::valid::ImmediateUsage,
 }
 
 impl Interface {
@@ -1256,12 +1271,10 @@ impl Interface {
             resource_mapping.insert(var_handle, handle);
         }
 
-        let immediate_size = naga::valid::ImmediateSlots::size_for_module(module);
-
         let mut entry_points = FastHashMap::default();
         entry_points.reserve(module.entry_points.len());
         for (index, entry_point) in module.entry_points.iter().enumerate() {
-            let info = info.get_entry_point(index);
+            let func_info = info.get_entry_point(index);
             let mut ep = EntryPoint::default();
             for arg in entry_point.function.arguments.iter() {
                 Self::populate(&mut ep.inputs, arg.binding.as_ref(), arg.ty, &module.types);
@@ -1276,19 +1289,38 @@ impl Interface {
             }
 
             for (var_handle, var) in module.global_variables.iter() {
-                let usage = info[var_handle];
+                let usage = func_info[var_handle];
                 if !usage.is_empty() && var.binding.is_some() {
                     ep.resources.push(resource_mapping[&var_handle]);
                 }
             }
 
-            for key in info.sampling_set.iter() {
+            for key in func_info.sampling_set.iter() {
                 ep.sampling_pairs
                     .insert((resource_mapping[&key.image], resource_mapping[&key.sampler]));
             }
-            ep.dual_source_blending = info.dual_source_blending;
+            ep.dual_source_blending = func_info.dual_source_blending;
             ep.workgroup_size = entry_point.workgroup_size;
-            ep.immediate_slots_required = info.immediate_slots_used;
+
+            // Find the used immediates. Naga should have validated that
+            // at most one immediate is used by the entry point.
+            let mut used_immediates = module
+                .global_variables
+                .iter()
+                .filter(|&(_, var)| var.space == naga::AddressSpace::Immediate)
+                .map(|(handle, _)| handle)
+                .filter(|&handle| !func_info[handle].is_empty());
+            ep.immediate_usage = used_immediates
+                .next()
+                .map(|handle| {
+                    naga::valid::ImmediateUsage::from_type(
+                        &module.types[module.global_variables[handle].ty].inner,
+                        &module.types,
+                        module.to_ctx(),
+                    )
+                })
+                .unwrap_or_default();
+            assert!(used_immediates.next().is_none());
 
             if let Some(task_payload) = entry_point.task_payload {
                 ep.task_payload_size = Some(
@@ -1321,25 +1353,28 @@ impl Interface {
                 );
             }
 
-            entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
+            entry_points.insert(
+                EntryPointKey(entry_point.stage, entry_point.name.clone()),
+                ep,
+            );
         }
 
         Self {
             limits,
             resources,
             entry_points,
-            immediate_size,
         }
     }
 
-    pub fn immediate_slots_required(
+    fn immediate_usage(
         &self,
         stage: naga::ShaderStage,
         entry_point_name: &str,
-    ) -> naga::valid::ImmediateSlots {
+    ) -> naga::valid::ImmediateUsage {
         self.entry_points
-            .get(&(stage, entry_point_name.to_string()))
-            .map_or(Default::default(), |ep| ep.immediate_slots_required)
+            .get(&EntryPointKeyRef(stage, entry_point_name))
+            .map(|ep| ep.immediate_usage)
+            .unwrap_or_default()
     }
 
     pub fn finalize_entry_point_name(
@@ -1351,10 +1386,12 @@ impl Interface {
             .map(|ep| ep.to_string())
             .map(Ok)
             .unwrap_or_else(|| {
-                let mut entry_points = self
-                    .entry_points
-                    .keys()
-                    .filter_map(|(ep_stage, name)| (ep_stage == &stage).then_some(name));
+                let mut entry_points =
+                    self.entry_points
+                        .keys()
+                        .filter_map(|EntryPointKey(ep_stage, name)| {
+                            (ep_stage == &stage).then_some(name)
+                        });
                 let first = entry_points.next().ok_or(StageError::NoEntryPointFound)?;
                 if entry_points.next().is_some() {
                     return Err(StageError::MultipleEntryPointsFound);
@@ -1376,12 +1413,12 @@ impl Interface {
     ) -> Result<StageIo, StageError> {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
-        let pair = (shader_stage.to_naga(), entry_point_name.to_string());
+        let pair = EntryPointKeyRef(shader_stage.to_naga(), entry_point_name);
         let entry_point = match self.entry_points.get(&pair) {
             Some(some) => some,
-            None => return Err(StageError::MissingEntryPoint(pair.1)),
+            None => return Err(StageError::MissingEntryPoint(pair.1.to_string())),
         };
-        let (_, entry_point_name) = pair;
+        let EntryPointKeyRef(_, entry_point_name) = pair;
 
         let stage_bit = shader_stage.to_wgt_bit();
 
@@ -1505,42 +1542,38 @@ impl Interface {
 
         // check workgroup size limits
         if shader_stage.to_naga().compute_like() {
-            let total = match shader_stage.to_naga() {
-                naga::ShaderStage::Compute => check_workgroup_sizes(
-                    &entry_point.workgroup_size,
-                    &[
+            let workgroup_size_check = match shader_stage.to_naga() {
+                naga::ShaderStage::Compute => WorkgroupSizeCheck {
+                    dimensions: &entry_point.workgroup_size,
+                    per_dimension_limits: &[
                         self.limits.max_compute_workgroup_size_x,
                         self.limits.max_compute_workgroup_size_y,
                         self.limits.max_compute_workgroup_size_z,
                     ],
-                    "max_compute_workgroup_size_*",
-                    self.limits.max_compute_invocations_per_workgroup,
-                    "max_compute_invocations_per_workgroup",
-                )?,
-                naga::ShaderStage::Task => check_workgroup_sizes(
-                    &entry_point.workgroup_size,
-                    &[
-                        self.limits.max_task_invocations_per_dimension,
-                        self.limits.max_task_invocations_per_dimension,
-                        self.limits.max_task_invocations_per_dimension,
-                    ],
-                    "max_task_invocations_per_dimension",
-                    self.limits.max_task_invocations_per_workgroup,
-                    "max_task_invocations_per_workgroup",
-                )?,
-                naga::ShaderStage::Mesh => check_workgroup_sizes(
-                    &entry_point.workgroup_size,
-                    &[
-                        self.limits.max_mesh_invocations_per_dimension,
-                        self.limits.max_mesh_invocations_per_dimension,
-                        self.limits.max_mesh_invocations_per_dimension,
-                    ],
-                    "max_mesh_invocations_per_dimension",
-                    self.limits.max_mesh_invocations_per_workgroup,
-                    "max_mesh_invocations_per_workgroup",
-                )?,
+                    per_dimension_limits_desc: "max_compute_workgroup_size_*",
+
+                    total_limit: self.limits.max_compute_invocations_per_workgroup,
+                    total_limit_desc: "max_compute_invocations_per_workgroup",
+                },
+                naga::ShaderStage::Task => WorkgroupSizeCheck {
+                    dimensions: &entry_point.workgroup_size,
+                    per_dimension_limits: &[self.limits.max_task_invocations_per_dimension; 3],
+                    per_dimension_limits_desc: "max_task_invocations_per_dimension",
+
+                    total_limit: self.limits.max_task_invocations_per_workgroup,
+                    total_limit_desc: "max_task_invocations_per_workgroup",
+                },
+                naga::ShaderStage::Mesh => WorkgroupSizeCheck {
+                    dimensions: &entry_point.workgroup_size,
+                    per_dimension_limits: &[self.limits.max_mesh_invocations_per_dimension; 3],
+                    per_dimension_limits_desc: "max_mesh_invocations_per_dimension",
+
+                    total_limit: self.limits.max_mesh_invocations_per_workgroup,
+                    total_limit_desc: "max_mesh_invocations_per_workgroup",
+                },
                 _ => unreachable!(),
             };
+            let total = workgroup_size_check.check_and_compute_total_invocations()?;
             if total == 0 {
                 return Err(StageError::InvalidWorkgroupSize(
                     InvalidWorkgroupSizeError::Zero {
@@ -1883,6 +1916,20 @@ impl Interface {
             })
             .collect();
 
+        let immediate_usage = self
+            .immediate_usage(shader_stage.to_naga(), entry_point_name)
+            .merge(&inputs.immediates);
+
+        // Check pipeline layout immediate size
+        if let BindingLayoutSource::Provided(pipeline_layout) = layouts {
+            if pipeline_layout.immediate_size < immediate_usage.size() {
+                return Err(StageError::LayoutImmediateSize {
+                    layout: pipeline_layout.immediate_size,
+                    required: immediate_usage.size(),
+                });
+            }
+        }
+
         Ok(StageIo {
             task_payload_size: entry_point.task_payload_size,
             varyings: outputs,
@@ -1891,18 +1938,8 @@ impl Interface {
             } else {
                 None
             },
+            immediates: immediate_usage,
         })
-    }
-
-    pub fn fragment_uses_dual_source_blending(
-        &self,
-        entry_point_name: &str,
-    ) -> Result<bool, StageError> {
-        let pair = (naga::ShaderStage::Fragment, entry_point_name.to_string());
-        self.entry_points
-            .get(&pair)
-            .ok_or(StageError::MissingEntryPoint(pair.1))
-            .map(|ep| ep.dual_source_blending)
     }
 }
 
@@ -1968,40 +2005,57 @@ pub enum InvalidWorkgroupSizeError {
     Zero { dimensions: [u32; 3] },
 }
 
-/// Check X/Y/Z workgroup sizes against per-dimension and overall limits.
-///
-/// This function does not check that the sizes are non-zero. In a dispatch, it is legal for
-/// the size to be zero. In shader or pipeline creation, it is an error for the size to be
-/// zero, and the caller must check that.
-pub(crate) fn check_workgroup_sizes(
-    sizes: &[u32; 3],
-    per_dimension_limits: &[u32; 3],
-    per_dimension_limits_desc: &'static str,
-    total_limit: u32,
-    total_limit_desc: &'static str,
-) -> Result<u32, InvalidWorkgroupSizeError> {
-    let total = sizes
-        .iter()
-        .fold(1u32, |total, &dim| total.saturating_mul(dim));
+/// A helper type for avoiding argument order mistakes when calling
+/// [`Self::check_and_compute_total_invocations`].
+#[derive(Clone, Debug)]
+pub(crate) struct WorkgroupSizeCheck<'a> {
+    pub dimensions: &'a [u32; 3],
+    pub per_dimension_limits: &'a [u32; 3],
+    pub per_dimension_limits_desc: &'static str,
+    pub total_limit: u32,
+    pub total_limit_desc: &'static str,
+}
 
-    let invalid_total_invocations = total > total_limit;
-
-    let dimension_too_large = sizes
-        .iter()
-        .zip(per_dimension_limits.iter())
-        .any(|(dim, limit)| dim > limit);
-
-    if invalid_total_invocations || dimension_too_large {
-        Err(InvalidWorkgroupSizeError::LimitExceeded {
-            dimensions: *sizes,
-            per_dimension_limits: *per_dimension_limits,
+impl WorkgroupSizeCheck<'_> {
+    /// Check X/Y/Z workgroup sizes against per-dimension and overall limits.
+    ///
+    /// This function does not check that the sizes are non-zero. In a dispatch, it is legal for
+    /// the size to be zero. In shader or pipeline creation, it is an error for the size to be
+    /// zero, and the caller must check that.
+    pub(crate) fn check_and_compute_total_invocations(
+        self,
+    ) -> Result<u32, InvalidWorkgroupSizeError> {
+        let Self {
+            dimensions,
+            per_dimension_limits,
             per_dimension_limits_desc,
-            total,
             total_limit,
             total_limit_desc,
-        })
-    } else {
-        Ok(total)
+        } = self;
+
+        let total = dimensions
+            .iter()
+            .fold(1u32, |total, &dim| total.saturating_mul(dim));
+
+        let invalid_total_invocations = total > total_limit;
+
+        let dimension_too_large = dimensions
+            .iter()
+            .zip(per_dimension_limits.iter())
+            .any(|(dim, limit)| dim > limit);
+
+        if invalid_total_invocations || dimension_too_large {
+            Err(InvalidWorkgroupSizeError::LimitExceeded {
+                dimensions: *dimensions,
+                per_dimension_limits: *per_dimension_limits,
+                per_dimension_limits_desc,
+                total,
+                total_limit,
+                total_limit_desc,
+            })
+        } else {
+            Ok(total)
+        }
     }
 }
 

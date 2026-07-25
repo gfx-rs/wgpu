@@ -1,7 +1,6 @@
 [package]
 name = "naga-test"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "common code for naga tests"
 homepage.workspace = true
@@ -10,7 +9,6 @@ keywords.workspace = true
 license.workspace = true
 rust-version.workspace = true
 publish = false
-
 
 [features]
 
@@ -35,3 +33,6 @@ toml.workspace = true
 bitflags.workspace = true
 serde_json.workspace = true
 serde.workspace = true
+
+[lints]
+workspace = true

@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-macros"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Macros for wgpu"
 homepage.workspace = true
@@ -19,3 +18,6 @@ proc-macro = true
 heck.workspace = true
 quote.workspace = true
 syn = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true

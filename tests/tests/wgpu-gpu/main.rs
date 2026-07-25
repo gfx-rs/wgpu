@@ -20,6 +20,7 @@ mod bind_groups;
 mod binding_array;
 mod buffer;
 mod buffer_copy;
+mod buffer_resource_limits;
 mod buffer_usages;
 mod clear_texture;
 mod clip_distances;
@@ -60,6 +61,7 @@ mod queue_transfer;
 mod ray_tracing;
 mod render_pass_ownership;
 mod render_target;
+mod resolve_query_set_init;
 mod resource_descriptor_accessor;
 mod resource_error;
 mod samplers;
@@ -89,6 +91,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
 
     adapter::all_tests(&mut tests);
     bgra8unorm_storage::all_tests(&mut tests);
+    buffer_resource_limits::all_tests(&mut tests);
     bind_group_layout_dedup::all_tests(&mut tests);
     bind_groups::all_tests(&mut tests);
     binding_array::all_tests(&mut tests);
@@ -99,6 +102,10 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     clip_distances::all_tests(&mut tests);
     cloneable_types::all_tests(&mut tests);
     compute_pass_ownership::all_tests(&mut tests);
+
+    #[cfg(wasm_test)]
+    create_surface_error::all_tests(&mut tests);
+
     device::all_tests(&mut tests);
     dispatch_workgroups_indirect::all_tests(&mut tests);
     draw_index::all_tests(&mut tests);
@@ -126,6 +133,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     primitive_index::all_tests(&mut tests);
     immediates::all_tests(&mut tests);
     query_set::all_tests(&mut tests);
+    resolve_query_set_init::all_tests(&mut tests);
     queue_transfer::all_tests(&mut tests);
     ray_tracing::all_tests(&mut tests);
     regression::issue_3349::all_tests(&mut tests);

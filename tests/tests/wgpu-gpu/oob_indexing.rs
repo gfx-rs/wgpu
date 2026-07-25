@@ -5,6 +5,7 @@ pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.extend([
         RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET,
         D3D12_RESTRICT_DYNAMIC_BUFFERS,
+        DYNAMIC_STORAGE_BUFFER_BINDING_SIZE,
     ]);
 }
 
@@ -473,4 +474,244 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
     readback_buffer.unmap();
 
     assert_eq!([1, 3, 0], current_res);
+}
+
+/// A dynamic-offset storage binding must observe its *binding* size, not the size
+/// of the underlying buffer. Regression test for
+/// [#9865](https://github.com/gfx-rs/wgpu/issues/9865).
+///
+/// On D3D12 a dynamic-offset storage binding is realized as a SRV/UAV whose
+/// `FirstElement` is baked in at bind-group-creation time, with the dynamic offset
+/// added inside the shader as a root constant (see `wgpu_hal::dx12`). Because that
+/// descriptor cannot slide, its `NumElements` is sized to span the entire tail of
+/// the buffer (`buffer.size - offset`) so that the largest legal dynamic offset
+/// stays in bounds. That has two observable consequences, both of which this test
+/// pins down:
+///
+///  1. `arrayLength()` lowers to `GetDimensions` on that descriptor, so it reports
+///     the element count of the whole buffer tail instead of the binding size.
+///     (This is wrong for every dynamic offset except the maximum legal one, where
+///     the remaining tail happens to equal the binding size.)
+///
+///  2. A writable binding can therefore store past the end of its bound range and
+///     into the rest of the buffer.
+///
+/// Note on the "writes into the buffer's tail padding" angle: because `buffer.size`
+/// on D3D12 is the *padded* allocation size (rounded up to 4, or to 256 for a
+/// buffer that is also `UNIFORM`), the over-write also reaches into the allocation
+/// padding beyond the application-visible size. That padding is not directly
+/// readable through the API — copies, bindings and vertex fetches are all clamped
+/// to the application size — so this test asserts on the observable portion of the
+/// over-write, i.e. the application-visible bytes that lie past the binding.
+///
+/// Vulkan and Metal apply the dynamic offset to the binding itself (via a dynamic
+/// descriptor / by folding it into the bound offset), so the accessible range
+/// equals the binding size and neither problem occurs. The test is expected to
+/// fail on D3D12 until the backend clamps the SRV/UAV to the binding size and
+/// communicates that size to the shader for `arrayLength`.
+#[gpu_test]
+static DYNAMIC_STORAGE_BUFFER_BINDING_SIZE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+            .limits(wgpu::Limits::downlevel_defaults())
+            // https://github.com/gfx-rs/wgpu/issues/9865
+            .expect_fail(FailureCase::backend(Backends::DX12)),
+    )
+    .run_async(dynamic_storage_buffer_binding_size);
+
+async fn dynamic_storage_buffer_binding_size(ctx: TestingContext) {
+    const BUFFER_SIZE: u64 = 256;
+    const BINDING_SIZE: u64 = 16;
+    const BINDING_ELEMENTS: u32 = (BINDING_SIZE / 4) as u32;
+    // Buffer is prefilled with SENTINEL, shader stores WRITE.
+    // Bytes past the binding must keep the SENTINEL value.
+    const SENTINEL: u32 = 0x1111_1111;
+    const WRITE: u32 = 0xAAAA_AAAA;
+
+    let shader_src = format!(
+        "
+        @group(0) @binding(0)
+        var<storage, read_write> data: array<u32>;   // dynamic offset, {BINDING_SIZE}-byte binding
+        @group(0) @binding(1)
+        var<storage, read_write> result: array<u32>;
+
+        @compute @workgroup_size(1)
+        fn main() {{
+            let len = arrayLength(&data);
+            result[0] = len;
+
+            // Write across what the shader believes is the whole array. With a
+            // correct binding size this only touches the {BINDING_ELEMENTS} bound
+            // elements; if `arrayLength` is over-reported this runs off the end of
+            // the binding and into the rest of the buffer.
+            for (var i = 0u; i < len; i = i + 1u) {{
+                data[i] = {WRITE}u;
+            }}
+        }}
+    "
+    );
+
+    let module = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(shader_src.into()),
+        });
+
+    let bgl = ctx
+        .device
+        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: true,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+    let layout = ctx
+        .device
+        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(&bgl)],
+            immediate_size: 0,
+        });
+
+    let pipeline = ctx
+        .device
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&layout),
+            module: &module,
+            entry_point: Some("main"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
+    let data_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: BUFFER_SIZE,
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+
+    let result_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 4,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+
+    let data_readback = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: BUFFER_SIZE,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let result_readback = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 4,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let prefill = [SENTINEL; (BUFFER_SIZE / 4) as usize];
+    ctx.queue
+        .write_buffer(&data_buffer, 0, bytemuck::cast_slice(&prefill));
+
+    let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &bgl,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &data_buffer,
+                    offset: 0,
+                    size: Some(std::num::NonZeroU64::new(BINDING_SIZE).unwrap()),
+                }),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: result_buffer.as_entire_binding(),
+            },
+        ],
+    });
+
+    let mut encoder = ctx.device.create_command_encoder(&Default::default());
+    {
+        let mut compute_pass = encoder.begin_compute_pass(&Default::default());
+        compute_pass.set_pipeline(&pipeline);
+        // A single dynamic offset, for binding 0. Zero is used so the binding
+        // covers `[0, BINDING_SIZE)`; the descriptor-sizing bug does not depend on
+        // the offset value.
+        compute_pass.set_bind_group(0, &bind_group, &[0]);
+        compute_pass.dispatch_workgroups(1, 1, 1);
+    }
+
+    encoder.copy_buffer_to_buffer(&data_buffer, 0, &data_readback, 0, BUFFER_SIZE);
+    encoder.copy_buffer_to_buffer(&result_buffer, 0, &result_readback, 0, 4);
+
+    ctx.queue.submit(Some(encoder.finish()));
+
+    result_readback
+        .slice(..)
+        .map_async(wgpu::MapMode::Read, |_| {});
+    data_readback
+        .slice(..)
+        .map_async(wgpu::MapMode::Read, |_| {});
+
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+
+    let reported_len: u32 = {
+        let view = result_readback.slice(..).get_mapped_range().unwrap();
+        *bytemuck::from_bytes(&view)
+    };
+    result_readback.unmap();
+
+    let data: [u32; (BUFFER_SIZE / 4) as usize] = {
+        let view = data_readback.slice(..).get_mapped_range().unwrap();
+        *bytemuck::from_bytes(&view)
+    };
+    data_readback.unmap();
+
+    // 1. `arrayLength(&data)` must equal the binding size in elements.
+    assert_eq!(
+        reported_len, BINDING_ELEMENTS,
+        "arrayLength reported {reported_len} elements, expected {BINDING_ELEMENTS} \
+         (the binding covers {BINDING_SIZE} bytes)"
+    );
+
+    // 2. The bound range was written, and nothing past it was.
+    for (i, &value) in data.iter().enumerate() {
+        let byte = i as u64 * 4;
+        let expected = if byte < BINDING_SIZE { WRITE } else { SENTINEL };
+        assert_eq!(
+            value, expected,
+            "unexpected value {value:#010x} at byte offset {byte}: the write \
+             escaped the {BINDING_SIZE}-byte binding"
+        );
+    }
 }

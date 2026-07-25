@@ -1,11 +1,11 @@
 fn main() {
     cfg_aliases::cfg_aliases! {
-        native: { not(target_arch = "wasm32") },
+        native: { not(target_family = "wasm") },
         send_sync: { any(
-            not(target_arch = "wasm32"),
+            not(target_family = "wasm"),
             all(feature = "fragile-send-sync-non-atomic-wasm", not(target_feature = "atomics"))
         ) },
-        webgl: { all(target_arch = "wasm32", not(target_os = "emscripten"), gles) },
+        webgl: { all(target_family = "wasm", not(target_os = "emscripten"), gles) },
         Emscripten: { all(target_os = "emscripten", gles) },
         dx12: { all(target_os = "windows", feature = "dx12") },
         gles: { all(feature = "gles") },
@@ -14,7 +14,7 @@ fn main() {
         gles_with_std: { all(
             feature = "gles",
             any(
-                not(target_arch = "wasm32"),
+                not(target_family = "wasm"),
                 // Accept wasm32-unknown-unknown, which uniquely has a stub `std`
                 all(target_vendor = "unknown", target_os = "unknown"),
                 // Accept wasm32-unknown-emscripten and similar, which has a real `std`
@@ -22,7 +22,7 @@ fn main() {
             )
         ) },
         metal: { all(target_vendor = "apple", feature = "metal") },
-        vulkan: { all(not(target_arch = "wasm32"), feature = "vulkan") },
+        vulkan: { all(not(target_family = "wasm"), feature = "vulkan") },
         drm: { all(
             feature = "drm",
             any(target_os = "linux", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd")

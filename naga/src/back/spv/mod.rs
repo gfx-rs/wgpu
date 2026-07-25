@@ -110,6 +110,8 @@ mod selection;
 mod subgroup;
 mod writer;
 
+pub use nt::spv::*;
+
 pub use mesh_shader::{MeshReturnInfo, MeshReturnMember};
 pub use spirv::{Capability, SourceLanguage};
 
@@ -906,6 +908,7 @@ impl BlockContext<'_> {
 /// type `type_id`, and the result of any `Load` will be immediately converted
 /// to the base type. This is used for matrices with 2 rows, as well as any
 /// arrays or structs containing such matrices.
+#[derive(Debug)]
 pub struct Std140CompatTypeInfo {
     /// ID of the std140 compatible type declaration.
     type_id: Word,
@@ -914,6 +917,7 @@ pub struct Std140CompatTypeInfo {
     member_indices: Vec<u32>,
 }
 
+#[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,
@@ -1037,19 +1041,6 @@ bitflags::bitflags! {
         const PRINT_ON_TRACE_RAYS_FAIL = 0x40;
     }
 }
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct BindingInfo {
-    pub descriptor_set: u32,
-    pub binding: u32,
-    /// If the binding is an unsized binding array, this overrides the size.
-    pub binding_array_size: Option<u32>,
-}
-
-// Using `BTreeMap` instead of `HashMap` so that we can hash itself.
-pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindingInfo>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZeroInitializeWorkgroupMemoryMode {

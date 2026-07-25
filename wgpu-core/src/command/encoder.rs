@@ -1,7 +1,10 @@
 use alloc::{sync::Arc, vec::Vec};
 
 use crate::{
-    command::memory_init::CommandBufferTextureMemoryActions,
+    command::{
+        memory_init::CommandBufferTextureMemoryActions,
+        query::{DeferredQuerySetResolve, QuerySetWrites},
+    },
     device::{queue::TempResource, Device},
     init_tracker::BufferInitTrackerAction,
     ray_tracing::AsAction,
@@ -50,4 +53,7 @@ pub(crate) struct EncodingState<'snatch_guard, 'cmd_enc, E: ?Sized = dyn hal::Dy
     /// When encoding a compute or render pass, this is the depth of debug
     /// scopes in the pass, not the depth of debug scopes in the parent encoder.
     pub(crate) debug_scope_depth: &'cmd_enc mut u32,
+
+    pub(crate) query_set_writes: &'cmd_enc mut QuerySetWrites,
+    pub(crate) deferred_query_set_resolves: &'cmd_enc mut Vec<DeferredQuerySetResolve>,
 }

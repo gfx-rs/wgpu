@@ -1,7 +1,6 @@
 [package]
 name = "wgpu"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Cross-platform, safe, pure-rust graphics API"
 homepage.workspace = true
@@ -67,6 +66,7 @@ webgpu = [
     "dep:wasm-bindgen-futures",
     "web-sys/Document",
     "web-sys/Event",
+    "web-sys/MediaQueryList",
     "web-sys/Navigator",
     "web-sys/NodeList",
     "web-sys/Window",
@@ -229,11 +229,11 @@ static_assertions.workspace = true
 ###################
 # Not Webassembly #
 ###################
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
 # Needed for only wgpu-core backend. Not optional as only wgpu-core backend exists on native platforms.
 wgpu-core = { workspace = true, features = [
     "renderdoc",
-    "wgsl",            # needed for indirect draw/dispatch validation
+    "wgsl", # needed for indirect draw/dispatch validation
     "portable-atomic",
 ] }
 wgpu-hal.workspace = true
@@ -243,7 +243,7 @@ smallvec.workspace = true
 ###############
 # Webassembly #
 ###############
-[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
+[target.'cfg(all(target_family = "wasm", not(target_os = "emscripten")))'.dependencies]
 # Needed for all backends
 js-sys = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
@@ -279,3 +279,6 @@ bytemuck.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
+
+[lints]
+workspace = true

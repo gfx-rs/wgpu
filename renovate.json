@@ -5,6 +5,8 @@
   "prConcurrentLimit": 20,
   "prHourlyLimit": 200,
   "minimumReleaseAge": "1 week",
+  "prCreation": "not-pending",
+  "internalChecksFilter": "strict",
   "labels": ["dependencies"],
   "lockFileMaintenance": {
     "enabled": true,

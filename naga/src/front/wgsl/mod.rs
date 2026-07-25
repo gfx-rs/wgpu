@@ -34,6 +34,7 @@ use std::println;
 
 pub(crate) type Result<'a, T> = core::result::Result<T, Box<Error<'a>>>;
 
+#[derive(Debug)]
 pub struct Frontend {
     parser: Parser,
     options: Options,
