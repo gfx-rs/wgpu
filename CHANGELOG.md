@@ -101,6 +101,12 @@ Bottom level categories:
 
 - Fixed signed integer `%` (and `%=`) returning the wrong result for negative operands in the GLSL (OpenGL/GLES) backend, e.g. `-1 % 768` yielding `255` instead of `-1`. GLSL's `%` is undefined when either operand is negative, so signed remainder is now lowered as `a - b * (a / b)`, matching the SPIR-V, HLSL, and Metal backends. By @mstampfli in [#9687](https://github.com/gfx-rs/wgpu/pull/9687).
 
+### Documentation
+
+#### General
+
+- Fix the `BlasAabbGeometry` docs to refer to the `stride` field instead of a nonexistent `size.stride`, and document the packed AABB buffer layout (each primitive a minimum then a maximum corner, two consecutive `vec3<f32>`). By @mstampfli in [#9934](https://github.com/gfx-rs/wgpu/pull/9934).
+
 ### Dependency Updates
 
 #### General
