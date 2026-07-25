@@ -1092,6 +1092,11 @@ pub fn map_acceleration_structure_usage_to_barrier(
     }
 
     (stages, access)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
 
     /// `map_vk_color_space` and `map_surface_color_space` must stay mutually
     /// inverse so that a color space reported in the surface capabilities is
@@ -1138,11 +1143,6 @@ pub fn map_acceleration_structure_usage_to_barrier(
         assert_eq!(format, wgt::TextureFormat::Rgb10a2Unorm);
         assert_eq!(color_space, wgt::SurfaceColorSpace::Bt2100Pq);
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
 
     #[test]
     fn buffer_shader_stages_follow_queue_flags() {
@@ -1283,52 +1283,4 @@ mod tests {
                 | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR
         );
     }
-
-    /// `map_vk_color_space` and `map_surface_color_space` must stay mutually
-    /// inverse so that a color space reported in the surface capabilities is
-    /// exactly what the swapchain is created with.
-    #[test]
-    fn color_space_round_trip() {
-        for vk_color_space in [
-            vk::ColorSpaceKHR::SRGB_NONLINEAR,
-            vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT,
-            vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT,
-            vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT,
-            vk::ColorSpaceKHR::HDR10_ST2084_EXT,
-            vk::ColorSpaceKHR::HDR10_HLG_EXT,
-        ] {
-            let mapped = map_vk_color_space(vk_color_space).unwrap();
-            assert_eq!(map_surface_color_space(mapped), vk_color_space);
-        }
-    }
-
-    #[test]
-    fn unknown_color_spaces_are_dropped() {
-        for vk_color_space in [
-            vk::ColorSpaceKHR::BT2020_LINEAR_EXT,
-            vk::ColorSpaceKHR::DOLBYVISION_EXT,
-            vk::ColorSpaceKHR::PASS_THROUGH_EXT,
-            vk::ColorSpaceKHR::ADOBERGB_NONLINEAR_EXT,
-        ] {
-            assert!(map_vk_color_space(vk_color_space).is_none());
-            assert!(map_vk_surface_formats(vk::SurfaceFormatKHR {
-                format: vk::Format::B8G8R8A8_UNORM,
-                color_space: vk_color_space,
-            })
-            .is_none());
-        }
-    }
-
-    #[test]
-    fn hdr10_surface_format_maps() {
-        let (format, color_space) = map_vk_surface_formats(vk::SurfaceFormatKHR {
-            format: vk::Format::A2B10G10R10_UNORM_PACK32,
-            color_space: vk::ColorSpaceKHR::HDR10_ST2084_EXT,
-        })
-        .unwrap();
-        assert_eq!(format, wgt::TextureFormat::Rgb10a2Unorm);
-        assert_eq!(color_space, wgt::SurfaceColorSpace::Bt2100Pq);
-    }
-
-
 }
