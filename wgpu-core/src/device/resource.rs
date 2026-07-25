@@ -32,9 +32,9 @@ use crate::{
     },
     command, conv,
     device::{
-        bgl, create_validator, features_to_naga_capabilities, life::WaitIdleError, map_buffer,
-        AttachmentData, BufferMapPendingClosure, DeviceLostInvocation, HostMap,
-        MissingDownlevelFlags, MissingFeatures, RenderPassContext,
+        bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
+        BufferMapPendingClosure, DeviceLostInvocation, HostMap, MissingDownlevelFlags,
+        MissingFeatures, RenderPassContext,
     },
     hal_label,
     init_tracker::{
@@ -2755,8 +2755,10 @@ impl Device {
             #[cfg(feature = "wgsl")]
             pipeline::ShaderModuleSource::Wgsl(code) => {
                 profiling::scope!("naga::front::wgsl::parse");
-                let capabilities =
-                    features_to_naga_capabilities(self.features, self.downlevel.flags);
+                let capabilities = crate::device::features_to_naga_capabilities(
+                    self.features,
+                    self.downlevel.flags,
+                );
                 let mut options = naga::front::wgsl::Options::new();
                 options.capabilities = capabilities;
                 let mut frontend = naga::front::wgsl::Frontend::new_with_options(options);
