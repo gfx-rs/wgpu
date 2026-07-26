@@ -99,19 +99,6 @@ impl crate::Error {
 /// This is the WebGPU counterpart of [`wgpu_hal::DropCallback`].
 pub type DropCallback = Box<dyn FnOnce() + 'static>;
 
-/// A video source for [`Device::import_external_texture`].
-///
-/// This is the `source` of a WebGPU `GPUExternalTextureDescriptor`.
-///
-/// [`Device::import_external_texture`]: crate::Device::import_external_texture
-#[derive(Debug, Clone)]
-pub enum ExternalTextureSource {
-    /// An `HTMLVideoElement`.
-    HtmlVideoElement(web_sys::HtmlVideoElement),
-    /// A WebCodecs `VideoFrame`.
-    VideoFrame(web_sys::VideoFrame),
-}
-
 pub(crate) struct DropGuard {
     callback: Option<DropCallback>,
 }
@@ -1413,6 +1400,19 @@ pub struct WebTexture {
     ident: crate::cmp::Identifier,
 }
 
+/// A video source for [`Device::import_external_texture`].
+///
+/// This is the `source` of a WebGPU `GPUExternalTextureDescriptor`.
+///
+/// [`Device::import_external_texture`]: crate::Device::import_external_texture
+#[derive(Debug, Clone)]
+pub enum ExternalTextureSource {
+    /// An `HTMLVideoElement`.
+    HtmlVideoElement(web_sys::HtmlVideoElement),
+    /// A WebCodecs `VideoFrame`.
+    VideoFrame(web_sys::VideoFrame),
+}
+
 #[derive(Debug, Clone)]
 pub struct WebExternalTexture {
     pub(crate) inner: webgpu_sys::GpuExternalTexture,
@@ -2293,11 +2293,10 @@ impl dispatch::DeviceInterface for WebDevice {
                 }
                 crate::BindingResource::ExternalTexture(external_texture) => {
                     let external_texture = &external_texture.inner.as_webgpu().inner;
-                    let entry: webgpu_sys::GpuBindGroupEntry =
-                        js_sys::Object::new().unchecked_into();
-                    entry.set_binding(binding.binding);
-                    entry.set_resource_gpu_external_texture(external_texture);
-                    entry
+                    webgpu_sys::GpuBindGroupEntry::new_with_gpu_external_texture(
+                        binding.binding,
+                        external_texture,
+                    )
                 }
             })
             .collect::<Vec<webgpu_sys::GpuBindGroupEntry>>();
