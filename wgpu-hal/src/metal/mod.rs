@@ -1347,7 +1347,10 @@ struct CommandState {
     /// [`ResourceBinding`]: naga::ResourceBinding
     storage_buffer_length_map: FastHashMap<(naga::ResourceBinding, u32), wgt::BufferSize>,
 
-    vertex_buffer_size_map: FastHashMap<u32, wgt::BufferSize>,
+    /// Sizes of currently bound vertex buffers.
+    ///
+    /// Unlike storage buffer bindings, these may have size zero.
+    vertex_buffer_size_map: FastHashMap<u32, wgt::BufferAddress>,
 
     immediates: Vec<u32>,
 

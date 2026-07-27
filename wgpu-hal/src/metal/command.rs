@@ -23,7 +23,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::{num::NonZeroU64, ops::Range, ptr::NonNull};
+use core::{ops::Range, ptr::NonNull};
 use smallvec::SmallVec;
 use wgpu_sync::atomic;
 
@@ -457,12 +457,13 @@ impl super::CommandState {
                 .unwrap_or_default()
         }));
 
-        // Extend with the sizes of the mapped vertex buffers, in the order
-        // they were added to the map.
+        // Extend with the sizes of the mapped vertex buffers, in the order they were added
+        // to the map. Note that zeros in the sizes buffer can be for either an unused
+        // binding index (no entry in map) or a zero-size binding (map entry that is zero).
         result_sizes.extend(stage_info.vertex_buffer_mappings.iter().map(|vbm| {
             self.vertex_buffer_size_map
                 .get(&vbm.id)
-                .map(|size| u32::try_from(size.get()).unwrap_or(u32::MAX))
+                .map(|&size| u32::try_from(size).unwrap_or(u32::MAX))
                 .unwrap_or_default()
         }));
 
@@ -1435,16 +1436,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         };
 
-        // The size map uses `NonZeroU64` mostly because it did so in the past when
-        // `hal::BufferBinding` tried to disallow zero-length bindings. Zero-length bindings
-        // are valid for vertex buffers, so there isn't really a significance of a
-        // zero-length buffer being removed from the map (vs. the map storing `u64`).
-        if let Some(size) = NonZeroU64::new(binding.size) {
-            self.state.vertex_buffer_size_map.insert(buffer_index, size);
-        } else {
-            // `make_sizes_buffer_update` uses zero for buffers that are not in the map.
-            self.state.vertex_buffer_size_map.remove(&buffer_index);
-        }
+        self.state
+            .vertex_buffer_size_map
+            .insert(buffer_index, binding.size);
 
         if let Some((index, sizes)) = self
             .state
