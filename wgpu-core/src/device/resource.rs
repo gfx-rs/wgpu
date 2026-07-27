@@ -372,7 +372,7 @@ impl Drop for Device {
         api_log!("Device::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
 
-        // The timestamp normalizer is late-initialized so is not included in `DeviceResources`.
+        // The timestamp normalizer is late-initialized, so it is not included in `DeviceResources`.
         if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
             timestamp_normalizer.dispose(self.raw.as_ref());
         }
@@ -392,14 +392,14 @@ impl Drop for Device {
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence) };
 
-        let _resources = DeviceResources {
+        drop(DeviceResources {
             raw: self.raw.as_ref(),
             zero_buffer: Some(zero_buffer),
             empty_bgl: Some(empty_bgl),
             default_external_texture_params_buffer: Some(default_external_texture_params_buffer),
             fence: Some(fence),
             indirect_validation: self.indirect_validation.take(),
-        };
+        });
     }
 }
 
