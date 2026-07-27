@@ -3137,18 +3137,18 @@ dependencies = [
 
 [[package]]
 name = "pollster"
-version = "0.4.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f3a9f18d041e6d0e102a0a46750538147e5e8992d3b4873aaafee2520b00ce3"
+checksum = "bc6355899e1c9462875b6757c79f3caa011a1fdae12bbb1a2e72dd1f234f8336"
 dependencies = [
  "pollster-macro",
 ]
 
 [[package]]
 name = "pollster-macro"
-version = "0.4.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac5da421106a50887c5b51d20806867db377fbb86bacf478ee0500a912e0c113"
+checksum = "79af046f3496a2db85e4c2fb04f2e9ff77e6b82f29bd43012b398290ce2c811c"
 dependencies = [
  "proc-macro2",
  "quote",

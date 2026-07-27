@@ -176,7 +176,7 @@ pico-args = { version = "0.5", features = [
     "combined-flags",
 ] }
 png = "0.18"
-pollster = "0.4"
+pollster = "1.0"
 portable-atomic = "1.10"
 portable-atomic-util = "0.2.4"
 pp-rs = "0.2.1"
