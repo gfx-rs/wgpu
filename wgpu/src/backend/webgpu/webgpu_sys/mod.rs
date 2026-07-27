@@ -162,6 +162,8 @@ mod gen_GpuMipmapFilterMode;
 pub use gen_GpuMipmapFilterMode::*;
 mod gen_GpuMultisampleState;
 pub use gen_GpuMultisampleState::*;
+mod gen_GpuInternalError;
+pub use gen_GpuInternalError::*;
 mod gen_GpuObjectDescriptorBase;
 pub use gen_GpuObjectDescriptorBase::*;
 mod gen_GpuOrigin2dDict;

@@ -505,6 +505,7 @@ struct RenderPassKey {
 struct DeviceShared {
     raw: ash::Device,
     family_index: u32,
+    queue_flags: vk::QueueFlags,
     queue_index: u32,
     raw_queue: vk::Queue,
     instance: Arc<InstanceShared>,

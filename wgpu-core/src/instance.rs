@@ -262,7 +262,7 @@ impl Instance {
         &self,
         display_handle: Option<raw_window_handle::RawDisplayHandle>,
         window_handle: raw_window_handle::RawWindowHandle,
-    ) -> Result<Surface, CreateSurfaceError> {
+    ) -> Result<Arc<Surface>, CreateSurfaceError> {
         profiling::scope!("Instance::create_surface");
 
         let instance_display_handle = self.display.as_ref().map(|d| {
@@ -308,10 +308,10 @@ impl Instance {
                 errors,
             ))
         } else {
-            let surface = Surface {
+            let surface = Arc::new(Surface {
                 presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
                 surface_per_backend,
-            };
+            });
 
             Ok(surface)
         }
@@ -338,7 +338,7 @@ impl Instance {
         width: u32,
         height: u32,
         refresh_rate: u32,
-    ) -> Result<Surface, CreateSurfaceError> {
+    ) -> Result<Arc<Surface>, CreateSurfaceError> {
         profiling::scope!("Instance::create_surface_from_drm");
 
         let mut errors = HashMap::default();
@@ -375,10 +375,10 @@ impl Instance {
                 errors,
             ))
         } else {
-            let surface = Surface {
+            let surface = Arc::new(Surface {
                 presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
                 surface_per_backend,
-            };
+            });
 
             Ok(surface)
         }
@@ -391,7 +391,7 @@ impl Instance {
     pub unsafe fn create_surface_metal(
         &self,
         layer: *mut core::ffi::c_void,
-    ) -> Result<Surface, CreateSurfaceError> {
+    ) -> Result<Arc<Surface>, CreateSurfaceError> {
         profiling::scope!("Instance::create_surface_metal");
 
         let instance = unsafe { self.as_hal::<hal::api::Metal>() }
@@ -413,10 +413,10 @@ impl Instance {
         let raw_surface: Box<dyn hal::DynSurface> =
             Box::new(instance.create_surface_from_layer(layer));
 
-        let surface = Surface {
+        let surface = Arc::new(Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
             surface_per_backend: core::iter::once((Backend::Metal, raw_surface)).collect(),
-        };
+        });
 
         Ok(surface)
     }
@@ -425,15 +425,15 @@ impl Instance {
     fn create_surface_dx12(
         &self,
         create_surface_func: impl FnOnce(&hal::dx12::Instance) -> hal::dx12::Surface,
-    ) -> Result<Surface, CreateSurfaceError> {
+    ) -> Result<Arc<Surface>, CreateSurfaceError> {
         let instance = unsafe { self.as_hal::<hal::api::Dx12>() }
             .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Dx12))?;
         let surface: Box<dyn hal::DynSurface> = Box::new(create_surface_func(instance));
 
-        let surface = Surface {
+        let surface = Arc::new(Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
             surface_per_backend: core::iter::once((Backend::Dx12, surface)).collect(),
-        };
+        });
 
         Ok(surface)
     }
@@ -445,7 +445,7 @@ impl Instance {
     pub unsafe fn create_surface_from_visual(
         &self,
         visual: *mut core::ffi::c_void,
-    ) -> Result<Surface, CreateSurfaceError> {
+    ) -> Result<Arc<Surface>, CreateSurfaceError> {
         profiling::scope!("Instance::instance_create_surface_from_visual");
         self.create_surface_dx12(|inst| unsafe { inst.create_surface_from_visual(visual) })
     }
@@ -457,7 +457,7 @@ impl Instance {
     pub unsafe fn create_surface_from_surface_handle(
         &self,
         surface_handle: *mut core::ffi::c_void,
-    ) -> Result<Surface, CreateSurfaceError> {
+    ) -> Result<Arc<Surface>, CreateSurfaceError> {
         profiling::scope!("Instance::instance_create_surface_from_surface_handle");
         self.create_surface_dx12(|inst| unsafe {
             inst.create_surface_from_surface_handle(surface_handle)
@@ -471,7 +471,7 @@ impl Instance {
     pub unsafe fn create_surface_from_swap_chain_panel(
         &self,
         swap_chain_panel: *mut core::ffi::c_void,
-    ) -> Result<Surface, CreateSurfaceError> {
+    ) -> Result<Arc<Surface>, CreateSurfaceError> {
         profiling::scope!("Instance::instance_create_surface_from_swap_chain_panel");
         self.create_surface_dx12(|inst| unsafe {
             inst.create_surface_from_swap_chain_panel(swap_chain_panel)
@@ -531,7 +531,7 @@ impl Instance {
                         }
                     })
                     .map(|raw| {
-                        let adapter = Adapter::new(raw, self.devices.clone());
+                        let adapter = Adapter::new(raw, self.devices.clone(), self.flags);
                         api_log_debug!("Adapter {:?}", adapter.raw.info);
                         adapter
                     }),
@@ -681,7 +681,7 @@ impl Instance {
 
         if let Some(adapter) = adapters.into_iter().next() {
             api_log_debug!("Request adapter result {:?}", adapter.info);
-            let adapter = Adapter::new(adapter, self.devices.clone());
+            let adapter = Adapter::new(adapter, self.devices.clone(), self.flags);
             Ok(adapter)
         } else {
             Err(wgt::RequestAdapterError::NotFound {
@@ -736,7 +736,7 @@ impl Instance {
     ) -> Arc<Adapter> {
         profiling::scope!("Instance::create_adapter_from_hal");
 
-        let adapter = Adapter::new(hal_adapter, self.devices.clone());
+        let adapter = Adapter::new(hal_adapter, self.devices.clone(), self.flags);
 
         resource_log!("Created Adapter {:?}", Arc::as_ptr(&adapter));
         adapter
@@ -1044,11 +1044,20 @@ impl Drop for Surface {
 pub struct Adapter {
     pub(crate) raw: hal::DynExposedAdapter,
     pub(crate) devices: InstanceDevices,
+    pub(crate) instance_flags: InstanceFlags,
 }
 
 impl Adapter {
-    pub(crate) fn new(raw: hal::DynExposedAdapter, devices: InstanceDevices) -> Arc<Self> {
-        Arc::new(Self { raw, devices })
+    pub(crate) fn new(
+        raw: hal::DynExposedAdapter,
+        devices: InstanceDevices,
+        flags: InstanceFlags,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            raw,
+            devices,
+            instance_flags: flags,
+        })
     }
 
     /// Returns the backend this adapter is using.
@@ -1186,15 +1195,14 @@ impl Adapter {
         self: &Arc<Self>,
         hal_device: hal::DynOpenDevice,
         desc: &DeviceDescriptor,
-        instance_flags: InstanceFlags,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         profiling::scope!("Adapter::create_device_and_queue_from_hal");
         api_log!("Adapter::create_device_and_queue_from_hal");
 
-        let device = Device::new(hal_device.device, self, desc, instance_flags)?;
+        let device = Device::new(hal_device.device, self, desc, self.instance_flags)?;
         let device = Arc::new(device);
 
-        let queue = Queue::new(device.clone(), hal_device.queue, instance_flags)?;
+        let queue = Queue::new(device.clone(), hal_device.queue, self.instance_flags)?;
         let queue = Arc::new(queue);
 
         device.set_queue(&queue);
@@ -1211,13 +1219,12 @@ impl Adapter {
     pub fn request_device(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
-        instance_flags: InstanceFlags,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         profiling::scope!("Adapter::request_device");
         api_log!("Adapter::request_device");
         let mut desc = desc.clone();
         filter_features_and_limits(
-            instance_flags,
+            self.instance_flags,
             &mut desc.required_features,
             &mut desc.required_limits,
         );
@@ -1275,7 +1282,7 @@ impl Adapter {
         }
         .map_err(DeviceError::from_hal)?;
 
-        unsafe { self.create_device_and_queue_from_hal(open, &desc, instance_flags) }
+        unsafe { self.create_device_and_queue_from_hal(open, &desc) }
     }
 }
 
@@ -1361,7 +1368,7 @@ impl Global {
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
         let surface = unsafe { self.instance.create_surface(display_handle, window_handle) }?;
-        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        let id = self.surfaces.prepare(id_in).assign(surface);
         Ok(id)
     }
 
@@ -1397,7 +1404,7 @@ impl Global {
                 refresh_rate,
             )
         }?;
-        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        let id = self.surfaces.prepare(id_in).assign(surface);
 
         Ok(id)
     }
@@ -1412,7 +1419,7 @@ impl Global {
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
         let surface = unsafe { self.instance.create_surface_metal(layer) }?;
-        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        let id = self.surfaces.prepare(id_in).assign(surface);
         Ok(id)
     }
 
@@ -1426,7 +1433,7 @@ impl Global {
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
         let surface = unsafe { self.instance.create_surface_from_visual(visual) }?;
-        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        let id = self.surfaces.prepare(id_in).assign(surface);
         Ok(id)
     }
 
@@ -1443,7 +1450,7 @@ impl Global {
             self.instance
                 .create_surface_from_surface_handle(surface_handle)
         }?;
-        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        let id = self.surfaces.prepare(id_in).assign(surface);
         Ok(id)
     }
 
@@ -1460,7 +1467,7 @@ impl Global {
             self.instance
                 .create_surface_from_swap_chain_panel(swap_chain_panel)
         }?;
-        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        let id = self.surfaces.prepare(id_in).assign(surface);
         Ok(id)
     }
 
@@ -1587,7 +1594,7 @@ impl Global {
         let queue_fid = self.hub.queues.prepare(queue_id_in);
 
         let adapter = self.hub.adapters.get(adapter_id);
-        let (device, queue) = adapter.request_device(desc, self.instance.flags)?;
+        let (device, queue) = adapter.request_device(desc)?;
 
         let device_id = device_fid.assign(device);
         resource_log!("Created Device {:?}", device_id);
@@ -1614,9 +1621,8 @@ impl Global {
         let queues_fid = self.hub.queues.prepare(queue_id_in);
 
         let adapter = self.hub.adapters.get(adapter_id);
-        let (device, queue) = unsafe {
-            adapter.create_device_and_queue_from_hal(hal_device, desc, self.instance.flags)
-        }?;
+        let (device, queue) =
+            unsafe { adapter.create_device_and_queue_from_hal(hal_device, desc) }?;
 
         let device_id = devices_fid.assign(device);
 
