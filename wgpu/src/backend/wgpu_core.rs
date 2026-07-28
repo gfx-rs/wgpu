@@ -2000,6 +2000,11 @@ impl dispatch::QueueInterface for CoreQueue {
     ) {
         let buffer = buffer.as_core();
         let staging_buffer = {
+            #[allow(
+                clippy::allow_attributes,
+                unreachable_patterns,
+                reason = "features may be disabled"
+            )]
             match staging_buffer {
                 dispatch::DispatchQueueWriteBuffer::Core(value) => value,
                 _ => panic!(concat!(

@@ -304,15 +304,6 @@ impl Instance {
     pub fn poll_all(&self, force_wait: bool) -> bool {
         self.inner.poll_all_devices(force_wait)
     }
-
-    /// Generates memory report.
-    ///
-    /// Returns `None` if the feature is not supported by the backend
-    /// which happens only when WebGPU is pre-selected by the instance creation.
-    #[cfg(wgpu_core)]
-    pub fn generate_report(&self) -> Option<wgc::global::GlobalReport> {
-        self.inner.as_core_opt().map(|ctx| ctx.generate_report())
-    }
 }
 
 /// Interop with wgpu-hal.
