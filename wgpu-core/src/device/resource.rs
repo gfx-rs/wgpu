@@ -415,6 +415,10 @@ impl Device {
     pub fn downlevel(&self) -> &wgt::DownlevelCapabilities {
         &self.downlevel
     }
+
+    pub fn adapter_info(&self) -> wgt::AdapterInfo {
+        self.adapter.get_info()
+    }
 }
 
 impl Device {
