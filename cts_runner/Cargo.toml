@@ -24,6 +24,7 @@ log.workspace = true
 pico-args.workspace = true
 tokio = { workspace = true, features = ["full"] }
 termcolor.workspace = true
+wgpu-hal = { workspace = true, features = ["internal_error_panic"] }
 
 [dev-dependencies]
 tempfile.workspace = true

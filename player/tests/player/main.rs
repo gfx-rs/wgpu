@@ -74,24 +74,16 @@ impl Test<'_> {
         ron::de::from_str(&string).unwrap_or_else(|e| panic!("{path:?}:{} {}", e.span, e.code))
     }
 
-    fn run(
-        self,
-        dir: &Path,
-        instance_flags: wgt::InstanceFlags,
-        adapter: Arc<wgc::instance::Adapter>,
-    ) {
+    fn run(self, dir: &Path, adapter: Arc<wgc::instance::Adapter>) {
         let (device, queue) = adapter
-            .request_device(
-                &wgt::DeviceDescriptor {
-                    label: None,
-                    required_features: self.features,
-                    required_limits: wgt::Limits::default(),
-                    experimental_features: unsafe { wgt::ExperimentalFeatures::enabled() },
-                    memory_hints: wgt::MemoryHints::default(),
-                    trace: wgt::Trace::Off,
-                },
-                instance_flags,
-            )
+            .request_device(&wgt::DeviceDescriptor {
+                label: None,
+                required_features: self.features,
+                required_limits: wgt::Limits::default(),
+                experimental_features: unsafe { wgt::ExperimentalFeatures::enabled() },
+                memory_hints: wgt::MemoryHints::default(),
+                trace: wgt::Trace::Off,
+            })
             .unwrap();
 
         let mut player = Player::default();
@@ -182,7 +174,6 @@ impl Corpus {
                 println!("\t\tTest '{test_path:?}'");
 
                 let instance_desc = wgt::InstanceDescriptor::new_without_display_handle_from_env();
-                let instance_flags = instance_desc.flags;
                 let instance = wgc::instance::Instance::new("test", instance_desc, None);
                 let adapter = match instance.request_adapter(
                     &wgt::RequestAdapterOptions::default(),
@@ -211,7 +202,7 @@ impl Corpus {
                     println!("\t\tSkipped due to missing compute shader capability");
                     continue;
                 }
-                test.run(dir, instance_flags, adapter);
+                test.run(dir, adapter);
             }
         }
     }

@@ -44,7 +44,7 @@ pub use self::encoder_command::PointerReferences;
 // here. Some types (in particular `CopySide`) may be exported unnecessarily.
 pub use self::{
     bundle::{
-        bundle_ffi, CreateRenderBundleError, ExecutionError, RenderBundle, RenderBundleDescriptor,
+        CreateRenderBundleError, ExecutionError, RenderBundle, RenderBundleDescriptor,
         RenderBundleEncoder, RenderBundleEncoderDescriptor, RenderBundleError,
         RenderBundleErrorInner,
     },
@@ -116,8 +116,6 @@ pub type TexelCopyTextureInfo = ffi::TexelCopyTextureInfo;
 /// cbindgen:ignore
 pub type CopyExternalImageDestInfo = ffi::CopyExternalImageDestInfo;
 
-const IMMEDIATES_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
-
 pub(crate) struct EncoderErrorState {
     error: CommandEncoderError,
 
@@ -151,15 +149,12 @@ fn make_error_state<E: Into<CommandEncoderError>>(error: E) -> CommandEncoderSta
 pub(crate) enum CommandEncoderStatus {
     /// Ready to record commands. An encoder's initial state.
     ///
-    /// Command building methods like [`command_encoder_clear_buffer`] and
-    /// [`compute_pass_end`] require the encoder to be in this
+    /// Command building methods like [`CommandEncoder::clear_buffer`] and
+    /// [`ComputePass::end`] require the encoder to be in this
     /// state.
     ///
     /// This corresponds to WebGPU's "open" state.
     /// See <https://www.w3.org/TR/webgpu/#encoder-state-open>
-    ///
-    /// [`command_encoder_clear_buffer`]: Global::command_encoder_clear_buffer
-    /// [`compute_pass_end`]: Global::compute_pass_end
     Recording(CommandBufferMutable),
 
     /// Locked by a render or compute pass.
@@ -176,14 +171,16 @@ pub(crate) enum CommandEncoderStatus {
 
     /// Command recording is complete, and the buffer is ready for submission.
     ///
-    /// [`Global::command_encoder_finish`] transitions a
+    /// [`CommandEncoder::finish`] transitions a
     /// `CommandBuffer` from the `Recording` state into this state.
     ///
-    /// [`Global::queue_submit`] requires that command buffers are
+    /// [`Queue::submit`] requires that command buffers are
     /// in this state.
     ///
     /// This corresponds to WebGPU's "ended" state.
     /// See <https://www.w3.org/TR/webgpu/#encoder-state-ended>
+    ///
+    /// [`Queue::submit`]: crate::device::queue::Queue::submit
     Finished(CommandBufferMutable),
 
     /// The command encoder is invalid.
@@ -1559,12 +1556,6 @@ pub struct BasePass<C, E> {
     /// Each successive [`PushDebugGroup`] or [`InsertDebugMarker`]
     /// instruction consumes the next `len` bytes from this vector.
     pub string_data: Vec<u8>,
-
-    /// Data used by `SetImmediate` instructions.
-    ///
-    /// See the documentation for [`RenderCommand::SetImmediate`]
-    /// and [`ComputeCommand::SetImmediate`] for details.
-    pub immediates_data: Vec<u32>,
 }
 
 impl<C: Clone, E: Clone> BasePass<C, E> {
@@ -1575,7 +1566,6 @@ impl<C: Clone, E: Clone> BasePass<C, E> {
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
-            immediates_data: Vec::new(),
         }
     }
 
@@ -1586,7 +1576,6 @@ impl<C: Clone, E: Clone> BasePass<C, E> {
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
-            immediates_data: Vec::new(),
         }
     }
 
@@ -1605,7 +1594,6 @@ impl<C: Clone, E: Clone> BasePass<C, E> {
                 commands: mem::take(&mut self.commands),
                 dynamic_offsets: mem::take(&mut self.dynamic_offsets),
                 string_data: mem::take(&mut self.string_data),
-                immediates_data: mem::take(&mut self.immediates_data),
             }),
         }
     }
@@ -1992,27 +1980,7 @@ pub(crate) fn pop_debug_group(state: &mut EncodingState) -> Result<(), CommandEn
     Ok(())
 }
 
-fn immediates_clear<PushFn>(offset: u32, size_bytes: u32, mut push_fn: PushFn)
-where
-    PushFn: FnMut(u32, &[u32]),
-{
-    let mut count_words = 0_u32;
-    let size_words = size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT;
-    while count_words < size_words {
-        let count_bytes = count_words * wgt::IMMEDIATE_DATA_ALIGNMENT;
-        let size_to_write_words =
-            (size_words - count_words).min(IMMEDIATES_CLEAR_ARRAY.len() as u32);
-
-        push_fn(
-            offset + count_bytes,
-            &IMMEDIATES_CLEAR_ARRAY[0..size_to_write_words as usize],
-        );
-
-        count_words += size_to_write_words;
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 struct StateChange<T> {
     last_state: Option<T>,
 }

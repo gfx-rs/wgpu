@@ -48,7 +48,7 @@ impl super::Instruction {
 
     pub(super) fn source_continued(source: &[u8]) -> Self {
         let mut instruction = Self::new(Op::SourceContinued);
-        instruction.add_operands(helpers::str_bytes_to_words(source));
+        instruction.add_operands(helpers::debug_str_bytes_to_words(source));
         instruction
     }
 
@@ -69,7 +69,7 @@ impl super::Instruction {
 
             let words = helpers::string_to_byte_chunks(debug_info.source_code, u16::MAX as usize);
             instruction.add_operand(debug_info.source_file_id);
-            instruction.add_operands(helpers::str_bytes_to_words(words[0]));
+            instruction.add_operands(helpers::debug_str_bytes_to_words(words[0]));
             instructions.push(instruction);
             for word_bytes in words[1..].iter() {
                 let instruction_continue = Self::source_continued(word_bytes);

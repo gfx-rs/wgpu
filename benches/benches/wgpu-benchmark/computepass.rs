@@ -77,7 +77,9 @@ impl ComputepassState {
                 | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
         )
         // TODO: as of writing llvmpipe segfaults the bindless benchmark on ci
-        && device_state.adapter_info.driver != "llvmpipe";
+        && device_state.adapter_info.driver != "llvmpipe"
+        // TODO(https://github.com/gfx-rs/wgpu/issues/9849): Currently broken on Metal
+        && device_state.adapter_info.backend != wgpu::Backend::Metal;
 
         // Performance gets considerably worse if the resources are shuffled.
         //

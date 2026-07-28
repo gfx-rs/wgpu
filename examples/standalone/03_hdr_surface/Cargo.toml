@@ -24,9 +24,9 @@ block2 = "0.6.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.5"
-wasm-bindgen = "0.2.108"
-wasm-bindgen-futures = "0.4.58"
-web-sys = { version = "0.3.85", features = [
+wasm-bindgen = "0.2.123"
+wasm-bindgen-futures = "0.4.73"
+web-sys = { version = "0.3.100", features = [
     "console",
     "Document",
     "Element",

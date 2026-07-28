@@ -429,6 +429,93 @@ impl BlockContext<'_> {
         block
     }
 
+    /// If `pointer` refers to a scalar reached by a dynamic (non-constant)
+    /// index into a vector in the [`Immediate`] (push-constant) address
+    /// space, write code to access the value, returning the ID of the
+    /// result. Else return `None`.
+    ///
+    /// `VUID-RuntimeSpirv-None-04745` requires:
+    ///
+    /// > All block members in a variable with a Storage Class of PushConstant
+    /// > declared as an array must only be accessed by dynamically uniform
+    /// > indices
+    ///
+    /// According to [upstream discussion], this requirement was intended to
+    /// allow drivers to always compile loads from push constants as scalar
+    /// loads; the omission of vectors seems to be an oversight.
+    ///
+    /// Naga IR, however, has no such restriction on indexing vectors in the
+    /// `Immediate` address space. So Naga must not emit `OpAccessChain` with
+    /// such an index directly into a `PushConstant` vector.
+    ///
+    /// Instead, this loads the whole vector -- a plain `OpLoad`, which isn't
+    /// subject to the restriction above -- and then extracts the desired
+    /// component from that loaded value with `OpVectorExtractDynamic`, exactly
+    /// as [`Self::write_vector_access()`] already does for by-value vectors.
+    ///
+    /// [`Immediate`]: crate::AddressSpace::Immediate
+    /// [upstream discussion]: https://gitlab.freedesktop.org/mesa/mesa/-/work_items/15891#note_3573369
+    fn maybe_write_immediate_vector_dynamic_access(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        block: &mut Block,
+    ) -> Result<Option<Word>, Error> {
+        // We're only interested in a scalar reached by indexing into a
+        // vector with a computed (not compile-time-constant) index.
+        let crate::Expression::Access {
+            base: vector_pointer,
+            index,
+        } = self.ir_function.expressions[pointer]
+        else {
+            return Ok(None);
+        };
+
+        // If the index is actually a compile-time constant, the plain
+        // access-chain path is fine: constants are as uniform as can be.
+        if let GuardedIndex::Known(_) =
+            GuardedIndex::from_expression(index, &self.ir_function.expressions, self.ir_module)
+        {
+            return Ok(None);
+        }
+
+        // Ensure `vector_pointer` is a pointer to a vector in the Immediate
+        // (push-constant) address space.
+        let vector_pointer_ty = self.fun_info[vector_pointer]
+            .ty
+            .inner_with(&self.ir_module.types);
+        if vector_pointer_ty.pointer_space() != Some(crate::AddressSpace::Immediate) {
+            return Ok(None);
+        }
+        let Some(vector_base_ty) = vector_pointer_ty.pointer_base_type() else {
+            return Ok(None);
+        };
+        let crate::TypeInner::Vector { size, scalar } =
+            *vector_base_ty.inner_with(&self.ir_module.types)
+        else {
+            return Ok(None);
+        };
+
+        let vector_type_id = self.get_numeric_type_id(NumericType::Vector { size, scalar });
+        let component_type_id = self.get_numeric_type_id(NumericType::Scalar(scalar));
+
+        let vector_load_id = self.write_checked_load(
+            vector_pointer,
+            block,
+            AccessTypeAdjustment::None,
+            vector_type_id,
+        )?;
+
+        let result_id = self.write_vector_access(
+            component_type_id,
+            vector_pointer,
+            Some(vector_load_id),
+            GuardedIndex::Expression(index),
+            block,
+        )?;
+
+        Ok(Some(result_id))
+    }
+
     /// If `pointer` refers to an access chain that contains a dynamic indexing
     /// of a two-row matrix in the [`Uniform`] address space, write code to
     /// access the value returning the ID of the result. Else return None.
@@ -2773,7 +2860,11 @@ impl BlockContext<'_> {
         access_type_adjustment: AccessTypeAdjustment,
         result_type_id: Word,
     ) -> Result<Word, Error> {
-        if let Some(result_id) = self.maybe_write_uniform_matcx2_dynamic_access(pointer, block)? {
+        if let Some(result_id) = self.maybe_write_immediate_vector_dynamic_access(pointer, block)? {
+            Ok(result_id)
+        } else if let Some(result_id) =
+            self.maybe_write_uniform_matcx2_dynamic_access(pointer, block)?
+        {
             Ok(result_id)
         } else if let Some(result_id) =
             self.maybe_write_load_uniform_matcx2_struct_member(pointer, block)?

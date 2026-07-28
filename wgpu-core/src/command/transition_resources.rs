@@ -126,7 +126,7 @@ pub(crate) fn transition_resources(
     Ok(())
 }
 
-/// Error encountered while attempting to perform [`Global::command_encoder_transition_resources`].
+/// Error encountered while attempting to perform [`CommandEncoder::transition_resources`].
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum TransitionResourcesError {

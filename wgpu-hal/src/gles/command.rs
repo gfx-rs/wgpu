@@ -659,7 +659,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         wgt::TextureSampleType::Float { .. } => C::ClearColorF {
                             draw_buffer: i as u32,
                             color: [c.r as f32, c.g as f32, c.b as f32, c.a as f32],
-                            is_srgb: cat.target.view.format.is_srgb(),
+                            is_srgb: cat.target.view.format.has_srgb_suffix(),
                         },
                         wgt::TextureSampleType::Uint => C::ClearColorU(
                             i as u32,

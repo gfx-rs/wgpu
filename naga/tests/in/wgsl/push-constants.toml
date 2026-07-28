@@ -1,5 +1,5 @@
 capabilities = "IMMEDIATES"
-targets = "GLSL | HLSL"
+targets = "GLSL | HLSL | ANALYSIS"
 
 [hlsl]
 fake_missing_bindings = true

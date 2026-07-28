@@ -17,7 +17,7 @@ use crate::{
     command::{
         bind::Binder,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState, TextureSurfaceDiscard},
-        pass::{self, flush_bindings_helper},
+        pass::{self, flush_bindings_helper, ImmediateState},
         pass_base, pass_try,
         query::{
             end_occlusion_query, end_pipeline_statistics_query, record_pass_timestamp_writes,
@@ -398,7 +398,6 @@ impl fmt::Debug for RenderPass {
             .field("depth_stencil_target", &self.depth_stencil_attachment)
             .field("command count", &self.base.commands.len())
             .field("dynamic offset count", &self.base.dynamic_offsets.len())
-            .field("immediate data u32 count", &self.base.immediates_data.len())
             .field("multiview mask", &self.multiview_mask)
             .finish()
     }
@@ -682,10 +681,6 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     pass: pass::PassState<'scope, 'snatch_guard, 'cmd_enc>,
 
-    /// A bitmask, tracking which 4-byte slots have been written via `set_immediates`.
-    /// Checked against the pipeline's required slots before each draw call.
-    immediate_slots_set: naga::valid::ImmediateSlots,
-
     active_occlusion_query: Option<(Arc<QuerySet>, u32)>,
     active_pipeline_statistics_query: Option<(Arc<QuerySet>, u32)>,
 }
@@ -726,19 +721,29 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
                 });
             }
             if !self
+                .pass
+                .immediate_state
                 .immediate_slots_set
                 .contains(pipeline.immediate_slots_required)
             {
                 return Err(DrawError::MissingImmediateData {
                     missing: pipeline
                         .immediate_slots_required
-                        .difference(self.immediate_slots_set),
+                        .difference(self.pass.immediate_state.immediate_slots_set),
                 });
             }
             Ok(())
         } else {
             Err(DrawError::MissingPipeline(pass::MissingPipeline))
         }
+    }
+
+    fn flush_immediates(&mut self) {
+        let pipeline = self.pipeline.as_ref().unwrap();
+        let layout = pipeline.layout().unwrap();
+        self.pass
+            .immediate_state
+            .flush_immediates(layout, self.pass.base.raw_encoder);
     }
 
     /// Flush binding state in preparation for a draw call.
@@ -756,7 +761,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         self.pipeline = None;
         self.index.reset();
         self.vertex = Default::default();
-        self.immediate_slots_set = Default::default();
+        self.pass.immediate_state.immediate_slots_set = Default::default();
     }
 
     /// Flush dirty vertex buffer slots to the HAL encoder in preparation for a draw call.
@@ -962,20 +967,9 @@ pub enum RenderPassErrorInner {
     #[error("Unable to clear non-present/read-only stencil")]
     InvalidStencilOps,
     #[error(transparent)]
-    InvalidValuesOffset(#[from] pass::InvalidValuesOffset),
-    #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
-    #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
-    UnalignedIndirectBufferOffset(BufferAddress),
-    #[error("Indirect draw arguments of {args_size} bytes (count = {count}) starting at {offset} would overrun buffer size of {buffer_size}")]
-    IndirectBufferOverrun {
-        count: u32,
-        offset: u64,
-        args_size: u64,
-        buffer_size: u64,
-    },
     #[error("Indirect draw count of {count_bytes} bytes starting at {begin_count_offset} would overrun buffer of size {count_buffer_size}")]
     IndirectCountBufferOverrun {
         count_bytes: u64,
@@ -1101,7 +1095,6 @@ impl WebGpuError for RenderPassError {
             RenderPassErrorInner::IncompatibleBundleTargets(e) => e.webgpu_error_type(),
             RenderPassErrorInner::InvalidAttachment(e) => e.webgpu_error_type(),
             RenderPassErrorInner::TimestampWrites(e) => e.webgpu_error_type(),
-            RenderPassErrorInner::InvalidValuesOffset(e) => e.webgpu_error_type(),
 
             RenderPassErrorInner::InvalidParentEncoder
             | RenderPassErrorInner::UnsupportedResolveTargetFormat { .. }
@@ -1114,8 +1107,6 @@ impl WebGpuError for RenderPassError {
             | RenderPassErrorInner::MismatchedResolveTextureFormat { .. }
             | RenderPassErrorInner::InvalidDepthOps
             | RenderPassErrorInner::InvalidStencilOps
-            | RenderPassErrorInner::UnalignedIndirectBufferOffset(..)
-            | RenderPassErrorInner::IndirectBufferOverrun { .. }
             | RenderPassErrorInner::IndirectCountBufferOverrun { .. }
             | RenderPassErrorInner::ResourceUsageCompatibility(..)
             | RenderPassErrorInner::IncompatibleBundleReadOnlyDepthStencil { .. }
@@ -2433,9 +2424,9 @@ pub(super) fn encode_render_pass(
                 dynamic_offset_count: 0,
 
                 string_offset: 0,
-            },
 
-            immediate_slots_set: Default::default(),
+                immediate_state: ImmediateState::default(),
+            },
 
             active_occlusion_query: None,
             active_pipeline_statistics_query: None,
@@ -2498,23 +2489,17 @@ pub(super) fn encode_render_pass(
                     let scope = PassErrorScope::SetViewport;
                     set_viewport(&mut state, rect, depth_min, depth_max).map_pass_err(scope)?;
                 }
-                ArcRenderCommand::SetImmediate {
-                    offset,
-                    size_bytes,
-                    values_offset,
-                } => {
+                ArcRenderCommand::SetImmediate { offset, data } => {
                     let scope = PassErrorScope::SetImmediate;
-                    pass::set_immediates::<RenderPassErrorInner, _>(
-                        &mut state.pass,
-                        &base.immediates_data,
-                        offset,
-                        size_bytes,
-                        values_offset,
-                        |_| {},
-                    )
-                    .map_pass_err(scope)?;
-                    state.immediate_slots_set |=
-                        naga::valid::ImmediateSlots::from_range(offset, size_bytes);
+                    state
+                        .pass
+                        .immediate_state
+                        .set_immediates::<RenderPassErrorInner>(
+                            &state.pass.base.device.limits,
+                            offset,
+                            &data,
+                        )
+                        .map_pass_err(scope)?;
                 }
                 ArcRenderCommand::SetScissor(rect) => {
                     let scope = PassErrorScope::SetScissorRect;
@@ -2873,11 +2858,10 @@ fn set_pipeline(
     }
 
     // Rebind resource
-    pass::change_pipeline_layout::<RenderPassErrorInner, _>(
+    pass::change_pipeline_layout::<RenderPassErrorInner>(
         &mut state.pass,
         pipeline.layout()?,
         &pipeline.late_sized_buffer_groups,
-        || {},
     )?;
 
     // Update vertex buffer limits.
@@ -3163,6 +3147,7 @@ fn draw(
     state.is_ready(DrawCommandFamily::Draw)?;
     state.flush_vertex_buffers()?;
     state.flush_bindings()?;
+    state.flush_immediates();
 
     state
         .vertex
@@ -3199,6 +3184,7 @@ fn draw_indexed(
     state.is_ready(DrawCommandFamily::DrawIndexed)?;
     state.flush_vertex_buffers()?;
     state.flush_bindings()?;
+    state.flush_immediates();
 
     let last_index = first_index as u64 + index_count as u64;
     let index_limit = state.index.limit;
@@ -3239,6 +3225,7 @@ fn draw_mesh_tasks(
     state.is_ready(DrawCommandFamily::DrawMeshTasks)?;
 
     state.flush_bindings()?;
+    state.flush_immediates();
     validate_mesh_draw_multiview(state)?;
 
     let limits = &state.pass.base.device.limits;
@@ -3294,6 +3281,7 @@ fn multi_draw_indirect(
     state.is_ready(family)?;
     state.flush_vertex_buffers()?;
     state.flush_bindings()?;
+    state.flush_immediates();
 
     if family == DrawCommandFamily::DrawMeshTasks {
         validate_mesh_draw_multiview(state)?;
@@ -3310,19 +3298,20 @@ fn multi_draw_indirect(
     indirect_buffer.check_destroyed(state.pass.base.snatch_guard)?;
 
     if !offset.is_multiple_of(4) {
-        return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
+        return Err(RenderCommandError::UnalignedIndirectBufferOffset(offset).into());
     }
 
     let stride = get_src_stride_of_indirect_args(family);
     let args_size = match stride.checked_mul(u64::from(count)) {
         Some(sz) if sz <= indirect_buffer.size && indirect_buffer.size - sz >= offset => sz,
         args_size => {
-            return Err(RenderPassErrorInner::IndirectBufferOverrun {
+            return Err(RenderCommandError::IndirectBufferOverrun {
                 count,
                 offset,
                 args_size: args_size.unwrap_or(u64::MAX),
                 buffer_size: indirect_buffer.size,
-            });
+            }
+            .into());
         }
     };
 
@@ -3489,6 +3478,7 @@ fn multi_draw_indirect_count(
     state.is_ready(family)?;
     state.flush_vertex_buffers()?;
     state.flush_bindings()?;
+    state.flush_immediates();
 
     if family == DrawCommandFamily::DrawMeshTasks {
         validate_mesh_draw_multiview(state)?;
@@ -3529,18 +3519,19 @@ fn multi_draw_indirect_count(
     let count_raw = count_buffer.try_raw(state.pass.base.snatch_guard)?;
 
     if !offset.is_multiple_of(4) {
-        return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
+        return Err(RenderCommandError::UnalignedIndirectBufferOffset(offset).into());
     }
 
     let args_size = match stride.checked_mul(u64::from(max_count)) {
         Some(sz) if sz <= indirect_buffer.size && indirect_buffer.size - sz >= offset => sz,
         args_size => {
-            return Err(RenderPassErrorInner::IndirectBufferOverrun {
+            return Err(RenderCommandError::IndirectBufferOverrun {
                 count: 1,
                 offset,
                 args_size: args_size.unwrap_or(u64::MAX),
                 buffer_size: indirect_buffer.size,
-            });
+            }
+            .into());
         }
     };
 
@@ -3869,28 +3860,18 @@ impl RenderPass {
         let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(self, scope);
 
-        let size_bytes = pass_try!(
-            base,
-            scope,
-            u32::try_from(data.len()).map_err(|_| ImmediateUploadError::ImmediateOutOfMemory)
-        );
         pass_try!(
             base,
             scope,
-            pass::validate_immediates_alignment(offset, size_bytes)
-        );
-
-        let values_offset = base.immediates_data.len().try_into().unwrap();
-
-        base.immediates_data.extend(
-            data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
-                .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
+            pass::validate_immediates_alignment(offset, data.len())
         );
 
         base.commands.push(ArcRenderCommand::SetImmediate {
             offset,
-            size_bytes: data.len() as u32,
-            values_offset: Some(values_offset),
+            data: data
+                .chunks_exact(size_of::<u32>())
+                .map(|ck| u32::from_le_bytes(ck.try_into().unwrap()))
+                .collect(),
         });
 
         Ok(())
