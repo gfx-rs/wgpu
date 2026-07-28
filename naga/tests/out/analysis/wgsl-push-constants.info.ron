@@ -1,6 +1,11 @@
 (
     type_flags: [
-        ("DATA | SIZED | COPY | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
         ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
         ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
     ],
@@ -10,28 +15,46 @@
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
             available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK | RAY_GENERATION | ANY_HIT | CLOSEST_HIT | MISS"),
             uniformity: (
-                non_uniform_result: None,
+                non_uniform_result: Some(1),
                 requirements: (""),
             ),
             may_kill: false,
             sampling_set: [],
             global_uses: [
                 ("READ"),
-                ("WRITE"),
+                (""),
             ],
             expressions: [
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(0),
                         requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(1),
+                    ty: Handle(6),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(7),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(7),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -43,7 +66,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(2),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -55,54 +78,57 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(1),
                         requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(0),
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(6),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(0),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(5),
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Value(Pointer(
-                        base: 0,
-                        space: Function,
-                    )),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(6),
                         requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(0),
                     ty: Value(Pointer(
-                        base: 1,
-                        space: Private,
+                        base: 2,
+                        space: Immediate,
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(0),
+                    ty: Value(Pointer(
+                        base: 0,
+                        space: Immediate,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(1),
+                    ty: Handle(0),
                 ),
                 (
                     uniformity: (
@@ -118,38 +144,72 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(1),
                         requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar((
-                        kind: Float,
-                        width: 4,
-                    ))),
+                    ty: Handle(3),
                 ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK | RAY_GENERATION | ANY_HIT | CLOSEST_HIT | MISS"),
+            uniformity: (
+                non_uniform_result: Some(0),
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                ("READ"),
+            ],
+            expressions: [
                 (
                     uniformity: (
-                        non_uniform_result: Some(10),
+                        non_uniform_result: Some(0),
                         requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Pointer(
-                        base: 1,
-                        space: Function,
-                    )),
+                    ty: Handle(5),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(11),
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(3),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
                     ty: Value(Pointer(
-                        base: 1,
-                        space: Private,
+                        base: 4,
+                        space: Immediate,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 3,
+                        space: Immediate,
                     )),
                 ),
                 (
@@ -159,43 +219,16 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(1),
+                    ty: Handle(3),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(0),
                         requirements: (""),
                     ),
-                    ref_count: 0,
+                    ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(1),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: None,
-                        requirements: (""),
-                    ),
-                    ref_count: 0,
-                    assignable_global: None,
-                    ty: Handle(1),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: None,
-                        requirements: (""),
-                    ),
-                    ref_count: 0,
-                    assignable_global: None,
-                    ty: Handle(1),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: None,
-                        requirements: (""),
-                    ),
-                    ref_count: 0,
-                    assignable_global: None,
-                    ty: Handle(2),
+                    ty: Handle(3),
                 ),
             ],
             sampling: [],
@@ -203,41 +236,5 @@
             diagnostic_filter_leaf: None,
         ),
     ],
-    const_expression_types: [
-        Value(Scalar((
-            kind: Bool,
-            width: 1,
-        ))),
-        Value(Scalar((
-            kind: Float,
-            width: 4,
-        ))),
-        Value(Scalar((
-            kind: Float,
-            width: 4,
-        ))),
-        Handle(1),
-        Value(Scalar((
-            kind: Float,
-            width: 4,
-        ))),
-        Handle(1),
-        Value(Scalar((
-            kind: Float,
-            width: 4,
-        ))),
-        Value(Scalar((
-            kind: Uint,
-            width: 4,
-        ))),
-        Handle(1),
-        Value(Scalar((
-            kind: Float,
-            width: 4,
-        ))),
-        Value(Scalar((
-            kind: Float,
-            width: 4,
-        ))),
-    ],
+    const_expression_types: [],
 )

@@ -302,19 +302,11 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
     }
 
     fn flush_immediates(&mut self) {
-        // SAFETY: The range of immediates written was validated in `is_ready`.
-        unsafe {
-            self.pass.immediate_state.flush_immediates(
-                self.pipeline
-                    .as_ref()
-                    .unwrap()
-                    .layout()
-                    .unwrap()
-                    .raw()
-                    .unwrap(),
-                self.pass.base.raw_encoder,
-            );
-        }
+        let pipeline = self.pipeline.as_ref().unwrap();
+        let layout = pipeline.layout().unwrap();
+        self.pass
+            .immediate_state
+            .flush_immediates(layout, self.pass.base.raw_encoder);
     }
 
     /// Flush binding state in preparation for a dispatch.

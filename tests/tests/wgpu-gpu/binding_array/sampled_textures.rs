@@ -273,7 +273,13 @@ static PARTIAL_BINDING_ARRAY_FOLLOWED_BY_STORAGE_BUFFER: GpuTestConfiguration =
                 .limits(Limits {
                     max_binding_array_elements_per_shader_stage: 32,
                     ..Limits::default()
-                }),
+                })
+                // https://github.com/gfx-rs/wgpu/issues/9184
+                .expect_fail(
+                    wgpu_test::FailureCase::molten_vk()
+                        .validation_error("Shader library compile failed")
+                        .validation_error("could not be compiled into pipeline"),
+                ),
         )
         .run_async(
             |ctx| async move { partial_binding_array_followed_by_storage_buffer(ctx).await },

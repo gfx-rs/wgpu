@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-examples"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Common example code"
 homepage.workspace = true

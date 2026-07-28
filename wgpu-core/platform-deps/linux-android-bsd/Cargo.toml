@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-core-deps-linux-android-bsd"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Feature unification helper crate for the Linux/Android/BSD platforms"
 homepage.workspace = true

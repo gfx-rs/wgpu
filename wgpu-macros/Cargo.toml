@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-macros"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Macros for wgpu"
 homepage.workspace = true

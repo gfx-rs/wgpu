@@ -79,6 +79,11 @@ impl crate::Error {
                 source,
                 description: js_error.message(),
             }
+        } else if let Some(js_error) = js_error.dyn_ref::<webgpu_sys::GpuInternalError>() {
+            crate::Error::Internal {
+                source,
+                description: js_error.message(),
+            }
         } else if js_error.has_type::<webgpu_sys::GpuOutOfMemoryError>() {
             crate::Error::OutOfMemory { source }
         } else {
@@ -1751,6 +1756,9 @@ impl dispatch::InstanceInterface for ContextWebGpu {
                     }
                     "pointer_composite_access" => {
                         Some(crate::WgslLanguageFeatures::PointerCompositeAccess)
+                    }
+                    "immediate_address_space" => {
+                        Some(crate::WgslLanguageFeatures::ImmediateAddressSpace)
                     }
                     _ => None,
                 })

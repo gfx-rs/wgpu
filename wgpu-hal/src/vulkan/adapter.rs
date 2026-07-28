@@ -2586,6 +2586,14 @@ impl super::Adapter {
                     .get_physical_device_memory_properties(self.raw)
             }
         };
+        let queue_flags = unsafe {
+            self.instance
+                .raw
+                .get_physical_device_queue_family_properties(self.raw)
+                .get(family_index as usize)
+                .map(|queue_family_properties| queue_family_properties.queue_flags)
+                .ok_or(crate::DeviceError::Unexpected)?
+        };
         let memory_types = &mem_properties.memory_types_as_slice();
         let valid_ash_memory_types = memory_types.iter().enumerate().fold(0, |u, (i, mem)| {
             if self.known_memory_flags.contains(mem.property_flags) {
@@ -2905,6 +2913,7 @@ impl super::Adapter {
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
             family_index,
+            queue_flags,
             queue_index,
             raw_queue,
             drop_guard,

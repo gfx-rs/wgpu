@@ -1285,18 +1285,18 @@ unsafe impl Sync for StagingBuffer {}
 /// is always created mapped, and the command that uses it destroys the buffer
 /// when it is done.
 ///
-/// [`StagingBuffer`]s can be created with [`queue_create_staging_buffer`] and
-/// used with [`queue_write_staging_buffer`]. They are also used internally by
-/// operations like [`queue_write_texture`] that need to upload data to the GPU,
+/// [`StagingBuffer`]s can be created with [`Queue::create_staging_buffer`] and
+/// used with [`Queue::write_staging_buffer`]. They are also used internally by
+/// operations like [`Queue::write_texture`] that need to upload data to the GPU,
 /// but that don't belong to any particular wgpu command buffer.
 ///
 /// Used `StagingBuffer`s are accumulated in [`Device::pending_writes`], to be
 /// freed once their associated operation's queue submission has finished
 /// execution.
 ///
-/// [`queue_create_staging_buffer`]: crate::global::Global::queue_create_staging_buffer
-/// [`queue_write_staging_buffer`]: crate::global::Global::queue_write_staging_buffer
-/// [`queue_write_texture`]: crate::global::Global::queue_write_texture
+/// [`Queue::create_staging_buffer`]: crate::device::queue::Queue::create_staging_buffer
+/// [`Queue::write_staging_buffer`]: crate::device::queue::Queue::write_staging_buffer
+/// [`Queue::write_texture`]: crate::device::queue::Queue::write_texture
 /// [`Device::pending_writes`]: crate::device::Device
 #[derive(Debug)]
 pub struct StagingBuffer {
@@ -1772,6 +1772,392 @@ impl Texture {
             life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
     }
+
+    fn create_view_inner(
+        self: &Arc<Self>,
+        desc: &TextureViewDescriptor,
+    ) -> Result<Arc<TextureView>, CreateTextureViewError> {
+        let device = &self.device;
+        device.check_is_valid()?;
+
+        let snatch_guard = device.snatchable_lock.read();
+
+        let texture_raw = self.try_inner(&snatch_guard)?.raw();
+
+        // resolve TextureViewDescriptor defaults
+        // https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureviewdescriptor-defaults
+        let resolved_format = desc.format.unwrap_or_else(|| {
+            self.desc
+                .format
+                .aspect_specific_format(desc.range.aspect)
+                .unwrap_or(self.desc.format)
+        });
+
+        let resolved_dimension = desc.dimension.unwrap_or_else(|| match self.desc.dimension {
+            wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
+            wgt::TextureDimension::D2 => {
+                if self.desc.array_layer_count() == 1 {
+                    wgt::TextureViewDimension::D2
+                } else {
+                    wgt::TextureViewDimension::D2Array
+                }
+            }
+            wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
+        });
+
+        let resolved_mip_level_count = desc.range.mip_level_count.unwrap_or_else(|| {
+            self.desc
+                .mip_level_count
+                .saturating_sub(desc.range.base_mip_level)
+        });
+
+        let resolved_array_layer_count =
+            desc.range
+                .array_layer_count
+                .unwrap_or_else(|| match resolved_dimension {
+                    wgt::TextureViewDimension::D1
+                    | wgt::TextureViewDimension::D2
+                    | wgt::TextureViewDimension::D3 => 1,
+                    wgt::TextureViewDimension::Cube => 6,
+                    wgt::TextureViewDimension::D2Array | wgt::TextureViewDimension::CubeArray => {
+                        self.desc
+                            .array_layer_count()
+                            .saturating_sub(desc.range.base_array_layer)
+                    }
+                });
+
+        let resolved_usage = {
+            let usage = desc.usage.unwrap_or(wgt::TextureUsages::empty());
+            if usage.is_empty() {
+                self.desc.usage
+            } else if self.desc.usage.contains(usage) {
+                // Transient texture usage subsetting is disallowed
+                if self
+                    .desc
+                    .usage
+                    .contains(wgt::TextureUsages::TRANSIENT_ATTACHMENT)
+                    && self.desc.usage != usage
+                {
+                    return Err(CreateTextureViewError::InvalidTransientTextureViewUsage {
+                        texture: self.desc.usage,
+                        view: usage,
+                    });
+                }
+
+                usage
+            } else {
+                return Err(CreateTextureViewError::InvalidTextureViewUsage {
+                    view: usage,
+                    texture: self.desc.usage,
+                });
+            }
+        };
+
+        let format_features = device.describe_format_features(resolved_format)?;
+        let allowed_format_usages = format_features.allowed_usages;
+        if resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+            && !allowed_format_usages.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+        {
+            return Err(CreateTextureViewError::TextureViewFormatNotRenderable(
+                resolved_format,
+            ));
+        }
+
+        if resolved_usage.contains(wgt::TextureUsages::STORAGE_BINDING)
+            && !allowed_format_usages.contains(wgt::TextureUsages::STORAGE_BINDING)
+        {
+            return Err(CreateTextureViewError::TextureViewFormatNotStorage(
+                resolved_format,
+            ));
+        }
+
+        // validate TextureViewDescriptor
+
+        let aspects = hal::FormatAspects::new(self.desc.format, desc.range.aspect);
+        if aspects.is_empty() {
+            return Err(CreateTextureViewError::InvalidAspect {
+                texture_format: self.desc.format,
+                requested_aspect: desc.range.aspect,
+            });
+        }
+
+        if desc.range.aspect == wgt::TextureAspect::All && resolved_format.is_multi_planar_format()
+        {
+            return Err(CreateTextureViewError::MultiplanarFullTexture(
+                resolved_format,
+            ));
+        }
+
+        let format_is_good = if desc.range.aspect == wgt::TextureAspect::All {
+            resolved_format == self.desc.format || self.desc.view_formats.contains(&resolved_format)
+        } else {
+            Some(resolved_format) == self.desc.format.aspect_specific_format(desc.range.aspect)
+        };
+        if !format_is_good {
+            return Err(CreateTextureViewError::FormatReinterpretation {
+                texture: self.desc.format,
+                view: resolved_format,
+            });
+        }
+
+        // check if multisampled texture is seen as anything but 2D
+        if self.desc.sample_count > 1 && resolved_dimension != wgt::TextureViewDimension::D2 {
+            // Multisample is allowed on 2D arrays, only if explicitly supported
+            let multisample_array_exception = resolved_dimension
+                == wgt::TextureViewDimension::D2Array
+                && device.features.contains(wgt::Features::MULTISAMPLE_ARRAY);
+
+            if !multisample_array_exception {
+                return Err(
+                    CreateTextureViewError::InvalidMultisampledTextureViewDimension(
+                        resolved_dimension,
+                    ),
+                );
+            }
+        }
+
+        // check if the dimension is compatible with the texture
+        if self.desc.dimension != resolved_dimension.compatible_texture_dimension() {
+            return Err(CreateTextureViewError::InvalidTextureViewDimension {
+                view: resolved_dimension,
+                texture: self.desc.dimension,
+            });
+        }
+
+        match resolved_dimension {
+            wgt::TextureViewDimension::D1
+            | wgt::TextureViewDimension::D2
+            | wgt::TextureViewDimension::D3 => {
+                if resolved_array_layer_count != 1 {
+                    return Err(CreateTextureViewError::InvalidArrayLayerCount {
+                        requested: resolved_array_layer_count,
+                        dim: resolved_dimension,
+                    });
+                }
+            }
+            wgt::TextureViewDimension::Cube => {
+                if resolved_array_layer_count != 6 {
+                    return Err(CreateTextureViewError::InvalidCubemapTextureDepth {
+                        depth: resolved_array_layer_count,
+                    });
+                }
+            }
+            wgt::TextureViewDimension::CubeArray => {
+                if !resolved_array_layer_count.is_multiple_of(6) {
+                    return Err(CreateTextureViewError::InvalidCubemapArrayTextureDepth {
+                        depth: resolved_array_layer_count,
+                    });
+                }
+            }
+            _ => {}
+        }
+
+        match resolved_dimension {
+            wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
+                if self.desc.size.width != self.desc.size.height {
+                    return Err(CreateTextureViewError::InvalidCubeTextureViewSize);
+                }
+            }
+            _ => {}
+        }
+
+        if resolved_mip_level_count == 0 {
+            return Err(CreateTextureViewError::ZeroMipLevelCount);
+        }
+
+        let mip_level_end = desc
+            .range
+            .base_mip_level
+            .saturating_add(resolved_mip_level_count);
+
+        let level_end = self.desc.mip_level_count;
+        if mip_level_end > level_end {
+            return Err(CreateTextureViewError::TooManyMipLevels {
+                base_mip_level: desc.range.base_mip_level,
+                mip_level_count: resolved_mip_level_count,
+                total: level_end,
+            });
+        }
+
+        if resolved_array_layer_count == 0 {
+            return Err(CreateTextureViewError::ZeroArrayLayerCount);
+        }
+
+        let array_layer_end = desc
+            .range
+            .base_array_layer
+            .saturating_add(resolved_array_layer_count);
+
+        let layer_end = self.desc.array_layer_count();
+        if array_layer_end > layer_end {
+            return Err(CreateTextureViewError::TooManyArrayLayers {
+                base_array_layer: desc.range.base_array_layer,
+                array_layer_count: resolved_array_layer_count,
+                total: layer_end,
+            });
+        };
+
+        // https://gpuweb.github.io/gpuweb/#abstract-opdef-renderable-texture-view
+        let render_extent = 'error: {
+            if !resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                break 'error Err(TextureViewNotRenderableReason::Usage(resolved_usage));
+            }
+
+            let allowed_view_dimensions = [
+                wgt::TextureViewDimension::D2,
+                wgt::TextureViewDimension::D2Array,
+                wgt::TextureViewDimension::D3,
+            ];
+            if !allowed_view_dimensions.contains(&resolved_dimension) {
+                break 'error Err(TextureViewNotRenderableReason::Dimension(
+                    resolved_dimension,
+                ));
+            }
+
+            if resolved_mip_level_count != 1 {
+                break 'error Err(TextureViewNotRenderableReason::MipLevelCount(
+                    resolved_mip_level_count,
+                ));
+            }
+
+            if resolved_array_layer_count != 1
+                && !(device.features.contains(wgt::Features::MULTIVIEW))
+            {
+                break 'error Err(TextureViewNotRenderableReason::ArrayLayerCount(
+                    resolved_array_layer_count,
+                ));
+            }
+
+            if !self.desc.format.is_multi_planar_format()
+                && aspects != hal::FormatAspects::from(self.desc.format)
+            {
+                break 'error Err(TextureViewNotRenderableReason::Aspects(aspects));
+            }
+
+            Ok(self
+                .desc
+                .compute_render_extent(desc.range.base_mip_level, desc.range.aspect.to_plane()))
+        };
+
+        // filter the usages based on the other criteria
+        let usage = {
+            let resolved_hal_usage = crate::conv::map_texture_usage(
+                resolved_usage,
+                resolved_format.into(),
+                format_features.flags,
+            );
+            let mask_copy = !(wgt::TextureUses::COPY_SRC | wgt::TextureUses::COPY_DST);
+            let mask_dimension = match resolved_dimension {
+                wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
+                    wgt::TextureUses::RESOURCE
+                }
+                wgt::TextureViewDimension::D3 => {
+                    wgt::TextureUses::RESOURCE
+                        | wgt::TextureUses::STORAGE_READ_ONLY
+                        | wgt::TextureUses::STORAGE_WRITE_ONLY
+                        | wgt::TextureUses::STORAGE_READ_WRITE
+                }
+                _ => wgt::TextureUses::all(),
+            };
+            let mask_mip_level = if resolved_mip_level_count == 1 {
+                wgt::TextureUses::all()
+            } else {
+                wgt::TextureUses::RESOURCE
+            };
+            resolved_hal_usage & mask_copy & mask_dimension & mask_mip_level
+        };
+
+        // use the combined depth-stencil format for the view
+        let format = if resolved_format.is_depth_stencil_component(self.desc.format) {
+            self.desc.format
+        } else {
+            resolved_format
+        };
+
+        let resolved_range = wgt::ImageSubresourceRange {
+            aspect: desc.range.aspect,
+            base_mip_level: desc.range.base_mip_level,
+            mip_level_count: Some(resolved_mip_level_count),
+            base_array_layer: desc.range.base_array_layer,
+            array_layer_count: Some(resolved_array_layer_count),
+        };
+
+        let hal_desc = hal::TextureViewDescriptor {
+            label: desc.label.to_hal(device.instance_flags),
+            format,
+            dimension: resolved_dimension,
+            usage,
+            range: resolved_range,
+        };
+
+        let raw = unsafe { device.raw().create_texture_view(texture_raw, &hal_desc) }
+            .map_err(|e| device.handle_hal_error(e))?;
+
+        let selector = TextureSelector {
+            mips: desc.range.base_mip_level..mip_level_end,
+            layers: desc.range.base_array_layer..array_layer_end,
+        };
+
+        let view = TextureView {
+            state: ResourceState::Valid(TextureViewState {
+                raw: Snatchable::new(raw),
+                render_extent,
+            }),
+            parent: self.clone(),
+            device: device.clone(),
+            desc: HalTextureViewDescriptor {
+                texture_format: self.desc.format,
+                format: resolved_format,
+                dimension: resolved_dimension,
+                usage: resolved_usage,
+                range: resolved_range,
+            },
+            format_features: self.format_features,
+            samples: self.desc.sample_count,
+            selector,
+            label: desc.label.to_string(),
+        };
+
+        let view = Arc::new(view);
+
+        {
+            let mut views = self.views.lock();
+            views.push(Arc::downgrade(&view));
+        }
+
+        Ok(view)
+    }
+
+    pub fn create_view(
+        self: &Arc<Self>,
+        desc: &TextureViewDescriptor,
+    ) -> (Arc<TextureView>, Option<CreateTextureViewError>) {
+        profiling::scope!("Texture::create_view");
+
+        let (view, error) = match self.create_view_inner(desc) {
+            Ok(view) => (view, None),
+            Err(e) => (TextureView::invalid(&self.device, self, desc), Some(e)),
+        };
+
+        api_log!(
+            "Texture::create_view({:?}) -> {:?}",
+            Arc::as_ptr(self),
+            Arc::as_ptr(&view)
+        );
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.device.trace.lock() {
+            use crate::device::trace;
+            use trace::IntoTrace as _;
+            trace.add(trace::Action::CreateTextureView {
+                id: view.to_trace(),
+                parent: self.to_trace(),
+                desc: desc.clone(),
+            });
+        }
+
+        (view, error)
+    }
 }
 
 /// A texture that has been marked as destroyed and is staged for actual deletion soon.
@@ -2243,6 +2629,8 @@ pub enum CreateTextureViewError {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+    #[error("TextureAspect::All cannot be used in texture views on multi-planar formats")]
+    MultiplanarFullTexture(wgt::TextureFormat),
 }
 
 impl From<InvalidOrDestroyedResourceError> for CreateTextureViewError {
@@ -2277,7 +2665,8 @@ impl WebGpuError for CreateTextureViewError {
             | Self::TextureViewFormatNotStorage(_)
             | Self::InvalidTextureViewUsage { .. }
             | Self::InvalidTransientTextureViewUsage { .. }
-            | Self::MissingFeatures(_) => ErrorType::Validation,
+            | Self::MissingFeatures(_)
+            | Self::MultiplanarFullTexture(_) => ErrorType::Validation,
         }
     }
 }
@@ -2642,7 +3031,7 @@ impl QuerySet {
             desc: desc.clone().map_label(|_| ()),
             initialized_slots: Mutex::new(
                 rank::QUERY_SET_INITIALIZED_SLOTS,
-                bit_vec::BitVec::from_elem(desc.count as usize, false),
+                bit_vec::BitVec::new(),
             ),
             device,
         })
