@@ -922,6 +922,18 @@ pub trait Device: WasmNotSendSync {
     /// Creates a new buffer.
     ///
     /// The initial usage is `wgt::BufferUses::empty()`.
+    ///
+    /// `wgpu_hal` may adjust the size in `desc` to a larger value if required
+    /// by the platform. On success, it returns a tuple of the buffer itself
+    /// and its actual allocated size. `wgpu-core` is responsible for
+    /// initializing any portion of the buffer that may be accessed, including
+    /// any padding added by `create_buffer`.
+    ///
+    /// Platform-dependent padding is currently required for uniform buffers on
+    /// dx12. Support for zero-size vertex and index bindings is also platform
+    /// dependent, but presently, `wgpu-core` adds padding to the end of all
+    /// buffers with vertex or index usage, and redirects all zero-size bindings
+    /// to that padding region, regardless of platform.
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,
@@ -1675,11 +1687,39 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &<Self::A as Api>::RenderPipeline);
 
+    /// Register an index buffer binding.
+    ///
+    /// The binding offset must be 4B-aligned and strictly less than the buffer
+    /// size. On some backends, the binding size is ignored. This means that
+    /// zero-size bindings must be simulated by binding a region of zeros
+    /// spanning from the provided offset to the end of the buffer. See
+    /// [`CommandEncoder::set_vertex_buffer`] for more detail.
     unsafe fn set_index_buffer<'a>(
         &mut self,
         binding: BufferBinding<'a, <Self::A as Api>::Buffer, wgt::BufferAddress>,
         format: wgt::IndexFormat,
     );
+    /// Register a vertex buffer binding.
+    ///
+    /// The binding offset must be 4B-aligned and strictly less than the buffer
+    /// size. On some backends, the binding size is ignored. This means that
+    /// zero-size bindings must be simulated by binding a region of zeros
+    /// spanning from the provided offset to the end of the buffer.
+    ///
+    /// These restrictions arise from Vulkan's `vkCmdBindVertexBuffers` and
+    /// `vkCmdBindIndexBuffer`, which:
+    ///
+    ///  1. Do not support specifying the size of the binding.
+    ///  2. Require that the binding offset is strictly less than the buffer size.
+    ///
+    /// A read at any offset from a zero-size binding is out-of-bounds, and
+    /// should return zero. Because the binding size is not respected, this
+    /// means there may not be non-zero data between the binding offset and
+    /// the end of the buffer.
+    ///
+    /// Because the binding offset must be strictly less than the buffer size,
+    /// supporting zero-size bindings requires zero padding at the end of the
+    /// buffer.
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
