@@ -2031,7 +2031,7 @@ impl dispatch::QueueInterface for CoreQueue {
         &self,
         buffer: &dispatch::DispatchBuffer,
         offset: crate::BufferAddress,
-        staging_buffer: &dispatch::DispatchQueueWriteBuffer,
+        staging_buffer: dispatch::DispatchQueueWriteBuffer,
     ) {
         let buffer = buffer.as_core();
         let staging_buffer = staging_buffer.as_core();
