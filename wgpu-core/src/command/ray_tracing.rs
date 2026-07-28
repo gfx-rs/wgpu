@@ -307,7 +307,7 @@ pub(crate) fn build_acceleration_structures(
                 state.tracker.blas_s.insert_single(blas.clone());
             }
 
-            instance_buffer_staging_source.extend(state.device.raw().tlas_instance_to_bytes(
+            state.device.raw().tlas_instance_to_bytes(
                 hal::TlasInstance {
                     transform: instance.transform,
                     custom_data: instance.custom_data,
@@ -315,7 +315,8 @@ pub(crate) fn build_acceleration_structures(
                     blas_address: blas.handle,
                     pipeline_intersection_data_offset: 0,
                 },
-            ));
+                &mut instance_buffer_staging_source,
+            );
 
             if tlas
                 .flags
