@@ -222,6 +222,22 @@ impl DeferredBufferMapPendingClosures {
     }
 }
 
+/// Resources associated with a device.
+///
+/// This struct exists so that resources can be cleaned up properly on error returns
+/// from [`Device::new`].
+///
+/// [`Device::timestamp_normalizer`] is late-initialized after [`Device::new`], so it is not
+/// included here.
+struct DeviceResources<'a> {
+    raw: &'a dyn hal::DynDevice,
+    zero_buffer: Option<Box<dyn hal::DynBuffer>>,
+    empty_bgl: Option<Box<dyn hal::DynBindGroupLayout>>,
+    default_external_texture_params_buffer: Option<Box<dyn hal::DynBuffer>>,
+    fence: Option<Box<dyn hal::DynFence>>,
+    indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
+}
+
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 pub struct Device {
@@ -323,12 +339,45 @@ impl fmt::Debug for Device {
     }
 }
 
+impl Drop for DeviceResources<'_> {
+    fn drop(&mut self) {
+        if let Some(indirect_validation) = self.indirect_validation.take() {
+            indirect_validation.dispose(self.raw);
+        }
+        unsafe {
+            if let Some(zero_buffer) = self.zero_buffer.take() {
+                self.raw.destroy_buffer(zero_buffer);
+            }
+            if let Some(empty_bgl) = self.empty_bgl.take() {
+                self.raw.destroy_bind_group_layout(empty_bgl);
+            }
+            if let Some(default_external_texture_params_buffer) =
+                self.default_external_texture_params_buffer.take()
+            {
+                self.raw
+                    .destroy_buffer(default_external_texture_params_buffer);
+            }
+            if let Some(fence) = self.fence.take() {
+                self.raw.destroy_fence(fence);
+            }
+        }
+    }
+}
+
 impl Drop for Device {
     #[allow(trivial_casts)]
     fn drop(&mut self) {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
+
+        // The timestamp normalizer is late-initialized, so it is not included in `DeviceResources`.
+        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
+            timestamp_normalizer.dispose(self.raw.as_ref());
+        }
+
+        // Transfer the rest of the resources back to `DeviceResources`, which cleans them
+        // up for us.
 
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this
         // point.
@@ -341,19 +390,15 @@ impl Drop for Device {
             unsafe { ManuallyDrop::take(&mut self.default_external_texture_params_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence) };
-        if let Some(indirect_validation) = self.indirect_validation.take() {
-            indirect_validation.dispose(self.raw.as_ref());
-        }
-        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
-            timestamp_normalizer.dispose(self.raw.as_ref());
-        }
-        unsafe {
-            self.raw.destroy_buffer(zero_buffer);
-            self.raw.destroy_bind_group_layout(empty_bgl);
-            self.raw
-                .destroy_buffer(default_external_texture_params_buffer);
-            self.raw.destroy_fence(fence);
-        }
+
+        drop(DeviceResources {
+            raw: self.raw.as_ref(),
+            zero_buffer: Some(zero_buffer),
+            empty_bgl: Some(empty_bgl),
+            default_external_texture_params_buffer: Some(default_external_texture_params_buffer),
+            fence: Some(fence),
+            indirect_validation: self.indirect_validation.take(),
+        });
     }
 }
 
@@ -484,7 +529,17 @@ impl Device {
         let ordered_buffer_usages = adapter.raw.adapter.get_ordered_buffer_usages();
         let ordered_texture_usages = adapter.raw.adapter.get_ordered_texture_usages();
 
-        let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
+        let mut resources = DeviceResources {
+            raw: raw_device.as_ref(),
+            zero_buffer: None,
+            empty_bgl: None,
+            default_external_texture_params_buffer: None,
+            fence: None,
+            indirect_validation: None,
+        };
+
+        resources.fence =
+            Some(unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?);
 
         let command_allocator = command::CommandAllocator::new();
 
@@ -498,37 +553,43 @@ impl Device {
         };
 
         // Create zeroed buffer used for texture clears (and raytracing if required).
-        let zero_buffer = unsafe {
-            raw_device.create_buffer(&hal::BufferDescriptor {
-                label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
-                size: ZERO_BUFFER_SIZE,
-                usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
-                memory_flags: hal::MemoryFlags::empty(),
-            })
-        }
-        .map_err(DeviceError::from_hal)?;
+        resources.zero_buffer = Some(
+            unsafe {
+                raw_device.create_buffer(&hal::BufferDescriptor {
+                    label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
+                    size: ZERO_BUFFER_SIZE,
+                    usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
+                    memory_flags: hal::MemoryFlags::empty(),
+                })
+            }
+            .map_err(DeviceError::from_hal)?,
+        );
 
-        let empty_bgl = unsafe {
-            raw_device.create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
-                label: None,
-                flags: hal::BindGroupLayoutFlags::empty(),
-                entries: &[],
-            })
-        }
-        .map_err(DeviceError::from_hal)?;
+        resources.empty_bgl = Some(
+            unsafe {
+                raw_device.create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
+                    label: None,
+                    flags: hal::BindGroupLayoutFlags::empty(),
+                    entries: &[],
+                })
+            }
+            .map_err(DeviceError::from_hal)?,
+        );
 
-        let default_external_texture_params_buffer = unsafe {
-            raw_device.create_buffer(&hal::BufferDescriptor {
-                label: hal_label(
-                    Some("(wgpu internal) default external texture params buffer"),
-                    instance_flags,
-                ),
-                size: size_of::<ExternalTextureParams>() as _,
-                usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
-                memory_flags: hal::MemoryFlags::empty(),
-            })
-        }
-        .map_err(DeviceError::from_hal)?;
+        resources.default_external_texture_params_buffer = Some(
+            unsafe {
+                raw_device.create_buffer(&hal::BufferDescriptor {
+                    label: hal_label(
+                        Some("(wgpu internal) default external texture params buffer"),
+                        instance_flags,
+                    ),
+                    size: size_of::<ExternalTextureParams>() as _,
+                    usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
+                    memory_flags: hal::MemoryFlags::empty(),
+                })
+            }
+            .map_err(DeviceError::from_hal)?,
+        );
 
         // Cloned as we need them below anyway.
         let alignments = adapter.raw.capabilities.alignments.clone();
@@ -542,63 +603,76 @@ impl Device {
             )
             && limits.max_storage_buffers_per_shader_stage >= 2;
 
-        let indirect_validation = if enable_indirect_validation {
-            Some(crate::indirect_validation::IndirectValidation::new(
-                raw_device.as_ref(),
-                &desc.required_limits,
-                &desc.required_features,
-                instance_flags,
-                adapter.backend(),
-            )?)
-        } else {
-            None
-        };
+        if enable_indirect_validation {
+            resources.indirect_validation =
+                Some(crate::indirect_validation::IndirectValidation::new(
+                    raw_device.as_ref(),
+                    &desc.required_limits,
+                    &desc.required_features,
+                    instance_flags,
+                    adapter.backend(),
+                )?);
+        }
 
-        Ok(Self {
-            raw: raw_device,
-            adapter: adapter.clone(),
-            queue: OnceCellOrLock::new(),
-            zero_buffer: ManuallyDrop::new(zero_buffer),
-            empty_bgl: ManuallyDrop::new(empty_bgl),
-            default_external_texture_params_buffer: ManuallyDrop::new(
-                default_external_texture_params_buffer,
-            ),
-            label: desc.label.to_string(),
-            command_allocator,
-            command_indices: RwLock::new(
-                rank::DEVICE_COMMAND_INDICES,
-                CommandIndices {
-                    active_submission_index: 0,
-                    // By starting at one, we can put the result in a NonZeroU64.
-                    next_acceleration_structure_build_command_index: 1,
-                },
-            ),
-            last_successful_submission_index: AtomicU64::new(0),
-            fence: ManuallyDrop::new(fence),
-            snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
-            valid: AtomicBool::new(true),
-            device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
-            trackers: Mutex::new(
-                rank::DEVICE_TRACKERS,
-                DeviceTracker::new(ordered_buffer_usages, ordered_texture_usages),
-            ),
-            tracker_indices: TrackerIndexAllocators::new(),
-            bgl_pool: ResourcePool::new(),
-            #[cfg(feature = "trace")]
-            trace: Mutex::new(rank::DEVICE_TRACE, trace),
-            alignments,
-            limits: desc.required_limits.clone(),
-            features: desc.required_features,
-            downlevel,
-            ordered_buffer_usages,
-            ordered_texture_usages,
-            instance_flags,
-            deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
-            usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
-            timestamp_normalizer: OnceCellOrLock::new(),
-            indirect_validation,
-            deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures::new(),
-        })
+        // Error returns after this point could bypass resource cleanup.
+        #[deny(clippy::question_mark_used)]
+        {
+            let zero_buffer = resources.zero_buffer.take().unwrap();
+            let empty_bgl = resources.empty_bgl.take().unwrap();
+            let default_external_texture_params_buffer = resources
+                .default_external_texture_params_buffer
+                .take()
+                .unwrap();
+            let fence = resources.fence.take().unwrap();
+            let indirect_validation = resources.indirect_validation.take();
+            drop(resources);
+
+            Ok(Self {
+                raw: raw_device,
+                adapter: adapter.clone(),
+                queue: OnceCellOrLock::new(),
+                zero_buffer: ManuallyDrop::new(zero_buffer),
+                empty_bgl: ManuallyDrop::new(empty_bgl),
+                default_external_texture_params_buffer: ManuallyDrop::new(
+                    default_external_texture_params_buffer,
+                ),
+                label: desc.label.to_string(),
+                command_allocator,
+                command_indices: RwLock::new(
+                    rank::DEVICE_COMMAND_INDICES,
+                    CommandIndices {
+                        active_submission_index: 0,
+                        // By starting at one, we can put the result in a NonZeroU64.
+                        next_acceleration_structure_build_command_index: 1,
+                    },
+                ),
+                last_successful_submission_index: AtomicU64::new(0),
+                fence: ManuallyDrop::new(fence),
+                snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
+                valid: AtomicBool::new(true),
+                device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
+                trackers: Mutex::new(
+                    rank::DEVICE_TRACKERS,
+                    DeviceTracker::new(ordered_buffer_usages, ordered_texture_usages),
+                ),
+                tracker_indices: TrackerIndexAllocators::new(),
+                bgl_pool: ResourcePool::new(),
+                #[cfg(feature = "trace")]
+                trace: Mutex::new(rank::DEVICE_TRACE, trace),
+                alignments,
+                limits: desc.required_limits.clone(),
+                features: desc.required_features,
+                downlevel,
+                ordered_buffer_usages,
+                ordered_texture_usages,
+                instance_flags,
+                deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
+                usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
+                timestamp_normalizer: OnceCellOrLock::new(),
+                indirect_validation,
+                deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures::new(),
+            })
+        }
     }
 
     /// Initializes [`Device::default_external_texture_params_buffer`] with
