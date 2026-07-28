@@ -207,7 +207,7 @@ impl Instance {
         }
     }
 
-    pub(crate) fn from_hal_instance<A: hal::Api>(
+    pub fn from_hal_instance<A: hal::Api>(
         name: String,
         hal_instance: <A as hal::Api>::Instance,
     ) -> Arc<Self> {
