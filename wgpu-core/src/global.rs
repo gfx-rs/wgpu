@@ -84,6 +84,49 @@ impl Global {
     }
 }
 
+/// Implement [`Send`] + [`Sync`] for [`Global`], and check that all of its fields are.
+///
+/// This is identical to the “auto trait” implementation that Rust would provide, except that
+/// it is eager rather than lazy: its requirements are checked now (in
+/// `_global_fields_are_send_sync`), when this crate is compiled, rather than whenever a dependent
+/// wants to know whether `Global: Send` holds.
+///
+/// This improves compilation performance and avoids a risk of dependents running into the default
+/// [`recursion_limit`] when checking types containing [`Global`]. This risk will become greater
+/// when Rust’s “next solver” is stabilized.
+///
+/// [`recursion_limit`]: https://doc.rust-lang.org/reference/attributes/limits.html#the-recursion_limit-attribute
+#[cfg(send_sync)]
+mod global_send_sync {
+    use super::Global;
+
+    // SAFETY: Bounds checked below
+    unsafe impl Send for Global {}
+
+    // SAFETY: Bounds checked below
+    unsafe impl Sync for Global {}
+
+    /// This function will fail to compile if any field is not `Send + Sync`, or if a new field is
+    /// added to `Global`.
+    ///
+    /// This technique is modeled after the macro library `non_structural_derive`, with permission
+    /// (see
+    /// <https://github.com/fee1-dead/non_structural_derive/issues/1#issuecomment-5250905440>).
+    /// We only need it once, so it’s cheaper to write out the same code the macro would generate.
+    fn _global_fields_are_send_sync(global: &Global) {
+        fn _check_bound<T: Send + Sync>(_: &T) {}
+
+        let Global {
+            surfaces,
+            hub,
+            instance,
+        } = global;
+        _check_bound(surfaces);
+        _check_bound(hub);
+        _check_bound(instance);
+    }
+}
+
 impl fmt::Debug for Global {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Global").finish()
@@ -95,10 +138,4 @@ impl Drop for Global {
         profiling::scope!("Global::drop");
         resource_log!("Global::drop");
     }
-}
-
-#[cfg(send_sync)]
-fn _test_send_sync(global: &Global) {
-    fn test_internal<T: Send + Sync>(_: T) {}
-    test_internal(global)
 }
