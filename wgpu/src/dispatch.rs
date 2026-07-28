@@ -236,7 +236,7 @@ pub trait QueueInterface: CommonTraits {
         &self,
         buffer: &DispatchBuffer,
         offset: crate::BufferAddress,
-        staging_buffer: &DispatchQueueWriteBuffer,
+        staging_buffer: DispatchQueueWriteBuffer,
     );
 
     fn write_texture(
