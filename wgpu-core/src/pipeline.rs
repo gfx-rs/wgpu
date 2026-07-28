@@ -809,6 +809,11 @@ pub enum ColorStateError {
         factor: wgt::BlendFactor,
         target: u32,
     },
+    #[error("The {which} blend factor {factor:?} is not valid because the shader output does have an alpha channel.")]
+    InvalidAlphaBlend {
+        which: &'static str,
+        factor: wgt::BlendFactor,
+    },
     #[error(
         "Blend factor {factor:?} for render target {target} is not valid. Blend factor must be `one` when using min/max blend operations."
     )]
@@ -816,6 +821,8 @@ pub enum ColorStateError {
         factor: wgt::BlendFactor,
         target: u32,
     },
+    #[error("Shader does not produce an output at this index")]
+    OutputNotPresent,
 }
 
 #[derive(Clone, Debug, Error)]
