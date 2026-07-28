@@ -70,6 +70,7 @@ pub async fn execute_test(
         &adapter,
         config.params.required_features,
         config.params.required_limits.clone(),
+        config.params.trace,
     )
     .await;
 

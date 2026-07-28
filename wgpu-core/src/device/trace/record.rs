@@ -1,6 +1,7 @@
 use alloc::{borrow::Cow, string::ToString, sync::Arc, vec::Vec};
 use core::{any::Any, convert::Infallible, marker::PhantomData};
 use std::io::Write as _;
+use wgt::{Report, ResourceReport};
 
 use crate::{
     command::{
@@ -44,6 +45,8 @@ pub trait Trace: Any + Send + Sync {
 
     fn make_string(&mut self, kind: DataKind, data: &str) -> Data;
 
+    fn report(&self) -> Report;
+
     fn add(&mut self, action: Action<'_, PointerReferences>)
     where
         for<'a> Action<'a, PointerReferences>: serde::Serialize;
@@ -55,6 +58,7 @@ pub struct DiskTrace {
     file: std::fs::File,
     config: ron::ser::PrettyConfig,
     data_id: usize,
+    report: Report,
 }
 
 impl DiskTrace {
@@ -67,6 +71,7 @@ impl DiskTrace {
             file,
             config: ron::ser::PrettyConfig::default(),
             data_id: 0,
+            report: Report::default(),
         })
     }
 }
@@ -91,10 +96,15 @@ impl Trace for DiskTrace {
         self.make_binary(kind, data.as_bytes())
     }
 
+    fn report(&self) -> Report {
+        self.report.clone()
+    }
+
     fn add(&mut self, action: Action<'_, PointerReferences>)
     where
         for<'a> Action<'a, PointerReferences>: serde::Serialize,
     {
+        report_action(&mut self.report, &action);
         match ron::ser::to_string_pretty(&action, self.config.clone()) {
             Ok(string) => {
                 let _ = writeln!(self.file, "{string},");
@@ -109,6 +119,79 @@ impl Trace for DiskTrace {
 impl Drop for DiskTrace {
     fn drop(&mut self) {
         let _ = self.file.write_all(b"]");
+    }
+}
+
+fn report_create(report: &mut ResourceReport) {
+    report.num_allocated += 1;
+}
+
+fn report_drop(report: &mut ResourceReport) {
+    report.num_released += 1;
+}
+
+fn report_action(report: &mut Report, action: &Action<'_, PointerReferences>) {
+    // creation can happen at many places and we want to capture all of them
+    // to have balanced create/drop counts
+    match action {
+        Action::Init { .. } => {}
+        Action::ConfigureSurface(_, _) => {}
+        Action::CreateBuffer(_, _) => report_create(&mut report.buffers),
+        Action::DestroyBuffer(_) => {}
+        Action::DropBuffer(_) => report_drop(&mut report.buffers),
+        Action::CreateTexture(_, _) => report_create(&mut report.textures),
+        Action::CreateTextureError(_, _) => report_create(&mut report.textures),
+        Action::DestroyTexture(_) => {}
+        Action::DropTexture(_) => report_drop(&mut report.textures),
+        Action::CreateTextureView { .. } => report_create(&mut report.texture_views),
+        Action::DropTextureView(_) => report_drop(&mut report.texture_views),
+        Action::CreateExternalTexture { .. } => report_create(&mut report.external_textures),
+        Action::DestroyExternalTexture(_) => {}
+        Action::DropExternalTexture(_) => report_drop(&mut report.external_textures),
+        Action::CreateSampler(_, _) => report_create(&mut report.samplers),
+        Action::DropSampler(_) => report_drop(&mut report.samplers),
+        Action::GetSurfaceTexture { .. } => report_create(&mut report.textures),
+        Action::Present(_) => {}
+        Action::DiscardSurfaceTexture(_) => {}
+        Action::ReleaseSurfaceTexture(_) => {}
+        Action::CreateBindGroupLayout(_, _) => {
+            report_create(&mut report.bind_group_layouts);
+        }
+        Action::GetRenderPipelineBindGroupLayout { .. } => {
+            report_create(&mut report.bind_group_layouts);
+        }
+        Action::GetComputePipelineBindGroupLayout { .. } => {
+            report_create(&mut report.bind_group_layouts);
+        }
+        Action::DropBindGroupLayout(_) => report_drop(&mut report.bind_group_layouts),
+        Action::CreatePipelineLayout(_, _) => {
+            report_create(&mut report.pipeline_layouts);
+        }
+        Action::DropPipelineLayout(_) => report_drop(&mut report.pipeline_layouts),
+        Action::CreateBindGroup(_, _) => report_create(&mut report.bind_groups),
+        Action::DropBindGroup(_) => report_drop(&mut report.bind_groups),
+        Action::CreateShaderModule { .. } => report_create(&mut report.shader_modules),
+        Action::CreateShaderModulePassthrough { .. } => report_create(&mut report.shader_modules),
+        Action::DropShaderModule(_) => report_drop(&mut report.shader_modules),
+        Action::CreateComputePipeline { .. } => report_create(&mut report.compute_pipelines),
+        Action::DropComputePipeline(_) => report_drop(&mut report.compute_pipelines),
+        Action::CreateGeneralRenderPipeline { .. } => report_create(&mut report.render_pipelines),
+        Action::DropRenderPipeline(_) => report_drop(&mut report.render_pipelines),
+        Action::CreatePipelineCache { .. } => report_create(&mut report.pipeline_caches),
+        Action::DropPipelineCache(_) => report_drop(&mut report.pipeline_caches),
+        Action::CreateRenderBundle { .. } => report_create(&mut report.render_bundles),
+        Action::DropRenderBundle(_) => report_drop(&mut report.render_bundles),
+        Action::CreateQuerySet { .. } => report_create(&mut report.query_sets),
+        Action::DropQuerySet(_) => report_drop(&mut report.query_sets),
+        Action::DestroyQuerySet(_) => report_drop(&mut report.query_sets),
+        Action::WriteBuffer { .. } => {}
+        Action::WriteTexture { .. } => {}
+        Action::Submit(_, _) => {}
+        Action::FailedCommands { .. } => {}
+        Action::CreateBlas { .. } => report_create(&mut report.blases),
+        Action::DropBlas(_) => report_drop(&mut report.blases),
+        Action::CreateTlas { .. } => report_create(&mut report.tlases),
+        Action::DropTlas(_) => report_drop(&mut report.tlases),
     }
 }
 
@@ -142,6 +225,14 @@ impl Trace for MemoryTrace {
     /// `make_binary` instead.
     fn make_string(&mut self, kind: DataKind, data: &str) -> Data {
         Data::String(kind, data.to_string())
+    }
+
+    fn report(&self) -> Report {
+        let mut report = Report::default();
+        for action in &self.actions {
+            report_action(&mut report, action);
+        }
+        report
     }
 
     fn add(&mut self, action: Action<'_, PointerReferences>)

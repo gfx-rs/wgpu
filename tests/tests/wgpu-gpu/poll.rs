@@ -346,9 +346,13 @@ static WAIT_AFTER_BAD_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::n
     .run_async(wait_after_bad_submission);
 
 async fn wait_after_bad_submission(ctx: TestingContext) {
-    let (device2, queue2) =
-        wgpu_test::initialize_device(&ctx.adapter, ctx.device_features, ctx.device_limits.clone())
-            .await;
+    let (device2, queue2) = wgpu_test::initialize_device(
+        &ctx.adapter,
+        ctx.device_features,
+        ctx.device_limits.clone(),
+        wgpu::Trace::Off,
+    )
+    .await;
 
     let command_buffer1 = ctx
         .device
@@ -392,9 +396,13 @@ static WAIT_ON_FAILED_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::n
 async fn wait_on_failed_submission(ctx: TestingContext) {
     // Create an alternate device; we will produce a failed submission by
     // submitting a command buffer to the wrong device.
-    let (device2, queue2) =
-        wgpu_test::initialize_device(&ctx.adapter, ctx.device_features, ctx.device_limits.clone())
-            .await;
+    let (device2, queue2) = wgpu_test::initialize_device(
+        &ctx.adapter,
+        ctx.device_features,
+        ctx.device_limits.clone(),
+        wgpu::Trace::Off,
+    )
+    .await;
 
     // 1. Successful empty submit. Advances `last_successful_submission_index`.
     let _idx_before = queue2.submit([]);

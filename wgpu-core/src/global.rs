@@ -5,7 +5,7 @@ use crate::{
     binding_model::{BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, CommandEncoder},
     device::{queue::Queue, Device},
-    hub::{Hub, HubReport},
+    hub::Hub,
     id::{
         AdapterId, BindGroupLayoutId, BufferId, CommandBufferId, CommandEncoderId,
         ComputePipelineId, DeviceId, PipelineLayoutId, QuerySetId, QueueId, RenderPipelineId,
@@ -13,25 +13,10 @@ use crate::{
     },
     instance::{Adapter, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline},
-    registry::{Registry, RegistryReport},
+    registry::Registry,
     resource::{Buffer, QuerySet, Texture},
     resource_log,
 };
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct GlobalReport {
-    pub surfaces: RegistryReport,
-    pub hub: HubReport,
-}
-
-impl GlobalReport {
-    pub fn surfaces(&self) -> &RegistryReport {
-        &self.surfaces
-    }
-    pub fn hub_report(&self) -> &HubReport {
-        &self.hub
-    }
-}
 
 pub struct Global {
     pub(crate) surfaces: Registry<Arc<Surface>>,
@@ -83,13 +68,6 @@ impl Global {
             instance,
             surfaces: Registry::new(),
             hub: Hub::new(),
-        }
-    }
-
-    pub fn generate_report(&self) -> GlobalReport {
-        GlobalReport {
-            surfaces: self.surfaces.generate_report(),
-            hub: self.hub.generate_report(),
         }
     }
 }

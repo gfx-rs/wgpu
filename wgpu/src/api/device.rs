@@ -631,6 +631,14 @@ impl Device {
         self.inner.generate_allocator_report()
     }
 
+    /// Generates memory report.
+    ///
+    /// Returns `None` if the feature is not supported by the backend (webgpu)
+    /// or if tracing is not enabled.
+    pub fn generate_report(&self) -> Option<wgt::Report> {
+        self.inner.generate_report()
+    }
+
     /// Get the [`wgpu_hal`] device from this `Device`.
     ///
     /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],

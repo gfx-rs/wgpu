@@ -2716,6 +2716,10 @@ impl dispatch::DeviceInterface for WebDevice {
         None
     }
 
+    fn generate_report(&self) -> Option<wgt::Report> {
+        None
+    }
+
     fn destroy(&self) {
         self.inner.destroy();
     }

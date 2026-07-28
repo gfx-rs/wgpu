@@ -1,5 +1,5 @@
 use arrayvec::ArrayVec;
-use wgpu::{DownlevelCapabilities, DownlevelFlags, Features, InstanceFlags, Limits};
+use wgpu::{DownlevelCapabilities, DownlevelFlags, Features, InstanceFlags, Limits, Trace};
 
 use crate::{
     report::AdapterReport, FailureApplicationReasons, FailureBehavior, FailureCase,
@@ -18,6 +18,8 @@ pub struct TestParameters {
     pub required_features: Features,
     pub required_downlevel_caps: DownlevelCapabilities,
     pub required_limits: Limits,
+
+    pub trace: Trace,
 
     pub required_instance_flags: InstanceFlags,
 
@@ -43,6 +45,7 @@ impl Default for TestParameters {
             required_features: Features::empty(),
             required_downlevel_caps: LOWEST_DOWNLEVEL_PROPERTIES,
             required_limits: Limits::downlevel_webgl2_defaults(),
+            trace: Trace::Off,
             required_instance_flags: InstanceFlags::empty(),
             force_fxc: false,
             // By default we skip the noop backend, and enable it if the test
@@ -109,6 +112,11 @@ impl TestParameters {
     pub fn enable_noop(mut self) -> Self {
         self.skips
             .retain(|case| *case != FailureCase::backend(wgpu::Backends::NOOP));
+        self
+    }
+
+    pub fn set_trace(mut self, trace: Trace) -> Self {
+        self.trace = trace;
         self
     }
 

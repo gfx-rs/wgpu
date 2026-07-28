@@ -1171,6 +1171,11 @@ impl Global {
         device.take_trace()
     }
 
+    pub fn device_report(&self, device_id: DeviceId) -> Option<wgt::Report> {
+        let device = self.hub.devices.get(device_id);
+        device.report()
+    }
+
     pub fn queue_drop(&self, queue_id: QueueId) {
         self.hub.queues.remove(queue_id);
     }

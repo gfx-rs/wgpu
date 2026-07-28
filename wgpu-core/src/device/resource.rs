@@ -798,6 +798,14 @@ impl Device {
         self.trace.lock().take()
     }
 
+    /// Returns a report of the trace object.
+    pub fn report(&self) -> Option<wgt::Report> {
+        #[cfg(feature = "trace")]
+        return self.trace.lock().as_ref().map(|t| t.report());
+        #[cfg(not(feature = "trace"))]
+        return None;
+    }
+
     /// Checks that we are operating within the memory budget reported by the native APIs.
     ///
     /// If we are not, the device gets invalidated.

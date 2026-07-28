@@ -290,6 +290,10 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn generate_report(&self) -> Option<wgpu::wgt::Report> {
+        unimplemented!()
+    }
+
     fn destroy(&self) {
         unimplemented!()
     }

@@ -7,27 +7,8 @@ use crate::{
         rank::{self, LockRank},
         RwLock, RwLockReadGuard,
     },
-    storage::{Element, Storage, StorageItem},
+    storage::{Storage, StorageItem},
 };
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct RegistryReport {
-    /// Count of IDs allocated by [`IdentityManager`]
-    ///
-    /// This may be inconsistent with other fields of the report if
-    /// IDs are allocated or released concurrently with report
-    /// generation.
-    pub num_allocated: usize,
-    pub num_kept_from_user: usize,
-    pub num_released_from_user: usize,
-    pub element_size: usize,
-}
-
-impl RegistryReport {
-    pub fn is_empty(&self) -> bool {
-        self.num_allocated + self.num_kept_from_user == 0
-    }
-}
 
 /// Registry is the primary holder of each resource type
 /// Every resource is now arcanized so the last arc released
@@ -103,28 +84,6 @@ impl<T: StorageItem> Registry<T> {
         self.identity.free(id);
         //Returning None is legal if it's an error ID
         value
-    }
-
-    pub(crate) fn generate_report(&self) -> RegistryReport {
-        let mut report = RegistryReport {
-            element_size: size_of::<T>(),
-            ..Default::default()
-        };
-
-        // Acquiring the identity values lock while holding the storage lock
-        // would require adding an edge in the lock graph, and would still not
-        // ensure a consistent report, because the storage lock is not otherwise
-        // acquired when managing IDs.
-        report.num_allocated = self.identity.values.lock().count();
-
-        let storage = self.storage.read();
-        for element in storage.map.iter() {
-            match *element {
-                Element::Occupied(..) => report.num_kept_from_user += 1,
-                Element::Vacant => report.num_released_from_user += 1,
-            }
-        }
-        report
     }
 }
 

@@ -218,6 +218,7 @@ pub trait DeviceInterface: CommonTraits {
 
     fn get_internal_counters(&self) -> crate::InternalCounters;
     fn generate_allocator_report(&self) -> Option<crate::AllocatorReport>;
+    fn generate_report(&self) -> Option<wgt::Report>;
 
     fn destroy(&self);
 }

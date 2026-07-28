@@ -108,10 +108,6 @@ impl IdentityValues {
         }
         self.count -= 1;
     }
-
-    pub fn count(&self) -> usize {
-        self.count
-    }
 }
 
 #[derive(Debug)]

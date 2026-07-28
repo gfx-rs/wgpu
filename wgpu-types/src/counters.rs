@@ -238,3 +238,50 @@ impl fmt::Display for FmtBytes {
         }
     }
 }
+
+/// Count of resources created/destroyed as captured by tracing.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct ResourceReport {
+    /// Number of resources created.
+    pub num_allocated: usize,
+    /// Number of resources deallocated.
+    pub num_released: usize,
+}
+
+impl ResourceReport {
+    /// Returns the number of resources that are currently alive.
+    pub fn active(&self) -> usize {
+        self.num_allocated
+            .checked_sub(self.num_released)
+            .expect("Trace should be balanced")
+    }
+}
+
+#[expect(missing_docs)]
+/// Report of all resources created/destroyed as captured by tracing.
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
+pub struct Report {
+    pub pipeline_layouts: ResourceReport,
+    pub shader_modules: ResourceReport,
+    pub bind_group_layouts: ResourceReport,
+    pub bind_groups: ResourceReport,
+    // not impl in tracing yet
+    // pub command_encoders: ResourceReport,
+    // pub command_buffers: ResourceReport,
+    pub render_bundles: ResourceReport,
+    pub render_pipelines: ResourceReport,
+    pub compute_pipelines: ResourceReport,
+    pub pipeline_caches: ResourceReport,
+    pub query_sets: ResourceReport,
+    pub buffers: ResourceReport,
+    pub textures: ResourceReport,
+    pub texture_views: ResourceReport,
+    pub external_textures: ResourceReport,
+    pub samplers: ResourceReport,
+    pub render_passes: ResourceReport,
+    pub compute_passes: ResourceReport,
+    pub render_bundle_encoders: ResourceReport,
+    pub blases: ResourceReport,
+    pub tlases: ResourceReport,
+    pub surfaces: ResourceReport,
+}

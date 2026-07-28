@@ -1,4 +1,4 @@
-use wgpu::{Adapter, Backends, Device, Features, Instance, Limits, Queue};
+use wgpu::{Adapter, Backends, Device, Features, Instance, Limits, Queue, Trace};
 
 use crate::{report::AdapterReport, TestParameters};
 
@@ -196,6 +196,7 @@ pub async fn initialize_device(
     adapter: &Adapter,
     features: Features,
     limits: Limits,
+    trace: Trace,
 ) -> (Device, Queue) {
     let bundle = adapter
         .request_device(&wgpu::DeviceDescriptor {
@@ -204,7 +205,7 @@ pub async fn initialize_device(
             required_limits: limits,
             experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
             memory_hints: wgpu::MemoryHints::MemoryUsage,
-            trace: wgpu::Trace::Off,
+            trace,
         })
         .await;
 

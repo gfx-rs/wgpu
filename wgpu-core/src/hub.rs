@@ -117,7 +117,6 @@ when replaying a trace.
 */
 
 use alloc::sync::Arc;
-use core::fmt::Debug;
 
 use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
@@ -128,45 +127,13 @@ use crate::{
     instance::Adapter,
     lock::rank,
     pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
-    registry::{Registry, RegistryReport},
+    registry::Registry,
     resource::{
         Blas, Buffer, ExternalTexture, QuerySet, Sampler, StagingBuffer, Texture, TextureView, Tlas,
     },
 };
 
 use parking_lot::Mutex;
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct HubReport {
-    pub adapters: RegistryReport,
-    pub devices: RegistryReport,
-    pub queues: RegistryReport,
-    pub pipeline_layouts: RegistryReport,
-    pub shader_modules: RegistryReport,
-    pub bind_group_layouts: RegistryReport,
-    pub bind_groups: RegistryReport,
-    pub command_encoders: RegistryReport,
-    pub command_buffers: RegistryReport,
-    pub render_bundles: RegistryReport,
-    pub render_pipelines: RegistryReport,
-    pub compute_pipelines: RegistryReport,
-    pub pipeline_caches: RegistryReport,
-    pub query_sets: RegistryReport,
-    pub buffers: RegistryReport,
-    pub textures: RegistryReport,
-    pub texture_views: RegistryReport,
-    pub external_textures: RegistryReport,
-    pub samplers: RegistryReport,
-    pub render_passes: RegistryReport,
-    pub compute_passes: RegistryReport,
-    pub render_bundle_encoders: RegistryReport,
-}
-
-impl HubReport {
-    pub fn is_empty(&self) -> bool {
-        self.adapters.is_empty()
-    }
-}
 
 #[allow(rustdoc::private_intra_doc_links)]
 /// All the resources tracked by a [`crate::global::Global`].
@@ -252,33 +219,6 @@ impl Hub {
             render_passes: Registry::new(),
             compute_passes: Registry::new(),
             render_bundle_encoders: Registry::new(),
-        }
-    }
-
-    pub fn generate_report(&self) -> HubReport {
-        HubReport {
-            adapters: self.adapters.generate_report(),
-            devices: self.devices.generate_report(),
-            queues: self.queues.generate_report(),
-            pipeline_layouts: self.pipeline_layouts.generate_report(),
-            shader_modules: self.shader_modules.generate_report(),
-            bind_group_layouts: self.bind_group_layouts.generate_report(),
-            bind_groups: self.bind_groups.generate_report(),
-            command_encoders: self.command_encoders.generate_report(),
-            command_buffers: self.command_buffers.generate_report(),
-            render_bundles: self.render_bundles.generate_report(),
-            render_pipelines: self.render_pipelines.generate_report(),
-            compute_pipelines: self.compute_pipelines.generate_report(),
-            pipeline_caches: self.pipeline_caches.generate_report(),
-            query_sets: self.query_sets.generate_report(),
-            buffers: self.buffers.generate_report(),
-            textures: self.textures.generate_report(),
-            texture_views: self.texture_views.generate_report(),
-            external_textures: self.external_textures.generate_report(),
-            samplers: self.samplers.generate_report(),
-            render_passes: self.render_passes.generate_report(),
-            compute_passes: self.compute_passes.generate_report(),
-            render_bundle_encoders: self.render_bundle_encoders.generate_report(),
         }
     }
 }

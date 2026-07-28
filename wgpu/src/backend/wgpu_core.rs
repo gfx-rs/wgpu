@@ -262,10 +262,6 @@ impl ContextWgpuCore {
         unsafe { self.0.tlas_as_hal::<A>(tlas.id) }
     }
 
-    pub fn generate_report(&self) -> wgc::global::GlobalReport {
-        self.0.generate_report()
-    }
-
     #[cold]
     #[track_caller]
     #[inline(never)]
@@ -1937,6 +1933,10 @@ impl dispatch::DeviceInterface for CoreDevice {
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
         self.context.0.device_generate_allocator_report(self.id)
+    }
+
+    fn generate_report(&self) -> Option<wgt::Report> {
+        self.context.0.device_report(self.id)
     }
 
     fn destroy(&self) {
