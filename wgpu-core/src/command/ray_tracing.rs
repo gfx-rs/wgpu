@@ -10,7 +10,7 @@ use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 use crate::{
     command::encoder::EncodingState,
     ray_tracing::{
-        AsAction, AsBuild, BlasAabbGeometry, BlasTriangleGeometry, TlasBuild, TlasInstance,
+        AsAction, AsBuild, BlasAabbGeometry, BlasTriangleGeometry, TlasBuild,
         ValidateAsActionsError,
     },
     resource::{Buffer, InvalidResourceError},
@@ -96,7 +96,7 @@ impl super::CommandEncoder {
     pub fn build_acceleration_structures<'a>(
         self: &Arc<Self>,
         blas_iter: impl Iterator<Item = BlasBuildEntry<'a, Arc<Blas>, Arc<Buffer>>>,
-        tlas_iter: impl Iterator<Item = TlasPackage<'a, Arc<Tlas>, Arc<Blas>>>,
+        tlas_iter: Vec<ArcTlasPackage>,
     ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::build_acceleration_structures");
 
@@ -158,37 +158,16 @@ impl super::CommandEncoder {
                 })
                 .collect::<Result<_, BuildAccelerationStructureError>>()?;
 
-            let tlas = tlas_iter
-                .map(|tlas_package| {
-                    let instances = tlas_package
-                        .instances
-                        .map(|instance| {
-                            instance
-                                .as_ref()
-                                .map(|instance| {
-                                    let blas = instance.blas.clone();
-                                    blas.check_is_valid()?;
-                                    Ok(ArcTlasInstance {
-                                        blas,
-                                        transform: *instance.transform,
-                                        custom_data: instance.custom_data,
-                                        mask: instance.mask,
-                                    })
-                                })
-                                .transpose()
-                        })
-                        .collect::<Result<_, BuildAccelerationStructureError>>()?;
-                    let tlas = tlas_package.tlas;
-                    tlas.check_is_valid()?;
-                    Ok(ArcTlasPackage {
-                        tlas,
-                        instances,
-                        lowest_unmodified: tlas_package.lowest_unmodified,
-                    })
-                })
-                .collect::<Result<_, BuildAccelerationStructureError>>()?;
+            for tlas_package in &tlas_iter {
+                tlas_package.tlas.check_is_valid()?;
+                for instance in &tlas_package.instances {
+                    if let Some(instance) = instance {
+                        instance.blas.check_is_valid()?;
+                    }
+                }
+            }
 
-            Ok(ArcCommand::BuildAccelerationStructures { blas, tlas })
+            Ok(ArcCommand::BuildAccelerationStructures { blas, tlas: tlas_iter })
         })
     }
 }
@@ -255,19 +234,19 @@ impl Global {
                 }
             },
         });
-        let tlases = tlas_iter.map(|e| TlasPackage {
+        let tlases = tlas_iter.map(|e| ArcTlasPackage {
             tlas: hub.tlas_s.get(e.tlas),
-            instances: Box::new(e.instances.map(|instance| {
-                instance.as_ref().map(|instance| TlasInstance {
+            instances: e.instances.map(|instance| {
+                instance.as_ref().map(|instance| ArcTlasInstance {
                     blas: hub.blas_s.get(instance.blas),
-                    transform: instance.transform,
+                    transform: *instance.transform,
                     custom_data: instance.custom_data,
                     mask: instance.mask,
                 })
-            })),
+            }).collect(),
             lowest_unmodified: e.lowest_unmodified,
         });
-        cmd_enc.build_acceleration_structures(blases.into_iter(), tlases.into_iter())
+        cmd_enc.build_acceleration_structures(blases.into_iter(), tlases.collect())
     }
 }
 
@@ -276,6 +255,7 @@ pub(crate) fn build_acceleration_structures(
     blas: Vec<OwnedBlasBuildEntry<ArcReferences>>,
     tlas: Vec<OwnedTlasPackage<ArcReferences>>,
 ) -> Result<(), BuildAccelerationStructureError> {
+    profiling::scope!("build_acceleration_structures");
     state
         .device
         .require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
@@ -298,6 +278,7 @@ pub(crate) fn build_acceleration_structures(
     let mut instance_buffer_staging_source = Vec::<u8>::new();
 
     for package in tlas.iter() {
+        profiling::scope!("tlas validation");
         let tlas = &package.tlas;
         state.tracker.tlas_s.insert_single(tlas.clone());
 
