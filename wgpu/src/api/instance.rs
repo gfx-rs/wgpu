@@ -1,3 +1,5 @@
+#[cfg(wgpu_core)]
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::future::Future;
 
@@ -418,7 +420,7 @@ impl Instance {
     /// # Safety
     ///
     /// Refer to the creation of wgpu-core Instance.
-    pub unsafe fn from_core(core_instance: wgc::instance::Instance) -> Self {
+    pub unsafe fn from_core(core_instance: Arc<wgc::instance::Instance>) -> Self {
         Self {
             inner: unsafe {
                 crate::backend::ContextWgpuCore::from_core_instance(core_instance).into()

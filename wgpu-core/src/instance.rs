@@ -128,7 +128,7 @@ impl Instance {
         name: &str,
         mut instance_desc: wgt::InstanceDescriptor,
         telemetry: Option<hal::Telemetry>,
-    ) -> Self {
+    ) -> Arc<Self> {
         let mut this = Self {
             _name: name.to_owned(),
             instance_per_backend: Vec::new(),
@@ -153,7 +153,7 @@ impl Instance {
         #[cfg(feature = "noop")]
         this.try_add_hal(hal::api::Noop, &instance_desc, telemetry);
 
-        this
+        Arc::new(this)
     }
 
     /// Helper for `Instance::new()`; attempts to add a single `wgpu-hal` backend to this instance.
@@ -210,8 +210,8 @@ impl Instance {
     pub(crate) fn from_hal_instance<A: hal::Api>(
         name: String,
         hal_instance: <A as hal::Api>::Instance,
-    ) -> Self {
-        Self {
+    ) -> Arc<Self> {
+        Arc::new(Self {
             _name: name,
             instance_per_backend: vec![(A::VARIANT, Box::new(hal_instance))],
             requested_backends: A::VARIANT.into(),
@@ -219,7 +219,7 @@ impl Instance {
             flags: InstanceFlags::default(),
             display: None, // TODO: Extract display from HAL instance if available?
             devices: InstanceDevices::new(),
-        }
+        })
     }
 
     pub fn raw(&self, backend: Backend) -> Option<&dyn hal::DynInstance> {
@@ -488,7 +488,7 @@ impl Instance {
     }
 
     pub fn enumerate_adapters(
-        &self,
+        self: &Arc<Self>,
         backends: Backends,
         apply_limit_buckets: bool,
     ) -> Vec<Arc<Adapter>> {
@@ -531,7 +531,7 @@ impl Instance {
                         }
                     })
                     .map(|raw| {
-                        let adapter = Adapter::new(raw, self.devices.clone(), self.flags);
+                        let adapter = Adapter::new(raw, self.clone());
                         api_log_debug!("Adapter {:?}", adapter.raw.info);
                         adapter
                     }),
@@ -541,7 +541,7 @@ impl Instance {
     }
 
     pub fn request_adapter(
-        &self,
+        self: &Arc<Self>,
         desc: &wgt::RequestAdapterOptions<&Surface>,
         backends: Backends,
     ) -> Result<Arc<Adapter>, wgt::RequestAdapterError> {
@@ -681,7 +681,7 @@ impl Instance {
 
         if let Some(adapter) = adapters.into_iter().next() {
             api_log_debug!("Request adapter result {:?}", adapter.info);
-            let adapter = Adapter::new(adapter, self.devices.clone(), self.flags);
+            let adapter = Adapter::new(adapter, self.clone());
             Ok(adapter)
         } else {
             Err(wgt::RequestAdapterError::NotFound {
@@ -731,12 +731,12 @@ impl Instance {
     ///
     /// [lt]: crate::limits#Limit-bucketing
     pub unsafe fn create_adapter_from_hal(
-        &self,
+        self: &Arc<Self>,
         hal_adapter: hal::DynExposedAdapter,
     ) -> Arc<Adapter> {
         profiling::scope!("Instance::create_adapter_from_hal");
 
-        let adapter = Adapter::new(hal_adapter, self.devices.clone(), self.flags);
+        let adapter = Adapter::new(hal_adapter, self.clone());
 
         resource_log!("Created Adapter {:?}", Arc::as_ptr(&adapter));
         adapter
@@ -1043,21 +1043,12 @@ impl Drop for Surface {
 
 pub struct Adapter {
     pub(crate) raw: hal::DynExposedAdapter,
-    pub(crate) devices: InstanceDevices,
-    pub(crate) instance_flags: InstanceFlags,
+    pub(crate) instance: Arc<Instance>,
 }
 
 impl Adapter {
-    pub(crate) fn new(
-        raw: hal::DynExposedAdapter,
-        devices: InstanceDevices,
-        flags: InstanceFlags,
-    ) -> Arc<Self> {
-        Arc::new(Self {
-            raw,
-            devices,
-            instance_flags: flags,
-        })
+    pub(crate) fn new(raw: hal::DynExposedAdapter, instance: Arc<Instance>) -> Arc<Self> {
+        Arc::new(Self { raw, instance })
     }
 
     /// Returns the backend this adapter is using.
@@ -1199,10 +1190,10 @@ impl Adapter {
         profiling::scope!("Adapter::create_device_and_queue_from_hal");
         api_log!("Adapter::create_device_and_queue_from_hal");
 
-        let device = Device::new(hal_device.device, self, desc, self.instance_flags)?;
+        let device = Device::new(hal_device.device, self, desc, self.instance.flags)?;
         let device = Arc::new(device);
 
-        let queue = Queue::new(device.clone(), hal_device.queue, self.instance_flags)?;
+        let queue = Queue::new(device.clone(), hal_device.queue, self.instance.flags)?;
         let queue = Arc::new(queue);
 
         device.set_queue(&queue);
@@ -1211,7 +1202,7 @@ impl Adapter {
         resource_log!("Created Device {:?}", Arc::as_ptr(&device));
         resource_log!("Created Queue {:?}", Arc::as_ptr(&queue));
 
-        self.devices.push(&device);
+        self.instance.devices.push(&device);
 
         Ok((device, queue))
     }
@@ -1224,7 +1215,7 @@ impl Adapter {
         api_log!("Adapter::request_device");
         let mut desc = desc.clone();
         filter_features_and_limits(
-            self.instance_flags,
+            self.instance.flags,
             &mut desc.required_features,
             &mut desc.required_limits,
         );
