@@ -1,8 +1,6 @@
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::{
-    cmp::max,
-    num::NonZeroU64,
-    ops::{Deref, Range},
+    cmp::max, mem, num::NonZeroU64, ops::{Deref, Range},
 };
 
 use wgt::{math::align_to, BufferUsages, BufferUses, Features};
@@ -253,7 +251,7 @@ impl Global {
 pub(crate) fn build_acceleration_structures(
     state: &mut EncodingState,
     blas: Vec<OwnedBlasBuildEntry<ArcReferences>>,
-    tlas: Vec<OwnedTlasPackage<ArcReferences>>,
+    mut tlas: Vec<OwnedTlasPackage<ArcReferences>>,
 ) -> Result<(), BuildAccelerationStructureError> {
     profiling::scope!("build_acceleration_structures");
     state
@@ -277,7 +275,7 @@ pub(crate) fn build_acceleration_structures(
     let mut tlas_storage = Vec::<TlasStore>::with_capacity(tlas.len());
     let mut instance_buffer_staging_source = Vec::<u8>::new();
 
-    for package in tlas.iter() {
+    for package in tlas.iter_mut() {
         profiling::scope!("tlas validation");
         let tlas = &package.tlas;
         state.tracker.tlas_s.insert_single(tlas.clone());
@@ -294,13 +292,13 @@ pub(crate) fn build_acceleration_structures(
         let mut seen_dependencies = FastHashSet::<TrackerIndex>::default();
 
         let mut instance_count = 0;
-        for instance in package.instances.iter().flatten() {
+        for instance in mem::take(&mut package.instances).into_iter().flatten() {
             if instance.custom_data >= (1u32 << 24u32) {
                 return Err(BuildAccelerationStructureError::TlasInvalidCustomIndex(
                     tlas.error_ident(),
                 ));
             }
-            let blas = &instance.blas;
+            let blas = instance.blas;
             let is_new_dependency = seen_dependencies.insert(blas.tracker_index());
 
             if is_new_dependency {
@@ -336,7 +334,7 @@ pub(crate) fn build_acceleration_structures(
             instance_count += 1;
 
             if is_new_dependency {
-                dependencies.push(blas.clone());
+                dependencies.push(blas);
             }
         }
 
