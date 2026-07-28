@@ -34,8 +34,8 @@ fn downlevel_default_limits_less_than_default_limits() {
     )
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct InstanceDevices(Arc<Mutex<WeakVec<Device>>>);
+#[derive(Debug)]
+pub(crate) struct InstanceDevices(Mutex<WeakVec<Device>>);
 
 impl Default for InstanceDevices {
     fn default() -> Self {
@@ -45,7 +45,7 @@ impl Default for InstanceDevices {
 
 impl InstanceDevices {
     pub(crate) fn new() -> Self {
-        Self(Arc::new(Mutex::new(rank::HUB_OTHER, WeakVec::new())))
+        Self(Mutex::new(rank::HUB_OTHER, WeakVec::new()))
     }
 
     pub(crate) fn push(&self, device: &Arc<Device>) {
