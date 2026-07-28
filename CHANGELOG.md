@@ -42,6 +42,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+#### General
+
+- Explicitly implement `Send` and `Sync` in `wgpu-core` to reduce the risk of `recursion_limit` overflow. By @nazar-pc in [#9953](https://github.com/gfx-rs/wgpu/pull/9953)
+
 ## v30.0.1 (2026-08-21)
 
 ### Bug Fixes
