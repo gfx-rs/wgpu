@@ -351,8 +351,9 @@ bitflags::bitflags! {
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct ModuleInfo {
     type_flags: Vec<TypeFlags>,
-    functions: Vec<FunctionInfo>,
-    entry_points: Vec<FunctionInfo>,
+    // Need to be pub(crate) so they can be modified by the inlining pass.
+    pub(crate) functions: Vec<FunctionInfo>,
+    pub(crate) entry_points: Vec<FunctionInfo>,
     const_expression_types: Box<[TypeResolution]>,
 }
 
