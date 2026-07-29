@@ -638,8 +638,12 @@ impl WebGpuError for QueueSubmitError {
 /// [`submit`]: `PendingSubmission::submit`
 pub(crate) struct PendingSubmission<'a> {
     queue: &'a Queue,
-    snatch_guard: SnatchGuard<'a>,
+    // Declared before `snatch_guard` so that it is dropped first. `snatch_guard`
+    // is acquired by the caller and `command_index_guard` in
+    // `Queue::allocate_submission`, so releasing in field order would release the
+    // older guard first — which `--cfg wgpu_validate_locks` rejects.
     command_index_guard: RwLockWriteGuard<'a, CommandIndices>,
+    snatch_guard: SnatchGuard<'a>,
     // Command buffers to be executed, along with trackers for the resources they use.
     pub executions: Vec<EncoderInFlight>,
     // Surface textures referenced by command buffers in this submission. These need to be
