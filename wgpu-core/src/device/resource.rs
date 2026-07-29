@@ -1075,13 +1075,29 @@ impl Device {
             if let Some(wait_submission_index) = wait_submission_index {
                 // Assert to ensure that if we received a queue empty status, the fence shows the
                 // correct value. This is defensive, as this should never be hit.
+                //
+                // Re-read the fence rather than reusing `current_finished_submission`:
+                // that was sampled before `Queue::maintain`, but `queue_empty` is
+                // observed inside it, and another thread may retire and triage
+                // submissions in between (`Device::poll` takes `&self`). A fresh read
+                // is sound because an empty tracker implies some thread triaged past
+                // `wait_submission_index`, which requires a fence read at least that
+                // high, and the fence is monotonic.
+                let finished_submission =
+                    match unsafe { self.raw().get_fence_value(self.fence.as_ref()) } {
+                        Ok(fence_value) => fence_value.max(current_finished_submission),
+                        Err(e) => {
+                            let hal_error: WaitIdleError = self.handle_hal_error(e).into();
+                            return (user_closures, Err(hal_error));
+                        }
+                    };
                 assert!(
-                    current_finished_submission >= wait_submission_index,
+                    finished_submission >= wait_submission_index,
                     concat!(
                         "If the queue is empty, the current submission index ",
                         "({}) should be at least the wait submission index ({})",
                     ),
-                    current_finished_submission,
+                    finished_submission,
                     wait_submission_index,
                 );
             }
