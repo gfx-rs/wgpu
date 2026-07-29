@@ -1,6 +1,9 @@
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::{
-    cmp::max, mem, num::NonZeroU64, ops::{Deref, Range},
+    cmp::max,
+    mem,
+    num::NonZeroU64,
+    ops::{Deref, Range},
 };
 
 use wgt::{math::align_to, BufferUsages, BufferUses, Features};
@@ -158,10 +161,8 @@ impl super::CommandEncoder {
 
             for tlas_package in &tlas_iter {
                 tlas_package.tlas.check_is_valid()?;
-                for instance in &tlas_package.instances {
-                    if let Some(instance) = instance {
-                        instance.blas.check_is_valid()?;
-                    }
+                for instance in tlas_package.instances.iter().flatten() {
+                    instance.blas.check_is_valid()?;
                 }
             }
 
@@ -234,14 +235,17 @@ impl Global {
         });
         let tlases = tlas_iter.map(|e| ArcTlasPackage {
             tlas: hub.tlas_s.get(e.tlas),
-            instances: e.instances.map(|instance| {
-                instance.as_ref().map(|instance| ArcTlasInstance {
-                    blas: hub.blas_s.get(instance.blas),
-                    transform: *instance.transform,
-                    custom_data: instance.custom_data,
-                    mask: instance.mask,
+            instances: e
+                .instances
+                .map(|instance| {
+                    instance.as_ref().map(|instance| ArcTlasInstance {
+                        blas: hub.blas_s.get(instance.blas),
+                        transform: *instance.transform,
+                        custom_data: instance.custom_data,
+                        mask: instance.mask,
+                    })
                 })
-            }).collect(),
+                .collect(),
             lowest_unmodified: e.lowest_unmodified,
         });
         cmd_enc.build_acceleration_structures(blases.into_iter(), tlases.collect())
