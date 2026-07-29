@@ -323,7 +323,14 @@ pub const MAX_MIP_LEVELS: u32 = 16;
 /// Size of a single occlusion/timestamp query, when copied into a buffer, in bytes.
 /// cbindgen:ignore
 pub const QUERY_SIZE: wgt::BufferAddress = 8;
+// The struct itself is defined in core, but we need to know the size.
+// There is a const assert for correctness located with the struct definition.
+#[doc(hidden)]
 pub const EXTERNAL_TEXTURE_PARAMS_SIZE: wgt::BufferAddress = 208;
+/// Universally safe value for buffer size alignment.
+///
+/// This is determined by `D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT`.
+pub const UNIVERSAL_BUFFER_SIZE_ALIGNMENT: wgt::BufferAddress = 256;
 
 pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
