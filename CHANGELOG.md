@@ -91,7 +91,7 @@ Bottom level categories:
 #### Naga
 
 - Replace embedded NUL characters with `?` when writing debug strings to SPIR-V. By @andyleiserson in [#9904](https://github.com/gfx-rs/wgpu/pull/9904).
-- Fixed invalid HLSL generated for `textureSampleLevel` with an explicit offset on 3D textures. The HLSL backend wrapped every sampling offset in `int2(...)`, producing a nested `int2(int3(...))` that matches no `Texture3D.SampleLevel` overload; the constructor now follows the offset's own dimension. By @mvanhorn in [#9717](https://github.com/gfx-rs/wgpu/issues/9717).
+- Fix invalid HLSL generated for `textureSampleLevel` with non-2D textures. By @mvanhorn in [#9717](https://github.com/gfx-rs/wgpu/issues/9717).
 
 #### Vulkan
 
