@@ -993,8 +993,10 @@ impl Device {
             wgt::PollType::Poll => None,
         };
 
-        // Wait for the submission index if requested.
-        if let Some(target_submission_index) = wait_submission_index {
+        // Wait for the submission index if requested. `None` if no wait was requested,
+        // otherwise `Some(succeeded)` with whether the wait was satisfied before the
+        // timeout. The outcome is consulted below when interpreting `queue_empty`.
+        let wait_succeeded = if let Some(target_submission_index) = wait_submission_index {
             log::trace!("Device::maintain: waiting for submission index {target_submission_index}");
 
             let wait_timeout = match poll_type {
@@ -1009,13 +1011,16 @@ impl Device {
                     .wait(self.fence.as_ref(), target_submission_index, wait_timeout)
             };
 
-            // This error match is only about `DeviceErrors`. At this stage we do not care if
-            // the wait succeeded or not, and the `Ok(bool)`` variant is ignored.
-            if let Err(e) = wait_result {
-                let hal_error: WaitIdleError = self.handle_hal_error(e).into();
-                return (user_closures, Err(hal_error));
+            match wait_result {
+                Ok(succeeded) => Some(succeeded),
+                Err(e) => {
+                    let hal_error: WaitIdleError = self.handle_hal_error(e).into();
+                    return (user_closures, Err(hal_error));
+                }
             }
-        }
+        } else {
+            None
+        };
 
         // Get the currently finished submission index. This may be higher than the requested
         // wait, or it may be less than the requested wait if the wait failed.
@@ -1071,33 +1076,30 @@ impl Device {
 
         // Based on the queue empty status, and the current finished submission index, determine
         // the result of the poll.
-        let result = if queue_empty {
+        //
+        // `queue_empty` alone does not justify reporting `QueueEmpty` after a timed-out
+        // wait: `current_finished_submission` is sampled before `Queue::maintain`, but
+        // `queue_empty` is observed inside it, and another thread may retire and triage
+        // submissions in between (`Device::poll` takes `&self`). Reporting `QueueEmpty`
+        // there would claim more than this thread's fence sample proves; `QueueEmpty`
+        // is documented to imply the wait was satisfied. Such a race reports
+        // `WaitSucceeded` or `Timeout` instead, and a subsequent poll observes the
+        // empty queue.
+        let result = if queue_empty && wait_succeeded != Some(false) {
             if let Some(wait_submission_index) = wait_submission_index {
                 // Assert to ensure that if we received a queue empty status, the fence shows the
                 // correct value. This is defensive, as this should never be hit.
                 //
-                // Re-read the fence rather than reusing `current_finished_submission`:
-                // that was sampled before `Queue::maintain`, but `queue_empty` is
-                // observed inside it, and another thread may retire and triage
-                // submissions in between (`Device::poll` takes `&self`). A fresh read
-                // is sound because an empty tracker implies some thread triaged past
-                // `wait_submission_index`, which requires a fence read at least that
-                // high, and the fence is monotonic.
-                let finished_submission =
-                    match unsafe { self.raw().get_fence_value(self.fence.as_ref()) } {
-                        Ok(fence_value) => fence_value,
-                        Err(e) => {
-                            let hal_error: WaitIdleError = self.handle_hal_error(e).into();
-                            return (user_closures, Err(hal_error));
-                        }
-                    };
+                // This branch is reached with a wait index only when the wait succeeded,
+                // and `current_finished_submission` was sampled after that wait, so a
+                // monotonic fence must show at least `wait_submission_index`.
                 assert!(
-                    finished_submission >= wait_submission_index,
+                    current_finished_submission >= wait_submission_index,
                     concat!(
                         "If the queue is empty, the current submission index ",
                         "({}) should be at least the wait submission index ({})",
                     ),
-                    finished_submission,
+                    current_finished_submission,
                     wait_submission_index,
                 );
             }
