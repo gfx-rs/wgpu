@@ -166,7 +166,7 @@ impl super::CommandEncoder {
                 }
             }
 
-            Ok(ArcCommand::BuildAccelerationStructures { blas, tlas: tlas_iter })
+            Ok(ArcCommand::BuildAccelerationStructures { blas, tlas: tlases })
         })
     }
 }
