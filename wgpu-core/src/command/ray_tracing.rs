@@ -279,6 +279,8 @@ pub(crate) fn build_acceleration_structures(
     let mut tlas_storage = Vec::<TlasStore>::with_capacity(tlases.len());
     let mut instance_buffer_staging_source = Vec::<u8>::new();
 
+    // We cannot move out of `tlases` because it will be borrowed by `tlas_storage`,
+    // but each package’s `instances` is consumed by the `mem::take` below.
     for package in tlases.iter_mut() {
         profiling::scope!("tlas validation");
         let tlas = &package.tlas;
