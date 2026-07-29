@@ -1085,7 +1085,7 @@ impl Device {
                 // high, and the fence is monotonic.
                 let finished_submission =
                     match unsafe { self.raw().get_fence_value(self.fence.as_ref()) } {
-                        Ok(fence_value) => fence_value.max(current_finished_submission),
+                        Ok(fence_value) => fence_value,
                         Err(e) => {
                             let hal_error: WaitIdleError = self.handle_hal_error(e).into();
                             return (user_closures, Err(hal_error));
