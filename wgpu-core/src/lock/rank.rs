@@ -169,6 +169,10 @@ define_lock_ranks! {
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
     rank BUFFER_MAP_STATE "Buffer::map_state" followed by {
+        // `Buffer::map` holds `map_state` across `device::map_buffer`, which
+        // writes the buffer's initialization tracker. See `Buffer::map` for why
+        // the guard must span the HAL map.
+        BUFFER_INITIALIZATION_STATUS,
         DEVICE_TRACE,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
