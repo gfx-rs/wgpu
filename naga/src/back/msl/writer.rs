@@ -2120,6 +2120,78 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Write a polyfill for [`Statement::SubgroupBallotFindBit`], since MSL has no
+    /// built-in for it: a chain of ternaries. `priority` counts up from 0 (the
+    /// lowest-priority word, used as the fallback base case) to 3 (the
+    /// highest-priority word, checked first: `x` for LSB, `w` for MSB), each
+    /// overriding the lower-priority result when that word has any bit set.
+    ///
+    /// [`Statement::SubgroupBallotFindBit`]: crate::Statement::SubgroupBallotFindBit
+    fn put_ballot_find_bit(
+        &mut self,
+        argument: Handle<crate::Expression>,
+        context: &ExpressionContext,
+        order: crate::BallotFindBitOrder,
+        priority: u32,
+    ) -> BackendResult {
+        let (component, base) = match (order, priority) {
+            (crate::BallotFindBitOrder::Lsb, 0) => ('w', 96),
+            (crate::BallotFindBitOrder::Lsb, 1) => ('z', 64),
+            (crate::BallotFindBitOrder::Lsb, 2) => ('y', 32),
+            (crate::BallotFindBitOrder::Lsb, 3) => ('x', 0),
+            (crate::BallotFindBitOrder::Msb, 0) => ('x', 0),
+            (crate::BallotFindBitOrder::Msb, 1) => ('y', 32),
+            (crate::BallotFindBitOrder::Msb, 2) => ('z', 64),
+            (crate::BallotFindBitOrder::Msb, 3) => ('w', 96),
+            (_, _) => unreachable!(),
+        };
+
+        if priority == 0 {
+            self.put_ballot_find_bit_value(argument, context, order, component, base)?;
+        } else {
+            write!(self.out, "(")?;
+            self.put_expression(argument, context, true)?;
+            write!(self.out, ".{component} != 0u ? ")?;
+            self.put_ballot_find_bit_value(argument, context, order, component, base)?;
+            write!(self.out, " : ")?;
+            self.put_ballot_find_bit(argument, context, order, priority - 1)?;
+            write!(self.out, ")")?;
+        }
+        Ok(())
+    }
+
+    /// Write the least/most significant set bit of one `u32` component of the
+    /// ballot, offset by that component's base invocation index. Mirrors the
+    /// `Mf::FirstTrailingBit`/`Mf::FirstLeadingBit` formulas above, specialized
+    /// for a known-unsigned 32-bit scalar. Used by [`Self::put_ballot_find_bit`].
+    fn put_ballot_find_bit_value(
+        &mut self,
+        argument: Handle<crate::Expression>,
+        context: &ExpressionContext,
+        order: crate::BallotFindBitOrder,
+        component: char,
+        base: u32,
+    ) -> BackendResult {
+        match order {
+            crate::BallotFindBitOrder::Lsb => {
+                write!(self.out, "((({NAMESPACE}::ctz(")?;
+                self.put_expression(argument, context, true)?;
+                write!(self.out, ".{component}) + 1) % 33) - 1)")?;
+            }
+            crate::BallotFindBitOrder::Msb => {
+                write!(self.out, "{NAMESPACE}::select(31 - {NAMESPACE}::clz(")?;
+                self.put_expression(argument, context, true)?;
+                write!(self.out, ".{component}), uint(-1), ")?;
+                self.put_expression(argument, context, true)?;
+                write!(self.out, ".{component} == 0)")?;
+            }
+        }
+        if base != 0 {
+            write!(self.out, " + {base}u")?;
+        }
+        Ok(())
+    }
+
     /// Emit code for the expression `expr_handle`.
     ///
     /// The `is_scoped` argument is true if the surrounding operators have the
@@ -4445,6 +4517,18 @@ impl<W: Write> Writer<W> {
                         }
                     }
                     writeln!(self.out, ");")?;
+                }
+                crate::Statement::SubgroupBallotFindBit {
+                    order,
+                    argument,
+                    result,
+                } => {
+                    write!(self.out, "{level}")?;
+                    let name = self.namer.call("");
+                    self.start_baking_expression(result, &context.expression, &name)?;
+                    self.named_expressions.insert(result, name);
+                    self.put_ballot_find_bit(argument, &context.expression, order, 3)?;
+                    writeln!(self.out, ";")?;
                 }
                 crate::Statement::CooperativeStore { target, ref data } => {
                     write!(self.out, "{level}simdgroup_store(")?;

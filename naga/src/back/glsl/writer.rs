@@ -2285,6 +2285,29 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::SubgroupBallotFindBit {
+                order,
+                argument,
+                result,
+            } => {
+                write!(self.out, "{level}")?;
+                let res_name = Baked(result).to_string();
+                let res_ty = ctx.info[result].ty.inner_with(&self.module.types);
+                self.write_value_type(res_ty)?;
+                write!(self.out, " {res_name} = ")?;
+                self.named_expressions.insert(result, res_name);
+
+                match order {
+                    crate::BallotFindBitOrder::Lsb => {
+                        write!(self.out, "subgroupBallotFindLSB(")?;
+                    }
+                    crate::BallotFindBitOrder::Msb => {
+                        write!(self.out, "subgroupBallotFindMSB(")?;
+                    }
+                }
+                self.write_expr(argument, ctx)?;
+                writeln!(self.out, ");")?;
+            }
             Statement::CooperativeStore { .. } => unimplemented!(),
             Statement::RayPipelineFunction(_) => unimplemented!(),
         }

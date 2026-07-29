@@ -1208,6 +1208,19 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::SubgroupBallotFindBit {
+                order,
+                argument,
+                result,
+            } => {
+                write!(self.out, "{level}")?;
+                let res_name = Baked(result).to_string();
+                self.start_named_expr(module, result, func_ctx, &res_name)?;
+                self.named_expressions.insert(result, res_name);
+
+                self.write_ballot_find_bit(module, argument, func_ctx, order, 3)?;
+                writeln!(self.out, ";")?;
+            }
             Statement::CooperativeStore { target, ref data } => {
                 let suffix = if data.row_major { "T" } else { "" };
                 write!(self.out, "{level}coopStore{suffix}(")?;
@@ -1313,6 +1326,72 @@ impl<W: Write> Writer<W> {
         }
 
         write!(self.out, " = ")?;
+        Ok(())
+    }
+
+    /// Write a polyfill for [`Statement::SubgroupBallotFindBit`], since WGSL has no
+    /// built-in for it: a chain of `select`s. `priority` counts up from 0 (the
+    /// lowest-priority word, used as the fallback base case) to 3 (the
+    /// highest-priority word, checked first: `x` for LSB, `w` for MSB), each
+    /// overriding the lower-priority result when that word has any bit set.
+    ///
+    /// [`Statement::SubgroupBallotFindBit`]: crate::Statement::SubgroupBallotFindBit
+    fn write_ballot_find_bit(
+        &mut self,
+        module: &Module,
+        argument: Handle<crate::Expression>,
+        func_ctx: &back::FunctionCtx<'_>,
+        order: crate::BallotFindBitOrder,
+        priority: u32,
+    ) -> BackendResult {
+        let (component, base) = match (order, priority) {
+            (crate::BallotFindBitOrder::Lsb, 0) => ('w', 96),
+            (crate::BallotFindBitOrder::Lsb, 1) => ('z', 64),
+            (crate::BallotFindBitOrder::Lsb, 2) => ('y', 32),
+            (crate::BallotFindBitOrder::Lsb, 3) => ('x', 0),
+            (crate::BallotFindBitOrder::Msb, 0) => ('x', 0),
+            (crate::BallotFindBitOrder::Msb, 1) => ('y', 32),
+            (crate::BallotFindBitOrder::Msb, 2) => ('z', 64),
+            (crate::BallotFindBitOrder::Msb, 3) => ('w', 96),
+            (_, _) => unreachable!(),
+        };
+
+        if priority == 0 {
+            self.write_ballot_find_bit_value(module, argument, func_ctx, order, component, base)?;
+        } else {
+            write!(self.out, "select(")?;
+            self.write_ballot_find_bit(module, argument, func_ctx, order, priority - 1)?;
+            write!(self.out, ", ")?;
+            self.write_ballot_find_bit_value(module, argument, func_ctx, order, component, base)?;
+            write!(self.out, ", ")?;
+            self.write_expr(module, argument, func_ctx)?;
+            write!(self.out, ".{component} != 0u)")?;
+        }
+        Ok(())
+    }
+
+    /// Write `firstTrailingBit`/`firstLeadingBit` applied to one component of the
+    /// ballot, offset by that component's base invocation index. Used by
+    /// [`Self::write_ballot_find_bit`].
+    fn write_ballot_find_bit_value(
+        &mut self,
+        module: &Module,
+        argument: Handle<crate::Expression>,
+        func_ctx: &back::FunctionCtx<'_>,
+        order: crate::BallotFindBitOrder,
+        component: char,
+        base: u32,
+    ) -> BackendResult {
+        let math_fn = match order {
+            crate::BallotFindBitOrder::Lsb => "firstTrailingBit",
+            crate::BallotFindBitOrder::Msb => "firstLeadingBit",
+        };
+        write!(self.out, "{math_fn}(")?;
+        self.write_expr(module, argument, func_ctx)?;
+        write!(self.out, ".{component})")?;
+        if base != 0 {
+            write!(self.out, " + {base}u")?;
+        }
         Ok(())
     }
 

@@ -1,0 +1,37 @@
+OpCapability Shader
+OpCapability GroupNonUniform
+OpCapability GroupNonUniformBallot
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main" %invocation_id
+OpExecutionMode %main LocalSize 1 1 1
+OpDecorate %invocation_id BuiltIn SubgroupLocalInvocationId
+OpDecorate %output_block BufferBlock
+OpMemberDecorate %output_block 0 Offset 0
+OpDecorate %output_var DescriptorSet 0
+OpDecorate %output_var Binding 0
+%void = OpTypeVoid
+%uint = OpTypeInt 32 0
+%bool = OpTypeBool
+%uint4 = OpTypeVector %uint 4
+%ptr_uint_input = OpTypePointer Input %uint
+%invocation_id = OpVariable %ptr_uint_input Input
+%output_block = OpTypeStruct %uint
+%ptr_output_block = OpTypePointer Uniform %output_block
+%output_var = OpVariable %ptr_output_block Uniform
+%ptr_uint_uniform = OpTypePointer Uniform %uint
+%fn_void = OpTypeFunction %void
+%uint_0 = OpConstant %uint 0
+%scope_subgroup = OpConstant %uint 3
+%main = OpFunction %void None %fn_void
+%entry = OpLabel
+%inv_id = OpLoad %uint %invocation_id
+%cond = OpINotEqual %bool %inv_id %uint_0
+%ballot = OpGroupNonUniformBallot %uint4 %scope_subgroup %cond
+%lsb = OpGroupNonUniformBallotFindLSB %uint %scope_subgroup %ballot
+%msb = OpGroupNonUniformBallotFindMSB %uint %scope_subgroup %ballot
+%sum = OpIAdd %uint %lsb %msb
+%dst = OpAccessChain %ptr_uint_uniform %output_var %uint_0
+OpStore %dst %sum
+OpReturn
+OpFunctionEnd

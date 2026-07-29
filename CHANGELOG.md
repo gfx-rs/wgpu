@@ -93,6 +93,10 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - `wgpu::WriteOnly<[_]>` now implements `Send`. By @kpreid in [#10163](https://github.com/gfx-rs/wgpu/pull/10163).
 - Added `Texture::mark_externally_initialized()` to stop a texture from being lazily cleared if it was written to externally (e.g. via `as_hal`). By @R-Cramer4 in [#10075](https://github.com/gfx-rs/wgpu/pull/10075).
 
+#### naga
+
+- Support SPIR-V's `OpGroupNonUniformBallotFindLSB`/`OpGroupNonUniformBallotFindMSB` and GLSL's `subgroupBallotFindLSB`/`subgroupBallotFindMSB` via a new `Statement::SubgroupBallotFindBit` IR node: native `OpGroupNonUniformBallotFindLSB`/`MSB` and `subgroupBallotFindLSB`/`MSB` on SPIR-V and GLSL output, formula-based polyfills on HLSL, MSL, and WGSL. By @nazar-pc in [#9966](https://github.com/gfx-rs/wgpu/pull/9966)
+
 #### Hal
 
 - Add `BufferBinding::buffer`, a public read accessor for the bound buffer, which was previously inaccessible to out-of-tree `wgpu_hal::Api` implementations. By @danlehmann in [#9820](https://github.com/gfx-rs/wgpu/pull/9820).

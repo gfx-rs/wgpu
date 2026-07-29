@@ -4240,6 +4240,13 @@ impl BlockContext<'_> {
                 } => {
                     self.write_subgroup_gather(mode, argument, result, &mut block)?;
                 }
+                Statement::SubgroupBallotFindBit {
+                    order,
+                    argument,
+                    result,
+                } => {
+                    self.write_subgroup_ballot_find_bit(order, argument, result, &mut block)?;
+                }
                 Statement::CooperativeStore { target, ref data } => {
                     let target_id = self.cached[target];
                     let layout = if data.row_major {
