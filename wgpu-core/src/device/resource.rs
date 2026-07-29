@@ -173,6 +173,10 @@ pub struct ExternalTextureParams {
 
 const _: () =
     assert!(size_of::<ExternalTextureParams>() == wgpu_hal::EXTERNAL_TEXTURE_PARAMS_SIZE as usize);
+const EXTERNAL_TEXTURE_PARAMS_BUFFER_SIZE: usize = {
+    size_of::<ExternalTextureParams>()
+        .next_multiple_of(wgpu_hal::UNIVERSAL_BUFFER_SIZE_ALIGNMENT as usize)
+};
 
 impl ExternalTextureParams {
     pub fn from_desc<L>(desc: &wgt::ExternalTextureDescriptor<L>) -> Self {
@@ -549,7 +553,7 @@ impl Device {
                     Some("(wgpu internal) default external texture params buffer"),
                     instance_flags,
                 ),
-                size: align_to(size_of::<ExternalTextureParams>() as _, 256),
+                size: EXTERNAL_TEXTURE_PARAMS_BUFFER_SIZE as _,
                 usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
                 memory_flags: hal::MemoryFlags::empty(),
             })
@@ -684,9 +688,11 @@ impl Device {
             num_planes: 1,
             _padding: Default::default(),
         };
-        let mut staging_buffer =
-            StagingBuffer::new(self, wgt::BufferSize::new(size_of_val(&data) as _).unwrap())?;
-        staging_buffer.write(bytemuck::bytes_of(&data));
+        let mut staging_buffer = StagingBuffer::new(
+            self,
+            wgt::BufferSize::new(EXTERNAL_TEXTURE_PARAMS_BUFFER_SIZE as _).unwrap(),
+        )?;
+        staging_buffer.write_with_zero_padding(bytemuck::bytes_of(&data));
         let staging_buffer = staging_buffer.flush();
 
         let params_buffer = self.default_external_texture_params_buffer.as_ref();
