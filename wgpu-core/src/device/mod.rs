@@ -5,8 +5,8 @@ use crate::{
     binding_model,
     ray_tracing::BlasCompactReadyPendingClosure,
     resource::{
-        Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Labeled,
-        RawResourceAccess, ResourceErrorIdent,
+        Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, DestroyedResourceError,
+        Labeled, RawResourceAccess, ResourceErrorIdent,
     },
     snatch::SnatchGuard,
     Label, DOWNLEVEL_ERROR_MESSAGE,
@@ -226,6 +226,20 @@ pub struct DeviceLostInvocation {
     message: String,
 }
 
+/// The failure modes of [`map_buffer_deferred_error`], kept apart so a caller
+/// can decide *when* to translate the HAL error.
+pub(crate) enum MapBufferError {
+    Access(BufferAccessError),
+    /// Not yet passed to [`Device::handle_hal_error`].
+    Hal(hal::DeviceError),
+}
+
+impl From<DestroyedResourceError> for MapBufferError {
+    fn from(e: DestroyedResourceError) -> Self {
+        Self::Access(e.into())
+    }
+}
+
 pub(crate) fn map_buffer(
     buffer: &Buffer,
     offset: BufferAddress,
@@ -233,12 +247,31 @@ pub(crate) fn map_buffer(
     kind: HostMap,
     snatch_guard: &SnatchGuard,
 ) -> Result<hal::BufferMapping, BufferAccessError> {
+    map_buffer_deferred_error(buffer, offset, size, kind, snatch_guard).map_err(|e| match e {
+        MapBufferError::Access(e) => e,
+        MapBufferError::Hal(e) => buffer.device.handle_hal_error(e).into(),
+    })
+}
+
+/// Like [`map_buffer`], but returns the HAL error untranslated.
+///
+/// [`Device::handle_hal_error`] can call [`Device::lose`], which invokes the
+/// user's device-lost callback inline. A caller holding a lock must therefore
+/// release it before translating, or that callback runs under the lock — see
+/// the note on `Buffer::map`.
+pub(crate) fn map_buffer_deferred_error(
+    buffer: &Buffer,
+    offset: BufferAddress,
+    size: BufferAddress,
+    kind: HostMap,
+    snatch_guard: &SnatchGuard,
+) -> Result<hal::BufferMapping, MapBufferError> {
     let raw_device = buffer.device.raw();
     let raw_buffer = buffer.try_raw(snatch_guard)?;
     let mapping = unsafe {
         raw_device
             .map_buffer(raw_buffer, offset..offset + size)
-            .map_err(|e| buffer.device.handle_hal_error(e))?
+            .map_err(MapBufferError::Hal)?
     };
 
     if !mapping.is_coherent && kind == HostMap::Read {

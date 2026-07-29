@@ -972,7 +972,7 @@ impl Buffer {
         let status = if pending_mapping.range.start != pending_mapping.range.end {
             let host = pending_mapping.op.host;
             let size = pending_mapping.range.end - pending_mapping.range.start;
-            match crate::device::map_buffer(
+            match crate::device::map_buffer_deferred_error(
                 self,
                 pending_mapping.range.start,
                 size,
@@ -987,6 +987,12 @@ impl Buffer {
                     };
                     Ok(())
                 }
+                // Deliberately not translated yet: `handle_hal_error` can run
+                // the user's device-lost callback inline, and that callback may
+                // call back into this buffer (`unmap`, `destroy`, `map_async`),
+                // which would re-lock `map_state` on this thread. `map_state`
+                // is already `Idle` on this path, so the translation is done
+                // below, after the guard is released.
                 Err(e) => Err(e),
             }
         } else {
@@ -1000,7 +1006,12 @@ impl Buffer {
             };
             Ok(())
         };
+        // Release before translating: see the `Err` arm above.
         drop(map_state);
+        let status = status.map_err(|e| match e {
+            crate::device::MapBufferError::Access(e) => e,
+            crate::device::MapBufferError::Hal(e) => self.device.handle_hal_error(e).into(),
+        });
         Some((pending_mapping.op, status))
     }
 
