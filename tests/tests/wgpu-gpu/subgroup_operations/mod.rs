@@ -1,6 +1,6 @@
 use std::num::NonZeroU64;
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(SUBGROUP_OPERATIONS);
@@ -9,7 +9,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 const THREAD_COUNT: u64 = 128;
 const TEST_COUNT: u32 = 37;
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

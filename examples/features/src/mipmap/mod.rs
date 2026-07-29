@@ -511,7 +511,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "mipmap",
     image_path: "/examples/features/src/mipmap/screenshot.png",
@@ -524,7 +524,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
 };
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST_QUERY: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "mipmap-query",
     image_path: "/examples/features/src/mipmap/screenshot_query.png",

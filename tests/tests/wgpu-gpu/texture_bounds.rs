@@ -1,12 +1,12 @@
 //! Tests for texture copy bounds checks.
 
-use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{apply, fail_if, gpu_test, GpuTestConfiguration, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.push(BAD_COPY_ORIGIN_TEST);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BAD_COPY_ORIGIN_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
