@@ -97,7 +97,7 @@ impl super::CommandEncoder {
     pub fn build_acceleration_structures<'a>(
         self: &Arc<Self>,
         blas_iter: impl Iterator<Item = BlasBuildEntry<'a, Arc<Blas>, Arc<Buffer>>>,
-        tlas_iter: Vec<ArcTlasPackage>,
+        tlases: Vec<ArcTlasPackage>,
     ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::build_acceleration_structures");
 
@@ -159,7 +159,7 @@ impl super::CommandEncoder {
                 })
                 .collect::<Result<_, BuildAccelerationStructureError>>()?;
 
-            for tlas_package in &tlas_iter {
+            for tlas_package in &tlases {
                 tlas_package.tlas.check_is_valid()?;
                 for instance in tlas_package.instances.iter().flatten() {
                     instance.blas.check_is_valid()?;
@@ -254,20 +254,20 @@ impl Global {
 
 pub(crate) fn build_acceleration_structures(
     state: &mut EncodingState,
-    blas: Vec<OwnedBlasBuildEntry<ArcReferences>>,
-    mut tlas: Vec<OwnedTlasPackage<ArcReferences>>,
+    blases: Vec<OwnedBlasBuildEntry<ArcReferences>>,
+    mut tlases: Vec<OwnedTlasPackage<ArcReferences>>,
 ) -> Result<(), BuildAccelerationStructureError> {
     profiling::scope!("build_acceleration_structures");
     state
         .device
         .require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
 
-    let mut build_command = AsBuild::with_capacity(blas.len(), tlas.len());
+    let mut build_command = AsBuild::with_capacity(blases.len(), tlases.len());
     let mut input_barriers = Vec::<hal::BufferBarrier<dyn hal::DynBuffer>>::new();
     let mut scratch_buffer_blas_size = 0;
-    let mut blas_storage = Vec::with_capacity(blas.len());
+    let mut blas_storage = Vec::with_capacity(blases.len());
     iter_blas(
-        blas.iter(),
+        blases.iter(),
         &mut build_command,
         &mut input_barriers,
         &mut scratch_buffer_blas_size,
@@ -276,10 +276,10 @@ pub(crate) fn build_acceleration_structures(
     )?;
 
     let mut scratch_buffer_tlas_size: u64 = 0;
-    let mut tlas_storage = Vec::<TlasStore>::with_capacity(tlas.len());
+    let mut tlas_storage = Vec::<TlasStore>::with_capacity(tlases.len());
     let mut instance_buffer_staging_source = Vec::<u8>::new();
 
-    for package in tlas.iter_mut() {
+    for package in tlases.iter_mut() {
         profiling::scope!("tlas validation");
         let tlas = &package.tlas;
         state.tracker.tlas_s.insert_single(tlas.clone());
@@ -424,7 +424,7 @@ pub(crate) fn build_acceleration_structures(
     let raw_encoder = &mut state.raw_encoder;
 
     let mut blas_s_compactable = Vec::new();
-    let mut descriptors = Vec::with_capacity(blas.len());
+    let mut descriptors = Vec::with_capacity(blases.len());
 
     for storage in &blas_storage {
         descriptors.push(map_blas(
