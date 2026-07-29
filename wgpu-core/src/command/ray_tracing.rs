@@ -294,6 +294,10 @@ pub(crate) fn build_acceleration_structures(
                         instance.intersection_index,
                     ),
                 );
+            } else if instance.intersection_index != 0 {
+                state
+                    .device
+                    .require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)?;
             }
 
             instance_buffer_staging_source.extend(state.device.raw().tlas_instance_to_bytes(
