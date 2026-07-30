@@ -28,6 +28,11 @@ allow-wildcard-paths = true
 [advisories]
 # Ignore unmaintained crate advisories on this maintenance branch.
 unmaintained = "none"
+ignore = [
+    # naga-cli and wgpu-info use anyhow 1.0.102, which has a soundness bug in
+    # `Error::downcast_mut()`. https://rustsec.org/advisories/RUSTSEC-2026-0190
+    "RUSTSEC-2026-0190",
+]
 
 [licenses]
 allow = [
