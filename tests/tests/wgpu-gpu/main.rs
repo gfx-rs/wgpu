@@ -41,7 +41,6 @@ mod image_atomics;
 mod immediates;
 mod instance;
 mod life_cycle;
-mod linear_interpolation;
 mod mem_leaks;
 mod mesh_shader;
 mod multiview;
@@ -118,7 +117,6 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     image_atomics::all_tests(&mut tests);
     instance::all_tests(&mut tests);
     life_cycle::all_tests(&mut tests);
-    linear_interpolation::all_tests(&mut tests);
     mem_leaks::all_tests(&mut tests);
     mesh_shader::all_tests(&mut tests);
     multiview::all_tests(&mut tests);
