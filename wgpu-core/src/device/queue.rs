@@ -1338,169 +1338,171 @@ impl Queue {
 
         let res = 'error: {
             let mut used_surface_textures = track::TextureUsageScope::default();
+            let mut baked_command_buffers = Vec::with_capacity(command_buffers.len());
 
-            {
-                if !command_buffers.is_empty() {
-                    profiling::scope!("prepare");
+            if !command_buffers.is_empty() {
+                profiling::scope!("prepare");
 
-                    let mut first_error = None;
+                let mut first_error = None;
 
-                    //TODO: if multiple command buffers are submitted, we can re-use the last
-                    // native command buffer of the previous chain instead of always creating
-                    // a temporary one, since the chains are not finished.
+                // We are required to invalidate all command buffers in both the success and
+                // failure paths, so we `continue` after errors, and disallow `?`.
+                #[deny(clippy::question_mark_used)]
+                for command_buffer in command_buffers {
+                    profiling::scope!("process command buffer");
 
-                    // finish all the command buffers first
-                    for command_buffer in command_buffers {
-                        profiling::scope!("process command buffer");
+                    // we reset the used surface textures every time we use
+                    // it, so make sure to set_size on it.
+                    used_surface_textures.set_size(self.device.tracker_indices.textures.size());
 
-                        // we reset the used surface textures every time we use
-                        // it, so make sure to set_size on it.
-                        used_surface_textures.set_size(self.device.tracker_indices.textures.size());
+                    // Anything other than our own submission work in the remainder of this
+                    // function that attempts to use the WebGPU command buffer after this
+                    // point, will find it vacant (invalid), and produce an error.
+                    #[cfg_attr(not(feature = "trace"), expect(unused_mut))]
+                    let mut cmd_buf_data = command_buffer.take_finished();
 
-                        // Note that we are required to invalidate all command buffers in both the success and failure paths.
-                        // This is why we `continue` and don't early return via `?`.
-                        #[allow(unused_mut)]
-                        let mut cmd_buf_data = command_buffer.take_finished();
+                    if first_error.is_some() {
+                        continue;
+                    }
 
-                        if first_error.is_some() {
-                            continue;
-                        }
+                    #[cfg(feature = "trace")]
+                    let trace_commands = cmd_buf_data
+                        .as_mut()
+                        .ok()
+                        .and_then(|data| mem::take(&mut data.trace_commands));
 
-                        #[cfg(feature = "trace")]
-                        let trace_commands = cmd_buf_data
-                            .as_mut()
-                            .ok()
-                            .and_then(|data| mem::take(&mut data.trace_commands));
-
-                        let mut baked = match cmd_buf_data {
-                            Ok(cmd_buf_data) => {
-                                let res = validate_command_buffer(
-                                    command_buffer,
-                                    self,
-                                    &cmd_buf_data,
-                                    &submission.snatch_guard,
-                                    &mut submission.surface_textures,
-                                    &mut used_surface_textures,
-                                    &mut submission.command_index_guard,
-                                );
-                                if let Err(err) = res {
-                                    #[cfg(feature = "trace")]
-                                    self.trace_failed_submission(
-                                        submit_index,
-                                        trace_commands,
-                                        err.to_string(),
-                                    );
-                                    first_error.get_or_insert(err);
-                                    continue;
-                                }
-
-                                #[cfg(feature = "trace")]
-                                if let Some(commands) = trace_commands {
-                                    self.trace_submission(submit_index, commands);
-                                }
-
-                                cmd_buf_data.set_acceleration_structure_dependencies(
-                                    &submission.snatch_guard,
-                                );
-                                cmd_buf_data.into_baked_commands()
-                            }
-                            Err(err) => {
+                    let mut baked = match cmd_buf_data {
+                        Ok(cmd_buf_data) => {
+                            let res = validate_command_buffer(
+                                command_buffer,
+                                self,
+                                &cmd_buf_data,
+                                &submission.snatch_guard,
+                                &mut submission.surface_textures,
+                                &mut used_surface_textures,
+                                &mut submission.command_index_guard,
+                            );
+                            if let Err(err) = res {
                                 #[cfg(feature = "trace")]
                                 self.trace_failed_submission(
                                     submit_index,
                                     trace_commands,
                                     err.to_string(),
                                 );
-                                first_error.get_or_insert(err.into());
+                                first_error.get_or_insert(err);
                                 continue;
                             }
-                        };
 
-                        if let Err(e) = baked.process_deferred_query_set_resolves(
-                            &self.device,
-                            &submission.snatch_guard,
-                        ) {
-                            break 'error Err(e.into());
+                            #[cfg(feature = "trace")]
+                            if let Some(commands) = trace_commands {
+                                self.trace_submission(submit_index, commands);
+                            }
+
+                            cmd_buf_data
+                                .set_acceleration_structure_dependencies(&submission.snatch_guard);
+                            cmd_buf_data.into_baked_commands()
                         }
+                        Err(err) => {
+                            #[cfg(feature = "trace")]
+                            self.trace_failed_submission(
+                                submit_index,
+                                trace_commands,
+                                err.to_string(),
+                            );
+                            first_error.get_or_insert(err.into());
+                            continue;
+                        }
+                    };
 
-                        // execute resource transitions
+                    if let Err(e) = baked
+                        .process_deferred_query_set_resolves(&self.device, &submission.snatch_guard)
+                    {
+                        break 'error Err(e.into());
+                    }
+
+                    baked_command_buffers.push(baked);
+                }
+
+                if let Some(first_error) = first_error {
+                    break 'error Err(first_error);
+                }
+
+                for mut baked in baked_command_buffers {
+                    profiling::scope!("process baked commands");
+
+                    // execute resource transitions
+                    if let Err(e) = baked.encoder.open_pass(hal_label(
+                        Some("(wgpu internal) Transit"),
+                        self.device.instance_flags,
+                    )) {
+                        break 'error Err(e.into());
+                    }
+
+                    //Note: locking the trackers has to be done after the storages
+                    let mut trackers = self.device.trackers.lock();
+                    if let Err(e) =
+                        baked.initialize_buffer_memory(&mut trackers, &submission.snatch_guard)
+                    {
+                        break 'error Err(e.into());
+                    }
+                    if let Err(e) = baked.initialize_texture_memory(
+                        &mut trackers,
+                        &self.device,
+                        &submission.snatch_guard,
+                    ) {
+                        break 'error Err(e.into());
+                    }
+
+                    //Note: stateless trackers are not merged:
+                    // device already knows these resources exist.
+                    CommandEncoder::insert_barriers_from_device_tracker(
+                        baked.encoder.raw.as_mut(),
+                        &mut trackers,
+                        &baked.trackers,
+                        &submission.snatch_guard,
+                    );
+
+                    if let Err(e) = baked.encoder.close_and_push_front() {
+                        break 'error Err(e.into());
+                    }
+
+                    // Transition surface textures into `Present` state.
+                    // Note: we could technically do it after all of the command buffers,
+                    // but here we have a command encoder by hand, so it's easier to use it.
+                    if !used_surface_textures.is_empty() {
                         if let Err(e) = baked.encoder.open_pass(hal_label(
-                            Some("(wgpu internal) Transit"),
+                            Some("(wgpu internal) Present"),
                             self.device.instance_flags,
                         )) {
                             break 'error Err(e.into());
                         }
-
-                        //Note: locking the trackers has to be done after the storages
-                        let mut trackers = self.device.trackers.lock();
-                        if let Err(e) =
-                            baked.initialize_buffer_memory(&mut trackers, &submission.snatch_guard)
-                        {
+                        let texture_barriers = trackers
+                            .textures
+                            .set_from_usage_scope_and_drain_transitions(
+                                &used_surface_textures,
+                                &submission.snatch_guard,
+                            )
+                            .collect::<Vec<_>>();
+                        unsafe {
+                            baked.encoder.raw.transition_textures(&texture_barriers);
+                        };
+                        if let Err(e) = baked.encoder.close() {
                             break 'error Err(e.into());
                         }
-                        if let Err(e) = baked.initialize_texture_memory(
-                            &mut trackers,
-                            &self.device,
-                            &submission.snatch_guard,
-                        ) {
-                            break 'error Err(e.into());
-                        }
-
-                        //Note: stateless trackers are not merged:
-                        // device already knows these resources exist.
-                        CommandEncoder::insert_barriers_from_device_tracker(
-                            baked.encoder.raw.as_mut(),
-                            &mut trackers,
-                            &baked.trackers,
-                            &submission.snatch_guard,
-                        );
-
-                        if let Err(e) = baked.encoder.close_and_push_front() {
-                            break 'error Err(e.into());
-                        }
-
-                        // Transition surface textures into `Present` state.
-                        // Note: we could technically do it after all of the command buffers,
-                        // but here we have a command encoder by hand, so it's easier to use it.
-                        if !used_surface_textures.is_empty() {
-                            if let Err(e) = baked.encoder.open_pass(hal_label(
-                                Some("(wgpu internal) Present"),
-                                self.device.instance_flags,
-                            )) {
-                                break 'error Err(e.into());
-                            }
-                            let texture_barriers = trackers
-                                .textures
-                                .set_from_usage_scope_and_drain_transitions(
-                                    &used_surface_textures,
-                                    &submission.snatch_guard,
-                                )
-                                .collect::<Vec<_>>();
-                            unsafe {
-                                baked.encoder.raw.transition_textures(&texture_barriers);
-                            };
-                            if let Err(e) = baked.encoder.close() {
-                                break 'error Err(e.into());
-                            }
-                            used_surface_textures = track::TextureUsageScope::default();
-                        }
-
-                        // done
-                        submission.executions.push(EncoderInFlight {
-                            inner: baked.encoder,
-                            trackers: baked.trackers,
-                            temp_resources: baked.temp_resources,
-                            _indirect_draw_validation_resources: baked
-                                .indirect_draw_validation_resources,
-                            pending_buffers: FastHashMap::default(),
-                            pending_textures: FastHashMap::default(),
-                            pending_blas_s: FastHashMap::default(),
-                        });
+                        used_surface_textures = track::TextureUsageScope::default();
                     }
 
-                    if let Some(first_error) = first_error {
-                        break 'error Err(first_error);
-                    }
+                    // done
+                    submission.executions.push(EncoderInFlight {
+                        inner: baked.encoder,
+                        trackers: baked.trackers,
+                        temp_resources: baked.temp_resources,
+                        _indirect_draw_validation_resources: baked
+                            .indirect_draw_validation_resources,
+                        pending_buffers: FastHashMap::default(),
+                        pending_textures: FastHashMap::default(),
+                        pending_blas_s: FastHashMap::default(),
+                    });
                 }
             }
 
@@ -1512,6 +1514,11 @@ impl Queue {
             };
 
             profiling::scope!("cleanup");
+
+            // Failing in `Device::maintain` won't put resource state at risk, but returning
+            // an error from a successful submission could be confusing, do we really want
+            // to do that?
+            lose_device_on_error = false;
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
