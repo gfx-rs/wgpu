@@ -3011,10 +3011,10 @@ impl super::Adapter {
         let mut enabled_extensions = self.required_device_extensions(features);
         let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
 
-        let default_family_index = 0; //TODO
-        let mut family_infos = Vec::from([vk::DeviceQueueCreateInfo::default()
+        let default_family_index = 0;
+        let mut family_infos = vec![vk::DeviceQueueCreateInfo::default()
             .queue_family_index(default_family_index)
-            .queue_priorities(&[1.0])]);
+            .queue_priorities(&[1.0])];
 
         let mut pre_info = vk::DeviceCreateInfo::default();
 
