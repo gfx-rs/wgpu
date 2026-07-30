@@ -1773,25 +1773,27 @@ fn struct_type_mismatch_in_let_decl() {
 
 #[test]
 fn struct_type_mismatch_in_return_value() {
-    check_validation!(
+    check(
         "
         struct Foo { a: u32 };
         struct Bar { a: u32 };
         fn bar() -> Bar {
             return Foo(1);
         }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            handle: _,
-            name: function_name,
-            source: naga::valid::FunctionError::InvalidReturnType { .. }
-        }) if function_name == "bar"
+        ",
+        r#"error: expected `Bar`, found `Foo`
+  ┌─ wgsl:5:20
+  │
+5 │             return Foo(1);
+  │                    ^^^^^^ this expression has type `Foo`
+
+"#,
     );
 }
 
 #[test]
 fn struct_type_mismatch_in_argument() {
-    check_validation!(
+    check(
         "
         struct Foo { a: u32 };
         struct Bar { a: u32 };
@@ -1799,17 +1801,56 @@ fn struct_type_mismatch_in_argument() {
         fn main() {
             bar(Foo(1));
         }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            name: function_name,
-            source: naga::valid::FunctionError::InvalidCall {
-                function: _,
-                error: naga::valid::CallError::ArgumentType { index, .. },
-            },
-            ..
-        })
-        // The validation error is reported at the call, i.e., in `main`
-        if function_name == "main" && *index == 0
+        ",
+        r#"error: expected `Bar`, found `Foo`
+  ┌─ wgsl:6:17
+  │
+6 │             bar(Foo(1));
+  │                 ^^^^^^ this expression has type `Foo`
+
+"#,
+    );
+}
+
+/// Regression test for <https://github.com/gfx-rs/wgpu/issues/7419>: a
+/// constructor component of the wrong concrete type used to be reported by the
+/// IR validator as `Composing 0's component type is not expected`.
+#[test]
+fn type_mismatch_in_composite_constructor() {
+    check(
+        "
+        fn main() {
+            var a = array<vec2<u32>, 2>(1u, 2u);
+        }
+        ",
+        r#"error: expected `vec2<u32>`, found `u32`
+  ┌─ wgsl:3:21
+  │
+3 │             var a = array<vec2<u32>, 2>(1u, 2u);
+  │                     ^^^^^^^^^^^^^^^^^^^ ^^ this expression has type `u32`
+  │                     │                    
+  │                     a value of type `vec2<u32>` is required here
+
+"#,
+    );
+
+    check(
+        "
+        struct S { inner: array<u32, 4> }
+        fn main() {
+            var s = S(1u);
+        }
+        ",
+        r#"error: expected `array<u32, 4>`, found `u32`
+  ┌─ wgsl:2:9
+  │
+2 │         struct S { inner: array<u32, 4> }
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ a value of type `array<u32, 4>` is required here
+3 │         fn main() {
+4 │             var s = S(1u);
+  │                       ^^ this expression has type `u32`
+
+"#,
     );
 }
 
@@ -1970,13 +2011,16 @@ fn invalid_functions() {
 
 #[test]
 fn invalid_return_type() {
-    check_validation! {
-        "fn invalid_return_type() -> i32 { return 0u; }":
-        Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::InvalidReturnType { .. },
-            ..
-        })
-    };
+    check(
+        "fn invalid_return_type() -> i32 { return 0u; }",
+        r#"error: expected `i32`, found `u32`
+  ┌─ wgsl:1:42
+  │
+1 │ fn invalid_return_type() -> i32 { return 0u; }
+  │                                          ^^ this expression has type `u32`
+
+"#,
+    );
 }
 
 #[test]
@@ -4045,9 +4089,10 @@ fn vector_logical_ops() {
 #[test]
 fn issue7165() {
     // Regression test for https://github.com/gfx-rs/wgpu/issues/7165
+    // Any shader that parses but fails validation with a span will do.
     let shader = "
-        struct Struct { a: u32 }
-        fn invalid_return_type(a: Struct) -> i32 { return a; }
+        struct Atom { a: atomic<u32> }
+        fn non_constructible_return_type(a: Atom) -> Atom { return a; }
     ";
 
     // We need the span for the error, so have to invoke manually.
