@@ -218,6 +218,14 @@ bitflags::bitflags! {
         const MEMORY_DECORATION_VOLATILE = 1 << 42;
         /// Support for 16-bit integer types.
         const SHADER_INT16 = 1 << 43;
+        /// Support for [`Interpolation::Linear`] (`@interpolate(linear)` in WGSL).
+        ///
+        /// This is core WebGPU, but GLSL ES (and thus WebGL2) has no
+        /// `noperspective` qualifier, so the GLES backend can only offer it on
+        /// desktop GL.
+        ///
+        /// [`Interpolation::Linear`]: crate::Interpolation::Linear
+        const LINEAR_INTERPOLATION = 1 << 44;
     }
 }
 

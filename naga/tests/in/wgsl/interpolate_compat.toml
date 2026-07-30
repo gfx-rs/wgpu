@@ -1,3 +1,5 @@
+capabilities = "LINEAR_INTERPOLATION"
+
 [glsl]
 version.Desktop = 400
 writer_flags = ""
