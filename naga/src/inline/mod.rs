@@ -1,8 +1,10 @@
+mod adjust;
+
 use core::unreachable;
 
 use crate::{
-    valid::{FunctionInfo, ModuleInfo},
-    Block, Function, Handle, Module, Span, Statement, Type, UniqueArena,
+    valid::{FunctionInfo, ModuleInfo, TypeFlags},
+    AddressSpace, Block, Function, Handle, Module, Span, Statement, Type, TypeInner,
 };
 use nt::FastHashMap;
 
@@ -20,22 +22,27 @@ pub enum InlineStrategy {
     All,
 }
 
-struct InlineStackItem {
-    pub func: Handle<Function>,
-    pub statement_index: usize,
-}
-
 struct InlineState<'a> {
     pub module: &'a mut Module,
-    pub info: &'a mut ModuleInfo,
     /// Collect all functions that may need to be inlined, but inline them lazily, keeping
     /// track of which have already been inlined.
     pub funcs_needing_inline: FastHashMap<Handle<Function>, bool>,
 }
 
-/// Perform the inlining pass on a module. It may leave some unused variables and blocks behind,
-/// so should be used with the compaction pass.
-pub fn inline(module: &mut Module, info: &mut ModuleInfo, strategy: InlineStrategy) {
+pub fn type_needs_unrestricted_pointer_params(module: &Module, ty: Handle<Type>) -> bool {
+    match module.types[ty].inner {
+        TypeInner::Pointer { space, .. } | TypeInner::ValuePointer { space, .. } => {
+            !matches!(space, AddressSpace::Function | AddressSpace::Private)
+        }
+        TypeInner::Struct { ref members, .. } => members
+            .iter()
+            .any(|m| type_needs_unrestricted_pointer_params(module, m.ty)),
+        TypeInner::Array { base, .. } => type_needs_unrestricted_pointer_params(module, base),
+        _ => false,
+    }
+}
+
+pub fn inline(module: &mut Module, strategy: InlineStrategy) {
     let mut funcs_needing_inline: FastHashMap<Handle<Function>, bool>;
     if strategy == InlineStrategy::All {
         funcs_needing_inline = module.functions.iter().map(|e| (e.0, false)).collect();
@@ -45,7 +52,7 @@ pub fn inline(module: &mut Module, info: &mut ModuleInfo, strategy: InlineStrate
             let args = &func.arguments;
             let needs_inline = args
                 .iter()
-                .any(|arg| parameter_needs_unrestricted_pointer_params(&module.types, r#arg.ty));
+                .any(|arg| type_needs_unrestricted_pointer_params(module, r#arg.ty));
             if needs_inline {
                 funcs_needing_inline.insert(handle, false);
             }
@@ -53,26 +60,16 @@ pub fn inline(module: &mut Module, info: &mut ModuleInfo, strategy: InlineStrate
     };
     let mut state = InlineState {
         module,
-        info,
         funcs_needing_inline,
     };
     for i in 0..state.module.entry_points.len() {
         // Take these out so we can modify them while using the rest of the module without using unsafe code.
         let function = core::mem::take(&mut state.module.entry_points[i].function);
-        let mut function_info = std::mem::take(&mut state.info.entry_points[i]);
 
-        let function = state.inline_all_calls(function, &mut function_info, false);
+        let function = state.inline_all_calls(function, false);
 
         state.module.entry_points[i].function = function;
-        state.info.entry_points[i] = function_info;
     }
-}
-
-fn parameter_needs_unrestricted_pointer_params(
-    arena: &UniqueArena<Type>,
-    r#type: Handle<Type>,
-) -> bool {
-    core::todo!()
 }
 
 impl InlineState<'_> {
@@ -80,7 +77,6 @@ impl InlineState<'_> {
     fn inline_all_calls(
         &mut self,
         mut function: Function,
-        info: &mut FunctionInfo,
         prepare_for_self_inline: bool,
     ) -> Function {
         if !prepare_for_self_inline {
@@ -142,12 +138,10 @@ impl InlineState<'_> {
                         self.funcs_needing_inline.insert(handle, true);
 
                         let function = core::mem::take(&mut self.module.functions[handle]);
-                        let mut info = std::mem::take(&mut self.info.functions[handle.index()]);
 
-                        let function = self.inline_all_calls(function, &mut info, true);
+                        let function = self.inline_all_calls(function, true);
 
                         self.module.functions[handle] = function;
-                        self.info.functions[handle.index()] = info;
                     }
                     if self.funcs_needing_inline.contains_key(&handle) {
                         new_block.push(
@@ -157,11 +151,31 @@ impl InlineState<'_> {
                             },
                             span,
                         );
+                        let func = &self.module.functions[handle];
+                        let mut pasted_body = func.body.clone();
+                        let expr_offset = function.expressions.len() as u32;
+                        let local_variable_offset = function.local_variables.len() as u32;
+                        for (_, expr, span) in func.expressions.iter_span() {
+                            function.expressions.append(expr.clone(), *span);
+                        }
+                        for (_, var, span) in func.local_variables.iter_span() {
+                            function.local_variables.append(var.clone(), *span);
+                        }
+
+                        let adjust_info = adjust::AdjustInfo {
+                            function_args: arguments,
+                            expressions: &mut function.expressions,
+                            statements: &mut pasted_body.body,
+                            expr_offset,
+                            local_variable_offset,
+                        };
+                        adjust_info.adjust_all();
+
                         // Copy-paste the function body inside of a for-loop.
                         // We will have to reuse adjust_body from the compact module to realign all local variable and expression indices.
                         new_block.push(
                             Statement::Loop {
-                                body: todo!(),
+                                body: pasted_body,
                                 continuing: Block::default(),
                                 break_if: Some(true_val),
                             },

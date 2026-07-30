@@ -331,7 +331,7 @@ bitflags::bitflags! {
     /// Validation flags.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
     pub struct ShaderStages: u16 {
         const VERTEX = 0x1;
         const FRAGMENT = 0x2;
