@@ -3,8 +3,8 @@ mod adjust;
 use core::unreachable;
 
 use crate::{
-    valid::{FunctionInfo, ModuleInfo, TypeFlags},
-    AddressSpace, Block, Function, Handle, Module, Span, Statement, Type, TypeInner,
+    AddressSpace, Block, Expression, Function, Handle, LocalVariable, Module, Span, Statement,
+    Type, TypeInner,
 };
 use nt::FastHashMap;
 
@@ -26,7 +26,7 @@ struct InlineState<'a> {
     pub module: &'a mut Module,
     /// Collect all functions that may need to be inlined, but inline them lazily, keeping
     /// track of which have already been inlined.
-    pub funcs_needing_inline: FastHashMap<Handle<Function>, bool>,
+    pub funcs_needing_inline: FastHashMap<Handle<Function>, Option<Function>>,
 }
 
 pub fn type_needs_unrestricted_pointer_params(module: &Module, ty: Handle<Type>) -> bool {
@@ -43,9 +43,9 @@ pub fn type_needs_unrestricted_pointer_params(module: &Module, ty: Handle<Type>)
 }
 
 pub fn inline(module: &mut Module, strategy: InlineStrategy) {
-    let mut funcs_needing_inline: FastHashMap<Handle<Function>, bool>;
+    let mut funcs_needing_inline: FastHashMap<Handle<Function>, Option<Function>>;
     if strategy == InlineStrategy::All {
-        funcs_needing_inline = module.functions.iter().map(|e| (e.0, false)).collect();
+        funcs_needing_inline = module.functions.iter().map(|e| (e.0, None)).collect();
     } else {
         funcs_needing_inline = Default::default();
         for (handle, func) in module.functions.iter() {
@@ -54,7 +54,7 @@ pub fn inline(module: &mut Module, strategy: InlineStrategy) {
                 .iter()
                 .any(|arg| type_needs_unrestricted_pointer_params(module, r#arg.ty));
             if needs_inline {
-                funcs_needing_inline.insert(handle, false);
+                funcs_needing_inline.insert(handle, None);
             }
         }
     };
@@ -98,28 +98,27 @@ impl InlineState<'_> {
         let bool_type = self.module.types.insert(
             Type {
                 name: None,
-                inner: crate::TypeInner::Scalar(crate::Scalar::BOOL),
+                inner: TypeInner::Scalar(crate::Scalar::BOOL),
             },
             Span::UNDEFINED,
         );
-        let mut is_done_var = function.local_variables.append(
-            crate::LocalVariable {
+        let is_done_var = function.local_variables.append(
+            LocalVariable {
                 name: None,
                 ty: bool_type,
                 init: None,
             },
             Span::UNDEFINED,
         );
-        let is_done_var_ptr = function.expressions.append(
-            crate::Expression::LocalVariable(is_done_var),
-            Span::UNDEFINED,
-        );
+        let is_done_var_ptr = function
+            .expressions
+            .append(Expression::LocalVariable(is_done_var), Span::UNDEFINED);
         let false_val = function.expressions.append(
-            crate::Expression::Literal(crate::Literal::Bool(false)),
+            Expression::Literal(crate::Literal::Bool(false)),
             Span::UNDEFINED,
         );
         let true_val = function.expressions.append(
-            crate::Expression::Literal(crate::Literal::Bool(true)),
+            Expression::Literal(crate::Literal::Bool(true)),
             Span::UNDEFINED,
         );
         for (st, span) in function
@@ -134,56 +133,66 @@ impl InlineState<'_> {
                     ref result,
                     ref arguments,
                 } => {
-                    if self.funcs_needing_inline.get(&handle) == Some(&false) {
-                        self.funcs_needing_inline.insert(handle, true);
-
-                        let function = core::mem::take(&mut self.module.functions[handle]);
+                    if matches!(self.funcs_needing_inline.get(&handle), Some(None)) {
+                        let function = self.module.functions[handle].clone();
 
                         let function = self.inline_all_calls(function, true);
 
-                        self.module.functions[handle] = function;
+                        self.funcs_needing_inline.insert(handle, Some(function));
                     }
-                    if self.funcs_needing_inline.contains_key(&handle) {
-                        new_block.push(
-                            Statement::Store {
-                                pointer: is_done_var_ptr,
-                                value: false_val,
-                            },
-                            span,
-                        );
-                        let func = &self.module.functions[handle];
-                        let mut pasted_body = func.body.clone();
-                        let expr_offset = function.expressions.len() as u32;
-                        let local_variable_offset = function.local_variables.len() as u32;
-                        for (_, expr, span) in func.expressions.iter_span() {
-                            function.expressions.append(expr.clone(), *span);
-                        }
-                        for (_, var, span) in func.local_variables.iter_span() {
-                            function.local_variables.append(var.clone(), *span);
-                        }
-
-                        let adjust_info = adjust::AdjustInfo {
-                            function_args: arguments,
-                            expressions: &mut function.expressions,
-                            statements: &mut pasted_body.body,
-                            expr_offset,
-                            local_variable_offset,
-                        };
-                        adjust_info.adjust_all();
-
-                        // Copy-paste the function body inside of a for-loop.
-                        // We will have to reuse adjust_body from the compact module to realign all local variable and expression indices.
-                        new_block.push(
-                            Statement::Loop {
-                                body: pasted_body,
-                                continuing: Block::default(),
-                                break_if: Some(true_val),
-                            },
-                            span,
-                        );
-                    } else {
+                    let Some(prepared) = self.funcs_needing_inline.get(&handle) else {
                         new_block.push(st, span);
+                        continue;
+                    };
+                    let prepared = prepared.as_ref().unwrap();
+                    let call_result_var = prepared.result.as_ref().map(|r| {
+                        let var = function.local_variables.append(
+                            LocalVariable {
+                                name: None,
+                                ty: r.ty,
+                                init: None,
+                            },
+                            span,
+                        );
+                        function.expressions[result.unwrap()] = Expression::LocalVariable(var);
+                        var
+                    });
+                    new_block.push(
+                        Statement::Store {
+                            pointer: is_done_var_ptr,
+                            value: false_val,
+                        },
+                        span,
+                    );
+                    let mut pasted_body = prepared.body.clone();
+                    let expr_offset = function.expressions.len() as u32;
+                    let local_variable_offset = function.local_variables.len() as u32;
+                    for (_, expr, span) in prepared.expressions.iter_span() {
+                        function.expressions.append(expr.clone(), *span);
                     }
+                    for (_, var, span) in prepared.local_variables.iter_span() {
+                        function.local_variables.append(var.clone(), *span);
+                    }
+
+                    let adjust_info = adjust::AdjustInfo {
+                        function_args: arguments,
+                        expressions: &mut function.expressions,
+                        statements: &mut pasted_body.body,
+                        expr_offset,
+                        local_variable_offset,
+                    };
+                    adjust_info.adjust_all();
+
+                    // Copy-paste the function body inside of a for-loop.
+                    new_block.push(
+                        Statement::Loop {
+                            body: pasted_body,
+                            continuing: Block::default(),
+                            break_if: Some(true_val),
+                        },
+                        span,
+                    );
+                    // TODO: should we `Emit` the call result expression which is now a LocalVariable expression?
                 }
                 _ => new_block.push(st, span),
             }
