@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 
-use wgpu_test::{fail, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{
+    apply, fail, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -36,7 +38,7 @@ fn main() {
 }
 "#;
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DEBUG_PRINTF_SHADER_MODULE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -51,7 +53,7 @@ static DEBUG_PRINTF_SHADER_MODULE: GpuTestConfiguration = GpuTestConfiguration::
         });
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DEBUG_PRINTF_REQUIRES_FEATURE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -67,7 +69,7 @@ static DEBUG_PRINTF_REQUIRES_FEATURE: GpuTestConfiguration = GpuTestConfiguratio
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DEBUG_PRINTF_REQUIRES_ENABLE_EXTENSION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -84,7 +86,7 @@ static DEBUG_PRINTF_REQUIRES_ENABLE_EXTENSION: GpuTestConfiguration = GpuTestCon
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DEBUG_PRINTF_REJECTS_STRING_LITERAL_OUTSIDE_CALL: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
