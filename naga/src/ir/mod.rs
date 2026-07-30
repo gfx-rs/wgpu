@@ -91,6 +91,15 @@ Naga's rules for when `Expression`s are evaluated are as follows:
     [`RayQuery`] statement whose [`Proceed::result`] points to it is
     executed.
 
+-   A [`SubgroupBallotResult`] expression is evaluated when the
+    [`SubgroupBallot`] statement whose [`result`][Statement::SubgroupBallot::result]
+    field points to it is executed.
+
+-   A [`SubgroupOperationResult`] expression is evaluated when the
+    [`SubgroupCollectiveOperation`] statement whose
+    [`result`][Statement::SubgroupCollectiveOperation::result]
+    field points to it is executed.
+
 -   All other expressions are evaluated when the (unique) [`Statement::Emit`]
     statement that covers them is executed.
 
@@ -179,6 +188,8 @@ An override expression can be evaluated at pipeline creation time.
 
 [`AtomicResult`]: Expression::AtomicResult
 [`RayQueryProceedResult`]: Expression::RayQueryProceedResult
+[`SubgroupBallotResult`]: Expression::SubgroupBallotResult
+[`SubgroupOperationResult`]: Expression::SubgroupOperationResult
 [`CallResult`]: Expression::CallResult
 [`Constant`]: Expression::Constant
 [`ZeroValue`]: Expression::ZeroValue
@@ -196,6 +207,8 @@ An override expression can be evaluated at pipeline creation time.
 [`Emit`]: Statement::Emit
 [`Store`]: Statement::Store
 [`RayQuery`]: Statement::RayQuery
+[`SubgroupBallot`]: Statement::SubgroupBallot
+[`SubgroupCollectiveOperation`]: Statement::SubgroupCollectiveOperation
 
 [`Proceed::result`]: RayQueryFunction::Proceed::result
 
