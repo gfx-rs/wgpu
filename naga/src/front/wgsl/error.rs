@@ -30,6 +30,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use core::fmt::Write as _;
 use core::ops::Range;
 
 #[derive(Clone, Debug)]
@@ -201,32 +202,59 @@ pub enum ExpectedToken<'a> {
     ForUpdate,
 }
 
-impl ExpectedToken<'_> {
-    fn as_string(&self) -> String {
+impl core::fmt::Display for ExpectedToken<'_> {
+    #[expect(
+        unused,
+        reason = "This ignores write errors, since this should only be called to write into a \
+                  String, which is infallible. Ignoring errors lowers binary bloat from this \
+                  function."
+    )]
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        // This function uses a temporary enum here to lower binary bloat by merging calls to
+        // write_str.
+        //
+        // Tokens where the output is already a single string (such as Token::Number) use Kind::Str.
+        // Tokens where the output is made up of two static strings split by a char (such as
+        // Token::Operation) use Kind::FormatChar
+        // Tokens where the output is 3 strings concatenated (such as Token::DocComment) use
+        // Kind::FormatStr
+        //
+        // Any exceptions (such as Token::ShiftOperation) handle their cases explicity and return
         enum Kind<'a> {
             Str(&'a str),
             FormatChar(&'static str, char, &'static str),
             FormatStr([&'a str; 3]),
         }
-        match match self {
+
+        let kind = match *self {
             ExpectedToken::Token(token) => match token {
-                Token::Separator(c) | Token::Paren(c) => Kind::FormatChar("`", *c, "`"),
+                Token::Separator(c) | Token::Paren(c) => Kind::FormatChar("`", c, "`"),
                 Token::Attribute => Kind::Str("@"),
                 Token::Number(_) => Kind::Str("number"),
                 Token::Word(s) => Kind::Str(s),
-                Token::Operation(c) => Kind::FormatChar("operation (`", *c, "`)"),
-                Token::LogicalOperation(c) => Kind::FormatChar("logical operation (`", *c, "`)"),
-                Token::ShiftOperation(c) => return format!("bitshift (`{c}{c}`)"),
-                Token::AssignmentOperation(c) if *c == '<' || *c == '>' => {
-                    return format!("bitshift (`{c}{c}=`)")
+                Token::Operation(c) => Kind::FormatChar("operation (`", c, "`)"),
+                Token::LogicalOperation(c) => Kind::FormatChar("logical operation (`", c, "`)"),
+                Token::ShiftOperation(c) => {
+                    f.write_str("bitshift (`");
+                    f.write_char(c);
+                    f.write_char(c);
+                    f.write_str("`)");
+                    return Ok(())
+                },
+                Token::AssignmentOperation(c) if c == '<' || c == '>' => {
+                    f.write_str("bitshift (`");
+                    f.write_char(c);
+                    f.write_char(c);
+                    f.write_str("=`)");
+                    return Ok(())
                 }
-                Token::AssignmentOperation(c) => Kind::FormatChar("operation (`", *c, "=`)"),
+                Token::AssignmentOperation(c) => Kind::FormatChar("operation (`", c, "=`)"),
                 Token::IncrementOperation => Kind::Str("increment operation"),
                 Token::DecrementOperation => Kind::Str("decrement operation"),
                 Token::Arrow => Kind::Str("->"),
                 Token::TemplateArgsStart => Kind::Str("template args start"),
                 Token::TemplateArgsEnd => Kind::Str("template args end"),
-                Token::Unknown(c) => Kind::FormatChar("unknown (`", *c, "`)"),
+                Token::Unknown(c) => Kind::FormatChar("unknown (`", c, "`)"),
                 Token::Trivia => Kind::Str("trivia"),
                 Token::DocComment(s) => Kind::FormatStr(["doc comment ('", s, "')"]),
                 Token::ModuleDocComment(s) => Kind::FormatStr(["module doc comment ('", s, "')"]),
@@ -265,11 +293,25 @@ impl ExpectedToken<'_> {
             ExpectedToken::Statement => Kind::Str("statement"),
             ExpectedToken::ForInit => Kind::Str("for loop initializer statement (`var`/`let`/`const` declaration, assignment, `i++`/`i--` statement, function call)"),
             ExpectedToken::ForUpdate => Kind::Str("for loop update statement (assignment, `i++`/`i--` statement, function call)"),
-        } {
-            Kind::Str(s) => s.to_string(),
-            Kind::FormatChar(a, b, c) => format!("{a}{b}{c}"),
-            Kind::FormatStr(strings) => strings.concat(),
+        };
+
+        match kind {
+            Kind::Str(s) => {
+                f.write_str(s);
+            }
+            Kind::FormatChar(a, b, c) => {
+                f.write_str(a);
+                f.write_char(b);
+                f.write_str(c);
+            }
+            Kind::FormatStr(strings) => {
+                for s in strings {
+                    f.write_str(s);
+                }
+            }
         }
+
+        Ok(())
     }
 }
 
@@ -606,16 +648,31 @@ impl<'a> Error<'a> {
     // `stack-frame-limit` without causing problems.
     #[allow(clippy::large_stack_frames)]
     pub(crate) fn as_parse_error(&self, source: &'a str) -> ParseError {
+        // This function normally produces a lot of binary bloat, so has been structured in a
+        // non-idiomatic way to minimize its size.
+        //
+        // Errors where the output has a static message and a single, static label are handled in
+        // the block starting with UnexpectedComponents.
+        //
+        // Errors where the output has a single static label, and a message in the form
+        // "..{&source[span]}.." are handled in the block starting with BadAccessor.
+        //
+        // Other errors with a single static label, and a non-static message are handled in the
+        // block starting with BadMatrixScalarKind.
+        //
+        // Other errors are handled on their own.
+        //
+        // If you're adding a new error type, and you're not sure where to put it, you can put it
+        // on its own; there'll only be a small difference in size from one variant :)
+
         match self {
             Error::Unexpected(unexpected_span, expected) => {
-                let expected_str = expected.as_string();
                 ParseError {
                     message: format!(
-                        "expected {}, found {:?}",
-                        expected_str, &source[*unexpected_span],
-                    )
-                    .into(),
-                    labels: vec![(*unexpected_span, format!("expected {expected_str}").into())],
+                        "expected {expected}, found {:?}",
+                        &source[*unexpected_span]
+                    ).into(),
+                    labels: vec![(*unexpected_span, format!("expected {expected}").into())],
                     notes: vec![],
                 }
             }
@@ -898,7 +955,7 @@ impl<'a> Error<'a> {
                     notes: vec![]
                 }
             },
-            // Other variants with a static message, single label and no notes
+            // Other variants with a single static label and no notes
             Error::BadMatrixScalarKind(span, _)
                 | Error::UnknownIdent(span, _)
                 | Error::BadTextureSampleType { span, .. }
