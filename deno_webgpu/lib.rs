@@ -193,7 +193,7 @@ impl GPU {
       if strict_compliance {
         flags |= wgpu_types::InstanceFlags::STRICT_WEBGPU_COMPLIANCE;
       }
-      state.put(Arc::new(wgpu_core::instance::Instance::new(
+      state.put(wgpu_core::instance::Instance::new(
         "webgpu",
         wgpu_types::InstanceDescriptor {
           backends,
@@ -214,7 +214,7 @@ impl GPU {
           display: None,
         },
         None,
-      )));
+      ));
       state.borrow::<Instance>()
     };
 
