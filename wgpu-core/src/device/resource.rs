@@ -1662,13 +1662,20 @@ impl Device {
         }
     }
 
-    fn create_texture_inner(
+    pub fn validate_texture_descriptor(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
-    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
-        use resource::{CreateTextureError, TextureDimensionError};
+    ) -> Result<(), resource::CreateTextureError> {
+        self.validate_texture_descriptor_inner(desc)?;
+        Ok(())
+    }
 
-        self.check_is_valid()?;
+    fn validate_texture_descriptor_inner(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> Result<(wgt::TextureFormatFeatures, Vec<TextureFormat>), resource::CreateTextureError>
+    {
+        use resource::{CreateTextureError, TextureDimensionError};
 
         if desc.usage.is_empty() || desc.usage.contains_unknown_bits() {
             return Err(CreateTextureError::InvalidUsage(desc.usage));
@@ -1938,6 +1945,17 @@ impl Device {
         if !hal_view_formats.is_empty() {
             self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
         }
+
+        Ok((format_features, hal_view_formats))
+    }
+
+    fn create_texture_inner(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+        self.check_is_valid()?;
+
+        let (format_features, hal_view_formats) = self.validate_texture_descriptor_inner(desc)?;
 
         let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
 
