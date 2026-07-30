@@ -344,6 +344,8 @@ webgpu:shader,execution,expression,call,builtin,textureNumLevels:*
 fails-if(dx12) webgpu:shader,execution,expression,call,builtin,textureNumSamples:*
 webgpu:shader,execution,expression,call,builtin,textureSample:sampled_1d_coords:*
 webgpu:shader,execution,expression,call,builtin,textureSampleBaseClampToEdge:2d_coords:stage="c";textureType="texture_2d<f32>";*
+webgpu:shader,execution,expression,call,builtin,textureSampleLevel:sampled_1d_coords:*
+webgpu:shader,execution,expression,call,builtin,textureSampleLevel:sampled_3d_coords:*
 // NOTE: This is supposed to be an exhaustive listing underneath
 // `webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:*`, so exceptions can be
 // worked around.
