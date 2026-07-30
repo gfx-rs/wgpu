@@ -219,7 +219,7 @@ impl core::fmt::Display for ExpectedToken<'_> {
         // Tokens where the output is 3 strings concatenated (such as Token::DocComment) use
         // Kind::FormatStr
         //
-        // Any exceptions (such as Token::ShiftOperation) handle their cases explicity and return
+        // Any exceptions (such as Token::ShiftOperation) handle their cases explicitly and return
         enum Kind<'a> {
             Str(&'a str),
             FormatChar(&'static str, char, &'static str),
