@@ -2144,6 +2144,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let mut emitter = proc::Emitter::default();
                 emitter.start(&ctx.function.expressions);
                 let target_span = ctx.ast_expressions.get_span(ast_target);
+                let value_span = ctx.ast_expressions.get_span(value);
 
                 let mut ectx = ctx.as_expression(block, &mut emitter);
                 let target = self.expression_for_reference(ast_target, &mut ectx)?;
@@ -2201,6 +2202,33 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                     None => value,
                 };
+
+                // Check that the value's type matches the type of the memory
+                // location being assigned to. The IR validator catches this as
+                // well, but it can only describe the mismatch in terms of IR
+                // handles, so report it here in WGSL terms instead.
+                if let Some(target_base_ty) =
+                    resolve_inner!(ectx, target_handle).pointer_base_type()
+                {
+                    let value_ty = resolve!(ectx, value).clone();
+                    let types = &ectx.module.types;
+                    let matches = match *target_base_ty.inner_with(types) {
+                        // Naga IR permits storing a scalar to an atomic.
+                        ir::TypeInner::Atomic(scalar) => {
+                            *value_ty.inner_with(types) == ir::TypeInner::Scalar(scalar)
+                        }
+                        _ => ectx.module.compare_types(&target_base_ty, &value_ty),
+                    };
+                    if !matches {
+                        return Err(Box::new(Error::AssignmentTypeMismatch {
+                            target_span,
+                            target_type: ectx.type_resolution_to_string(&target_base_ty),
+                            value_span,
+                            value_type: ectx.type_resolution_to_string(&value_ty),
+                        }));
+                    }
+                }
+
                 block.extend(emitter.finish(&ctx.function.expressions));
 
                 ir::Statement::Store {

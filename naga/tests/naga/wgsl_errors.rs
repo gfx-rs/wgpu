@@ -722,6 +722,131 @@ fn var_type_mismatch() {
     );
 }
 
+/// Regression test for <https://github.com/gfx-rs/wgpu/issues/7419>: an
+/// assignment with mismatched types used to be reported by the IR validator,
+/// which could only refer to the operands by IR handle index.
+#[test]
+fn assignment_type_mismatch() {
+    check(
+        r#"
+            @group(0) @binding(0)
+            var<storage, read_write> v_indices: array<u32>;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                var arr: array<u32, 16>;
+                arr = v_indices[0];
+            }
+        "#,
+        r#"error: cannot assign a value of type `u32` to a memory location of type `array<u32, 16>`
+  ┌─ wgsl:8:17
+  │
+8 │                 arr = v_indices[0];
+  │                 ^^^   ^^^^^^^^^^^^ this expression has type `u32`
+  │                 │      
+  │                 this has type `array<u32, 16>`
+
+"#,
+    );
+
+    check(
+        r#"
+            fn main() {
+                var arr: array<u32, 16>;
+                var wrong_type: array<u32, 8>;
+                arr = wrong_type;
+            }
+        "#,
+        r#"error: cannot assign a value of type `array<u32, 8>` to a memory location of type `array<u32, 16>`
+  ┌─ wgsl:5:17
+  │
+5 │                 arr = wrong_type;
+  │                 ^^^   ^^^^^^^^^^ this expression has type `array<u32, 8>`
+  │                 │      
+  │                 this has type `array<u32, 16>`
+
+"#,
+    );
+
+    // Assigning through a pointer.
+    check(
+        r#"
+            fn main() {
+                var x: f32;
+                let p = &x;
+                *p = vec2<f32>(1.0, 2.0);
+            }
+        "#,
+        r#"error: cannot assign a value of type `vec2<f32>` to a memory location of type `f32`
+  ┌─ wgsl:5:18
+  │
+5 │                 *p = vec2<f32>(1.0, 2.0);
+  │                  ^   ^^^^^^^^^^^^^^^^^^^ this expression has type `vec2<f32>`
+  │                  │    
+  │                  this has type `f32`
+
+"#,
+    );
+
+    // Assigning to a vector component.
+    check(
+        r#"
+            fn main() {
+                var v: vec3<f32>;
+                v.x = vec2<f32>(1.0, 2.0);
+            }
+        "#,
+        r#"error: cannot assign a value of type `vec2<f32>` to a memory location of type `f32`
+  ┌─ wgsl:4:17
+  │
+4 │                 v.x = vec2<f32>(1.0, 2.0);
+  │                 ^^^   ^^^^^^^^^^^^^^^^^^^ this expression has type `vec2<f32>`
+  │                 │      
+  │                 this has type `f32`
+
+"#,
+    );
+
+    // Assigning to a struct member.
+    check(
+        r#"
+            struct S { inner: array<u32, 4> }
+            fn main() {
+                var s: S;
+                s.inner = 1u;
+            }
+        "#,
+        r#"error: cannot assign a value of type `u32` to a memory location of type `array<u32, 4>`
+  ┌─ wgsl:5:17
+  │
+5 │                 s.inner = 1u;
+  │                 ^^^^^^^   ^^ this expression has type `u32`
+  │                 │          
+  │                 this has type `array<u32, 4>`
+
+"#,
+    );
+
+    // Assigning to an array element.
+    check(
+        r#"
+            fn main() {
+                var arr: array<u32, 4>;
+                arr[0] = vec2<u32>(1u, 2u);
+            }
+        "#,
+        r#"error: cannot assign a value of type `vec2<u32>` to a memory location of type `u32`
+  ┌─ wgsl:4:17
+  │
+4 │                 arr[0] = vec2<u32>(1u, 2u);
+  │                 ^^^^^^   ^^^^^^^^^^^^^^^^^ this expression has type `vec2<u32>`
+  │                 │         
+  │                 this has type `u32`
+
+"#,
+    );
+}
+
 #[test]
 fn local_var_missing_type() {
     check(
@@ -1732,7 +1857,7 @@ fn invalid_structs() {
 
 #[test]
 fn struct_type_mismatch_in_assignment() {
-    check_validation!(
+    check(
         "
         struct Foo { a: u32 };
         struct Bar { a: u32 };
@@ -1740,14 +1865,16 @@ fn struct_type_mismatch_in_assignment() {
             var x: Bar = Bar(1);
             x = Foo(1);
         }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            handle: _,
-            name: function_name,
-            source: naga::valid::FunctionError::InvalidStoreTypes { .. },
-        })
-        // The validation error is reported at the call, i.e., in `main`
-        if function_name == "main"
+        ",
+        "error: cannot assign a value of type `Foo` to a memory location of type `Bar`
+  ┌─ wgsl:6:13
+  │
+6 │             x = Foo(1);
+  │             ^   ^^^^^^ this expression has type `Foo`
+  │             │    
+  │             this has type `Bar`
+
+",
     );
 }
 

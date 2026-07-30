@@ -264,6 +264,12 @@ pub(crate) enum Error<'a> {
         expected: String,
         got: String,
     },
+    AssignmentTypeMismatch {
+        target_span: Span,
+        target_type: String,
+        value_span: Span,
+        value_type: String,
+    },
     DeclMissingTypeAndInit(Span),
     MissingAttribute(&'static str, Span),
     InvalidAddrOfOperand(Span),
@@ -846,6 +852,27 @@ impl<'a> Error<'a> {
                     &source[name], expected, got,
                 ),
                 labels: vec![(name, format!("definition of `{}`", &source[name]).into())],
+                notes: vec![],
+            },
+            Error::AssignmentTypeMismatch {
+                target_span,
+                ref target_type,
+                value_span,
+                ref value_type,
+            } => ParseError {
+                message: format!(
+                    "cannot assign a value of type `{value_type}` to a memory location of type `{target_type}`"
+                ),
+                labels: vec![
+                    (
+                        target_span,
+                        format!("this has type `{target_type}`").into(),
+                    ),
+                    (
+                        value_span,
+                        format!("this expression has type `{value_type}`").into(),
+                    ),
+                ],
                 notes: vec![],
             },
             Error::DeclMissingTypeAndInit(name_span) => ParseError {
