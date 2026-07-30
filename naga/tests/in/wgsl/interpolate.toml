@@ -1,5 +1,5 @@
 targets = "SPIRV | METAL | HLSL | WGSL"
-capabilities = "LINEAR_INTERPOLATION"
+capabilities = "MULTISAMPLED_SHADING | LINEAR_INTERPOLATION"
 
 [glsl]
 version.Desktop = 400
