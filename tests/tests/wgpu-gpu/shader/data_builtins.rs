@@ -1,7 +1,7 @@
 use wgpu::{DownlevelFlags, Limits};
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest};
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([UNPACK4xU8, UNPACK4xI8, PACK4xU8, PACK4xI8]);
@@ -33,7 +33,7 @@ fn create_unpack4xU8_test() -> Vec<ShaderTest> {
     tests
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static UNPACK4xU8: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -77,7 +77,7 @@ fn create_unpack4xI8_test() -> Vec<ShaderTest> {
     tests
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static UNPACK4xI8: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -106,7 +106,7 @@ fn create_pack4xU8_test() -> Vec<ShaderTest> {
     tests
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PACK4xU8: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -154,7 +154,7 @@ fn create_pack4xI8_test() -> Vec<ShaderTest> {
     tests
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PACK4xI8: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

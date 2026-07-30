@@ -4990,15 +4990,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-macros"
-version = "29.0.0"
-dependencies = [
- "heck",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "wgpu-naga-bridge"
 version = "29.0.0"
 dependencies = [
@@ -5027,10 +5018,12 @@ dependencies = [
  "js-sys",
  "libtest-mimic",
  "log",
+ "macro_rules_attribute",
  "naga",
  "nanorand",
  "nv-flip",
  "parking_lot",
+ "paste",
  "png",
  "pollster",
  "profiling",
@@ -5046,7 +5039,6 @@ dependencies = [
  "wgpu",
  "wgpu-core",
  "wgpu-hal",
- "wgpu-macros",
  "wgpu-types",
 ]
 

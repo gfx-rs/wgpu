@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -91,7 +91,7 @@ async fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
 /// certain conditions. See https://github.com/gfx-rs/wgpu/issues/4122 for more information.
 ///
 /// This test will fail on nvidia if the bug is not properly worked around.
-#[gpu_test]
+#[apply(gpu_test!)]
 static CLEAR_BUFFER_RANGE_RESPECTED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
