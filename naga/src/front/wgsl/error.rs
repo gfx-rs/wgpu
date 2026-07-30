@@ -1177,7 +1177,6 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::TypeMismatch(ref error) => {
-                // destructuring ensures all fields are handled
                 let TypeMismatchError {
                     dest_span,
                     ref dest_type,
