@@ -80,6 +80,7 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 - `wgpu-core` now exposes `validate_device_descriptor` and `validate_texture_descriptor` functions that perform the same descriptor validation the corresponding resource creation APIs would, without actually creating a resource. This may be useful in conjunction with hal raw APIs. By @andyleiserson in [#9967](https://github.com/gfx-rs/wgpu/pull/9967) and [#9979](https://github.com/gfx-rs/wgpu/pull/9979).
 - Added `TextureDescriptor::theoretical_memory_footprint` to estimate memory footprint of a texture. By @sagudev in [#10032](https://github.com/gfx-rs/wgpu/pull/10032).
 - `wgpu::WriteOnly<[_]>` now implements `Send`. By @kpreid in [#10163](https://github.com/gfx-rs/wgpu/pull/10163).
+- Add support for shader `debugPrintf` in Metal and Vulkan, behind a wgsl extension. By @39ali [#9389](https://github.com/gfx-rs/wgpu/pull/9389).
 
 #### Hal
 
@@ -342,7 +343,6 @@ By @inner-daemons in [#9434](https://github.com/gfx-rs/wgpu/pull/9434).
 - Make `wgpu_types::texture::format::TextureChannel` accessible as `wgpu::TextureChannel`. By @TornaxO7 in [#9349](https://github.com/gfx-rs/wgpu/pull/9349).
 - Add support for `per_vertex` in Metal and DX12, as well as some validation for `per_vertex`, and a new enable extension, `wgpu_per_vertex`. By @inner-daemons in [#9219](https://github.com/gfx-rs/wgpu/pull/9219).
 - Add `ComputePass` version of `CommandEncoder::transition_resources` that allows intra-pass transitions. By @wingertge in [#9371](https://github.com/gfx-rs/wgpu/pull/9371).
-- Add support for shader `debugPrintf` in Metal and Vulkan, behind a wgsl extension. By @39ali [#9389](https://github.com/gfx-rs/wgpu/pull/9389).
 - `Device::create_texture_from_hal` now takes an explicit `initial_state: wgt::TextureUses` parameter declaring the state the wrapped foreign resource is already in. Previously the tracker hard-coded `TextureUses::UNINITIALIZED` for the wrapped texture, which is a content-discarding transition under the Vulkan spec. This affected zero-copy hardware-decoded video imports on the platforms where compressed modifiers are used. To migrate, pass `wgpu::TextureUses::UNINITIALIZED` to preserve the previous behaviour:
   ```diff
     let texture = unsafe {
@@ -365,7 +365,6 @@ By @inner-daemons in [#9434](https://github.com/gfx-rs/wgpu/pull/9434).
 - Add `spirv-out` ray tracing pipelines. By @Vecvec in [#9085](https://github.com/gfx-rs/wgpu/pull/9085).
 - Add `naga::front::wgsl::ParseError::notes()`. By @kwillemsen in [#9572](https://github.com/gfx-rs/wgpu/pull/9572).
 - Add MSL support for cooperative matrix multiply-add with lower-precision A/B operands and a higher-precision accumulator/result, such as `coopMultiplyAdd(f16, f16, f32) -> f32`. By @seddonm1 in [#9629](https://github.com/gfx-rs/wgpu/pull/9629).
-- Implement `debugPrintf()` in Vulkan backend. By @39ali [#9389](https://github.com/gfx-rs/wgpu/pull/9389).
 
 #### DX12
 
@@ -389,7 +388,6 @@ By @inner-daemons in [#9434](https://github.com/gfx-rs/wgpu/pull/9434).
 - Added full support for mesh shaders, including in WGSL shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).
 - Added support for bindless storage buffers (buffer binding arrays) on Metal. By @mate-h in [#9081](https://github.com/gfx-rs/wgpu/pull/9081).
 - Added `DropCallback`s to Metal textures. By @jerzywilczek in [#9634](https://github.com/gfx-rs/wgpu/pull/9634).
-- Implement `debugPrintf()` in Metal backend. By @39ali [#9389](https://github.com/gfx-rs/wgpu/pull/9389).
 
 #### GLES
 

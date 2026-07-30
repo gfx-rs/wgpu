@@ -869,9 +869,15 @@ bitflags_array! {
 
         /// Allows the user to print debug messages from shaders using `debugPrintf()`.
         ///
+        /// Each WGSL module using `debugPrintf` must opt in with `enable wgpu_debug_printf;`.
+        /// See the [`debugPrintf` extension specification](https://github.com/gfx-rs/wgpu/blob/trunk/docs/api-specs/debug_printf.md)
+        /// for the syntax, how to receive the output, and per-backend requirements.
+        ///
         /// Supported platforms:
-        /// - Metal (3.2+)
-        /// - Vulkan (1.1+)
+        /// - Metal (3.2+, lowered to shader logging)
+        /// - Vulkan (lowered to SPIR-V `NonSemantic.DebugPrintf`; output requires the
+        ///   validation layer's debug-printf path, which is unavailable when GPU-assisted
+        ///   validation is enabled)
         ///
         /// This is a native only feature.
         #[name("wgpu-debug-printf")]

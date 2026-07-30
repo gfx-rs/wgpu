@@ -1,5 +1,5 @@
 use block2::StackBlock;
-use objc2::rc::autoreleasepool;
+use objc2::rc::{autoreleasepool, Retained};
 use objc2::runtime::{AnyObject, ProtocolObject, Sel};
 use objc2::{available, sel};
 use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo, NSString};
@@ -55,6 +55,35 @@ pub(super) const MAX_COMMAND_BUFFERS: usize = 4096;
 /// counting down from MAX_BUFFERS - 1.
 pub const MAX_BUFFERS: u32 = 31;
 
+/// Create an `MTLLogState` that forwards shader `debugPrintf` messages to stdout,
+/// or `None` if the log state could not be created.
+fn create_debug_printf_log_state(
+    device: &ProtocolObject<dyn MTLDevice>,
+) -> Option<Retained<ProtocolObject<dyn MTLLogState>>> {
+    let log_desc = MTLLogStateDescriptor::new();
+    log_desc.setLevel(MTLLogLevel::Debug);
+
+    let Ok(log_state) = device.newLogStateWithDescriptor_error(&log_desc) else {
+        return None;
+    };
+
+    let handler = StackBlock::new(
+        |_subsystem: *mut NSString,
+         _category: *mut NSString,
+         _level: MTLLogLevel,
+         message: NonNull<NSString>| {
+            // SAFETY: message is NonNull<NSString>.
+            let message = unsafe { message.as_ref() }.to_string();
+            println!("[debugPrintf] {message}");
+        },
+    );
+
+    // SAFETY: handler is Send because it does not capture
+    unsafe { log_state.addLogHandler(&handler) };
+
+    Some(log_state)
+}
+
 impl super::Adapter {
     pub(super) fn new(shared: Arc<super::AdapterShared>) -> Self {
         Self { shared }
@@ -89,25 +118,8 @@ impl crate::Adapter for super::Adapter {
                 .store(use_debug_printf, atomic::Ordering::Relaxed);
 
             if use_debug_printf {
-                let log_desc = MTLLogStateDescriptor::new();
-                log_desc.setLevel(MTLLogLevel::Debug);
-
-                if let Ok(log_state) = device.newLogStateWithDescriptor_error(&log_desc) {
+                if let Some(log_state) = create_debug_printf_log_state(device) {
                     cq_desc.setLogState(Some(&log_state));
-
-                    let handler = StackBlock::new(
-                        |_subsystem: *mut NSString,
-                         _category: *mut NSString,
-                         _level: MTLLogLevel,
-                         message: NonNull<NSString>| {
-                            // SAFETY: message is NonNull<NSString>.
-                            let message = unsafe { message.as_ref() }.to_string();
-                            println!("[debugPrintf] {message}");
-                        },
-                    );
-
-                    // SAFETY: handler is Send because it does not capture
-                    unsafe { log_state.addLogHandler(&handler) };
                 }
             }
 

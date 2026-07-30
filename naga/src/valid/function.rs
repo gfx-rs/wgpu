@@ -1795,6 +1795,9 @@ impl super::Validator {
                         let ty =
                             context.resolve_type_inner(argument, &self.valid_expression_set)?;
                         match *ty {
+                            // Only scalar arguments are supported for now. Vector and
+                            // matrix arguments could be supported in the future by
+                            // splatting them into their components in the backends.
                             Ti::Scalar(_) => {}
                             _ => {
                                 return Err(FunctionError::InvalidDebugPrintfArgument(argument)

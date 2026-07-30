@@ -316,6 +316,20 @@ impl<W: Write> Writer<W> {
         }
     }
 
+    /// Returns `true` if any function or entry point in the module uses `debugPrintf`.
+    fn module_uses_debug_printf(module: &Module) -> bool {
+        let functions = module.functions.iter().map(|(_, f)| f);
+        let entry_points = module.entry_points.iter().map(|ep| &ep.function);
+        for func in functions.chain(entry_points) {
+            for stmt in func.body.iter() {
+                if Self::find_debug_printf(stmt) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// Helper method which writes all the `enable` declarations
     /// needed for a module.
     fn write_enable_declarations(&mut self, module: &Module) -> BackendResult {
@@ -464,17 +478,7 @@ impl<W: Write> Writer<W> {
         }
 
         // search for debugPrintf statements in all functions and entry points
-        let mut functions_to_check = module.functions.iter().map(|(_, f)| f).collect::<Vec<_>>();
-        functions_to_check.extend(module.entry_points.iter().map(|ep| &ep.function));
-
-        'outer: for func in functions_to_check {
-            for stmt in func.body.iter() {
-                if Self::find_debug_printf(stmt) {
-                    needed.debug_printf = true;
-                    break 'outer;
-                }
-            }
-        }
+        needed.debug_printf = Self::module_uses_debug_printf(module);
 
         // Write required declarations
         let mut any_written = false;

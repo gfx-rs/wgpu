@@ -224,7 +224,7 @@ bitflags::bitflags! {
         ///
         /// [`Interpolation::Linear`]: crate::Interpolation::Linear
         const LINEAR_INTERPOLATION = 1 << 44;
-        /// Support for debugPrintf.
+        /// Support for `debugPrintf`.
         const DEBUG_PRINTF = 1 << 45;
     }
 }
