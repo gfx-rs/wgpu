@@ -847,6 +847,145 @@ fn assignment_type_mismatch() {
     );
 }
 
+/// Regression test for <https://github.com/gfx-rs/wgpu/issues/7419>.
+#[test]
+fn return_value_mismatch() {
+    check(
+        r#"
+            fn f() -> u32 {
+                return;
+            }
+        "#,
+        r#"error: `return` with no value in a function returning `u32`
+  ┌─ wgsl:3:17
+  │
+3 │                 return;
+  │                 ^^^^^^^ expected a value of type `u32`
+
+"#,
+    );
+
+    check(
+        r#"
+            fn f() {
+                return 1u;
+            }
+        "#,
+        r#"error: `return` with a value in a function with no return type
+  ┌─ wgsl:3:24
+  │
+3 │                 return 1u;
+  │                        ^^ this function does not return a value
+
+"#,
+    );
+}
+
+/// Regression test for <https://github.com/gfx-rs/wgpu/issues/7419>: binary
+/// operand type errors used to be reported by the IR validator, which could
+/// only refer to the operands by IR handle index.
+#[test]
+fn binary_operand_type_mismatch() {
+    check(
+        r#"
+            fn f() {
+                var m: mat2x2<f32>;
+                var v: vec3<f32>;
+                var x = m + v;
+            }
+        "#,
+        r#"error: the `+` operator cannot be applied to `mat2x2<f32>` and `vec3<f32>`
+  ┌─ wgsl:5:25
+  │
+5 │                 var x = m + v;
+  │                         ^   ^ this expression has type `vec3<f32>`
+  │                         │    
+  │                         this expression has type `mat2x2<f32>`
+
+"#,
+    );
+
+    // Comparison operators require both operands to have the same type.
+    check(
+        r#"
+            fn f() {
+                var v: vec3<f32>;
+                var b = 1.0 < v;
+            }
+        "#,
+        r#"error: the `<` operator cannot be applied to `f32` and `vec3<f32>`
+  ┌─ wgsl:4:25
+  │
+4 │                 var b = 1.0 < v;
+  │                         ^^^   ^ this expression has type `vec3<f32>`
+  │                         │      
+  │                         this expression has type `f32`
+
+"#,
+    );
+
+    // The short-circuiting operators don't produce a `Binary` expression at
+    // all, so the validator never saw their operands paired up.
+    check(
+        r#"
+            fn f() {
+                var x = true && 1u;
+            }
+        "#,
+        r#"error: the `&&` operator cannot be applied to `bool` and `u32`
+  ┌─ wgsl:3:25
+  │
+3 │                 var x = true && 1u;
+  │                         ^^^^    ^^ this expression has type `u32`
+  │                         │        
+  │                         this expression has type `bool`
+
+"#,
+    );
+
+    // Compound assignment.
+    check(
+        r#"
+            fn f() {
+                var m: mat2x2<f32>;
+                m += vec2<f32>(1.0, 2.0);
+            }
+        "#,
+        r#"error: the `+` operator cannot be applied to `mat2x2<f32>` and `vec2<f32>`
+  ┌─ wgsl:4:17
+  │
+4 │                 m += vec2<f32>(1.0, 2.0);
+  │                 ^    ^^^^^^^^^^^^^^^^^^^ this expression has type `vec2<f32>`
+  │                 │     
+  │                 this expression has type `mat2x2<f32>`
+
+"#,
+    );
+}
+
+/// Regression test for <https://github.com/gfx-rs/wgpu/issues/7419>: a
+/// constructor argument of the wrong concrete type used to be reported by the
+/// IR validator as `Composing 0's component type is not expected`.
+#[test]
+fn constructor_component_type_mismatch() {
+    check(
+        r#"
+            fn f() {
+                var a = array<vec2<u32>, 2>(1u, 2u);
+            }
+        "#,
+        r#"error: expected `vec2<u32>`, found `u32`
+  ┌─ wgsl:3:25
+  │
+3 │                 var a = array<vec2<u32>, 2>(1u, 2u);
+  │                         ^^^^^^^^^^^^^^^^^^^ ^^ this expression has type `u32`
+  │                         │                    
+  │                         a value of type `vec2<u32>` is required here
+
+"#,
+    );
+}
+
 #[test]
 fn local_var_missing_type() {
     check(
@@ -1908,7 +2047,7 @@ fn struct_type_mismatch_in_return_value() {
             return Foo(1);
         }
         ",
-        r#"error: expected `Bar`, found `Foo`
+        r#"error: the value returned here has type `Foo`, but the function's return type is `Bar`
   ┌─ wgsl:5:20
   │
 5 │             return Foo(1);
@@ -1929,11 +2068,11 @@ fn struct_type_mismatch_in_argument() {
             bar(Foo(1));
         }
         ",
-        r#"error: expected `Bar`, found `Foo`
+        r#"error: wrong type passed as argument #1 to `bar`
   ┌─ wgsl:6:17
   │
 6 │             bar(Foo(1));
-  │                 ^^^^^^ this expression has type `Foo`
+  │                 ^^^^^^ expected `Bar`, found `Foo`
 
 "#,
     );
@@ -2140,7 +2279,7 @@ fn invalid_functions() {
 fn invalid_return_type() {
     check(
         "fn invalid_return_type() -> i32 { return 0u; }",
-        r#"error: expected `i32`, found `u32`
+        r#"error: the value returned here has type `u32`, but the function's return type is `i32`
   ┌─ wgsl:1:42
   │
 1 │ fn invalid_return_type() -> i32 { return 0u; }

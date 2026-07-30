@@ -527,7 +527,7 @@ pub enum ValidationError {
 }
 
 impl crate::TypeInner {
-    const fn is_sized(&self) -> bool {
+    pub(crate) const fn is_sized(&self) -> bool {
         match *self {
             Self::Scalar { .. }
             | Self::Vector { .. }

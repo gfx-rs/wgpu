@@ -399,6 +399,52 @@ pub(crate) enum Error<'a> {
         /// first unacceptable argument.
         allowed: Vec<String>,
     },
+    /// A value passed to a user-declared function has a type that does not
+    /// match the corresponding parameter's type.
+    ParameterTypeMismatch {
+        /// The name of the function being called.
+        function: String,
+
+        /// The argument expression whose type is wrong.
+        arg_span: Span,
+
+        /// The index of that argument.
+        arg_index: u32,
+
+        /// The declared type of the corresponding parameter.
+        expected: String,
+
+        /// The argument's actual type.
+        got: String,
+    },
+    /// A `return` statement's value does not match the function's declared
+    /// return type.
+    ReturnTypeMismatch {
+        /// The returned expression.
+        span: Span,
+
+        /// The function's declared return type.
+        expected: String,
+
+        /// The returned expression's type.
+        got: String,
+    },
+    /// A `return` statement in a function with no declared return type has a
+    /// value.
+    UnexpectedReturnValue {
+        span: Span,
+    },
+    /// A `return` statement in a function with a declared return type has no
+    /// value.
+    MissingReturnValue {
+        span: Span,
+
+        /// The function's declared return type.
+        expected: String,
+    },
+    /// A binary operator was applied to operands whose types it does not
+    /// accept.
+    InvalidBinaryOperandTypes(Box<InvalidBinaryOperandTypesError>),
     FunctionReturnsVoid(Span),
     FunctionMustUseUnused(Span),
     FunctionMustUseReturnsVoid(Span, Span),
@@ -531,6 +577,16 @@ pub(crate) struct AutoConversionLeafScalarError {
     pub dest_scalar: String,
     pub source_span: Span,
     pub source_type: String,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct InvalidBinaryOperandTypesError {
+    /// The operator, as it is spelled in WGSL.
+    pub op: &'static str,
+    pub left_span: Span,
+    pub left_type: String,
+    pub right_span: Span,
+    pub right_type: String,
 }
 
 #[derive(Clone, Debug)]
@@ -1125,6 +1181,69 @@ impl<'a> Error<'a> {
                 notes.extend(allowed.iter().map(|ty| format!("allowed type: {ty}")));
 
                 ParseError { message, labels, notes }
+            }
+            Error::ParameterTypeMismatch {
+                ref function,
+                arg_span,
+                arg_index,
+                ref expected,
+                ref got,
+            } => ParseError {
+                message: format!(
+                    "wrong type passed as argument #{} to `{function}`",
+                    arg_index + 1,
+                ),
+                labels: vec![(
+                    arg_span,
+                    format!("expected `{expected}`, found `{got}`").into(),
+                )],
+                notes: vec![],
+            },
+            Error::ReturnTypeMismatch {
+                span,
+                ref expected,
+                ref got,
+            } => ParseError {
+                message: format!(
+                    "the value returned here has type `{got}`, but the function's return type is `{expected}`"
+                ),
+                labels: vec![(span, format!("this expression has type `{got}`").into())],
+                notes: vec![],
+            },
+            Error::UnexpectedReturnValue { span } => ParseError {
+                message: "`return` with a value in a function with no return type".to_string(),
+                labels: vec![(span, "this function does not return a value".into())],
+                notes: vec![],
+            },
+            Error::MissingReturnValue { span, ref expected } => ParseError {
+                message: format!("`return` with no value in a function returning `{expected}`"),
+                labels: vec![(span, format!("expected a value of type `{expected}`").into())],
+                notes: vec![],
+            },
+            Error::InvalidBinaryOperandTypes(ref error) => {
+                let InvalidBinaryOperandTypesError {
+                    op,
+                    left_span,
+                    ref left_type,
+                    right_span,
+                    ref right_type,
+                } = **error;
+                ParseError {
+                    message: format!(
+                        "the `{op}` operator cannot be applied to `{left_type}` and `{right_type}`"
+                    ),
+                    labels: vec![
+                        (
+                            left_span,
+                            format!("this expression has type `{left_type}`").into(),
+                        ),
+                        (
+                            right_span,
+                            format!("this expression has type `{right_type}`").into(),
+                        ),
+                    ],
+                    notes: vec![],
+                }
             }
             Error::FunctionReturnsVoid(span) => ParseError {
                 message: "function does not return any value".to_string(),

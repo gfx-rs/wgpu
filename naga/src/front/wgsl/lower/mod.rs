@@ -7,7 +7,9 @@ use alloc::{
 };
 use core::num::NonZeroU32;
 
-use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
+use crate::front::wgsl::error::{
+    Error, ExpectedToken, InvalidAssignmentType, InvalidBinaryOperandTypesError,
+};
 use crate::front::wgsl::index::Index;
 use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
 use crate::front::wgsl::parse::number::Number;
@@ -827,6 +829,69 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     ///
     /// Multiply is not handled here as backends are expected to handle vec*scalar
     /// operations, so inserting splats into the IR increases size needlessly.
+    /// Resolve `expr`'s type, with any abstract leaf scalar replaced by the
+    /// concrete scalar it would be concretized to.
+    ///
+    /// Naga IR's operators are only defined on concrete types, but the WGSL
+    /// front end leaves operands abstract for as long as it can. Use this to
+    /// apply the concrete typing rules to an operand that may still be
+    /// abstract.
+    fn resolve_concretized_inner(
+        &mut self,
+        expr: Handle<ir::Expression>,
+    ) -> Result<'source, ir::TypeInner> {
+        Ok(match *resolve_inner!(self, expr) {
+            ir::TypeInner::Scalar(scalar) => ir::TypeInner::Scalar(scalar.concretize()),
+            ir::TypeInner::Vector { size, scalar } => ir::TypeInner::Vector {
+                size,
+                scalar: scalar.concretize(),
+            },
+            ir::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => ir::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar: scalar.concretize(),
+            },
+            ref other => other.clone(),
+        })
+    }
+
+    /// Report an error if `op` does not accept operands of `left` and `right`'s
+    /// types.
+    ///
+    /// The IR validator performs the same check, but it can only name the
+    /// operands by handle index, so catch the problem here while we still have
+    /// spans and WGSL type names.
+    fn check_binary_operands(
+        &mut self,
+        op: ir::BinaryOperator,
+        left: Handle<ir::Expression>,
+        left_span: Span,
+        right: Handle<ir::Expression>,
+        right_span: Span,
+    ) -> Result<'source, ()> {
+        let left_inner = self.resolve_concretized_inner(left)?;
+        let right_inner = self.resolve_concretized_inner(right)?;
+        if proc::binary_op_accepts_operands(op, &left_inner, &right_inner) {
+            return Ok(());
+        }
+
+        let left_res = resolve!(self, left).clone();
+        let right_res = resolve!(self, right).clone();
+        Err(Box::new(Error::InvalidBinaryOperandTypes(Box::new(
+            InvalidBinaryOperandTypesError {
+                op: crate::back::binary_operation_str(op),
+                left_span,
+                left_type: self.type_resolution_to_string(&left_res),
+                right_span,
+                right_type: self.type_resolution_to_string(&right_res),
+            },
+        ))))
+    }
+
     fn binary_op_splat(
         &mut self,
         op: ir::BinaryOperator,
@@ -2099,23 +2164,38 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let mut emitter = proc::Emitter::default();
                 emitter.start(&ctx.function.expressions);
 
+                let result_ty = ctx.function.result.as_ref().map(|r| r.ty);
                 let value;
                 if let Some(ast_expr) = ast_value {
                     let value_span = ctx.ast_expressions.get_span(ast_expr);
-                    let result_ty = ctx.function.result.as_ref().map(|r| r.ty);
                     let mut ectx = ctx.as_expression(block, &mut emitter);
                     let expr = self.expression_for_abstract(ast_expr, &mut ectx)?;
 
-                    if let Some(result_ty) = result_ty {
-                        let mut ectx = ctx.as_expression(block, &mut emitter);
-                        let resolution = proc::TypeResolution::Handle(result_ty);
-                        let converted =
-                            ectx.try_automatic_conversions(expr, &resolution, value_span)?;
-                        value = Some(converted);
-                    } else {
-                        value = Some(expr);
-                    }
+                    let Some(result_ty) = result_ty else {
+                        return Err(Box::new(Error::UnexpectedReturnValue { span: value_span }));
+                    };
+
+                    let resolution = proc::TypeResolution::Handle(result_ty);
+                    let converted = ectx
+                        .try_automatic_conversions(expr, &resolution, value_span)
+                        .map_err(|error| match *error {
+                            Error::TypeMismatch(e) => Box::new(Error::ReturnTypeMismatch {
+                                span: value_span,
+                                expected: e.dest_type,
+                                got: e.source_type,
+                            }),
+                            _ => error,
+                        })?;
+
+                    value = Some(converted);
                 } else {
+                    if let Some(result_ty) = result_ty {
+                        let ectx = ctx.as_expression(block, &mut emitter);
+                        return Err(Box::new(Error::MissingReturnValue {
+                            span: stmt.span,
+                            expected: ectx.type_to_string(result_ty),
+                        }));
+                    }
                     value = None;
                 }
                 block.extend(emitter.finish(&ctx.function.expressions));
@@ -2191,6 +2271,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let value = match op_assign {
                     Some((op, mut left)) => {
                         ectx.binary_op_splat(op, &mut left, &mut value)?;
+                        ectx.check_binary_operands(op, left, target_span, value, value_span)?;
                         ectx.append_expression(
                             ir::Expression::Binary {
                                 op,
@@ -2594,10 +2675,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         op: crate::BinaryOperator,
         left: Handle<crate::Expression>,
+        left_span: Span,
         right: Handle<ast::Expression<'source>>,
         span: Span,
         ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, Typed<crate::Expression>> {
+        let right_span = ctx.ast_expressions.get_span(right);
         debug_assert!(
             op == crate::BinaryOperator::LogicalAnd || op == crate::BinaryOperator::LogicalOr
         );
@@ -2653,6 +2736,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             let (right, mut accept) = ctx.with_nested_runtime_expression_ctx(span, |ctx| {
                 let right = self.expression_for_abstract(right, ctx)?;
                 ctx.grow_types(right)?;
+                // Unlike the non-short-circuiting operators, we don't build a
+                // `Binary` expression here, so the IR validator never sees this
+                // operand paired with `left`. Check it ourselves.
+                ctx.check_binary_operands(op, left, left_span, right, right_span)?;
                 Ok(right)
             })?;
 
@@ -2710,6 +2797,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 // and to non-well-formed expressions (rejected by type checking).
                 let right = self.expression_for_abstract(right, ctx)?;
                 ctx.grow_types(right)?;
+                ctx.check_binary_operands(op, left, left_span, right, right_span)?;
 
                 Ok(Typed::Plain(crate::Expression::Binary { op, left, right }))
             }
@@ -2943,6 +3031,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         span: Span,
         ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, Typed<ir::Expression>> {
+        let left_span = ctx.ast_expressions.get_span(left);
+        let right_span = ctx.ast_expressions.get_span(right);
+
         if op == ir::BinaryOperator::LogicalAnd || op == ir::BinaryOperator::LogicalOr {
             let left = self.expression_for_abstract(left, ctx)?;
             ctx.grow_types(left)?;
@@ -2951,12 +3042,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 resolve_inner!(ctx, left),
                 &ir::TypeInner::Scalar(ir::Scalar::BOOL)
             ) {
-                // Pass it through as-is, will fail validation
+                // The left operand isn't a `bool`, so this can't be a valid
+                // short-circuiting operator. Lower the right operand anyway, so
+                // that we can name both types in the error.
                 let right = self.expression_for_abstract(right, ctx)?;
                 ctx.grow_types(right)?;
+                ctx.check_binary_operands(op, left, left_span, right, right_span)?;
                 Ok(Typed::Plain(crate::Expression::Binary { op, left, right }))
             } else {
-                self.logical(op, left, right, span, ctx)
+                self.logical(op, left, left_span, right, span, ctx)
             }
         } else {
             // Load both operands.
@@ -3008,6 +3102,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                 }
             }
+
+            ctx.check_binary_operands(op, left, left_span, right, right_span)?;
 
             Ok(Typed::Plain(ir::Expression::Binary { op, left, right }))
         }
@@ -3950,12 +4046,20 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             return self.expression(arg, ctx);
                         };
 
+                        let arg_span = ctx.ast_expressions.get_span(arg);
                         let expr = self.expression_for_abstract(arg, ctx)?;
-                        ctx.try_automatic_conversions(
-                            expr,
-                            &proc::TypeResolution::Handle(parameter_ty),
-                            ctx.ast_expressions.get_span(arg),
-                        )
+                        let parameter_res = proc::TypeResolution::Handle(parameter_ty);
+                        ctx.try_automatic_conversions(expr, &parameter_res, arg_span)
+                            .map_err(|error| match *error {
+                                Error::TypeMismatch(e) => Box::new(Error::ParameterTypeMismatch {
+                                    function: function_name.to_string(),
+                                    arg_span,
+                                    arg_index: i as u32,
+                                    expected: e.dest_type,
+                                    got: e.source_type,
+                                }),
+                                _ => error,
+                            })
                     })
                     .collect::<Result<Vec<_>>>()?;
 

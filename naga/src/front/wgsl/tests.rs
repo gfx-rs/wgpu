@@ -1,4 +1,4 @@
-use alloc::format;
+use alloc::{format, string::String};
 
 use super::parse_str;
 
@@ -502,29 +502,29 @@ fn parse_local_var_address_space() {
 
 #[test]
 fn binary_expression_mixed_scalar_and_vector_operands() {
+    fn mixed_scalar_and_vector(operand: char) -> String {
+        format!(
+            "
+            @fragment
+            fn main(@location(0) some_vec: vec3<f32>) -> @location(0) vec4<f32> {{
+                let result = 1.0 {operand} some_vec;
+                return vec4(1.0);
+            }}
+            "
+        )
+    }
+
+    // WGSL's arithmetic operators accept a mix of scalar and vector operands.
+    // Some of them are represented in the IR by splatting the scalar operand,
+    // while the backends handle the mixed forms of the others themselves.
     for (operand, expect_splat) in [
-        ('<', false),
-        ('>', false),
-        ('&', false),
-        ('|', false),
         ('+', true),
         ('-', true),
         ('*', false),
         ('/', true),
         ('%', true),
     ] {
-        let module = parse_str(&format!(
-            "
-            @fragment
-            fn main(@location(0) some_vec: vec3<f32>) -> @location(0) vec4<f32> {{
-                if (all(1.0 {operand} some_vec)) {{
-                    return vec4(0.0);
-                }}
-                return vec4(1.0);
-            }}
-            "
-        ))
-        .unwrap();
+        let module = parse_str(&mixed_scalar_and_vector(operand)).unwrap();
 
         let expressions = &&module.entry_points[0].function.expressions;
 
@@ -551,23 +551,29 @@ fn binary_expression_mixed_scalar_and_vector_operands() {
         );
     }
 
-    let module = parse_str(
+    // The comparison and bitwise operators, on the other hand, require both
+    // operands to have the same type.
+    for operand in ['<', '>', '&', '|'] {
+        let error = parse_str(&mixed_scalar_and_vector(operand)).unwrap_err();
+        assert_eq!(
+            error.message(),
+            format!("the `{operand}` operator cannot be applied to `f32` and `vec3<f32>`"),
+        );
+    }
+
+    // Nor is `/` defined for a matrix and a vector.
+    let error = parse_str(
         "@fragment
         fn main(mat: mat3x3<f32>) {
             let vec = vec3<f32>(1.0, 1.0, 1.0);
             let result = mat / vec;
         }",
     )
-    .unwrap();
-    let expressions = &&module.entry_points[0].function.expressions;
-    let found_splat = expressions.iter().any(|(_, e)| {
-        if let crate::Expression::Binary { left, .. } = *e {
-            matches!(&expressions[left], &crate::Expression::Splat { .. })
-        } else {
-            false
-        }
-    });
-    assert!(!found_splat, "'mat / vec' should not be splatted");
+    .unwrap_err();
+    assert_eq!(
+        error.message(),
+        "the `/` operator cannot be applied to `mat3x3<f32>` and `vec3<f32>`",
+    );
 }
 
 #[test]
