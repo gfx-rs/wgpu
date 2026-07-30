@@ -2,7 +2,8 @@ use std::num::{NonZeroU32, NonZeroU64};
 
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
@@ -14,7 +15,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -33,7 +34,7 @@ static BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConfiguratio
     )
     .run_async(|ctx| async move { binding_array_buffers(ctx, BufferType::Uniform, false).await });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PARTIAL_BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -56,7 +57,7 @@ static PARTIAL_BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConf
     )
     .run_async(|ctx| async move { binding_array_buffers(ctx, BufferType::Uniform, true).await });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters {
         required_instance_flags: wgpu::InstanceFlags::GPU_BASED_VALIDATION,
@@ -73,7 +74,7 @@ static BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConfiguratio
     })
     .run_async(|ctx| async move { binding_array_buffers(ctx, BufferType::Storage, false).await });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PARTIAL_BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters {
         required_instance_flags: wgpu::InstanceFlags::GPU_BASED_VALIDATION,

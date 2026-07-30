@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 use wgpu_test::{
-    fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -14,7 +14,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -92,7 +92,7 @@ static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
             .unwrap();
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static TEXTURE_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -374,7 +374,7 @@ fn test_buffer_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
 }
 
 // Test that destroying a buffer between command encoding and submission fails gracefully.
-#[gpu_test]
+#[apply(gpu_test!)]
 static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -476,7 +476,7 @@ fn test_texture_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
 }
 
 // Test that destroying a texture between command encoding and submission fails gracefully.
-#[gpu_test]
+#[apply(gpu_test!)]
 static TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -545,7 +545,7 @@ fn test_external_texture_destroy_before_submit(ctx: &TestingContext, usage: Usag
 
 // Test that destroying an external texture between command encoding and submission fails
 // gracefully.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -681,7 +681,7 @@ fn test_replaced_bind_group(ctx: &TestingContext, usage: UsageKind) {
 
 /// Test that bind groups that are replaced before use in a draw/dispatch are still
 /// considered in submit-time liveness checks.
-#[gpu_test]
+#[apply(gpu_test!)]
 static REPLACED_BIND_GROUP: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

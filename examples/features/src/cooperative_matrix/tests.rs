@@ -1,7 +1,7 @@
 use super::*;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters};
 
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static COOPERATIVE_MATRIX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

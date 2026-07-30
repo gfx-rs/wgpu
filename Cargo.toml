@@ -22,7 +22,6 @@ members = [
     "wgpu-core/platform-deps/*",
     "wgpu-hal",
     "wgpu-info",
-    "wgpu-macros",
     "wgpu-naga-bridge",
     "wgpu-types",
     "wgpu",
@@ -47,7 +46,6 @@ default-members = [
     "wgpu-core/platform-deps/*",
     "wgpu-hal",
     "wgpu-info",
-    "wgpu-macros",
     "wgpu-naga-bridge",
     "wgpu-types",
     "wgpu",
@@ -87,7 +85,6 @@ wgpu = { version = "29.0.0", path = "./wgpu", default-features = false, features
 ] }
 wgpu-core = { version = "29.0.0", path = "./wgpu-core" }
 wgpu-hal = { version = "29.0.0", path = "./wgpu-hal" }
-wgpu-macros = { version = "29.0.0", path = "./wgpu-macros" }
 wgpu-naga-bridge = { version = "29.0.0", path = "./wgpu-naga-bridge" }
 wgpu-test = { version = "29.0.0", path = "./tests" }
 wgpu-types = { version = "29.0.0", path = "./wgpu-types", default-features = false }
@@ -134,7 +131,6 @@ hashbrown = { version = "0.16", default-features = false, features = [
     "default-hasher",
     "inline-more",
 ] }
-heck = "0.5"
 image = { version = "0.25", default-features = false, features = ["png"] }
 indexmap = { version = "2.11.4", default-features = false }
 indicatif = "0.18"
@@ -162,6 +158,7 @@ once_cell = { version = "1.21", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
 ordered-float = { version = ">=3, <6.0", default-features = false }
 parking_lot = "0.12.3"
+paste = "1.0.15"
 petgraph = { version = "0.8", default-features = false }
 pico-args = { version = "0.5", features = [
     "eq-separator",
@@ -194,7 +191,6 @@ smallvec = "1.14"
 spirv = "0.4"
 static_assertions = "1.1"
 strum = { version = "0.28", default-features = false, features = ["derive"] }
-syn = "2.0.98"
 tempfile = "3"
 toml = "1.0.0"
 trybuild = "1"

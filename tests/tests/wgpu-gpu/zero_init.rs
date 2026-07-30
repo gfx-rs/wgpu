@@ -9,7 +9,7 @@ use core::num::NonZeroU64;
 use wgpu::util::DeviceExt as _;
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, GpuTestInitializer,
+    apply, gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, GpuTestInitializer,
     TestParameters, TestingContext,
 };
 
@@ -75,7 +75,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 }
 
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in after submit of the encoder.
-#[gpu_test]
+#[apply(gpu_test!)]
 static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_AFTER_SUBMIT:
     GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
@@ -92,7 +92,7 @@ static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_A
         case.assert_buffers_are_zero().await;
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_IN_SAME_ENCODER:
     GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
@@ -106,7 +106,7 @@ static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_I
         case.assert_buffers_are_zero().await;
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DISCARDING_DEPTH_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_IN_SAME_ENCODER:
     GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -134,7 +134,7 @@ static DISCARDING_DEPTH_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_I
         }
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DISCARDING_EITHER_DEPTH_OR_STENCIL_ASPECT_TEST: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -396,7 +396,7 @@ impl<'ctx> DiscardTestCase<'ctx> {
 // Tests that a full-extent, single-aspect `write_texture` does not cause
 // *other* aspects of a multi-aspect texture to be considered initialized.
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -419,7 +419,7 @@ static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8: GpuTestC
 // Note: there aren't corresponding `WRITE_TEXTURE_DEPTH_LEAVES_STENCIL_UNINIT_*`
 // cases because the depth aspect of the combined depth/stencil formats cannot
 // be the destination of a `write_texture` call.
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -489,7 +489,7 @@ static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8: GpuTestCo
             );
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -511,7 +511,7 @@ static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12: GpuTestConfiguration =
             .await;
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_NV12: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -533,7 +533,7 @@ static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_NV12: GpuTestConfiguration =
             .await;
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_P010: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -555,7 +555,7 @@ static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_P010: GpuTestConfiguration =
             .await;
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_P010: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -580,7 +580,7 @@ static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_P010: GpuTestConfiguration =
 // The write_texture tests exhaustively cover all the relevant format/aspect combinations.
 // These copy_buffer_to_texture tests only sanity-check one depth/stencil format and one
 // multi-planar format.
-#[gpu_test]
+#[apply(gpu_test!)]
 static COPY_BUFFER_TO_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8:
     GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -600,7 +600,7 @@ static COPY_BUFFER_TO_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8:
         .await;
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static COPY_BUFFER_TO_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -848,7 +848,7 @@ async fn check_write_aspect_leaves_other_uninit(
 }
 
 // Test that buffer ranges are properly initialized when used with a dynamic offset binding.
-#[gpu_test]
+#[apply(gpu_test!)]
 static DYNAMIC_OFFSET_BUFFER_BINDING_INIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -1001,7 +1001,7 @@ const D3_DEPTH: u32 = 4;
 
 // A read from a fresh 3D texture as a copy *source* at `origin.z >= 1` must
 // trigger initialization of the full texture.
-#[gpu_test]
+#[apply(gpu_test!)]
 static COPY_TEXTURE_TO_BUFFER_3D_SOURCE_ORIGIN_Z_UNINIT: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
@@ -1009,7 +1009,7 @@ static COPY_TEXTURE_TO_BUFFER_3D_SOURCE_ORIGIN_Z_UNINIT: GpuTestConfiguration =
             check_3d_copy_source_init(&ctx, ReadMethod::CopyTextureToBuffer).await;
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static COPY_TEXTURE_TO_TEXTURE_3D_SOURCE_ORIGIN_Z_UNINIT: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
@@ -1019,7 +1019,7 @@ static COPY_TEXTURE_TO_TEXTURE_3D_SOURCE_ORIGIN_Z_UNINIT: GpuTestConfiguration =
 
 // The first depth slice must be initialized to zero before a partial copy into a fresh 3D
 // texture with destination `origin.z >= 1`.
-#[gpu_test]
+#[apply(gpu_test!)]
 static COPY_BUFFER_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
@@ -1027,7 +1027,7 @@ static COPY_BUFFER_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL: GpuTestConfiguration =
             check_3d_copy_dest_init(&ctx, WriteMethod::CopyBufferToTexture).await;
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static COPY_TEXTURE_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))

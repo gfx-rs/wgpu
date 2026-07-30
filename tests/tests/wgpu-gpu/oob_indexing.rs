@@ -1,5 +1,7 @@
 use wgpu::{Backend, Backends};
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    apply, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
+};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.extend([
@@ -11,7 +13,7 @@ pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
 /// Tests that writing and reading to the max length of a container (vec, mat, array)
 /// in the workgroup, private and function address spaces + let declarations
 /// will instead write to and read from the last element.
-#[gpu_test]
+#[apply(gpu_test!)]
 static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -253,7 +255,7 @@ impl TestResources {
 ///
 /// This test is specific to D3D12 since Vulkan and Metal behave differently and
 /// the WGSL spec allows for multiple behaviors when it comes to OOB accesses.
-#[gpu_test]
+#[apply(gpu_test!)]
 static D3D12_RESTRICT_DYNAMIC_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
