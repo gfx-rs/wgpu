@@ -506,6 +506,5 @@ pub fn supported_capabilities() -> valid::Capabilities {
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
-        // `noperspective` only exists in desktop GLSL; `check_availability` rejects it on ES.
         | Caps::LINEAR_INTERPOLATION
 }
