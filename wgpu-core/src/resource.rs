@@ -1780,6 +1780,11 @@ impl Texture {
         let device = &self.device;
         device.check_is_valid()?;
 
+        if desc.swizzle != wgt::TextureComponentSwizzle::default() {
+            self.device
+                .require_features(wgt::Features::TEXTURE_COMPONENT_SWIZZLE)?;
+        }
+
         let snatch_guard = device.snatchable_lock.read();
 
         let texture_raw = self.try_inner(&snatch_guard)?.raw();
@@ -2034,6 +2039,10 @@ impl Texture {
                 break 'error Err(TextureViewNotRenderableReason::Aspects(aspects));
             }
 
+            if desc.swizzle != wgt::TextureComponentSwizzle::default() {
+                break 'error Err(TextureViewNotRenderableReason::Swizzle(desc.swizzle));
+            }
+
             Ok(self
                 .desc
                 .compute_render_extent(desc.range.base_mip_level, desc.range.aspect.to_plane()))
@@ -2088,6 +2097,7 @@ impl Texture {
             dimension: resolved_dimension,
             usage,
             range: resolved_range,
+            swizzle: desc.swizzle,
         };
 
         let raw = unsafe { device.raw().create_texture_view(texture_raw, &hal_desc) }
@@ -2111,6 +2121,7 @@ impl Texture {
                 dimension: resolved_dimension,
                 usage: resolved_usage,
                 range: resolved_range,
+                swizzle: desc.swizzle,
             },
             format_features: self.format_features,
             samples: self.desc.sample_count,
