@@ -1662,6 +1662,10 @@ impl Device {
         }
     }
 
+    /// Validate a texture descriptor.
+    ///
+    /// This applies the same validation as [`Self::create_texture`], without
+    /// actually creating a texture.
     pub fn validate_texture_descriptor(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
@@ -1670,6 +1674,12 @@ impl Device {
         Ok(())
     }
 
+    /// Validate a texture descriptor.
+    ///
+    /// Implements the [validating GPUTextureDescriptor] algorithm, with some
+    /// `wgpu` extensions.
+    ///
+    /// [validating GPUTextureDescriptor]: https://www.w3.org/TR/webgpu/#abstract-opdef-validating-gputexturedescriptor
     fn validate_texture_descriptor_inner(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
