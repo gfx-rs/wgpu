@@ -1336,6 +1336,11 @@ impl Queue {
             .map_err(|(index, e)| (index, e.into()))?;
         let submit_index = submission.index;
 
+        // If we encounter an error after we have started updating global state and before
+        // successful submission, we must lose the device to avoid continuing with
+        // potentially inaccurate resource state.
+        let mut lose_device_on_error = false;
+
         let res = 'error: {
             let mut used_surface_textures = track::TextureUsageScope::default();
             let mut baked_command_buffers = Vec::with_capacity(command_buffers.len());
@@ -1427,6 +1432,23 @@ impl Queue {
                     break 'error Err(first_error);
                 }
 
+                // At this point we have validated all the command buffers, and we start
+                // making updates to global state. If we fail between here and successful
+                // submission, we must lose the device, or else we could leave that global
+                // state inaccurate or inconsistent.
+                //
+                // At time of writing, there were two kinds of errors that can occur in
+                // this stage:
+                //  - `hal` command encoding errors. These produce device loss in
+                //    `handle_hal_error`, independent of what we do here.
+                //  - Errors from `initialize_texture_memory`. The error cases that
+                //    can actually occur should also be encoder errors, but we map
+                //    everything to device loss, just in case.
+                lose_device_on_error = true;
+
+                // Note: locking the trackers has to be done after the storages
+                let mut trackers = self.device.trackers.lock();
+
                 for mut baked in baked_command_buffers {
                     profiling::scope!("process baked commands");
 
@@ -1438,19 +1460,16 @@ impl Queue {
                         break 'error Err(e.into());
                     }
 
-                    //Note: locking the trackers has to be done after the storages
-                    let mut trackers = self.device.trackers.lock();
-                    if let Err(e) =
-                        baked.initialize_buffer_memory(&mut trackers, &submission.snatch_guard)
-                    {
-                        break 'error Err(e.into());
-                    }
+                    baked.initialize_buffer_memory(&mut trackers, &submission.snatch_guard);
+
                     if let Err(e) = baked.initialize_texture_memory(
                         &mut trackers,
                         &self.device,
                         &submission.snatch_guard,
                     ) {
-                        break 'error Err(e.into());
+                        break 'error Err(QueueSubmitError::CommandEncoder(
+                            CommandEncoderError::Clear(e),
+                        ));
                     }
 
                     //Note: stateless trackers are not merged:
@@ -1539,11 +1558,16 @@ impl Queue {
             };
 
             Ok(closures)
-        };
+        }; // 'error
 
         let callbacks = match res {
             Ok(ok) => ok,
-            Err(e) => return Err((submit_index, e)),
+            Err(e) => {
+                if lose_device_on_error {
+                    self.device.lose("submission failed");
+                }
+                return Err((submit_index, e));
+            }
         };
 
         // the closures should execute with nothing locked!
