@@ -683,7 +683,6 @@ impl PhysicalDeviceFeatures {
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
-            | Df::READ_ONLY_DEPTH_STENCIL
             | Df::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | Df::COMPARISON_SAMPLERS
             | Df::VERTEX_STORAGE
@@ -697,6 +696,15 @@ impl PhysicalDeviceFeatures {
             | Df::NONBLOCKING_QUERY_RESOLVE
             | Df::SHADER_F16_IN_F32
             | Df::MSL2_1;
+
+        // `VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL`
+        // and `VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL`
+        // is required for separate read-only depth stencil.
+        dl_flags.set(
+            Df::READ_ONLY_DEPTH_STENCIL,
+            caps.device_api_version >= vk::API_VERSION_1_1
+                || caps.supports_extension(khr::maintenance2::NAME),
+        );
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
