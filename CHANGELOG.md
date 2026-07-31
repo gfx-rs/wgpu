@@ -47,6 +47,7 @@ Bottom level categories:
 #### General
 
 - Support the `wasm64-unknown-unknown` target for the web backend. Building for wasm64 requires a nightly toolchain with `-Z build-std=std,panic_abort`. By @nickbabcock in [#9836](https://github.com/gfx-rs/wgpu/pull/9836).
+- `wgpu-core` now exposes a `validate_device_descriptor` function that validates a device descriptor as `request_device` would. This may be useful in conjunction with `create_device_from_hal`. By @andyleiserson in [#9967](https://github.com/gfx-rs/wgpu/pull/9967).
 
 #### Hal
 
@@ -68,6 +69,7 @@ Bottom level categories:
 - Validate pipeline layout `immediate_size` and fix its calculation when there are multiple immediate variables. Now it must be >= required size of the shader entry point. By @beicause in [#9711](https://github.com/gfx-rs/wgpu/pull/9711).
 - [`immediate_address_space`](https://www.w3.org/TR/WGSL/#language_extension-immediate_address_space) WGSL language extension is implemented. By @beicause in [#9711](https://github.com/gfx-rs/wgpu/pull/9711).
 - `TextureFormat::is_srgb()` has been renamed to `TextureFormat::has_srgb_suffix()` to clarify its function. By @kpreid in [#9758](https://github.com/gfx-rs/wgpu/pull/9758).
+- Remove the never-constructed `CreateBlasError::InvalidAabbStride` variant. `create_blas` takes no stride, so it could never be produced; AABB stride is validated at build time as `BuildAccelerationStructureError::InvalidAabbStride`. By @mstampfli in [#9935](https://github.com/gfx-rs/wgpu/pull/9935).
 
 #### naga
 
@@ -79,27 +81,42 @@ Bottom level categories:
 
 - Zero-initialize padding (if any) at the end of a buffer allocation. This was application-visible in rare cases on Vulkan when a shader read beyond the valid range of a vertex buffer. By @andyleiserson in [#9791](https://github.com/gfx-rs/wgpu/pull/9791).
 - Fix required immediate slots calculation and remove `naga::valid::FunctionInfo::immediate_slots_used`. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
+- Fix `PendingSubmission` releasing its lock guards out of stacking order, which tripped `--cfg wgpu_validate_locks` on any submission. By @AdrianEddy in [#9960](https://github.com/gfx-rs/wgpu/pull/9960).
 - Fix separate depth/stencil read-only state and `SYNC-HAZARD-WRITE-AFTER-WRITE` Vulkan validation error. By @beicause in [#9763](https://github.com/gfx-rs/wgpu/pull/9763).
 
 #### naga
 
 - Fix panics when shader `var<immediate>` size is larger than 256 bytes. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
+- Fix a panic in the SPIR-V frontend when a subgroup collective operation (e.g. `OpGroupNonUniformUMin`) or `OpGroupNonUniformBallot` used an argument whose value needed to be spilled to a temporary variable, such as when the argument was computed inside a loop. By @nazar-pc in [#9957](https://github.com/gfx-rs/wgpu/issues/9957).
 
 #### Validation
 
 - Validate that the arguments are within the indirect buffer when encoding an indirect draw to a render bundle. Moves some indirect draw errors from `RenderPassErrorInner` to `RenderCommandError`. By @andyleiserson in [#9871](https://github.com/gfx-rs/wgpu/pull/9871).
+- When creating render pipelines, validate that a corresponding shader output is present for each color attachment with non-zero write mask, and that shader output includes alpha when the blend operation uses source alpha. By @andyleiserson in [#9939](https://github.com/gfx-rs/wgpu/pull/9939).
 
 #### Naga
 
 - Replace embedded NUL characters with `?` when writing debug strings to SPIR-V. By @andyleiserson in [#9904](https://github.com/gfx-rs/wgpu/pull/9904).
+- Fix invalid HLSL generated for `textureSampleLevel` with non-2D textures. By @mvanhorn in [#9717](https://github.com/gfx-rs/wgpu/issues/9717).
 
 #### Vulkan
 
+- Add OpenHarmony surface support via `VK_OHOS_surface`. Previously the Vulkan backend could not create a surface on OpenHarmony, leaving GLES as the only usable backend. By @ozongzi in [#9908](https://github.com/gfx-rs/wgpu/pull/9908).
 - Stop passing an un-waited fence to `vkAcquireNextImageKHR` on non-Windows platforms, which triggered `VUID-vkAcquireNextImageKHR-fence-10066` validation errors every frame since v30.0.0. By @ErichDonGubler in [#9855](https://github.com/gfx-rs/wgpu/issues/9855).
 
 #### GLES
 
 - Fixed signed integer `%` (and `%=`) returning the wrong result for negative operands in the GLSL (OpenGL/GLES) backend, e.g. `-1 % 768` yielding `255` instead of `-1`. GLSL's `%` is undefined when either operand is negative, so signed remainder is now lowered as `a - b * (a / b)`, matching the SPIR-V, HLSL, and Metal backends. By @mstampfli in [#9687](https://github.com/gfx-rs/wgpu/pull/9687).
+
+#### WebGPU
+
+- Recognize `GPUInternalError` when converting a WebGPU error, mapping it to `Error::Internal` instead of panicking with "Unexpected error". By @evilpies in [#9919](https://github.com/gfx-rs/wgpu/pull/9919).
+
+### Documentation
+
+#### General
+
+- Fix the `BlasAabbGeometry` docs to refer to the `stride` field instead of a nonexistent `size.stride`, and document the packed AABB buffer layout (each primitive a minimum then a maximum corner, two consecutive `vec3<f32>`). By @mstampfli in [#9934](https://github.com/gfx-rs/wgpu/pull/9934).
 
 ### Dependency Updates
 
@@ -375,6 +392,7 @@ By @inner-daemons in [#9434](https://github.com/gfx-rs/wgpu/pull/9434).
 
 #### Vulkan
 
+- Use the imported queue family's supported shader stages when building buffer, texture, and acceleration structure barriers for raw Vulkan devices. By @ruihe774 in [#9594](https://github.com/gfx-rs/wgpu/pull/9594).
 - Fixed `SHADER_I16` not enabling `storage_buffer16_bit_access` or `storage_input_output16`, causing Vulkan validation errors when using 16-bit integers in buffers. By @JMS55 in [#9412](https://github.com/gfx-rs/wgpu/pull/9412).
 - Fixed validation errors when frames take longer than the specified swapchain acquire timeout. By @atlv24 in [#9405](https://github.com/gfx-rs/wgpu/pull/9405).
 - Fixed limits on Mesa's Honeykrisp / Asahi Linux. By @im-0 in [#9393](https://github.com/gfx-rs/wgpu/pull/9393).

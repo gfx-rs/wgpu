@@ -132,6 +132,8 @@ macro_rules! with_limits {
 ///
 /// [`downlevel_defaults()`]: Limits::downlevel_defaults
 #[repr(C)]
+// Even though this type is simple, it is not copy because it is large.
+// https://rust-lang.github.io/rust-clippy/master/#large_types_passed_by_value
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase", default))]

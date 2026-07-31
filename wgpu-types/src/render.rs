@@ -65,10 +65,23 @@ impl BlendFactor {
     ///
     /// Note that the usage of those blend factors require [`Features::DUAL_SOURCE_BLENDING`].
     #[must_use]
-    pub fn ref_second_blend_source(&self) -> bool {
+    pub fn uses_second_blend_source(&self) -> bool {
         match self {
             BlendFactor::Src1
             | BlendFactor::OneMinusSrc1
+            | BlendFactor::Src1Alpha
+            | BlendFactor::OneMinusSrc1Alpha => true,
+            _ => false,
+        }
+    }
+
+    /// Returns `true` if the blend factor references the source alpha.
+    #[must_use]
+    pub fn uses_source_alpha(&self) -> bool {
+        match self {
+            BlendFactor::SrcAlpha
+            | BlendFactor::OneMinusSrcAlpha
+            | BlendFactor::SrcAlphaSaturated
             | BlendFactor::Src1Alpha
             | BlendFactor::OneMinusSrc1Alpha => true,
             _ => false,
@@ -252,6 +265,8 @@ pub struct ColorWrites(u32);
 
 bitflags::bitflags! {
     impl ColorWrites: u32 {
+        /// Do not write any channels
+        const NONE = 0;
         /// Enable red channel writes
         const RED = 1 << 0;
         /// Enable green channel writes

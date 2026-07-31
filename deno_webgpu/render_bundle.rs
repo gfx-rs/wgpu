@@ -3,6 +3,7 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::num::NonZeroU64;
+use std::sync::Arc;
 
 use deno_core::cppgc::Ptr;
 use deno_core::op2;
@@ -20,10 +21,8 @@ use crate::buffer::GPUBuffer;
 use crate::error::GPUGenericError;
 use crate::get_data_slice;
 use crate::texture::GPUTextureFormat;
-use crate::Instance;
 
 pub struct GPURenderBundleEncoder {
-  pub instance: Instance,
   pub error_handler: super::error::ErrorHandler,
 
   pub encoder: RefCell<Box<wgpu_core::command::RenderBundleEncoder>>,
@@ -63,18 +62,13 @@ impl GPURenderBundleEncoder {
     let wgpu_descriptor = wgpu_core::command::RenderBundleDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
     };
-
-    let (id, err) = self.instance.render_bundle_encoder_finish(
-      &mut self.encoder.borrow_mut(),
-      &wgpu_descriptor,
-      None,
-    );
+    let (wgpu_render_bundle, err) =
+      self.encoder.borrow_mut().finish(&wgpu_descriptor);
 
     self.error_handler.push_error(err);
 
     GPURenderBundle {
-      instance: self.instance.clone(),
-      id,
+      wgpu_render_bundle,
       label: descriptor.label.clone(),
     }
   }
@@ -87,10 +81,7 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = self
-      .instance
-      .render_bundle_encoder_push_debug_group(encoder, &group_label)
-      .err();
+    let err = encoder.push_debug_group(&group_label).err();
 
     self.error_handler.push_error(err);
 
@@ -103,10 +94,7 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = self
-      .instance
-      .render_bundle_encoder_pop_debug_group(encoder)
-      .err();
+    let err = encoder.pop_debug_group().err();
 
     self.error_handler.push_error(err);
 
@@ -121,10 +109,7 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = self
-      .instance
-      .render_bundle_encoder_insert_debug_marker(encoder, &marker_label)
-      .err();
+    let err = encoder.insert_debug_marker(&marker_label).err();
 
     self.error_handler.push_error(err);
     Ok(())
@@ -177,12 +162,12 @@ impl GPURenderBundleEncoder {
 
       let offsets = &data[start..(start + len)];
 
-      let err = self
-        .instance
-        .render_bundle_encoder_set_bind_group(
-          encoder,
+      let err = encoder
+        .set_bind_group(
           index,
-          bind_group.into_option().map(|bind_group| bind_group.id),
+          bind_group
+            .into_option()
+            .map(|bind_group| bind_group.wgpu_bind_group.clone()),
           offsets,
         )
         .err();
@@ -201,12 +186,12 @@ impl GPURenderBundleEncoder {
       )?
       .unwrap_or_default();
 
-      let err = self
-        .instance
-        .render_bundle_encoder_set_bind_group(
-          encoder,
+      let err = encoder
+        .set_bind_group(
           index,
-          bind_group.into_option().map(|bind_group| bind_group.id),
+          bind_group
+            .into_option()
+            .map(|bind_group| bind_group.wgpu_bind_group.clone()),
           &offsets,
         )
         .err();
@@ -225,9 +210,8 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = self
-      .instance
-      .render_bundle_encoder_set_pipeline(encoder, pipeline.id)
+    let err = encoder
+      .set_pipeline(pipeline.wgpu_render_pipeline.clone())
       .err();
 
     self.error_handler.push_error(err);
@@ -246,11 +230,9 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = self
-      .instance
-      .render_bundle_encoder_set_index_buffer(
-        encoder,
-        buffer.id,
+    let err = encoder
+      .set_index_buffer(
+        buffer.wgpu_buffer.clone(),
         index_format.into(),
         offset,
         size.and_then(NonZeroU64::new),
@@ -274,12 +256,12 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = self
-      .instance
-      .render_bundle_encoder_set_vertex_buffer(
-        encoder,
+    let err = encoder
+      .set_vertex_buffer(
         slot,
-        buffer.into_option().map(|buffer| buffer.id),
+        buffer
+          .into_option()
+          .map(|buffer| buffer.wgpu_buffer.clone()),
         offset,
         size.and_then(NonZeroU64::new),
       )
@@ -300,15 +282,8 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = self
-      .instance
-      .render_bundle_encoder_draw(
-        encoder,
-        vertex_count,
-        instance_count,
-        first_vertex,
-        first_instance,
-      )
+    let err = encoder
+      .draw(vertex_count, instance_count, first_vertex, first_instance)
       .err();
     self.error_handler.push_error(err);
     Ok(())
@@ -327,10 +302,8 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = self
-      .instance
-      .render_bundle_encoder_draw_indexed(
-        encoder,
+    let err = encoder
+      .draw_indexed(
         index_count,
         instance_count,
         first_index,
@@ -352,13 +325,8 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = self
-      .instance
-      .render_bundle_encoder_draw_indirect(
-        encoder,
-        indirect_buffer.id,
-        indirect_offset,
-      )
+    let err = encoder
+      .draw_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset)
       .err();
     self.error_handler.push_error(err);
     Ok(())
@@ -374,11 +342,9 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = self
-      .instance
-      .render_bundle_encoder_draw_indexed_indirect(
-        encoder,
-        indirect_buffer.id,
+    let err = encoder
+      .draw_indexed_indirect(
+        indirect_buffer.wgpu_buffer.clone(),
         indirect_offset,
       )
       .err();
@@ -401,10 +367,7 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = self
-      .instance
-      .render_bundle_encoder_set_immediates(encoder, offset, data)
-      .err();
+    let err = encoder.set_immediates(offset, data).err();
     self.error_handler.push_error(err);
     Ok(())
   }
@@ -439,15 +402,8 @@ enum SetBindGroupError {
 }
 
 pub struct GPURenderBundle {
-  pub instance: Instance,
-  pub id: wgpu_core::id::RenderBundleId,
+  pub wgpu_render_bundle: Arc<wgpu_core::command::RenderBundle>,
   pub label: String,
-}
-
-impl Drop for GPURenderBundle {
-  fn drop(&mut self) {
-    self.instance.render_bundle_drop(self.id);
-  }
 }
 
 impl WebIdlInterfaceConverter for GPURenderBundle {

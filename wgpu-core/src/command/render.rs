@@ -1845,8 +1845,8 @@ fn check_transient_attachment_ops<V>(load_op: LoadOp<V>, store_op: StoreOp) -> b
 }
 
 impl CommandEncoder {
-    fn begin_render_pass(
-        self: Arc<Self>,
+    pub fn begin_render_pass(
+        self: &Arc<Self>,
         desc: ResolvedRenderPassDescriptor<'_>,
     ) -> (RenderPass, Option<CommandEncoderError>) {
         use EncoderStateError as SErr;
@@ -2114,9 +2114,9 @@ impl CommandEncoder {
                     multiview_mask: None,
                 };
                 match fill_arc_desc(desc, &mut arc_desc, &self.device) {
-                    Ok(()) => (RenderPass::new(self, arc_desc), None),
+                    Ok(()) => (RenderPass::new(self.clone(), arc_desc), None),
                     Err(err) => (
-                        RenderPass::new_invalid(self, &label, err.map_pass_err(scope)),
+                        RenderPass::new_invalid(self.clone(), &label, err.map_pass_err(scope)),
                         None,
                     ),
                 }
@@ -2128,7 +2128,7 @@ impl CommandEncoder {
                 cmd_buf_data.invalidate(err.clone());
                 drop(cmd_buf_data);
                 (
-                    RenderPass::new_invalid(self, &desc.label, err.map_pass_err(scope)),
+                    RenderPass::new_invalid(self.clone(), &desc.label, err.map_pass_err(scope)),
                     None,
                 )
             }
@@ -2137,7 +2137,11 @@ impl CommandEncoder {
                 // generates an immediate validation error.
                 drop(cmd_buf_data);
                 (
-                    RenderPass::new_invalid(self, &desc.label, err.clone().map_pass_err(scope)),
+                    RenderPass::new_invalid(
+                        self.clone(),
+                        &desc.label,
+                        err.clone().map_pass_err(scope),
+                    ),
                     Some(err.into()),
                 )
             }
@@ -2149,7 +2153,7 @@ impl CommandEncoder {
                 // invalid pass to save that work.
                 drop(cmd_buf_data);
                 (
-                    RenderPass::new_invalid(self, &desc.label, err.map_pass_err(scope)),
+                    RenderPass::new_invalid(self.clone(), &desc.label, err.map_pass_err(scope)),
                     None,
                 )
             }

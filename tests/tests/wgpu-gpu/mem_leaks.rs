@@ -308,7 +308,7 @@ async fn draw_test_with_reports(
     target_os = "emscripten",
     feature = "webgl"
 ))]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 static SIMPLE_DRAW_CHECK_MEM_LEAKS: wgpu_test::GpuTestConfiguration =
     wgpu_test::GpuTestConfiguration::new()
         .parameters(

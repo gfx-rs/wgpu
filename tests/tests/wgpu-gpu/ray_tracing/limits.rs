@@ -7,14 +7,13 @@ use wgpu::{
     BlasTriangleGeometrySizeDescriptor, CreateBlasDescriptor, CreateTlasDescriptor, Limits,
     ShaderStages, VertexFormat,
 };
-use wgpu_macros::gpu_test;
-use wgpu_test::{fail, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, fail, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     tests.push(LIMITS_HIT);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static LIMITS_HIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

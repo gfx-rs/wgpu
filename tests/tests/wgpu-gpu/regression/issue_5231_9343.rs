@@ -1,6 +1,7 @@
 use wgpu::*;
-use wgpu_macros::gpu_test;
-use wgpu_test::{GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext};
+use wgpu_test::{
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(READ_ONLY_DEPTH_WITHOUT_TEXTURE_BINDING);
@@ -18,7 +19,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 /// texture to `DEPTH_READ | RESOURCE`. This is normally a valid usage combination,
 /// but when the texture view does not have `TEXTURE_BINDING` usage, the `RESOURCE` usage
 /// is not allowed, and dx12 raises an error.
-#[gpu_test]
+#[apply(gpu_test!)]
 static READ_ONLY_DEPTH_WITHOUT_TEXTURE_BINDING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -30,7 +31,7 @@ static READ_ONLY_DEPTH_WITHOUT_TEXTURE_BINDING: GpuTestConfiguration = GpuTestCo
 /// Test that a read-only depth attachment can simultaneously be sampled as a texture
 /// binding within the same render pass. This exercises the `DEPTH_READ | RESOURCE`
 /// usage combination that wgpu-core sets up in render.rs.
-#[gpu_test]
+#[apply(gpu_test!)]
 static READ_ONLY_DEPTH_WITH_SAMPLED_BINDING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
