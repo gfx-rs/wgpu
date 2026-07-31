@@ -1,5 +1,6 @@
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -129,7 +130,7 @@ async fn test_empty_buffer_range_with_usage(
         .unwrap();
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static EMPTY_BUFFER_READ: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -138,7 +139,7 @@ static EMPTY_BUFFER_READ: GpuTestConfiguration = GpuTestConfiguration::new()
         test_empty_buffer_range_with_usage(&ctx, 0, "zero-sized buffer", usage).await;
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static EMPTY_BUFFER_READ_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -151,7 +152,7 @@ static EMPTY_BUFFER_READ_WRITE: GpuTestConfiguration = GpuTestConfiguration::new
         test_empty_buffer_range_with_usage(&ctx, 0, "zero-sized buffer", usage).await;
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -228,7 +229,7 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
 /// intervening submit.
 ///
 /// Regression test for [#5173](https://github.com/gfx-rs/wgpu/issues/5173).
-#[gpu_test]
+#[apply(gpu_test!)]
 static MAP_WITHOUT_SUBMIT: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
@@ -273,7 +274,7 @@ static MAP_WITHOUT_SUBMIT: GpuTestConfiguration =
 /// This test tries to build a pipeline from a shader module with a
 /// 32-byte variable and a bindgroup layout with a min_binding_size of
 /// 16 for that variable's group/index. Pipeline creation should fail.
-#[gpu_test]
+#[apply(gpu_test!)]
 static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().test_features_limits().enable_noop())
     .run_sync(|ctx| {
@@ -343,7 +344,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
 /// variable with a bindgroup layout with a min_binding_size of zero
 /// (meaning, "validate at dispatch recording time") and a 16-byte
 /// binding. Command recording should fail.
-#[gpu_test]
+#[apply(gpu_test!)]
 static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().test_features_limits().enable_noop())
     .run_sync(|ctx| {
@@ -440,7 +441,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
@@ -465,7 +466,7 @@ static CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS: GpuTestConfiguration = GpuTestConfi
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().enable_noop())

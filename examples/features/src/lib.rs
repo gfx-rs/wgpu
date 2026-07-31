@@ -84,7 +84,8 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     #[cfg(not(wasm_test))]
     {
         test_list.push(big_compute_buffers::tests::TWO_BUFFERS);
-        test_list.push(cooperative_matrix::tests::COOPERATIVE_MATRIX);
+        test_list.push(cooperative_matrix::tests::COOPERATIVE_MATRIX_F32);
+        test_list.push(cooperative_matrix::tests::COOPERATIVE_MATRIX_F16);
     }
 
     test_list

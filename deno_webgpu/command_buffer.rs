@@ -1,22 +1,16 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+use std::sync::Arc;
+
 use deno_core::op2;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 
 use crate::error::GPUGenericError;
-use crate::Instance;
 
 pub struct GPUCommandBuffer {
-  pub instance: Instance,
-  pub id: wgpu_core::id::CommandBufferId,
+  pub wgpu_command_buffer: Arc<wgpu_core::command::CommandBuffer>,
   pub label: String,
-}
-
-impl Drop for GPUCommandBuffer {
-  fn drop(&mut self) {
-    self.instance.command_buffer_drop(self.id);
-  }
 }
 
 impl deno_core::webidl::WebIdlInterfaceConverter for GPUCommandBuffer {

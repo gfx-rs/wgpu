@@ -2,7 +2,8 @@ use std::num::{NonZeroU32, NonZeroU64};
 
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
@@ -14,7 +15,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -33,7 +34,7 @@ static BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConfiguratio
     )
     .run_async(|ctx| async move { binding_array_buffers(ctx, BufferType::Uniform, false).await });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PARTIAL_BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -56,7 +57,7 @@ static PARTIAL_BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConf
     )
     .run_async(|ctx| async move { binding_array_buffers(ctx, BufferType::Uniform, true).await });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters {
         required_instance_flags: wgpu::InstanceFlags::GPU_BASED_VALIDATION,
@@ -67,13 +68,21 @@ static BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConfiguratio
             max_binding_array_elements_per_shader_stage: 17,
             ..Limits::default()
         },
-        // See https://github.com/gfx-rs/wgpu/issues/6745.
-        failures: FailureCase::mac_vulkan(|case| case.panic("bad SPIR-V wrapper struct inference")),
+        // Metal: https://github.com/gfx-rs/wgpu/issues/9849
+        // MoltenVK: #9849 and also https://github.com/gfx-rs/wgpu/issues/6745
+        // With #6745 only, the expected failure was `case.panic("bad SPIR-V wrapper struct inference")`
+        failures: FailureCase::mac_vulkan(|case| {
+            case.validation_error("Shader library compile failed")
+                .validation_error("could not be compiled into pipeline")
+        })
+        .into_iter()
+        .chain([FailureCase::backend(Backends::METAL)])
+        .collect(),
         ..Default::default()
     })
     .run_async(|ctx| async move { binding_array_buffers(ctx, BufferType::Storage, false).await });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PARTIAL_BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters {
         required_instance_flags: wgpu::InstanceFlags::GPU_BASED_VALIDATION,
@@ -85,8 +94,16 @@ static PARTIAL_BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConf
             max_binding_array_elements_per_shader_stage: 33,
             ..Limits::default()
         },
-        // See https://github.com/gfx-rs/wgpu/issues/6745.
-        failures: FailureCase::mac_vulkan(|case| case.panic("bad SPIR-V wrapper struct inference")),
+        // Metal: https://github.com/gfx-rs/wgpu/issues/9849
+        // MoltenVK: #9849 and also https://github.com/gfx-rs/wgpu/issues/6745
+        // With #6745 only, the expected failure was `case.panic("bad SPIR-V wrapper struct inference")`
+        failures: FailureCase::mac_vulkan(|case| {
+            case.validation_error("Shader library compile failed")
+                .validation_error("could not be compiled into pipeline")
+        })
+        .into_iter()
+        .chain([FailureCase::backend(Backends::METAL)])
+        .collect(),
         ..Default::default()
     })
     .run_async(|ctx| async move { binding_array_buffers(ctx, BufferType::Storage, true).await });

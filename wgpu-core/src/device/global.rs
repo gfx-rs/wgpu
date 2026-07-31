@@ -4,7 +4,6 @@ use core::ptr::NonNull;
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    api_log,
     binding_model::{
         self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,
         ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
@@ -127,14 +126,14 @@ impl Global {
     /// which requires [`GPUBufferDescriptor`] validation to be generated on the
     /// Device timeline and leave the newly created [`GPUBuffer`] invalid.
     ///
-    /// Ideally, we would simply let [`device_create_buffer`] take care of all
+    /// Ideally, we would simply let [`Device::create_buffer`] take care of all
     /// of this, but some errors must be detected before we can even construct a
     /// [`wgpu_types::BufferDescriptor`] to give it. For example, the WebGPU API
     /// allows a `GPUBufferDescriptor`'s [`usage`] property to be any WebIDL
     /// `unsigned long` value, but we can't construct a
     /// [`wgpu_types::BufferUsages`] value from values with unassigned bits
     /// set. This means we must validate `usage` before we can call
-    /// `device_create_buffer`.
+    /// `Device::create_buffer`.
     ///
     /// When that validation fails, we must arrange for the buffer id to be
     /// considered invalid. This method provides the means to do so.
@@ -143,7 +142,7 @@ impl Global {
     /// [`GPUBufferDescriptor`]: https://www.w3.org/TR/webgpu/#dictdef-gpubufferdescriptor
     /// [`GPUBuffer`]: https://www.w3.org/TR/webgpu/#gpubuffer
     /// [`wgpu_types::BufferDescriptor`]: wgt::BufferDescriptor
-    /// [`device_create_buffer`]: Global::device_create_buffer
+    /// [`Device::create_buffer`]: crate::device::Device::create_buffer
     /// [`usage`]: https://www.w3.org/TR/webgpu/#dom-gputexturedescriptor-usage
     /// [`wgpu_types::BufferUsages`]: wgt::BufferUsages
     pub fn create_buffer_error(
@@ -270,8 +269,6 @@ impl Global {
         initial_state: wgt::TextureUses,
         id_in: Option<id::TextureId>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
-        profiling::scope!("Device::create_texture_from_hal");
-
         let hub = &self.hub;
 
         let fid = hub.textures.prepare(id_in);
@@ -298,8 +295,6 @@ impl Global {
         desc: &resource::BufferDescriptor,
         id_in: Option<id::BufferId>,
     ) -> (id::BufferId, Option<CreateBufferError>) {
-        profiling::scope!("Device::create_buffer");
-
         let hub = &self.hub;
         let fid = hub.buffers.prepare(id_in);
 
@@ -337,9 +332,8 @@ impl Global {
         let fid = hub.texture_views.prepare(id_in);
 
         let texture = hub.textures.get(texture_id);
-        let device = &texture.device;
 
-        let (view, error) = device.create_texture_view(&texture, desc);
+        let (view, error) = texture.create_view(desc);
 
         let id = fid.assign(view);
 
@@ -670,8 +664,6 @@ impl Global {
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Option<id::CommandEncoderId>,
     ) -> (id::CommandEncoderId, Option<DeviceError>) {
-        profiling::scope!("Device::create_command_encoder");
-
         let hub = &self.hub;
         let fid = hub.command_encoders.prepare(id_in);
 
@@ -699,15 +691,8 @@ impl Global {
         Box<command::RenderBundleEncoder>,
         Option<command::CreateRenderBundleError>,
     ) {
-        profiling::scope!("Device::create_render_bundle_encoder");
-        api_log!("Device::device_create_render_bundle_encoder");
         let device = self.hub.devices.get(device_id);
-        let (encoder, error) =
-            match command::RenderBundleEncoder::new(desc, Some(&device), device_id) {
-                Ok(encoder) => (encoder, None),
-                Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
-            };
-        (Box::new(encoder), error)
+        device.create_render_bundle_encoder(desc)
     }
 
     pub fn device_create_render_bundle_encoder_with_id(
@@ -738,15 +723,11 @@ impl Global {
         desc: &command::RenderBundleDescriptor,
         id_in: Option<id::RenderBundleId>,
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
-        profiling::scope!("RenderBundleEncoder::finish");
-
         let hub = &self.hub;
 
         let fid = hub.render_bundles.prepare(id_in);
 
-        let device = self.hub.devices.get(bundle_encoder.parent());
-
-        let (render_bundle, error) = bundle_encoder.finish(desc, &device, hub);
+        let (render_bundle, error) = bundle_encoder.finish(desc);
 
         let id = fid.assign(render_bundle);
 
@@ -1088,7 +1069,7 @@ impl Global {
         let device = self.hub.devices.get(device_id);
         let surface = self.surfaces.get(surface_id);
 
-        device.configure_surface(&surface, config)
+        surface.configure(&device, config)
     }
 
     /// Check `device_id` for freeable resources and completed buffer mappings.

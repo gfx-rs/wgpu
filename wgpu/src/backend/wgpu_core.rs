@@ -906,6 +906,9 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                     ImplementedLanguageExtension::PointerCompositeAccess => {
                         crate::WgslLanguageFeatures::PointerCompositeAccess
                     }
+                    ImplementedLanguageExtension::ImmediateAddressSpace => {
+                        crate::WgslLanguageFeatures::ImmediateAddressSpace
+                    }
                 }
             },
         )

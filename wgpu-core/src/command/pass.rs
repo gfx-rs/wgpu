@@ -75,20 +75,29 @@ impl ImmediateState {
         self.immediates[offset_bytes_usize / size_per_elem..end_offset_bytes / size_per_elem]
             .copy_from_slice(data);
         self.immediate_slots_set |=
-            naga::valid::ImmediateSlots::from_range(offset_bytes, size_bytes.try_into().unwrap());
+            naga::valid::ImmediateSlots::from_range(offset_bytes, size_bytes.try_into().unwrap())
+                .expect("maxImmediateSize should not exceed 256");
         self.immediates_dirty = true;
 
         Ok(())
     }
 
-    pub(crate) unsafe fn flush_immediates(
+    pub(crate) fn flush_immediates(
         &mut self,
-        raw_layout: &dyn hal::DynPipelineLayout,
+        layout: &Arc<binding_model::PipelineLayout>,
         raw_encoder: &mut dyn hal::DynCommandEncoder,
     ) {
         if !self.immediates.is_empty() && self.immediates_dirty {
+            // SAFETY: The range of immediates written is within layout immediate size.
             unsafe {
-                raw_encoder.set_immediates(raw_layout, 0, &self.immediates);
+                raw_encoder.set_immediates(
+                    layout.raw().unwrap(),
+                    0,
+                    &self.immediates[..(self
+                        .immediates
+                        .len()
+                        .min(layout.immediate_size as usize / size_of::<u32>()))],
+                );
             }
             self.immediates_dirty = false;
         }

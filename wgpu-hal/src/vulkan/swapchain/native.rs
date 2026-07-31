@@ -257,12 +257,21 @@ impl Surface for NativeSurface {
         let images = unsafe { functor.get_swapchain_images(raw) }
             .map_err(crate::vulkan::map_host_device_oom_err)?;
 
-        let fence = unsafe {
-            device
-                .shared
-                .raw
-                .create_fence(&vk::FenceCreateInfo::default(), None)
-                .map_err(crate::vulkan::map_host_device_oom_err)?
+        // This fence is only used to throttle acquisition on Windows. It is very important to
+        // avoid bad frame pacing when the Vulkan driver is using a DXGI swapchain. See
+        // https://github.com/gfx-rs/wgpu/issues/8310 and
+        // https://github.com/gfx-rs/wgpu/issues/8354 for more details.
+        let fence = if cfg!(target_os = "windows") {
+            let raw = unsafe {
+                device
+                    .shared
+                    .raw
+                    .create_fence(&vk::FenceCreateInfo::default(), None)
+                    .map_err(crate::vulkan::map_host_device_oom_err)?
+            };
+            Some(raw)
+        } else {
+            None
         };
 
         // NOTE: It's important that we define the same number of acquire/present semaphores
@@ -309,7 +318,7 @@ pub(crate) struct NativeSwapchain {
     device: Arc<DeviceShared>,
     images: Vec<vk::Image>,
     /// Fence used to wait on the acquired image.
-    fence: vk::Fence,
+    fence: Option<vk::Fence>,
     config: crate::SurfaceConfiguration,
 
     /// Semaphores used between image acquisition and the first submission
@@ -382,7 +391,9 @@ impl Swapchain for NativeSwapchain {
             };
         };
 
-        unsafe { device.shared.raw.destroy_fence(self.fence, None) }
+        if let Some(fence) = self.fence {
+            unsafe { device.shared.raw.destroy_fence(fence, None) }
+        }
 
         // We cannot take this by value, as the function returns `self`.
         for semaphore in self.acquire_semaphores.drain(..) {
@@ -455,6 +466,8 @@ impl Swapchain for NativeSwapchain {
             return Err(crate::SurfaceError::Timeout);
         }
 
+        let acquire_fence = self.fence.unwrap_or_else(vk::Fence::null);
+
         // will block if no image is available
         let (index, suboptimal) = match unsafe {
             profiling::scope!("vkAcquireNextImageKHR");
@@ -462,7 +475,7 @@ impl Swapchain for NativeSwapchain {
                 self.raw,
                 timeout_ns,
                 acquire_semaphore_guard.acquire,
-                self.fence,
+                acquire_fence,
             )
         } {
             // We treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android.
@@ -485,24 +498,19 @@ impl Swapchain for NativeSwapchain {
             }
         };
 
-        // Wait for the image was acquired to be fully ready to be rendered too.
-        //
-        // This wait is very important on Windows to avoid bad frame pacing on
-        // Windows where the Vulkan driver is using a DXGI swapchain. See
-        // https://github.com/gfx-rs/wgpu/issues/8310 and
-        // https://github.com/gfx-rs/wgpu/issues/8354 for more details.
-        #[cfg(target_os = "windows")]
-        unsafe {
-            // The `wait_all` argument must be `true` to avoid crash on some Android devices. See https://github.com/gfx-rs/wgpu/pull/8769
-            self.device
-                .raw
-                .wait_for_fences(&[self.fence], true, timeout_ns)
-                .map_err(map_host_device_oom_and_lost_err)?;
+        if let Some(fence) = self.fence {
+            unsafe {
+                // The `wait_all` argument must be `true` to avoid crash on some Android devices. See https://github.com/gfx-rs/wgpu/pull/8769
+                self.device
+                    .raw
+                    .wait_for_fences(&[fence], true, timeout_ns)
+                    .map_err(map_host_device_oom_and_lost_err)?;
 
-            self.device
-                .raw
-                .reset_fences(&[self.fence])
-                .map_err(map_host_device_oom_and_lost_err)?;
+                self.device
+                    .raw
+                    .reset_fences(&[fence])
+                    .map_err(map_host_device_oom_and_lost_err)?;
+            }
         }
 
         drop(acquire_semaphore_guard);

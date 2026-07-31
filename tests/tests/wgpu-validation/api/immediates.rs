@@ -93,7 +93,7 @@ fn dispatch_without_setting_immediates_fails() {
         pass.set_bind_group(0, &bind_group, &[]);
         pass.dispatch_workgroups(1, 1, 1);
     }
-    fail(&device, || encoder.finish(), Some("immediate data"));
+    fail(&device, || encoder.finish(), Some("not all immediate data required by the pipeline has been set via set_immediates (missing byte ranges: 0..16)"));
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn dispatch_with_partial_immediates_fails() {
         pass.set_immediates(0, &[0u8; 8]);
         pass.dispatch_workgroups(1, 1, 1);
     }
-    fail(&device, || encoder.finish(), Some("immediate data"));
+    fail(&device, || encoder.finish(), Some("not all immediate data required by the pipeline has been set via set_immediates (missing byte ranges: 8..16)"));
 }
 
 #[test]
@@ -356,5 +356,199 @@ fn auto_layout_infers_immediate_size() {
         pass.set_immediates(0, &[0u8; 16]);
         pass.dispatch_workgroups(1, 1, 1);
     }
+    wgpu_test::valid(&device, || encoder.finish());
+}
+
+const RENDER_SHADER_MULTI_IMMEDIATES: &str = "
+    enable f16;
+    struct ImmediateA {
+        @size(34)
+        a1: f16,
+    }
+    var<immediate> im_a: ImmediateA;
+
+    struct ImmediateB {
+        b1: u32,
+        b2: vec4<f32>,
+    }
+    var<immediate> im_b: ImmediateB;
+
+    struct VertexOutput {
+        @builtin(position) position: vec4f,
+        @location(0) @interpolate(flat) index: u32,
+    }
+
+    @vertex fn vertex() -> VertexOutput {
+        return VertexOutput(vec4f(1.0, 0.0, 0.0, 1.0), u32(im_a.a1));
+    }
+
+    @fragment fn fragment(
+        @location(0) @interpolate(flat) ix: u32,
+     ) -> @location(0) vec4f {
+        return im_b.b2;
+    }
+";
+
+fn begin_render_pass<'b, 'a: 'b>(
+    output_texture_view: &'a wgpu::TextureView,
+    encoder: &'a mut wgpu::CommandEncoder,
+    f: impl Fn(&mut wgpu::RenderPass<'b>),
+) {
+    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("Render Pass"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: output_texture_view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::default()),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        ..Default::default()
+    });
+    f(&mut render_pass);
+}
+
+fn setup_render() -> (wgpu::Device, wgpu::Queue, wgpu::TextureView) {
+    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor {
+        required_features: wgpu::Features::IMMEDIATES | wgpu::Features::SHADER_F16,
+        required_limits: wgpu::Limits {
+            max_immediate_size: 64,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    let output_texture = device.create_texture(&wgpu::TextureDescriptor {
+        size: wgpu::Extent3d {
+            width: 2,
+            height: 2,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        label: Some("Output Texture"),
+        view_formats: &[],
+    });
+    let output_texture_view = output_texture.create_view(&Default::default());
+
+    (device, queue, output_texture_view)
+}
+
+#[test]
+fn render_multi_immediates_with_smaller_layout_immediate_size_fails() {
+    let (device, _queue, output_texture_view) = setup_render();
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Shader"),
+        source: wgpu::ShaderSource::Wgsl(RENDER_SHADER_MULTI_IMMEDIATES.into()),
+    });
+    let create_pipeline = |immediate_size| {
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(
+                &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: None,
+                    bind_group_layouts: &[],
+                    immediate_size,
+                }),
+            ),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: None,
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: None,
+                targets: &[Some(output_texture_view.texture().format().into())],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::PointList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        })
+    };
+
+    fail(&device, || create_pipeline(32), Some("Pipeline layout immediate size (32) must be >= the required immediate size (34) of the shader entry point"));
+
+    fail(&device, || create_pipeline(34), Some("Immediate data has range bound 34 which is not aligned to IMMEDIATE_DATA_ALIGNMENT (4)"));
+
+    wgpu_test::valid(&device, || create_pipeline(36));
+}
+
+#[test]
+fn render_multi_immediates_auto_layout_with_all_immediates_set_succeeds() {
+    let (device, _queue, output_texture_view) = setup_render();
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Shader"),
+        source: wgpu::ShaderSource::Wgsl(RENDER_SHADER_MULTI_IMMEDIATES.into()),
+    });
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Render Pipeline"),
+        layout: None,
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: None,
+            buffers: &[],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: None,
+            targets: &[Some(output_texture_view.texture().format().into())],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::PointList,
+            ..Default::default()
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    });
+
+    fn do_encoding<'a>(
+        encoder: &mut dyn wgpu::util::RenderEncoder<'a>,
+        pipeline: &'a wgpu::RenderPipeline,
+    ) {
+        encoder.set_pipeline(pipeline);
+        encoder.set_immediates(0, &[0u8; 4]);
+        encoder.set_immediates(16, &[0u8; 16]);
+        encoder.draw(0..4, 0..1);
+    }
+
+    let mut encoder = device.create_command_encoder(&Default::default());
+
+    begin_render_pass(&output_texture_view, &mut encoder, |pass| {
+        do_encoding(pass, &pipeline);
+    });
+
+    wgpu_test::valid(&device, || encoder.finish());
+
+    let mut encoder = device.create_command_encoder(&Default::default());
+    let mut bundle_encoder =
+        device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+            color_formats: &[Some(output_texture_view.texture().format())],
+            sample_count: 1,
+            ..wgpu::RenderBundleEncoderDescriptor::default()
+        });
+    do_encoding(&mut bundle_encoder, &pipeline);
+    let bundle = bundle_encoder.finish(&wgpu::RenderBundleDescriptor::default());
+
+    begin_render_pass(&output_texture_view, &mut encoder, |pass| {
+        pass.execute_bundles([&bundle]);
+    });
+
     wgpu_test::valid(&device, || encoder.finish());
 }

@@ -739,19 +739,11 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
     }
 
     fn flush_immediates(&mut self) {
-        // SAFETY: The range of immediates written was validated in `is_ready`.
-        unsafe {
-            self.pass.immediate_state.flush_immediates(
-                self.pipeline
-                    .as_ref()
-                    .unwrap()
-                    .layout()
-                    .unwrap()
-                    .raw()
-                    .unwrap(),
-                self.pass.base.raw_encoder,
-            );
-        }
+        let pipeline = self.pipeline.as_ref().unwrap();
+        let layout = pipeline.layout().unwrap();
+        self.pass
+            .immediate_state
+            .flush_immediates(layout, self.pass.base.raw_encoder);
     }
 
     /// Flush binding state in preparation for a draw call.
@@ -978,15 +970,6 @@ pub enum RenderPassErrorInner {
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
-    #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
-    UnalignedIndirectBufferOffset(BufferAddress),
-    #[error("Indirect draw arguments of {args_size} bytes (count = {count}) starting at {offset} would overrun buffer size of {buffer_size}")]
-    IndirectBufferOverrun {
-        count: u32,
-        offset: u64,
-        args_size: u64,
-        buffer_size: u64,
-    },
     #[error("Indirect draw count of {count_bytes} bytes starting at {begin_count_offset} would overrun buffer of size {count_buffer_size}")]
     IndirectCountBufferOverrun {
         count_bytes: u64,
@@ -1124,8 +1107,6 @@ impl WebGpuError for RenderPassError {
             | RenderPassErrorInner::MismatchedResolveTextureFormat { .. }
             | RenderPassErrorInner::InvalidDepthOps
             | RenderPassErrorInner::InvalidStencilOps
-            | RenderPassErrorInner::UnalignedIndirectBufferOffset(..)
-            | RenderPassErrorInner::IndirectBufferOverrun { .. }
             | RenderPassErrorInner::IndirectCountBufferOverrun { .. }
             | RenderPassErrorInner::ResourceUsageCompatibility(..)
             | RenderPassErrorInner::IncompatibleBundleReadOnlyDepthStencil { .. }
@@ -1845,8 +1826,8 @@ fn check_transient_attachment_ops<V>(load_op: LoadOp<V>, store_op: StoreOp) -> b
 }
 
 impl CommandEncoder {
-    fn begin_render_pass(
-        self: Arc<Self>,
+    pub fn begin_render_pass(
+        self: &Arc<Self>,
         desc: ResolvedRenderPassDescriptor<'_>,
     ) -> (RenderPass, Option<CommandEncoderError>) {
         use EncoderStateError as SErr;
@@ -2114,9 +2095,9 @@ impl CommandEncoder {
                     multiview_mask: None,
                 };
                 match fill_arc_desc(desc, &mut arc_desc, &self.device) {
-                    Ok(()) => (RenderPass::new(self, arc_desc), None),
+                    Ok(()) => (RenderPass::new(self.clone(), arc_desc), None),
                     Err(err) => (
-                        RenderPass::new_invalid(self, &label, err.map_pass_err(scope)),
+                        RenderPass::new_invalid(self.clone(), &label, err.map_pass_err(scope)),
                         None,
                     ),
                 }
@@ -2128,7 +2109,7 @@ impl CommandEncoder {
                 cmd_buf_data.invalidate(err.clone());
                 drop(cmd_buf_data);
                 (
-                    RenderPass::new_invalid(self, &desc.label, err.map_pass_err(scope)),
+                    RenderPass::new_invalid(self.clone(), &desc.label, err.map_pass_err(scope)),
                     None,
                 )
             }
@@ -2137,7 +2118,11 @@ impl CommandEncoder {
                 // generates an immediate validation error.
                 drop(cmd_buf_data);
                 (
-                    RenderPass::new_invalid(self, &desc.label, err.clone().map_pass_err(scope)),
+                    RenderPass::new_invalid(
+                        self.clone(),
+                        &desc.label,
+                        err.clone().map_pass_err(scope),
+                    ),
                     Some(err.into()),
                 )
             }
@@ -2149,7 +2134,7 @@ impl CommandEncoder {
                 // invalid pass to save that work.
                 drop(cmd_buf_data);
                 (
-                    RenderPass::new_invalid(self, &desc.label, err.map_pass_err(scope)),
+                    RenderPass::new_invalid(self.clone(), &desc.label, err.map_pass_err(scope)),
                     None,
                 )
             }
@@ -3317,19 +3302,20 @@ fn multi_draw_indirect(
     indirect_buffer.check_destroyed(state.pass.base.snatch_guard)?;
 
     if !offset.is_multiple_of(4) {
-        return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
+        return Err(RenderCommandError::UnalignedIndirectBufferOffset(offset).into());
     }
 
     let stride = get_src_stride_of_indirect_args(family);
     let args_size = match stride.checked_mul(u64::from(count)) {
         Some(sz) if sz <= indirect_buffer.size && indirect_buffer.size - sz >= offset => sz,
         args_size => {
-            return Err(RenderPassErrorInner::IndirectBufferOverrun {
+            return Err(RenderCommandError::IndirectBufferOverrun {
                 count,
                 offset,
                 args_size: args_size.unwrap_or(u64::MAX),
                 buffer_size: indirect_buffer.size,
-            });
+            }
+            .into());
         }
     };
 
@@ -3537,18 +3523,19 @@ fn multi_draw_indirect_count(
     let count_raw = count_buffer.try_raw(state.pass.base.snatch_guard)?;
 
     if !offset.is_multiple_of(4) {
-        return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
+        return Err(RenderCommandError::UnalignedIndirectBufferOffset(offset).into());
     }
 
     let args_size = match stride.checked_mul(u64::from(max_count)) {
         Some(sz) if sz <= indirect_buffer.size && indirect_buffer.size - sz >= offset => sz,
         args_size => {
-            return Err(RenderPassErrorInner::IndirectBufferOverrun {
+            return Err(RenderCommandError::IndirectBufferOverrun {
                 count: 1,
                 offset,
                 args_size: args_size.unwrap_or(u64::MAX),
                 buffer_size: indirect_buffer.size,
-            });
+            }
+            .into());
         }
     };
 

@@ -193,7 +193,7 @@ impl super::Queue {
         &self,
         gl: &glow::Context,
         command: &C,
-        #[cfg_attr(target_arch = "wasm32", allow(unused))] data_bytes: &[u8],
+        #[cfg_attr(target_family = "wasm", allow(unused))] data_bytes: &[u8],
         queries: &[glow::Query],
     ) {
         match *command {

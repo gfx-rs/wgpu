@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-test"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "common code for wgpu tests"
 homepage.workspace = true
@@ -48,7 +47,6 @@ test-build-with-profiling = ["profiling/type-check"]
 wgpu = { workspace = true, features = ["noop", "gles", "webgl", "angle"] }
 wgpu-core = { workspace = true, features = ["trace"] }
 wgpu-hal = { workspace = true, features = ["validation_canary"] }
-wgpu-macros.workspace = true
 wgpu-types.workspace = true
 naga = { workspace = true, features = [
     "spv-out",
@@ -66,7 +64,9 @@ cfg-if.workspace = true
 exhaust.workspace = true
 futures-lite.workspace = true
 libtest-mimic.workspace = true
+macro_rules_attribute.workspace = true
 log.workspace = true
+paste.workspace = true
 png.workspace = true
 pollster.workspace = true
 profiling.workspace = true

@@ -10,6 +10,7 @@ use std::ffi::c_void;
   target_os = "openbsd"
 ))]
 use std::ptr::NonNull;
+use std::sync::Arc;
 
 use deno_core::cppgc::SameObject;
 use deno_core::op2;
@@ -91,7 +92,7 @@ pub enum ByowError {
 
 // TODO(@littledivy): This will extend `OffscreenCanvas` when we add it.
 pub struct UnsafeWindowSurface {
-  pub id: wgpu_core::id::SurfaceId,
+  pub wgpu_surface: Arc<wgpu_core::instance::Surface>,
   pub width: RefCell<u32>,
   pub height: RefCell<u32>,
 
@@ -140,14 +141,14 @@ impl UnsafeWindowSurface {
     )?;
 
     // SAFETY: see above comment
-    let id = unsafe {
+    let wgpu_surface = unsafe {
       instance
-        .instance_create_surface(display_handle, win_handle, None)
+        .create_surface(display_handle, win_handle)
         .map_err(ByowError::CreateSurface)?
     };
 
     Ok(UnsafeWindowSurface {
-      id,
+      wgpu_surface,
       width: RefCell::new(options.width),
       height: RefCell::new(options.height),
       context: SameObject::new(),
@@ -161,7 +162,7 @@ impl UnsafeWindowSurface {
     scope: &mut v8::HandleScope,
   ) -> v8::Global<v8::Object> {
     self.context.get(scope, |_| GPUCanvasContext {
-      surface_id: self.id,
+      wgpu_surface: self.wgpu_surface.clone(),
       width: self.width.clone(),
       height: self.height.clone(),
       config: RefCell::new(None),

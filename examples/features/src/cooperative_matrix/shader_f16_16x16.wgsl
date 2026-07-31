@@ -42,24 +42,27 @@ fn main(@builtin(workgroup_id) workgroup_id: vec3<u32>) {
     let tile_row = workgroup_id.x * TILE_SIZE;
     let tile_col = workgroup_id.y * TILE_SIZE;
 
-    // Load the C tile (accumulator)
+    // Load the C tile (accumulator). `matrix_c` is row-major, so this must
+    // use the row-major (`...T`) load/store variants -- the plain
+    // `coopLoad`/`coopStore` are column-major and would silently read/write
+    // a transposed tile.
     let c_offset = tile_row * stride + tile_col;
-    var c_tile = coopLoad<coop_mat16x16<f16, C>>(&matrix_c[c_offset], stride);
+    var c_tile = coopLoadT<coop_mat16x16<f16, C>>(&matrix_c[c_offset], stride);
 
     // Iterate over K dimension in tiles
     for (var k: u32 = 0u; k < K; k += TILE_SIZE) {
         // Load A tile: rows [tile_row, tile_row+16), cols [k, k+16)
         let a_offset = tile_row * K + k;
-        let a_tile = coopLoad<coop_mat16x16<f16, A>>(&matrix_a[a_offset], K);
+        let a_tile = coopLoadT<coop_mat16x16<f16, A>>(&matrix_a[a_offset], K);
 
         // Load B tile: rows [k, k+16), cols [tile_col, tile_col+16)
         let b_offset = k * stride + tile_col;
-        let b_tile = coopLoad<coop_mat16x16<f16, B>>(&matrix_b[b_offset], stride);
+        let b_tile = coopLoadT<coop_mat16x16<f16, B>>(&matrix_b[b_offset], stride);
 
         // Multiply and accumulate: C += A * B
         c_tile = coopMultiplyAdd(a_tile, b_tile, c_tile);
     }
 
     // Store the result back to C
-    coopStore(c_tile, &matrix_c[c_offset], stride);
+    coopStoreT(c_tile, &matrix_c[c_offset], stride);
 }

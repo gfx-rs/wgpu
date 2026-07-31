@@ -65,17 +65,17 @@ Contributors are welcome! See [CONTRIBUTING.md][contrib] for more information.
 
 ## Supported Platforms
 
-| API    | Windows      | Linux/Android   | macOS/iOS | Web (wasm)  |
-| ------ | ------------ | --------------- | --------- | ----------- |
-| Vulkan | ✅           | ✅              | 🌋        |             |
-| Metal  |              |                 | ✅        |             |
-| DX12   | ✅           |                 |           |             |
-| OpenGL | 🆗 (GL 3.3+) | 🆗 (GL ES 3.0+) | 📐        | 🆗 (WebGL2) |
-| WebGPU |              |                 |           | ✅          |
+| API    | Windows             | Linux/Android   | macOS/iOS | Web (wasm)  |
+| ------ | ------------------- | --------------- | --------- | ----------- |
+| Vulkan | ✅                  | ✅              | 🌋        |             |
+| Metal  |                     |                 | ✅        |             |
+| DX12   | ✅                  |                 |           |             |
+| OpenGL | 🆗 (GL 3.3+), or 📐 | 🆗 (GL ES 3.0+) | 📐        | 🆗 (WebGL2) |
+| WebGPU |                     |                 |           | ✅          |
 
 ✅ = First Class Support  
 🆗 = Downlevel/Best Effort Support  
-📐 = Requires the [ANGLE](https://github.com/gfx-rs/wgpu/wiki/Running-on-ANGLE) translation layer (GL ES 3.0 only). Use the `angle` feature on macOS/iOS. On Windows, `gles` uses WGL by default; build with `cfg(windows_angle)` to use ANGLE instead.
+📐 = Requires the [ANGLE](https://github.com/gfx-rs/wgpu/wiki/Running-on-ANGLE) translation layer (GL ES 3.0 only). On macOS/iOS, use the `angle` feature. On Windows, `gles` uses WGL by default; build with `cfg(windows_angle)` to use ANGLE instead.
 🌋 = Requires the [MoltenVK](https://vulkan.lunarg.com/sdk/home#mac) translation layer  
 🛠️ = Unsupported, though open to contributions
 

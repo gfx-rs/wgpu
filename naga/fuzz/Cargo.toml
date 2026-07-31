@@ -1,7 +1,6 @@
 [package]
 name = "naga-fuzz"
 version.workspace = true
-authors.workspace = true
 publish = false
 edition.workspace = true
 license.workspace = true
@@ -10,7 +9,7 @@ build = "build.rs"
 [package.metadata]
 cargo-fuzz = true
 
-[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "openbsd")))'.dependencies]
 arbitrary = { workspace = true, features = ["derive"] }
 libfuzzer-sys.workspace = true
 

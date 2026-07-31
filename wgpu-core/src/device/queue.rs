@@ -638,8 +638,10 @@ impl WebGpuError for QueueSubmitError {
 /// [`submit`]: `PendingSubmission::submit`
 pub(crate) struct PendingSubmission<'a> {
     queue: &'a Queue,
-    snatch_guard: SnatchGuard<'a>,
+    // NOTE: Guards must be declared in reverse of acquisition order, so  `wgpu_validate_locks`
+    // succeeds.
     command_index_guard: RwLockWriteGuard<'a, CommandIndices>,
+    snatch_guard: SnatchGuard<'a>,
     // Command buffers to be executed, along with trackers for the resources they use.
     pub executions: Vec<EncoderInFlight>,
     // Surface textures referenced by command buffers in this submission. These need to be
@@ -922,6 +924,8 @@ impl Queue {
 
         self.same_device_as(dst.as_ref())?;
 
+        dst.check_valid()?;
+
         dst.check_usage(wgt::TextureUsages::COPY_DST)
             .map_err(TransferError::MissingTextureUsage)?;
 
@@ -1170,6 +1174,8 @@ impl Queue {
             origin: destination.origin,
             aspect: destination.aspect,
         };
+
+        dst.check_valid()?;
 
         if !conv::is_valid_external_image_copy_dst_texture_format(dst.desc.format) {
             return Err(

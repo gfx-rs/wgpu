@@ -46,6 +46,7 @@ mod webidl;
 pub const UNSTABLE_FEATURE_NAME: &str = "webgpu";
 
 pub const DX12_COMPILER_ENV_VAR: &str = "DENO_WEBGPU_DX12_COMPILER";
+pub const STRICT_COMPLIANCE_ENV_VAR: &str = "DENO_WEBGPU_STRICT_COMPLIANCE";
 
 #[allow(clippy::print_stdout)]
 pub fn print_linker_flags(name: &str) {
@@ -66,7 +67,7 @@ pub fn print_linker_flags(name: &str) {
   }
 }
 
-pub type Instance = Arc<wgpu_core::global::Global>;
+pub type Instance = Arc<wgpu_core::instance::Instance>;
 
 deno_core::extension!(
   deno_webgpu,
@@ -185,10 +186,14 @@ impl GPU {
       instance
     } else {
       let mut flags = wgpu_types::InstanceFlags::from_build_config();
-      if std::env::var_os("DENO_WEBGPU_STRICT_COMPLIANCE").is_some() {
+      let strict_compliance = std::env::var(STRICT_COMPLIANCE_ENV_VAR)
+        .is_ok_and(|value| {
+          !matches!(value.to_ascii_lowercase().as_str(), "false" | "no" | "0")
+        });
+      if strict_compliance {
         flags |= wgpu_types::InstanceFlags::STRICT_WEBGPU_COMPLIANCE;
       }
-      state.put(Arc::new(wgpu_core::global::Global::new(
+      state.put(Arc::new(wgpu_core::instance::Instance::new(
         "webgpu",
         wgpu_types::InstanceDescriptor {
           backends,
@@ -223,7 +228,7 @@ impl GPU {
     ))
     .ok()?;
 
-    let descriptor = wgpu_core::instance::RequestAdapterOptions {
+    let descriptor = wgpu_types::RequestAdapterOptions {
       power_preference: options
         .power_preference
         .map(|pp| match pp {
@@ -237,14 +242,13 @@ impl GPU {
       compatible_surface: None, // windowless
       apply_limit_buckets: false,
     };
-    let id = instance.request_adapter(&descriptor, backends, None).ok()?;
+    let wgpu_adapter = instance.request_adapter(&descriptor, backends).ok()?;
 
     Some(adapter::GPUAdapter {
-      instance: instance.clone(),
       features: SameObject::new(),
       limits: SameObject::new(),
       info: Rc::new(SameObject::new()),
-      id,
+      wgpu_adapter,
     })
   }
 

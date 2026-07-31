@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-core-deps-windows"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Feature unification helper crate for the Windows/Linux/Android platforms"
 homepage.workspace = true

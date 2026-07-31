@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(BGRA8_UNORM_STORAGE);
@@ -17,7 +17,7 @@ fn main(@builtin(workgroup_id) wgid: vec3<u32>) {
 }
 ";
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

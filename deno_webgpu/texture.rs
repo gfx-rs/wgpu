@@ -1,5 +1,6 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+use std::sync::Arc;
 use std::sync::OnceLock;
 
 use deno_core::op2;
@@ -17,7 +18,6 @@ use wgpu_types::TextureViewDimension;
 
 use crate::error::GPUGenericError;
 use crate::webidl::GPUTextureUsageFlags;
-use crate::Instance;
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
@@ -41,11 +41,10 @@ pub(crate) struct GPUTextureDescriptor {
 }
 
 pub struct GPUTexture {
-  pub instance: Instance,
   pub error_handler: super::error::ErrorHandler,
 
-  pub id: wgpu_core::id::TextureId,
-  pub default_view_id: OnceLock<wgpu_core::id::TextureViewId>,
+  pub wgpu_texture: Arc<wgpu_core::resource::Texture>,
+  pub default_view: OnceLock<Arc<wgpu_core::resource::TextureView>>,
 
   pub label: String,
 
@@ -58,35 +57,27 @@ pub struct GPUTexture {
 }
 
 impl GPUTexture {
-  pub(crate) fn default_view_id(&self) -> wgpu_core::id::TextureViewId {
-    *self.default_view_id.get_or_init(|| {
-      let (id, err) =
-        self
-          .instance
-          .texture_create_view(self.id, &Default::default(), None);
-      if let Some(err) = err {
-        use wgpu_types::error::WebGpuError;
-        assert_ne!(
-          err.webgpu_error_type(),
-          wgpu_types::error::ErrorType::Validation,
-          concat!(
-            "getting default view for a texture ",
-            "caused a validation error (!?)"
-          )
-        );
-        self.error_handler.push_error(Some(err));
-      }
-      id
-    })
-  }
-}
-
-impl Drop for GPUTexture {
-  fn drop(&mut self) {
-    if let Some(id) = self.default_view_id.take() {
-      self.instance.texture_view_drop(id);
-    }
-    self.instance.texture_drop(self.id);
+  pub(crate) fn default_view(&self) -> Arc<wgpu_core::resource::TextureView> {
+    self
+      .default_view
+      .get_or_init(|| {
+        let (wgpu_texture_view, err) =
+          self.wgpu_texture.create_view(&Default::default());
+        if let Some(err) = err {
+          use wgpu_types::error::WebGpuError;
+          assert_ne!(
+            err.webgpu_error_type(),
+            wgpu_types::error::ErrorType::Validation,
+            concat!(
+              "getting default view for a texture ",
+              "caused a validation error (!?)"
+            )
+          );
+          self.error_handler.push_error(Some(err));
+        }
+        wgpu_texture_view
+      })
+      .clone()
   }
 }
 
@@ -156,7 +147,7 @@ impl GPUTexture {
   #[fast]
   #[undefined]
   fn destroy(&self) {
-    self.instance.texture_destroy(self.id);
+    self.wgpu_texture.destroy();
   }
 
   #[cppgc]
@@ -179,16 +170,13 @@ impl GPUTexture {
       swizzle: crate::map_texture_component_swizzle(&descriptor.swizzle)?,
     };
 
-    let (id, err) =
-      self
-        .instance
-        .texture_create_view(self.id, &wgpu_descriptor, None);
+    let (wgpu_texture_view, err) =
+      self.wgpu_texture.create_view(&wgpu_descriptor);
 
     self.error_handler.push_error(err);
 
     Ok(GPUTextureView {
-      instance: self.instance.clone(),
-      id,
+      wgpu_texture_view,
       label: descriptor.label,
     })
   }
@@ -269,15 +257,8 @@ impl From<GPUTextureAspect> for TextureAspect {
 }
 
 pub struct GPUTextureView {
-  pub instance: Instance,
-  pub id: wgpu_core::id::TextureViewId,
+  pub wgpu_texture_view: Arc<wgpu_core::resource::TextureView>,
   pub label: String,
-}
-
-impl Drop for GPUTextureView {
-  fn drop(&mut self) {
-    self.instance.texture_view_drop(self.id);
-  }
 }
 
 impl WebIdlInterfaceConverter for GPUTextureView {
@@ -714,7 +695,7 @@ impl From<GPUTextureFormat> for TextureFormat {
 }
 
 pub struct GPUExternalTexture {
-  pub id: wgpu_core::id::ExternalTextureId,
+  pub wgpu_external_texture: Arc<wgpu_core::resource::ExternalTexture>,
 }
 
 impl WebIdlInterfaceConverter for GPUExternalTexture {

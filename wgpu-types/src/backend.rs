@@ -39,14 +39,29 @@ pub enum Backend {
     /// enables it, in addition to the ordinary requirement of [`Backends::NOOP`] being set.
     /// This ensures that applications not desiring a non-functional backend will not receive it.
     Noop = 0,
+
     /// Vulkan API (Windows, Linux, Android, MacOS via `vulkan-portability`/MoltenVK)
     Vulkan = 1,
+
     /// Metal API (Apple platforms)
     Metal = 2,
+
     /// Direct3D-12 (Windows)
     Dx12 = 3,
-    /// OpenGL 3.3+ (Windows), OpenGL ES 3.0+ (Linux, Android, MacOS via Angle), and WebGL2
+
+    /// OpenGL 3.3+, OpenGL ES 3.0+, WebGL2.
+    ///
+    /// - On Windows, this is normally OpenGL. If you build with
+    ///   `cfg(windows_angle)` to use ANGLE instead, then this is OpenGL ES.
+    ///
+    /// - On Linux, we create a full OpenGL context if possible (Mesa offers
+    ///   it), but if that fails we fall back to OpenGL ES.
+    ///
+    /// - On Android and macOS with ANGLE, we get OpenGL ES.
+    ///
+    /// - When running in a web browser, we get WebGL2.
     Gl = 4,
+
     /// WebGPU in the browser
     BrowserWebGpu = 5,
 }
