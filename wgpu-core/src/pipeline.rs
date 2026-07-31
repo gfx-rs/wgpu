@@ -125,6 +125,25 @@ impl ShaderModule {
         })
     }
 
+    /// Select an entry point name, given an optional name and a shader stage.
+    ///
+    /// This function takes care of turning the `Option<&str>`
+    /// [`ProgrammableStageDescriptor::entry_point`][ep] into a specific name.
+    ///
+    /// For non-passthrough shaders, if `entry_point` is `Some`, then return it
+    /// as a `String`. Otherwise, return the name of the unique entry point in
+    /// `self`'s module for `stage`; if there is not exactly one such entry
+    /// point, return an error.
+    ///
+    /// The non-passthrough case counts on `Interface::check_stage` to verify
+    /// that an entry point with the given name actually exists.
+    ///
+    /// For passthrough shaders, if `entry_point` is `Some`, verify that an
+    /// entry point by that name exists (returning an error if not), and return
+    /// it as a `String`. Otherwise, if `entry_point` is `None`, then check that
+    /// this module has exactly one entry point, and return its name.
+    ///
+    /// [ep]: crate::pipeline::ProgrammableStageDescriptor::entry_point
     pub(crate) fn finalize_entry_point_name(
         &self,
         stage: naga::ShaderStage,
@@ -223,14 +242,18 @@ impl WebGpuError for CreateShaderModuleError {
 pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     /// The compiled shader module for this stage.
     pub module: SM,
-    /// The name of the entry point in the compiled shader. The name is selected using the
-    /// following logic:
+
+    /// The name of the entry point in `module` that this stage should use.
     ///
-    /// * If `Some(name)` is specified, there must be a function with this name in the shader.
-    /// * If a single entry point associated with this stage must be in the shader, then proceed as
-    ///   if `Some(…)` was specified with that entry point's name.
+    /// - If this is `Some(name)`, `module` must contain an entry point with the
+    ///   given name.
+    ///
+    /// - If this is `None`, `module` must have only one entry point for this
+    ///   stage; we use that one.
     pub entry_point: Option<Cow<'a, str>>,
-    /// Specifies the values of pipeline-overridable constants in the shader module.
+
+    /// Values for pipeline-overridable constants in `module` that this stage
+    /// should use.
     ///
     /// If an `@id` attribute was specified on the declaration,
     /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
@@ -238,10 +261,13 @@ pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     ///
     /// The value may represent any of WGSL's concrete scalar types.
     pub constants: naga::back::PipelineConstants,
-    /// Whether workgroup scoped memory will be initialized with zero values for this stage.
+
+    /// Whether variables in the workgroup address space will be initialized
+    /// with zero values for this stage.
     ///
-    /// This is required by the WebGPU spec, but may have overhead which can be avoided
-    /// for cross-platform applications
+    /// The WebGPU spec requires variables in the workgroup address space to be
+    /// zeroed. However, initialization does impose some overhead, and
+    /// non-browser applications may not need it.
     pub zero_initialize_workgroup_memory: bool,
 }
 
