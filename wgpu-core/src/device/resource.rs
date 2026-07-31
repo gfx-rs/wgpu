@@ -5587,7 +5587,7 @@ impl Device {
         Ok(query_set)
     }
 
-    fn lose(&self, message: &str) {
+    pub(crate) fn lose(&self, message: &str) {
         // Follow the steps at https://gpuweb.github.io/gpuweb/#lose-the-device.
 
         // Mark the device explicitly as invalid. This is checked in various
