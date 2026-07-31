@@ -1212,19 +1212,22 @@ mod tests {
     fn texture_shader_stages_follow_queue_flags() {
         let usage = wgt::TextureUses::RESOURCE;
 
-        let (stages, access) = map_texture_usage_to_barrier(usage, vk::QueueFlags::GRAPHICS);
+        let (stages, access) = map_texture_usage_to_barrier(usage, vk::QueueFlags::GRAPHICS, false);
         assert_eq!(
             stages,
             vk::PipelineStageFlags::VERTEX_SHADER | vk::PipelineStageFlags::FRAGMENT_SHADER
         );
         assert_eq!(access, vk::AccessFlags::SHADER_READ);
 
-        let (stages, access) = map_texture_usage_to_barrier(usage, vk::QueueFlags::COMPUTE);
+        let (stages, access) = map_texture_usage_to_barrier(usage, vk::QueueFlags::COMPUTE, false);
         assert_eq!(stages, vk::PipelineStageFlags::COMPUTE_SHADER);
         assert_eq!(access, vk::AccessFlags::SHADER_READ);
 
-        let (stages, access) =
-            map_texture_usage_to_barrier(usage, vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE);
+        let (stages, access) = map_texture_usage_to_barrier(
+            usage,
+            vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE,
+            false,
+        );
         assert_eq!(
             stages,
             vk::PipelineStageFlags::VERTEX_SHADER
@@ -1239,6 +1242,7 @@ mod tests {
         let (stages, access) = map_texture_usage_to_barrier(
             wgt::TextureUses::COPY_SRC | wgt::TextureUses::COLOR_TARGET,
             vk::QueueFlags::empty(),
+            false,
         );
 
         assert_eq!(

@@ -249,12 +249,18 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 bar.texture.format,
                 &self.device.private_caps,
             );
-            let (src_stage, src_access) =
-                conv::map_texture_usage_to_barrier(bar.usage.from, self.device.queue_flags,self.device.private_caps.store_op_none);
+            let (src_stage, src_access) = conv::map_texture_usage_to_barrier(
+                bar.usage.from,
+                self.device.queue_flags,
+                self.device.private_caps.store_op_none,
+            );
             let src_layout = conv::derive_image_layout(bar.usage.from, bar.texture.format);
             src_stages |= src_stage;
-            let (dst_stage, dst_access) =
-                conv::map_texture_usage_to_barrier(bar.usage.to, self.device.queue_flags,self.device.private_caps.store_op_none,);
+            let (dst_stage, dst_access) = conv::map_texture_usage_to_barrier(
+                bar.usage.to,
+                self.device.queue_flags,
+                self.device.private_caps.store_op_none,
+            );
             let dst_layout = conv::derive_image_layout(bar.usage.to, bar.texture.format);
             dst_stages |= dst_stage;
 
