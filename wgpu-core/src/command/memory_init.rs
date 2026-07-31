@@ -9,7 +9,7 @@ use hashbrown::hash_map::Entry;
 use crate::{
     device::{Device, DeviceError},
     init_tracker::*,
-    resource::{DestroyedResourceError, ParentDevice, RawResourceAccess, Texture, Trackable},
+    resource::{ParentDevice, RawResourceAccess, Texture, Trackable},
     snatch::SnatchGuard,
     track::{DeviceTracker, TextureTracker},
     FastHashMap,
@@ -156,13 +156,22 @@ pub(crate) fn fixup_discarded_surfaces<InitIter: Iterator<Item = TextureSurfaceD
 }
 
 impl BakedCommands {
-    // inserts all buffer initializations that are going to be needed for
-    // executing the commands and updates resource init states accordingly
+    /// Initialize buffers.
+    ///
+    /// Inserts all buffer initializations that are going to be needed for
+    /// executing the commands, and updates resource init states accordingly.
+    ///
+    /// The caller is responsible for checking that any buffer this may touch has not been
+    /// destroyed, and must have done that check under the same snatch guard that is passed
+    /// to this function.
+    ///
+    /// # Panics
+    /// If a destroyed buffer is encountered.
     pub(crate) fn initialize_buffer_memory(
         &mut self,
         device_tracker: &mut DeviceTracker,
         snatch_guard: &SnatchGuard<'_>,
-    ) -> Result<(), DestroyedResourceError> {
+    ) {
         profiling::scope!("initialize_buffer_memory");
 
         // Gather init ranges for each buffer so we can collapse them.
@@ -220,7 +229,9 @@ impl BakedCommands {
                 .buffers
                 .set_single(&buffer, wgt::BufferUses::COPY_DST);
 
-            let raw_buf = buffer.try_raw(snatch_guard)?;
+            let raw_buf = buffer
+                .try_raw(snatch_guard)
+                .expect("attempt to initialize a destroyed buffer");
 
             unsafe {
                 self.encoder.raw.transition_buffers(
@@ -251,19 +262,30 @@ impl BakedCommands {
                 }
             }
         }
-        Ok(())
     }
 
-    // inserts all texture initializations that are going to be needed for
-    // executing the commands and updates resource init states accordingly any
-    // textures that are left discarded by this command buffer will be marked as
-    // uninitialized
+    /// Initialize textures.
+    ///
+    /// Inserts all texture initializations that are going to be needed for
+    /// executing the commands, and updates resource init states accordingly. Any
+    /// textures that are left discarded by this command buffer will be marked as
+    /// uninitialized.
+    ///
+    /// The caller is responsible for checking that any texture this may touch has not been
+    /// destroyed, and must have done that check under the same snatch guard that is passed
+    /// to this function.
+    ///
+    /// Note that any error returned from this function will become device loss in
+    /// [`crate::device::queue::Queue::submit`].
+    ///
+    /// # Panics
+    /// If a destroyed texture is encountered.
     pub(crate) fn initialize_texture_memory(
         &mut self,
         device_tracker: &mut DeviceTracker,
         device: &Device,
         snatch_guard: &SnatchGuard<'_>,
-    ) -> Result<(), DestroyedResourceError> {
+    ) -> Result<(), ClearError> {
         profiling::scope!("initialize_texture_memory");
 
         let mut ranges: Vec<TextureInitRange> = Vec::new();
@@ -308,16 +330,14 @@ impl BakedCommands {
                     device.instance_flags,
                 );
 
-                // A Texture can be destroyed between the command recording
-                // and now, this is out of our control so we have to handle
-                // it gracefully.
-                if let Err(ClearError::DestroyedResource(e)) = clear_result {
-                    return Err(e);
-                }
-
-                // Other errors are unexpected.
-                if let Err(error) = clear_result {
-                    panic!("{error}");
+                // We panic on destroyed textures for symmetry with buffer
+                // initialization. It should not happen, but supposing it did,
+                // it would also be fine to return the error and lose the
+                // device in queue submit.
+                if matches!(clear_result, Err(ClearError::DestroyedResource(_))) {
+                    panic!("attempt to initialize a destroyed texture");
+                } else {
+                    clear_result?;
                 }
             }
         }
