@@ -151,9 +151,26 @@ impl fmt::Display for InterfaceVar {
     }
 }
 
+/// An [inter-stage input or output value][io].
+///
+/// A value of this type describes one value to be passed to or returned from
+/// some entry point.
+///
+/// [io]: https://www.w3.org/TR/WGSL/#stage-inputs-outputs
 #[derive(Debug, Eq, PartialEq)]
 enum Varying {
-    Local { location: u32, iv: InterfaceVar },
+    /// A [user-defined input or output][uio].
+    ///
+    /// In WGSL, this is a value with a `@location` attribute.
+    ///
+    /// [uio]: https://www.w3.org/TR/WGSL/#user-defined-inputs-outputs
+    UserDefined { location: u32, iv: InterfaceVar },
+
+    /// A [built-in input or output][bio].
+    ///
+    /// In WGSL, this is a value with a `@builtin` attribute.
+    ///
+    /// [bio]: https://www.w3.org/TR/WGSL/#builtin-inputs-outputs
     BuiltIn(BuiltIn),
 }
 
@@ -1177,7 +1194,7 @@ impl Interface {
                 sampling,
                 per_primitive,
                 blend_src: _,
-            }) => Varying::Local {
+            }) => Varying::UserDefined {
                 location,
                 iv: InterfaceVar {
                     ty: numeric_ty,
@@ -1609,7 +1626,7 @@ impl Interface {
         // check inputs compatibility
         for input in entry_point.inputs.iter() {
             match *input {
-                Varying::Local { location, ref iv } => {
+                Varying::UserDefined { location, ref iv } => {
                     let result = inputs
                         .varyings
                         .get(&location)
@@ -1727,7 +1744,7 @@ impl Interface {
 
                 for output in entry_point.outputs.iter() {
                     match *output {
-                        Varying::Local { ref iv, location } => {
+                        Varying::UserDefined { ref iv, location } => {
                             if location > max_vertex_shader_output_location {
                                 return Err(StageError::VertexOutputLocationTooLarge {
                                     location,
@@ -1780,7 +1797,7 @@ impl Interface {
                     self.limits.max_inter_stage_shader_variables;
 
                 let deductions = entry_point.inputs.iter().filter_map(|output| match output {
-                    Varying::Local { .. } => None,
+                    Varying::UserDefined { .. } => None,
                     Varying::BuiltIn(builtin) => {
                         MaxFragmentShaderInputDeduction::from_inter_stage_builtin(builtin.to_naga())
                             .or_else(|| {
@@ -1807,7 +1824,7 @@ impl Interface {
 
                 for output in entry_point.inputs.iter() {
                     match *output {
-                        Varying::Local { ref iv, location } => {
+                        Varying::UserDefined { ref iv, location } => {
                             if location >= self.limits.max_inter_stage_shader_variables {
                                 return Err(StageError::FragmentInputLocationTooLarge {
                                     location,
@@ -1831,7 +1848,7 @@ impl Interface {
                 }
 
                 for output in &entry_point.outputs {
-                    let &Varying::Local { location, ref iv } = output else {
+                    let &Varying::UserDefined { location, ref iv } = output else {
                         continue;
                     };
                     if location >= self.limits.max_color_attachments {
@@ -1930,7 +1947,7 @@ impl Interface {
             .outputs
             .iter()
             .filter_map(|output| match *output {
-                Varying::Local { location, ref iv } => Some((location, iv.clone())),
+                Varying::UserDefined { location, ref iv } => Some((location, iv.clone())),
                 Varying::BuiltIn(_) => None,
             })
             .collect();
