@@ -2411,6 +2411,12 @@ pub struct FunctionResult {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct Function {
     /// Name of the function, if any.
+    ///
+    /// Unlike WGSL, Naga IR allows a module to have multiple functions with the
+    /// same name. Since functions are generally identified by handle, the name
+    /// is mostly needed for diagnostics and as a hint to [`Namer`].
+    ///
+    /// [`Namer`]: crate::proc::Namer
     pub name: Option<String>,
     /// Information about function argument.
     pub arguments: Vec<FunctionArgument>,
@@ -2502,7 +2508,9 @@ pub struct Function {
 pub struct EntryPoint {
     /// Name of this entry point, visible externally.
     ///
-    /// Entry point names for a given `stage` must be distinct within a module.
+    /// Unlike WGSL, Naga IR allows a module to have multiple entry points with
+    /// the same name, as long as they are for different shader stages. That is,
+    /// `(name, stage)` pairs must be distinct within a module.
     pub name: String,
     /// Shader stage.
     pub stage: ShaderStage,
