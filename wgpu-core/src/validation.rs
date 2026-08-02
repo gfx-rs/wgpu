@@ -1429,7 +1429,7 @@ impl Interface {
     pub fn check_stage(
         &self,
         layouts: &mut BindingLayoutSource,
-        shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+        minimum_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
         shader_stage: ShaderStageForValidation,
         inputs: StageIo,
@@ -1457,7 +1457,7 @@ impl Interface {
                             minimum_binding_size,
                         } = res.ty
                         {
-                            match shader_binding_sizes.entry(res.bind) {
+                            match minimum_binding_sizes.entry(res.bind) {
                                 Entry::Occupied(e) => {
                                     *e.into_mut() = minimum_binding_size.max(*e.get());
                                 }
