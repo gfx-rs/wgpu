@@ -62,8 +62,11 @@ fn expect_validation_error_with_span(
     )
 }
 
-/// Validation should fail if `AtomicResult` expressions are not
-/// populated by `Atomic` statements.
+/// Validation should fail if [`AtomicResult` expressions] are not
+/// populated by [`Atomic` statements].
+///
+/// [`AtomicResult` expressions]: Expression::AtomicResult
+/// [`Atomic` statements]: naga::Statement::Atomic
 #[test]
 fn populate_atomic_result() {
     use naga::{Module, Type, TypeInner};
@@ -1814,7 +1817,7 @@ fn entry_points_distinguished_by_stage() {
     .expect("module should be valid");
 }
 
-/// It is not permitted for a `Module` to have multiple entry points with the
+/// It is not permitted for a [`Module`] to have multiple entry points with the
 /// same name and the same stage.
 #[test]
 fn entry_points_share_name() {
@@ -1860,7 +1863,7 @@ fn entry_points_share_name() {
     ));
 }
 
-/// Unlike WGSL, Naga IR permits a `Module` to have multiple non-entry-point
+/// Unlike WGSL, Naga IR permits a [`Module`] to have multiple non-entry-point
 /// functions with the same name. (Calls identify callees by handle, so the
 /// names shouldn't affect validation.)
 #[test]
