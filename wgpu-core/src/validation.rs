@@ -26,7 +26,7 @@ pub mod shader_io_deductions;
 #[derive(Debug)]
 enum ResourceType {
     Buffer {
-        size: wgt::BufferSize,
+        minimum_binding_size: wgt::BufferSize,
     },
     Texture {
         dim: naga::ImageDimension,
@@ -602,7 +602,9 @@ pub use wgpu_naga_bridge::map_storage_format_to_naga;
 impl Resource {
     fn check_binding_use(&self, entry: &BindGroupLayoutEntry) -> Result<(), BindingError> {
         match self.ty {
-            ResourceType::Buffer { size } => {
+            ResourceType::Buffer {
+                minimum_binding_size,
+            } => {
                 let min_size = match entry.ty {
                     BindingType::Buffer {
                         ty,
@@ -635,9 +637,9 @@ impl Resource {
                     }
                 };
                 match min_size {
-                    Some(non_zero) if non_zero < size => {
+                    Some(non_zero) if non_zero < minimum_binding_size => {
                         return Err(BindingError::WrongBufferSize {
-                            buffer_size: size,
+                            buffer_size: minimum_binding_size,
                             min_binding_size: non_zero,
                         })
                     }
@@ -805,7 +807,9 @@ impl Resource {
         is_reffed_by_sampler_in_entrypoint: bool,
     ) -> Result<BindingType, BindingError> {
         Ok(match self.ty {
-            ResourceType::Buffer { size } => BindingType::Buffer {
+            ResourceType::Buffer {
+                minimum_binding_size,
+            } => BindingType::Buffer {
                 ty: match self.class {
                     naga::AddressSpace::Uniform => wgt::BufferBindingType::Uniform,
                     naga::AddressSpace::Storage { access } => wgt::BufferBindingType::Storage {
@@ -814,7 +818,7 @@ impl Resource {
                     _ => return Err(BindingError::WrongBufferAddressSpace { space: self.class }),
                 },
                 has_dynamic_offset: false,
-                min_binding_size: Some(size),
+                min_binding_size: Some(minimum_binding_size),
             },
             ResourceType::Sampler { comparison } => BindingType::Sampler(if comparison {
                 wgt::SamplerBindingType::Comparison
@@ -1278,7 +1282,8 @@ impl Interface {
                     ResourceType::AccelerationStructure { vertex_return }
                 }
                 ref other => ResourceType::Buffer {
-                    size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64).unwrap(),
+                    minimum_binding_size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64)
+                        .unwrap(),
                 },
             };
             let handle = resources.append(
@@ -1427,7 +1432,7 @@ impl Interface {
     pub fn check_stage(
         &self,
         layouts: &mut BindingLayoutSource,
-        shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+        minimum_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
         shader_stage: ShaderStageForValidation,
         inputs: StageIo,
@@ -1451,13 +1456,16 @@ impl Interface {
                 match layouts {
                     BindingLayoutSource::Provided(pipeline_layout) => {
                         // update the required binding size for this buffer
-                        if let ResourceType::Buffer { size } = res.ty {
-                            match shader_binding_sizes.entry(res.bind) {
+                        if let ResourceType::Buffer {
+                            minimum_binding_size,
+                        } = res.ty
+                        {
+                            match minimum_binding_sizes.entry(res.bind) {
                                 Entry::Occupied(e) => {
-                                    *e.into_mut() = size.max(*e.get());
+                                    *e.into_mut() = minimum_binding_size.max(*e.get());
                                 }
                                 Entry::Vacant(e) => {
-                                    e.insert(size);
+                                    e.insert(minimum_binding_size);
                                 }
                             }
                         }
