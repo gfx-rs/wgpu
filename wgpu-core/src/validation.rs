@@ -268,13 +268,6 @@ impl BuiltIn {
     }
 }
 
-#[allow(unused)]
-#[derive(Debug)]
-struct SpecializationConstant {
-    id: u32,
-    ty: NumericType,
-}
-
 #[derive(Debug)]
 struct EntryPointMeshInfo {
     max_vertices: u32,
@@ -287,8 +280,6 @@ struct EntryPoint {
     inputs: Vec<Varying>,
     outputs: Vec<Varying>,
     resources: Vec<naga::Handle<Resource>>,
-    #[allow(unused)]
-    spec_constants: Vec<SpecializationConstant>,
     sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
     workgroup_size: [u32; 3],
     dual_source_blending: bool,
