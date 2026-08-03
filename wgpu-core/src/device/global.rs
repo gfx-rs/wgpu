@@ -317,6 +317,18 @@ impl Global {
         (id, Some(error))
     }
 
+    pub fn device_validate_texture_descriptor(
+        &self,
+        device_id: DeviceId,
+        desc: &resource::TextureDescriptor,
+    ) -> Option<resource::CreateTextureError> {
+        self.hub
+            .devices
+            .get(device_id)
+            .validate_texture_descriptor(desc)
+            .err()
+    }
+
     /// # Safety
     ///
     /// - `hal_texture` must be created from `device_id` corresponding raw handle.
