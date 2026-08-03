@@ -1862,7 +1862,7 @@ fn entry_points_share_name() {
 
 /// Unlike WGSL, Naga IR permits a `Module` to have multiple non-entry-point
 /// functions with the same name. (Calls identify callees by handle, so the
-/// names aren't dispositive.)
+/// names shouldn't affect validation.)
 #[test]
 fn functions_share_name() {
     let mut test_spans = TestSpanGenerator::default();
