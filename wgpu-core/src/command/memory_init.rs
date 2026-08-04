@@ -23,7 +23,11 @@ use super::{clear_texture, BakedCommands, ClearError};
 pub(crate) struct TextureSurfaceDiscard {
     pub texture: Arc<Texture>,
     pub mip_level: u32,
-    pub layer: u32,
+
+    /// For 3D textures, this field is a depth slice, otherwise, it is an array
+    /// layer. Unlike the primary initialization tracker, we _do_ track
+    /// individual discarded depth slices during encoding of a command buffer.
+    pub layer_or_depth_slice: u32,
 }
 
 pub(crate) type SurfacesInDiscardState = Vec<TextureSurfaceDiscard>;
@@ -33,9 +37,19 @@ pub(crate) struct CommandBufferTextureMemoryActions {
     /// The tracker actions that we need to be executed before the command
     /// buffer is executed.
     init_actions: Vec<TextureInitTrackerAction>,
-    /// All the discards that haven't been followed by init again within the
-    /// command buffer i.e. everything in this list resets the texture init
-    /// state *after* the command buffer execution
+    /// Tracks surfaces that were previously discarded within this command buffer.
+    ///
+    /// If a later pass reads from one of these surfaces, we must insert an immediate
+    /// clear operation in the command sequence. (Typically, memory initialization is done
+    /// in a dedicated pass prepended to the entire command buffer, but the discards we are
+    /// tracking here occur after that). Any discarded surfaces that are not reinitialized
+    /// prior to the end of the command buffer, will have their `initialization_status` set
+    /// to uninitialized at that point, except for depth slices, which must be reinitialized
+    /// prior to the end of the command buffer.
+    ///
+    /// We do a linear scan of the discarded surface list for _each_ initialization
+    /// action, i.e., we assume that most of the time there are no discarded surfaces.
+    /// If this list has more than a few items, performance will suffer.
     discards: Vec<TextureSurfaceDiscard>,
 }
 
@@ -56,6 +70,9 @@ impl CommandBufferTextureMemoryActions {
         &mut self,
         action: &TextureInitTrackerAction,
     ) -> SurfacesInDiscardState {
+        // Texture subresources from `self.discards` that were discarded earlier in this
+        // command buffer and which the present `action` requires be initialized. These
+        // require inline initialization, which will be done by `fixup_discarded_surfaces`.
         let mut immediately_necessary_clears = SurfacesInDiscardState::new();
 
         // Note that within a command buffer we may stack arbitrary memory init
@@ -79,7 +96,11 @@ impl CommandBufferTextureMemoryActions {
         let init_actions = &mut self.init_actions;
         self.discards.retain(|discarded_surface| {
             if discarded_surface.texture.is_equal(&action.texture)
-                && action.range.layer_range.contains(&discarded_surface.layer)
+                && discarded_surface.texture.desc.dimension != wgt::TextureDimension::D3
+                && action
+                    .range
+                    .layer_range
+                    .contains(&discarded_surface.layer_or_depth_slice)
                 && action
                     .range
                     .mip_range
@@ -91,15 +112,37 @@ impl CommandBufferTextureMemoryActions {
                     // Mark surface as implicitly initialized (this is relevant
                     // because it might have been uninitialized prior to
                     // discarding
+                    let layer = discarded_surface.layer_or_depth_slice;
                     init_actions.push(TextureInitTrackerAction {
                         texture: discarded_surface.texture.clone(),
                         range: TextureInitRange {
                             mip_range: discarded_surface.mip_level
                                 ..(discarded_surface.mip_level + 1),
-                            layer_range: discarded_surface.layer..(discarded_surface.layer + 1),
+                            layer_range: layer..(layer + 1),
                         },
                         kind: MemoryInitKind::ImplicitlyInitialized,
                     });
+                }
+                false
+            } else if discarded_surface.texture.is_equal(&action.texture)
+                && discarded_surface.texture.desc.dimension == wgt::TextureDimension::D3
+                && action
+                    .range
+                    .mip_range
+                    .contains(&discarded_surface.mip_level)
+            {
+                if let MemoryInitKind::NeedsInitializedMemory = action.kind {
+                    immediately_necessary_clears.push(discarded_surface.clone());
+
+                    // Init tracking of 3D textures is for mip levels only (not depth
+                    // slices). If a mip was uninitialized at the start of the
+                    // command buffer, we recorded an init action above. We don't need
+                    // to additionally record `ImplicitlyInitialized` for it here.
+                    // When the actual initialization commands are prepared in
+                    // [`Queue::submit`], `initialize_texture_memory` collects a list of any
+                    // slices remaining in `self.discards` and returns it, and they will be
+                    // reinitialized before the conclusion of the command buffer by
+                    // `initialize_discarded_depth_slices`.
                 }
                 false
             } else {
@@ -138,12 +181,22 @@ pub(crate) fn fixup_discarded_surfaces<InitIter: Iterator<Item = TextureSurfaceD
     snatch_guard: &SnatchGuard<'_>,
 ) {
     for init in inits {
+        let (layer_range, depth_slice) = if init.texture.desc.dimension == wgt::TextureDimension::D3
+        {
+            (0..1, Some(init.layer_or_depth_slice))
+        } else {
+            (
+                init.layer_or_depth_slice..(init.layer_or_depth_slice + 1),
+                None,
+            )
+        };
         clear_texture(
             &init.texture,
             TextureInitRange {
                 mip_range: init.mip_level..(init.mip_level + 1),
-                layer_range: init.layer..(init.layer + 1),
+                layer_range,
             },
+            depth_slice,
             encoder,
             texture_tracker,
             &device.alignments,
@@ -268,8 +321,9 @@ impl BakedCommands {
     ///
     /// Inserts all texture initializations that are going to be needed for
     /// executing the commands, and updates resource init states accordingly. Any
-    /// textures that are left discarded by this command buffer will be marked as
-    /// uninitialized.
+    /// non-3D textures that are left discarded by this command buffer will be marked as
+    /// uninitialized, and a list of any 3D depth slices is returned, to be reinitialized
+    /// just prior to the end of the command buffer.
     ///
     /// The caller is responsible for checking that any texture this may touch has not been
     /// destroyed, and must have done that check under the same snatch guard that is passed
@@ -285,8 +339,10 @@ impl BakedCommands {
         device_tracker: &mut DeviceTracker,
         device: &Device,
         snatch_guard: &SnatchGuard<'_>,
-    ) -> Result<(), ClearError> {
+    ) -> Result<SurfacesInDiscardState, ClearError> {
         profiling::scope!("initialize_texture_memory");
+
+        let mut depth_slice_discards = SurfacesInDiscardState::new();
 
         let mut ranges: Vec<TextureInitRange> = Vec::new();
         for texture_use in self.texture_memory_actions.drain_init_actions() {
@@ -324,6 +380,7 @@ impl BakedCommands {
                 let clear_result = clear_texture(
                     &texture_use.texture,
                     range,
+                    None,
                     self.encoder.raw.as_mut(),
                     &mut device_tracker.textures,
                     &device.alignments,
@@ -344,15 +401,80 @@ impl BakedCommands {
             }
         }
 
-        // Now that all buffers/textures have the proper init state for before
-        // cmdbuf start, we discard init states for textures it left discarded
-        // after its execution.
-        for surface_discard in self.texture_memory_actions.discards.iter() {
-            surface_discard
-                .texture
-                .initialization_status
-                .write()
-                .discard(surface_discard.mip_level, surface_discard.layer);
+        // Process any surfaces that remain in discarded state after
+        // the command buffer executes.
+        for surface_discard in self.texture_memory_actions.discards.drain(..) {
+            if surface_discard.texture.desc.dimension == wgt::TextureDimension::D3 {
+                // Depth slices are below the resolution of the init tracker, so
+                // collect a list of them to be initialized just prior to the
+                // end of the command buffer.
+                //
+                // We could optimize this by checking whether the entire mip is
+                // uninitialized (command buffer either did Clear+Discard when it was
+                // already uninitialized, or discarded every slice), and if so, ignore the
+                // pending discard, but it's not clear that happens enough for the
+                // optimization to be worth it.
+                depth_slice_discards.push(surface_discard);
+            } else {
+                // Anything else, record the discarded state in the initialization tracker.
+                surface_discard
+                    .texture
+                    .initialization_status
+                    .write()
+                    .discard(
+                        surface_discard.mip_level,
+                        surface_discard.layer_or_depth_slice,
+                    );
+            }
+        }
+
+        Ok(depth_slice_discards)
+    }
+
+    /// Reinitialize any depth slices that were discarded during the command buffer and not
+    /// subsequently reinitialized.
+    ///
+    /// This is necessary because the initialization tracker does not track the status of
+    /// individual depth slices.
+    ///
+    /// We do not optimize the case where _every_ depth slice of a 3D texture is discarded.
+    pub(crate) fn initialize_discarded_depth_slices(
+        &mut self,
+        discards: SurfacesInDiscardState,
+        device_tracker: &mut DeviceTracker,
+        device: &Device,
+        snatch_guard: &SnatchGuard<'_>,
+    ) -> Result<(), ClearError> {
+        for discard in discards {
+            assert!(
+                discard.texture.desc.dimension == wgt::TextureDimension::D3,
+                "unexpected texture dimension {:?} in initialize_discarded_depth_slices",
+                discard.texture.desc.dimension,
+            );
+            let range = TextureInitRange {
+                mip_range: discard.mip_level..(discard.mip_level + 1),
+                layer_range: 0..1,
+            };
+            let clear_result = clear_texture(
+                &discard.texture,
+                range,
+                Some(discard.layer_or_depth_slice),
+                self.encoder.raw.as_mut(),
+                &mut device_tracker.textures,
+                &device.alignments,
+                device.zero_buffer.as_ref(),
+                snatch_guard,
+                device.instance_flags,
+            );
+            // We panic on destroyed textures for symmetry with the main buffer
+            // and initialization pass. It should not happen, but supposing it
+            // did, it would also be fine to return the error and lose the
+            // device in queue submit.
+            if matches!(clear_result, Err(ClearError::DestroyedResource(_))) {
+                panic!("attempt to initialize a destroyed texture");
+            } else {
+                clear_result?;
+            }
         }
 
         Ok(())

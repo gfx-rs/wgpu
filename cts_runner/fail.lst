@@ -16,7 +16,6 @@ webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_t
 webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth24plus-stencil8";depthReadOnly=true;stencilReadOnly=false // https://github.com/gfx-rs/wgpu/issues/8705
 webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=false;stencilReadOnly=true // https://github.com/gfx-rs/wgpu/issues/8705
 webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=true;stencilReadOnly=false // https://github.com/gfx-rs/wgpu/issues/8705
-webgpu:api,operation,rendering,3d_texture_slices:* // https://github.com/gfx-rs/wgpu/issues/9455
 
 webgpu:api,validation,buffer,create:new_usages,* // 0%, deno_webgpu declares the GPU*Usage constants as static getters, which are non-enumerable, so the test sees no legal usage bits, https://github.com/denoland/deno/issues/33846
 webgpu:api,validation,buffer,mapping:* // crash

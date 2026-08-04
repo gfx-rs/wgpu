@@ -1142,32 +1142,78 @@ impl RenderPassInfo {
         store_op: StoreOp,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions,
         view: &TextureView,
+        depth_slice: Option<u32>,
         pending_discard_init_fixups: &mut SurfacesInDiscardState,
     ) {
+        match (
+            depth_slice,
+            view.parent.desc.dimension == wgt::TextureDimension::D3,
+        ) {
+            (Some(_), true) | (None, false) => {}
+            _ => unreachable!("3D textures, but not any other kind, must specify a depth slice"),
+        }
+        // 3D textures with more than one depth slice are a special case,
+        // because we don't track initialization status per slice.
+        let partial_z = view.parent.desc.dimension == wgt::TextureDimension::D3
+            && view
+                .parent
+                .desc
+                .mip_level_size(view.selector.mips.start)
+                .is_some_and(|dim| dim.depth_or_array_layers > 1);
+
         if matches!(load_op, LoadOp::Load) {
+            // Record the initialization action for the texture. Simultaneously, collect a
+            // list of any ranges of the texture that were discarded within the current
+            // command buffer, for initialization by `fixup_discarded_surfaces`.
+            // (The analogous case for texture copies is in `handle_texture_init`.)
+            //
+            // Even when the target is a depth slice of a 3D texture, this is an action
+            // for the entire mip. In most cases that is what we want (if there is any
+            // live data in the mip at the end of a command buffer, we must have the
+            // entire thing initialized). The exception is Load+Discard of one slice in an
+            // uninitialized mip. In that case, we could initialize only one slice, and then
+            // leave the entire mip uninitialized at the end of the command buffer. But we
+            // don't optimize that, because it is a lot of complexity for a case that
+            // doesn't seem very useful (if the render targets are only used transiently,
+            // why is it important that they are volume slices?).
             pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
                     texture: view.parent.clone(),
                     range: TextureInitRange::from(view),
-                    // Note that this is needed even if the target is discarded,
+                    // Note that this is needed for `Load` even if the target has `StoreOp::Discard`.
                     kind: MemoryInitKind::NeedsInitializedMemory,
                 },
             ));
         } else if store_op == StoreOp::Store {
-            // Clear + Store
-            texture_memory_actions.register_implicit_init(
-                &view.parent,
-                TextureInitRange::from(view),
-            );
+            if partial_z {
+                // We must initialize the entire mip due to init tracking granularity.
+                pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
+                    &TextureInitTrackerAction {
+                        texture: view.parent.clone(),
+                        range: TextureInitRange::from(view),
+                        kind: MemoryInitKind::NeedsInitializedMemory,
+                    },
+                ));
+            } else {
+                // Clear + Store
+                texture_memory_actions
+                    .register_implicit_init(&view.parent, TextureInitRange::from(view));
+            }
         }
         if store_op == StoreOp::Discard {
-            // the discard happens at the *end* of a pass, but recording the
-            // discard right away be alright since the texture can't be used
-            // during the pass anyways
+            // The discard happens at the *end* of a pass, but recording the
+            // discard right away is fine, since attachments can't be used
+            // for any other purpose during the pass.
+            //
+            // Discards are usually deferred as long as possible (i.e. until the
+            // next use of the subresource). But discarded depth slices of 3D
+            // textures will be reinitialized at the end of the command buffer
+            // (by [`BakedCommands::initialize_discarded_depth_slices`]),
+            // because the primary init tracker does not track individual slices.
             texture_memory_actions.discard(TextureSurfaceDiscard {
                 texture: view.parent.clone(),
                 mip_level: view.selector.mips.start,
-                layer: view.selector.layers.start,
+                layer_or_depth_slice: depth_slice.unwrap_or(view.selector.layers.start),
             });
         }
     }
@@ -1292,6 +1338,7 @@ impl RenderPassInfo {
                     at.depth.store_op(),
                     texture_memory_actions,
                     view,
+                    None,
                     pending_discard_init_fixups,
                 );
             } else if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
@@ -1300,6 +1347,7 @@ impl RenderPassInfo {
                     at.stencil.store_op(),
                     texture_memory_actions,
                     view,
+                    None,
                     pending_discard_init_fixups,
                 );
             } else {
@@ -1365,7 +1413,7 @@ impl RenderPassInfo {
                     texture_memory_actions.discard(TextureSurfaceDiscard {
                         texture: view.parent.clone(),
                         mip_level: view.selector.mips.start,
-                        layer: view.selector.layers.start,
+                        layer_or_depth_slice: view.selector.layers.start,
                     });
                 }
             }
@@ -1520,6 +1568,7 @@ impl RenderPassInfo {
                 at.store_op,
                 texture_memory_actions,
                 color_view,
+                at.depth_slice,
                 pending_discard_init_fixups,
             );
             render_attachments
@@ -2626,6 +2675,8 @@ pub(super) fn encode_render_pass(
             ))
             .map_pass_err(pass_scope)?;
 
+        // If this pass reads any surfaces that were discarded by a previous
+        // pass in the same command buffer, initialize them.
         fixup_discarded_surfaces(
             pending_discard_init_fixups.into_iter(),
             transit,
