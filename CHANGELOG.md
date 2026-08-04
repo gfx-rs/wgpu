@@ -99,6 +99,10 @@ Bottom level categories:
 - Replace embedded NUL characters with `?` when writing debug strings to SPIR-V. By @andyleiserson in [#9904](https://github.com/gfx-rs/wgpu/pull/9904).
 - Fix invalid HLSL generated for `textureSampleLevel` with non-2D textures. By @mvanhorn in [#9717](https://github.com/gfx-rs/wgpu/issues/9717).
 
+#### DX12
+
+- Make sure padding bytes are 0 in the destination buffer after a `copy_texture_to_buffer` when `UnrestrictedBufferTextureCopyPitchSupported` is not available. By @teoxoy in [#10005](https://github.com/gfx-rs/wgpu/pull/10005).
+
 #### Vulkan
 
 - Add OpenHarmony surface support via `VK_OHOS_surface`. Previously the Vulkan backend could not create a surface on OpenHarmony, leaving GLES as the only usable backend. By @ozongzi in [#9908](https://github.com/gfx-rs/wgpu/pull/9908).
