@@ -171,6 +171,15 @@ impl FailureCase {
         vec![f(FailureCase::molten_vk()), f(FailureCase::kosmic_krisp())]
     }
 
+    /// Tests running on macOS (both Vulkan and Metal).
+    pub fn mac(f: impl Fn(FailureCase) -> FailureCase) -> Vec<Self> {
+        vec![
+            f(FailureCase::molten_vk()),
+            f(FailureCase::kosmic_krisp()),
+            f(FailureCase::backend(wgpu::Backends::METAL)),
+        ]
+    }
+
     pub fn lvp_poison_memory(message: &'static str) -> Self {
         if let Ok("true") = std::env::var("LVP_POISON_MEMORY").as_deref() {
             FailureCase {

@@ -2,8 +2,7 @@ use std::num::NonZeroU64;
 
 use wgpu::{util::DeviceExt, BufferUsages, PollType};
 use wgpu_test::{
-    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
-    TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -256,11 +255,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MIPMAP_SAMPLER: GpuTestConfiguration =
 
 #[apply(gpu_test!)]
 static BIND_GROUP_WITH_MAX_BINDING_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .limits(wgpu::Limits::downlevel_defaults())
-            .expect_fail(FailureCase::kosmic_krisp()), // https://github.com/gfx-rs/wgpu/issues/9187
-    )
+    .parameters(TestParameters::default().limits(wgpu::Limits::downlevel_defaults()))
     .run_async(|ctx| async move {
         let (device, queue) = ctx
             .adapter
