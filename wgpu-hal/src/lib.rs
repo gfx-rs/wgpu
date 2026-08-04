@@ -670,22 +670,14 @@ pub trait Instance: Sized + WasmNotSendSync {
     ) -> Vec<ExposedAdapter<Self::A>>;
 
     /// Expose the single adapter that best matches `power_preference` and
-    /// `force_fallback_adapter`, creating backend resources for as few
-    /// adapters as possible.
+    /// `force_fallback_adapter`, exposing as few adapters as possible.
     ///
-    /// The default returns `None`, which callers treat as "no lazy selection
-    /// available" and answer with a full [`Self::enumerate_adapters`] pass.
-    /// Backends override this when they can rank adapters from cheap native
-    /// descriptors before paying full exposure — on DX12, exposing an adapter
-    /// means creating an `ID3D12Device`, and driver initialization can take
-    /// seconds per adapter on machines with more than one GPU.
-    ///
-    /// Overrides must return an adapter that [`Self::enumerate_adapters`]
-    /// would also expose, selected consistently with how callers rank a full
-    /// enumeration for these options (`force_fallback_adapter` restricts the
-    /// choice to [`wgt::DeviceType::Cpu`] adapters). Callers re-validate the
-    /// returned adapter and fall back to full enumeration when it is
-    /// unsuitable, so an override may ignore `surface_hint`.
+    /// The default `None` means no lazy selection is available and the caller
+    /// falls back to [`Self::enumerate_adapters`]. Overrides must select
+    /// consistently with how callers rank a full enumeration
+    /// (`force_fallback_adapter` restricts the choice to
+    /// [`wgt::DeviceType::Cpu`]). The caller re-validates the result, so
+    /// `surface_hint` may be ignored.
     unsafe fn request_adapter(
         &self,
         _power_preference: wgt::PowerPreference,
