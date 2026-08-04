@@ -41,6 +41,13 @@ pub trait DynInstance: DynResource {
         &self,
         surface_hint: Option<&dyn DynSurface>,
     ) -> Vec<DynExposedAdapter>;
+
+    unsafe fn request_adapter(
+        &self,
+        power_preference: wgt::PowerPreference,
+        force_fallback_adapter: bool,
+        surface_hint: Option<&dyn DynSurface>,
+    ) -> Option<DynExposedAdapter>;
 }
 
 impl<I: Instance + DynResource> DynInstance for I {
@@ -67,5 +74,16 @@ impl<I: Instance + DynResource> DynInstance for I {
                 capabilities: exposed.capabilities,
             })
             .collect()
+    }
+
+    unsafe fn request_adapter(
+        &self,
+        power_preference: wgt::PowerPreference,
+        force_fallback_adapter: bool,
+        surface_hint: Option<&dyn DynSurface>,
+    ) -> Option<DynExposedAdapter> {
+        let surface_hint = surface_hint.map(|s| s.expect_downcast_ref());
+        unsafe { I::request_adapter(self, power_preference, force_fallback_adapter, surface_hint) }
+            .map(Into::into)
     }
 }
