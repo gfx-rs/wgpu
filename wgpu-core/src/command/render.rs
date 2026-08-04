@@ -1148,7 +1148,7 @@ impl RenderPassInfo {
             pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
                     texture: view.parent.clone(),
-                    range: TextureInitRange::from(view.selector.clone()),
+                    range: TextureInitRange::from(view),
                     // Note that this is needed even if the target is discarded,
                     kind: MemoryInitKind::NeedsInitializedMemory,
                 },
@@ -1157,7 +1157,7 @@ impl RenderPassInfo {
             // Clear + Store
             texture_memory_actions.register_implicit_init(
                 &view.parent,
-                TextureInitRange::from(view.selector.clone()),
+                TextureInitRange::from(view),
             );
         }
         if store_op == StoreOp::Discard {
@@ -1331,7 +1331,7 @@ impl RenderPassInfo {
                     pending_discard_init_fixups.extend(
                         texture_memory_actions.register_init_action(&TextureInitTrackerAction {
                             texture: view.parent.clone(),
-                            range: TextureInitRange::from(view.selector.clone()),
+                            range: TextureInitRange::from(view.as_ref()),
                             kind: MemoryInitKind::NeedsInitializedMemory,
                         }),
                     );
@@ -1349,7 +1349,7 @@ impl RenderPassInfo {
                     if !need_init_beforehand {
                         texture_memory_actions.register_implicit_init(
                             &view.parent,
-                            TextureInitRange::from(view.selector.clone()),
+                            TextureInitRange::from(view.as_ref()),
                         );
                     }
                     divergent_discarded_depth_stencil_aspect = Some((
@@ -1587,7 +1587,7 @@ impl RenderPassInfo {
 
                 texture_memory_actions.register_implicit_init(
                     &resolve_view.parent,
-                    TextureInitRange::from(resolve_view.selector.clone()),
+                    TextureInitRange::from(resolve_view.as_ref()),
                 );
                 render_attachments
                     .push(resolve_view.to_render_attachment(wgt::TextureUses::COLOR_TARGET));
