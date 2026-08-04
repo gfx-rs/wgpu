@@ -156,6 +156,7 @@ impl Queue {
                     mip_range: 0..1,
                     layer_range: 0..1,
                 },
+                None,
                 encoder,
                 &mut trackers.textures,
                 &device.alignments,
@@ -1089,6 +1090,7 @@ impl Queue {
                         mip_range: destination.mip_level..(destination.mip_level + 1),
                         layer_range,
                     },
+                    None,
                     encoder,
                     &mut trackers.textures,
                     &self.device.alignments,
@@ -1377,6 +1379,7 @@ impl Queue {
                         mip_range: destination.mip_level..(destination.mip_level + 1),
                         layer_range,
                     },
+                    None,
                     encoder,
                     &mut trackers.textures,
                     &self.device.alignments,
@@ -1620,7 +1623,7 @@ impl Queue {
                 // this stage:
                 //  - `hal` command encoding errors. These produce device loss in
                 //    `handle_hal_error`, independent of what we do here.
-                //  - Errors from `initialize_texture_memory`. The error cases that
+                //  - Errors from texture initialization. The error cases that
                 //    can actually occur should also be encoder errors, but we map
                 //    everything to device loss, just in case.
                 lose_device_on_error = true;
@@ -1641,15 +1644,18 @@ impl Queue {
 
                     baked.initialize_buffer_memory(&mut trackers, &submission.snatch_guard);
 
-                    if let Err(e) = baked.initialize_texture_memory(
+                    let depth_slice_discards = match baked.initialize_texture_memory(
                         &mut trackers,
                         &self.device,
                         &submission.snatch_guard,
                     ) {
-                        break 'error Err(QueueSubmitError::CommandEncoder(
-                            CommandEncoderError::Clear(e),
-                        ));
-                    }
+                        Ok(discards) => discards,
+                        Err(e) => {
+                            break 'error Err(QueueSubmitError::CommandEncoder(
+                                CommandEncoderError::Clear(e),
+                            ));
+                        }
+                    };
 
                     //Note: stateless trackers are not merged:
                     // device already knows these resources exist.
@@ -1664,16 +1670,28 @@ impl Queue {
                         break 'error Err(e.into());
                     }
 
-                    // Transition surface textures into `Present` state.
-                    // Note: we could technically do it after all of the command buffers,
-                    // but here we have a command encoder by hand, so it's easier to use it.
-                    if !used_surface_textures.is_empty() {
+                    if !depth_slice_discards.is_empty() || !used_surface_textures.is_empty() {
                         if let Err(e) = baked.encoder.open_pass(hal_label(
-                            Some("(wgpu internal) Present"),
+                            Some("(wgpu internal) Finalize"),
                             self.device.instance_flags,
                         )) {
                             break 'error Err(e.into());
                         }
+
+                        if let Err(e) = baked.initialize_discarded_depth_slices(
+                            depth_slice_discards,
+                            &mut trackers,
+                            &self.device,
+                            &submission.snatch_guard,
+                        ) {
+                            break 'error Err(QueueSubmitError::CommandEncoder(
+                                CommandEncoderError::Clear(e),
+                            ));
+                        }
+
+                        // Transition surface textures into `Present` state.
+                        // Note: we could technically do it after all of the command buffers,
+                        // but here we have a command encoder by hand, so it's easier to use it.
                         let texture_barriers = trackers
                             .textures
                             .set_from_usage_scope_and_drain_transitions(
