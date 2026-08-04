@@ -11,33 +11,24 @@ const TEST_COUNT: u32 = 37;
 
 #[apply(gpu_test!)]
 static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(wgpu::Features::SUBGROUP)
-            .limits(wgpu::Limits::downlevel_defaults())
-            // Expect metal to fail on tests involving operations in divergent control flow
-            //
-            // Newlines are included in the panic message to ensure that _additional_ failures
-            // are not matched against.
-            .expect_fail(
-                wgpu_test::FailureCase::molten_vk()
-                    // 26.0 fails only test 28, and not on thread 0
-                    .panic("thread 1 failed tests: 28,\n")
-                    // 14.3 fails 27 and 28
-                    .panic("thread 0 failed tests: 27,\nthread 1 failed tests: 27, 28,\n")
-                    // Prior versions fail 27, 28, and 29
-                    .panic("thread 0 failed tests: 27, 29,\nthread 1 failed tests: 27, 28, 29,\n"),
-            )
-            .expect_fail(
-                wgpu_test::FailureCase::backend(wgpu::Backends::METAL)
-                    // 26.0 fails only test 28, and not on thread 0
-                    .panic("thread 1 failed tests: 28,\n")
-                    // 14.3 fails 27 and 28
-                    .panic("thread 0 failed tests: 27,\nthread 1 failed tests: 27, 28,\n")
-                    // Prior versions fail 27, 28, and 29
-                    .panic("thread 0 failed tests: 27, 29,\nthread 1 failed tests: 27, 28, 29,\n"),
-            ),
-    )
+    .parameters(TestParameters {
+        required_features: wgpu::Features::SUBGROUP,
+        required_limits: wgpu::Limits::downlevel_defaults(),
+        // Expect metal to fail on tests involving operations in divergent control flow
+        //
+        // Newlines are included in the panic message to ensure that _additional_ failures
+        // are not matched against.
+        failures: wgpu_test::FailureCase::mac(|case| {
+            case
+                // 26.0 fails only test 28, and not on thread 0
+                .panic("thread 1 failed tests: 28,\n")
+                // 14.3 fails 27 and 28
+                .panic("thread 0 failed tests: 27,\nthread 1 failed tests: 27, 28,\n")
+                // Prior versions fail 27, 28, and 29
+                .panic("thread 0 failed tests: 27, 29,\nthread 1 failed tests: 27, 28, 29,\n")
+        }),
+        ..Default::default()
+    })
     .run_sync(|ctx| {
         let device = &ctx.device;
 
