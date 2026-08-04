@@ -16,7 +16,6 @@ webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_t
 webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth24plus-stencil8";depthReadOnly=true;stencilReadOnly=false // https://github.com/gfx-rs/wgpu/issues/8705
 webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=false;stencilReadOnly=true // https://github.com/gfx-rs/wgpu/issues/8705
 webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=true;stencilReadOnly=false // https://github.com/gfx-rs/wgpu/issues/8705
-webgpu:api,operation,rendering,3d_texture_slices:* // https://github.com/gfx-rs/wgpu/issues/9455
 
 webgpu:api,validation,buffer,create:new_usages,* // https://github.com/denoland/deno/issues/33846; possibly issues with wgpu extensions
 webgpu:api,validation,buffer,mapping:* // crash
