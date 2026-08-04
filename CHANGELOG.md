@@ -80,7 +80,7 @@ Bottom level categories:
 
 #### General
 
-- `Instance::request_adapter` no longer exposes every adapter in the system to select one. Backends can answer a request from cheap native descriptors (`wgpu_hal::Instance::request_adapter`), and the DX12 backend does: adapters are ranked via `IDXGIFactory6::EnumAdapterByGpuPreference` and only the selected adapter gets an `ID3D12Device` created. On machines with more than one GPU (hybrid-graphics laptops, desktops with an iGPU) this removes seconds of per-adapter driver initialization from startup. On DX12 systems with several adapters of the same device type, `LowPower`/`HighPerformance` ties now resolve in DXGI's GPU-preference order instead of enumeration order. By @AdrianEddy in [#0000](https://github.com/gfx-rs/wgpu/pull/0000).
+- `Instance::request_adapter` no longer exposes every adapter in the system to select one. Backends can answer a request from cheap native descriptors (`wgpu_hal::Instance::request_adapter`), and the DX12 backend does: adapters are ranked via `IDXGIFactory6::EnumAdapterByGpuPreference` and only the selected adapter gets an `ID3D12Device` created. On machines with more than one GPU (hybrid-graphics laptops, desktops with an iGPU) this removes seconds of per-adapter driver initialization from startup. On DX12 systems with several adapters of the same device type, `LowPower`/`HighPerformance` ties now resolve in DXGI's GPU-preference order instead of enumeration order. By @AdrianEddy in [#10011](https://github.com/gfx-rs/wgpu/pull/10011).
 
 ### Bug Fixes
 
