@@ -1,0 +1,6 @@
+capabilities = "MEMORY_DECORATION_COHERENT | MEMORY_DECORATION_VOLATILE"
+targets = "SPIRV"
+
+[spv]
+version = [1, 3]
+use_vulkan_memory_model = true

@@ -44,6 +44,10 @@ Bottom level categories:
 
 ### Added/New Features
 
+#### naga
+
+- The SPIR-V backend now emits spec-compliant output under the Vulkan memory model: storage and workgroup accesses carry `NonPrivatePointer` with availability/visibility scopes, barrier semantics include `MakeAvailable`/`MakeVisible`, atomics and storage barriers use `QueueFamily` scope instead of `Device`, and the `Coherent`/`Volatile` decorations (forbidden by the model) are replaced by per-access memory operands. The model is declared whenever the module requires it (cooperative matrices) or when the new `spv::Options::use_vulkan_memory_model` option requests it. By @kvark in [#8805](https://github.com/gfx-rs/wgpu/issues/8805) and [#1545](https://github.com/gfx-rs/wgpu/issues/1545).
+
 #### General
 
 - Support the `wasm64-unknown-unknown` target for the web backend. Building for wasm64 requires a nightly toolchain with `-Z build-std=std,panic_abort`. By @nickbabcock in [#9836](https://github.com/gfx-rs/wgpu/pull/9836).

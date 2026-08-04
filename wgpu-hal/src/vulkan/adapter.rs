@@ -2881,6 +2881,10 @@ impl super::Adapter {
                 mesh_shader_primitive_indices_clamp: true,
                 trace_ray_argument_validation: true,
                 emit_int_div_checks: true,
+                // Modules that require the Vulkan memory model (cooperative
+                // matrices) still declare it; opting in globally would add
+                // per-access memory operands to every shader.
+                use_vulkan_memory_model: false,
             }
         };
 

@@ -186,6 +186,15 @@ pub struct ExpressionInfo {
 }
 
 impl ExpressionInfo {
+    /// The global variable this expression is a pointer into, if any.
+    ///
+    /// This is `None` unless this expression is either a `GlobalVariable`,
+    /// or an `Access` or `AccessIndex` that ultimately refers to some part
+    /// of a global.
+    pub const fn assignable_global(&self) -> Option<Handle<crate::GlobalVariable>> {
+        self.assignable_global
+    }
+
     const fn new() -> Self {
         ExpressionInfo {
             uniformity: Uniformity::new(),

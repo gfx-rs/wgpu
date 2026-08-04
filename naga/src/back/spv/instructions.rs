@@ -494,21 +494,26 @@ impl super::Instruction {
         instruction
     }
 
+    fn add_memory_operands(&mut self, memory_operands: Option<super::MemoryOperands>) {
+        if let Some(operands) = memory_operands {
+            self.add_operand(operands.access.bits());
+            if let Some(scope_id) = operands.scope_id {
+                self.add_operand(scope_id);
+            }
+        }
+    }
+
     pub(super) fn load(
         result_type_id: Word,
         id: Word,
         pointer_id: Word,
-        memory_access: Option<spirv::MemoryAccess>,
+        memory_operands: Option<super::MemoryOperands>,
     ) -> Self {
         let mut instruction = Self::new(Op::Load);
         instruction.set_type(result_type_id);
         instruction.set_result(id);
         instruction.add_operand(pointer_id);
-
-        if let Some(memory_access) = memory_access {
-            instruction.add_operand(memory_access.bits());
-        }
-
+        instruction.add_memory_operands(memory_operands);
         instruction
     }
 
@@ -531,16 +536,12 @@ impl super::Instruction {
     pub(super) fn store(
         pointer_id: Word,
         value_id: Word,
-        memory_access: Option<spirv::MemoryAccess>,
+        memory_operands: Option<super::MemoryOperands>,
     ) -> Self {
         let mut instruction = Self::new(Op::Store);
         instruction.add_operand(pointer_id);
         instruction.add_operand(value_id);
-
-        if let Some(memory_access) = memory_access {
-            instruction.add_operand(memory_access.bits());
-        }
-
+        instruction.add_memory_operands(memory_operands);
         instruction
     }
 
@@ -1309,6 +1310,7 @@ impl super::Instruction {
         pointer_id: Word,
         layout_id: Word,
         stride_id: Word,
+        memory_operands: Option<super::MemoryOperands>,
     ) -> Self {
         let mut instruction = Self::new(Op::CooperativeMatrixLoadKHR);
         instruction.set_type(result_type_id);
@@ -1316,14 +1318,22 @@ impl super::Instruction {
         instruction.add_operand(pointer_id);
         instruction.add_operand(layout_id);
         instruction.add_operand(stride_id);
+        instruction.add_memory_operands(memory_operands);
         instruction
     }
-    pub(super) fn coop_store(id: Word, pointer_id: Word, layout_id: Word, stride_id: Word) -> Self {
+    pub(super) fn coop_store(
+        id: Word,
+        pointer_id: Word,
+        layout_id: Word,
+        stride_id: Word,
+        memory_operands: Option<super::MemoryOperands>,
+    ) -> Self {
         let mut instruction = Self::new(Op::CooperativeMatrixStoreKHR);
         instruction.add_operand(pointer_id);
         instruction.add_operand(id);
         instruction.add_operand(layout_id);
         instruction.add_operand(stride_id);
+        instruction.add_memory_operands(memory_operands);
         instruction
     }
     pub(super) fn coop_mul_add(result_type_id: Word, id: Word, a: Word, b: Word, c: Word) -> Self {

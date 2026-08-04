@@ -1,12 +1,12 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 45
+; Bound: 47
 OpCapability Shader
-OpCapability CooperativeMatrixKHR
 OpCapability VulkanMemoryModel
-OpExtension "SPV_KHR_cooperative_matrix"
+OpCapability CooperativeMatrixKHR
 OpExtension "SPV_KHR_vulkan_memory_model"
+OpExtension "SPV_KHR_cooperative_matrix"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical Vulkan
 OpEntryPoint GLCompute %24 "main" %14 %17 %20
@@ -43,7 +43,9 @@ OpMemberDecorate %21 0 Offset 0
 %30 = OpConstantNull  %12
 %32 = OpConstantNull  %12
 %34 = OpTypePointer StorageBuffer %3
-%35 = OpConstant  %6  4
+%36 = OpTypeInt 32 1
+%35 = OpConstant  %36  2
+%37 = OpConstant  %6  4
 %24 = OpFunction  %2  None %25
 %23 = OpLabel
 %28 = OpVariable  %29  Function %30
@@ -51,18 +53,18 @@ OpMemberDecorate %21 0 Offset 0
 %27 = OpAccessChain  %26  %20 %8
 OpBranch %33
 %33 = OpLabel
-%36 = OpAccessChain  %34  %27 %35
-%37 = OpCooperativeMatrixLoadKHR  %12  %36 %10 %7
-OpStore %28 %37
-%38 = OpLoad  %4  %14
-%39 = OpLoad  %9  %17
-%40 = OpLoad  %12  %28
-%41 = OpCooperativeMatrixMulAddKHR  %12  %38 %39 %40
-OpStore %31 %41
-%42 = OpLoad  %12  %31
-%43 = OpAccessChain  %34  %27 %8
-OpCooperativeMatrixStoreKHR %43 %42 %10 %7
+%38 = OpAccessChain  %34  %27 %37
+%39 = OpCooperativeMatrixLoadKHR  %12  %38 %10 %7 MakePointerVisible|NonPrivatePointer %35
+OpStore %28 %39
+%40 = OpLoad  %4  %14
+%41 = OpLoad  %9  %17
+%42 = OpLoad  %12  %28
+%43 = OpCooperativeMatrixMulAddKHR  %12  %40 %41 %42
+OpStore %31 %43
 %44 = OpLoad  %12  %31
-OpStore %28 %44
+%45 = OpAccessChain  %34  %27 %8
+OpCooperativeMatrixStoreKHR %45 %44 %10 %7 MakePointerAvailable|NonPrivatePointer %35
+%46 = OpLoad  %12  %31
+OpStore %28 %46
 OpReturn
 OpFunctionEnd

@@ -893,6 +893,33 @@ impl BlockContext<'_> {
             .get_constant_scalar(crate::Literal::I32(scope as _))
     }
 
+    /// Memory decorations of the global variable `pointer` refers into,
+    /// or empty if the pointer cannot be traced back to a global.
+    fn memory_decorations_for(
+        &self,
+        pointer: Handle<crate::Expression>,
+    ) -> crate::MemoryDecorations {
+        match self.fun_info[pointer].assignable_global() {
+            Some(handle) => self.ir_module.global_variables[handle].memory_decorations,
+            None => crate::MemoryDecorations::empty(),
+        }
+    }
+
+    /// Memory operands for a cooperative matrix load or store through `pointer`.
+    fn coop_memory_operands(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        is_load: bool,
+    ) -> Option<MemoryOperands> {
+        let space = self.fun_info[pointer]
+            .ty
+            .inner_with(&self.ir_module.types)
+            .pointer_space()?;
+        let decorations = self.memory_decorations_for(pointer);
+        self.writer
+            .access_memory_operands(space, decorations, is_load)
+    }
+
     fn get_pointer_type_id(&mut self, base: Word, class: spirv::StorageClass) -> Word {
         self.writer.get_pointer_type_id(base, class)
     }
@@ -915,6 +942,18 @@ pub struct Std140CompatTypeInfo {
     /// For structs, a mapping of Naga IR struct member indices to the indices
     /// used in the generated SPIR-V. For non-struct types this will be empty.
     member_indices: Vec<u32>,
+}
+
+/// Memory operands attached to a load or store instruction.
+///
+/// Under the Vulkan memory model, non-atomic accesses to memory that other
+/// invocations can observe carry `NonPrivatePointer` together with a
+/// `MakePointerAvailable` (stores) or `MakePointerVisible` (loads) scope.
+#[derive(Clone, Copy, Debug)]
+struct MemoryOperands {
+    access: spirv::MemoryAccess,
+    /// Scope id operand required by `MakePointerAvailable`/`MakePointerVisible`.
+    scope_id: Option<Word>,
 }
 
 #[expect(missing_debug_implementations, reason = "would be way too verbose?")]
@@ -946,6 +985,13 @@ pub struct Writer {
     force_loop_bounding: bool,
     use_storage_input_output_16: bool,
     emit_int_div_checks: bool,
+    /// See [`Options::use_vulkan_memory_model`].
+    use_vulkan_memory_model: bool,
+    /// Whether the module being written declares the Vulkan memory model:
+    /// either requested through the options, or required by a capability the
+    /// module uses. Decided up front in [`Writer::write`] so that memory
+    /// operands can be emitted consistently throughout the module.
+    vulkan_memory_model: bool,
     void_type: Word,
     tuple_of_u32s_ty_id: Option<Word>,
     //TODO: convert most of these into vectors, addressable by handle indices
@@ -1117,6 +1163,22 @@ pub struct Options<'a> {
     /// implementation-defined results when the divisor is zero. Appropriate
     /// for compute shaders where the developer guarantees non-zero divisors.
     pub emit_int_div_checks: bool,
+
+    /// If true, declare the Vulkan memory model
+    /// (`SPV_KHR_vulkan_memory_model`) instead of GLSL450.
+    ///
+    /// The Vulkan memory model is also declared, regardless of this option,
+    /// whenever the module requires a capability that depends on it (for
+    /// example cooperative matrices). Under the Vulkan memory model, the
+    /// writer annotates storage and workgroup accesses with the memory
+    /// operands the model requires (`NonPrivatePointer` with availability or
+    /// visibility scopes) and widens barrier semantics with
+    /// `MakeAvailable`/`MakeVisible`; the `Coherent` and `Volatile`
+    /// decorations, which the model forbids, are replaced by per-access
+    /// operands.
+    ///
+    /// Requires the device to enable the `vulkanMemoryModel` feature.
+    pub use_vulkan_memory_model: bool,
 }
 
 impl Default for Options<'_> {
@@ -1143,6 +1205,7 @@ impl Default for Options<'_> {
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,
             emit_int_div_checks: true,
+            use_vulkan_memory_model: false,
         }
     }
 }
