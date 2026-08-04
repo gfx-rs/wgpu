@@ -181,6 +181,20 @@ impl Texture {
     pub fn usage(&self) -> TextureUsages {
         self.inner.usage()
     }
+
+    /// Marks this texture's contents as already initialized, skipping wgpu's
+    /// lazy zero-initialization of it.
+    ///
+    /// # Safety
+    ///
+    /// The entire contents of the texture must already be initialized, e.g. by
+    /// writing to it through the handle returned by [`Texture::as_hal`].
+    #[cfg(wgpu_core)]
+    pub unsafe fn mark_externally_initialized(&self) {
+        if let Some(texture) = self.inner.as_core_opt() {
+            unsafe { texture.context.texture_mark_externally_initialized(texture) };
+        }
+    }
 }
 
 /// Describes a [`Texture`].

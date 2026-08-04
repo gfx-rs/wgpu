@@ -320,6 +320,17 @@ impl Global {
         hub.textures.remove(texture_id)
     }
 
+    /// # Safety
+    ///
+    /// The entire contents of the texture must already be initialized.
+    pub unsafe fn texture_mark_externally_initialized(&self, texture_id: id::TextureId) {
+        let hub = &self.hub.borrow();
+
+        let texture = hub.textures.get(texture_id);
+
+        unsafe { texture.mark_externally_initialized() };
+    }
+
     pub fn texture_create_view(
         &self,
         texture_id: id::TextureId,

@@ -87,6 +87,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         VERTEX_BUFFER_TAIL_INIT_MAP_WRITE_MAPPED_AT_CREATION,
         COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_ROW_PADDING_INIT,
         COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_IMAGE_PADDING_INIT,
+        MARK_EXTERNALLY_INITIALIZED_SKIPS_LAZY_CLEAR,
     ]);
 }
 
@@ -2823,4 +2824,192 @@ async fn test_copy_texture_to_buffer_padding_init(
         data.iter().all(|&byte| byte == 0),
         "the destination buffer of copies from a never-written texture is not all zero",
     );
+}
+
+#[apply(gpu_test!)]
+static MARK_EXTERNALLY_INITIALIZED_SKIPS_LAZY_CLEAR: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            match ctx.adapter_info.backend {
+                #[cfg(any(
+                    target_os = "windows",
+                    target_os = "linux",
+                    target_os = "android",
+                    target_os = "freebsd"
+                ))]
+                Backend::Vulkan => {
+                    check_mark_externally_initialized::<hal::vulkan::Api>(&ctx).await;
+                }
+                #[cfg(target_vendor = "apple")]
+                Backend::Metal => {
+                    check_mark_externally_initialized::<hal::metal::Api>(&ctx).await;
+                }
+                #[cfg(target_os = "windows")]
+                Backend::Dx12 => {
+                    check_mark_externally_initialized::<hal::dx12::Api>(&ctx).await;
+                }
+                other => {
+                    // This test pokes at raw hal texture state, which is only
+                    // exercised above for the desktop-native backends.
+                    log::info!("Skipping mark_externally_initialized test on {other:?}");
+                }
+            }
+        });
+
+#[cfg(any(
+    target_os = "windows",
+    target_os = "linux",
+    target_os = "android",
+    target_os = "freebsd",
+    target_vendor = "apple"
+))]
+async fn check_mark_externally_initialized<A: hal::Api>(ctx: &TestingContext) {
+    check_mark_externally_initialized_case::<A>(ctx, false).await;
+    check_mark_externally_initialized_case::<A>(ctx, true).await;
+}
+
+#[cfg(any(
+    target_os = "windows",
+    target_os = "linux",
+    target_os = "android",
+    target_os = "freebsd",
+    target_vendor = "apple"
+))]
+async fn check_mark_externally_initialized_case<A: hal::Api>(ctx: &TestingContext, mark: bool) {
+    use core::iter;
+    use wgpu::hal::{CommandEncoder as _, Device as _};
+
+    const SENTINEL: u8 = 0xAB;
+    // `Rgba8Unorm` at this width gives exactly `COPY_BYTES_PER_ROW_ALIGNMENT` bytes per
+    // row, so the raw hal copy below needs no extra row padding.
+    let size = Extent3d {
+        width: COPY_BYTES_PER_ROW_ALIGNMENT / 4,
+        height: 4,
+        depth_or_array_layers: 1,
+    };
+    let bytes_per_row = size.width * 4;
+    let buffer_size = u64::from(bytes_per_row * size.height);
+
+    let texture = ctx.device.create_texture(&TextureDescriptor {
+        label: Some("mark_externally_initialized target"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba8Unorm,
+        usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+
+    // Write a non-zero pattern into the texture through its raw hal handle, entirely
+    // bypassing wgpu-core's command recording (and thus its init tracking) for the
+    // texture. This simulates e.g. a video decoder writing into the texture through
+    // native driver APIs.
+    //
+    // SAFETY: `hal_device`, `hal_texture`, and `raw_encoder` are all obtained from the
+    // same wgpu `Device`, and are only used to write and destroy resources not tracked
+    // by wgpu-core.
+    unsafe {
+        let hal_device = ctx.device.as_hal::<A>().expect("adapter backend mismatch");
+        let hal_texture = texture.as_hal::<A>().expect("adapter backend mismatch");
+
+        let staging_buffer = hal_device
+            .create_buffer(&hal::BufferDescriptor {
+                label: Some("mark_externally_initialized staging"),
+                size: buffer_size,
+                usage: wgt::BufferUses::MAP_WRITE | wgt::BufferUses::COPY_SRC,
+                memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
+            })
+            .expect("failed to create staging buffer");
+        {
+            let mapping = hal_device
+                .map_buffer(&staging_buffer, 0..buffer_size)
+                .expect("failed to map staging buffer");
+            core::ptr::write_bytes(mapping.ptr.as_ptr(), SENTINEL, buffer_size as usize);
+            if !mapping.is_coherent {
+                hal_device.flush_mapped_ranges(&staging_buffer, iter::once(0..buffer_size));
+            }
+            hal_device.unmap_buffer(&staging_buffer);
+        }
+
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+        encoder.as_hal_mut::<A, _, ()>(|raw_encoder| {
+            let raw_encoder = raw_encoder.expect("adapter backend mismatch");
+            raw_encoder.transition_textures(iter::once(hal::TextureBarrier {
+                texture: &*hal_texture,
+                range: wgt::ImageSubresourceRange::default(),
+                usage: hal::StateTransition {
+                    from: wgt::TextureUses::UNINITIALIZED,
+                    to: wgt::TextureUses::COPY_DST,
+                },
+                queue_family_ownership_transfer: None,
+            }));
+            raw_encoder.copy_buffer_to_texture(
+                &staging_buffer,
+                &*hal_texture,
+                iter::once(hal::BufferTextureCopy {
+                    buffer_layout: TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(bytes_per_row),
+                        rows_per_image: None,
+                    },
+                    texture_base: hal::TextureCopyBase {
+                        mip_level: 0,
+                        array_layer: 0,
+                        origin: Origin3d::ZERO,
+                        aspect: hal::FormatAspects::COLOR,
+                    },
+                    size: hal::CopyExtent {
+                        width: size.width,
+                        height: size.height,
+                        depth: 1,
+                    },
+                }),
+            );
+            raw_encoder.transition_textures(iter::once(hal::TextureBarrier {
+                texture: &*hal_texture,
+                range: wgt::ImageSubresourceRange::default(),
+                usage: hal::StateTransition {
+                    from: wgt::TextureUses::COPY_DST,
+                    to: wgt::TextureUses::COPY_SRC,
+                },
+                queue_family_ownership_transfer: None,
+            }));
+        });
+        // Release the texture's snatch-lock guard before submitting: queue submission
+        // needs to acquire it too, and it is not reentrant.
+        drop(hal_texture);
+        ctx.queue.submit(Some(encoder.finish()));
+        ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+
+        hal_device.destroy_buffer(staging_buffer);
+    }
+
+    if mark {
+        unsafe { texture.mark_externally_initialized() };
+    }
+
+    let readback_buffers = ReadbackBuffers::new(&ctx.device, &texture);
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    readback_buffers.copy_from(&ctx.device, &mut encoder, &texture);
+    ctx.queue.submit(Some(encoder.finish()));
+
+    if mark {
+        assert!(
+            !readback_buffers.are_zero(ctx).await,
+            "texture written through as_hal and marked externally initialized was \
+             still lazily cleared to zero before being read back",
+        );
+    } else {
+        assert!(
+            readback_buffers.are_zero(ctx).await,
+            "texture written through as_hal without being marked externally initialized \
+             was not lazily cleared to zero as expected",
+        );
+    }
 }
