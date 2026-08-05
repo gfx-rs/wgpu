@@ -620,7 +620,7 @@ impl Player {
         wgc::pipeline::ResolvedComputePipelineDescriptor {
             label: desc.label,
             layout: desc.layout.map(|id| self.resolve_pipeline_layout_id(id)),
-            stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+            stage: wgc::pipeline::ProgrammableStageDescriptor {
                 module: self.resolve_shader_module_id(desc.stage.module),
                 entry_point: desc.stage.entry_point,
                 constants: desc.stage.constants,
@@ -640,7 +640,7 @@ impl Player {
             wgc::pipeline::RenderPipelineVertexProcessor::Vertex(vertex_state) => {
                 wgc::pipeline::RenderPipelineVertexProcessor::Vertex(
                     wgc::pipeline::ResolvedVertexState {
-                        stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+                        stage: wgc::pipeline::ProgrammableStageDescriptor {
                             module: self.resolve_shader_module_id(vertex_state.stage.module),
                             entry_point: vertex_state.stage.entry_point,
                             constants: vertex_state.stage.constants,
@@ -654,7 +654,7 @@ impl Player {
             }
             wgc::pipeline::RenderPipelineVertexProcessor::Mesh(task_state, mesh_state) => {
                 let resolved_task = task_state.map(|task| wgc::pipeline::ResolvedTaskState {
-                    stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+                    stage: wgc::pipeline::ProgrammableStageDescriptor {
                         module: self.resolve_shader_module_id(task.stage.module),
                         entry_point: task.stage.entry_point,
                         constants: task.stage.constants,
@@ -664,7 +664,7 @@ impl Player {
                     },
                 });
                 let resolved_mesh = wgc::pipeline::ResolvedMeshState {
-                    stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+                    stage: wgc::pipeline::ProgrammableStageDescriptor {
                         module: self.resolve_shader_module_id(mesh_state.stage.module),
                         entry_point: mesh_state.stage.entry_point,
                         constants: mesh_state.stage.constants,
@@ -680,7 +680,7 @@ impl Player {
         let fragment = desc
             .fragment
             .map(|fragment_state| wgc::pipeline::ResolvedFragmentState {
-                stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+                stage: wgc::pipeline::ProgrammableStageDescriptor {
                     module: self.resolve_shader_module_id(fragment_state.stage.module),
                     entry_point: fragment_state.stage.entry_point,
                     constants: fragment_state.stage.constants,

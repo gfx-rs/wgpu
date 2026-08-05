@@ -676,9 +676,7 @@ impl<'a> IntoTrace for &'_ crate::binding_model::BindGroupDescriptor<'a> {
     type Output = TraceBindGroupDescriptor<'a>;
 
     fn into_trace(self) -> Self::Output {
-        use crate::binding_model::{
-            BindGroupEntry, BindingResource, BufferBinding,
-        };
+        use crate::binding_model::{BindGroupEntry, BindingResource, BufferBinding};
         TraceBindGroupDescriptor {
             label: self.label.clone(),
             layout: self.layout.to_trace(),
@@ -775,7 +773,7 @@ impl<'a> IntoTrace for crate::pipeline::ResolvedComputePipelineDescriptor<'a> {
     }
 }
 
-impl<'a> IntoTrace for crate::pipeline::ResolvedProgrammableStageDescriptor<'a> {
+impl<'a> IntoTrace for crate::pipeline::ProgrammableStageDescriptor<'a> {
     type Output =
         crate::pipeline::ProgrammableStageDescriptor<'a, PointerId<markers::ShaderModule>>;
     fn into_trace(self) -> Self::Output {
