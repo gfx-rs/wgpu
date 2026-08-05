@@ -20,7 +20,6 @@ use wgt::error::{ErrorType, WebGpuError};
 use crate::{
     api_log,
     device::{bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
-    id::{BufferId, ExternalTextureId, SamplerId, TextureViewId, TlasId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
@@ -1107,7 +1106,7 @@ crate::impl_storage_item!(PipelineLayout);
 #[repr(C)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BufferBinding<B = BufferId> {
+pub struct BufferBinding<B = Arc<Buffer>> {
     pub buffer: B,
     pub offset: wgt::BufferAddress,
 
@@ -1121,19 +1120,17 @@ pub struct BufferBinding<B = BufferId> {
     pub size: Option<wgt::BufferAddress>,
 }
 
-pub type ResolvedBufferBinding = BufferBinding<Arc<Buffer>>;
-
 // Note: Duplicated in `wgpu-rs` as `BindingResource`
 // They're different enough that it doesn't make sense to share a common type
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BindingResource<
     'a,
-    B = BufferId,
-    S = SamplerId,
-    TV = TextureViewId,
-    TLAS = TlasId,
-    ET = ExternalTextureId,
+    B = Arc<Buffer>,
+    S = Arc<Sampler>,
+    TV = Arc<TextureView>,
+    TLAS = Arc<Tlas>,
+    ET = Arc<ExternalTexture>,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -1170,15 +1167,6 @@ pub enum BindingResource<
     AccelerationStructureArray(Cow<'a, [TLAS]>),
     ExternalTexture(ET),
 }
-
-pub type ResolvedBindingResource<'a> = BindingResource<
-    'a,
-    Arc<Buffer>,
-    Arc<Sampler>,
-    Arc<TextureView>,
-    Arc<Tlas>,
-    Arc<ExternalTexture>,
->;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]

@@ -677,7 +677,7 @@ impl<'a> IntoTrace for &'_ crate::binding_model::BindGroupDescriptor<'a> {
 
     fn into_trace(self) -> Self::Output {
         use crate::binding_model::{
-            BindGroupEntry, BindingResource, BufferBinding, ResolvedBindingResource,
+            BindGroupEntry, BindingResource, BufferBinding,
         };
         TraceBindGroupDescriptor {
             label: self.label.clone(),
@@ -687,14 +687,14 @@ impl<'a> IntoTrace for &'_ crate::binding_model::BindGroupDescriptor<'a> {
                     .iter()
                     .map(|entry| {
                         let resource = match &entry.resource {
-                            ResolvedBindingResource::Buffer(buffer_binding) => {
+                            BindingResource::Buffer(buffer_binding) => {
                                 BindingResource::Buffer(BufferBinding {
                                     buffer: buffer_binding.buffer.to_trace(),
                                     offset: buffer_binding.offset,
                                     size: buffer_binding.size,
                                 })
                             }
-                            ResolvedBindingResource::BufferArray(buffer_bindings) => {
+                            BindingResource::BufferArray(buffer_bindings) => {
                                 let resolved_buffers: Vec<_> = buffer_bindings
                                     .iter()
                                     .map(|bb| BufferBinding {
@@ -705,31 +705,31 @@ impl<'a> IntoTrace for &'_ crate::binding_model::BindGroupDescriptor<'a> {
                                     .collect();
                                 BindingResource::BufferArray(Cow::Owned(resolved_buffers))
                             }
-                            ResolvedBindingResource::Sampler(sampler_id) => {
+                            BindingResource::Sampler(sampler_id) => {
                                 BindingResource::Sampler(sampler_id.to_trace())
                             }
-                            ResolvedBindingResource::SamplerArray(sampler_ids) => {
+                            BindingResource::SamplerArray(sampler_ids) => {
                                 let resolved: Vec<_> =
                                     sampler_ids.iter().map(|id| id.to_trace()).collect();
                                 BindingResource::SamplerArray(Cow::Owned(resolved))
                             }
-                            ResolvedBindingResource::TextureView(texture_view_id) => {
+                            BindingResource::TextureView(texture_view_id) => {
                                 BindingResource::TextureView(texture_view_id.to_trace())
                             }
-                            ResolvedBindingResource::TextureViewArray(texture_view_ids) => {
+                            BindingResource::TextureViewArray(texture_view_ids) => {
                                 let resolved: Vec<_> =
                                     texture_view_ids.iter().map(|id| id.to_trace()).collect();
                                 BindingResource::TextureViewArray(Cow::Owned(resolved))
                             }
-                            ResolvedBindingResource::AccelerationStructure(tlas_id) => {
+                            BindingResource::AccelerationStructure(tlas_id) => {
                                 BindingResource::AccelerationStructure(tlas_id.to_trace())
                             }
-                            ResolvedBindingResource::AccelerationStructureArray(tlas_ids) => {
+                            BindingResource::AccelerationStructureArray(tlas_ids) => {
                                 let resolved: Vec<_> =
                                     tlas_ids.iter().map(|id| id.to_trace()).collect();
                                 BindingResource::AccelerationStructureArray(Cow::Owned(resolved))
                             }
-                            ResolvedBindingResource::ExternalTexture(external_texture_id) => {
+                            BindingResource::ExternalTexture(external_texture_id) => {
                                 BindingResource::ExternalTexture(external_texture_id.to_trace())
                             }
                         };

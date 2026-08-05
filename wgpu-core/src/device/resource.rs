@@ -3171,7 +3171,7 @@ impl Device {
 
     fn create_buffer_binding<'a>(
         &self,
-        bb: &'a binding_model::ResolvedBufferBinding,
+        bb: &'a binding_model::BufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         buffer_init_actions: &mut Vec<BufferInitTrackerAction>,
@@ -3602,7 +3602,7 @@ impl Device {
         self: &Arc<Self>,
         desc: &binding_model::BindGroupDescriptor,
     ) -> Result<Arc<BindGroup>, CreateBindGroupError> {
-        use crate::binding_model::{CreateBindGroupError as Error, ResolvedBindingResource as Br};
+        use crate::binding_model::{BindingResource as Br, CreateBindGroupError as Error};
 
         self.check_is_valid()?;
 
