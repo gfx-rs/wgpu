@@ -4,9 +4,7 @@ use core::ptr::NonNull;
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model::{
-        self, BindingResource, BufferBinding, ResolvedBindingResource, ResolvedBufferBinding,
-    },
+    binding_model::{self},
     command,
     device::{life::WaitIdleError, DeviceError, DeviceLostClosure},
     global::Global,
@@ -38,6 +36,17 @@ pub type BindGroupDescriptor<'a> = binding_model::BindGroupDescriptor<
 >;
 
 pub type BindGroupEntry<'a> = binding_model::BindGroupEntry<
+    'a,
+    id::BufferId,
+    id::SamplerId,
+    id::TextureViewId,
+    id::TlasId,
+    id::ExternalTextureId,
+>;
+
+pub type BufferBinding = binding_model::BufferBinding<id::BufferId>;
+
+pub type BindingResource<'a> = binding_model::BindingResource<
     'a,
     id::BufferId,
     id::SamplerId,
@@ -531,7 +540,7 @@ impl Global {
         ) -> binding_model::BindGroupEntry<'a> {
             let resolve_buffer = |bb: &BufferBinding| {
                 let buffer = buffer_storage.get(bb.buffer);
-                ResolvedBufferBinding {
+                binding_model::BufferBinding {
                     buffer,
                     offset: bb.offset,
                     size: bb.size,
@@ -544,35 +553,37 @@ impl Global {
                 |id: &id::ExternalTextureId| external_texture_storage.get(*id);
             let resource = match e.resource {
                 BindingResource::Buffer(ref buffer) => {
-                    ResolvedBindingResource::Buffer(resolve_buffer(buffer))
+                    binding_model::BindingResource::Buffer(resolve_buffer(buffer))
                 }
                 BindingResource::BufferArray(ref buffers) => {
                     let buffers = buffers.iter().map(resolve_buffer).collect::<Vec<_>>();
-                    ResolvedBindingResource::BufferArray(Cow::Owned(buffers))
+                    binding_model::BindingResource::BufferArray(Cow::Owned(buffers))
                 }
                 BindingResource::Sampler(ref sampler) => {
-                    ResolvedBindingResource::Sampler(resolve_sampler(sampler))
+                    binding_model::BindingResource::Sampler(resolve_sampler(sampler))
                 }
                 BindingResource::SamplerArray(ref samplers) => {
                     let samplers = samplers.iter().map(resolve_sampler).collect::<Vec<_>>();
-                    ResolvedBindingResource::SamplerArray(Cow::Owned(samplers))
+                    binding_model::BindingResource::SamplerArray(Cow::Owned(samplers))
                 }
                 BindingResource::TextureView(ref view) => {
-                    ResolvedBindingResource::TextureView(resolve_view(view))
+                    binding_model::BindingResource::TextureView(resolve_view(view))
                 }
                 BindingResource::TextureViewArray(ref views) => {
                     let views = views.iter().map(resolve_view).collect::<Vec<_>>();
-                    ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
+                    binding_model::BindingResource::TextureViewArray(Cow::Owned(views))
                 }
                 BindingResource::AccelerationStructure(ref tlas) => {
-                    ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas))
+                    binding_model::BindingResource::AccelerationStructure(resolve_tlas(tlas))
                 }
                 BindingResource::AccelerationStructureArray(ref tlas_array) => {
                     let tlas_array = tlas_array.iter().map(resolve_tlas).collect::<Vec<_>>();
-                    ResolvedBindingResource::AccelerationStructureArray(Cow::Owned(tlas_array))
+                    binding_model::BindingResource::AccelerationStructureArray(Cow::Owned(
+                        tlas_array,
+                    ))
                 }
                 BindingResource::ExternalTexture(ref et) => {
-                    ResolvedBindingResource::ExternalTexture(resolve_external_texture(et))
+                    binding_model::BindingResource::ExternalTexture(resolve_external_texture(et))
                 }
             };
             binding_model::BindGroupEntry {

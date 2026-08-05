@@ -718,8 +718,8 @@ impl Player {
                 let resource = match entry.resource {
                     BindingResource::Buffer(buffer_binding) => {
                         let buffer = self.resolve_buffer_id(buffer_binding.buffer);
-                        wgc::binding_model::ResolvedBindingResource::Buffer(
-                            wgc::binding_model::ResolvedBufferBinding {
+                        wgc::binding_model::BindingResource::Buffer(
+                            wgc::binding_model::BufferBinding {
                                 buffer,
                                 offset: buffer_binding.offset,
                                 size: buffer_binding.size,
@@ -732,20 +732,20 @@ impl Player {
                             .into_iter()
                             .map(|bb| {
                                 let buffer = self.resolve_buffer_id(bb.buffer);
-                                wgc::binding_model::ResolvedBufferBinding {
+                                wgc::binding_model::BufferBinding {
                                     buffer,
                                     offset: bb.offset,
                                     size: bb.size,
                                 }
                             })
                             .collect();
-                        wgc::binding_model::ResolvedBindingResource::BufferArray(Cow::Owned(
+                        wgc::binding_model::BindingResource::BufferArray(Cow::Owned(
                             resolved_buffers,
                         ))
                     }
                     BindingResource::Sampler(sampler_id) => {
                         let sampler = self.resolve_sampler_id(sampler_id);
-                        wgc::binding_model::ResolvedBindingResource::Sampler(sampler)
+                        wgc::binding_model::BindingResource::Sampler(sampler)
                     }
                     BindingResource::SamplerArray(sampler_ids) => {
                         let resolved_samplers: Vec<_> = sampler_ids
@@ -753,13 +753,13 @@ impl Player {
                             .into_iter()
                             .map(|id| self.resolve_sampler_id(id))
                             .collect();
-                        wgc::binding_model::ResolvedBindingResource::SamplerArray(Cow::Owned(
+                        wgc::binding_model::BindingResource::SamplerArray(Cow::Owned(
                             resolved_samplers,
                         ))
                     }
                     BindingResource::TextureView(texture_view_id) => {
                         let texture_view = self.resolve_texture_view_id(texture_view_id);
-                        wgc::binding_model::ResolvedBindingResource::TextureView(texture_view)
+                        wgc::binding_model::BindingResource::TextureView(texture_view)
                     }
                     BindingResource::TextureViewArray(texture_view_ids) => {
                         let resolved_views: Vec<_> = texture_view_ids
@@ -767,13 +767,13 @@ impl Player {
                             .into_iter()
                             .map(|id| self.resolve_texture_view_id(id))
                             .collect();
-                        wgc::binding_model::ResolvedBindingResource::TextureViewArray(Cow::Owned(
+                        wgc::binding_model::BindingResource::TextureViewArray(Cow::Owned(
                             resolved_views,
                         ))
                     }
                     BindingResource::AccelerationStructure(tlas_id) => {
                         let tlas = self.resolve_tlas_id(tlas_id);
-                        wgc::binding_model::ResolvedBindingResource::AccelerationStructure(tlas)
+                        wgc::binding_model::BindingResource::AccelerationStructure(tlas)
                     }
                     BindingResource::AccelerationStructureArray(tlas_ids) => {
                         let resolved_tlas: Vec<_> = tlas_ids
@@ -781,16 +781,14 @@ impl Player {
                             .into_iter()
                             .map(|id| self.resolve_tlas_id(id))
                             .collect();
-                        wgc::binding_model::ResolvedBindingResource::AccelerationStructureArray(
-                            Cow::Owned(resolved_tlas),
-                        )
+                        wgc::binding_model::BindingResource::AccelerationStructureArray(Cow::Owned(
+                            resolved_tlas,
+                        ))
                     }
                     BindingResource::ExternalTexture(external_texture_id) => {
                         let external_texture =
                             self.resolve_external_texture_id(external_texture_id);
-                        wgc::binding_model::ResolvedBindingResource::ExternalTexture(
-                            external_texture,
-                        )
+                        wgc::binding_model::BindingResource::ExternalTexture(external_texture)
                     }
                 };
 
