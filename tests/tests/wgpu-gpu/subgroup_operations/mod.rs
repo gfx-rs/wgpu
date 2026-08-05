@@ -15,6 +15,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
         required_features: wgpu::Features::SUBGROUP,
         required_limits: wgpu::Limits::downlevel_defaults(),
         // Expect metal to fail on tests involving operations in divergent control flow
+        // <https://github.com/gfx-rs/wgpu/issues/10019>
         //
         // Newlines are included in the panic message to ensure that _additional_ failures
         // are not matched against.
