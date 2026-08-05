@@ -5,8 +5,7 @@ use core::ptr::NonNull;
 use crate::device::trace;
 use crate::{
     binding_model::{
-        self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,
-        ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
+        self, BindingResource, BufferBinding, ResolvedBindingResource, ResolvedBufferBinding,
     },
     command,
     device::{life::WaitIdleError, DeviceError, DeviceLostClosure},
@@ -27,6 +26,25 @@ use crate::{
 };
 
 use wgt::{BufferAddress, TextureFormat};
+
+pub type BindGroupDescriptor<'a> = binding_model::BindGroupDescriptor<
+    'a,
+    id::BindGroupLayoutId,
+    id::BufferId,
+    id::SamplerId,
+    id::TextureViewId,
+    id::TlasId,
+    id::ExternalTextureId,
+>;
+
+pub type BindGroupEntry<'a> = binding_model::BindGroupEntry<
+    'a,
+    id::BufferId,
+    id::SamplerId,
+    id::TextureViewId,
+    id::TlasId,
+    id::ExternalTextureId,
+>;
 
 impl Global {
     pub fn adapter_is_surface_supported(
@@ -493,7 +511,7 @@ impl Global {
     pub fn device_create_bind_group(
         &self,
         device_id: DeviceId,
-        desc: &binding_model::BindGroupDescriptor,
+        desc: &BindGroupDescriptor,
         id_in: Option<id::BindGroupId>,
     ) -> (id::BindGroupId, Option<binding_model::CreateBindGroupError>) {
         let hub = &self.hub;
@@ -510,7 +528,7 @@ impl Global {
             texture_view_storage: &Storage<Arc<resource::TextureView>>,
             tlas_storage: &Storage<Arc<resource::Tlas>>,
             external_texture_storage: &Storage<Arc<resource::ExternalTexture>>,
-        ) -> ResolvedBindGroupEntry<'a> {
+        ) -> binding_model::BindGroupEntry<'a> {
             let resolve_buffer = |bb: &BufferBinding| {
                 let buffer = buffer_storage.get(bb.buffer);
                 ResolvedBufferBinding {
@@ -557,7 +575,7 @@ impl Global {
                     ResolvedBindingResource::ExternalTexture(resolve_external_texture(et))
                 }
             };
-            ResolvedBindGroupEntry {
+            binding_model::BindGroupEntry {
                 binding: e.binding,
                 resource,
             }
@@ -585,7 +603,7 @@ impl Global {
         };
         let entries = Cow::Owned(entries);
 
-        let desc = ResolvedBindGroupDescriptor {
+        let desc = binding_model::BindGroupDescriptor {
             label: desc.label.clone(),
             layout,
             entries,

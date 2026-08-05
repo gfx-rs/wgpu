@@ -3585,7 +3585,7 @@ impl Device {
 
     pub fn create_bind_group(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedBindGroupDescriptor,
+        desc: &binding_model::BindGroupDescriptor,
     ) -> (Arc<BindGroup>, Option<CreateBindGroupError>) {
         profiling::scope!("Device::create_bind_group");
         #[cfg(feature = "trace")]
@@ -3619,7 +3619,7 @@ impl Device {
     // (not passing a duplicate) beforehand.
     pub fn create_bind_group_inner(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedBindGroupDescriptor,
+        desc: &binding_model::BindGroupDescriptor,
     ) -> Result<Arc<BindGroup>, CreateBindGroupError> {
         use crate::binding_model::{CreateBindGroupError as Error, ResolvedBindingResource as Br};
 

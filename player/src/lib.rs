@@ -707,10 +707,10 @@ impl Player {
     fn resolve_bind_group_descriptor<'a>(
         &self,
         desc: wgc::device::trace::TraceBindGroupDescriptor<'a>,
-    ) -> wgc::binding_model::ResolvedBindGroupDescriptor<'a> {
+    ) -> wgc::binding_model::BindGroupDescriptor<'a> {
         let layout = self.resolve_bind_group_layout_id(desc.layout);
 
-        let entries: Vec<wgc::binding_model::ResolvedBindGroupEntry> = desc
+        let entries: Vec<wgc::binding_model::BindGroupEntry> = desc
             .entries
             .to_vec()
             .into_iter()
@@ -794,14 +794,14 @@ impl Player {
                     }
                 };
 
-                wgc::binding_model::ResolvedBindGroupEntry {
+                wgc::binding_model::BindGroupEntry {
                     binding: entry.binding,
                     resource,
                 }
             })
             .collect();
 
-        wgc::binding_model::ResolvedBindGroupDescriptor {
+        wgc::binding_model::BindGroupDescriptor {
             label: desc.label.clone(),
             layout,
             entries: entries.into(),
