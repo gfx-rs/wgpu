@@ -999,6 +999,7 @@ impl WebGpuError for ImmediateUploadError {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(bound = "BGL: Serialize"))]
+/// cbindgen:ignore
 pub struct PipelineLayoutDescriptor<'a, BGL = Arc<BindGroupLayout>>
 where
     [Option<BGL>]: ToOwned,
