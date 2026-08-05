@@ -824,7 +824,7 @@ impl<'a> IntoTrace for crate::pipeline::ResolvedMeshState<'a> {
     }
 }
 
-impl<'a> IntoTrace for crate::pipeline::ResolvedVertexState<'a> {
+impl<'a> IntoTrace for crate::pipeline::VertexState<'a> {
     type Output = crate::pipeline::VertexState<'a, PointerId<markers::ShaderModule>>;
     fn into_trace(self) -> Self::Output {
         crate::pipeline::VertexState {

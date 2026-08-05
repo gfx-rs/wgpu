@@ -596,15 +596,13 @@ impl Default for VertexBufferLayout<'_> {
 /// Describes the vertex process in a render pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct VertexState<'a, SM = ShaderModuleId> {
+/// cbindgen:ignore
+pub struct VertexState<'a, SM = Arc<ShaderModule>> {
     /// The compiled vertex stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a, SM>,
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: Cow<'a, [Option<VertexBufferLayout<'a>>]>,
 }
-
-/// cbindgen:ignore
-pub type ResolvedVertexState<'a> = VertexState<'a, Arc<ShaderModule>>;
 
 /// Describes fragment processing in a render pipeline.
 #[derive(Clone, Debug)]
