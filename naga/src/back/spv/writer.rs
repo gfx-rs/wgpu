@@ -65,6 +65,101 @@ impl Function {
     }
 }
 
+pub(in crate::back::spv) enum ConstExprContext<'ctx> {
+    Global {
+        writer: &'ctx mut Writer,
+        mod_info: &'ctx ModuleInfo,
+        module: &'ctx crate::Module,
+        expressions: &'ctx crate::Arena<crate::Expression>,
+    },
+    Local {
+        writer: &'ctx mut Writer,
+        cached: &'ctx CachedExpressions,
+        fun_info: &'ctx FunctionInfo,
+        module: &'ctx crate::Module,
+        expressions: &'ctx crate::Arena<crate::Expression>,
+    },
+}
+
+impl<'ctx> ConstExprContext<'ctx> {
+    const fn writer(&mut self) -> &mut Writer {
+        match *self {
+            ConstExprContext::Global { ref mut writer, .. }
+            | ConstExprContext::Local { ref mut writer, .. } => writer,
+        }
+    }
+
+    const fn expressions(&self) -> &'ctx crate::Arena<crate::Expression> {
+        match *self {
+            ConstExprContext::Global { expressions, .. }
+            | ConstExprContext::Local { expressions, .. } => expressions,
+        }
+    }
+
+    const fn module(&self) -> &'ctx crate::Module {
+        match *self {
+            ConstExprContext::Global { module, .. } | ConstExprContext::Local { module, .. } => {
+                module
+            }
+        }
+    }
+
+    fn resolve_expr(&mut self, expr: Handle<crate::Expression>) -> Result<Word, Error> {
+        match *self {
+            ConstExprContext::Global { .. } => self.write_constant_expr(expr),
+            ConstExprContext::Local { cached, .. } => Ok(cached[expr]),
+        }
+    }
+
+    fn get_expression_lookup_type(&mut self, handle: Handle<crate::Expression>) -> LookupType {
+        let tr = match *self {
+            ConstExprContext::Global { mod_info, .. } => &mod_info[handle],
+            ConstExprContext::Local { fun_info, .. } => &fun_info[handle].ty,
+        };
+        self.writer().get_expression_lookup_type(tr)
+    }
+
+    pub(in crate::back::spv) fn write_constant_expr(
+        &mut self,
+        handle: Handle<crate::Expression>,
+    ) -> Result<Word, Error> {
+        let id = match self.expressions()[handle] {
+            crate::Expression::Literal(literal) => self.writer().get_constant_scalar(literal),
+            crate::Expression::Constant(constant) => {
+                let constant = &self.module().constants[constant];
+                self.writer().constant_ids[constant.init]
+            }
+            crate::Expression::ZeroValue(ty) => {
+                let type_id = self.writer().get_handle_type_id(ty);
+                self.writer().get_constant_null(type_id)
+            }
+            crate::Expression::Compose { ty, ref components } => {
+                let flattened =
+                    crate::proc::flatten_compose(ty, components, self.expressions(), &self.module().types)
+                        .map(|component| self.resolve_expr(component))
+                        .collect::<Result<Vec<_>, _>>()?;
+                self.writer()
+                    .get_constant_composite(LookupType::Handle(ty), &flattened)
+            }
+            crate::Expression::Splat { size, value } => {
+                let value_id = match *self {
+                    ConstExprContext::Global { .. } => self.writer().constant_ids[value],
+                    ConstExprContext::Local { cached, .. } => cached[value],
+                };
+                let component_ids = &[value_id; 4][..size as usize];
+
+                let ty = self.get_expression_lookup_type(handle);
+                self.writer().get_constant_composite(ty, component_ids)
+            }
+            _ => {
+                return Err(Error::Override);
+            }
+        };
+
+        Ok(id)
+    }
+}
+
 impl Writer {
     pub fn new(options: &Options) -> Result<Self, Error> {
         let (major, minor) = options.lang_version;
@@ -2733,51 +2828,6 @@ impl Writer {
         null_id
     }
 
-    fn write_constant_expr(
-        &mut self,
-        handle: Handle<crate::Expression>,
-        ir_module: &crate::Module,
-        mod_info: &ModuleInfo,
-    ) -> Result<Word, Error> {
-        let id = match ir_module.global_expressions[handle] {
-            crate::Expression::Literal(literal) => self.get_constant_scalar(literal),
-            crate::Expression::Constant(constant) => {
-                let constant = &ir_module.constants[constant];
-                self.constant_ids[constant.init]
-            }
-            crate::Expression::ZeroValue(ty) => {
-                let type_id = self.get_handle_type_id(ty);
-                self.get_constant_null(type_id)
-            }
-            crate::Expression::Compose { ty, ref components } => {
-                let component_ids: Vec<_> = crate::proc::flatten_compose(
-                    ty,
-                    components,
-                    &ir_module.global_expressions,
-                    &ir_module.types,
-                )
-                .map(|component| self.constant_ids[component])
-                .collect();
-                self.get_constant_composite(LookupType::Handle(ty), component_ids.as_slice())
-            }
-            crate::Expression::Splat { size, value } => {
-                let value_id = self.constant_ids[value];
-                let component_ids = &[value_id; 4][..size as usize];
-
-                let ty = self.get_expression_lookup_type(&mod_info[handle]);
-
-                self.get_constant_composite(ty, component_ids)
-            }
-            _ => {
-                return Err(Error::Override);
-            }
-        };
-
-        self.constant_ids[handle] = id;
-
-        Ok(id)
-    }
-
     pub(super) fn write_control_barrier(
         &mut self,
         flags: crate::Barrier,
@@ -3797,7 +3847,14 @@ impl Writer {
         self.constant_ids
             .resize(ir_module.global_expressions.len(), 0);
         for (handle, _) in ir_module.global_expressions.iter() {
-            self.write_constant_expr(handle, ir_module, mod_info)?;
+            let id = ConstExprContext::Global {
+                writer: self,
+                mod_info,
+                module: ir_module,
+                expressions: &ir_module.global_expressions,
+            }
+            .write_constant_expr(handle)?;
+            self.constant_ids[handle] = id;
         }
         debug_assert!(self.constant_ids.iter().all(|&id| id != 0));
 
