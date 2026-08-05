@@ -677,7 +677,7 @@ impl Player {
 
         let fragment = desc
             .fragment
-            .map(|fragment_state| wgc::pipeline::ResolvedFragmentState {
+            .map(|fragment_state| wgc::pipeline::FragmentState {
                 stage: wgc::pipeline::ProgrammableStageDescriptor {
                     module: self.resolve_shader_module_id(fragment_state.stage.module),
                     entry_point: fragment_state.stage.entry_point,

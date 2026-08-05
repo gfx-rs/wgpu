@@ -834,7 +834,7 @@ impl<'a> IntoTrace for crate::pipeline::VertexState<'a> {
     }
 }
 
-impl<'a> IntoTrace for crate::pipeline::ResolvedFragmentState<'a> {
+impl<'a> IntoTrace for crate::pipeline::FragmentState<'a> {
     type Output = crate::pipeline::FragmentState<'a, PointerId<markers::ShaderModule>>;
     fn into_trace(self) -> Self::Output {
         crate::pipeline::FragmentState {

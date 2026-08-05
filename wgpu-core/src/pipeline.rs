@@ -581,15 +581,13 @@ pub struct VertexState<'a, SM = Arc<ShaderModule>> {
 /// Describes fragment processing in a render pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FragmentState<'a, SM = ShaderModuleId> {
+/// cbindgen:ignore
+pub struct FragmentState<'a, SM = Arc<ShaderModule>> {
     /// The compiled fragment stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a, SM>,
     /// The effect of draw calls on the color aspect of the output target.
     pub targets: Cow<'a, [Option<wgt::ColorTargetState>]>,
 }
-
-/// cbindgen:ignore
-pub type ResolvedFragmentState<'a> = FragmentState<'a, Arc<ShaderModule>>;
 
 /// Describes the task shader in a mesh shader pipeline.
 #[derive(Clone, Debug)]
