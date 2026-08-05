@@ -760,7 +760,7 @@ impl<'a> IntoTrace for crate::pipeline::ResolvedGeneralRenderPipelineDescriptor<
     }
 }
 
-impl<'a> IntoTrace for crate::pipeline::ResolvedComputePipelineDescriptor<'a> {
+impl<'a> IntoTrace for crate::pipeline::ComputePipelineDescriptor<'a> {
     type Output = TraceComputePipelineDescriptor<'a>;
 
     fn into_trace(self) -> Self::Output {

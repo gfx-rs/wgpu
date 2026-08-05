@@ -4250,7 +4250,7 @@ impl Device {
 
     pub fn create_compute_pipeline(
         self: &Arc<Self>,
-        desc: pipeline::ResolvedComputePipelineDescriptor,
+        desc: pipeline::ComputePipelineDescriptor,
     ) -> (
         Arc<pipeline::ComputePipeline>,
         Option<pipeline::CreateComputePipelineError>,
@@ -4281,7 +4281,7 @@ impl Device {
 
     pub fn create_compute_pipeline_inner(
         self: &Arc<Self>,
-        desc: pipeline::ResolvedComputePipelineDescriptor,
+        desc: pipeline::ComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
         self.check_is_valid()?;
 
