@@ -654,7 +654,7 @@ impl IntoTrace for ArcRenderCommand {
     }
 }
 
-impl IntoTrace for crate::binding_model::ResolvedPipelineLayoutDescriptor<'_> {
+impl IntoTrace for crate::binding_model::PipelineLayoutDescriptor<'_> {
     type Output = crate::binding_model::PipelineLayoutDescriptor<
         'static,
         PointerId<markers::BindGroupLayout>,

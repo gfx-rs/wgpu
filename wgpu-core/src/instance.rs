@@ -1216,13 +1216,19 @@ impl Adapter {
         Ok((device, queue))
     }
 
-    pub fn request_device(
-        self: &Arc<Self>,
-        desc: &DeviceDescriptor,
-    ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
-        profiling::scope!("Adapter::request_device");
-        api_log!("Adapter::request_device");
-        let mut desc = desc.clone();
+    /// Validate a device descriptor.
+    ///
+    /// This validates the provided device descriptor as if it were passed to
+    /// [`Self::request_device`]. If [`InstanceFlags::STRICT_WEBGPU_COMPLIANCE`] is active,
+    /// the requested extensions in the descriptor will be filtered to remove `wgpu`
+    /// extensions, except for those that are included in [`limits::EXEMPT_FEATURES`].
+    ///
+    /// This may be useful when it is necessary to obtain the device itself from a raw hal
+    /// API, but the rest of the `request_device` validation is still desired.
+    pub fn validate_device_descriptor(
+        &self,
+        desc: &mut DeviceDescriptor,
+    ) -> Result<(), RequestDeviceError> {
         filter_features_and_limits(
             self.instance_flags,
             &mut desc.required_features,
@@ -1272,6 +1278,19 @@ impl Adapter {
         if let Some(failed) = check_limits(&desc.required_limits, &caps.limits).pop() {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
+
+        Ok(())
+    }
+
+    pub fn request_device(
+        self: &Arc<Self>,
+        desc: &DeviceDescriptor,
+    ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
+        profiling::scope!("Adapter::request_device");
+        api_log!("Adapter::request_device");
+
+        let mut desc = desc.clone();
+        self.validate_device_descriptor(&mut desc)?;
 
         let open = unsafe {
             self.raw.adapter.open(
@@ -1603,6 +1622,15 @@ impl Global {
         resource_log!("Created Queue {:?}", queue_id);
 
         Ok((device_id, queue_id))
+    }
+
+    pub fn adapter_validate_device_descriptor(
+        &self,
+        adapter_id: AdapterId,
+        desc: &mut DeviceDescriptor,
+    ) -> Result<(), RequestDeviceError> {
+        let adapter = self.hub.adapters.get(adapter_id);
+        adapter.validate_device_descriptor(desc)
     }
 
     /// # Safety

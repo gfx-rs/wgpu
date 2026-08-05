@@ -1,0 +1,54 @@
+; SPIR-V
+; Version: 1.3
+;
+; Regression test for https://github.com/gfx-rs/wgpu/issues/8389
+;
+; The `naga` SPIR-V frontend panicked with
+; `called Option::unwrap() on a None value` at `naga::proc::emitter::Emitter::finish`
+; when a `OpGroupNonUniform*` reduction/scan instruction (e.g. `OpGroupNonUniformUMin`)
+; used an argument whose defining expression came from an already-closed control-flow
+; body (here, a value computed inside a loop and used after the loop merges), which
+; requires spilling the value through a temporary local variable.
+               OpCapability Shader
+               OpCapability GroupNonUniform
+               OpCapability GroupNonUniformArithmetic
+       %ext = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main" %local_id
+               OpExecutionMode %main LocalSize 1 1 1
+               OpDecorate %local_id BuiltIn LocalInvocationIndex
+
+       %void = OpTypeVoid
+     %voidfn = OpTypeFunction %void
+       %uint = OpTypeInt 32 0
+       %bool = OpTypeBool
+%_ptr_Input_uint = OpTypePointer Input %uint
+   %local_id = OpVariable %_ptr_Input_uint Input
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
+     %uint_4 = OpConstant %uint 4
+%subgroup_scope = OpConstant %uint 3
+
+       %main = OpFunction %void None %voidfn
+      %entry = OpLabel
+         %id = OpLoad %uint %local_id
+               OpBranch %loop_header
+
+%loop_header = OpLabel
+          %i = OpPhi %uint %uint_0 %entry %i_next %continue
+               OpLoopMerge %merge %continue None
+               OpBranch %body
+
+       %body = OpLabel
+        %acc = OpIAdd %uint %id %i
+               OpBranch %continue
+
+   %continue = OpLabel
+     %i_next = OpIAdd %uint %i %uint_1
+       %cond = OpULessThan %bool %i_next %uint_4
+               OpBranchConditional %cond %loop_header %merge
+
+      %merge = OpLabel
+        %min = OpGroupNonUniformUMin %uint %subgroup_scope Reduce %acc
+               OpReturn
+               OpFunctionEnd

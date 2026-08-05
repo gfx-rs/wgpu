@@ -3,7 +3,7 @@ use std::fmt::Write;
 use wgpu::{Backends, DownlevelFlags, Features, Limits};
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest, MAX_BUFFER_SIZE};
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -22,7 +22,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
 // Note that some specific subtests are marked as failing on GL due to
 // https://github.com/gfx-rs/wgpu/issues/4371.
-#[gpu_test]
+#[apply(gpu_test!)]
 static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -37,7 +37,7 @@ static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static STORAGE_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -52,7 +52,7 @@ static STORAGE_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static IMMEDIATES_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -599,7 +599,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     tests
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static UNIFORM_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -615,7 +615,7 @@ static UNIFORM_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static STORAGE_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -631,7 +631,7 @@ static STORAGE_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static IMMEDIATES_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -752,7 +752,7 @@ fn create_64bit_struct_layout_tests() -> Vec<ShaderTest> {
     tests
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static UNIFORM_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -768,7 +768,7 @@ static UNIFORM_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static STORAGE_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -784,7 +784,7 @@ static STORAGE_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static UNIFORM_INPUT_I16: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -800,7 +800,7 @@ static UNIFORM_INPUT_I16: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static STORAGE_INPUT_I16: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

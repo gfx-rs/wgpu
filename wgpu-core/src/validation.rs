@@ -26,7 +26,7 @@ pub mod shader_io_deductions;
 #[derive(Debug)]
 enum ResourceType {
     Buffer {
-        size: wgt::BufferSize,
+        minimum_binding_size: wgt::BufferSize,
     },
     Texture {
         dim: naga::ImageDimension,
@@ -151,9 +151,26 @@ impl fmt::Display for InterfaceVar {
     }
 }
 
+/// An [inter-stage input or output value][io].
+///
+/// A value of this type describes one value to be passed to or returned from
+/// some entry point.
+///
+/// [io]: https://www.w3.org/TR/WGSL/#stage-inputs-outputs
 #[derive(Debug, Eq, PartialEq)]
 enum Varying {
-    Local { location: u32, iv: InterfaceVar },
+    /// A [user-defined input or output][uio].
+    ///
+    /// In WGSL, this is a value with a `@location` attribute.
+    ///
+    /// [uio]: https://www.w3.org/TR/WGSL/#user-defined-inputs-outputs
+    UserDefined { location: u32, iv: InterfaceVar },
+
+    /// A [built-in input or output][bio].
+    ///
+    /// In WGSL, this is a value with a `@builtin` attribute.
+    ///
+    /// [bio]: https://www.w3.org/TR/WGSL/#builtin-inputs-outputs
     BuiltIn(BuiltIn),
 }
 
@@ -268,13 +285,6 @@ impl BuiltIn {
     }
 }
 
-#[allow(unused)]
-#[derive(Debug)]
-struct SpecializationConstant {
-    id: u32,
-    ty: NumericType,
-}
-
 #[derive(Debug)]
 struct EntryPointMeshInfo {
     max_vertices: u32,
@@ -287,8 +297,6 @@ struct EntryPoint {
     inputs: Vec<Varying>,
     outputs: Vec<Varying>,
     resources: Vec<naga::Handle<Resource>>,
-    #[allow(unused)]
-    spec_constants: Vec<SpecializationConstant>,
     sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
     workgroup_size: [u32; 3],
     dual_source_blending: bool,
@@ -594,7 +602,9 @@ pub use wgpu_naga_bridge::map_storage_format_to_naga;
 impl Resource {
     fn check_binding_use(&self, entry: &BindGroupLayoutEntry) -> Result<(), BindingError> {
         match self.ty {
-            ResourceType::Buffer { size } => {
+            ResourceType::Buffer {
+                minimum_binding_size,
+            } => {
                 let min_size = match entry.ty {
                     BindingType::Buffer {
                         ty,
@@ -627,9 +637,9 @@ impl Resource {
                     }
                 };
                 match min_size {
-                    Some(non_zero) if non_zero < size => {
+                    Some(non_zero) if non_zero < minimum_binding_size => {
                         return Err(BindingError::WrongBufferSize {
-                            buffer_size: size,
+                            buffer_size: minimum_binding_size,
                             min_binding_size: non_zero,
                         })
                     }
@@ -797,7 +807,9 @@ impl Resource {
         is_reffed_by_sampler_in_entrypoint: bool,
     ) -> Result<BindingType, BindingError> {
         Ok(match self.ty {
-            ResourceType::Buffer { size } => BindingType::Buffer {
+            ResourceType::Buffer {
+                minimum_binding_size,
+            } => BindingType::Buffer {
                 ty: match self.class {
                     naga::AddressSpace::Uniform => wgt::BufferBindingType::Uniform,
                     naga::AddressSpace::Storage { access } => wgt::BufferBindingType::Storage {
@@ -806,7 +818,7 @@ impl Resource {
                     _ => return Err(BindingError::WrongBufferAddressSpace { space: self.class }),
                 },
                 has_dynamic_offset: false,
-                min_binding_size: Some(size),
+                min_binding_size: Some(minimum_binding_size),
             },
             ResourceType::Sampler { comparison } => BindingType::Sampler(if comparison {
                 wgt::SamplerBindingType::Comparison
@@ -1160,12 +1172,7 @@ impl Interface {
                 return;
             }
             ref other => {
-                //Note: technically this should be at least `log::error`, but
-                // the reality is - every shader coming from `glslc` outputs an array
-                // of clip distances and hits this path :(
-                // So we lower it to `log::debug` to be less annoying as
-                // there's nothing the user can do about it.
-                log::debug!("Unexpected varying type: {other:?}");
+                log::error!("Unexpected varying type: {other:?}");
                 return;
             }
         };
@@ -1177,7 +1184,7 @@ impl Interface {
                 sampling,
                 per_primitive,
                 blend_src: _,
-            }) => Varying::Local {
+            }) => Varying::UserDefined {
                 location,
                 iv: InterfaceVar {
                     ty: numeric_ty,
@@ -1275,7 +1282,8 @@ impl Interface {
                     ResourceType::AccelerationStructure { vertex_return }
                 }
                 ref other => ResourceType::Buffer {
-                    size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64).unwrap(),
+                    minimum_binding_size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64)
+                        .unwrap(),
                 },
             };
             let handle = resources.append(
@@ -1424,7 +1432,7 @@ impl Interface {
     pub fn check_stage(
         &self,
         layouts: &mut BindingLayoutSource,
-        shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+        minimum_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
         shader_stage: ShaderStageForValidation,
         inputs: StageIo,
@@ -1448,13 +1456,16 @@ impl Interface {
                 match layouts {
                     BindingLayoutSource::Provided(pipeline_layout) => {
                         // update the required binding size for this buffer
-                        if let ResourceType::Buffer { size } = res.ty {
-                            match shader_binding_sizes.entry(res.bind) {
+                        if let ResourceType::Buffer {
+                            minimum_binding_size,
+                        } = res.ty
+                        {
+                            match minimum_binding_sizes.entry(res.bind) {
                                 Entry::Occupied(e) => {
-                                    *e.into_mut() = size.max(*e.get());
+                                    *e.into_mut() = minimum_binding_size.max(*e.get());
                                 }
                                 Entry::Vacant(e) => {
-                                    e.insert(size);
+                                    e.insert(minimum_binding_size);
                                 }
                             }
                         }
@@ -1609,7 +1620,7 @@ impl Interface {
         // check inputs compatibility
         for input in entry_point.inputs.iter() {
             match *input {
-                Varying::Local { location, ref iv } => {
+                Varying::UserDefined { location, ref iv } => {
                     let result = inputs
                         .varyings
                         .get(&location)
@@ -1727,7 +1738,7 @@ impl Interface {
 
                 for output in entry_point.outputs.iter() {
                     match *output {
-                        Varying::Local { ref iv, location } => {
+                        Varying::UserDefined { ref iv, location } => {
                             if location > max_vertex_shader_output_location {
                                 return Err(StageError::VertexOutputLocationTooLarge {
                                     location,
@@ -1780,7 +1791,7 @@ impl Interface {
                     self.limits.max_inter_stage_shader_variables;
 
                 let deductions = entry_point.inputs.iter().filter_map(|output| match output {
-                    Varying::Local { .. } => None,
+                    Varying::UserDefined { .. } => None,
                     Varying::BuiltIn(builtin) => {
                         MaxFragmentShaderInputDeduction::from_inter_stage_builtin(builtin.to_naga())
                             .or_else(|| {
@@ -1807,7 +1818,7 @@ impl Interface {
 
                 for output in entry_point.inputs.iter() {
                     match *output {
-                        Varying::Local { ref iv, location } => {
+                        Varying::UserDefined { ref iv, location } => {
                             if location >= self.limits.max_inter_stage_shader_variables {
                                 return Err(StageError::FragmentInputLocationTooLarge {
                                     location,
@@ -1831,7 +1842,7 @@ impl Interface {
                 }
 
                 for output in &entry_point.outputs {
-                    let &Varying::Local { location, ref iv } = output else {
+                    let &Varying::UserDefined { location, ref iv } = output else {
                         continue;
                     };
                     if location >= self.limits.max_color_attachments {
@@ -1930,7 +1941,7 @@ impl Interface {
             .outputs
             .iter()
             .filter_map(|output| match *output {
-                Varying::Local { location, ref iv } => Some((location, iv.clone())),
+                Varying::UserDefined { location, ref iv } => Some((location, iv.clone())),
                 Varying::BuiltIn(_) => None,
             })
             .collect();

@@ -47,6 +47,8 @@ Bottom level categories:
 #### General
 
 - Support the `wasm64-unknown-unknown` target for the web backend. Building for wasm64 requires a nightly toolchain with `-Z build-std=std,panic_abort`. By @nickbabcock in [#9836](https://github.com/gfx-rs/wgpu/pull/9836).
+- Many types now offer `pub const fn default()` in addition to implementing the `Default` trait, allowing constants to make use of default values. By @kpreid in [#9929](https://github.com/gfx-rs/wgpu/pull/9929).
+- `wgpu-core` now exposes `validate_device_descriptor` and `validate_texture_descriptor` functions that perform the same descriptor validation the corresponding resource creation APIs would, without actually creating a resource. This may be useful in conjunction with hal raw APIs. By @andyleiserson in [#9967](https://github.com/gfx-rs/wgpu/pull/9967) and [#9979](https://github.com/gfx-rs/wgpu/pull/9979).
 
 #### Hal
 
@@ -69,6 +71,7 @@ Bottom level categories:
 - [`immediate_address_space`](https://www.w3.org/TR/WGSL/#language_extension-immediate_address_space) WGSL language extension is implemented. By @beicause in [#9711](https://github.com/gfx-rs/wgpu/pull/9711).
 - `TextureFormat::is_srgb()` has been renamed to `TextureFormat::has_srgb_suffix()` to clarify its function. By @kpreid in [#9758](https://github.com/gfx-rs/wgpu/pull/9758).
 - Remove the never-constructed `CreateBlasError::InvalidAabbStride` variant. `create_blas` takes no stride, so it could never be produced; AABB stride is validated at build time as `BuildAccelerationStructureError::InvalidAabbStride`. By @mstampfli in [#9935](https://github.com/gfx-rs/wgpu/pull/9935).
+- Use `Arc`'d resources instead of IDs as the default resource type in `PipelineLayoutDescriptor`. By @sagudev in [#9985](https://github.com/gfx-rs/wgpu/pull/9985)
 
 #### naga
 
@@ -81,10 +84,13 @@ Bottom level categories:
 - Zero-initialize padding (if any) at the end of a buffer allocation. This was application-visible in rare cases on Vulkan when a shader read beyond the valid range of a vertex buffer. By @andyleiserson in [#9791](https://github.com/gfx-rs/wgpu/pull/9791).
 - Fix required immediate slots calculation and remove `naga::valid::FunctionInfo::immediate_slots_used`. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
 - Fix a panic on the queue-empty assert in `Device::maintain` when more than one thread polls the same device. A timed-out `Wait` poll that races a concurrent poll on another thread now returns `WaitSucceeded` or `Timeout` instead of `QueueEmpty`; `QueueEmpty` is only returned when the poll itself proved it, as its documentation already promised. Polling again reports the empty queue. By @AdrianEddy in [#9958](https://github.com/gfx-rs/wgpu/pull/9958).
+- Fix `PendingSubmission` releasing its lock guards out of stacking order, which tripped `--cfg wgpu_validate_locks` on any submission. By @AdrianEddy in [#9960](https://github.com/gfx-rs/wgpu/pull/9960).
+- Fixed some cases where initialization tracking was not correct. By @andyleiserson in [#10002](https://github.com/gfx-rs/wgpu/pull/10002).
 
 #### naga
 
 - Fix panics when shader `var<immediate>` size is larger than 256 bytes. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
+- Fix a panic in the SPIR-V frontend when a subgroup collective operation (e.g. `OpGroupNonUniformUMin`) or `OpGroupNonUniformBallot` used an argument whose value needed to be spilled to a temporary variable, such as when the argument was computed inside a loop. By @nazar-pc in [#9957](https://github.com/gfx-rs/wgpu/issues/9957).
 
 #### Validation
 
@@ -94,6 +100,7 @@ Bottom level categories:
 #### Naga
 
 - Replace embedded NUL characters with `?` when writing debug strings to SPIR-V. By @andyleiserson in [#9904](https://github.com/gfx-rs/wgpu/pull/9904).
+- Fix invalid HLSL generated for `textureSampleLevel` with non-2D textures. By @mvanhorn in [#9717](https://github.com/gfx-rs/wgpu/issues/9717).
 
 #### Vulkan
 
@@ -103,6 +110,7 @@ Bottom level categories:
 #### GLES
 
 - Fixed signed integer `%` (and `%=`) returning the wrong result for negative operands in the GLSL (OpenGL/GLES) backend, e.g. `-1 % 768` yielding `255` instead of `-1`. GLSL's `%` is undefined when either operand is negative, so signed remainder is now lowered as `a - b * (a / b)`, matching the SPIR-V, HLSL, and Metal backends. By @mstampfli in [#9687](https://github.com/gfx-rs/wgpu/pull/9687).
+- Fix negative argument for `atomicSub` yielding incorrect GLSL. By @ErichDonGubler in [#9924](https://github.com/gfx-rs/wgpu/pull/9924).
 
 #### WebGPU
 

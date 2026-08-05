@@ -61,7 +61,7 @@ pub use self::{
         ColorAttachmentError, ColorAttachments, LoadOp, PassChannel, RenderBasePass, RenderPass,
         RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
         RenderPassError, RenderPassErrorInner, ResolvedPassChannel,
-        ResolvedRenderPassDepthStencilAttachment, StoreOp,
+        ResolvedRenderPassDepthStencilAttachment, ResolvedRenderPassDescriptor, StoreOp,
     },
     render_command::ArcRenderCommand,
     transfer::{CopySide, TransferError},
