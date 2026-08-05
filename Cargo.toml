@@ -175,6 +175,8 @@ portable-atomic-util = "0.2.4"
 pp-rs = "0.2.1"
 profiling = { version = "1.0.1", default-features = false }
 quote = "1.0.38"
+# Limit to versions that use rand 0.8
+proptest = ">=1, <1.7"
 raw-window-handle = { version = "0.6.2", default-features = false }
 rayon = "1.3"
 regex-lite = "0.1"

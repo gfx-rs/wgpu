@@ -197,5 +197,8 @@ thiserror.workspace = true
 [target.'cfg(not(target_has_atomic = "64"))'.dependencies]
 portable-atomic = { workspace = true, optional = true }
 
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+proptest.workspace = true
+
 [build-dependencies]
 cfg_aliases.workspace = true
