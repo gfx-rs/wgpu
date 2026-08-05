@@ -302,11 +302,12 @@ impl WebGpuError for ImplicitLayoutError {
 /// Describes a compute pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// cbindgen:ignore
 pub struct ComputePipelineDescriptor<
     'a,
-    PLL = PipelineLayoutId,
-    SM = ShaderModuleId,
-    PLC = PipelineCacheId,
+    PLL = Arc<PipelineLayout>,
+    SM = Arc<ShaderModule>,
+    PLC = Arc<PipelineCache>,
 > {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
@@ -316,10 +317,6 @@ pub struct ComputePipelineDescriptor<
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PLC>,
 }
-
-/// cbindgen:ignore
-pub type ResolvedComputePipelineDescriptor<'a> =
-    ComputePipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]

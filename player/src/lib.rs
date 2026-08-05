@@ -616,8 +616,8 @@ impl Player {
     fn resolve_compute_pipeline_descriptor<'a>(
         &self,
         desc: wgc::device::trace::TraceComputePipelineDescriptor<'a>,
-    ) -> wgc::pipeline::ResolvedComputePipelineDescriptor<'a> {
-        wgc::pipeline::ResolvedComputePipelineDescriptor {
+    ) -> wgc::pipeline::ComputePipelineDescriptor<'a> {
+        wgc::pipeline::ComputePipelineDescriptor {
             label: desc.label,
             layout: desc.layout.map(|id| self.resolve_pipeline_layout_id(id)),
             stage: wgc::pipeline::ProgrammableStageDescriptor {

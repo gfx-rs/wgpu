@@ -11,8 +11,7 @@ use crate::{
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
     pipeline::{
-        self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
-        ResolvedComputePipelineDescriptor, ResolvedFragmentState,
+        self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor, ResolvedFragmentState,
         ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState, ResolvedTaskState,
         ResolvedVertexState,
     },
@@ -54,6 +53,13 @@ pub type BindingResource<'a> = binding_model::BindingResource<
     id::TextureViewId,
     id::TlasId,
     id::ExternalTextureId,
+>;
+
+pub type ComputePipelineDescriptor<'a> = pipeline::ComputePipelineDescriptor<
+    'a,
+    id::PipelineLayoutId,
+    id::ShaderModuleId,
+    id::PipelineCacheId,
 >;
 
 impl Global {
@@ -1003,7 +1009,7 @@ impl Global {
     pub fn device_create_compute_pipeline(
         &self,
         device_id: DeviceId,
-        desc: &pipeline::ComputePipelineDescriptor,
+        desc: &ComputePipelineDescriptor,
         id_in: Option<id::ComputePipelineId>,
     ) -> (
         id::ComputePipelineId,
@@ -1028,7 +1034,7 @@ impl Global {
             zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
         };
 
-        let desc = ResolvedComputePipelineDescriptor {
+        let desc = pipeline::ComputePipelineDescriptor {
             label: desc.label.clone(),
             layout,
             stage,

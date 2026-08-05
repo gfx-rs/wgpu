@@ -749,18 +749,17 @@ impl GPUDevice {
     GPUComputePipeline,
     Option<wgpu_core::pipeline::CreateComputePipelineError>,
   ) {
-    let wgpu_descriptor =
-      wgpu_core::pipeline::ResolvedComputePipelineDescriptor {
-        label: crate::transform_label(descriptor.label.clone()),
-        layout: descriptor.layout.into(),
-        stage: ProgrammableStageDescriptor {
-          module: descriptor.compute.module.wgpu_shader_module.clone(),
-          entry_point: descriptor.compute.entry_point.map(Into::into),
-          constants: descriptor.compute.constants.into_iter().collect(),
-          zero_initialize_workgroup_memory: true,
-        },
-        cache: None,
-      };
+    let wgpu_descriptor = wgpu_core::pipeline::ComputePipelineDescriptor {
+      label: crate::transform_label(descriptor.label.clone()),
+      layout: descriptor.layout.into(),
+      stage: ProgrammableStageDescriptor {
+        module: descriptor.compute.module.wgpu_shader_module.clone(),
+        entry_point: descriptor.compute.entry_point.map(Into::into),
+        constants: descriptor.compute.constants.into_iter().collect(),
+        zero_initialize_workgroup_memory: true,
+      },
+      cache: None,
+    };
 
     let (wgpu_compute_pipeline, err) =
       self.wgpu_device.create_compute_pipeline(wgpu_descriptor);
