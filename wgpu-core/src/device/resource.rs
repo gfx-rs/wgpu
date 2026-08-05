@@ -4052,7 +4052,7 @@ impl Device {
 
     pub fn create_pipeline_layout(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedPipelineLayoutDescriptor,
+        desc: &binding_model::PipelineLayoutDescriptor,
     ) -> (
         Arc<binding_model::PipelineLayout>,
         Option<binding_model::CreatePipelineLayoutError>,
@@ -4082,7 +4082,7 @@ impl Device {
 
     fn create_pipeline_layout_impl(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedPipelineLayoutDescriptor,
+        desc: &binding_model::PipelineLayoutDescriptor,
         ignore_exclusive_pipeline_check: bool,
     ) -> Result<Arc<binding_model::PipelineLayout>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
@@ -4238,7 +4238,7 @@ impl Device {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
+        let layout_desc = binding_model::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: Cow::Owned(bind_group_layouts),
             immediate_size,
