@@ -672,7 +672,7 @@ impl IntoTrace for crate::binding_model::PipelineLayoutDescriptor<'_> {
     }
 }
 
-impl<'a> IntoTrace for &'_ crate::binding_model::ResolvedBindGroupDescriptor<'a> {
+impl<'a> IntoTrace for &'_ crate::binding_model::BindGroupDescriptor<'a> {
     type Output = TraceBindGroupDescriptor<'a>;
 
     fn into_trace(self) -> Self::Output {

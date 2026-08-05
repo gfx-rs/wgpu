@@ -394,7 +394,7 @@ impl GPUDevice {
     let entries = descriptor
       .entries
       .into_iter()
-      .map(|entry| wgpu_core::binding_model::ResolvedBindGroupEntry {
+      .map(|entry| wgpu_core::binding_model::BindGroupEntry {
         binding: entry.binding,
         resource: match entry.resource {
           GPUBindingResource::Sampler(sampler) => {
@@ -429,12 +429,11 @@ impl GPUDevice {
       })
       .collect::<Vec<_>>();
 
-    let wgpu_descriptor =
-      wgpu_core::binding_model::ResolvedBindGroupDescriptor {
-        label: crate::transform_label(descriptor.label.clone()),
-        layout: descriptor.layout.wgpu_bind_group_layout.clone(),
-        entries: Cow::Owned(entries),
-      };
+    let wgpu_descriptor = wgpu_core::binding_model::BindGroupDescriptor {
+      label: crate::transform_label(descriptor.label.clone()),
+      layout: descriptor.layout.wgpu_bind_group_layout.clone(),
+      entries: Cow::Owned(entries),
+    };
 
     let (wgpu_bind_group, err) =
       self.wgpu_device.create_bind_group(&wgpu_descriptor);

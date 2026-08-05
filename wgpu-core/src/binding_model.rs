@@ -20,7 +20,7 @@ use wgt::error::{ErrorType, WebGpuError};
 use crate::{
     api_log,
     device::{bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
-    id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId, TlasId},
+    id::{BufferId, ExternalTextureId, SamplerId, TextureViewId, TlasId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
@@ -645,11 +645,11 @@ impl BindingTypeMaxCountValidator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BindGroupEntry<
     'a,
-    B = BufferId,
-    S = SamplerId,
-    TV = TextureViewId,
-    TLAS = TlasId,
-    ET = ExternalTextureId,
+    B = Arc<Buffer>,
+    S = Arc<Sampler>,
+    TV = Arc<TextureView>,
+    TLAS = Arc<Tlas>,
+    ET = Arc<ExternalTexture>,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -671,27 +671,18 @@ pub struct BindGroupEntry<
     pub resource: BindingResource<'a, B, S, TV, TLAS, ET>,
 }
 
-/// cbindgen:ignore
-pub type ResolvedBindGroupEntry<'a> = BindGroupEntry<
-    'a,
-    Arc<Buffer>,
-    Arc<Sampler>,
-    Arc<TextureView>,
-    Arc<Tlas>,
-    Arc<ExternalTexture>,
->;
-
 /// Describes a group of bindings and the resources to be bound.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// cbindgen:ignore
 pub struct BindGroupDescriptor<
     'a,
-    BGL = BindGroupLayoutId,
-    B = BufferId,
-    S = SamplerId,
-    TV = TextureViewId,
-    TLAS = TlasId,
-    ET = ExternalTextureId,
+    BGL = Arc<BindGroupLayout>,
+    B = Arc<Buffer>,
+    S = Arc<Sampler>,
+    TV = Arc<TextureView>,
+    TLAS = Arc<Tlas>,
+    ET = Arc<ExternalTexture>,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -720,17 +711,6 @@ pub struct BindGroupDescriptor<
     #[allow(clippy::type_complexity)]
     pub entries: Cow<'a, [BindGroupEntry<'a, B, S, TV, TLAS, ET>]>,
 }
-
-/// cbindgen:ignore
-pub type ResolvedBindGroupDescriptor<'a> = BindGroupDescriptor<
-    'a,
-    Arc<BindGroupLayout>,
-    Arc<Buffer>,
-    Arc<Sampler>,
-    Arc<TextureView>,
-    Arc<Tlas>,
-    Arc<ExternalTexture>,
->;
 
 /// Describes a [`BindGroupLayout`].
 #[derive(Clone, Debug)]
