@@ -11,7 +11,7 @@ use crate::{
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
     pipeline::{
-        self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor, ResolvedFragmentState,
+        self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
         ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState, ResolvedTaskState,
     },
     present,
@@ -950,7 +950,7 @@ impl Global {
                 constants: state.stage.constants.clone(),
                 zero_initialize_workgroup_memory: state.stage.zero_initialize_workgroup_memory,
             };
-            Some(ResolvedFragmentState {
+            Some(pipeline::FragmentState {
                 stage,
                 targets: state.targets.clone(),
             })
