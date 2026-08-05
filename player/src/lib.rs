@@ -638,19 +638,17 @@ impl Player {
 
         let vertex = match desc.vertex {
             wgc::pipeline::RenderPipelineVertexProcessor::Vertex(vertex_state) => {
-                wgc::pipeline::RenderPipelineVertexProcessor::Vertex(
-                    wgc::pipeline::ResolvedVertexState {
-                        stage: wgc::pipeline::ProgrammableStageDescriptor {
-                            module: self.resolve_shader_module_id(vertex_state.stage.module),
-                            entry_point: vertex_state.stage.entry_point,
-                            constants: vertex_state.stage.constants,
-                            zero_initialize_workgroup_memory: vertex_state
-                                .stage
-                                .zero_initialize_workgroup_memory,
-                        },
-                        buffers: vertex_state.buffers,
+                wgc::pipeline::RenderPipelineVertexProcessor::Vertex(wgc::pipeline::VertexState {
+                    stage: wgc::pipeline::ProgrammableStageDescriptor {
+                        module: self.resolve_shader_module_id(vertex_state.stage.module),
+                        entry_point: vertex_state.stage.entry_point,
+                        constants: vertex_state.stage.constants,
+                        zero_initialize_workgroup_memory: vertex_state
+                            .stage
+                            .zero_initialize_workgroup_memory,
                     },
-                )
+                    buffers: vertex_state.buffers,
+                })
             }
             wgc::pipeline::RenderPipelineVertexProcessor::Mesh(task_state, mesh_state) => {
                 let resolved_task = task_state.map(|task| wgc::pipeline::ResolvedTaskState {

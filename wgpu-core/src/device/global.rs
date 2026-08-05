@@ -13,7 +13,6 @@ use crate::{
     pipeline::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor, ResolvedFragmentState,
         ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState, ResolvedTaskState,
-        ResolvedVertexState,
     },
     present,
     resource::{
@@ -61,6 +60,8 @@ pub type ComputePipelineDescriptor<'a> = pipeline::ComputePipelineDescriptor<
     id::ShaderModuleId,
     id::PipelineCacheId,
 >;
+
+pub type VertexState<'a> = pipeline::VertexState<'a, id::ShaderModuleId>;
 
 impl Global {
     pub fn adapter_is_surface_supported(
@@ -905,7 +906,7 @@ impl Global {
                     constants: vertex.stage.constants.clone(),
                     zero_initialize_workgroup_memory: vertex.stage.zero_initialize_workgroup_memory,
                 };
-                RenderPipelineVertexProcessor::Vertex(ResolvedVertexState {
+                RenderPipelineVertexProcessor::Vertex(pipeline::VertexState {
                     stage,
                     buffers: vertex.buffers.clone(),
                 })
