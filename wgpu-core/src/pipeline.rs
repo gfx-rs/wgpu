@@ -220,7 +220,8 @@ impl WebGpuError for CreateShaderModuleError {
 /// Describes a programmable pipeline stage.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
+/// cbindgen:ignore
+pub struct ProgrammableStageDescriptor<'a, SM = Arc<ShaderModule>> {
     /// The compiled shader module for this stage.
     pub module: SM,
     /// The name of the entry point in the compiled shader. The name is selected using the
@@ -244,10 +245,6 @@ pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
 }
-
-/// cbindgen:ignore
-pub type ResolvedProgrammableStageDescriptor<'a> =
-    ProgrammableStageDescriptor<'a, Arc<ShaderModule>>;
 
 /// Number of implicit bind groups derived at pipeline creation.
 pub type ImplicitBindGroupCount = u8;

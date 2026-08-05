@@ -11,9 +11,10 @@ use crate::{
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
     pipeline::{
-        self, RenderPipelineVertexProcessor, ResolvedComputePipelineDescriptor,
-        ResolvedFragmentState, ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState,
-        ResolvedProgrammableStageDescriptor, ResolvedTaskState, ResolvedVertexState,
+        self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
+        ResolvedComputePipelineDescriptor, ResolvedFragmentState,
+        ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState, ResolvedTaskState,
+        ResolvedVertexState,
     },
     present,
     resource::{
@@ -892,7 +893,7 @@ impl Global {
         let vertex = match desc.vertex {
             RenderPipelineVertexProcessor::Vertex(ref vertex) => {
                 let module = hub.shader_modules.get(vertex.stage.module);
-                let stage = ResolvedProgrammableStageDescriptor {
+                let stage = ProgrammableStageDescriptor {
                     module,
                     entry_point: vertex.stage.entry_point.clone(),
                     constants: vertex.stage.constants.clone(),
@@ -907,7 +908,7 @@ impl Global {
                 let task_module = if let Some(task) = task {
                     let module = hub.shader_modules.get(task.stage.module);
 
-                    let state = ResolvedProgrammableStageDescriptor {
+                    let state = ProgrammableStageDescriptor {
                         module,
                         entry_point: task.stage.entry_point.clone(),
                         constants: task.stage.constants.clone(),
@@ -920,7 +921,7 @@ impl Global {
                     None
                 };
                 let mesh_module = hub.shader_modules.get(mesh.stage.module);
-                let mesh_stage = ResolvedProgrammableStageDescriptor {
+                let mesh_stage = ProgrammableStageDescriptor {
                     module: mesh_module,
                     entry_point: mesh.stage.entry_point.clone(),
                     constants: mesh.stage.constants.clone(),
@@ -936,7 +937,7 @@ impl Global {
         let fragment = if let Some(ref state) = desc.fragment {
             let module = hub.shader_modules.get(state.stage.module);
 
-            let stage = ResolvedProgrammableStageDescriptor {
+            let stage = ProgrammableStageDescriptor {
                 module,
                 entry_point: state.stage.entry_point.clone(),
                 constants: state.stage.constants.clone(),
@@ -1020,7 +1021,7 @@ impl Global {
 
         let module = hub.shader_modules.get(desc.stage.module);
 
-        let stage = ResolvedProgrammableStageDescriptor {
+        let stage = ProgrammableStageDescriptor {
             module,
             entry_point: desc.stage.entry_point.clone(),
             constants: desc.stage.constants.clone(),
