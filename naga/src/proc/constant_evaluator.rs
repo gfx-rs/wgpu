@@ -17,6 +17,7 @@ use num_traits::{real::Real, FromPrimitive, One, ToPrimitive, Zero};
 
 use crate::{
     arena::{Arena, Handle, HandleVec, UniqueArena},
+    proc::FlattenedComponent,
     ArraySize, BinaryOperator, Constant, Expression, Literal, Override, RelationalFunction,
     ScalarKind, Span, Type, TypeInner, UnaryOperator,
 };
@@ -2198,9 +2199,40 @@ impl<'a> ConstantEvaluator<'a> {
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
         match self.expressions[expr] {
             Expression::Compose { ty, ref components } => {
-                let components =
-                    crate::proc::flatten_compose(ty, components, self.expressions, self.types)
-                        .collect::<Vec<_>>();
+                let component_scalar_ty = match self.types[ty].inner {
+                    TypeInner::Vector { size: _, scalar } => Some(scalar),
+                    _ => None,
+                };
+                let mut zero_handle = None;
+                let components = match crate::proc::flatten_compose(
+                    ty,
+                    components,
+                    self.expressions,
+                    self.types,
+                ) {
+                    Some(flattened) => flattened
+                        .into_iter()
+                        .map(|component| match component {
+                            FlattenedComponent::Expression(expr) => Ok(expr),
+                            FlattenedComponent::Zero => {
+                                let component_ty = *(zero_handle.get_or_insert_with(|| {
+                                    self.types.insert(
+                                        Type {
+                                            name: None,
+                                            inner: TypeInner::Scalar(
+                                                component_scalar_ty
+                                                    .expect("zeros only in flattened vectors"),
+                                            ),
+                                        },
+                                        span,
+                                    )
+                                }));
+                                self.eval_zero_value_impl(component_ty, span)
+                            }
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    None => components.clone(),
+                };
                 expr =
                     self.register_evaluated_expr(Expression::Compose { ty, components }, span)?;
             }

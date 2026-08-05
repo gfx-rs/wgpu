@@ -1,4 +1,4 @@
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{borrow::Cow, format, string::String, vec, vec::Vec};
 
 use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
@@ -20,7 +20,7 @@ use crate::{
         BindingInfo, Std140CompatTypeInfo, WrappedFunction,
     },
     common::ForDebugWithTypes as _,
-    proc::{Alignment, TypeResolution},
+    proc::{Alignment, FlattenedComponent, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
 };
 
@@ -134,12 +134,37 @@ impl<'ctx> ConstExprContext<'ctx> {
                 self.writer().get_constant_null(type_id)
             }
             crate::Expression::Compose { ty, ref components } => {
-                let flattened =
-                    crate::proc::flatten_compose(ty, components, self.expressions(), &self.module().types)
-                        .map(|component| self.resolve_expr(component))
-                        .collect::<Result<Vec<_>, _>>()?;
+                let mut zero_id = None;
+                let components = match crate::proc::flatten_compose(
+                    ty,
+                    components,
+                    self.expressions(),
+                    &self.module().types,
+                ) {
+                    Some(flattened) => flattened
+                        .map(|component| match component {
+                            FlattenedComponent::Expression(expr) => self.resolve_expr(expr),
+                            FlattenedComponent::Zero => Ok(zero_id
+                                .get_or_insert_with(|| match self.module().types[ty].inner {
+                                    crate::TypeInner::Vector { size: _, scalar } => {
+                                        let type_id = self
+                                            .writer()
+                                            .get_numeric_type_id(NumericType::Scalar(scalar));
+                                        Some(self.writer().get_constant_null(type_id))
+                                    }
+                                    _ => None,
+                                })
+                                .expect("zeros only in flattened vectors")),
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    None => components
+                        .iter()
+                        .copied()
+                        .map(|c| self.resolve_expr(c))
+                        .collect::<Result<Vec<_>, _>>()?,
+                };
                 self.writer()
-                    .get_constant_composite(LookupType::Handle(ty), &flattened)
+                    .get_constant_composite(LookupType::Handle(ty), components)
             }
             crate::Expression::Splat { size, value } => {
                 let value_id = match *self {
@@ -2776,11 +2801,16 @@ impl Writer {
         instruction.to_words(&mut self.logical_layout.declarations);
     }
 
-    pub(super) fn get_constant_composite(
+    /// Produce an `OpConstantComposite` instruction and return the result ID.
+    ///
+    /// The length of `constituent_ids` must match the number of components in the composite
+    /// type (nesting vectors within vectors is not allowed).
+    pub(super) fn get_constant_composite<'c>(
         &mut self,
         ty: LookupType,
-        constituent_ids: &[Word],
+        constituent_ids: impl Into<Cow<'c, [Word]>>,
     ) -> Word {
+        let constituent_ids = constituent_ids.into();
         let composite = CachedConstant::Composite {
             ty,
             constituent_ids: constituent_ids.to_vec(),
@@ -2789,7 +2819,7 @@ impl Writer {
             return id;
         }
         let id = self.id_gen.next();
-        self.write_constant_composite(id, ty, constituent_ids, None);
+        self.write_constant_composite(id, ty, constituent_ids.as_ref(), None);
         self.cached_constants.insert(composite, id);
         id
     }
