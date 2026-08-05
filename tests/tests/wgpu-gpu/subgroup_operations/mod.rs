@@ -18,15 +18,18 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
         //
         // Newlines are included in the panic message to ensure that _additional_ failures
         // are not matched against.
-        failures: wgpu_test::FailureCase::mac(|case| {
-            case
-                // 26.0 fails only test 28, and not on thread 0
-                .panic("thread 1 failed tests: 28,\n")
-                // 14.3 fails 27 and 28
-                .panic("thread 0 failed tests: 27,\nthread 1 failed tests: 27, 28,\n")
-                // Prior versions fail 27, 28, and 29
-                .panic("thread 0 failed tests: 27, 29,\nthread 1 failed tests: 27, 28, 29,\n")
-        }),
+        failures: wgpu_test::FailureCase::mac()
+            .into_iter()
+            .map(|case| {
+                case
+                    // 26.0 fails only test 28, and not on thread 0
+                    .panic("thread 1 failed tests: 28,\n")
+                    // 14.3 fails 27 and 28
+                    .panic("thread 0 failed tests: 27,\nthread 1 failed tests: 27, 28,\n")
+                    // Prior versions fail 27, 28, and 29
+                    .panic("thread 0 failed tests: 27, 29,\nthread 1 failed tests: 27, 28, 29,\n")
+            })
+            .collect(),
         ..Default::default()
     })
     .run_sync(|ctx| {
