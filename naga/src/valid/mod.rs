@@ -218,6 +218,9 @@ bitflags::bitflags! {
         const MEMORY_DECORATION_VOLATILE = 1 << 42;
         /// Support for 16-bit integer types.
         const SHADER_INT16 = 1 << 43;
+        /// Support for the `storageFence` and `workgroupFence` built-in
+        /// functions: memory ordering without execution synchronization.
+        const MEMORY_FENCE = 1 << 44;
     }
 }
 

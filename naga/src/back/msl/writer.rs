@@ -403,6 +403,7 @@ pub(super) struct TypedGlobalVariable<'a> {
     pub handle: Handle<crate::GlobalVariable>,
     pub usage: valid::GlobalUse,
     pub reference: bool,
+    pub lang_version: (u8, u8),
 }
 
 struct TypedGlobalVariableParts {
@@ -464,11 +465,30 @@ impl TypedGlobalVariable<'_> {
                         .memory_decorations
                         .contains(crate::MemoryDecorations::COHERENT)
                     {
+                        if self.lang_version < (3, 2) {
+                            return Err(Error::UnsupportedCoherent);
+                        }
                         "coherent "
                     } else {
                         ""
                     };
-                    (coherent, space, access, "&")
+                    let volatile = if var
+                        .memory_decorations
+                        .contains(crate::MemoryDecorations::VOLATILE)
+                    {
+                        "volatile "
+                    } else {
+                        ""
+                    };
+                    // `volatile` and `coherent` are both pointee
+                    // qualifiers; emit them ahead of the address space.
+                    let qualifiers: &str = match (volatile.is_empty(), coherent.is_empty()) {
+                        (false, false) => "volatile coherent ",
+                        (false, true) => volatile,
+                        (true, false) => coherent,
+                        (true, true) => "",
+                    };
+                    (qualifiers, space, access, "&")
                 }
                 _ => ("", "", "", ""),
             }
@@ -7029,6 +7049,7 @@ template <typename A>
                     handle,
                     usage: fun_info[handle],
                     reference: true,
+                    lang_version: options.lang_version,
                 };
                 let separator =
                     separate(index + 1 != pass_through_globals.len() || needs_buffer_sizes);
@@ -7801,6 +7822,7 @@ template <typename A>
                             handle,
                             usage,
                             reference: true,
+                            lang_version: options.lang_version,
                         };
                         let parts = tyvar.to_parts()?;
                         let mut binding = String::new();
@@ -8099,6 +8121,7 @@ template <typename A>
                         usage,
 
                         reference: false,
+                        lang_version: options.lang_version,
                     };
                     write!(self.out, "{}", back::INDENT)?;
                     tyvar.try_fmt(&mut self.out)?;

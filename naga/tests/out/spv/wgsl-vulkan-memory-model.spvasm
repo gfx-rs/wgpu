@@ -83,5 +83,6 @@ OpStore %46 %45 Volatile|MakePointerAvailable|NonPrivatePointer %24
 OpAtomicStore %20 %40 %19 %21
 %47 = OpAtomicLoad  %3  %20 %40 %19
 %48 = OpAtomicIAdd  %3  %20 %40 %19 %21
+OpMemoryBarrier %42 %43
 OpReturn
 OpFunctionEnd

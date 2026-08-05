@@ -46,6 +46,8 @@ Bottom level categories:
 
 #### naga
 
+- Add the `wgpu_memory_fence` native enable-extension: `storageFence()` and `workgroupFence()` provide acquire/release memory ordering without execution synchronization or the uniform-control-flow requirement of the barrier built-ins (SPIR-V `OpMemoryBarrier`; on Metal and HLSL they degrade to the corresponding execution barriers, so portable code should keep them in uniform control flow). SPIR-V ingestion of `OpMemoryBarrier` now round-trips through WGSL as these fences instead of being strengthened to control barriers. By @kvark+Claude in [#10016](https://github.com/gfx-rs/wgpu/issues/10016).
+- The Metal backend now supports the `@volatile` memory decoration (`volatile` device pointers), and rejects `@coherent` below MSL 3.2 instead of emitting a qualifier older Metal cannot compile. By @kvark+Claude in [#10016](https://github.com/gfx-rs/wgpu/issues/10016).
 - The SPIR-V backend now emits spec-compliant output under the Vulkan memory model: storage and workgroup accesses carry `NonPrivatePointer` with availability/visibility scopes, barrier semantics include `MakeAvailable`/`MakeVisible`, atomics and storage barriers use `QueueFamily` scope instead of `Device`, and the `Coherent`/`Volatile` decorations (forbidden by the model) are replaced by per-access memory operands. The model is declared whenever the module requires it (cooperative matrices) or when the new `spv::Options::use_vulkan_memory_model` option requests it. Accesses to storage globals that no entry point writes stay private, preserving first-level caching for read-only data. By @kvark+Claude in [#10016](https://github.com/gfx-rs/wgpu/issues/10016).
 
 #### General

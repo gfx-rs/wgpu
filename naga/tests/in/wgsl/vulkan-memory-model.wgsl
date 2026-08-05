@@ -1,3 +1,5 @@
+enable wgpu_memory_fence;
+
 struct Data {
     values: array<u32>,
 }
@@ -26,4 +28,5 @@ fn main() {
     atomicStore(&flag, 1u);
     _ = atomicLoad(&flag);
     _ = atomicAdd(&flag, 1u);
+    storageFence();
 }

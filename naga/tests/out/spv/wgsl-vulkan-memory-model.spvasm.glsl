@@ -35,10 +35,10 @@ void main()
     _6._m0[0u] = _13;
     memoryBarrierBuffer();
     barrier();
-    uint _45 = _8._m0[0u];
-    _8._m0[1u] = _45;
+    _8._m0[1u] = _8._m0[0u];
     atomicExchange(_10._m0, 1u);
     uint _47 = atomicAdd(_10._m0, 0u);
     uint _48 = atomicAdd(_10._m0, 1u);
+    memoryBarrierBuffer();
 }
 
