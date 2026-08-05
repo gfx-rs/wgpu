@@ -1013,11 +1013,12 @@ pub struct Writer {
     emit_int_div_checks: bool,
     /// See [`Options::use_vulkan_memory_model`].
     use_vulkan_memory_model: bool,
-    /// Whether the module being written declares the Vulkan memory model:
-    /// either requested through the options, or required by a capability the
-    /// module uses. Decided up front in [`Writer::write`] so that memory
-    /// operands can be emitted consistently throughout the module.
-    vulkan_memory_model: bool,
+    /// The memory model the module being written declares: Vulkan when
+    /// requested through the options or required by a capability the module
+    /// uses, GLSL450 otherwise. Decided up front in [`Writer::write`] so
+    /// that memory operands can be emitted consistently throughout the
+    /// module.
+    memory_model: spirv::MemoryModel,
     /// Globals written (including atomically) by the entry points being
     /// written. Only populated under the Vulkan memory model, where accesses
     /// to globals outside this set stay private

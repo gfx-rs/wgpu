@@ -98,7 +98,8 @@ impl Writer {
             use_storage_input_output_16: options.use_storage_input_output_16,
             emit_int_div_checks: options.emit_int_div_checks,
             use_vulkan_memory_model: options.use_vulkan_memory_model,
-            vulkan_memory_model: options.use_vulkan_memory_model,
+            // Re-decided per module in `write`.
+            memory_model: spirv::MemoryModel::GLSL450,
             written_globals: crate::FastHashSet::default(),
             void_type,
             tuple_of_u32s_ty_id: None,
@@ -189,8 +190,8 @@ impl Writer {
             use_vulkan_memory_model: self.use_vulkan_memory_model,
 
             // Initialized afresh:
-            // Re-decided per module in `write`; option-requested value until then.
-            vulkan_memory_model: self.use_vulkan_memory_model,
+            // Re-decided per module in `write`.
+            memory_model: spirv::MemoryModel::GLSL450,
             written_globals: take(&mut self.written_globals),
             id_gen,
             void_type,
@@ -2815,7 +2816,7 @@ impl Writer {
             spirv::MemorySemantics::IMAGE_MEMORY,
             flags.contains(crate::Barrier::TEXTURE),
         );
-        if self.vulkan_memory_model {
+        if self.memory_model == spirv::MemoryModel::Vulkan {
             // Under the Vulkan memory model, availability and visibility are
             // explicit: without these bits the barrier orders accesses but
             // does not propagate them between invocations.
@@ -2875,7 +2876,7 @@ impl Writer {
         decorations: crate::MemoryDecorations,
         is_load: bool,
     ) -> Option<super::MemoryOperands> {
-        if !self.vulkan_memory_model {
+        if self.memory_model != spirv::MemoryModel::Vulkan {
             return None;
         }
         match space {
@@ -2910,7 +2911,7 @@ impl Writer {
         decorations: crate::MemoryDecorations,
     ) -> (spirv::MemorySemantics, spirv::Scope) {
         let (mut semantics, mut scope) = space.to_spirv_semantics_and_scope();
-        if self.vulkan_memory_model {
+        if self.memory_model == spirv::MemoryModel::Vulkan {
             // Device scope requires the `vulkanMemoryModelDeviceScope`
             // feature; QueueFamily is the model's equivalent scope.
             if scope == spirv::Scope::Device {
@@ -3502,7 +3503,7 @@ impl Writer {
         // decorations are forbidden; their effects are expressed through
         // memory operands on each access instead
         // (see `access_memory_operands`).
-        if !self.vulkan_memory_model {
+        if self.memory_model != spirv::MemoryModel::Vulkan {
             if global_variable
                 .memory_decorations
                 .contains(crate::MemoryDecorations::COHERENT)
@@ -3941,14 +3942,7 @@ impl Writer {
         }
 
         let addressing_model = spirv::AddressingModel::Logical;
-        let memory_model = if self
-            .capabilities_used
-            .contains(&spirv::Capability::VulkanMemoryModel)
-        {
-            spirv::MemoryModel::Vulkan
-        } else {
-            spirv::MemoryModel::GLSL450
-        };
+        let memory_model = self.memory_model;
         //self.check(addressing_model.required_capabilities())?;
         //self.check(memory_model.required_capabilities())?;
 
@@ -3986,15 +3980,18 @@ impl Writer {
         // accesses depend on it, and those are written before the module
         // header is assembled. Cooperative matrices require the Vulkan
         // memory model regardless of what the options request.
-        self.vulkan_memory_model = self.use_vulkan_memory_model
+        let requires_vulkan_model = self.use_vulkan_memory_model
             || ir_module
                 .types
                 .iter()
                 .any(|(_, ty)| matches!(ty.inner, crate::TypeInner::CooperativeMatrix { .. }));
-        if self.vulkan_memory_model {
+        self.memory_model = if requires_vulkan_model {
             self.require_any("memory model", &[spirv::Capability::VulkanMemoryModel])?;
             self.use_extension("SPV_KHR_vulkan_memory_model");
-        }
+            spirv::MemoryModel::Vulkan
+        } else {
+            spirv::MemoryModel::GLSL450
+        };
 
         // Try to find the entry point and corresponding index
         let ep_index = match pipeline_options {
@@ -4009,7 +4006,7 @@ impl Writer {
             None => None,
         };
 
-        if self.vulkan_memory_model {
+        if self.memory_model == spirv::MemoryModel::Vulkan {
             // Collect the globals any written entry point writes. The union
             // over entry points keeps functions shared between them sound.
             self.written_globals.clear();
