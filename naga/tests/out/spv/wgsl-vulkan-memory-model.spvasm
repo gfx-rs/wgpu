@@ -69,7 +69,7 @@ OpControlBarrier %33 %33 %34
 OpBranch %35
 %35 = OpLabel
 %37 = OpAccessChain  %18  %9 %19 %19
-%38 = OpLoad  %3  %37 MakePointerVisible|NonPrivatePointer %24
+%38 = OpLoad  %3  %37
 OpStore %13 %38 MakePointerAvailable|NonPrivatePointer %24
 OpControlBarrier %33 %33 %34
 %39 = OpLoad  %3  %13 MakePointerVisible|NonPrivatePointer %24

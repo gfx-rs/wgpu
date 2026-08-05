@@ -99,6 +99,7 @@ impl Writer {
             emit_int_div_checks: options.emit_int_div_checks,
             use_vulkan_memory_model: options.use_vulkan_memory_model,
             vulkan_memory_model: options.use_vulkan_memory_model,
+            written_globals: crate::FastHashSet::default(),
             void_type,
             tuple_of_u32s_ty_id: None,
             lookup_type: crate::FastHashMap::default(),
@@ -190,6 +191,7 @@ impl Writer {
             // Initialized afresh:
             // Re-decided per module in `write`; option-requested value until then.
             vulkan_memory_model: self.use_vulkan_memory_model,
+            written_globals: take(&mut self.written_globals),
             id_gen,
             void_type,
             tuple_of_u32s_ty_id: None,
@@ -4006,6 +4008,26 @@ impl Writer {
             }
             None => None,
         };
+
+        if self.vulkan_memory_model {
+            // Collect the globals any written entry point writes. The union
+            // over entry points keeps functions shared between them sound.
+            self.written_globals.clear();
+            let ep_range = match ep_index {
+                Some(index) => index..index + 1,
+                None => 0..ir_module.entry_points.len(),
+            };
+            for index in ep_range {
+                let ep_info = info.get_entry_point(index);
+                for (handle, _) in ir_module.global_variables.iter() {
+                    if ep_info[handle].intersects(
+                        crate::valid::GlobalUse::WRITE | crate::valid::GlobalUse::ATOMIC,
+                    ) {
+                        self.written_globals.insert(handle);
+                    }
+                }
+            }
+        }
 
         self.write_logical_layout(ir_module, info, ep_index, debug_info)?;
         self.write_physical_layout();

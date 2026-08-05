@@ -2922,10 +2922,7 @@ impl BlockContext<'_> {
                     _ => (None, false),
                 };
             let memory_operands = match pointer_space {
-                Some(space) if !is_atomic => {
-                    let decorations = self.memory_decorations_for(pointer);
-                    self.writer.access_memory_operands(space, decorations, true)
-                }
+                Some(space) if !is_atomic => self.access_memory_operands(pointer, space, true),
                 _ => None,
             };
 
@@ -3900,9 +3897,7 @@ impl BlockContext<'_> {
                         };
                     let memory_operands = match pointer_space {
                         Some(space) if !is_atomic => {
-                            let decorations = self.memory_decorations_for(pointer);
-                            self.writer
-                                .access_memory_operands(space, decorations, false)
+                            self.access_memory_operands(pointer, space, false)
                         }
                         _ => None,
                     };

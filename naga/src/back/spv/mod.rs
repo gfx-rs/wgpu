@@ -899,10 +899,38 @@ impl BlockContext<'_> {
         &self,
         pointer: Handle<crate::Expression>,
     ) -> crate::MemoryDecorations {
-        match self.fun_info[pointer].assignable_global() {
+        match self.fun_info[pointer].assignable_global {
             Some(handle) => self.ir_module.global_variables[handle].memory_decorations,
             None => crate::MemoryDecorations::empty(),
         }
+    }
+
+    /// Memory operands for a non-atomic access through `pointer`.
+    ///
+    /// Storage globals that no entry point writes keep fully private
+    /// accesses: there is nothing an availability or visibility operation
+    /// could propagate, since the API-side domain operation before the
+    /// dispatch already made their contents visible, and private accesses
+    /// preserve first-level caching. Globals carrying explicit memory
+    /// decorations are exempt from this elision: `@volatile` in particular
+    /// exists for data modified from outside the dispatch.
+    fn access_memory_operands(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        space: crate::AddressSpace,
+        is_load: bool,
+    ) -> Option<MemoryOperands> {
+        let global = self.fun_info[pointer].assignable_global;
+        let decorations = self.memory_decorations_for(pointer);
+        if decorations.is_empty() {
+            if let (crate::AddressSpace::Storage { .. }, Some(global)) = (space, global) {
+                if !self.writer.written_globals.contains(&global) {
+                    return None;
+                }
+            }
+        }
+        self.writer
+            .access_memory_operands(space, decorations, is_load)
     }
 
     /// Memory operands for a cooperative matrix load or store through `pointer`.
@@ -915,9 +943,7 @@ impl BlockContext<'_> {
             .ty
             .inner_with(&self.ir_module.types)
             .pointer_space()?;
-        let decorations = self.memory_decorations_for(pointer);
-        self.writer
-            .access_memory_operands(space, decorations, is_load)
+        self.access_memory_operands(pointer, space, is_load)
     }
 
     fn get_pointer_type_id(&mut self, base: Word, class: spirv::StorageClass) -> Word {
@@ -992,6 +1018,11 @@ pub struct Writer {
     /// module uses. Decided up front in [`Writer::write`] so that memory
     /// operands can be emitted consistently throughout the module.
     vulkan_memory_model: bool,
+    /// Globals written (including atomically) by the entry points being
+    /// written. Only populated under the Vulkan memory model, where accesses
+    /// to globals outside this set stay private
+    /// (see [`BlockContext::access_memory_operands`]).
+    written_globals: crate::FastHashSet<Handle<crate::GlobalVariable>>,
     void_type: Word,
     tuple_of_u32s_ty_id: Option<Word>,
     //TODO: convert most of these into vectors, addressable by handle indices

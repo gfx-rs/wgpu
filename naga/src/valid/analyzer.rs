@@ -179,22 +179,13 @@ pub struct ExpressionInfo {
     /// [`Access`]: crate::Expression::Access
     /// [`AccessIndex`]: crate::Expression::AccessIndex
     /// [`Load`]: crate::Expression::Load
-    assignable_global: Option<Handle<crate::GlobalVariable>>,
+    pub(crate) assignable_global: Option<Handle<crate::GlobalVariable>>,
 
     /// The type of this expression.
     pub ty: TypeResolution,
 }
 
 impl ExpressionInfo {
-    /// The global variable this expression is a pointer into, if any.
-    ///
-    /// This is `None` unless this expression is either a `GlobalVariable`,
-    /// or an `Access` or `AccessIndex` that ultimately refers to some part
-    /// of a global.
-    pub const fn assignable_global(&self) -> Option<Handle<crate::GlobalVariable>> {
-        self.assignable_global
-    }
-
     const fn new() -> Self {
         ExpressionInfo {
             uniformity: Uniformity::new(),

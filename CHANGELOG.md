@@ -46,7 +46,7 @@ Bottom level categories:
 
 #### naga
 
-- The SPIR-V backend now emits spec-compliant output under the Vulkan memory model: storage and workgroup accesses carry `NonPrivatePointer` with availability/visibility scopes, barrier semantics include `MakeAvailable`/`MakeVisible`, atomics and storage barriers use `QueueFamily` scope instead of `Device`, and the `Coherent`/`Volatile` decorations (forbidden by the model) are replaced by per-access memory operands. The model is declared whenever the module requires it (cooperative matrices) or when the new `spv::Options::use_vulkan_memory_model` option requests it. By @kvark in [#8805](https://github.com/gfx-rs/wgpu/issues/8805) and [#1545](https://github.com/gfx-rs/wgpu/issues/1545).
+- The SPIR-V backend now emits spec-compliant output under the Vulkan memory model: storage and workgroup accesses carry `NonPrivatePointer` with availability/visibility scopes, barrier semantics include `MakeAvailable`/`MakeVisible`, atomics and storage barriers use `QueueFamily` scope instead of `Device`, and the `Coherent`/`Volatile` decorations (forbidden by the model) are replaced by per-access memory operands. The model is declared whenever the module requires it (cooperative matrices) or when the new `spv::Options::use_vulkan_memory_model` option requests it. Accesses to storage globals that no entry point writes stay private, preserving first-level caching for read-only data. By @kvark+Claude in [#10016](https://github.com/gfx-rs/wgpu/issues/10016).
 
 #### General
 
