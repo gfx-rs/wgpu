@@ -1517,6 +1517,8 @@ impl Device {
         desc: &resource::TextureDescriptor,
         initial_state: wgt::TextureUses,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+        self.check_is_valid()?;
+
         let format_features = self
             .describe_format_features(desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
@@ -1662,10 +1664,29 @@ impl Device {
         }
     }
 
-    fn create_texture_inner(
+    /// Validate a texture descriptor.
+    ///
+    /// This applies the same validation as [`Self::create_texture`], without
+    /// actually creating a texture.
+    pub fn validate_texture_descriptor(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
-    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+    ) -> Result<(), resource::CreateTextureError> {
+        self.validate_texture_descriptor_inner(desc)?;
+        Ok(())
+    }
+
+    /// Validate a texture descriptor.
+    ///
+    /// Implements the [validating GPUTextureDescriptor] algorithm, with some
+    /// `wgpu` extensions.
+    ///
+    /// [validating GPUTextureDescriptor]: https://www.w3.org/TR/webgpu/#abstract-opdef-validating-gputexturedescriptor
+    fn validate_texture_descriptor_inner(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> Result<(wgt::TextureFormatFeatures, Vec<TextureFormat>), resource::CreateTextureError>
+    {
         use resource::{CreateTextureError, TextureDimensionError};
 
         self.check_is_valid()?;
@@ -1938,6 +1959,15 @@ impl Device {
         if !hal_view_formats.is_empty() {
             self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
         }
+
+        Ok((format_features, hal_view_formats))
+    }
+
+    fn create_texture_inner(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+        let (format_features, hal_view_formats) = self.validate_texture_descriptor_inner(desc)?;
 
         let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
 
@@ -4033,7 +4063,7 @@ impl Device {
 
     pub fn create_pipeline_layout(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedPipelineLayoutDescriptor,
+        desc: &binding_model::PipelineLayoutDescriptor,
     ) -> (
         Arc<binding_model::PipelineLayout>,
         Option<binding_model::CreatePipelineLayoutError>,
@@ -4063,7 +4093,7 @@ impl Device {
 
     fn create_pipeline_layout_impl(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedPipelineLayoutDescriptor,
+        desc: &binding_model::PipelineLayoutDescriptor,
         ignore_exclusive_pipeline_check: bool,
     ) -> Result<Arc<binding_model::PipelineLayout>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
@@ -4219,7 +4249,7 @@ impl Device {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
+        let layout_desc = binding_model::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: Cow::Owned(bind_group_layouts),
             immediate_size,
@@ -4295,7 +4325,7 @@ impl Device {
             Some(pipeline_layout) => validation::BindingLayoutSource::Provided(pipeline_layout),
             None => validation::BindingLayoutSource::new_derived(&self.limits),
         };
-        let mut shader_binding_sizes = FastHashMap::default();
+        let mut minimum_binding_sizes = FastHashMap::default();
         let mut io = validation::StageIo::default();
 
         let final_entry_point_name;
@@ -4311,7 +4341,7 @@ impl Device {
             if let Some(interface) = shader_module_state.interface.interface() {
                 io = interface.check_stage(
                     &mut binding_layout_source,
-                    &mut shader_binding_sizes,
+                    &mut minimum_binding_sizes,
                     &final_entry_point_name,
                     stage,
                     io,
@@ -4336,7 +4366,7 @@ impl Device {
         };
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
+            Device::make_late_sized_buffer_groups(&minimum_binding_sizes, &pipeline_layout);
 
         let cache = match desc.cache {
             Some(cache) => {
@@ -4447,7 +4477,7 @@ impl Device {
 
         self.check_is_valid()?;
 
-        let mut shader_binding_sizes = FastHashMap::default();
+        let mut minimum_binding_sizes = FastHashMap::default();
 
         let color_targets = desc
             .fragment
@@ -4908,7 +4938,7 @@ impl Device {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
-                                &mut shader_binding_sizes,
+                                &mut minimum_binding_sizes,
                                 &_vertex_entry_point_name,
                                 stage,
                                 io,
@@ -4960,7 +4990,7 @@ impl Device {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
-                                &mut shader_binding_sizes,
+                                &mut minimum_binding_sizes,
                                 &_task_entry_point_name,
                                 stage,
                                 io,
@@ -5010,7 +5040,7 @@ impl Device {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
-                                &mut shader_binding_sizes,
+                                &mut minimum_binding_sizes,
                                 &_mesh_entry_point_name,
                                 stage,
                                 io,
@@ -5069,7 +5099,7 @@ impl Device {
                     io = interface
                         .check_stage(
                             &mut binding_layout_source,
-                            &mut shader_binding_sizes,
+                            &mut minimum_binding_sizes,
                             &fragment_entry_point_name,
                             stage,
                             io,
@@ -5199,7 +5229,7 @@ impl Device {
             .flags
             .contains(wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED)
         {
-            for (binding, size) in shader_binding_sizes.iter() {
+            for (binding, size) in minimum_binding_sizes.iter() {
                 if size.get() % 16 != 0 {
                     return Err(pipeline::CreateRenderPipelineError::UnalignedShader {
                         binding: binding.binding,
@@ -5211,7 +5241,7 @@ impl Device {
         }
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
+            Device::make_late_sized_buffer_groups(&minimum_binding_sizes, &pipeline_layout);
 
         let cache = match desc.cache {
             Some(cache) => {

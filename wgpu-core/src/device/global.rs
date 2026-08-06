@@ -254,6 +254,18 @@ impl Global {
         (id, error)
     }
 
+    pub fn device_validate_texture_descriptor(
+        &self,
+        device_id: DeviceId,
+        desc: &resource::TextureDescriptor,
+    ) -> Option<resource::CreateTextureError> {
+        self.hub
+            .devices
+            .get(device_id)
+            .validate_texture_descriptor(desc)
+            .err()
+    }
+
     /// # Safety
     ///
     /// - `hal_texture` must be created from `device_id` corresponding raw handle.
@@ -442,7 +454,7 @@ impl Global {
     pub fn device_create_pipeline_layout(
         &self,
         device_id: DeviceId,
-        desc: &binding_model::PipelineLayoutDescriptor,
+        desc: &binding_model::PipelineLayoutDescriptor<id::BindGroupLayoutId>,
         id_in: Option<id::PipelineLayoutId>,
     ) -> (
         id::PipelineLayoutId,
@@ -461,7 +473,7 @@ impl Global {
                 .collect::<Vec<_>>()
         };
 
-        let desc = binding_model::ResolvedPipelineLayoutDescriptor {
+        let desc = binding_model::PipelineLayoutDescriptor {
             label: desc.label.clone(),
             bind_group_layouts: Cow::Owned(bind_group_layouts),
             immediate_size: desc.immediate_size,

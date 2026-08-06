@@ -173,11 +173,13 @@ pico-args = { version = "0.5", features = [
     "combined-flags",
 ] }
 png = "0.18"
-pollster = "0.4"
+pollster = "1.0"
 portable-atomic = "1.10"
 portable-atomic-util = "0.2.4"
 pp-rs = "0.2.1"
 profiling = { version = "1.0.1", default-features = false }
+# Limit to versions that use rand 0.8
+proptest = ">=1, <1.7"
 raw-window-handle = { version = "0.6.2", default-features = false }
 rayon = "1.3"
 regex-lite = "0.1"
