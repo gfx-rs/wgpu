@@ -40,6 +40,7 @@ mod float32_filterable;
 mod image_atomics;
 mod immediates;
 mod instance;
+mod internal_counters;
 mod life_cycle;
 mod mesh_shader;
 mod multiview;
@@ -115,6 +116,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     float32_filterable::all_tests(&mut tests);
     image_atomics::all_tests(&mut tests);
     instance::all_tests(&mut tests);
+    internal_counters::all_tests(&mut tests);
     life_cycle::all_tests(&mut tests);
     mesh_shader::all_tests(&mut tests);
     multiview::all_tests(&mut tests);

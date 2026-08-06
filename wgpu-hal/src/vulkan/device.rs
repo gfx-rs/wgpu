@@ -1217,8 +1217,6 @@ impl crate::Device for super::Device {
                 unsafe { self.shared.raw.destroy_image(image.raw, None) };
             })?;
 
-        self.counters.texture_memory.add(allocation.size() as isize);
-
         unsafe {
             self.shared
                 .raw
@@ -1228,6 +1226,9 @@ impl crate::Device for super::Device {
         .inspect_err(|_| {
             unsafe { self.shared.raw.destroy_image(image.raw, None) };
         })?;
+
+        self.counters.texture_memory.add(allocation.size() as isize);
+        self.counters.textures.add(1);
 
         Ok(unsafe {
             self.texture_from_raw(
