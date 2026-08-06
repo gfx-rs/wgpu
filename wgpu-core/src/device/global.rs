@@ -70,6 +70,13 @@ pub type MeshPipelineDescriptor<'a> = pipeline::MeshPipelineDescriptor<
     id::PipelineCacheId,
 >;
 
+pub type RenderPipelineDescriptor<'a> = pipeline::RenderPipelineDescriptor<
+    'a,
+    id::PipelineLayoutId,
+    id::ShaderModuleId,
+    id::PipelineCacheId,
+>;
+
 impl Global {
     pub fn adapter_is_surface_supported(
         &self,
@@ -857,7 +864,7 @@ impl Global {
     pub fn device_create_render_pipeline(
         &self,
         device_id: DeviceId,
-        desc: &pipeline::RenderPipelineDescriptor,
+        desc: &RenderPipelineDescriptor,
         id_in: Option<id::RenderPipelineId>,
     ) -> (
         id::RenderPipelineId,

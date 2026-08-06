@@ -625,9 +625,9 @@ pub enum RenderPipelineVertexProcessor<'a, SM = Arc<ShaderModule>> {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RenderPipelineDescriptor<
     'a,
-    PLL = PipelineLayoutId,
-    SM = ShaderModuleId,
-    PLC = PipelineCacheId,
+    PLL = Arc<PipelineLayout>,
+    SM = Arc<ShaderModule>,
+    PLC = Arc<PipelineCache>,
 > {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
