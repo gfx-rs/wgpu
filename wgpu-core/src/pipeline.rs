@@ -626,12 +626,10 @@ pub struct TaskState<'a, SM = Arc<ShaderModule>> {
 /// Describes the mesh shader in a mesh shader pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct MeshState<'a, SM = ShaderModuleId> {
+pub struct MeshState<'a, SM = Arc<ShaderModule>> {
     /// The compiled mesh stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a, SM>,
 }
-
-pub type ResolvedMeshState<'a> = MeshState<'a, Arc<ShaderModule>>;
 
 /// Describes a vertex processor for either a conventional or mesh shading
 /// pipeline architecture.

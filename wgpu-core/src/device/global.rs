@@ -11,8 +11,8 @@ use crate::{
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
     pipeline::{
-        self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
-        ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState, TaskState,
+        self, MeshState, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
+        ResolvedGeneralRenderPipelineDescriptor, TaskState,
     },
     present,
     resource::{
@@ -934,10 +934,7 @@ impl Global {
                     constants: mesh.stage.constants.clone(),
                     zero_initialize_workgroup_memory: mesh.stage.zero_initialize_workgroup_memory,
                 };
-                RenderPipelineVertexProcessor::Mesh(
-                    task_module,
-                    ResolvedMeshState { stage: mesh_stage },
-                )
+                RenderPipelineVertexProcessor::Mesh(task_module, MeshState { stage: mesh_stage })
             }
         };
 
