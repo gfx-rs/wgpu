@@ -24,7 +24,6 @@ use crate::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
         RenderPassContext,
     },
-    id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
     pipeline_cache,
     resource::{InvalidResourceError, Labeled, ResourceState, TrackingData},
     resource_log,
@@ -697,9 +696,9 @@ pub struct MeshPipelineDescriptor<
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GeneralRenderPipelineDescriptor<
     'a,
-    PLL = PipelineLayoutId,
-    SM = ShaderModuleId,
-    PLC = PipelineCacheId,
+    PLL = Arc<PipelineLayout>,
+    SM = Arc<ShaderModule>,
+    PLC = Arc<PipelineCache>,
 > {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
