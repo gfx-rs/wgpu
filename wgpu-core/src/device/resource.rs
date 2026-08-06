@@ -205,13 +205,11 @@ impl ExternalTextureParams {
 
 /// Because all operations are push/swap (no longlived lock),
 /// we can have mutex without lock rank
-pub(crate) struct DeferredBufferMapPendingClosures(
-    parking_lot::Mutex<Vec<BufferMapPendingClosure>>,
-);
+pub(crate) struct DeferredBufferMapPendingClosures(wgpu_sync::Mutex<Vec<BufferMapPendingClosure>>);
 
 impl DeferredBufferMapPendingClosures {
     pub(crate) fn new() -> Self {
-        Self(parking_lot::Mutex::new(Vec::new()))
+        Self(wgpu_sync::Mutex::new(Vec::new()))
     }
 
     pub(crate) fn push(&self, closure: BufferMapPendingClosure) {

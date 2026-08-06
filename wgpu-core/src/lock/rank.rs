@@ -26,8 +26,8 @@
 /// TODO(<https://github.com/gfx-rs/wgpu/issues/5572>): Resolve invalid
 /// acquisitions of DEVICE_COMMAND_INDICES followed by COMMAND_BUFFER_DATA.
 ///
-/// [`Mutex`]: parking_lot::Mutex
-/// [`RwLock`]: parking_lot::RwLock
+/// [`Mutex`]: wgpu_sync::Mutex
+/// [`RwLock`]: wgpu_sync::RwLock
 /// [`SnatchLock`]: crate::snatch::SnatchLock
 /// [`CommandBuffer::data`]: crate::command::CommandBuffer::data
 #[derive(Debug, Copy, Clone)]
