@@ -23,17 +23,17 @@ struct Light {
 const c_ambient: vec3<f32> = vec3<f32>(0.05f, 0.05f, 0.05f);
 const c_max_lights: u32 = 10u;
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<uniform> u_globals: Globals;
-@group(1) @binding(0) 
+@group(1) @binding(0)
 var<uniform> u_entity: Entity;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage> s_lights: array<Light>;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<uniform> u_lights: array<Light, 10>;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var t_shadow: texture_depth_2d_array;
-@group(0) @binding(3) 
+@group(0) @binding(3)
 var sampler_shadow: sampler_comparison;
 
 fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
@@ -47,7 +47,7 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
     return _e24;
 }
 
-@vertex 
+@vertex
 fn vs_main(@location(0) position: vec4<i32>, @location(1) normal: vec4<i32>) -> VertexOutput {
     var out: VertexOutput;
 
@@ -62,7 +62,7 @@ fn vs_main(@location(0) position: vec4<i32>, @location(1) normal: vec4<i32>) -> 
     return _e28;
 }
 
-@fragment 
+@fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color: vec3<f32> = c_ambient;
     var i: u32 = 0u;
@@ -95,7 +95,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return (vec4<f32>(_e42, 1f) * _e47);
 }
 
-@fragment 
+@fragment
 fn fs_main_without_storage(in_1: VertexOutput) -> @location(0) vec4<f32> {
     var color_1: vec3<f32> = c_ambient;
     var i_1: u32 = 0u;
