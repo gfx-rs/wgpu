@@ -71,6 +71,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         VERTEX_BUFFER_TAIL_INIT_MAP_WRITE,
         VERTEX_BUFFER_TAIL_INIT_MAPPED_AT_CREATION,
         VERTEX_BUFFER_TAIL_INIT_MAP_WRITE_MAPPED_AT_CREATION,
+        COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_ROW_PADDING_INIT,
+        COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_IMAGE_PADDING_INIT,
     ]);
 }
 
@@ -1554,5 +1556,152 @@ async fn check_vertex_buffer_tail_init(
     assert_eq!(
         tail, 0,
         "did not read expected zero data in padding area (case: {case_desc}): got 0x{tail:08x}",
+    );
+}
+
+// Tests that the padding of a `copy_texture_to_buffer()` destination is not filled
+// with the leftovers of previously freed memory.
+//
+// The test is effective mainly on DX12, where a destination offset that is not a
+// multiple of `D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT` (512) forces the copy to go
+// through a backend-private intermediate buffer. The texture copy only writes the
+// texel bytes of each row of that buffer, but the whole buffer is then copied into
+// the destination, so the padding of the intermediate buffer has to be zeroed first.
+
+// A single pixel wide texture, so that each row of the copy is 4 bytes of texel data
+// followed by 252 bytes of padding.
+#[apply(gpu_test!)]
+static COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_ROW_PADDING_INIT: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            test_copy_texture_to_buffer_padding_init(
+                &ctx,
+                TextureFormat::Rgba8Unorm,
+                Extent3d {
+                    width: 1,
+                    height: 512,
+                    depth_or_array_layers: 1,
+                },
+                256,
+                512,
+            )
+            .await;
+        });
+
+// Padding that neither starts nor ends at a four byte boundary, plus padding
+// between the array layers.
+#[apply(gpu_test!)]
+static COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_IMAGE_PADDING_INIT: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            test_copy_texture_to_buffer_padding_init(
+                &ctx,
+                TextureFormat::R8Unorm,
+                Extent3d {
+                    width: 3,
+                    height: 8,
+                    depth_or_array_layers: 3,
+                },
+                256,
+                12,
+            )
+            .await;
+        });
+
+async fn test_copy_texture_to_buffer_padding_init(
+    ctx: &TestingContext,
+    format: TextureFormat,
+    size: Extent3d,
+    bytes_per_row: u32,
+    rows_per_image: u32,
+) {
+    /// A legal `copy_texture_to_buffer()` destination offset that is not a multiple of
+    /// D3D12's 512 byte texture data placement alignment.
+    const T2B_PAD_OFFSET: u64 = 4;
+    /// How many copies to perform, to give the allocator several chances to hand out
+    /// the memory of the freed seed buffers.
+    const T2B_PAD_COPIES: u64 = 8;
+
+    let texel_bytes = format.block_copy_size(None).unwrap();
+    let row_bytes = size.width * texel_bytes;
+    let image_stride = u64::from(bytes_per_row) * u64::from(rows_per_image);
+    let image_bytes = u64::from(bytes_per_row) * u64::from(size.height - 1) + u64::from(row_bytes);
+    // The copy footprint does not include the padding after its very last row.
+    let footprint = u64::from(size.depth_or_array_layers - 1) * image_stride + image_bytes;
+    // Round up so that every copy's destination offset is congruent to
+    // `T2B_PAD_OFFSET` modulo 512, and thus unaligned for DX12.
+    let stride = footprint.next_multiple_of(512);
+
+    // Dirty some device memory with a recognizable pattern and release it again, so
+    // that the buffers the backend allocates for the copies below are likely to be
+    // suballocated on top of it.
+    let markers: Vec<u32> = (0..footprint.next_multiple_of(4) as usize / 4)
+        .map(|word_index| 0xA73C_0001 + word_index as u32)
+        .collect();
+    let seed_buffers: Vec<Buffer> = (0..T2B_PAD_COPIES)
+        .map(|i| {
+            ctx.device.create_buffer_init(&util::BufferInitDescriptor {
+                label: Some(&format!("copy padding seed {i}")),
+                contents: bytemuck::cast_slice(&markers),
+                usage: BufferUsages::COPY_SRC,
+            })
+        })
+        .collect();
+    ctx.queue.submit(None);
+    ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+    for seed_buffer in &seed_buffers {
+        seed_buffer.destroy();
+    }
+    drop(seed_buffers);
+    ctx.queue.submit(None);
+    ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+
+    let texture = ctx.device.create_texture(&TextureDescriptor {
+        label: Some("copy padding source"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format,
+        usage: TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+
+    let readback = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("copy padding readback"),
+        size: T2B_PAD_OFFSET + stride * T2B_PAD_COPIES,
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    for i in 0..T2B_PAD_COPIES {
+        encoder.copy_texture_to_buffer(
+            texture.as_image_copy(),
+            TexelCopyBufferInfo {
+                buffer: &readback,
+                layout: TexelCopyBufferLayout {
+                    offset: T2B_PAD_OFFSET + stride * i,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: Some(rows_per_image),
+                },
+            },
+            size,
+        );
+    }
+    ctx.queue.submit([encoder.finish()]);
+
+    // Neither the source texture nor the destination buffer was ever written by the
+    // application, so the whole buffer must read back as zero. The interesting part is
+    // the footprint of each copy, texel data and padding alike: the copies mark it
+    // initialized, so mapping the buffer will not zero it for us.
+    let data = map_and_read(ctx, &readback).await;
+    assert!(
+        data.iter().all(|&byte| byte == 0),
+        "the destination buffer of copies from a never-written texture is not all zero",
     );
 }
