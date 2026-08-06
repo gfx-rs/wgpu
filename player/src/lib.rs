@@ -661,7 +661,7 @@ impl Player {
                             .zero_initialize_workgroup_memory,
                     },
                 });
-                let resolved_mesh = wgc::pipeline::ResolvedMeshState {
+                let resolved_mesh = wgc::pipeline::MeshState {
                     stage: wgc::pipeline::ProgrammableStageDescriptor {
                         module: self.resolve_shader_module_id(mesh_state.stage.module),
                         entry_point: mesh_state.stage.entry_point,
