@@ -651,7 +651,7 @@ impl Player {
                 })
             }
             wgc::pipeline::RenderPipelineVertexProcessor::Mesh(task_state, mesh_state) => {
-                let resolved_task = task_state.map(|task| wgc::pipeline::ResolvedTaskState {
+                let resolved_task = task_state.map(|task| wgc::pipeline::TaskState {
                     stage: wgc::pipeline::ProgrammableStageDescriptor {
                         module: self.resolve_shader_module_id(task.stage.module),
                         entry_point: task.stage.entry_point,

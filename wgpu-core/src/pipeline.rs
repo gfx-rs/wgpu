@@ -618,12 +618,10 @@ pub struct FragmentState<'a, SM = Arc<ShaderModule>> {
 /// Describes the task shader in a mesh shader pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TaskState<'a, SM = ShaderModuleId> {
+pub struct TaskState<'a, SM = Arc<ShaderModule>> {
     /// The compiled task stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a, SM>,
 }
-
-pub type ResolvedTaskState<'a> = TaskState<'a, Arc<ShaderModule>>;
 
 /// Describes the mesh shader in a mesh shader pipeline.
 #[derive(Clone, Debug)]

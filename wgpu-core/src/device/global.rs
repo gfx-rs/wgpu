@@ -12,7 +12,7 @@ use crate::{
     instance::{self, Adapter, Surface},
     pipeline::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
-        ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState, ResolvedTaskState,
+        ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState, TaskState,
     },
     present,
     resource::{
@@ -923,7 +923,7 @@ impl Global {
                             .stage
                             .zero_initialize_workgroup_memory,
                     };
-                    Some(ResolvedTaskState { stage: state })
+                    Some(TaskState { stage: state })
                 } else {
                     None
                 };
