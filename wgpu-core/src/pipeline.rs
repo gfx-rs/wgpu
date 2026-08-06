@@ -615,7 +615,7 @@ pub struct MeshState<'a, SM = Arc<ShaderModule>> {
 #[doc(hidden)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum RenderPipelineVertexProcessor<'a, SM = ShaderModuleId> {
+pub enum RenderPipelineVertexProcessor<'a, SM = Arc<ShaderModule>> {
     Vertex(VertexState<'a, SM>),
     Mesh(Option<TaskState<'a, SM>>, MeshState<'a, SM>),
 }
