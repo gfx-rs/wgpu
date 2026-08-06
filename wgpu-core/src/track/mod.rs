@@ -330,9 +330,8 @@ pub(crate) trait ResourceUses:
     /// Returns true if the given states violates the usage scope rule
     /// of any(inclusive) XOR one(exclusive)
     fn is_invalid(self) -> bool {
-        // Is power of two also means "is one bit set". We check for this as if
-        // we're in any exclusive state, we must only be in a single state.
-        self.any_exclusive() && !self.bits().is_power_of_two()
+        // If we're in any exclusive state, we must only be in a single state.
+        self.any_exclusive() && self.bits().count_ones() != 1
     }
 }
 
