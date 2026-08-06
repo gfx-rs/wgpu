@@ -63,6 +63,13 @@ pub type ComputePipelineDescriptor<'a> = pipeline::ComputePipelineDescriptor<
 
 pub type VertexState<'a> = pipeline::VertexState<'a, id::ShaderModuleId>;
 
+pub type MeshPipelineDescriptor<'a> = pipeline::MeshPipelineDescriptor<
+    'a,
+    id::PipelineLayoutId,
+    id::ShaderModuleId,
+    id::PipelineCacheId,
+>;
+
 impl Global {
     pub fn adapter_is_surface_supported(
         &self,
@@ -868,7 +875,7 @@ impl Global {
     pub fn device_create_mesh_pipeline(
         &self,
         device_id: DeviceId,
-        desc: &pipeline::MeshPipelineDescriptor,
+        desc: &MeshPipelineDescriptor,
         id_in: Option<id::RenderPipelineId>,
     ) -> (
         id::RenderPipelineId,
