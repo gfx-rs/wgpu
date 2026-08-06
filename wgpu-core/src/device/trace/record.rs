@@ -806,7 +806,7 @@ impl<'a> IntoTrace
     }
 }
 
-impl<'a> IntoTrace for crate::pipeline::ResolvedTaskState<'a> {
+impl<'a> IntoTrace for crate::pipeline::TaskState<'a> {
     type Output = crate::pipeline::TaskState<'a, PointerId<markers::ShaderModule>>;
     fn into_trace(self) -> Self::Output {
         crate::pipeline::TaskState {
