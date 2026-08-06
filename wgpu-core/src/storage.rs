@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 
 use crate::id::Marker;
 use crate::resource::ResourceType;
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 
 /// Not a public API. For use only by `player`.
 #[doc(hidden)]

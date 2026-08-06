@@ -4795,7 +4795,6 @@ dependencies = [
  "naga",
  "naga-types",
  "once_cell",
- "parking_lot",
  "portable-atomic",
  "profiling",
  "proptest",
@@ -4812,6 +4811,7 @@ dependencies = [
  "wgpu-core-deps-windows",
  "wgpu-hal",
  "wgpu-naga-bridge",
+ "wgpu-sync",
  "wgpu-types",
 ]
 
