@@ -77,6 +77,13 @@ pub type RenderPipelineDescriptor<'a> = pipeline::RenderPipelineDescriptor<
     id::PipelineCacheId,
 >;
 
+pub type GeneralRenderPipelineDescriptor<'a> = pipeline::GeneralRenderPipelineDescriptor<
+    'a,
+    id::PipelineLayoutId,
+    id::ShaderModuleId,
+    id::PipelineCacheId,
+>;
+
 impl Global {
     pub fn adapter_is_surface_supported(
         &self,
@@ -898,7 +905,7 @@ impl Global {
 
     fn device_create_general_render_pipeline(
         &self,
-        desc: pipeline::GeneralRenderPipelineDescriptor,
+        desc: GeneralRenderPipelineDescriptor,
         device: Arc<crate::device::resource::Device>,
         fid: crate::registry::FutureId<Arc<pipeline::RenderPipeline>>,
     ) -> (
