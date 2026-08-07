@@ -1354,8 +1354,8 @@ impl<'a> Error<'a> {
                 message: "incorrect type passed to workgroupUniformLoad".into(),
             },
             Error::InvalidStringLiteral { span, description } => ParseError {
-                message: description.to_string(),
-                labels: vec![(span, "invalid string literal".into())],
+                message: description.to_string().into(),
+                labels: vec![(*span, "invalid string literal".into())],
                 notes: vec![],
             },
             Error::Internal(message) => ParseError {
