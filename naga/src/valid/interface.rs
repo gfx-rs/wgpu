@@ -1387,6 +1387,36 @@ impl super::Validator {
             };
             ctx.validate(ep, fa.ty, fa.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Argument(index as u32, e).with_span())?;
+            match ep.stage {
+                nt::ShaderStage::Compute | nt::ShaderStage::Mesh | nt::ShaderStage::Task => {
+                    let reject_location_binding = |binding| {
+                        if let Some(&crate::ir::Binding::Location { .. }) = binding {
+                            return Err(EntryPointError::Argument(
+                                index as u32,
+                                VaryingError::InvalidAttributeInStage("location", ep.stage),
+                            )
+                            .with_span());
+                        }
+                        Ok(())
+                    };
+                    reject_location_binding(fa.binding.as_ref())?;
+
+                    if let &crate::TypeInner::Struct { ref members, .. } =
+                        &module.types[fa.ty].inner
+                    {
+                        members
+                            .iter()
+                            .map(|m| m.binding.as_ref())
+                            .try_for_each(reject_location_binding)?;
+                    }
+                }
+                nt::ShaderStage::Vertex
+                | nt::ShaderStage::Fragment
+                | nt::ShaderStage::RayGeneration
+                | nt::ShaderStage::Miss
+                | nt::ShaderStage::AnyHit
+                | nt::ShaderStage::ClosestHit => {}
+            }
         }
 
         self.location_mask.make_empty();
