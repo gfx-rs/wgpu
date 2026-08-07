@@ -190,7 +190,7 @@ impl<V: Copy + Default> ResolvedPassChannel<V> {
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RenderPassColorAttachment<TV = id::TextureViewId> {
+pub struct RenderPassColorAttachment<TV = Arc<TextureView>> {
     /// The view to use as an attachment.
     pub view: TV,
     /// The depth slice index of a 3D view. It must not be provided if the view is not 3D.
@@ -207,14 +207,12 @@ pub struct RenderPassColorAttachment<TV = id::TextureViewId> {
     pub store_op: StoreOp,
 }
 
-pub type ArcRenderPassColorAttachment = RenderPassColorAttachment<Arc<TextureView>>;
-
 // Avoid allocation in the common case that there is only one color attachment,
 // but don't bloat `ArcCommand::RunRenderPass` excessively.
 pub type ColorAttachments<TV = Arc<TextureView>> =
     SmallVec<[Option<RenderPassColorAttachment<TV>>; 1]>;
 
-impl ArcRenderPassColorAttachment {
+impl RenderPassColorAttachment {
     fn hal_ops(&self) -> hal::AttachmentOps {
         load_hal_ops(self.load_op) | store_hal_ops(self.store_op)
     }
@@ -262,7 +260,7 @@ pub struct ResolvedRenderPassDepthStencilAttachment<TV> {
 pub struct RenderPassDescriptor<'a> {
     pub label: Label<'a>,
     /// The color attachments of the render pass.
-    pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment>]>,
+    pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment<id::TextureViewId>>]>,
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<id::TextureViewId>>,
     /// Defines where and when timestamp values will be written for this pass.
@@ -294,7 +292,7 @@ struct ArcRenderPassDescriptor<'a> {
     pub label: &'a Label<'a>,
     /// The color attachments of the render pass.
     pub color_attachments:
-        ArrayVec<Option<ArcRenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
+        ArrayVec<Option<RenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment:
         Option<ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>>,
@@ -326,8 +324,7 @@ pub struct RenderPass {
     /// See <https://www.w3.org/TR/webgpu/#encoder-state>
     parent: Option<Arc<CommandEncoder>>,
 
-    color_attachments:
-        ArrayVec<Option<ArcRenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
+    color_attachments: ArrayVec<Option<RenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil_attachment: Option<ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>>,
     timestamp_writes: Option<ArcPassTimestampWrites>,
     occlusion_query_set: Option<Arc<QuerySet>>,
@@ -1189,7 +1186,7 @@ impl RenderPassInfo {
     fn start(
         device: &Arc<Device>,
         hal_label: Option<&str>,
-        color_attachments: &[Option<ArcRenderPassColorAttachment>],
+        color_attachments: &[Option<RenderPassColorAttachment>],
         mut depth_stencil_attachment: Option<
             ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>,
         >,
@@ -1894,7 +1891,7 @@ impl CommandEncoder {
 
                     arc_desc
                         .color_attachments
-                        .push(Some(ArcRenderPassColorAttachment {
+                        .push(Some(RenderPassColorAttachment {
                             view: Arc::clone(view),
                             depth_slice: *depth_slice,
                             resolve_target: resolve_target.map(Arc::clone),
