@@ -5666,3 +5666,38 @@ fn unterminated_block_comment_errors() {
         "unterminated block comment",
     )
 }
+
+#[test]
+fn compute_shaders_dont_accept_result_types() {
+    check_validation! {
+        "
+        @compute @workgroup_size(1)
+        fn main() -> @location(0) u32 { return 0; }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Compute,
+                source: naga::valid::EntryPointError::UnexpectedComputeShaderEntryResult,
+                ..
+            },
+        )
+    }
+
+    check_validation! {
+        "
+        struct ComputeOutput {
+            @location(0) output0: vec4<f32>,
+            @location(1) output1: u32,
+        }
+        @compute @workgroup_size(1)
+        fn main() -> ComputeOutput { return ComputeOutput(vec4(0.0), 1); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Compute,
+                source: naga::valid::EntryPointError::UnexpectedComputeShaderEntryResult,
+                ..
+            },
+        )
+    }
+}

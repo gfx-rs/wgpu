@@ -191,6 +191,8 @@ pub enum EntryPointError {
     RayPayloadInInvalidStage(crate::ShaderStage),
     #[error("Only the `closest_hit`, `any_hit`, and `miss` shader stages can access a global variable in the `incoming_ray_payload` address space")]
     IncomingRayPayloadInInvalidStage(crate::ShaderStage),
+    #[error("Compute shader entry point cannot have a return type")]
+    UnexpectedComputeShaderEntryResult,
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -1424,8 +1426,10 @@ impl super::Validator {
                         return Err(EntryPointError::WrongTaskShaderEntryResult.with_span());
                     }
                 }
+                nt::ShaderStage::Compute => {
+                    return Err(EntryPointError::UnexpectedComputeShaderEntryResult.with_span())
+                }
                 nt::ShaderStage::Fragment
-                | nt::ShaderStage::Compute
                 | nt::ShaderStage::RayGeneration
                 | nt::ShaderStage::Miss
                 | nt::ShaderStage::AnyHit
