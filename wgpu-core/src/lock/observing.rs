@@ -29,7 +29,7 @@
 //! [`lock/rank.rs`]: ../../../src/wgpu_core/lock/rank.rs.html
 
 use alloc::{format, string::String};
-use core::{cell::RefCell, panic::Location};
+use core::{cell::RefCell, mem::ManuallyDrop, panic::Location};
 use std::{
     fs::File,
     path::{Path, PathBuf},
@@ -249,11 +249,11 @@ impl Drop for LockStateGuard {
 /// Return the `Option<HeldLock>` state that must be restored when this lock is
 /// released.
 fn acquire(new_rank: LockRank, location: &'static Location<'static>) -> Option<HeldLock> {
-    LOCK_STATE.with_borrow_mut(|state| match *state {
+    LOCK_STATE.with_borrow_mut(|state| match **state {
         ThreadState::Disabled => None,
         ThreadState::Initial => {
             let Ok(dir) = std::env::var("WGPU_CORE_LOCK_OBSERVE_DIR") else {
-                *state = ThreadState::Disabled;
+                **state = ThreadState::Disabled;
                 return None;
             };
 
@@ -269,7 +269,7 @@ fn acquire(new_rank: LockRank, location: &'static Location<'static>) -> Option<H
 
             // Update our state to reflect that we are logging acquisitions, and
             // that we have acquired this lock.
-            *state = ThreadState::Enabled {
+            **state = ThreadState::Enabled {
                 held_lock: Some(HeldLock {
                     rank: new_rank,
                     location,
@@ -302,7 +302,7 @@ fn release(saved: Option<HeldLock>) {
     LOCK_STATE.with_borrow_mut(|state| {
         if let ThreadState::Enabled {
             ref mut held_lock, ..
-        } = *state
+        } = **state
         {
             *held_lock = saved;
         }
@@ -310,7 +310,12 @@ fn release(saved: Option<HeldLock>) {
 }
 
 std::thread_local! {
-    static LOCK_STATE: RefCell<ThreadState> = const { RefCell::new(ThreadState::Initial) };
+    // In order to allow the user to have thread locals which contain WGPU primitives, we leak the
+    // lock state on thread exit. This ensures the destructors of user objects may continue to be
+    // instrumented and will not cause a panic of they run after this thread_local is dropped.
+    // Also see: snatch.rs
+    static LOCK_STATE: RefCell<ManuallyDrop<ThreadState>> =
+        const { RefCell::new(ManuallyDrop::new(ThreadState::Initial)) };
 }
 
 /// Thread-local state for lock observation.

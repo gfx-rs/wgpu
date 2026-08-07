@@ -65,7 +65,7 @@ unsafe impl<T> Sync for SnatchableInner<T> {}
 use trace::LockTrace;
 #[cfg(all(debug_assertions, feature = "std"))]
 mod trace {
-    use core::{cell::Cell, fmt, panic::Location};
+    use core::{cell::Cell, fmt, mem::ManuallyDrop, panic::Location};
     use std::{backtrace::Backtrace, thread};
 
     pub(super) struct LockTrace {
@@ -94,6 +94,8 @@ mod trace {
             };
 
             if let Some(prev) = SNATCH_LOCK_TRACE.take() {
+                // explicitly drop previous trace, see SNATCH_LOCK_TRACE for reasoning
+                let prev = ManuallyDrop::into_inner(prev);
                 let current = thread::current();
                 let name = current.name().unwrap_or("<unnamed>");
                 panic!(
@@ -102,17 +104,23 @@ mod trace {
                  - Previously acquired {prev}",
                 );
             } else {
-                SNATCH_LOCK_TRACE.set(Some(new));
+                SNATCH_LOCK_TRACE.set(Some(ManuallyDrop::new(new)));
             }
         }
 
         pub(super) fn exit() {
-            SNATCH_LOCK_TRACE.take();
+            if let Some(trace) = SNATCH_LOCK_TRACE.take() {
+                drop(ManuallyDrop::into_inner(trace));
+            }
         }
     }
 
     std::thread_local! {
-        static SNATCH_LOCK_TRACE: Cell<Option<LockTrace>> = const { Cell::new(None) };
+        // In order to allow the user to have thread locals which contain WGPU primitives, we leak the
+        // lock state on thread exit. This ensures the destructors of user objects may continue to be
+        // instrumented and will not cause a panic of they run after this thread_local is dropped
+        // Also see: observing.rs
+        static SNATCH_LOCK_TRACE: Cell<Option<ManuallyDrop<LockTrace>>> = const { Cell::new(None) };
     }
 }
 #[cfg(not(all(debug_assertions, feature = "std")))]
@@ -198,5 +206,42 @@ impl Drop for SnatchGuard<'_> {
 impl Drop for ExclusiveSnatchGuard<'_> {
     fn drop(&mut self) {
         LockTrace::exit();
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod tests {
+    use super::SnatchLock;
+    use crate::lock::rank;
+    use core::cell::Cell;
+
+    /// A thing that reads a snatchlock during drop, to test destruction call order problems
+    struct LockOnDrop(SnatchLock);
+    impl Drop for LockOnDrop {
+        fn drop(&mut self) {
+            drop(self.0.read());
+        }
+    }
+
+    std::thread_local! {
+        static HOLDER: Cell<Option<LockOnDrop>> = const { Cell::new(None) };
+    }
+
+    #[test]
+    fn read_during_tls_destruction() {
+        std::thread::spawn(|| {
+            // our thread local is touched first, so its destructor will be called last
+            HOLDER.set(Some(LockOnDrop(unsafe {
+                SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK)
+            })));
+
+            // take the lock which causes SNATCH_LOCK_TRACE to be created. it
+            // will be destroyed first
+            let lock = unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) };
+            drop(lock.read());
+        })
+        .join()
+        .unwrap();
+        // just testing that the thread exited successfully
     }
 }
