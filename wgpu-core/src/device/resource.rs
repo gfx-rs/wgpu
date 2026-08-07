@@ -993,9 +993,9 @@ impl Device {
             wgt::PollType::Poll => None,
         };
 
-        // Wait for the submission index if requested. `None` if no wait was requested,
-        // otherwise `Some(succeeded)` with whether the wait was satisfied before the
-        // timeout. The outcome is consulted below when interpreting `queue_empty`.
+        // If a target submission index was specified, wait for it, and set
+        // `wait_succeeded` to `Some(bool)` indicating success or timeout. If
+        // no target was specified, set `wait_succeeded` to `None`.
         let wait_succeeded = if let Some(target_submission_index) = wait_submission_index {
             log::trace!("Device::maintain: waiting for submission index {target_submission_index}");
 
@@ -1077,22 +1077,21 @@ impl Device {
         // Based on the queue empty status, and the current finished submission index, determine
         // the result of the poll.
         //
-        // `queue_empty` alone does not justify reporting `QueueEmpty` after a timed-out
-        // wait: `current_finished_submission` is sampled before `Queue::maintain`, but
-        // `queue_empty` is observed inside it, and another thread may retire and triage
-        // submissions in between (`Device::poll` takes `&self`). Reporting `QueueEmpty`
-        // there would claim more than this thread's fence sample proves; `QueueEmpty`
-        // is documented to imply the wait was satisfied. Such a race reports
-        // `WaitSucceeded` or `Timeout` instead, and a subsequent poll observes the
-        // empty queue.
+        // After a successful wait, `current_finished_submission` should match or exceed
+        // the target. But after a timeout, more work may have finished before
+        // `current_finished_submission` is read, so it could be on either side of the
+        // target, and the queue can also become empty before `Queue::maintain`
+        // computes `queue_empty`.
+        //
+        // We report as accurately as we can with the information available. In
+        // particular, when our wait timed out but `queue_empty` comes back `true`, we
+        // report `WaitSucceeded` if `current_finished_submission` reached the target,
+        // and `Timeout` if it didn't. We don't want to risk reporting `QueueEmpty`
+        // without actually having seen that the target submission is retired.
         let result = if queue_empty && wait_succeeded != Some(false) {
             if let Some(wait_submission_index) = wait_submission_index {
-                // Assert to ensure that if we received a queue empty status, the fence shows the
-                // correct value. This is defensive, as this should never be hit.
-                //
-                // This branch is reached with a wait index only when the wait succeeded,
-                // and `current_finished_submission` was sampled after that wait, so a
-                // monotonic fence must show at least `wait_submission_index`.
+                // Sanity-check that we don't report `QueueEmpty` without
+                // reaching the target submission index.
                 assert!(
                     current_finished_submission >= wait_submission_index,
                     concat!(
@@ -1102,6 +1101,8 @@ impl Device {
                     current_finished_submission,
                     wait_submission_index,
                 );
+            } else {
+                // We didn't wait (passive poll), safe to report `QueueEmpty`.
             }
 
             Ok(wgt::PollStatus::QueueEmpty)
