@@ -1,7 +1,7 @@
 use wgpu::{DownlevelFlags, Limits};
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest};
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -46,7 +46,7 @@ fn create_numeric_builtin_test() -> Vec<ShaderTest> {
     tests
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static NUMERIC_BUILTINS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -89,7 +89,7 @@ fn create_int64_atomic_min_max_test() -> Vec<ShaderTest> {
     tests
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static INT64_ATOMIC_MIN_MAX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -144,7 +144,7 @@ fn create_int64_atomic_all_ops_test() -> Vec<ShaderTest> {
     tests
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static INT64_ATOMIC_ALL_OPS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -188,7 +188,7 @@ fn create_float32_atomic_test() -> Vec<ShaderTest> {
     tests
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static FLOAT32_ATOMIC: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -296,7 +296,7 @@ fn create_int64_polyfill_test() -> Vec<ShaderTest> {
     tests
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static INT64_POLYFILL: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

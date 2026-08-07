@@ -17,7 +17,7 @@ use arrayvec::ArrayVec;
 use bitflags::Flags;
 use smallvec::SmallVec;
 use wgt::{
-    math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureSelector,
+    math::align_to, ColorWrites, DeviceLostReason, TextureFormat, TextureSampleType,
     TextureViewDimension,
 };
 
@@ -32,9 +32,9 @@ use crate::{
     },
     command, conv,
     device::{
-        bgl, create_validator, features_to_naga_capabilities, life::WaitIdleError, map_buffer,
-        AttachmentData, BufferMapPendingClosure, DeviceLostInvocation, HostMap,
-        MissingDownlevelFlags, MissingFeatures, RenderPassContext,
+        bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
+        BufferMapPendingClosure, DeviceLostInvocation, HostMap, MissingDownlevelFlags,
+        MissingFeatures, RenderPassContext,
     },
     hal_label,
     init_tracker::{
@@ -48,7 +48,7 @@ use crate::{
     resource::{
         self, Buffer, BufferState, ExternalTexture, ExternalTextureState, Labeled, ParentDevice,
         QuerySet, QuerySetState, RawResourceAccess, ResourceState, Sampler, StagingBuffer, Texture,
-        TextureView, TextureViewNotRenderableReason, TextureViewState, Tlas, TrackingData,
+        TextureView, Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
@@ -223,6 +223,22 @@ impl DeferredBufferMapPendingClosures {
     }
 }
 
+/// Resources associated with a device.
+///
+/// This struct exists so that resources can be cleaned up properly on error returns
+/// from [`Device::new`].
+///
+/// [`Device::timestamp_normalizer`] is late-initialized after [`Device::new`], so it is not
+/// included here.
+struct DeviceResources<'a> {
+    raw: &'a dyn hal::DynDevice,
+    zero_buffer: Option<Box<dyn hal::DynBuffer>>,
+    empty_bgl: Option<Box<dyn hal::DynBindGroupLayout>>,
+    default_external_texture_params_buffer: Option<Box<dyn hal::DynBuffer>>,
+    fence: Option<Box<dyn hal::DynFence>>,
+    indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
+}
+
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 pub struct Device {
@@ -324,12 +340,45 @@ impl fmt::Debug for Device {
     }
 }
 
+impl Drop for DeviceResources<'_> {
+    fn drop(&mut self) {
+        if let Some(indirect_validation) = self.indirect_validation.take() {
+            indirect_validation.dispose(self.raw);
+        }
+        unsafe {
+            if let Some(zero_buffer) = self.zero_buffer.take() {
+                self.raw.destroy_buffer(zero_buffer);
+            }
+            if let Some(empty_bgl) = self.empty_bgl.take() {
+                self.raw.destroy_bind_group_layout(empty_bgl);
+            }
+            if let Some(default_external_texture_params_buffer) =
+                self.default_external_texture_params_buffer.take()
+            {
+                self.raw
+                    .destroy_buffer(default_external_texture_params_buffer);
+            }
+            if let Some(fence) = self.fence.take() {
+                self.raw.destroy_fence(fence);
+            }
+        }
+    }
+}
+
 impl Drop for Device {
     #[allow(trivial_casts)]
     fn drop(&mut self) {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
+
+        // The timestamp normalizer is late-initialized, so it is not included in `DeviceResources`.
+        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
+            timestamp_normalizer.dispose(self.raw.as_ref());
+        }
+
+        // Transfer the rest of the resources back to `DeviceResources`, which cleans them
+        // up for us.
 
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this
         // point.
@@ -342,19 +391,15 @@ impl Drop for Device {
             unsafe { ManuallyDrop::take(&mut self.default_external_texture_params_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence) };
-        if let Some(indirect_validation) = self.indirect_validation.take() {
-            indirect_validation.dispose(self.raw.as_ref());
-        }
-        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
-            timestamp_normalizer.dispose(self.raw.as_ref());
-        }
-        unsafe {
-            self.raw.destroy_buffer(zero_buffer);
-            self.raw.destroy_bind_group_layout(empty_bgl);
-            self.raw
-                .destroy_buffer(default_external_texture_params_buffer);
-            self.raw.destroy_fence(fence);
-        }
+
+        drop(DeviceResources {
+            raw: self.raw.as_ref(),
+            zero_buffer: Some(zero_buffer),
+            empty_bgl: Some(empty_bgl),
+            default_external_texture_params_buffer: Some(default_external_texture_params_buffer),
+            fence: Some(fence),
+            indirect_validation: self.indirect_validation.take(),
+        });
     }
 }
 
@@ -485,7 +530,17 @@ impl Device {
         let ordered_buffer_usages = adapter.raw.adapter.get_ordered_buffer_usages();
         let ordered_texture_usages = adapter.raw.adapter.get_ordered_texture_usages();
 
-        let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
+        let mut resources = DeviceResources {
+            raw: raw_device.as_ref(),
+            zero_buffer: None,
+            empty_bgl: None,
+            default_external_texture_params_buffer: None,
+            fence: None,
+            indirect_validation: None,
+        };
+
+        resources.fence =
+            Some(unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?);
 
         let command_allocator = command::CommandAllocator::new();
 
@@ -499,37 +554,43 @@ impl Device {
         };
 
         // Create zeroed buffer used for texture clears (and raytracing if required).
-        let zero_buffer = unsafe {
-            raw_device.create_buffer(&hal::BufferDescriptor {
-                label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
-                size: ZERO_BUFFER_SIZE,
-                usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
-                memory_flags: hal::MemoryFlags::empty(),
-            })
-        }
-        .map_err(DeviceError::from_hal)?;
+        resources.zero_buffer = Some(
+            unsafe {
+                raw_device.create_buffer(&hal::BufferDescriptor {
+                    label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
+                    size: ZERO_BUFFER_SIZE,
+                    usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
+                    memory_flags: hal::MemoryFlags::empty(),
+                })
+            }
+            .map_err(DeviceError::from_hal)?,
+        );
 
-        let empty_bgl = unsafe {
-            raw_device.create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
-                label: None,
-                flags: hal::BindGroupLayoutFlags::empty(),
-                entries: &[],
-            })
-        }
-        .map_err(DeviceError::from_hal)?;
+        resources.empty_bgl = Some(
+            unsafe {
+                raw_device.create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
+                    label: None,
+                    flags: hal::BindGroupLayoutFlags::empty(),
+                    entries: &[],
+                })
+            }
+            .map_err(DeviceError::from_hal)?,
+        );
 
-        let default_external_texture_params_buffer = unsafe {
-            raw_device.create_buffer(&hal::BufferDescriptor {
-                label: hal_label(
-                    Some("(wgpu internal) default external texture params buffer"),
-                    instance_flags,
-                ),
-                size: size_of::<ExternalTextureParams>() as _,
-                usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
-                memory_flags: hal::MemoryFlags::empty(),
-            })
-        }
-        .map_err(DeviceError::from_hal)?;
+        resources.default_external_texture_params_buffer = Some(
+            unsafe {
+                raw_device.create_buffer(&hal::BufferDescriptor {
+                    label: hal_label(
+                        Some("(wgpu internal) default external texture params buffer"),
+                        instance_flags,
+                    ),
+                    size: size_of::<ExternalTextureParams>() as _,
+                    usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
+                    memory_flags: hal::MemoryFlags::empty(),
+                })
+            }
+            .map_err(DeviceError::from_hal)?,
+        );
 
         // Cloned as we need them below anyway.
         let alignments = adapter.raw.capabilities.alignments.clone();
@@ -543,63 +604,76 @@ impl Device {
             )
             && limits.max_storage_buffers_per_shader_stage >= 2;
 
-        let indirect_validation = if enable_indirect_validation {
-            Some(crate::indirect_validation::IndirectValidation::new(
-                raw_device.as_ref(),
-                &desc.required_limits,
-                &desc.required_features,
-                instance_flags,
-                adapter.backend(),
-            )?)
-        } else {
-            None
-        };
+        if enable_indirect_validation {
+            resources.indirect_validation =
+                Some(crate::indirect_validation::IndirectValidation::new(
+                    raw_device.as_ref(),
+                    &desc.required_limits,
+                    &desc.required_features,
+                    instance_flags,
+                    adapter.backend(),
+                )?);
+        }
 
-        Ok(Self {
-            raw: raw_device,
-            adapter: adapter.clone(),
-            queue: OnceCellOrLock::new(),
-            zero_buffer: ManuallyDrop::new(zero_buffer),
-            empty_bgl: ManuallyDrop::new(empty_bgl),
-            default_external_texture_params_buffer: ManuallyDrop::new(
-                default_external_texture_params_buffer,
-            ),
-            label: desc.label.to_string(),
-            command_allocator,
-            command_indices: RwLock::new(
-                rank::DEVICE_COMMAND_INDICES,
-                CommandIndices {
-                    active_submission_index: 0,
-                    // By starting at one, we can put the result in a NonZeroU64.
-                    next_acceleration_structure_build_command_index: 1,
-                },
-            ),
-            last_successful_submission_index: AtomicU64::new(0),
-            fence: ManuallyDrop::new(fence),
-            snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
-            valid: AtomicBool::new(true),
-            device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
-            trackers: Mutex::new(
-                rank::DEVICE_TRACKERS,
-                DeviceTracker::new(ordered_buffer_usages, ordered_texture_usages),
-            ),
-            tracker_indices: TrackerIndexAllocators::new(),
-            bgl_pool: ResourcePool::new(),
-            #[cfg(feature = "trace")]
-            trace: Mutex::new(rank::DEVICE_TRACE, trace),
-            alignments,
-            limits: desc.required_limits.clone(),
-            features: desc.required_features,
-            downlevel,
-            ordered_buffer_usages,
-            ordered_texture_usages,
-            instance_flags,
-            deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
-            usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
-            timestamp_normalizer: OnceCellOrLock::new(),
-            indirect_validation,
-            deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures::new(),
-        })
+        // Error returns after this point could bypass resource cleanup.
+        #[deny(clippy::question_mark_used)]
+        {
+            let zero_buffer = resources.zero_buffer.take().unwrap();
+            let empty_bgl = resources.empty_bgl.take().unwrap();
+            let default_external_texture_params_buffer = resources
+                .default_external_texture_params_buffer
+                .take()
+                .unwrap();
+            let fence = resources.fence.take().unwrap();
+            let indirect_validation = resources.indirect_validation.take();
+            drop(resources);
+
+            Ok(Self {
+                raw: raw_device,
+                adapter: adapter.clone(),
+                queue: OnceCellOrLock::new(),
+                zero_buffer: ManuallyDrop::new(zero_buffer),
+                empty_bgl: ManuallyDrop::new(empty_bgl),
+                default_external_texture_params_buffer: ManuallyDrop::new(
+                    default_external_texture_params_buffer,
+                ),
+                label: desc.label.to_string(),
+                command_allocator,
+                command_indices: RwLock::new(
+                    rank::DEVICE_COMMAND_INDICES,
+                    CommandIndices {
+                        active_submission_index: 0,
+                        // By starting at one, we can put the result in a NonZeroU64.
+                        next_acceleration_structure_build_command_index: 1,
+                    },
+                ),
+                last_successful_submission_index: AtomicU64::new(0),
+                fence: ManuallyDrop::new(fence),
+                snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
+                valid: AtomicBool::new(true),
+                device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
+                trackers: Mutex::new(
+                    rank::DEVICE_TRACKERS,
+                    DeviceTracker::new(ordered_buffer_usages, ordered_texture_usages),
+                ),
+                tracker_indices: TrackerIndexAllocators::new(),
+                bgl_pool: ResourcePool::new(),
+                #[cfg(feature = "trace")]
+                trace: Mutex::new(rank::DEVICE_TRACE, trace),
+                alignments,
+                limits: desc.required_limits.clone(),
+                features: desc.required_features,
+                downlevel,
+                ordered_buffer_usages,
+                ordered_texture_usages,
+                instance_flags,
+                deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
+                usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
+                timestamp_normalizer: OnceCellOrLock::new(),
+                indirect_validation,
+                deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures::new(),
+            })
+        }
     }
 
     /// Initializes [`Device::default_external_texture_params_buffer`] with
@@ -1443,6 +1517,8 @@ impl Device {
         desc: &resource::TextureDescriptor,
         initial_state: wgt::TextureUses,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+        self.check_is_valid()?;
+
         let format_features = self
             .describe_format_features(desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
@@ -1588,10 +1664,29 @@ impl Device {
         }
     }
 
-    fn create_texture_inner(
+    /// Validate a texture descriptor.
+    ///
+    /// This applies the same validation as [`Self::create_texture`], without
+    /// actually creating a texture.
+    pub fn validate_texture_descriptor(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
-    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+    ) -> Result<(), resource::CreateTextureError> {
+        self.validate_texture_descriptor_inner(desc)?;
+        Ok(())
+    }
+
+    /// Validate a texture descriptor.
+    ///
+    /// Implements the [validating GPUTextureDescriptor] algorithm, with some
+    /// `wgpu` extensions.
+    ///
+    /// [validating GPUTextureDescriptor]: https://www.w3.org/TR/webgpu/#abstract-opdef-validating-gputexturedescriptor
+    fn validate_texture_descriptor_inner(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> Result<(wgt::TextureFormatFeatures, Vec<TextureFormat>), resource::CreateTextureError>
+    {
         use resource::{CreateTextureError, TextureDimensionError};
 
         self.check_is_valid()?;
@@ -1865,6 +1960,15 @@ impl Device {
             self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
         }
 
+        Ok((format_features, hal_view_formats))
+    }
+
+    fn create_texture_inner(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+        let (format_features, hal_view_formats) = self.validate_texture_descriptor_inner(desc)?;
+
         let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
 
         let hal_desc = hal::TextureDescriptor {
@@ -2008,406 +2112,6 @@ impl Device {
             ));
         }
         texture
-    }
-
-    fn create_texture_view_inner(
-        self: &Arc<Self>,
-        texture: &Arc<Texture>,
-        desc: &resource::TextureViewDescriptor,
-    ) -> Result<Arc<TextureView>, resource::CreateTextureViewError> {
-        self.check_is_valid()?;
-
-        let snatch_guard = texture.device.snatchable_lock.read();
-
-        let texture_raw = texture.try_inner(&snatch_guard)?.raw();
-
-        // resolve TextureViewDescriptor defaults
-        // https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureviewdescriptor-defaults
-        let resolved_format = desc.format.unwrap_or_else(|| {
-            texture
-                .desc
-                .format
-                .aspect_specific_format(desc.range.aspect)
-                .unwrap_or(texture.desc.format)
-        });
-
-        let resolved_dimension = desc
-            .dimension
-            .unwrap_or_else(|| match texture.desc.dimension {
-                wgt::TextureDimension::D1 => TextureViewDimension::D1,
-                wgt::TextureDimension::D2 => {
-                    if texture.desc.array_layer_count() == 1 {
-                        TextureViewDimension::D2
-                    } else {
-                        TextureViewDimension::D2Array
-                    }
-                }
-                wgt::TextureDimension::D3 => TextureViewDimension::D3,
-            });
-
-        let resolved_mip_level_count = desc.range.mip_level_count.unwrap_or_else(|| {
-            texture
-                .desc
-                .mip_level_count
-                .saturating_sub(desc.range.base_mip_level)
-        });
-
-        let resolved_array_layer_count =
-            desc.range
-                .array_layer_count
-                .unwrap_or_else(|| match resolved_dimension {
-                    TextureViewDimension::D1
-                    | TextureViewDimension::D2
-                    | TextureViewDimension::D3 => 1,
-                    TextureViewDimension::Cube => 6,
-                    TextureViewDimension::D2Array | TextureViewDimension::CubeArray => texture
-                        .desc
-                        .array_layer_count()
-                        .saturating_sub(desc.range.base_array_layer),
-                });
-
-        let resolved_usage = {
-            let usage = desc.usage.unwrap_or(wgt::TextureUsages::empty());
-            if usage.is_empty() {
-                texture.desc.usage
-            } else if texture.desc.usage.contains(usage) {
-                // Transient texture usage subsetting is disallowed
-                if texture
-                    .desc
-                    .usage
-                    .contains(wgt::TextureUsages::TRANSIENT_ATTACHMENT)
-                    && texture.desc.usage != usage
-                {
-                    return Err(
-                        resource::CreateTextureViewError::InvalidTransientTextureViewUsage {
-                            texture: texture.desc.usage,
-                            view: usage,
-                        },
-                    );
-                }
-
-                usage
-            } else {
-                return Err(resource::CreateTextureViewError::InvalidTextureViewUsage {
-                    view: usage,
-                    texture: texture.desc.usage,
-                });
-            }
-        };
-
-        let format_features = self.describe_format_features(resolved_format)?;
-        let allowed_format_usages = format_features.allowed_usages;
-        if resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-            && !allowed_format_usages.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-        {
-            return Err(
-                resource::CreateTextureViewError::TextureViewFormatNotRenderable(resolved_format),
-            );
-        }
-
-        if resolved_usage.contains(wgt::TextureUsages::STORAGE_BINDING)
-            && !allowed_format_usages.contains(wgt::TextureUsages::STORAGE_BINDING)
-        {
-            return Err(
-                resource::CreateTextureViewError::TextureViewFormatNotStorage(resolved_format),
-            );
-        }
-
-        // validate TextureViewDescriptor
-
-        let aspects = hal::FormatAspects::new(texture.desc.format, desc.range.aspect);
-        if aspects.is_empty() {
-            return Err(resource::CreateTextureViewError::InvalidAspect {
-                texture_format: texture.desc.format,
-                requested_aspect: desc.range.aspect,
-            });
-        }
-
-        if desc.range.aspect == wgt::TextureAspect::All && resolved_format.is_multi_planar_format()
-        {
-            return Err(resource::CreateTextureViewError::MultiplanarFullTexture(
-                resolved_format,
-            ));
-        }
-
-        let format_is_good = if desc.range.aspect == wgt::TextureAspect::All {
-            resolved_format == texture.desc.format
-                || texture.desc.view_formats.contains(&resolved_format)
-        } else {
-            Some(resolved_format)
-                == texture
-                    .desc
-                    .format
-                    .aspect_specific_format(desc.range.aspect)
-        };
-        if !format_is_good {
-            return Err(resource::CreateTextureViewError::FormatReinterpretation {
-                texture: texture.desc.format,
-                view: resolved_format,
-            });
-        }
-
-        // check if multisampled texture is seen as anything but 2D
-        if texture.desc.sample_count > 1 && resolved_dimension != TextureViewDimension::D2 {
-            // Multisample is allowed on 2D arrays, only if explicitly supported
-            let multisample_array_exception = resolved_dimension == TextureViewDimension::D2Array
-                && self.features.contains(wgt::Features::MULTISAMPLE_ARRAY);
-
-            if !multisample_array_exception {
-                return Err(
-                    resource::CreateTextureViewError::InvalidMultisampledTextureViewDimension(
-                        resolved_dimension,
-                    ),
-                );
-            }
-        }
-
-        // check if the dimension is compatible with the texture
-        if texture.desc.dimension != resolved_dimension.compatible_texture_dimension() {
-            return Err(
-                resource::CreateTextureViewError::InvalidTextureViewDimension {
-                    view: resolved_dimension,
-                    texture: texture.desc.dimension,
-                },
-            );
-        }
-
-        match resolved_dimension {
-            TextureViewDimension::D1 | TextureViewDimension::D2 | TextureViewDimension::D3 => {
-                if resolved_array_layer_count != 1 {
-                    return Err(resource::CreateTextureViewError::InvalidArrayLayerCount {
-                        requested: resolved_array_layer_count,
-                        dim: resolved_dimension,
-                    });
-                }
-            }
-            TextureViewDimension::Cube => {
-                if resolved_array_layer_count != 6 {
-                    return Err(
-                        resource::CreateTextureViewError::InvalidCubemapTextureDepth {
-                            depth: resolved_array_layer_count,
-                        },
-                    );
-                }
-            }
-            TextureViewDimension::CubeArray => {
-                if !resolved_array_layer_count.is_multiple_of(6) {
-                    return Err(
-                        resource::CreateTextureViewError::InvalidCubemapArrayTextureDepth {
-                            depth: resolved_array_layer_count,
-                        },
-                    );
-                }
-            }
-            _ => {}
-        }
-
-        match resolved_dimension {
-            TextureViewDimension::Cube | TextureViewDimension::CubeArray => {
-                if texture.desc.size.width != texture.desc.size.height {
-                    return Err(resource::CreateTextureViewError::InvalidCubeTextureViewSize);
-                }
-            }
-            _ => {}
-        }
-
-        if resolved_mip_level_count == 0 {
-            return Err(resource::CreateTextureViewError::ZeroMipLevelCount);
-        }
-
-        let mip_level_end = desc
-            .range
-            .base_mip_level
-            .saturating_add(resolved_mip_level_count);
-
-        let level_end = texture.desc.mip_level_count;
-        if mip_level_end > level_end {
-            return Err(resource::CreateTextureViewError::TooManyMipLevels {
-                base_mip_level: desc.range.base_mip_level,
-                mip_level_count: resolved_mip_level_count,
-                total: level_end,
-            });
-        }
-
-        if resolved_array_layer_count == 0 {
-            return Err(resource::CreateTextureViewError::ZeroArrayLayerCount);
-        }
-
-        let array_layer_end = desc
-            .range
-            .base_array_layer
-            .saturating_add(resolved_array_layer_count);
-
-        let layer_end = texture.desc.array_layer_count();
-        if array_layer_end > layer_end {
-            return Err(resource::CreateTextureViewError::TooManyArrayLayers {
-                base_array_layer: desc.range.base_array_layer,
-                array_layer_count: resolved_array_layer_count,
-                total: layer_end,
-            });
-        };
-
-        // https://gpuweb.github.io/gpuweb/#abstract-opdef-renderable-texture-view
-        let render_extent = 'error: {
-            if !resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
-                break 'error Err(TextureViewNotRenderableReason::Usage(resolved_usage));
-            }
-
-            let allowed_view_dimensions = [
-                TextureViewDimension::D2,
-                TextureViewDimension::D2Array,
-                TextureViewDimension::D3,
-            ];
-            if !allowed_view_dimensions.contains(&resolved_dimension) {
-                break 'error Err(TextureViewNotRenderableReason::Dimension(
-                    resolved_dimension,
-                ));
-            }
-
-            if resolved_mip_level_count != 1 {
-                break 'error Err(TextureViewNotRenderableReason::MipLevelCount(
-                    resolved_mip_level_count,
-                ));
-            }
-
-            if resolved_array_layer_count != 1
-                && !(self.features.contains(wgt::Features::MULTIVIEW))
-            {
-                break 'error Err(TextureViewNotRenderableReason::ArrayLayerCount(
-                    resolved_array_layer_count,
-                ));
-            }
-
-            if !texture.desc.format.is_multi_planar_format()
-                && aspects != hal::FormatAspects::from(texture.desc.format)
-            {
-                break 'error Err(TextureViewNotRenderableReason::Aspects(aspects));
-            }
-
-            Ok(texture
-                .desc
-                .compute_render_extent(desc.range.base_mip_level, desc.range.aspect.to_plane()))
-        };
-
-        // filter the usages based on the other criteria
-        let usage = {
-            let resolved_hal_usage = conv::map_texture_usage(
-                resolved_usage,
-                resolved_format.into(),
-                format_features.flags,
-            );
-            let mask_copy = !(wgt::TextureUses::COPY_SRC | wgt::TextureUses::COPY_DST);
-            let mask_dimension = match resolved_dimension {
-                TextureViewDimension::Cube | TextureViewDimension::CubeArray => {
-                    wgt::TextureUses::RESOURCE
-                }
-                TextureViewDimension::D3 => {
-                    wgt::TextureUses::RESOURCE
-                        | wgt::TextureUses::STORAGE_READ_ONLY
-                        | wgt::TextureUses::STORAGE_WRITE_ONLY
-                        | wgt::TextureUses::STORAGE_READ_WRITE
-                }
-                _ => wgt::TextureUses::all(),
-            };
-            let mask_mip_level = if resolved_mip_level_count == 1 {
-                wgt::TextureUses::all()
-            } else {
-                wgt::TextureUses::RESOURCE
-            };
-            resolved_hal_usage & mask_copy & mask_dimension & mask_mip_level
-        };
-
-        // use the combined depth-stencil format for the view
-        let format = if resolved_format.is_depth_stencil_component(texture.desc.format) {
-            texture.desc.format
-        } else {
-            resolved_format
-        };
-
-        let resolved_range = wgt::ImageSubresourceRange {
-            aspect: desc.range.aspect,
-            base_mip_level: desc.range.base_mip_level,
-            mip_level_count: Some(resolved_mip_level_count),
-            base_array_layer: desc.range.base_array_layer,
-            array_layer_count: Some(resolved_array_layer_count),
-        };
-
-        let hal_desc = hal::TextureViewDescriptor {
-            label: desc.label.to_hal(self.instance_flags),
-            format,
-            dimension: resolved_dimension,
-            usage,
-            range: resolved_range,
-        };
-
-        let raw = unsafe { self.raw().create_texture_view(texture_raw, &hal_desc) }
-            .map_err(|e| self.handle_hal_error(e))?;
-
-        let selector = TextureSelector {
-            mips: desc.range.base_mip_level..mip_level_end,
-            layers: desc.range.base_array_layer..array_layer_end,
-        };
-
-        let view = TextureView {
-            state: ResourceState::Valid(TextureViewState {
-                raw: Snatchable::new(raw),
-                render_extent,
-            }),
-            parent: texture.clone(),
-            device: self.clone(),
-            desc: resource::HalTextureViewDescriptor {
-                texture_format: texture.desc.format,
-                format: resolved_format,
-                dimension: resolved_dimension,
-                usage: resolved_usage,
-                range: resolved_range,
-            },
-            format_features: texture.format_features,
-            samples: texture.desc.sample_count,
-            selector,
-            label: desc.label.to_string(),
-        };
-
-        let view = Arc::new(view);
-
-        {
-            let mut views = texture.views.lock();
-            views.push(Arc::downgrade(&view));
-        }
-
-        Ok(view)
-    }
-
-    pub fn create_texture_view(
-        self: &Arc<Self>,
-        texture: &Arc<Texture>,
-        desc: &resource::TextureViewDescriptor,
-    ) -> (Arc<TextureView>, Option<resource::CreateTextureViewError>) {
-        profiling::scope!("Texture::create_view");
-
-        let (view, error) = match self.create_texture_view_inner(texture, desc) {
-            Ok(view) => (view, None),
-            Err(e) => (TextureView::invalid(self, texture, desc), Some(e)),
-        };
-
-        api_log!(
-            "Texture::create_view({:?}) -> {:?}",
-            Arc::as_ptr(texture),
-            Arc::as_ptr(&view)
-        );
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *self.trace.lock() {
-            use crate::device::trace;
-            use trace::IntoTrace as _;
-            trace.add(trace::Action::CreateTextureView {
-                id: view.to_trace(),
-                parent: texture.to_trace(),
-                desc: desc.clone(),
-            });
-        }
-
-        (view, error)
     }
 
     pub fn create_external_texture(
@@ -2755,8 +2459,10 @@ impl Device {
             #[cfg(feature = "wgsl")]
             pipeline::ShaderModuleSource::Wgsl(code) => {
                 profiling::scope!("naga::front::wgsl::parse");
-                let capabilities =
-                    features_to_naga_capabilities(self.features, self.downlevel.flags);
+                let capabilities = crate::device::features_to_naga_capabilities(
+                    self.features,
+                    self.downlevel.flags,
+                );
                 let mut options = naga::front::wgsl::Options::new();
                 options.capabilities = capabilities;
                 let mut frontend = naga::front::wgsl::Frontend::new_with_options(options);
@@ -4346,7 +4052,7 @@ impl Device {
 
     pub fn create_pipeline_layout(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedPipelineLayoutDescriptor,
+        desc: &binding_model::PipelineLayoutDescriptor,
     ) -> (
         Arc<binding_model::PipelineLayout>,
         Option<binding_model::CreatePipelineLayoutError>,
@@ -4376,7 +4082,7 @@ impl Device {
 
     fn create_pipeline_layout_impl(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedPipelineLayoutDescriptor,
+        desc: &binding_model::PipelineLayoutDescriptor,
         ignore_exclusive_pipeline_check: bool,
     ) -> Result<Arc<binding_model::PipelineLayout>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
@@ -4532,7 +4238,7 @@ impl Device {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
+        let layout_desc = binding_model::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: Cow::Owned(bind_group_layouts),
             immediate_size,
@@ -4608,7 +4314,7 @@ impl Device {
             Some(pipeline_layout) => validation::BindingLayoutSource::Provided(pipeline_layout),
             None => validation::BindingLayoutSource::new_derived(&self.limits),
         };
-        let mut shader_binding_sizes = FastHashMap::default();
+        let mut minimum_binding_sizes = FastHashMap::default();
         let mut io = validation::StageIo::default();
 
         let final_entry_point_name;
@@ -4624,7 +4330,7 @@ impl Device {
             if let Some(interface) = shader_module_state.interface.interface() {
                 io = interface.check_stage(
                     &mut binding_layout_source,
-                    &mut shader_binding_sizes,
+                    &mut minimum_binding_sizes,
                     &final_entry_point_name,
                     stage,
                     io,
@@ -4649,7 +4355,7 @@ impl Device {
         };
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
+            Device::make_late_sized_buffer_groups(&minimum_binding_sizes, &pipeline_layout);
 
         let cache = match desc.cache {
             Some(cache) => {
@@ -4760,7 +4466,7 @@ impl Device {
 
         self.check_is_valid()?;
 
-        let mut shader_binding_sizes = FastHashMap::default();
+        let mut minimum_binding_sizes = FastHashMap::default();
 
         let color_targets = desc
             .fragment
@@ -4956,6 +4662,10 @@ impl Device {
         }
 
         let mut target_specified = false;
+        let mut required_color_outputs = 0u64;
+        const _: () = {
+            assert!(hal::MAX_COLOR_ATTACHMENTS <= 64);
+        };
 
         for (i, cs) in color_targets.iter().enumerate() {
             if let Some(cs) = cs.as_ref() {
@@ -4966,6 +4676,8 @@ impl Device {
                     // on the device timeline.
                     if cs.write_mask.contains_unknown_bits() {
                         break 'error Some(ColorStateError::InvalidWriteMask(cs.write_mask));
+                    } else if cs.write_mask != ColorWrites::NONE {
+                        required_color_outputs |= 1 << i;
                     }
 
                     let format_features = self.describe_format_features(cs.format)?;
@@ -5004,7 +4716,7 @@ impl Device {
                     if let Some(blend_mode) = cs.blend {
                         for component in [&blend_mode.color, &blend_mode.alpha] {
                             for factor in [component.src_factor, component.dst_factor] {
-                                if factor.ref_second_blend_source() {
+                                if factor.uses_second_blend_source() {
                                     self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
                                     if i == 0 {
                                         dual_source_blending = true;
@@ -5215,7 +4927,7 @@ impl Device {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
-                                &mut shader_binding_sizes,
+                                &mut minimum_binding_sizes,
                                 &_vertex_entry_point_name,
                                 stage,
                                 io,
@@ -5267,7 +4979,7 @@ impl Device {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
-                                &mut shader_binding_sizes,
+                                &mut minimum_binding_sizes,
                                 &_task_entry_point_name,
                                 stage,
                                 io,
@@ -5317,7 +5029,7 @@ impl Device {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
-                                &mut shader_binding_sizes,
+                                &mut minimum_binding_sizes,
                                 &_mesh_entry_point_name,
                                 stage,
                                 io,
@@ -5376,7 +5088,7 @@ impl Device {
                     io = interface
                         .check_stage(
                             &mut binding_layout_source,
-                            &mut shader_binding_sizes,
+                            &mut minimum_binding_sizes,
                             &fragment_entry_point_name,
                             stage,
                             io,
@@ -5404,21 +5116,16 @@ impl Device {
             ));
         }
 
+        let mut active_color_outputs = 0u64;
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, output) in io.varyings.iter() {
+                active_color_outputs |= 1 << i;
                 match color_targets.get(*i as usize) {
                     Some(Some(state)) => {
-                        validation::check_texture_format(state.format, &output.ty).map_err(
-                            |pipeline| {
-                                pipeline::CreateRenderPipelineError::ColorState(
-                                    *i as u8,
-                                    ColorStateError::IncompatibleFormat {
-                                        pipeline,
-                                        shader: output.ty,
-                                    },
-                                )
-                            },
-                        )?;
+                        validation::check_color_attachment_compatibility(state, output.ty)
+                            .map_err(|err| {
+                                pipeline::CreateRenderPipelineError::ColorState(*i as u8, err)
+                            })?;
                     }
                     _ => {
                         log::debug!(
@@ -5431,7 +5138,16 @@ impl Device {
                     }
                 }
             }
+
+            let missing_color_outputs = required_color_outputs & !active_color_outputs;
+            if missing_color_outputs != 0 {
+                return Err(pipeline::CreateRenderPipelineError::ColorState(
+                    missing_color_outputs.trailing_zeros() as u8,
+                    ColorStateError::OutputNotPresent,
+                ));
+            }
         }
+
         let last_stage = match desc.fragment {
             Some(_) => wgt::ShaderStages::FRAGMENT,
             None => wgt::ShaderStages::VERTEX,
@@ -5502,7 +5218,7 @@ impl Device {
             .flags
             .contains(wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED)
         {
-            for (binding, size) in shader_binding_sizes.iter() {
+            for (binding, size) in minimum_binding_sizes.iter() {
                 if size.get() % 16 != 0 {
                     return Err(pipeline::CreateRenderPipelineError::UnalignedShader {
                         binding: binding.binding,
@@ -5514,7 +5230,7 @@ impl Device {
         }
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
+            Device::make_late_sized_buffer_groups(&minimum_binding_sizes, &pipeline_layout);
 
         let cache = match desc.cache {
             Some(cache) => {

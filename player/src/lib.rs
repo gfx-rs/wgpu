@@ -140,7 +140,7 @@ impl Player {
             }
             Action::CreateTextureView { id, parent, desc } => {
                 let parent_texture = self.resolve_texture_id(parent);
-                let (texture_view, _error) = device.create_texture_view(&parent_texture, &desc);
+                let (texture_view, _error) = parent_texture.create_view(&desc);
                 self.texture_views.insert(id, texture_view);
             }
             Action::DropTextureView(id) => {
@@ -213,7 +213,7 @@ impl Player {
                     .map(|bgl_id| bgl_id.map(|bgl_id| self.resolve_bind_group_layout_id(bgl_id)))
                     .collect();
 
-                let resolved_desc = wgc::binding_model::ResolvedPipelineLayoutDescriptor {
+                let resolved_desc = wgc::binding_model::PipelineLayoutDescriptor {
                     label: desc.label.clone(),
                     bind_group_layouts: Cow::from(&bind_group_layouts),
                     immediate_size: desc.immediate_size,

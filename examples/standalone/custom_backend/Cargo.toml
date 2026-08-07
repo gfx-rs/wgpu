@@ -13,4 +13,4 @@ wgpu = { version = "30.0.0", features = [
     "custom",
     "wgsl",
 ], default-features = false }
-pollster = { version = "0.4", features = ["macro"] }
+pollster = { version = "1.0", features = ["macro"] }

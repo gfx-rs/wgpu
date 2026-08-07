@@ -68,7 +68,6 @@ fn main() {
     #[cfg(feature = "winit")]
     let instance_desc =
         instance_desc.with_display_handle(Box::new(event_loop.owned_display_handle()));
-    let instance_flags = instance_desc.flags;
     let instance = wgc::instance::Instance::new("player", instance_desc, None);
 
     let (backends, device_desc) =
@@ -96,9 +95,7 @@ fn main() {
     let info = adapter.get_info();
     log::info!("Using '{}'", info.name);
 
-    let (device, queue) = adapter
-        .request_device(&device_desc, instance_flags)
-        .unwrap();
+    let (device, queue) = adapter.request_device(&device_desc).unwrap();
 
     let mut player = Player::default();
 
@@ -151,7 +148,7 @@ fn main() {
                 }
                 .unwrap();
                 self.window = Some(window);
-                self.surface = Some(Arc::new(surface));
+                self.surface = Some(surface);
             }
 
             fn exiting(&mut self, _event_loop: &ActiveEventLoop) {

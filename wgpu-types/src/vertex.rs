@@ -1,10 +1,12 @@
 //! Types for defining vertex attributes and their buffers.
 
+use macro_rules_attribute::derive;
+
 use nt::VertexFormat;
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
 
-use crate::{link_to_wgpu_docs, link_to_wgpu_item};
+use crate::{link_to_wgpu_docs, link_to_wgpu_item, ConstDefault};
 
 #[cfg(doc)]
 use crate::Features;
@@ -67,12 +69,12 @@ use crate::Features;
 /// [`Vertex`]: VertexStepMode::Vertex
 /// [`Instance`]: VertexStepMode::Instance
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum VertexStepMode {
     /// Vertex data is advanced every vertex.
-    #[default]
+    #[custom(default)]
     Vertex = 0,
     /// Vertex data is advanced every instance.
     Instance = 1,

@@ -550,6 +550,7 @@ struct RenderPassKey {
 struct DeviceShared {
     raw: ash::Device,
     family_index: u32,
+    queue_flags: vk::QueueFlags,
     queue_index: u32,
     raw_queue: vk::Queue,
     instance: Arc<InstanceShared>,
@@ -1754,7 +1755,10 @@ where
     pub extensions: &'arg mut Vec<&'static CStr>,
     /// The physical device features to enable. You may enable features, but must not disable any.
     pub device_features: &'arg mut PhysicalDeviceFeatures,
-    /// The queue create infos for the device. You may add or modify queue create infos as needed.
+    /// The queue create infos for the device. You may substitute a different queue, but:
+    /// 1. Any queue you provide must be compatible with `wgpu`'s usage,
+    /// 2. You must not leave the vector empty,
+    /// 3. `wgpu` currently only uses the first entry.
     pub queue_create_infos: &'arg mut Vec<vk::DeviceQueueCreateInfo<'pnext>>,
     /// The create info for the device. You may add or modify things in the pnext chain, but
     /// do not turn features off. Additionally, do not add things to the list of extensions,

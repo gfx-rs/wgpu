@@ -999,7 +999,8 @@ impl WebGpuError for ImmediateUploadError {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(bound = "BGL: Serialize"))]
-pub struct PipelineLayoutDescriptor<'a, BGL = BindGroupLayoutId>
+/// cbindgen:ignore
+pub struct PipelineLayoutDescriptor<'a, BGL = Arc<BindGroupLayout>>
 where
     [Option<BGL>]: ToOwned,
     <[Option<BGL>] as ToOwned>::Owned: fmt::Debug,
@@ -1022,10 +1023,6 @@ where
     /// If this value is non-zero, [`wgt::Features::IMMEDIATES`] must be enabled.
     pub immediate_size: u32,
 }
-
-/// cbindgen:ignore
-pub type ResolvedPipelineLayoutDescriptor<'a, BGL = Arc<BindGroupLayout>> =
-    PipelineLayoutDescriptor<'a, BGL>;
 
 #[derive(Debug)]
 pub struct PipelineLayout {
