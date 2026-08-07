@@ -5671,3 +5671,50 @@ fn compute_shaders_dont_accept_result_types() {
         )
     }
 }
+
+#[test]
+fn user_locations_not_accepted_in_compute_entry_point_arguments() {
+    check_validation! {
+        "
+        @compute @workgroup_size(1)
+        fn main(@location(0) _input: u32) { return; }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Compute,
+                source: naga::valid::EntryPointError::Argument(
+                    0,
+                    naga::valid::VaryingError::InvalidAttributeInStage(
+                        "location",
+                        naga::ShaderStage::Compute,
+                    ),
+                ),
+                ..
+            },
+        )
+    }
+
+    check_validation! {
+        "
+        struct ComputeInput {
+            @location(0) input0: vec4<f32>,
+            @location(1) input1: u32,
+        }
+        @compute @workgroup_size(1)
+        fn main(_input: ComputeInput) { return; }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Compute,
+                source: naga::valid::EntryPointError::Argument(
+                    0,
+                    naga::valid::VaryingError::InvalidAttributeInStage(
+                        "location",
+                        naga::ShaderStage::Compute
+                    ),
+                ),
+                ..
+            },
+        )
+    }
+}
