@@ -4,8 +4,8 @@ use std::io::Write as _;
 
 use crate::{
     command::{
-        ArcCommand, ArcComputeCommand, ArcPassTimestampWrites, ArcReferences, ArcRenderCommand,
-        BasePass, ColorAttachments, Command, ComputeCommand, PointerReferences, RenderCommand,
+        ArcCommand, ArcComputeCommand, ArcReferences, ArcRenderCommand, BasePass, ColorAttachments,
+        Command, ComputeCommand, PassTimestampWrites, PointerReferences, RenderCommand,
         RenderPassColorAttachment, ResolvedRenderPassDepthStencilAttachment,
     },
     device::trace::{Data, DataKind},
@@ -313,10 +313,10 @@ impl<T: IntoTrace> IntoTrace for wgt::TexelCopyTextureInfo<T> {
     }
 }
 
-impl IntoTrace for ArcPassTimestampWrites {
-    type Output = crate::command::PassTimestampWrites<PointerId<markers::QuerySet>>;
+impl IntoTrace for PassTimestampWrites {
+    type Output = PassTimestampWrites<PointerId<markers::QuerySet>>;
     fn into_trace(self) -> Self::Output {
-        crate::command::PassTimestampWrites {
+        PassTimestampWrites {
             query_set: self.query_set.into_trace(),
             beginning_of_pass_write_index: self.beginning_of_pass_write_index,
             end_of_pass_write_index: self.end_of_pass_write_index,

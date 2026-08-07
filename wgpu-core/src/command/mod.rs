@@ -83,7 +83,6 @@ pub(crate) use allocator::CommandAllocator;
 /// cbindgen:ignore
 pub use self::{compute_command::ComputeCommand, render_command::RenderCommand};
 
-pub(crate) use timestamp_writes::ArcPassTimestampWrites;
 pub use timestamp_writes::PassTimestampWrites;
 
 use crate::binding_model::BindingError;
@@ -969,7 +968,7 @@ impl CommandEncoder {
     pub(crate) fn validate_pass_timestamp_writes<E>(
         device: &Device,
         timestamp_writes: &PassTimestampWrites<Arc<QuerySet>>,
-    ) -> Result<ArcPassTimestampWrites, E>
+    ) -> Result<PassTimestampWrites, E>
     where
         E: From<TimestampWritesError>
             + From<QueryUseError>
@@ -1008,7 +1007,7 @@ impl CommandEncoder {
             return Err(TimestampWritesError::IndicesMissing.into());
         }
 
-        Ok(ArcPassTimestampWrites {
+        Ok(PassTimestampWrites {
             query_set: query_set.clone(),
             beginning_of_pass_write_index,
             end_of_pass_write_index,

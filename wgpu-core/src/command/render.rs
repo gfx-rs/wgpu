@@ -25,11 +25,11 @@ use crate::{
             QueryResetMap, QuerySetWrites,
         },
         render_command::ArcRenderCommand,
-        ArcCommand, ArcPassTimestampWrites, BasePass, BindGroupStateChange,
-        CommandBufferTextureMemoryActions, CommandEncoder, CommandEncoderError, DebugGroupError,
-        DrawCommandFamily, DrawError, DrawKind, EncoderStateError, EncodingState, ExecutionError,
-        InnerCommandEncoder, MapPassErr, PassErrorScope, PassStateError, PassTimestampWrites,
-        QueryUseError, Rect, RenderBundle, RenderCommandError, StateChange, TimestampWritesError,
+        ArcCommand, BasePass, BindGroupStateChange, CommandBufferTextureMemoryActions,
+        CommandEncoder, CommandEncoderError, DebugGroupError, DrawCommandFamily, DrawError,
+        DrawKind, EncoderStateError, EncodingState, ExecutionError, InnerCommandEncoder,
+        MapPassErr, PassErrorScope, PassStateError, PassTimestampWrites, QueryUseError, Rect,
+        RenderBundle, RenderCommandError, StateChange, TimestampWritesError,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -264,7 +264,7 @@ pub struct RenderPassDescriptor<'a> {
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<id::TextureViewId>>,
     /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<PassTimestampWrites>,
+    pub timestamp_writes: Option<PassTimestampWrites<id::QuerySetId>>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<id::QuerySetId>,
     /// The multiview array layers that will be used
@@ -297,7 +297,7 @@ struct ArcRenderPassDescriptor<'a> {
     pub depth_stencil_attachment:
         Option<ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>>,
     /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<ArcPassTimestampWrites>,
+    pub timestamp_writes: Option<PassTimestampWrites>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<Arc<QuerySet>>,
     /// The multiview array layers that will be used
@@ -326,7 +326,7 @@ pub struct RenderPass {
 
     color_attachments: ArrayVec<Option<RenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil_attachment: Option<ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>>,
-    timestamp_writes: Option<ArcPassTimestampWrites>,
+    timestamp_writes: Option<PassTimestampWrites>,
     occlusion_query_set: Option<Arc<QuerySet>>,
     multiview_mask: Option<NonZeroU32>,
 
@@ -1190,7 +1190,7 @@ impl RenderPassInfo {
         mut depth_stencil_attachment: Option<
             ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>,
         >,
-        mut timestamp_writes: Option<ArcPassTimestampWrites>,
+        mut timestamp_writes: Option<PassTimestampWrites>,
         mut occlusion_query_set: Option<Arc<QuerySet>>,
         encoder: &mut dyn hal::DynCommandEncoder,
         trackers: &mut Tracker,
@@ -2333,7 +2333,7 @@ pub(super) fn encode_render_pass(
     mut depth_stencil_attachment: Option<
         ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>,
     >,
-    mut timestamp_writes: Option<ArcPassTimestampWrites>,
+    mut timestamp_writes: Option<PassTimestampWrites>,
     occlusion_query_set: Option<Arc<QuerySet>>,
     multiview_mask: Option<NonZeroU32>,
 ) -> Result<(), RenderPassError> {

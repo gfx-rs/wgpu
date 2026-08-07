@@ -41,7 +41,7 @@ pub(crate) struct DeferredQuerySetResolve {
 pub(crate) type QuerySetWrites = FastHashMap<TrackerIndex, BitVec>;
 
 pub(super) fn record_pass_timestamp_writes(
-    tw: &crate::command::ArcPassTimestampWrites,
+    tw: &crate::command::PassTimestampWrites,
     query_set_writes: &mut QuerySetWrites,
 ) {
     for index in tw
