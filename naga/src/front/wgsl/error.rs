@@ -1663,9 +1663,9 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::RayQueryWithInitializer(span) => ParseError {
-                message: "Ray query with initialize".to_string(),
+                message: "Ray query with initialize".into(),
                 labels: vec![(
-                    span,
+                    *span,
                     "variables with type `ray_query` are special and so cannot have initializers".into(),
                 )],
                 notes: vec![],
