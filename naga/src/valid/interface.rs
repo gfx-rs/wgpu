@@ -1400,29 +1400,48 @@ impl super::Validator {
             };
             ctx.validate(ep, fr.ty, fr.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
-            if ep.stage == crate::ShaderStage::Vertex
-                && !result_built_ins.contains(&crate::BuiltIn::Position { invariant: false })
-            {
-                return Err(EntryPointError::MissingVertexOutputPosition.with_span());
-            }
-            if ep.stage == crate::ShaderStage::Mesh {
-                return Err(EntryPointError::UnexpectedMeshShaderEntryResult.with_span());
-            }
-            // Task shaders must have a single `MeshTaskSize` output, and nothing else.
-            if ep.stage == crate::ShaderStage::Task {
-                let ok = module.types[fr.ty].inner
-                    == crate::TypeInner::Vector {
-                        size: crate::VectorSize::Tri,
-                        scalar: crate::Scalar::U32,
-                    };
-                if !ok {
-                    return Err(EntryPointError::WrongTaskShaderEntryResult.with_span());
+            match ep.stage {
+                nt::ShaderStage::Vertex => {
+                    if !result_built_ins.contains(&crate::BuiltIn::Position { invariant: false }) {
+                        return Err(EntryPointError::MissingVertexOutputPosition.with_span());
+                    }
                 }
+                nt::ShaderStage::Mesh => {
+                    return Err(EntryPointError::UnexpectedMeshShaderEntryResult.with_span())
+                }
+                nt::ShaderStage::Task => {
+                    let ok = module.types[fr.ty].inner
+                        == crate::TypeInner::Vector {
+                            size: crate::VectorSize::Tri,
+                            scalar: crate::Scalar::U32,
+                        };
+                    if !ok {
+                        return Err(EntryPointError::WrongTaskShaderEntryResult.with_span());
+                    }
+                }
+                nt::ShaderStage::Fragment
+                | nt::ShaderStage::Compute
+                | nt::ShaderStage::RayGeneration
+                | nt::ShaderStage::Miss
+                | nt::ShaderStage::AnyHit
+                | nt::ShaderStage::ClosestHit => {}
             }
-        } else if ep.stage == crate::ShaderStage::Vertex {
-            return Err(EntryPointError::MissingVertexOutputPosition.with_span());
-        } else if ep.stage == crate::ShaderStage::Task {
-            return Err(EntryPointError::WrongTaskShaderEntryResult.with_span());
+        } else {
+            match ep.stage {
+                nt::ShaderStage::Vertex => {
+                    return Err(EntryPointError::MissingVertexOutputPosition.with_span())
+                }
+                nt::ShaderStage::Task => {
+                    return Err(EntryPointError::WrongTaskShaderEntryResult.with_span())
+                }
+                nt::ShaderStage::Mesh
+                | nt::ShaderStage::Fragment
+                | nt::ShaderStage::Compute
+                | nt::ShaderStage::RayGeneration
+                | nt::ShaderStage::Miss
+                | nt::ShaderStage::AnyHit
+                | nt::ShaderStage::ClosestHit => {}
+            }
         }
 
         {
