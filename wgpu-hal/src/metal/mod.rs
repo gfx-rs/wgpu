@@ -333,7 +333,7 @@ struct CapabilitiesQuery {
     shader_per_vertex: bool,
     supports_multisample_array: bool,
     indirect_command_buffers_rendering: bool,
-    indirect_command_buffers_compute: bool,
+    indirect_command_buffers_mesh: bool,
 }
 
 #[derive(Debug)]
@@ -349,7 +349,7 @@ struct PrivateCapabilities {
     /// `MULTI_DRAW_INDIRECT_COUNT`: this backend uses render ICBs to lower
     /// fixed-count multi-draws even when the count feature isn't exposed.
     indirect_command_buffers_rendering: bool,
-    indirect_command_buffers_compute: bool,
+    indirect_command_buffers_mesh: bool,
 }
 
 #[derive(Debug)]
@@ -1210,11 +1210,7 @@ impl PipelineStageInfo {
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: Retained<ProtocolObject<dyn MTLRenderPipelineState>>,
-    /// Whether this pipeline was created with
-    /// `supportIndirectCommandBuffers`; some shaders are rejected by the
-    /// driver with that flag set, in which case the pipeline is created
-    /// without it and multi-draws recorded under it can't be lowered to ICBs.
-    supports_indirect_command_buffers: bool,
+    icb_raw: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
     vs_info: Option<PipelineStageInfo>,
     fs_info: Option<PipelineStageInfo>,
     ts_info: Option<PipelineStageInfo>,
@@ -1330,10 +1326,8 @@ struct CommandState {
         Option<Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>>>,
     render: Option<Retained<ProtocolObject<dyn MTLRenderCommandEncoder>>>,
     compute: Option<Retained<ProtocolObject<dyn MTLComputeCommandEncoder>>>,
-    /// Whether the currently bound render pipeline was created with
-    /// `supportIndirectCommandBuffers`; see
-    /// [`RenderPipeline::supports_indirect_command_buffers`].
-    render_pipeline_supports_icb: bool,
+    render_pipeline: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
+    render_pipeline_icb: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
     raw_primitive_type: MTLPrimitiveType,
     index: Option<IndexState>,
     stage_infos: MultiStageData<PipelineStageInfo>,

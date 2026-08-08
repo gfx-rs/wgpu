@@ -69,7 +69,7 @@ To run the benchmarks for benchmarking purposes, use `cargo bench`.
 
 - Located in: `examples/features`
 - Run with `cargo xtask test --bin wgpu-examples`
-- Uses a custom `#[gpu_test]` harness.
+- Uses a custom `#[apply(gpu_test!)]` harness.
 - `wgpu` integration tests, with access to `wgpu_test` helpers.
 
 These tests validate that the examples are functioning correctly
@@ -188,7 +188,7 @@ This provides a way to ensure that our `toml` files are correct.
 
 - Located in: `tests/tests/wgpu-gpu`
 - Run with `cargo xtask test --test wgpu-gpu`
-- Uses a custom `#[gpu_test]` harness.
+- Uses a custom `#[apply(gpu_test!)]` harness.
 - `wgpu` integration tests, with access to `wgpu_test` helpers.
 
 These tests use a custom harness to run each test on all GPUs

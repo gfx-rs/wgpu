@@ -17,7 +17,8 @@ use arrayvec::ArrayVec;
 use bitflags::Flags;
 use smallvec::SmallVec;
 use wgt::{
-    math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
+    math::align_to, ColorWrites, DeviceLostReason, TextureFormat, TextureSampleType,
+    TextureViewDimension,
 };
 
 #[cfg(feature = "trace")]
@@ -222,6 +223,22 @@ impl DeferredBufferMapPendingClosures {
     }
 }
 
+/// Resources associated with a device.
+///
+/// This struct exists so that resources can be cleaned up properly on error returns
+/// from [`Device::new`].
+///
+/// [`Device::timestamp_normalizer`] is late-initialized after [`Device::new`], so it is not
+/// included here.
+struct DeviceResources<'a> {
+    raw: &'a dyn hal::DynDevice,
+    zero_buffer: Option<Box<dyn hal::DynBuffer>>,
+    empty_bgl: Option<Box<dyn hal::DynBindGroupLayout>>,
+    default_external_texture_params_buffer: Option<Box<dyn hal::DynBuffer>>,
+    fence: Option<Box<dyn hal::DynFence>>,
+    indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
+}
+
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 pub struct Device {
@@ -323,12 +340,45 @@ impl fmt::Debug for Device {
     }
 }
 
+impl Drop for DeviceResources<'_> {
+    fn drop(&mut self) {
+        if let Some(indirect_validation) = self.indirect_validation.take() {
+            indirect_validation.dispose(self.raw);
+        }
+        unsafe {
+            if let Some(zero_buffer) = self.zero_buffer.take() {
+                self.raw.destroy_buffer(zero_buffer);
+            }
+            if let Some(empty_bgl) = self.empty_bgl.take() {
+                self.raw.destroy_bind_group_layout(empty_bgl);
+            }
+            if let Some(default_external_texture_params_buffer) =
+                self.default_external_texture_params_buffer.take()
+            {
+                self.raw
+                    .destroy_buffer(default_external_texture_params_buffer);
+            }
+            if let Some(fence) = self.fence.take() {
+                self.raw.destroy_fence(fence);
+            }
+        }
+    }
+}
+
 impl Drop for Device {
     #[allow(trivial_casts)]
     fn drop(&mut self) {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
+
+        // The timestamp normalizer is late-initialized, so it is not included in `DeviceResources`.
+        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
+            timestamp_normalizer.dispose(self.raw.as_ref());
+        }
+
+        // Transfer the rest of the resources back to `DeviceResources`, which cleans them
+        // up for us.
 
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this
         // point.
@@ -341,19 +391,15 @@ impl Drop for Device {
             unsafe { ManuallyDrop::take(&mut self.default_external_texture_params_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence) };
-        if let Some(indirect_validation) = self.indirect_validation.take() {
-            indirect_validation.dispose(self.raw.as_ref());
-        }
-        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
-            timestamp_normalizer.dispose(self.raw.as_ref());
-        }
-        unsafe {
-            self.raw.destroy_buffer(zero_buffer);
-            self.raw.destroy_bind_group_layout(empty_bgl);
-            self.raw
-                .destroy_buffer(default_external_texture_params_buffer);
-            self.raw.destroy_fence(fence);
-        }
+
+        drop(DeviceResources {
+            raw: self.raw.as_ref(),
+            zero_buffer: Some(zero_buffer),
+            empty_bgl: Some(empty_bgl),
+            default_external_texture_params_buffer: Some(default_external_texture_params_buffer),
+            fence: Some(fence),
+            indirect_validation: self.indirect_validation.take(),
+        });
     }
 }
 
@@ -484,7 +530,17 @@ impl Device {
         let ordered_buffer_usages = adapter.raw.adapter.get_ordered_buffer_usages();
         let ordered_texture_usages = adapter.raw.adapter.get_ordered_texture_usages();
 
-        let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
+        let mut resources = DeviceResources {
+            raw: raw_device.as_ref(),
+            zero_buffer: None,
+            empty_bgl: None,
+            default_external_texture_params_buffer: None,
+            fence: None,
+            indirect_validation: None,
+        };
+
+        resources.fence =
+            Some(unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?);
 
         let command_allocator = command::CommandAllocator::new();
 
@@ -498,37 +554,43 @@ impl Device {
         };
 
         // Create zeroed buffer used for texture clears (and raytracing if required).
-        let zero_buffer = unsafe {
-            raw_device.create_buffer(&hal::BufferDescriptor {
-                label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
-                size: ZERO_BUFFER_SIZE,
-                usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
-                memory_flags: hal::MemoryFlags::empty(),
-            })
-        }
-        .map_err(DeviceError::from_hal)?;
+        resources.zero_buffer = Some(
+            unsafe {
+                raw_device.create_buffer(&hal::BufferDescriptor {
+                    label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
+                    size: ZERO_BUFFER_SIZE,
+                    usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
+                    memory_flags: hal::MemoryFlags::empty(),
+                })
+            }
+            .map_err(DeviceError::from_hal)?,
+        );
 
-        let empty_bgl = unsafe {
-            raw_device.create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
-                label: None,
-                flags: hal::BindGroupLayoutFlags::empty(),
-                entries: &[],
-            })
-        }
-        .map_err(DeviceError::from_hal)?;
+        resources.empty_bgl = Some(
+            unsafe {
+                raw_device.create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
+                    label: None,
+                    flags: hal::BindGroupLayoutFlags::empty(),
+                    entries: &[],
+                })
+            }
+            .map_err(DeviceError::from_hal)?,
+        );
 
-        let default_external_texture_params_buffer = unsafe {
-            raw_device.create_buffer(&hal::BufferDescriptor {
-                label: hal_label(
-                    Some("(wgpu internal) default external texture params buffer"),
-                    instance_flags,
-                ),
-                size: size_of::<ExternalTextureParams>() as _,
-                usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
-                memory_flags: hal::MemoryFlags::empty(),
-            })
-        }
-        .map_err(DeviceError::from_hal)?;
+        resources.default_external_texture_params_buffer = Some(
+            unsafe {
+                raw_device.create_buffer(&hal::BufferDescriptor {
+                    label: hal_label(
+                        Some("(wgpu internal) default external texture params buffer"),
+                        instance_flags,
+                    ),
+                    size: size_of::<ExternalTextureParams>() as _,
+                    usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
+                    memory_flags: hal::MemoryFlags::empty(),
+                })
+            }
+            .map_err(DeviceError::from_hal)?,
+        );
 
         // Cloned as we need them below anyway.
         let alignments = adapter.raw.capabilities.alignments.clone();
@@ -542,63 +604,76 @@ impl Device {
             )
             && limits.max_storage_buffers_per_shader_stage >= 2;
 
-        let indirect_validation = if enable_indirect_validation {
-            Some(crate::indirect_validation::IndirectValidation::new(
-                raw_device.as_ref(),
-                &desc.required_limits,
-                &desc.required_features,
-                instance_flags,
-                adapter.backend(),
-            )?)
-        } else {
-            None
-        };
+        if enable_indirect_validation {
+            resources.indirect_validation =
+                Some(crate::indirect_validation::IndirectValidation::new(
+                    raw_device.as_ref(),
+                    &desc.required_limits,
+                    &desc.required_features,
+                    instance_flags,
+                    adapter.backend(),
+                )?);
+        }
 
-        Ok(Self {
-            raw: raw_device,
-            adapter: adapter.clone(),
-            queue: OnceCellOrLock::new(),
-            zero_buffer: ManuallyDrop::new(zero_buffer),
-            empty_bgl: ManuallyDrop::new(empty_bgl),
-            default_external_texture_params_buffer: ManuallyDrop::new(
-                default_external_texture_params_buffer,
-            ),
-            label: desc.label.to_string(),
-            command_allocator,
-            command_indices: RwLock::new(
-                rank::DEVICE_COMMAND_INDICES,
-                CommandIndices {
-                    active_submission_index: 0,
-                    // By starting at one, we can put the result in a NonZeroU64.
-                    next_acceleration_structure_build_command_index: 1,
-                },
-            ),
-            last_successful_submission_index: AtomicU64::new(0),
-            fence: ManuallyDrop::new(fence),
-            snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
-            valid: AtomicBool::new(true),
-            device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
-            trackers: Mutex::new(
-                rank::DEVICE_TRACKERS,
-                DeviceTracker::new(ordered_buffer_usages, ordered_texture_usages),
-            ),
-            tracker_indices: TrackerIndexAllocators::new(),
-            bgl_pool: ResourcePool::new(),
-            #[cfg(feature = "trace")]
-            trace: Mutex::new(rank::DEVICE_TRACE, trace),
-            alignments,
-            limits: desc.required_limits.clone(),
-            features: desc.required_features,
-            downlevel,
-            ordered_buffer_usages,
-            ordered_texture_usages,
-            instance_flags,
-            deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
-            usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
-            timestamp_normalizer: OnceCellOrLock::new(),
-            indirect_validation,
-            deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures::new(),
-        })
+        // Error returns after this point could bypass resource cleanup.
+        #[deny(clippy::question_mark_used)]
+        {
+            let zero_buffer = resources.zero_buffer.take().unwrap();
+            let empty_bgl = resources.empty_bgl.take().unwrap();
+            let default_external_texture_params_buffer = resources
+                .default_external_texture_params_buffer
+                .take()
+                .unwrap();
+            let fence = resources.fence.take().unwrap();
+            let indirect_validation = resources.indirect_validation.take();
+            drop(resources);
+
+            Ok(Self {
+                raw: raw_device,
+                adapter: adapter.clone(),
+                queue: OnceCellOrLock::new(),
+                zero_buffer: ManuallyDrop::new(zero_buffer),
+                empty_bgl: ManuallyDrop::new(empty_bgl),
+                default_external_texture_params_buffer: ManuallyDrop::new(
+                    default_external_texture_params_buffer,
+                ),
+                label: desc.label.to_string(),
+                command_allocator,
+                command_indices: RwLock::new(
+                    rank::DEVICE_COMMAND_INDICES,
+                    CommandIndices {
+                        active_submission_index: 0,
+                        // By starting at one, we can put the result in a NonZeroU64.
+                        next_acceleration_structure_build_command_index: 1,
+                    },
+                ),
+                last_successful_submission_index: AtomicU64::new(0),
+                fence: ManuallyDrop::new(fence),
+                snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
+                valid: AtomicBool::new(true),
+                device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
+                trackers: Mutex::new(
+                    rank::DEVICE_TRACKERS,
+                    DeviceTracker::new(ordered_buffer_usages, ordered_texture_usages),
+                ),
+                tracker_indices: TrackerIndexAllocators::new(),
+                bgl_pool: ResourcePool::new(),
+                #[cfg(feature = "trace")]
+                trace: Mutex::new(rank::DEVICE_TRACE, trace),
+                alignments,
+                limits: desc.required_limits.clone(),
+                features: desc.required_features,
+                downlevel,
+                ordered_buffer_usages,
+                ordered_texture_usages,
+                instance_flags,
+                deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
+                usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
+                timestamp_normalizer: OnceCellOrLock::new(),
+                indirect_validation,
+                deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures::new(),
+            })
+        }
     }
 
     /// Initializes [`Device::default_external_texture_params_buffer`] with
@@ -918,8 +993,10 @@ impl Device {
             wgt::PollType::Poll => None,
         };
 
-        // Wait for the submission index if requested.
-        if let Some(target_submission_index) = wait_submission_index {
+        // If a target submission index was specified, wait for it, and set
+        // `wait_succeeded` to `Some(bool)` indicating success or timeout. If
+        // no target was specified, set `wait_succeeded` to `None`.
+        let wait_succeeded = if let Some(target_submission_index) = wait_submission_index {
             log::trace!("Device::maintain: waiting for submission index {target_submission_index}");
 
             let wait_timeout = match poll_type {
@@ -934,13 +1011,16 @@ impl Device {
                     .wait(self.fence.as_ref(), target_submission_index, wait_timeout)
             };
 
-            // This error match is only about `DeviceErrors`. At this stage we do not care if
-            // the wait succeeded or not, and the `Ok(bool)`` variant is ignored.
-            if let Err(e) = wait_result {
-                let hal_error: WaitIdleError = self.handle_hal_error(e).into();
-                return (user_closures, Err(hal_error));
+            match wait_result {
+                Ok(succeeded) => Some(succeeded),
+                Err(e) => {
+                    let hal_error: WaitIdleError = self.handle_hal_error(e).into();
+                    return (user_closures, Err(hal_error));
+                }
             }
-        }
+        } else {
+            None
+        };
 
         // Get the currently finished submission index. This may be higher than the requested
         // wait, or it may be less than the requested wait if the wait failed.
@@ -996,10 +1076,22 @@ impl Device {
 
         // Based on the queue empty status, and the current finished submission index, determine
         // the result of the poll.
-        let result = if queue_empty {
+        //
+        // After a successful wait, `current_finished_submission` should match or exceed
+        // the target. But after a timeout, more work may have finished before
+        // `current_finished_submission` is read, so it could be on either side of the
+        // target, and the queue can also become empty before `Queue::maintain`
+        // computes `queue_empty`.
+        //
+        // We report as accurately as we can with the information available. In
+        // particular, when our wait timed out but `queue_empty` comes back `true`, we
+        // report `WaitSucceeded` if `current_finished_submission` reached the target,
+        // and `Timeout` if it didn't. We don't want to risk reporting `QueueEmpty`
+        // without actually having seen that the target submission is retired.
+        let result = if queue_empty && wait_succeeded != Some(false) {
             if let Some(wait_submission_index) = wait_submission_index {
-                // Assert to ensure that if we received a queue empty status, the fence shows the
-                // correct value. This is defensive, as this should never be hit.
+                // Sanity-check that we don't report `QueueEmpty` without
+                // reaching the target submission index.
                 assert!(
                     current_finished_submission >= wait_submission_index,
                     concat!(
@@ -1009,6 +1101,8 @@ impl Device {
                     current_finished_submission,
                     wait_submission_index,
                 );
+            } else {
+                // We didn't wait (passive poll), safe to report `QueueEmpty`.
             }
 
             Ok(wgt::PollStatus::QueueEmpty)
@@ -1442,6 +1536,8 @@ impl Device {
         desc: &resource::TextureDescriptor,
         initial_state: wgt::TextureUses,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+        self.check_is_valid()?;
+
         let format_features = self
             .describe_format_features(desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
@@ -1587,10 +1683,29 @@ impl Device {
         }
     }
 
-    fn create_texture_inner(
+    /// Validate a texture descriptor.
+    ///
+    /// This applies the same validation as [`Self::create_texture`], without
+    /// actually creating a texture.
+    pub fn validate_texture_descriptor(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
-    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+    ) -> Result<(), resource::CreateTextureError> {
+        self.validate_texture_descriptor_inner(desc)?;
+        Ok(())
+    }
+
+    /// Validate a texture descriptor.
+    ///
+    /// Implements the [validating GPUTextureDescriptor] algorithm, with some
+    /// `wgpu` extensions.
+    ///
+    /// [validating GPUTextureDescriptor]: https://www.w3.org/TR/webgpu/#abstract-opdef-validating-gputexturedescriptor
+    fn validate_texture_descriptor_inner(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> Result<(wgt::TextureFormatFeatures, Vec<TextureFormat>), resource::CreateTextureError>
+    {
         use resource::{CreateTextureError, TextureDimensionError};
 
         self.check_is_valid()?;
@@ -1863,6 +1978,15 @@ impl Device {
         if !hal_view_formats.is_empty() {
             self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
         }
+
+        Ok((format_features, hal_view_formats))
+    }
+
+    fn create_texture_inner(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+        let (format_features, hal_view_formats) = self.validate_texture_descriptor_inner(desc)?;
 
         let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
 
@@ -3947,7 +4071,7 @@ impl Device {
 
     pub fn create_pipeline_layout(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedPipelineLayoutDescriptor,
+        desc: &binding_model::PipelineLayoutDescriptor,
     ) -> (
         Arc<binding_model::PipelineLayout>,
         Option<binding_model::CreatePipelineLayoutError>,
@@ -3977,7 +4101,7 @@ impl Device {
 
     fn create_pipeline_layout_impl(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedPipelineLayoutDescriptor,
+        desc: &binding_model::PipelineLayoutDescriptor,
         ignore_exclusive_pipeline_check: bool,
     ) -> Result<Arc<binding_model::PipelineLayout>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
@@ -4133,7 +4257,7 @@ impl Device {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
+        let layout_desc = binding_model::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: Cow::Owned(bind_group_layouts),
             immediate_size,
@@ -4209,7 +4333,7 @@ impl Device {
             Some(pipeline_layout) => validation::BindingLayoutSource::Provided(pipeline_layout),
             None => validation::BindingLayoutSource::new_derived(&self.limits),
         };
-        let mut shader_binding_sizes = FastHashMap::default();
+        let mut minimum_binding_sizes = FastHashMap::default();
         let mut io = validation::StageIo::default();
 
         let final_entry_point_name;
@@ -4225,7 +4349,7 @@ impl Device {
             if let Some(interface) = shader_module_state.interface.interface() {
                 io = interface.check_stage(
                     &mut binding_layout_source,
-                    &mut shader_binding_sizes,
+                    &mut minimum_binding_sizes,
                     &final_entry_point_name,
                     stage,
                     io,
@@ -4250,7 +4374,7 @@ impl Device {
         };
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
+            Device::make_late_sized_buffer_groups(&minimum_binding_sizes, &pipeline_layout);
 
         let cache = match desc.cache {
             Some(cache) => {
@@ -4361,7 +4485,7 @@ impl Device {
 
         self.check_is_valid()?;
 
-        let mut shader_binding_sizes = FastHashMap::default();
+        let mut minimum_binding_sizes = FastHashMap::default();
 
         let color_targets = desc
             .fragment
@@ -4557,6 +4681,10 @@ impl Device {
         }
 
         let mut target_specified = false;
+        let mut required_color_outputs = 0u64;
+        const _: () = {
+            assert!(hal::MAX_COLOR_ATTACHMENTS <= 64);
+        };
 
         for (i, cs) in color_targets.iter().enumerate() {
             if let Some(cs) = cs.as_ref() {
@@ -4567,6 +4695,8 @@ impl Device {
                     // on the device timeline.
                     if cs.write_mask.contains_unknown_bits() {
                         break 'error Some(ColorStateError::InvalidWriteMask(cs.write_mask));
+                    } else if cs.write_mask != ColorWrites::NONE {
+                        required_color_outputs |= 1 << i;
                     }
 
                     let format_features = self.describe_format_features(cs.format)?;
@@ -4605,7 +4735,7 @@ impl Device {
                     if let Some(blend_mode) = cs.blend {
                         for component in [&blend_mode.color, &blend_mode.alpha] {
                             for factor in [component.src_factor, component.dst_factor] {
-                                if factor.ref_second_blend_source() {
+                                if factor.uses_second_blend_source() {
                                     self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
                                     if i == 0 {
                                         dual_source_blending = true;
@@ -4816,7 +4946,7 @@ impl Device {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
-                                &mut shader_binding_sizes,
+                                &mut minimum_binding_sizes,
                                 &_vertex_entry_point_name,
                                 stage,
                                 io,
@@ -4868,7 +4998,7 @@ impl Device {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
-                                &mut shader_binding_sizes,
+                                &mut minimum_binding_sizes,
                                 &_task_entry_point_name,
                                 stage,
                                 io,
@@ -4918,7 +5048,7 @@ impl Device {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
-                                &mut shader_binding_sizes,
+                                &mut minimum_binding_sizes,
                                 &_mesh_entry_point_name,
                                 stage,
                                 io,
@@ -4977,7 +5107,7 @@ impl Device {
                     io = interface
                         .check_stage(
                             &mut binding_layout_source,
-                            &mut shader_binding_sizes,
+                            &mut minimum_binding_sizes,
                             &fragment_entry_point_name,
                             stage,
                             io,
@@ -5005,21 +5135,16 @@ impl Device {
             ));
         }
 
+        let mut active_color_outputs = 0u64;
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, output) in io.varyings.iter() {
+                active_color_outputs |= 1 << i;
                 match color_targets.get(*i as usize) {
                     Some(Some(state)) => {
-                        validation::check_texture_format(state.format, &output.ty).map_err(
-                            |pipeline| {
-                                pipeline::CreateRenderPipelineError::ColorState(
-                                    *i as u8,
-                                    ColorStateError::IncompatibleFormat {
-                                        pipeline,
-                                        shader: output.ty,
-                                    },
-                                )
-                            },
-                        )?;
+                        validation::check_color_attachment_compatibility(state, output.ty)
+                            .map_err(|err| {
+                                pipeline::CreateRenderPipelineError::ColorState(*i as u8, err)
+                            })?;
                     }
                     _ => {
                         log::debug!(
@@ -5032,7 +5157,16 @@ impl Device {
                     }
                 }
             }
+
+            let missing_color_outputs = required_color_outputs & !active_color_outputs;
+            if missing_color_outputs != 0 {
+                return Err(pipeline::CreateRenderPipelineError::ColorState(
+                    missing_color_outputs.trailing_zeros() as u8,
+                    ColorStateError::OutputNotPresent,
+                ));
+            }
         }
+
         let last_stage = match desc.fragment {
             Some(_) => wgt::ShaderStages::FRAGMENT,
             None => wgt::ShaderStages::VERTEX,
@@ -5103,7 +5237,7 @@ impl Device {
             .flags
             .contains(wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED)
         {
-            for (binding, size) in shader_binding_sizes.iter() {
+            for (binding, size) in minimum_binding_sizes.iter() {
                 if size.get() % 16 != 0 {
                     return Err(pipeline::CreateRenderPipelineError::UnalignedShader {
                         binding: binding.binding,
@@ -5115,7 +5249,7 @@ impl Device {
         }
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
+            Device::make_late_sized_buffer_groups(&minimum_binding_sizes, &pipeline_layout);
 
         let cache = match desc.cache {
             Some(cache) => {
@@ -5472,7 +5606,7 @@ impl Device {
         Ok(query_set)
     }
 
-    fn lose(&self, message: &str) {
+    pub(crate) fn lose(&self, message: &str) {
         // Follow the steps at https://gpuweb.github.io/gpuweb/#lose-the-device.
 
         // Mark the device explicitly as invalid. This is checked in various

@@ -67,7 +67,7 @@ pub fn print_linker_flags(name: &str) {
   }
 }
 
-pub type Instance = Arc<wgpu_core::global::Global>;
+pub type Instance = Arc<wgpu_core::instance::Instance>;
 
 deno_core::extension!(
   deno_webgpu,
@@ -193,7 +193,7 @@ impl GPU {
       if strict_compliance {
         flags |= wgpu_types::InstanceFlags::STRICT_WEBGPU_COMPLIANCE;
       }
-      state.put(Arc::new(wgpu_core::global::Global::new(
+      state.put(Arc::new(wgpu_core::instance::Instance::new(
         "webgpu",
         wgpu_types::InstanceDescriptor {
           backends,
@@ -228,7 +228,7 @@ impl GPU {
     ))
     .ok()?;
 
-    let descriptor = wgpu_core::instance::RequestAdapterOptions {
+    let descriptor = wgpu_types::RequestAdapterOptions {
       power_preference: options
         .power_preference
         .map(|pp| match pp {
@@ -242,14 +242,13 @@ impl GPU {
       compatible_surface: None, // windowless
       apply_limit_buckets: false,
     };
-    let id = instance.request_adapter(&descriptor, backends, None).ok()?;
+    let wgpu_adapter = instance.request_adapter(&descriptor, backends).ok()?;
 
     Some(adapter::GPUAdapter {
-      instance: instance.clone(),
       features: SameObject::new(),
       limits: SameObject::new(),
       info: Rc::new(SameObject::new()),
-      id,
+      wgpu_adapter,
     })
   }
 

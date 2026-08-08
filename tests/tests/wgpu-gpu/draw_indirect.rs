@@ -5,7 +5,7 @@ use wgpu::{
     vertex_attr_array,
 };
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -1262,7 +1262,7 @@ async fn run_multi_draw_indirect_count_readback(ctx: TestingContext, indexed: bo
     assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -1271,7 +1271,7 @@ static MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP: GpuTestConfiguration = GpuTestCon
     )
     .run_async(run_multi_draw_indirect_over_icb_workgroup);
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDIRECT_FIRST_VERTEX_AND_INSTANCE: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -1282,7 +1282,7 @@ static MULTI_DRAW_INDIRECT_FIRST_VERTEX_AND_INSTANCE: GpuTestConfiguration =
         )
         .run_async(run_multi_draw_indirect_first_vertex_and_instance);
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDIRECT_MIXED_SEQUENCE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -1291,7 +1291,7 @@ static MULTI_DRAW_INDIRECT_MIXED_SEQUENCE: GpuTestConfiguration = GpuTestConfigu
     )
     .run_async(run_multi_draw_indirect_mixed_sequence);
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDIRECT_WITH_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -1300,7 +1300,7 @@ static MULTI_DRAW_INDIRECT_WITH_BIND_GROUPS: GpuTestConfiguration = GpuTestConfi
     )
     .run_async(run_multi_draw_indirect_with_bind_groups);
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDEXED_INDIRECT_U16: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -1309,7 +1309,7 @@ static MULTI_DRAW_INDEXED_INDIRECT_U16: GpuTestConfiguration = GpuTestConfigurat
     )
     .run_async(run_multi_draw_indexed_indirect_u16);
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDEXED_INDIRECT_POSITIVE_BASE_VERTEX: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -1319,7 +1319,7 @@ static MULTI_DRAW_INDEXED_INDIRECT_POSITIVE_BASE_VERTEX: GpuTestConfiguration =
         )
         .run_async(|ctx| run_multi_draw_indexed_indirect_base_vertex(ctx, 4));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDEXED_INDIRECT_NEGATIVE_BASE_VERTEX: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -1329,7 +1329,7 @@ static MULTI_DRAW_INDEXED_INDIRECT_NEGATIVE_BASE_VERTEX: GpuTestConfiguration =
         )
         .run_async(|ctx| run_multi_draw_indexed_indirect_base_vertex(ctx, -4));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDIRECT_COUNT_READBACK: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -1339,7 +1339,7 @@ static MULTI_DRAW_INDIRECT_COUNT_READBACK: GpuTestConfiguration = GpuTestConfigu
     )
     .run_async(|ctx| run_multi_draw_indirect_count_readback(ctx, false));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDEXED_INDIRECT_COUNT_READBACK: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -1563,7 +1563,7 @@ async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
     assert_eq!(first_bad_pixel, None);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDIRECT_GPU_GENERATED_ARGS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -1572,7 +1572,7 @@ static MULTI_DRAW_INDIRECT_GPU_GENERATED_ARGS: GpuTestConfiguration = GpuTestCon
     )
     .run_async(|ctx| run_gpu_generated_multi_draw_test(ctx, false));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDEXED_INDIRECT_GPU_GENERATED_ARGS: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -1590,7 +1590,7 @@ macro_rules! make_test {
         make_test!($name, $test_data, false, $features);
     };
     ($name:ident, $test_data:expr, $expect_noop:expr, $features:expr) => {
-        #[gpu_test]
+        #[apply(gpu_test!)]
         static $name: GpuTestConfiguration = GpuTestConfiguration::new()
             .parameters({
                 let params = TestParameters::default()
@@ -1823,7 +1823,7 @@ make_failing_test!(
     get_instanced_indexed_draw_test_data(0, 6, 0, 5)
 );
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static INDIRECT_BUFFER_OFFSETS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -2043,7 +2043,7 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
     assert!(succeeded);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDEXED_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -2052,7 +2052,7 @@ static MULTI_DRAW_INDEXED_INDIRECT: GpuTestConfiguration = GpuTestConfiguration:
     )
     .run_async(|ctx| run_test_inner(ctx, get_indexed_draw_test_data(0, 6), false, true));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

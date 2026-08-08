@@ -5,7 +5,8 @@ use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt as _;
 use wgpu_test::{
-    gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -26,7 +27,7 @@ var<storage, read_write> buffer: array<vec4f>;
 }
 ";
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static COMPUTE_PASS_RESOURCE_OWNERSHIP: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -71,7 +72,7 @@ async fn compute_pass_resource_ownership(ctx: TestingContext) {
     assert_compute_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static COMPUTE_PASS_QUERY_SET_OWNERSHIP_PIPELINE_STATISTICS: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -121,7 +122,7 @@ async fn compute_pass_query_set_ownership_pipeline_statistics(ctx: TestingContex
     assert_compute_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static COMPUTE_PASS_QUERY_SET_OWNERSHIP_TIMESTAMPS: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().test_features_limits().features(
@@ -179,7 +180,7 @@ async fn compute_pass_query_set_ownership_timestamps(ctx: TestingContext) {
     assert_compute_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static COMPUTE_PASS_KEEP_ENCODER_ALIVE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

@@ -251,7 +251,8 @@ impl Default for super::CommandState {
             acceleration_structure_builder: None,
             render: None,
             compute: None,
-            render_pipeline_supports_icb: false,
+            render_pipeline: None,
+            render_pipeline_icb: None,
             raw_primitive_type: MTLPrimitiveType::Point,
             index: None,
             stage_infos: Default::default(),
@@ -375,7 +376,6 @@ impl super::CommandEncoder {
 
     fn supports_icb_multi_draw(&self) -> bool {
         self.shared.private_caps.indirect_command_buffers_rendering
-            && self.shared.private_caps.indirect_command_buffers_compute
     }
 
     fn get_icb_command_pipelines(&self) -> Result<IcbCommandPipelines, crate::DeviceError> {
@@ -452,7 +452,7 @@ impl super::CommandEncoder {
     ) -> bool {
         if draw_count < ICB_MIN_DRAW_COUNT
             || !self.supports_icb_multi_draw()
-            || !self.state.render_pipeline_supports_icb
+            || self.state.render_pipeline_icb.is_none()
         {
             return false;
         }
@@ -562,7 +562,10 @@ impl super::CommandEncoder {
         // Record execution into the render pass now; the ICB contents become
         // defined when the deferred generation runs, in a command buffer the
         // queue executes before this one.
+        let pipeline = self.state.render_pipeline.as_ref().unwrap();
+        let icb_pipeline = self.state.render_pipeline_icb.as_ref().unwrap();
         let encoder = self.state.render.as_ref().unwrap();
+        encoder.setRenderPipelineState(icb_pipeline);
         #[allow(deprecated)]
         unsafe {
             encoder.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
@@ -588,6 +591,7 @@ impl super::CommandEncoder {
                 },
             );
         }
+        encoder.setRenderPipelineState(pipeline);
 
         self.deferred_multi_draws.push(IcbGenerationRequest {
             kind,
@@ -874,7 +878,8 @@ impl super::CommandEncoder {
 
 impl super::CommandState {
     fn reset(&mut self) {
-        self.render_pipeline_supports_icb = false;
+        self.render_pipeline = None;
+        self.render_pipeline_icb = None;
         self.storage_buffer_length_map.clear();
         self.vertex_buffer_size_map.clear();
         self.stage_infos.vs.clear();
@@ -1722,7 +1727,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.state.raw_primitive_type = pipeline.raw_primitive_type;
-        self.state.render_pipeline_supports_icb = pipeline.supports_indirect_command_buffers;
+        self.state.render_pipeline = Some(pipeline.raw.clone());
+        self.state.render_pipeline_icb = pipeline.icb_raw.clone();
         match pipeline.vs_info {
             Some(ref info) => self.state.stage_infos.vs.assign_from(info),
             None => self.state.stage_infos.vs.clear(),

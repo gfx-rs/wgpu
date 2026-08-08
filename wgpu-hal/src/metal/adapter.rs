@@ -579,23 +579,6 @@ const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v1,
 ];
 
-/// "Indirect command buffers (rendering)" in the Metal feature set tables,
-/// narrowed to the hardware generations this backend's compute-generated
-/// render ICB path has been validated on (A12-class and up on iOS; every
-/// discrete/Apple-silicon Mac). Apple documents render-ICB support on some
-/// older families, but those have not been validated with wgpu's generation
-/// kernels; widen this table as device validation lands.
-const INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily5_v1,
-    MTLFeatureSet::tvOS_GPUFamily2_v2,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
-];
-
-/// "Indirect command buffers (compute)" in the Metal feature set tables; same
-/// validated floor as the rendering table.
-const INDIRECT_COMMAND_BUFFERS_COMPUTE_SUPPORT: &[MTLFeatureSet] =
-    INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT;
-
 /// "Base vertex/instance drawing" in the Metal feature set tables
 ///
 /// in our terms, `base_vertex` and `first_instance` must be 0
@@ -718,54 +701,36 @@ impl super::CapabilitiesQuery {
 
         let is_virtual = device.name().to_string().to_lowercase().contains("virtual");
 
-        // Indirect-command-buffer support, from the feature-set tables plus the
-        // equivalent modern GPU-family checks. Two deliberate narrowings:
+        // GPU families only identify the device classes covered by real-device
+        // testing; their presence alone is not evidence that the driver
+        // executes this path correctly. Two observed failures shape this
+        // allowlist:
         // - Apple's paravirtual Metal device advertises the relevant families
         //   but aborts when executing render ICBs (observed in CI), so virtual
         //   devices are excluded.
         // - First-generation Apple TV 4K (A10X, Apple3) is allowed because it
         //   was validated directly on hardware; other Apple3/Apple4 devices
         //   stay excluded until they're validated with this backend.
-        // `MTLIndirectCommandBuffer` needs macOS 10.14 / iOS 12, but the
-        // pieces this backend depends on are newer: `inheritPipelineState`
-        // needs iOS/tvOS 13, and `useResource:usage:` only participates in
-        // hazard tracking from macOS 10.15 / iOS 13 — which the deferred
-        // generation relies on to order the ICB write against its execution.
-        // watchOS is gated at 11.0 for the same reason iOS/iPadOS/tvOS 17.x are
-        // excluded: those driver generations mishandle the render-ICB path.
-        let icb_api_check = available!(
-            macos = 10.15,
-            ios = 13.0,
-            tvos = 13.0,
-            visionos = 1.0,
-            watchos = 11.0
-        );
-        let icb_family_support = (family_check
-            && if os_type == super::OsType::Macos {
-                device.supportsFamily(MTLGPUFamily::Mac2)
-                    || device.supportsFamily(MTLGPUFamily::Metal3)
-            } else {
-                device.supportsFamily(MTLGPUFamily::Apple5)
-                    || device.supportsFamily(MTLGPUFamily::Metal3)
-                    || (os_type == super::OsType::Tvos
-                        && device.supportsFamily(MTLGPUFamily::Apple3))
-            })
-            // objc2-metal exposes no `MTLFeatureSet::watchOS_*` values, so the
-            // feature-set table can't cover watchOS and `family_check` carries
-            // no `watchos` key; detect the Apple Watch (which classifies as
-            // `OsType::Ios` here) purely by GPU family. The S4+ watch GPU
-            // reports Apple5 and supports ICBs — validated on Apple Watch SE 2
-            // (S8, watchOS 11). `available!(watchos = 11.0)` is `false` on every
-            // other platform, so this branch is inert off watchOS.
+        // Real-device readback found the iOS/iPadOS/tvOS 17.x driver lineage
+        // unreliable even when shaders compiled and surface rendering appeared
+        // to work. Older Mac, Intel/AMD, and visionOS classes remain on the
+        // fallback until equivalent real-device coverage exists.
+        let validated_icb_device = (os_type == super::OsType::Macos
+            && available!(macos = 26.0)
+            && device.supportsFamily(MTLGPUFamily::Apple9))
+            || (os_type == super::OsType::Ios
+                && available!(ios = 18.0)
+                && device.supportsFamily(MTLGPUFamily::Apple5))
+            || (os_type == super::OsType::Tvos
+                && available!(tvos = 18.0)
+                && device.supportsFamily(MTLGPUFamily::Apple3))
             || (available!(watchos = 11.0) && device.supportsFamily(MTLGPUFamily::Apple5));
-        let indirect_command_buffers_rendering = !is_virtual
-            && icb_api_check
-            && (Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_RENDERING_SUPPORT)
-                || icb_family_support);
-        let indirect_command_buffers_compute = !is_virtual
-            && icb_api_check
-            && (Self::supports_any(device, INDIRECT_COMMAND_BUFFERS_COMPUTE_SUPPORT)
-                || icb_family_support);
+        let indirect_command_buffers_rendering = !is_virtual && validated_icb_device;
+        // Only the Apple9 Mac path has real-device mesh-ICB readback coverage.
+        let indirect_command_buffers_mesh = indirect_command_buffers_rendering
+            && os_type == super::OsType::Macos
+            && available!(macos = 26.0)
+            && device.supportsFamily(MTLGPUFamily::Apple9);
 
         let mesh_shaders = family_check
                 && (device.supportsFamily(MTLGPUFamily::Metal3)
@@ -818,7 +783,7 @@ impl super::CapabilitiesQuery {
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
             indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT),
             indirect_command_buffers_rendering,
-            indirect_command_buffers_compute,
+            indirect_command_buffers_mesh,
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
@@ -1636,7 +1601,7 @@ impl super::CapabilitiesQuery {
             supports_memoryless_storage: self.supports_memoryless_storage,
             mesh_shaders: self.mesh_shaders,
             indirect_command_buffers_rendering: self.indirect_command_buffers_rendering,
-            indirect_command_buffers_compute: self.indirect_command_buffers_compute,
+            indirect_command_buffers_mesh: self.indirect_command_buffers_mesh,
         }
     }
 

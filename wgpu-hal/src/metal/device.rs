@@ -1747,28 +1747,18 @@ impl crate::Device for super::Device {
                     descriptor.setMaxVertexAmplificationCount(mv.get().count_ones() as usize)
                 };
             }
-            // Any pipeline may be current when a multi-draw executes through an
-            // indirect command buffer with inherited pipeline state, so try to
-            // set this on every render pipeline. Some shaders are rejected by
-            // the driver when this is set (e.g. "Fragment shader cannot be
-            // used with indirect command buffers"), so a failed creation is
-            // retried without it and the multi-draw ICB lowering then skips
-            // draws issued with that pipeline.
-            //
-            // On `MTLMeshRenderPipelineDescriptor` the property needs a newer
-            // OS than mesh pipelines themselves (and than the property on the
-            // standard descriptor).
+            // Keep the ordinary pipeline state for direct draws. On some
+            // drivers, using an ICB-capable pipeline directly changes render
+            // behavior. Multiview pipelines also fail with the ICB flag.
             let request_icb_support = self.shared.private_caps.indirect_command_buffers_rendering
                 && match descriptor {
-                    MetalGenericRenderPipelineDescriptor::Standard(_) => true,
+                    MetalGenericRenderPipelineDescriptor::Standard(_) => {
+                        desc.multiview_mask.is_none()
+                    }
                     MetalGenericRenderPipelineDescriptor::Mesh(_) => {
-                        available!(macos = 14.0, ios = 17.0, tvos = 18.1, visionos = 2.1)
+                        self.shared.private_caps.indirect_command_buffers_mesh
                     }
                 };
-            if request_icb_support {
-                descriptor.setSupportIndirectCommandBuffers(true);
-            }
-
             // Create the pipeline from descriptor
             let create = |descriptor: &MetalGenericRenderPipelineDescriptor| match descriptor {
                 MetalGenericRenderPipelineDescriptor::Standard(d) => self
@@ -1784,41 +1774,29 @@ impl crate::Device for super::Device {
                         None,
                     ),
             };
-            let mut supports_indirect_command_buffers = request_icb_support;
-            let raw = match create(&descriptor) {
-                Ok(raw) => raw,
-                Err(first_err) if request_icb_support => {
-                    descriptor.setSupportIndirectCommandBuffers(false);
-                    supports_indirect_command_buffers = false;
-                    let raw = create(&descriptor).map_err(|retry_err| {
-                        // The retry error is the pipeline's real problem; the
-                        // first attempt may only have failed because of the
-                        // ICB flag.
-                        crate::PipelineError::Linkage(
-                            wgt::ShaderStages::VERTEX | wgt::ShaderStages::FRAGMENT,
-                            format!("new_render_pipeline_state: {retry_err:?}"),
-                        )
-                    })?;
+            let raw = create(&descriptor).map_err(|e| {
+                crate::PipelineError::Linkage(
+                    wgt::ShaderStages::VERTEX | wgt::ShaderStages::FRAGMENT,
+                    format!("new_render_pipeline_state: {e:?}"),
+                )
+            })?;
+            let icb_raw = request_icb_support.then(|| {
+                descriptor.setSupportIndirectCommandBuffers(true);
+                create(&descriptor).map_err(|e| {
                     log::debug!(
-                        "created render pipeline {:?} without indirect command buffer support, \
-                         multi-draws recorded with it won't use ICBs: {first_err:?}",
+                        "could not create ICB-capable render pipeline {:?}; \
+                         multi-draws recorded with it won't use ICBs: {e:?}",
                         desc.label,
                     );
-                    raw
-                }
-                Err(e) => {
-                    return Err(crate::PipelineError::Linkage(
-                        wgt::ShaderStages::VERTEX | wgt::ShaderStages::FRAGMENT,
-                        format!("new_render_pipeline_state: {e:?}"),
-                    ))
-                }
-            };
+                })
+            });
+            let icb_raw = icb_raw.and_then(Result::ok);
 
             self.counters.render_pipelines.add(1);
 
             Ok(super::RenderPipeline {
                 raw,
-                supports_indirect_command_buffers,
+                icb_raw,
                 vs_info,
                 fs_info,
                 ts_info,

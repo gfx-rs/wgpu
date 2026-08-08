@@ -1,6 +1,8 @@
 use wgpu::include_wgsl;
 
-use wgpu_test::{fail, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{
+    apply, fail, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -11,7 +13,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SHADER_COMPILE_SUCCESS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -25,7 +27,7 @@ static SHADER_COMPILE_SUCCESS: GpuTestConfiguration = GpuTestConfiguration::new(
         }
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SHADER_COMPILE_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -64,7 +66,7 @@ const ENABLE_EXTENSION_SHADER_SOURCE: &str = r#"
     fn main() {}
 "#;
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ENABLE_EXTENSION_AVAILABLE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -85,7 +87,7 @@ static ENABLE_EXTENSION_AVAILABLE: GpuTestConfiguration = GpuTestConfiguration::
         });
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ENABLE_EXTENSION_UNAVAILABLE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
