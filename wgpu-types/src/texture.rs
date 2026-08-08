@@ -647,6 +647,21 @@ impl<L, V> TextureDescriptor<L, V> {
             TextureDimension::D2 => self.size.depth_or_array_layers,
         }
     }
+
+    /// Returns the theoretical memory footprint of a texture.
+    ///
+    /// Actual memory usage may greatly exceed this value due to alignment and padding.
+    #[must_use]
+    pub fn theoretical_memory_footprint(&self) -> u64 {
+        (0..self.mip_level_count).fold(0, |acc, level| {
+            acc.saturating_add(
+                self.format.theoretical_memory_footprint(
+                    self.mip_level_size(level)
+                        .expect("mipmap level should be inbounds"),
+                ),
+            )
+        })
+    }
 }
 
 /// Describes a `Sampler`.
