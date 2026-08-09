@@ -1190,3 +1190,46 @@ impl RenderPipeline {
         (bgl, error)
     }
 }
+
+#[cfg(feature = "wgsl")]
+#[cfg(test)]
+mod tests {
+    use alloc::{boxed::Box, string::ToString};
+    use naga::error::ShaderError;
+
+    use super::CreateShaderModuleError;
+
+    #[test]
+    fn create_shader_module_error_message() {
+        let source: &str = "not valid wgsl";
+        let error = CreateShaderModuleError::Parsing(ShaderError {
+            source: source.to_string(),
+            label: Some("my shader".to_string()),
+            inner: Box::new(
+                naga::front::wgsl::Frontend::new()
+                    .parse(source)
+                    .unwrap_err(),
+            ),
+        });
+
+        assert_eq!(error.to_string(), "Shader 'my shader' parsing error");
+        // Full details remain available for `getCompilationInfo()`.
+        assert!(error.compilation_message().contains(source));
+
+        let source: &str = "fn main() -> f32 { let arr = array(1.0); return arr[-1]; }";
+        let module = naga::front::wgsl::parse_str(source).unwrap();
+        let mut validator = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::empty(),
+        );
+        let error = CreateShaderModuleError::Validation(ShaderError {
+            source: source.to_string(),
+            label: Some("my shader".to_string()),
+            inner: validator.validate(&module).unwrap_err(),
+        });
+
+        assert_eq!(error.to_string(), "Shader 'my shader' validation error");
+        // Full details remain available for `getCompilationInfo()`.
+        assert!(error.compilation_message().contains(source));
+    }
+}
