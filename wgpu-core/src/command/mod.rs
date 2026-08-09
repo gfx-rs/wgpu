@@ -85,7 +85,7 @@ pub use self::{compute_command::ComputeCommand, render_command::RenderCommand};
 
 pub use timestamp_writes::PassTimestampWrites;
 
-use crate::binding_model::BindingError;
+use crate::binding_model::{BindGroup, BindingError};
 use crate::device::queue::TempResource;
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::lock::{rank, Mutex};
@@ -1955,11 +1955,11 @@ impl<T: PartialEq_> PartialEq_ for Option<T> {
 }
 
 #[derive(Debug)]
-struct BindGroupStateChange<BG = id::BindGroupId> {
-    last_states: [StateChange<Option<BG>>; hal::MAX_BIND_GROUPS],
+struct BindGroupStateChange {
+    last_states: [StateChange<Option<Arc<BindGroup>>>; hal::MAX_BIND_GROUPS],
 }
 
-impl<BG: Clone + PartialEq_> BindGroupStateChange<BG> {
+impl BindGroupStateChange {
     fn new() -> Self {
         Self {
             last_states: [const { StateChange::new() }; hal::MAX_BIND_GROUPS],
@@ -1968,7 +1968,7 @@ impl<BG: Clone + PartialEq_> BindGroupStateChange<BG> {
 
     fn set_and_check_redundant(
         &mut self,
-        bind_group: &Option<BG>,
+        bind_group: &Option<Arc<BindGroup>>,
         index: u32,
         dynamic_offsets: &mut Vec<u32>,
         offsets: &[wgt::DynamicOffset],
@@ -1999,7 +1999,7 @@ impl<BG: Clone + PartialEq_> BindGroupStateChange<BG> {
     }
 }
 
-impl<BG: Clone + PartialEq_> Default for BindGroupStateChange<BG> {
+impl Default for BindGroupStateChange {
     fn default() -> Self {
         Self::new()
     }

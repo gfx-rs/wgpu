@@ -64,7 +64,7 @@ pub struct ComputePass {
     timestamp_writes: Option<PassTimestampWrites>,
 
     // Resource binding dedupe state.
-    current_bind_groups: BindGroupStateChange<Arc<BindGroup>>,
+    current_bind_groups: BindGroupStateChange,
     current_pipeline: StateChange<Arc<ComputePipeline>>,
 }
 
