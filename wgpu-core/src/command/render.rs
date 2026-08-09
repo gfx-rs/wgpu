@@ -331,7 +331,7 @@ pub struct RenderPass {
     multiview_mask: Option<NonZeroU32>,
 
     // Resource binding dedupe state.
-    current_bind_groups: BindGroupStateChange<Arc<BindGroup>>,
+    current_bind_groups: BindGroupStateChange,
     current_pipeline: StateChange<Arc<RenderPipeline>>,
 }
 
