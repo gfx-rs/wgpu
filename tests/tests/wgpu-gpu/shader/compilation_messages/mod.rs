@@ -99,14 +99,32 @@ static ENABLE_EXTENSION_UNAVAILABLE: GpuTestConfiguration = GpuTestConfiguration
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let module = ctx
+                    .device
                     .create_shader_module(wgpu::ShaderModuleDescriptor {
                         label: Some("shader declaring enable extension"),
                         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
                             ENABLE_EXTENSION_SHADER_SOURCE,
                         )),
+                    });
+                let info = pollster::block_on(module.get_compilation_info());
+                assert_eq!(
+                    info.messages[0].message_type,
+                    wgpu::CompilationMessageType::Error
+                );
+                assert_eq!(
+                    info.messages[0].location,
+                    Some(wgpu::SourceLocation {
+                        line_number: 2,
+                        line_position: 12,
+                        offset: 12,
+                        length: 3
                     })
+                );
+                assert!(info.messages[0]
+                    .message
+                    .contains("the `f16` extension is not supported in the current environment"))
             },
-            Some("the `f16` extension is not supported in the current environment"),
+            Some("Shader 'shader declaring enable extension' parsing error"),
         );
     });
