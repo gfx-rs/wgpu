@@ -337,7 +337,7 @@ impl InstanceFlags {
 /// Memory budget thresholds used by backends to try to avoid high memory pressure situations.
 ///
 /// Currently only the D3D12 and (optionally) Vulkan backends support these options.
-#[derive(ConstDefault!, Clone, Debug, Copy)]
+#[derive(ConstDefault!, Clone, Debug, Copy, Eq, PartialEq)]
 pub struct MemoryBudgetThresholds {
     /// Threshold at which texture, buffer, query set and acceleration structure creation will start to return OOM errors.
     /// This is a percent of the memory budget reported by native APIs.
