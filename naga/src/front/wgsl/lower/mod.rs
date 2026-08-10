@@ -2924,11 +2924,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         let expr_resolution = resolve!(ctx, expr);
         // All unary operators are only defined for scalars and vectors of scalars.
-        let size_and_scalar = expr_resolution
+        let Some(kind) = expr_resolution
             .inner_with(&ctx.module.types)
-            .vector_size_and_scalar();
-
-        let Some(kind) = size_and_scalar.map(|(_, scalar)| scalar.kind) else {
+            .vector_size_and_scalar()
+            .map(|(_, scalar)| scalar.kind)
+        else {
             let operand_type = ctx.type_resolution_to_string(expr_resolution);
             return Err(Box::new(make_error(operand_type)));
         };
