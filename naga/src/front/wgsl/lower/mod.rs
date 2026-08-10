@@ -2921,15 +2921,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         let expr = self.expression_for_abstract(expr, ctx)?;
         ctx.grow_types(expr)?;
-        let expr_resolution = resolve!(ctx, expr);
+        let expr_ty_resolution = resolve!(ctx, expr);
 
         // All unary operators are only defined for scalars and vectors of scalars.
-        let Some(kind) = expr_resolution
+        let Some(kind) = expr_ty_resolution
             .inner_with(&ctx.module.types)
             .vector_size_and_scalar()
             .map(|(_, scalar)| scalar.kind)
         else {
-            let operand_type = ctx.type_resolution_to_string(expr_resolution);
+            let operand_type = ctx.type_resolution_to_string(expr_ty_resolution);
             return Err(Box::new(make_error(operand_type)));
         };
         // validate preconditions
@@ -2938,7 +2938,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ir::UnaryOperator::LogicalNot => {
                 let valid = matches!(kind, ir::ScalarKind::Bool);
                 if !valid {
-                    let operand_type = ctx.type_resolution_to_string(expr_resolution);
+                    let operand_type = ctx.type_resolution_to_string(expr_ty_resolution);
                     return Err(Box::new(make_error(operand_type)));
                 }
             }
@@ -2954,7 +2954,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         | ir::ScalarKind::Float
                 );
                 if !valid {
-                    let operand_type = ctx.type_resolution_to_string(expr_resolution);
+                    let operand_type = ctx.type_resolution_to_string(expr_ty_resolution);
                     return Err(Box::new(make_error(operand_type)));
                 }
             }
@@ -2967,7 +2967,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ir::ScalarKind::Sint | ir::ScalarKind::Uint | ir::ScalarKind::AbstractInt,
                 );
                 if !valid {
-                    let operand_type = ctx.type_resolution_to_string(expr_resolution);
+                    let operand_type = ctx.type_resolution_to_string(expr_ty_resolution);
                     return Err(Box::new(make_error(operand_type)));
                 }
             }
