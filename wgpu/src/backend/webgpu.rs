@@ -87,7 +87,13 @@ impl crate::Error {
         } else if js_error.has_type::<webgpu_sys::GpuOutOfMemoryError>() {
             crate::Error::OutOfMemory { source }
         } else {
-            panic!("Unexpected error");
+            let constructor = js_error
+                .constructor()
+                .name()
+                .as_string()
+                .unwrap_or_default();
+            let value = js_error.to_string().as_string().unwrap_or_default();
+            panic!("Unexpected error: constructor={constructor} value={value}");
         }
     }
 }
