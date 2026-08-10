@@ -1,6 +1,3 @@
-//! Tests that the hal internal counters stay balanced across resource
-//! creation and destruction.
-
 use wgpu_test::{
     apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
 };
@@ -9,14 +6,11 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(TEXTURE_COUNTERS_BALANCED);
 }
 
-/// Regression test for the Vulkan backend never incrementing
-/// `HalCounters::textures` in `create_texture` while still decrementing it in
-/// `destroy_texture`, which made the reported texture count drift negative.
 #[apply(gpu_test!)]
 static TEXTURE_COUNTERS_BALANCED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            // The webgpu backend does not implement internal counters.
+            // NOTE: The WebGPU backend does not implement internal counters.
             .skip(FailureCase::backend(wgpu::Backends::BROWSER_WEBGPU)),
     )
     .run_async(|ctx| async move {
@@ -41,7 +35,7 @@ static TEXTURE_COUNTERS_BALANCED: GpuTestConfiguration = GpuTestConfiguration::n
         assert_eq!(
             alive.textures.read(),
             before.textures.read() + 1,
-            "hal.textures should count the live texture",
+            "internal texture counter should increment with new texture",
         );
 
         drop(texture);
@@ -53,11 +47,14 @@ static TEXTURE_COUNTERS_BALANCED: GpuTestConfiguration = GpuTestConfiguration::n
         assert_eq!(
             after.textures.read(),
             before.textures.read(),
-            "hal.textures should return to its baseline once the texture is destroyed",
+            "internal texture counter should return to baseline once texture is destroyed",
         );
         assert_eq!(
             after.texture_memory.read(),
             before.texture_memory.read(),
-            "hal.texture_memory should return to its baseline once the texture is destroyed",
+            concat!(
+                "internal texture memory counter should return to its baseline ",
+                "once the texture is destroyed"
+            ),
         );
     });
