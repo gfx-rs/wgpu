@@ -2921,8 +2921,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         let expr = self.expression_for_abstract(expr, ctx)?;
         ctx.grow_types(expr)?;
-
         let expr_resolution = resolve!(ctx, expr);
+
         // All unary operators are only defined for scalars and vectors of scalars.
         let Some(kind) = expr_resolution
             .inner_with(&ctx.module.types)
