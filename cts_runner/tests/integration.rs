@@ -165,7 +165,6 @@ fn uncaptured_error() -> Result<(), Error> {
 
 #[test]
 fn shader_compilation_message() {
-    // FIXME: `GPUCompilationInfo` and stderr should not be empty.
     check_js_stdout(
         r#"
             const code = `const val: u32 = 1.1;`;
@@ -174,9 +173,32 @@ fn shader_compilation_message() {
             const device = await adapter.requestDevice();
             const shaderModule = device.createShaderModule({ code });
             console.log(await shaderModule.getCompilationInfo());
+
+            // Keep the event loop alive so the `uncapturederror` event is
+            // dispatched before the script exits.
+            await new Promise((r) => setTimeout(r, 100));
         "#,
-        "GPUCompilationInfo {}\n",
-        "",
+        concat!(
+            "GPUCompilationInfo {\n",
+            "  messages: [\n",
+            "    GPUCompilationMessage {\n",
+            "      message: \x1b[32m\"\\n\"\x1b[39m +\n",
+            "        \x1b[32m\"Shader '' parsing error: the type of `val` is expected to be `u32`, but got `{AbstractFloat}`\\n\"\x1b[39m +\n",
+            "        \x1b[32m\"  ┌─ wgsl:1:7\\n\"\x1b[39m +\n",
+            "        \x1b[32m\"  │\\n\"\x1b[39m +\n",
+            "        \x1b[32m\"1 │ const val: u32 = 1.1;\\n\"\x1b[39m +\n",
+            "        \x1b[32m\"  │       ^^^ definition of `val`\\n\"\x1b[39m +\n",
+            "        \x1b[32m\"\\n\"\x1b[39m,\n",
+            "      type: \x1b[32m\"error\"\x1b[39m,\n",
+            "      lineNum: \x1b[33m1\x1b[39m,\n",
+            "      linePos: \x1b[33m7\x1b[39m,\n",
+            "      offset: \x1b[33m6\x1b[39m,\n",
+            "      length: \x1b[33m3\x1b[39m\n",
+            "    }\n",
+            "  ]\n",
+            "}\n",
+        ),
+        "cts_runner caught WebGPU error: Shader '' parsing error\n",
     )
     .unwrap();
 }
