@@ -124,14 +124,12 @@ impl GPUCompilationMessage {
 
 impl GPUCompilationMessage {
   fn new(error: &pipeline::CreateShaderModuleError, source: &str) -> Self {
-    let message = error.compilation_message();
-
-    let loc = match error {
-      pipeline::CreateShaderModuleError::Parsing(e) => e.inner.location(source),
+    let (message, loc) = match error {
+      pipeline::CreateShaderModuleError::Parsing(e) => (e.inner.location(source), e.to_string()),
       pipeline::CreateShaderModuleError::Validation(e) => {
-        e.inner.location(source)
+        (e.inner.location(source), e.to_string())
       }
-      _ => None,
+      _ => (None, error.to_string()),
     };
 
     match loc {

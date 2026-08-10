@@ -266,16 +266,20 @@ impl ContextWgpuCore {
         self.0.generate_report()
     }
 
+    /// Handle the error and recursively format the error source into [`crate::Error::Validation::description`].
+    ///
+    /// If `format_filter` returns `false`, the **next** error source will skip formatting.
     #[cold]
     #[track_caller]
     #[inline(never)]
-    fn handle_error_inner(
+    fn handle_error_inner_with_format_filter(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
         error_type: ErrorType,
         source: ContextErrorSource,
         label: Label<'_>,
         fn_ident: &'static str,
+        format_filter: impl Fn(&(dyn Error + 'static)) -> bool,
     ) {
         let source: ErrorSource = Box::new(wgc::error::ContextError {
             fn_ident,
@@ -284,7 +288,7 @@ impl ContextWgpuCore {
         });
         let final_error_handling = {
             let mut sink = sink_mutex.lock();
-            let description = || self.format_error(&*source);
+            let description = || self.format_error_with_filter(&*source, format_filter);
             let error = match error_type {
                 ErrorType::Internal => {
                     let description = description();
@@ -312,6 +316,27 @@ impl ContextWgpuCore {
             // `handle_error_or_return_handler` for details.
             f();
         }
+    }
+
+    #[cold]
+    #[track_caller]
+    #[inline(never)]
+    fn handle_error_inner(
+        &self,
+        sink_mutex: &Mutex<ErrorSinkRaw>,
+        error_type: ErrorType,
+        source: ContextErrorSource,
+        label: Label<'_>,
+        fn_ident: &'static str,
+    ) {
+        self.handle_error_inner_with_format_filter(
+            sink_mutex,
+            error_type,
+            source,
+            label,
+            fn_ident,
+            |_| true,
+        );
     }
 
     #[inline]
@@ -351,17 +376,34 @@ impl ContextWgpuCore {
 
     #[inline(never)]
     fn format_error(&self, err: &(dyn Error + 'static)) -> String {
+        self.format_error_with_filter(err, |_| true)
+    }
+
+    #[inline(never)]
+    fn format_error_with_filter(
+        &self,
+        err: &(dyn Error + 'static),
+        filter: impl Fn(&(dyn Error + 'static)) -> bool,
+    ) -> String {
         let mut output = String::new();
         let mut level = 1;
 
-        fn print_tree(output: &mut String, level: &mut usize, e: &(dyn Error + 'static)) {
+        fn print_tree(
+            output: &mut String,
+            level: &mut usize,
+            e: &(dyn Error + 'static),
+            filter: &impl Fn(&(dyn Error + 'static)) -> bool,
+        ) {
             let mut print = |e: &(dyn Error + 'static)| {
                 use core::fmt::Write;
                 writeln!(output, "{}{}", " ".repeat(*level * 2), e).unwrap();
 
+                if !filter(e) {
+                    return;
+                }
                 if let Some(e) = e.source() {
                     *level += 1;
-                    print_tree(output, level, e);
+                    print_tree(output, level, e, filter);
                     *level -= 1;
                 }
             };
@@ -374,7 +416,7 @@ impl ContextWgpuCore {
             }
         }
 
-        print_tree(&mut output, &mut level, err);
+        print_tree(&mut output, &mut level, err, &filter);
 
         format!("Validation Error\n\nCaused by:\n{output}")
     }
@@ -1085,11 +1127,27 @@ impl dispatch::DeviceInterface for CoreDevice {
                 .device_create_shader_module(self.id, &descriptor, source, None);
         let compilation_info = match error {
             Some(cause) => {
-                self.context.handle_error(
+                // Don't print detailed compiler messages when formatting error's description.
+                //
+                // per the WebGPU specification <https://gpuweb.github.io/gpuweb/#dom-gpudevice-createshadermodule>,
+                // the message of the validation error raised by `createShaderModule` should not include those details,
+                // since they are accessible via `getCompilationInfo()`.
+                self.context.handle_error_inner_with_format_filter(
                     &self.error_sink,
-                    cause.clone(),
+                    cause.webgpu_error_type(),
+                    Box::new(cause.clone()),
                     desc.label,
                     "Device::create_shader_module",
+                    |e| match e.downcast_ref::<CreateShaderModuleError>() {
+                        #[cfg(feature = "wgsl")]
+                        Some(CreateShaderModuleError::Parsing(_)) => false,
+                        #[cfg(feature = "glsl")]
+                        Some(CreateShaderModuleError::ParsingGlsl(_)) => false,
+                        #[cfg(feature = "spirv")]
+                        Some(CreateShaderModuleError::ParsingSpirV(_)) => false,
+                        Some(CreateShaderModuleError::Validation(_)) => false,
+                        _ => true,
+                    },
                 );
                 CompilationInfo::from(cause)
             }

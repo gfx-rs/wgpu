@@ -181,26 +181,21 @@ impl ShaderModule {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateShaderModuleError {
-    // These variants deliberately don't forward to `ShaderError`'s `Display`,
-    // which would include the shader source text and detailed compiler messages:
-    // per the WebGPU specification <https://gpuweb.github.io/gpuweb/#dom-gpudevice-createshadermodule>,
-    // the message of the validation error raised by `createShaderModule` should not include those details,
-    // since they are accessible via `getCompilationInfo()`.
     #[cfg(feature = "wgsl")]
     #[error("Shader '{label}' parsing error", label = _0.label.as_deref().unwrap_or_default())]
-    Parsing(ShaderError<naga::front::wgsl::ParseError>),
+    Parsing(#[from] ShaderError<naga::front::wgsl::ParseError>),
     #[cfg(feature = "glsl")]
     #[error("Shader '{label}' parsing error", label = _0.label.as_deref().unwrap_or_default())]
-    ParsingGlsl(ShaderError<naga::front::glsl::ParseErrors>),
+    ParsingGlsl(#[from] ShaderError<naga::front::glsl::ParseErrors>),
     #[cfg(feature = "spirv")]
     #[error("Shader '{label}' parsing error", label = _0.label.as_deref().unwrap_or_default())]
-    ParsingSpirV(ShaderError<naga::front::spv::Error>),
+    ParsingSpirV(#[from] ShaderError<naga::front::spv::Error>),
     #[error("Failed to generate the backend-specific code")]
     Generation,
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error("Shader '{label}' validation error", label = _0.label.as_deref().unwrap_or_default())]
-    Validation(ShaderError<naga::WithSpan<naga::valid::ValidationError>>),
+    Validation(#[from] ShaderError<naga::WithSpan<naga::valid::ValidationError>>),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(
@@ -237,26 +232,6 @@ impl WebGpuError for CreateShaderModuleError {
             Self::ParsingGlsl(..) => ErrorType::Validation,
             #[cfg(feature = "spirv")]
             Self::ParsingSpirV(..) => ErrorType::Validation,
-        }
-    }
-}
-
-impl CreateShaderModuleError {
-    /// The full message of the compilation error, including the shader source
-    /// text and detailed compiler messages. This is meant for
-    /// `get_compilation_info()`, not for the message of the validation error
-    /// itself.
-    pub fn compilation_message(&self) -> String {
-        use alloc::string::ToString;
-        match self {
-            #[cfg(feature = "wgsl")]
-            Self::Parsing(e) => e.to_string(),
-            #[cfg(feature = "glsl")]
-            Self::ParsingGlsl(e) => e.to_string(),
-            #[cfg(feature = "spirv")]
-            Self::ParsingSpirV(e) => e.to_string(),
-            Self::Validation(e) => e.to_string(),
-            _ => self.to_string(),
         }
     }
 }
@@ -1199,6 +1174,9 @@ mod tests {
 
     use super::CreateShaderModuleError;
 
+    // Test that validation error `Display` doesn't include
+    // the shader source text and detailed compiler messages,
+    // per the WebGPU specification <https://gpuweb.github.io/gpuweb/#dom-gpudevice-createshadermodule>,
     #[test]
     fn create_shader_module_error_message() {
         let source: &str = "not valid wgsl";
@@ -1213,8 +1191,6 @@ mod tests {
         });
 
         assert_eq!(error.to_string(), "Shader 'my shader' parsing error");
-        // Full details remain available for `getCompilationInfo()`.
-        assert!(error.compilation_message().contains(source));
 
         let source: &str = "fn main() -> f32 { let arr = array(1.0); return arr[-1]; }";
         let module = naga::front::wgsl::parse_str(source).unwrap();
@@ -1229,7 +1205,5 @@ mod tests {
         });
 
         assert_eq!(error.to_string(), "Shader 'my shader' validation error");
-        // Full details remain available for `getCompilationInfo()`.
-        assert!(error.compilation_message().contains(source));
     }
 }

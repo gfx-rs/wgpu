@@ -35,7 +35,29 @@ static SHADER_COMPILE_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
         let sm = ctx
             .device
             .create_shader_module(include_wgsl!("error_shader.wgsl"));
-        assert!(pollster::block_on(scope.pop()).is_some());
+
+        let Some(wgpu::Error::Validation {
+            source,
+            description,
+        }) = scope.pop().await
+        else {
+            panic!("Expected validation error not found")
+        };
+        // Description of validation error should not include detailed shader compilation message.
+        assert_eq!(
+            description,
+            "Validation Error\n\nCaused by:\n  \
+            In Device::create_shader_module, label = 'error_shader.wgsl'\n    \
+            Shader 'error_shader.wgsl' parsing error\n"
+        );
+        let msg = source
+            .source()
+            .unwrap()
+            .source()
+            .unwrap()
+            .downcast_ref::<naga::error::ShaderError<naga::front::wgsl::ParseError>>()
+            .unwrap()
+            .to_string();
 
         let compilation_info = sm.get_compilation_info().await;
         let error_message = compilation_info
@@ -43,6 +65,7 @@ static SHADER_COMPILE_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
             .iter()
             .find(|message| message.message_type == wgpu::CompilationMessageType::Error)
             .expect("Expected error message not found");
+        assert_eq!(error_message.message, msg);
         let span = error_message.location.expect("Expected span not found");
         assert_eq!(
             span.offset, 32,
