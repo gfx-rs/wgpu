@@ -1082,7 +1082,9 @@ fn future_pop_error_scope(
     if js_option.is_empty() || JsValue::is_null(&js_option) {
         return None;
     }
-    let err = js_option.into_option().expect("null/undefined checked above");
+    let err = js_option
+        .into_option()
+        .expect("null/undefined checked above");
     Some(crate::Error::from_js(err.into()))
 }
 
