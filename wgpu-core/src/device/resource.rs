@@ -993,8 +993,10 @@ impl Device {
             wgt::PollType::Poll => None,
         };
 
-        // Wait for the submission index if requested.
-        if let Some(target_submission_index) = wait_submission_index {
+        // If a target submission index was specified, wait for it, and set
+        // `wait_succeeded` to `Some(bool)` indicating success or timeout. If
+        // no target was specified, set `wait_succeeded` to `None`.
+        let wait_succeeded = if let Some(target_submission_index) = wait_submission_index {
             log::trace!("Device::maintain: waiting for submission index {target_submission_index}");
 
             let wait_timeout = match poll_type {
@@ -1009,13 +1011,16 @@ impl Device {
                     .wait(self.fence.as_ref(), target_submission_index, wait_timeout)
             };
 
-            // This error match is only about `DeviceErrors`. At this stage we do not care if
-            // the wait succeeded or not, and the `Ok(bool)`` variant is ignored.
-            if let Err(e) = wait_result {
-                let hal_error: WaitIdleError = self.handle_hal_error(e).into();
-                return (user_closures, Err(hal_error));
+            match wait_result {
+                Ok(succeeded) => Some(succeeded),
+                Err(e) => {
+                    let hal_error: WaitIdleError = self.handle_hal_error(e).into();
+                    return (user_closures, Err(hal_error));
+                }
             }
-        }
+        } else {
+            None
+        };
 
         // Get the currently finished submission index. This may be higher than the requested
         // wait, or it may be less than the requested wait if the wait failed.
@@ -1071,10 +1076,22 @@ impl Device {
 
         // Based on the queue empty status, and the current finished submission index, determine
         // the result of the poll.
-        let result = if queue_empty {
+        //
+        // After a successful wait, `current_finished_submission` should match or exceed
+        // the target. But after a timeout, more work may have finished before
+        // `current_finished_submission` is read, so it could be on either side of the
+        // target, and the queue can also become empty before `Queue::maintain`
+        // computes `queue_empty`.
+        //
+        // We report as accurately as we can with the information available. In
+        // particular, when our wait timed out but `queue_empty` comes back `true`, we
+        // report `WaitSucceeded` if `current_finished_submission` reached the target,
+        // and `Timeout` if it didn't. We don't want to risk reporting `QueueEmpty`
+        // without actually having seen that the target submission is retired.
+        let result = if queue_empty && wait_succeeded != Some(false) {
             if let Some(wait_submission_index) = wait_submission_index {
-                // Assert to ensure that if we received a queue empty status, the fence shows the
-                // correct value. This is defensive, as this should never be hit.
+                // Sanity-check that we don't report `QueueEmpty` without
+                // reaching the target submission index.
                 assert!(
                     current_finished_submission >= wait_submission_index,
                     concat!(
@@ -1084,6 +1101,8 @@ impl Device {
                     current_finished_submission,
                     wait_submission_index,
                 );
+            } else {
+                // We didn't wait (passive poll), safe to report `QueueEmpty`.
             }
 
             Ok(wgt::PollStatus::QueueEmpty)
@@ -5587,7 +5606,7 @@ impl Device {
         Ok(query_set)
     }
 
-    fn lose(&self, message: &str) {
+    pub(crate) fn lose(&self, message: &str) {
         // Follow the steps at https://gpuweb.github.io/gpuweb/#lose-the-device.
 
         // Mark the device explicitly as invalid. This is checked in various
