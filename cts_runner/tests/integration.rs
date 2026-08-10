@@ -58,27 +58,43 @@ fn exec_js_file(script_file: impl AsRef<OsStr>) -> Result<(), Error> {
     Ok(())
 }
 
-fn check_js_stderr(script: &str, expected: &str) -> Result<(), Error> {
+fn check_js_stderr(script: &str, expected_stderr: &str) -> Result<(), Error> {
+    check_js_stdout(script, "", expected_stderr)
+}
+
+fn check_js_stdout(
+    script: &str,
+    expected_stdout: &str,
+    expected_stderr: &str,
+) -> Result<(), Error> {
     let mut tempfile = NamedTempFile::new().unwrap();
     tempfile.write_all(script.as_bytes()).unwrap();
     tempfile.flush().unwrap();
     let output = exec_cts_runner(tempfile.path());
-    if !output.stdout.is_empty() {
+
+    let stdout_str = str::from_utf8(&output.stdout).unwrap();
+    if expected_stdout.is_empty() && !output.stdout.is_empty() {
         return Err(Error(format!(
-            "unexpected output on stdout: {}",
-            str::from_utf8(&output.stdout).unwrap(),
+            "unexpected output on stdout: {:?}",
+            stdout_str,
+        )));
+    } else if stdout_str != expected_stdout {
+        return Err(Error(format!(
+            "expected the following output on stdout:\n{:?}\n\nbut observed:\n{:?}",
+            expected_stdout, stdout_str,
         )));
     }
+
     let stderr_str = str::from_utf8(&output.stderr).unwrap();
-    if expected.is_empty() && !stderr_str.is_empty() {
+    if expected_stderr.is_empty() && !stderr_str.is_empty() {
         return Err(Error(format!(
-            "unexpected output on stderr: {}",
+            "unexpected output on stderr: {:?}",
             stderr_str,
         )));
-    } else if stderr_str != expected {
+    } else if stderr_str != expected_stderr {
         return Err(Error(format!(
-            "expected the following output on stderr:\n{}\n\nbut observed:\n{}",
-            expected, stderr_str,
+            "expected the following output on stderr:\n{:?}\n\nbut observed:\n{:?}",
+            expected_stderr, stderr_str,
         )));
     }
     if !output.status.success() {
@@ -145,6 +161,24 @@ fn uncaptured_error() -> Result<(), Error> {
         "#,
         "cts_runner caught WebGPU error: Shader '' parsing error\n",
     )
+}
+
+#[test]
+fn shader_compilation_message() {
+    // FIXME: `GPUCompilationInfo` and stderr should not be empty.
+    check_js_stdout(
+        r#"
+            const code = `const val: u32 = 1.1;`;
+
+            const adapter = await navigator.gpu.requestAdapter();
+            const device = await adapter.requestDevice();
+            const shaderModule = device.createShaderModule({ code });
+            console.log(await shaderModule.getCompilationInfo());
+        "#,
+        "GPUCompilationInfo {}\n",
+        "",
+    )
+    .unwrap();
 }
 
 #[test]
