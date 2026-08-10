@@ -2933,43 +2933,30 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             return Err(Box::new(make_error(operand_type)));
         };
         // validate preconditions
-        match op {
+        match (op, kind) {
             // `T` is `bool` or `vecN<bool>`. These types have no automatic conversions.
-            ir::UnaryOperator::LogicalNot => {
-                let valid = matches!(kind, ir::ScalarKind::Bool);
-                if !valid {
-                    let operand_type = ctx.type_resolution_to_string(expr_ty_resolution);
-                    return Err(Box::new(make_error(operand_type)));
-                }
-            }
+            (ir::UnaryOperator::LogicalNot, ir::ScalarKind::Bool) => {}
 
             // `T` is `AbstractInt`, `AbstractFloat`, `i32`, `f32`, `f16`,
             // `vecN<AbstractInt>`, `vecN<AbstractFloat>`, `vecN<i32>`, `vecN<f32>`, or `vecN<f16>`.
-            ir::UnaryOperator::Negate => {
-                let valid = matches!(
-                    kind,
-                    ir::ScalarKind::AbstractInt
-                        | ir::ScalarKind::AbstractFloat
-                        | ir::ScalarKind::Sint
-                        | ir::ScalarKind::Float
-                );
-                if !valid {
-                    let operand_type = ctx.type_resolution_to_string(expr_ty_resolution);
-                    return Err(Box::new(make_error(operand_type)));
-                }
-            }
+            (
+                ir::UnaryOperator::Negate,
+                ir::ScalarKind::AbstractInt
+                | ir::ScalarKind::AbstractFloat
+                | ir::ScalarKind::Sint
+                | ir::ScalarKind::Float,
+            ) => {}
 
             // `S` is `AbstractInt`, `i32`, or `u32`.
             // `T` is `S` or `vecN<S>`.
-            ir::UnaryOperator::BitwiseNot => {
-                let valid = matches!(
-                    kind,
-                    ir::ScalarKind::Sint | ir::ScalarKind::Uint | ir::ScalarKind::AbstractInt,
-                );
-                if !valid {
-                    let operand_type = ctx.type_resolution_to_string(expr_ty_resolution);
-                    return Err(Box::new(make_error(operand_type)));
-                }
+            (
+                ir::UnaryOperator::BitwiseNot,
+                ir::ScalarKind::Sint | ir::ScalarKind::Uint | ir::ScalarKind::AbstractInt,
+            ) => {}
+
+            _ => {
+                let operand_type = ctx.type_resolution_to_string(expr_ty_resolution);
+                return Err(Box::new(make_error(operand_type)));
             }
         }
 
