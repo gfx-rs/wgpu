@@ -5,7 +5,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::num::NonZeroU32;
+use core::{matches, num::NonZeroU32};
 
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
@@ -2414,10 +2414,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                 return expr.try_map(|handle| ctx.interrupt_emitter(handle, span));
             }
-            ast::Expression::Unary { op, expr } => {
-                let expr = self.expression_for_abstract(expr, ctx)?;
-                Typed::Plain(ir::Expression::Unary { op, expr })
-            }
+            ast::Expression::Unary { op, expr } => self.unary(op, expr, span, ctx)?,
             ast::Expression::AddrOf(expr) => {
                 // The `&` operator simply converts a reference to a pointer. And since a
                 // reference is required, the Load Rule is not applied.
@@ -2907,6 +2904,76 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
         };
         Ok(ty)
+    }
+
+    fn unary(
+        &mut self,
+        op: ir::UnaryOperator,
+        expr: Handle<ast::Expression<'source>>,
+        span: Span,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, Typed<ir::Expression>> {
+        let make_error = |operand_type: String| Error::InvalidUnaryOperandType {
+            span,
+            op,
+            operand_type,
+        };
+
+        let expr = self.expression_for_abstract(expr, ctx)?;
+        ctx.grow_types(expr)?;
+
+        let expr_resolution = resolve!(ctx, expr);
+        // All unary operators are only defined for scalars and vectors of scalars.
+        let size_and_scalar = expr_resolution
+            .inner_with(&ctx.module.types)
+            .vector_size_and_scalar();
+
+        let Some(kind) = size_and_scalar.map(|(_, scalar)| scalar.kind) else {
+            let operand_type = ctx.type_resolution_to_string(expr_resolution);
+            return Err(Box::new(make_error(operand_type)));
+        };
+        // validate preconditions
+        match op {
+            // `T` is `bool` or `vecN<bool>`. These types have no automatic conversions.
+            ir::UnaryOperator::LogicalNot => {
+                let valid = matches!(kind, ir::ScalarKind::Bool);
+                if !valid {
+                    let operand_type = ctx.type_resolution_to_string(expr_resolution);
+                    return Err(Box::new(make_error(operand_type)));
+                }
+            }
+
+            // `T` is `AbstractInt`, `AbstractFloat`, `i32`, `f32`, `f16`,
+            // `vecN<AbstractInt>`, `vecN<AbstractFloat>`, `vecN<i32>`, `vecN<f32>`, or `vecN<f16>`.
+            ir::UnaryOperator::Negate => {
+                let valid = matches!(
+                    kind,
+                    ir::ScalarKind::AbstractInt
+                        | ir::ScalarKind::AbstractFloat
+                        | ir::ScalarKind::Sint
+                        | ir::ScalarKind::Float
+                );
+                if !valid {
+                    let operand_type = ctx.type_resolution_to_string(expr_resolution);
+                    return Err(Box::new(make_error(operand_type)));
+                }
+            }
+
+            // `S` is `AbstractInt`, `i32`, or `u32`.
+            // `T` is `S` or `vecN<S>`.
+            ir::UnaryOperator::BitwiseNot => {
+                let valid = matches!(
+                    kind,
+                    ir::ScalarKind::Sint | ir::ScalarKind::Uint | ir::ScalarKind::AbstractInt,
+                );
+                if !valid {
+                    let operand_type = ctx.type_resolution_to_string(expr_resolution);
+                    return Err(Box::new(make_error(operand_type)));
+                }
+            }
+        }
+
+        Ok(Typed::Plain(ir::Expression::Unary { op, expr }))
     }
 
     fn binary(
