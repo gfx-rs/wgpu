@@ -21,7 +21,7 @@ use wgt::{
 #[cfg(feature = "serde")]
 use crate::command::serde_object_reference_struct;
 use crate::{
-    command::{ArcReferences, EncoderStateError, IdReferences, ReferenceType},
+    command::{ArcReferences, EncoderStateError, ReferenceType},
     device::{DeviceError, MissingFeatures},
     resource::{
         self, Blas, BlasCompactCallback, BlasPrepareCompactResult, DestroyedResourceError,
@@ -370,7 +370,6 @@ pub struct OwnedBlasTriangleGeometry<R: ReferenceType> {
 }
 
 pub type ArcBlasTriangleGeometry = OwnedBlasTriangleGeometry<ArcReferences>;
-pub type TraceBlasTriangleGeometry = OwnedBlasTriangleGeometry<IdReferences>;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
@@ -382,7 +381,6 @@ pub struct OwnedBlasAabbGeometry<R: ReferenceType> {
 }
 
 pub type ArcBlasAabbGeometry = OwnedBlasAabbGeometry<ArcReferences>;
-pub type TraceBlasAabbGeometry = OwnedBlasAabbGeometry<IdReferences>;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
@@ -392,7 +390,6 @@ pub enum OwnedBlasGeometries<R: ReferenceType> {
 }
 
 pub type ArcBlasGeometries = OwnedBlasGeometries<ArcReferences>;
-pub type TraceBlasGeometries = OwnedBlasGeometries<IdReferences>;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
@@ -402,7 +399,6 @@ pub struct OwnedBlasBuildEntry<R: ReferenceType> {
 }
 
 pub type ArcBlasBuildEntry = OwnedBlasBuildEntry<ArcReferences>;
-pub type TraceBlasBuildEntry = OwnedBlasBuildEntry<IdReferences>;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
@@ -414,7 +410,6 @@ pub struct OwnedTlasInstance<R: ReferenceType> {
 }
 
 pub type ArcTlasInstance = OwnedTlasInstance<ArcReferences>;
-pub type TraceTlasInstance = OwnedTlasInstance<IdReferences>;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
@@ -424,7 +419,6 @@ pub struct OwnedTlasPackage<R: ReferenceType> {
     pub lowest_unmodified: u32,
 }
 
-pub type TraceTlasPackage = OwnedTlasPackage<IdReferences>;
 pub type ArcTlasPackage = OwnedTlasPackage<ArcReferences>;
 
 /// [`BlasTriangleGeometry`], without the resources.
