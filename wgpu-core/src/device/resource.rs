@@ -3114,6 +3114,22 @@ impl Device {
                 ));
             }
 
+            if entry
+                .visibility
+                .intersects(wgt::ShaderStages::TASK | wgt::ShaderStages::MESH)
+            {
+                required_features |= wgt::Features::EXPERIMENTAL_MESH_SHADER;
+            }
+
+            if entry.visibility.intersects(
+                wgt::ShaderStages::RAY_GENERATION
+                    | wgt::ShaderStages::ANY_HIT
+                    | wgt::ShaderStages::CLOSEST_HIT
+                    | wgt::ShaderStages::MISS,
+            ) {
+                required_features |= wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES;
+            }
+
             if entry.visibility.contains(wgt::ShaderStages::VERTEX) {
                 if writable_storage == WritableStorage::Yes {
                     required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
