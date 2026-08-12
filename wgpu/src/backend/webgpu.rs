@@ -1077,7 +1077,7 @@ fn future_pop_error_scope(
 ) -> Option<crate::Error> {
     let js_option = result.ok()?;
     // WebGPU's `popErrorScope()` resolves with `null` when the scope captured no error, but
-    // wasm-bindgen's `JsOption` only treats `undefined` as absent (not `null`), so `null`
+    // `wasm-bindgen`'s `JsOption` only treats `undefined` as absent (not `null`), so `null`
     // must be checked explicitly here.
     if js_option.is_empty() || JsValue::is_null(&js_option) {
         return None;
