@@ -13,6 +13,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         BIND_GROUP_NONFILTERING_LAYOUT_MAG_SAMPLER,
         BIND_GROUP_NONFILTERING_LAYOUT_MIPMAP_SAMPLER,
         BIND_GROUP_WITH_MAX_BINDING_INDEX,
+        BIND_GROUP_STAGE_ORDER,
     ]);
 }
 
@@ -382,3 +383,159 @@ static BIND_GROUP_WITH_MAX_BINDING_INDEX: GpuTestConfiguration = GpuTestConfigur
             &test_value.to_le_bytes()
         );
     });
+
+/// Regression test for the wgpu-hal Metal backend binding a shader stage's
+/// resources from the wrong offset into its internal per-bind-group
+/// resource arrays.
+///
+/// wgpu-hal's Metal backend builds one flat array per resource kind
+/// (buffers/textures/samplers) for each bind group, containing every
+/// resource visible to any shader stage, laid out stage-by-stage in a fixed
+/// order. When encoding `set_bind_group`, it computes where each stage's own
+/// resources start in that array as the sum of the resource counts of every
+/// stage that comes before it. If the stage order used to lay out the array
+/// and the stage order used to sum up the preceding counts ever disagree,
+/// a stage can end up bound to a completely different resource than the one
+/// it was assigned in the bind group.
+///
+/// This creates a bind group with buffers visible to `TASK`, `MESH`, and
+/// `FRAGMENT` (none of which the compute shader below actually uses) ahead
+/// of a `COMPUTE`-visible buffer, then dispatches a compute shader that
+/// doubles the compute buffer's value. If the compute stage's resources are
+/// read from the wrong offset because of a stage-ordering mismatch, the
+/// shader will double one of the filler buffers' values instead, and the
+/// compute buffer will be left unmodified.
+async fn bind_group_stage_order(ctx: TestingContext) {
+    let device = &ctx.device;
+
+    const FILLER_VALUE: u32 = 0xDEAD_0000;
+    const COMPUTE_VALUE: u32 = 111;
+
+    let make_filler_buffer = |label: &str| {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(label),
+            usage: wgpu::BufferUsages::STORAGE,
+            contents: bytemuck::bytes_of(&FILLER_VALUE),
+        })
+    };
+
+    let task_filler = make_filler_buffer("task filler");
+    let mesh_filler = make_filler_buffer("mesh filler");
+    let fragment_filler = make_filler_buffer("fragment filler");
+    let compute_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("compute buffer"),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        contents: bytemuck::bytes_of(&COMPUTE_VALUE),
+    });
+
+    let filler_entry = |binding: u32, visibility: wgpu::ShaderStages| wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only: false },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    };
+
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("bgl"),
+        entries: &[
+            filler_entry(0, wgpu::ShaderStages::TASK),
+            filler_entry(1, wgpu::ShaderStages::MESH),
+            filler_entry(2, wgpu::ShaderStages::FRAGMENT),
+            filler_entry(3, wgpu::ShaderStages::COMPUTE),
+        ],
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("bg"),
+        layout: &bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: task_filler.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: mesh_filler.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: fragment_filler.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: compute_buffer.as_entire_binding(),
+            },
+        ],
+    });
+
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("pipeline layout"),
+        bind_group_layouts: &[Some(&bind_group_layout)],
+        immediate_size: 0,
+    });
+
+    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("shader"),
+        source: wgpu::ShaderSource::Wgsl(
+            "
+            @group(0) @binding(3) var<storage, read_write> value: u32;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                value = value * 2u;
+            }
+            "
+            .into(),
+        ),
+    });
+
+    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("pipeline"),
+        layout: Some(&pipeline_layout),
+        module: &module,
+        entry_point: Some("main"),
+        compilation_options: Default::default(),
+        cache: None,
+    });
+
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("readback"),
+        size: 4,
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+        cpass.set_pipeline(&pipeline);
+        cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.dispatch_workgroups(1, 1, 1);
+    }
+    encoder.copy_buffer_to_buffer(&compute_buffer, 0, &readback, 0, 4);
+    ctx.queue.submit(Some(encoder.finish()));
+
+    readback.slice(..).map_async(wgpu::MapMode::Read, |_| ());
+    device.poll(PollType::wait_indefinitely()).unwrap();
+
+    let result: u32 = *bytemuck::from_bytes(&readback.slice(..).get_mapped_range().unwrap());
+    assert_eq!(
+        result,
+        COMPUTE_VALUE * 2,
+        "compute stage was bound to the wrong buffer (expected the `COMPUTE`-visible buffer's \
+         value to be doubled, got {result:#x})",
+    );
+}
+
+#[apply(gpu_test!)]
+static BIND_GROUP_STAGE_ORDER: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .limits(wgpu::Limits::downlevel_defaults())
+            .features(wgpu::Features::EXPERIMENTAL_MESH_SHADER),
+    )
+    .run_async(bind_group_stage_order);
