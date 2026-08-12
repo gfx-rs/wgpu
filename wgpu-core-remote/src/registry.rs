@@ -1,12 +1,9 @@
 use alloc::sync::Arc;
+use parking_lot::{RwLock, RwLockReadGuard};
 
 use crate::{
     id::Id,
     identity::IdentityManager,
-    lock::{
-        rank::{self, LockRank},
-        RwLock, RwLockReadGuard,
-    },
     storage::{Element, Storage, StorageItem},
 };
 
@@ -49,13 +46,9 @@ pub(crate) struct Registry<T: StorageItem> {
 
 impl<T: StorageItem> Registry<T> {
     pub(crate) fn new() -> Self {
-        Self::with_rank(rank::HUB_OTHER)
-    }
-
-    pub(crate) fn with_rank(rank: LockRank) -> Self {
         Self {
             identity: Arc::new(IdentityManager::new()),
-            storage: RwLock::new(rank, Storage::new()),
+            storage: RwLock::new(Storage::new()),
         }
     }
 }
@@ -137,8 +130,9 @@ impl<T: StorageItem + Clone> Registry<T> {
 #[cfg(test)]
 mod tests {
     use super::Registry;
-    use crate::{id::Marker, resource::ResourceType, storage::StorageItem};
+    use crate::{id::Marker, storage::StorageItem};
     use alloc::sync::Arc;
+    use wgpu_core::resource::ResourceType;
 
     struct TestData;
     struct TestDataId;

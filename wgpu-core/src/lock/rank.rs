@@ -213,7 +213,6 @@ define_lock_ranks! {
     // Ranks not connected to the graph, alphabetical.
     rank BLAS_BUILT_INDEX "Blas::built_index" followed by { }
     rank DEVICE_LOST_CLOSURE "Device::device_lost_closure" followed by { }
-    rank IDENTITY_MANAGER_VALUES "IdentityManager::values" followed by { }
     rank RESOURCE_POOL_INNER "ResourcePool::inner" followed by { }
     rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
     rank TLAS_BUILT_INDEX "Tlas::built_index" followed by { }

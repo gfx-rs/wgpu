@@ -119,16 +119,15 @@ when replaying a trace.
 use alloc::sync::Arc;
 use core::fmt::Debug;
 
-use crate::{
+use crate::registry::{Registry, RegistryReport};
+use wgpu_core::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{
         CommandBuffer, CommandEncoder, ComputePass, RenderBundle, RenderBundleEncoder, RenderPass,
     },
     device::{queue::Queue, Device},
     instance::Adapter,
-    lock::rank,
     pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
-    registry::{Registry, RegistryReport},
     resource::{
         Blas, Buffer, ExternalTexture, QuerySet, Sampler, StagingBuffer, Texture, TextureView, Tlas,
     },
@@ -233,22 +232,22 @@ impl Hub {
             pipeline_layouts: Registry::new(),
             shader_modules: Registry::new(),
             bind_group_layouts: Registry::new(),
-            bind_groups: Registry::with_rank(rank::HUB_BIND_GROUPS),
+            bind_groups: Registry::new(),
             command_encoders: Registry::new(),
             command_buffers: Registry::new(),
             render_bundles: Registry::new(),
-            render_pipelines: Registry::with_rank(rank::HUB_RENDER_PIPELINES),
+            render_pipelines: Registry::new(),
             compute_pipelines: Registry::new(),
             pipeline_caches: Registry::new(),
             query_sets: Registry::new(),
             buffers: Registry::new(),
             staging_buffers: Registry::new(),
             textures: Registry::new(),
-            texture_views: Registry::with_rank(rank::HUB_TEXTURE_VIEWS),
-            external_textures: Registry::with_rank(rank::HUB_EXTERNAL_TEXTURES),
-            samplers: Registry::with_rank(rank::HUB_SAMPLERS),
+            texture_views: Registry::new(),
+            external_textures: Registry::new(),
+            samplers: Registry::new(),
             blas_s: Registry::new(),
-            tlas_s: Registry::with_rank(rank::HUB_TLAS),
+            tlas_s: Registry::new(),
             render_passes: Registry::new(),
             compute_passes: Registry::new(),
             render_bundle_encoders: Registry::new(),

@@ -1,22 +1,30 @@
 use alloc::{borrow::ToOwned as _, sync::Arc};
 use core::fmt;
+use wgpu_core::binding_model::{BindGroupLayout, PipelineLayout};
+use wgpu_core::command::{CommandBuffer, CommandEncoder};
+use wgpu_core::device::queue::Queue;
+use wgpu_core::device::Device;
+use wgpu_core::instance::{Adapter, Instance, Surface};
+use wgpu_core::pipeline::{ComputePipeline, RenderPipeline};
+use wgpu_core::resource::{Buffer, QuerySet, Texture};
 
-use crate::{
-    binding_model::{BindGroupLayout, PipelineLayout},
-    command::{CommandBuffer, CommandEncoder},
-    device::{queue::Queue, Device},
-    hub::{Hub, HubReport},
-    id::{
-        AdapterId, BindGroupLayoutId, BufferId, CommandBufferId, CommandEncoderId,
-        ComputePipelineId, DeviceId, PipelineLayoutId, QuerySetId, QueueId, RenderPipelineId,
-        TextureId,
-    },
-    instance::{Adapter, Instance, Surface},
-    pipeline::{ComputePipeline, RenderPipeline},
-    registry::{Registry, RegistryReport},
-    resource::{Buffer, QuerySet, Texture},
-    resource_log,
+use crate::hub::{Hub, HubReport};
+use crate::id::{
+    AdapterId, BindGroupLayoutId, BufferId, CommandBufferId, CommandEncoderId, ComputePipelineId,
+    DeviceId, PipelineLayoutId, QuerySetId, QueueId, RenderPipelineId, TextureId,
 };
+use crate::registry::{Registry, RegistryReport};
+
+mod as_hal;
+mod bundle;
+mod command_encoder;
+mod compute_pass;
+mod device;
+mod instance;
+mod present;
+mod queue;
+mod ray_tracing;
+mod render_pass;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct GlobalReport {
@@ -46,7 +54,6 @@ impl Global {
         instance_desc: wgt::InstanceDescriptor,
         telemetry: Option<hal::Telemetry>,
     ) -> Self {
-        profiling::scope!("Global::new");
         Self {
             instance: Instance::new(name, instance_desc, telemetry),
             surfaces: Registry::new(),
@@ -58,8 +65,6 @@ impl Global {
     ///
     /// Refer to the creation of wgpu-hal Instance for every backend.
     pub unsafe fn from_hal_instance<A: hal::Api>(name: &str, hal_instance: A::Instance) -> Self {
-        profiling::scope!("Global::new");
-
         Self {
             instance: Instance::from_hal_instance::<A>(name.to_owned(), hal_instance),
             surfaces: Registry::new(),
@@ -78,7 +83,6 @@ impl Global {
     ///
     /// - The raw handles obtained from the Instance must not be manually destroyed
     pub unsafe fn from_instance(instance: Arc<Instance>) -> Self {
-        profiling::scope!("Global::new");
         Self {
             instance,
             surfaces: Registry::new(),
@@ -293,14 +297,6 @@ impl fmt::Debug for Global {
     }
 }
 
-impl Drop for Global {
-    fn drop(&mut self) {
-        profiling::scope!("Global::drop");
-        resource_log!("Global::drop");
-    }
-}
-
-#[cfg(send_sync)]
 fn _test_send_sync(global: &Global) {
     fn test_internal<T: Send + Sync>(_: T) {}
     test_internal(global)

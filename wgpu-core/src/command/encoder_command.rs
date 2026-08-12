@@ -26,10 +26,6 @@ pub trait ReferenceType {
     type Tlas: Clone + core::fmt::Debug;
 }
 
-/// Reference wgpu objects via numeric IDs assigned by [`crate::identity::IdentityManager`].
-#[derive(Clone, Debug)]
-pub struct IdReferences;
-
 /// Reference wgpu objects via the integer value of pointers.
 ///
 /// This is used for trace recording and playback. Recording stores the pointer
@@ -43,21 +39,6 @@ pub struct PointerReferences;
 /// Reference wgpu objects via `Arc`s.
 #[derive(Clone, Debug)]
 pub struct ArcReferences;
-
-impl ReferenceType for IdReferences {
-    type Buffer = id::BufferId;
-    type Surface = id::SurfaceId;
-    type Texture = id::TextureId;
-    type TextureView = id::TextureViewId;
-    type ExternalTexture = id::ExternalTextureId;
-    type QuerySet = id::QuerySetId;
-    type BindGroup = id::BindGroupId;
-    type RenderPipeline = id::RenderPipelineId;
-    type RenderBundle = id::RenderBundleId;
-    type ComputePipeline = id::ComputePipelineId;
-    type Blas = id::BlasId;
-    type Tlas = id::TlasId;
-}
 
 #[cfg(any(feature = "trace", feature = "replay"))]
 impl ReferenceType for PointerReferences {

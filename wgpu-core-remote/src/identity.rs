@@ -1,11 +1,8 @@
 use alloc::vec::Vec;
 use core::{fmt::Debug, marker::PhantomData};
+use parking_lot::Mutex;
 
-use crate::{
-    id::{Id, Marker},
-    lock::{rank, Mutex},
-    Epoch, Index,
-};
+use crate::{id::Id, id::Marker, Epoch, Index};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum IdSource {
@@ -135,15 +132,12 @@ impl<T: Marker> IdentityManager<T> {
 impl<T: Marker> IdentityManager<T> {
     pub fn new() -> Self {
         Self {
-            values: Mutex::new(
-                rank::IDENTITY_MANAGER_VALUES,
-                IdentityValues {
-                    free: Vec::new(),
-                    next_index: 0,
-                    count: 0,
-                    id_source: IdSource::None,
-                },
-            ),
+            values: Mutex::new(IdentityValues {
+                free: Vec::new(),
+                next_index: 0,
+                count: 0,
+                id_source: IdSource::None,
+            }),
             _phantom: PhantomData,
         }
     }

@@ -4860,6 +4860,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-core-remote"
+version = "30.0.0"
+dependencies = [
+ "parking_lot",
+ "raw-window-handle",
+ "serde",
+ "wgpu-core",
+ "wgpu-hal",
+ "wgpu-types",
+]
+
+[[package]]
 name = "wgpu-example-01-hello-compute"
 version = "0.0.0"
 dependencies = [
