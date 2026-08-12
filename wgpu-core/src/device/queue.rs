@@ -912,6 +912,18 @@ impl Queue {
         profiling::scope!("Queue::write_texture");
         api_log!("Queue::write_texture");
 
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.device.trace.lock() {
+            use crate::device::trace::DataKind;
+            let data = trace.make_binary(DataKind::Bin, data);
+            trace.add(Action::WriteTexture {
+                to: destination.to_trace(),
+                data,
+                layout: *data_layout,
+                size: *size,
+            });
+        }
+
         self.device.check_is_valid()?;
 
         let dst = destination.texture;
@@ -2047,18 +2059,6 @@ impl Global {
             origin: destination.origin,
             aspect: destination.aspect,
         };
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *queue.device.trace.lock() {
-            use crate::device::trace::DataKind;
-            let data = trace.make_binary(DataKind::Bin, data);
-            trace.add(Action::WriteTexture {
-                to: destination.to_trace(),
-                data,
-                layout: *data_layout,
-                size: *size,
-            });
-        }
 
         queue.write_texture(destination, data, data_layout, size)
     }
