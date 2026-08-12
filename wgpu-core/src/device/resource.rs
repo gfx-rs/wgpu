@@ -765,7 +765,7 @@ impl Device {
 
         let timestamp_normalizer = crate::timestamp_normalization::TimestampNormalizer::new(
             self,
-            queue.get_timestamp_period(),
+            queue.get_raw_timestamp_period(),
         )?;
 
         self.timestamp_normalizer
