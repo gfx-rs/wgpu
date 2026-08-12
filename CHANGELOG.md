@@ -148,6 +148,9 @@ Bottom level categories:
 #### General
 
 - Raise the minimum version of the `wasm-bindgen` family to the earliest releases that support wasm64. By @nickbabcock in [#9836](https://github.com/gfx-rs/wgpu/pull/9836).
+
+#### WebGPU
+
 - Upgrade vendored WebGPU bindings and `wasm-bindgen` to 0.2.127. By @beicause in [#10034](https://github.com/gfx-rs/wgpu/pull/10034).
 
 #### GLES
