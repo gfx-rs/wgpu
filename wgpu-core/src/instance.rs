@@ -254,7 +254,7 @@ impl Instance {
     /// - `display_handle` must be a valid object to create a surface upon,
     ///   falls back to the instance display handle otherwise.
     /// - `window_handle` must remain valid as long as the returned
-    ///   [`SurfaceId`] is being used.
+    ///   [`Surface`] is being used.
     pub unsafe fn create_surface(
         &self,
         display_handle: Option<raw_window_handle::RawDisplayHandle>,

@@ -1,15 +1,26 @@
-use core::{fmt::Debug, hash::Hash, marker::PhantomData};
 use wgt::WasmNotSendSync;
 
 /// Identify an object by the pointer returned by `Arc::as_ptr`.
 ///
-/// This is used for tracing. See [IDs and tracing](crate::hub#ids-and-tracing).
+/// This is used for tracing.
+///
+/// As of `wgpu` v27, commands are encoded all at once when
+/// `CommandEncoder::finish` is called, not when the encoding methods are
+/// called for each command. This implies storing a representation of the
+/// commands in memory until `finish` is called. The
+/// serialized trace identifies resources by the integer value of
+/// `Arc::as_ptr`. These IDs have the type [`crate::id::PointerId`]. The
+/// trace player uses hash maps to go from `PointerId`s to `Arc`s
+/// when replaying a trace.
 #[allow(dead_code)]
 #[cfg(feature = "serde")]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum PointerId<T: Marker> {
     // The only variant forces RON to not ignore "Id"
-    PointerId(core::num::NonZeroUsize, #[serde(skip)] PhantomData<T>),
+    PointerId(
+        core::num::NonZeroUsize,
+        #[serde(skip)] core::marker::PhantomData<T>,
+    ),
 }
 
 #[cfg(feature = "serde")]
@@ -35,7 +46,7 @@ impl<T: Marker> PartialEq for PointerId<T> {
 impl<T: Marker> Eq for PointerId<T> {}
 
 #[cfg(feature = "serde")]
-impl<T: Marker> Hash for PointerId<T> {
+impl<T: Marker> core::hash::Hash for PointerId<T> {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         let PointerId::PointerId(this, _) = self;
         this.hash(state);
@@ -54,7 +65,7 @@ impl<T: crate::storage::StorageItem> From<&alloc::sync::Arc<T>> for PointerId<T:
         // to add an offset to the pointer.
         PointerId::PointerId(
             core::num::NonZeroUsize::new(alloc::sync::Arc::as_ptr(arc) as usize).unwrap(),
-            PhantomData,
+            core::marker::PhantomData,
         )
     }
 }

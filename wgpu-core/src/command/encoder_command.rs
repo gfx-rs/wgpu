@@ -6,7 +6,6 @@ use macro_rules_attribute::{apply, attribute_alias};
 
 use crate::{
     command::ColorAttachments,
-    id,
     instance::Surface,
     resource::{Buffer, QuerySet, Texture},
 };
@@ -42,18 +41,18 @@ pub struct ArcReferences;
 
 #[cfg(any(feature = "trace", feature = "replay"))]
 impl ReferenceType for PointerReferences {
-    type Buffer = id::PointerId<id::markers::Buffer>;
-    type Surface = id::PointerId<id::markers::Surface>;
-    type Texture = id::PointerId<id::markers::Texture>;
-    type TextureView = id::PointerId<id::markers::TextureView>;
-    type ExternalTexture = id::PointerId<id::markers::ExternalTexture>;
-    type QuerySet = id::PointerId<id::markers::QuerySet>;
-    type BindGroup = id::PointerId<id::markers::BindGroup>;
-    type RenderPipeline = id::PointerId<id::markers::RenderPipeline>;
-    type RenderBundle = id::PointerId<id::markers::RenderBundle>;
-    type ComputePipeline = id::PointerId<id::markers::ComputePipeline>;
-    type Blas = id::PointerId<id::markers::Blas>;
-    type Tlas = id::PointerId<id::markers::Tlas>;
+    type Buffer = crate::id::PointerId<crate::id::markers::Buffer>;
+    type Surface = crate::id::PointerId<crate::id::markers::Surface>;
+    type Texture = crate::id::PointerId<crate::id::markers::Texture>;
+    type TextureView = crate::id::PointerId<crate::id::markers::TextureView>;
+    type ExternalTexture = crate::id::PointerId<crate::id::markers::ExternalTexture>;
+    type QuerySet = crate::id::PointerId<crate::id::markers::QuerySet>;
+    type BindGroup = crate::id::PointerId<crate::id::markers::BindGroup>;
+    type RenderPipeline = crate::id::PointerId<crate::id::markers::RenderPipeline>;
+    type RenderBundle = crate::id::PointerId<crate::id::markers::RenderBundle>;
+    type ComputePipeline = crate::id::PointerId<crate::id::markers::ComputePipeline>;
+    type Blas = crate::id::PointerId<crate::id::markers::Blas>;
+    type Tlas = crate::id::PointerId<crate::id::markers::Tlas>;
 }
 
 impl ReferenceType for ArcReferences {

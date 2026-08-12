@@ -101,19 +101,6 @@ flagged as errors as well.
 [wrapped in a mutex]: trait.IdentityHandler.html#impl-IdentityHandler%3CI%3E-for-Mutex%3CIdentityManager%3E
 [WebGPU]: https://www.w3.org/TR/webgpu/
 
-## IDs and tracing
-
-As of `wgpu` v27, commands are encoded all at once when
-`CommandEncoder::finish` is called, not when the encoding methods are
-called for each command. This implies storing a representation of the
-commands in memory until `finish` is called.  `Arc`s are more suitable
-for this purpose than numeric ids. Rather than redundantly store both
-`Id`s and `Arc`s, tracing has been changed to work with `Arc`s. The
-serialized trace identifies resources by the integer value of
-`Arc::as_ptr`. These IDs have the type [`crate::id::PointerId`]. The
-trace player uses hash maps to go from `PointerId`s to `Arc`s
-when replaying a trace.
-
 */
 
 use alloc::sync::Arc;
