@@ -76,10 +76,11 @@ fn trace_test(test_type: TestType) {
         .downcast_ref::<wgc::device::trace::MemoryTrace>()
         .unwrap();
     let actions = trace.actions();
+    dbg!(actions);
 
     match test_type {
         TestType::Normal => {
-            let Some(Action::Submit(_, commands)) = actions.last() else {
+            let [.., Action::Submit(_, commands), Action::DropBuffer(_)] = actions else {
                 panic!("expected last action to be Submit");
             };
             assert_eq!(commands.len(), 1);
