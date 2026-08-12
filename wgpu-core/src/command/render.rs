@@ -2271,43 +2271,7 @@ impl Global {
     }
 
     pub fn render_pass_end(&self, pass: &mut RenderPass) -> Result<(), EncoderStateError> {
-        profiling::scope!(
-            "CommandEncoder::run_render_pass {}",
-            pass.base.label.as_deref().unwrap_or("")
-        );
-
-        let cmd_enc = pass.parent.take().ok_or(EncoderStateError::Ended)?;
-        let mut cmd_buf_data = cmd_enc.data.lock();
-
-        cmd_buf_data.unlock_encoder()?;
-
-        let base = pass.base.take();
-
-        if let Err(RenderPassError { inner, scope: _ }) = &base {
-            if let RenderPassErrorInner::EncoderState(
-                err @ (EncoderStateError::Locked | EncoderStateError::Ended),
-            ) = inner.as_ref()
-            {
-                // Most encoding errors are detected and raised within `finish()`.
-                //
-                // However, we raise a validation error here if the pass was opened
-                // within another pass, or on a finished encoder. The latter is
-                // particularly important, because in that case reporting errors via
-                // `CommandEncoder::finish` is not possible.
-                return Err(err.clone());
-            }
-        }
-
-        cmd_buf_data.push_with(|| -> Result<_, RenderPassError> {
-            Ok(ArcCommand::RunRenderPass {
-                pass: base?,
-                color_attachments: SmallVec::from(pass.color_attachments.as_slice()),
-                depth_stencil_attachment: pass.depth_stencil_attachment.take(),
-                timestamp_writes: pass.timestamp_writes.take(),
-                occlusion_query_set: pass.occlusion_query_set.take(),
-                multiview_mask: pass.multiview_mask,
-            })
-        })
+        pass.end()
     }
 
     pub fn render_pass_end_with_id(
