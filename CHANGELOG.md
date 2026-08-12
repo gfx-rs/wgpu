@@ -119,7 +119,7 @@ Bottom level categories:
 #### WebGPU
 
 - Recognize `GPUInternalError` when converting a WebGPU error, mapping it to `Error::Internal` instead of panicking with "Unexpected error". By @evilpies in [#9919](https://github.com/gfx-rs/wgpu/pull/9919).
-- Fix `pop_error_scope` panics on WebGPU when it returns `null`. By @beicause in [#10039](https://github.com/gfx-rs/wgpu/pull/10039).
+- Fix `pop_error_scope` panics when it returns `null`. By @beicause in [#10039](https://github.com/gfx-rs/wgpu/pull/10039).
 
 ### Documentation
 
