@@ -1199,7 +1199,6 @@ impl RenderPassInfo {
         let mut is_stencil_read_only = false;
 
         let mut render_attachments = AttachmentDataVec::<RenderAttachment>::new();
-        let mut discarded_surfaces = AttachmentDataVec::new();
         let mut divergent_discarded_depth_stencil_aspect = None;
 
         let mut attachment_location = AttachmentErrorLocation::Color {
@@ -1307,7 +1306,7 @@ impl RenderPassInfo {
                 // This is the only place (anywhere in wgpu) where Stencil &
                 // Depth init state can diverge.
                 //
-                // To safe us the overhead of tracking init state of texture
+                // To save us the overhead of tracking init state of texture
                 // aspects everywhere, we're going to cheat a little bit in
                 // order to keep the init state of both Stencil and Depth
                 // aspects in sync. The expectation is that we hit this path
@@ -1316,7 +1315,8 @@ impl RenderPassInfo {
                 // Diverging LoadOp, i.e. Load + Clear:
                 //
                 // Record MemoryInitKind::NeedsInitializedMemory for the entire
-                // surface, a bit wasteful on unit but no negative effect!
+                // surface, a bit wasteful due to redundancy with Clear, but no
+                // negative effect!
                 //
                 // Rationale: If the loaded channel is uninitialized it needs
                 // clearing, the cleared channel doesn't care. (If everything is
@@ -1362,7 +1362,7 @@ impl RenderPassInfo {
                     ));
                 } else if at.depth.store_op() == StoreOp::Discard {
                     // Both are discarded using the regular path.
-                    discarded_surfaces.push(TextureSurfaceDiscard {
+                    texture_memory_actions.discard(TextureSurfaceDiscard {
                         texture: view.parent.clone(),
                         mip_level: view.selector.mips.start,
                         layer: view.selector.layers.start,
@@ -1751,15 +1751,12 @@ impl RenderPassInfo {
             };
         }
 
-        // If either only stencil or depth was discarded, we put in a special
-        // clear pass to keep the init status of the aspects in sync. We do this
-        // so we don't need to track init state for depth/stencil aspects
-        // individually.
-        //
-        // Note that we don't go the usual route of "brute force" initializing
-        // the texture when need arises here, since this path is actually
-        // something a user may genuinely want (where as the other cases are
-        // more seen along the lines as gracefully handling a user error).
+        // If one aspect of a combined depth/stencil format was discarded, we
+        // clear that aspect immediately to keep the init status of the aspects
+        // in sync. We do this so we don't need to track init state for depth/
+        // stencil aspects individually. We can't initialize the entire texture,
+        // because the user may genuinely want to preserve the data in the
+        // aspect that was not discarded.
         if let Some((aspect, view)) = self.divergent_discarded_depth_stencil_aspect {
             let (depth_ops, stencil_ops) = if aspect == wgt::TextureAspect::DepthOnly {
                 (
