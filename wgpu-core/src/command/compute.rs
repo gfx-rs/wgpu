@@ -22,10 +22,10 @@ use crate::{
             end_pipeline_statistics_query, record_pass_timestamp_writes,
             validate_and_begin_pipeline_statistics_query,
         },
-        ArcCommand, ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandEncoder,
-        CommandEncoderError, DebugGroupError, EncoderStateError, InnerCommandEncoder, MapPassErr,
-        PassErrorScope, PassStateError, PassTimestampWrites, QueryUseError, StateChange,
-        TimestampWritesError, TransitionResourcesError,
+        ArcCommand, BasePass, BindGroupStateChange, CommandEncoder, CommandEncoderError,
+        DebugGroupError, EncoderStateError, InnerCommandEncoder, MapPassErr, PassErrorScope,
+        PassStateError, PassTimestampWrites, QueryUseError, StateChange, TimestampWritesError,
+        TransitionResourcesError,
     },
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     global::Global,
@@ -61,10 +61,10 @@ pub struct ComputePass {
     /// See <https://www.w3.org/TR/webgpu/#encoder-state>
     parent: Option<Arc<CommandEncoder>>,
 
-    timestamp_writes: Option<ArcPassTimestampWrites>,
+    timestamp_writes: Option<PassTimestampWrites>,
 
     // Resource binding dedupe state.
-    current_bind_groups: BindGroupStateChange<Arc<BindGroup>>,
+    current_bind_groups: BindGroupStateChange,
     current_pipeline: StateChange<Arc<ComputePipeline>>,
 }
 
@@ -76,8 +76,8 @@ impl crate::storage::StorageItem for ComputePass {
 
 impl ComputePass {
     /// If the parent command encoder is invalid, the returned pass will be invalid.
-    fn new(parent: Arc<CommandEncoder>, desc: ArcComputePassDescriptor) -> Self {
-        let ArcComputePassDescriptor {
+    fn new(parent: Arc<CommandEncoder>, desc: ComputePassDescriptor) -> Self {
+        let ComputePassDescriptor {
             label,
             timestamp_writes,
         } = desc;
@@ -119,14 +119,12 @@ impl fmt::Debug for ComputePass {
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// cbindgen:ignore
 pub struct ComputePassDescriptor<'a, PTW = PassTimestampWrites> {
     pub label: Label<'a>,
     /// Defines where and when timestamp values will be written for this pass.
     pub timestamp_writes: Option<PTW>,
 }
-
-/// cbindgen:ignore
-type ArcComputePassDescriptor<'a> = ComputePassDescriptor<'a, ArcPassTimestampWrites>;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -500,7 +498,7 @@ impl CommandEncoder {
                     .transpose()
                 {
                     Ok(timestamp_writes) => {
-                        let arc_desc = ArcComputePassDescriptor {
+                        let arc_desc = ComputePassDescriptor {
                             label,
                             timestamp_writes,
                         };
@@ -610,7 +608,7 @@ impl Global {
     pub fn command_encoder_begin_compute_pass(
         &self,
         encoder_id: id::CommandEncoderId,
-        desc: &ComputePassDescriptor<'_>,
+        desc: &ComputePassDescriptor<'_, PassTimestampWrites<id::QuerySetId>>,
     ) -> (ComputePass, Option<CommandEncoderError>) {
         let hub = &self.hub;
 
@@ -634,7 +632,7 @@ impl Global {
     pub fn command_encoder_begin_compute_pass_with_id(
         &self,
         encoder_id: id::CommandEncoderId,
-        desc: &ComputePassDescriptor<'_>,
+        desc: &ComputePassDescriptor<'_, PassTimestampWrites<id::QuerySetId>>,
         id_in: Option<id::ComputePassEncoderId>,
     ) -> (id::ComputePassEncoderId, Option<CommandEncoderError>) {
         let fid = self.hub.compute_passes.prepare(id_in);
@@ -672,7 +670,7 @@ impl Global {
 pub(super) fn encode_compute_pass(
     parent_state: &mut EncodingState<InnerCommandEncoder>,
     mut base: BasePass<ArcComputeCommand, Infallible>,
-    mut timestamp_writes: Option<ArcPassTimestampWrites>,
+    mut timestamp_writes: Option<PassTimestampWrites>,
 ) -> Result<(), ComputePassError> {
     let pass_scope = PassErrorScope::Pass;
 

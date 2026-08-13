@@ -56,7 +56,7 @@ impl<L> DeviceDescriptor<L> {
 /// Hints to the device about the memory allocation strategy.
 ///
 /// Some backends may ignore these hints.
-#[derive(Clone, Debug, ConstDefault!)]
+#[derive(Clone, Debug, Eq, PartialEq, ConstDefault!)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum MemoryHints {
     /// Favor performance over memory usage (the default value).

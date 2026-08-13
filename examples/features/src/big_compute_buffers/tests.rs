@@ -24,6 +24,10 @@ pub static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
                     .validation_error("could not be compiled into pipeline")
                     // https://github.com/gfx-rs/wgpu/issues/9849
                     .panic("assertion failed: produced"),
+            )
+            .expect_fail(
+                // https://github.com/gfx-rs/wgpu/issues/9849
+                wgpu_test::FailureCase::kosmic_krisp().panic("assertion failed: produced"),
             ),
     )
     .run_async(|ctx| {

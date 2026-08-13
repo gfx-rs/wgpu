@@ -912,6 +912,18 @@ impl Queue {
         profiling::scope!("Queue::write_texture");
         api_log!("Queue::write_texture");
 
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.device.trace.lock() {
+            use crate::device::trace::DataKind;
+            let data = trace.make_binary(DataKind::Bin, data);
+            trace.add(Action::WriteTexture {
+                to: destination.to_trace(),
+                data,
+                layout: *data_layout,
+                size: *size,
+            });
+        }
+
         self.device.check_is_valid()?;
 
         let dst = destination.texture;
@@ -1829,8 +1841,16 @@ impl Queue {
         Ok(SubmissionResult { snatch_guard })
     }
 
-    pub fn get_timestamp_period(&self) -> f32 {
+    pub(crate) fn get_raw_timestamp_period(&self) -> f32 {
         unsafe { self.raw().get_timestamp_period() }
+    }
+
+    pub fn get_timestamp_period(&self) -> f32 {
+        if self.device.timestamp_normalizer.get().unwrap().enabled() {
+            return 1.0;
+        }
+
+        self.get_raw_timestamp_period()
     }
 
     /// `closure` is guaranteed to be called.
@@ -2048,18 +2068,6 @@ impl Global {
             aspect: destination.aspect,
         };
 
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *queue.device.trace.lock() {
-            use crate::device::trace::DataKind;
-            let data = trace.make_binary(DataKind::Bin, data);
-            trace.add(Action::WriteTexture {
-                to: destination.to_trace(),
-                data,
-                layout: *data_layout,
-                size: *size,
-            });
-        }
-
         queue.write_texture(destination, data, data_layout, size)
     }
 
@@ -2100,10 +2108,6 @@ impl Global {
 
     pub fn queue_get_timestamp_period(&self, queue_id: QueueId) -> f32 {
         let queue = self.hub.queues.get(queue_id);
-
-        if queue.device.timestamp_normalizer.get().unwrap().enabled() {
-            return 1.0;
-        }
 
         queue.get_timestamp_period()
     }

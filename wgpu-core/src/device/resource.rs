@@ -415,6 +415,10 @@ impl Device {
     pub fn downlevel(&self) -> &wgt::DownlevelCapabilities {
         &self.downlevel
     }
+
+    pub fn adapter_info(&self) -> wgt::AdapterInfo {
+        self.adapter.get_info()
+    }
 }
 
 impl Device {
@@ -761,7 +765,7 @@ impl Device {
 
         let timestamp_normalizer = crate::timestamp_normalization::TimestampNormalizer::new(
             self,
-            queue.get_timestamp_period(),
+            queue.get_raw_timestamp_period(),
         )?;
 
         self.timestamp_normalizer
@@ -3114,6 +3118,22 @@ impl Device {
                 ));
             }
 
+            if entry
+                .visibility
+                .intersects(wgt::ShaderStages::TASK | wgt::ShaderStages::MESH)
+            {
+                required_features |= wgt::Features::EXPERIMENTAL_MESH_SHADER;
+            }
+
+            if entry.visibility.intersects(
+                wgt::ShaderStages::RAY_GENERATION
+                    | wgt::ShaderStages::ANY_HIT
+                    | wgt::ShaderStages::CLOSEST_HIT
+                    | wgt::ShaderStages::MISS,
+            ) {
+                required_features |= wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES;
+            }
+
             if entry.visibility.contains(wgt::ShaderStages::VERTEX) {
                 if writable_storage == WritableStorage::Yes {
                     required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
@@ -3190,7 +3210,7 @@ impl Device {
 
     fn create_buffer_binding<'a>(
         &self,
-        bb: &'a binding_model::ResolvedBufferBinding,
+        bb: &'a binding_model::BufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         buffer_init_actions: &mut Vec<BufferInitTrackerAction>,
@@ -3585,7 +3605,7 @@ impl Device {
 
     pub fn create_bind_group(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedBindGroupDescriptor,
+        desc: &binding_model::BindGroupDescriptor,
     ) -> (Arc<BindGroup>, Option<CreateBindGroupError>) {
         profiling::scope!("Device::create_bind_group");
         #[cfg(feature = "trace")]
@@ -3619,9 +3639,9 @@ impl Device {
     // (not passing a duplicate) beforehand.
     pub fn create_bind_group_inner(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedBindGroupDescriptor,
+        desc: &binding_model::BindGroupDescriptor,
     ) -> Result<Arc<BindGroup>, CreateBindGroupError> {
-        use crate::binding_model::{CreateBindGroupError as Error, ResolvedBindingResource as Br};
+        use crate::binding_model::{BindingResource as Br, CreateBindGroupError as Error};
 
         self.check_is_valid()?;
 
@@ -4269,7 +4289,7 @@ impl Device {
 
     pub fn create_compute_pipeline(
         self: &Arc<Self>,
-        desc: pipeline::ResolvedComputePipelineDescriptor,
+        desc: pipeline::ComputePipelineDescriptor,
     ) -> (
         Arc<pipeline::ComputePipeline>,
         Option<pipeline::CreateComputePipelineError>,
@@ -4300,7 +4320,7 @@ impl Device {
 
     pub fn create_compute_pipeline_inner(
         self: &Arc<Self>,
-        desc: pipeline::ResolvedComputePipelineDescriptor,
+        desc: pipeline::ComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
         self.check_is_valid()?;
 

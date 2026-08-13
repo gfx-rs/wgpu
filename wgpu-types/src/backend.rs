@@ -224,7 +224,7 @@ impl Backends {
 /// Options that are passed to a given backend.
 ///
 /// Part of [`InstanceDescriptor`].
-#[derive(Clone, Debug, ConstDefault!)]
+#[derive(Clone, Debug, Eq, PartialEq, ConstDefault!)]
 pub struct BackendOptions {
     /// Options for the OpenGL/OpenGLES backend, [`Backend::Gl`].
     pub gl: GlBackendOptions,
@@ -263,7 +263,7 @@ impl BackendOptions {
 /// Configuration for the OpenGL/OpenGLES backend.
 ///
 /// Part of [`BackendOptions`].
-#[derive(Clone, Debug, ConstDefault!)]
+#[derive(Clone, Debug, Eq, PartialEq, ConstDefault!)]
 pub struct GlBackendOptions {
     /// Which OpenGL ES 3 minor version to request, if using OpenGL ES.
     pub gles_minor_version: Gles3MinorVersion,
@@ -379,7 +379,7 @@ impl GlDebugFns {
 
 /// Used to force wgpu to expose certain features on passthrough shaders even when
 /// those features aren't present on runtime-compiled shaders
-#[derive(Clone, Debug, ConstDefault!)]
+#[derive(Clone, Debug, Eq, PartialEq, ConstDefault!)]
 pub struct ForceShaderModelToken {
     inner: Option<DxcShaderModel>,
 }
@@ -488,7 +488,7 @@ impl Dx12AgilitySDKLoadFailure {
 /// [win11-21h2]: https://support.microsoft.com/en-us/topic/august-22-2023-kb5029332-os-build-22000-2360-preview-8f8aec64-77b4-4225-9a0f-f0153204ae28
 /// [win10-22h2]: https://support.microsoft.com/en-gb/topic/august-22-2023-kb5029331-os-build-19045-3393-preview-9f6c1dbd-0ee6-469b-af24-f9d0bf35ca18
 /// [server-2022]: https://support.microsoft.com/en-au/topic/september-12-2023-kb5030216-os-build-20348-1970-34d4aff3-fd05-4270-b288-4ab6379c7f81
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Dx12AgilitySDK {
     /// The Agility SDK version number (e.g., 614 for SDK version 1.614.0).
     ///
@@ -550,7 +550,7 @@ impl Dx12AgilitySDK {
 /// Configuration for the DX12 backend.
 ///
 /// Part of [`BackendOptions`].
-#[derive(Clone, Debug, ConstDefault!)]
+#[derive(Clone, Debug, Eq, PartialEq, ConstDefault!)]
 pub struct Dx12BackendOptions {
     /// Which DX12 shader compiler to use.
     pub shader_compiler: Dx12Compiler,
@@ -619,7 +619,7 @@ impl Dx12BackendOptions {
 /// Configuration for the noop backend.
 ///
 /// Part of [`BackendOptions`].
-#[derive(Clone, Debug, ConstDefault!)]
+#[derive(Clone, Debug, Eq, PartialEq, ConstDefault!)]
 pub struct NoopBackendOptions {
     /// Whether to allow the noop backend to be used.
     ///
@@ -740,7 +740,7 @@ impl Dx12SwapchainKind {
 }
 
 /// DXC shader model.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 #[allow(missing_docs)]
 pub enum DxcShaderModel {
     V6_0,
@@ -792,7 +792,7 @@ impl DxcShaderModel {
 }
 
 /// Selects which DX12 shader compiler to use.
-#[derive(Clone, Debug, ConstDefault!)]
+#[derive(Clone, Debug, Eq, PartialEq, ConstDefault!)]
 pub enum Dx12Compiler {
     /// The Fxc compiler (default) is old, slow and unmaintained.
     ///
@@ -877,7 +877,7 @@ impl FromStr for Dx12Compiler {
 }
 
 /// Whether and how to use a waitable handle obtained from `GetFrameLatencyWaitableObject`.
-#[derive(Clone, Debug, ConstDefault!)]
+#[derive(Clone, Debug, Eq, PartialEq, ConstDefault!)]
 pub enum Dx12UseFrameLatencyWaitableObject {
     /// Do not obtain a waitable handle and do not wait for it. The swapchain will
     /// be created without the `DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` flag.

@@ -337,7 +337,7 @@ impl QueueInterface for CustomQueue {
         &self,
         _buffer: &wgpu::custom::DispatchBuffer,
         _offset: wgpu::BufferAddress,
-        _staging_buffer: &wgpu::custom::DispatchQueueWriteBuffer,
+        _staging_buffer: wgpu::custom::DispatchQueueWriteBuffer,
     ) {
         unimplemented!()
     }

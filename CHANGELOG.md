@@ -75,7 +75,6 @@ Bottom level categories:
 - [`immediate_address_space`](https://www.w3.org/TR/WGSL/#language_extension-immediate_address_space) WGSL language extension is implemented. By @beicause in [#9711](https://github.com/gfx-rs/wgpu/pull/9711).
 - `TextureFormat::is_srgb()` has been renamed to `TextureFormat::has_srgb_suffix()` to clarify its function. By @kpreid in [#9758](https://github.com/gfx-rs/wgpu/pull/9758).
 - Remove the never-constructed `CreateBlasError::InvalidAabbStride` variant. `create_blas` takes no stride, so it could never be produced; AABB stride is validated at build time as `BuildAccelerationStructureError::InvalidAabbStride`. By @mstampfli in [#9935](https://github.com/gfx-rs/wgpu/pull/9935).
-- Use `Arc`'d resources instead of IDs as the default resource type in `PipelineLayoutDescriptor`. By @sagudev in [#9985](https://github.com/gfx-rs/wgpu/pull/9985)
 
 #### naga
 
@@ -100,6 +99,8 @@ Bottom level categories:
 
 - Validate that the arguments are within the indirect buffer when encoding an indirect draw to a render bundle. Moves some indirect draw errors from `RenderPassErrorInner` to `RenderCommandError`. By @andyleiserson in [#9871](https://github.com/gfx-rs/wgpu/pull/9871).
 - When creating render pipelines, validate that a corresponding shader output is present for each color attachment with non-zero write mask, and that shader output includes alpha when the blend operation uses source alpha. By @andyleiserson in [#9939](https://github.com/gfx-rs/wgpu/pull/9939).
+- Reject bind group layout entries with `TASK` or `MESH` visibility unless `Features::EXPERIMENTAL_MESH_SHADER` is enabled. By @teoxoy in [#10042](https://github.com/gfx-rs/wgpu/issues/10042).
+- Reject bind group layout entries with `RAY_GENERATION`, `ANY_HIT`, `CLOSEST_HIT`, or `MISS` visibility unless `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES` is enabled. By @teoxoy in [#10042](https://github.com/gfx-rs/wgpu/issues/10042).
 
 #### Naga
 
@@ -114,6 +115,10 @@ Bottom level categories:
 
 - Add OpenHarmony surface support via `VK_OHOS_surface`. Previously the Vulkan backend could not create a surface on OpenHarmony, leaving GLES as the only usable backend. By @ozongzi in [#9908](https://github.com/gfx-rs/wgpu/pull/9908).
 - Stop passing an un-waited fence to `vkAcquireNextImageKHR` on non-Windows platforms, which triggered `VUID-vkAcquireNextImageKHR-fence-10066` validation errors every frame since v30.0.0. By @ErichDonGubler in [#9855](https://github.com/gfx-rs/wgpu/issues/9855).
+
+#### Metal
+
+- Fix bind group resources for the task, mesh, fragment, and compute shader stages being bound from the wrong offsets whenever a bind group contained resources visible to the task or mesh stages, which could bind the wrong buffer, texture, or sampler to a shader slot. By @teoxoy in [#10043](https://github.com/gfx-rs/wgpu/issues/10043).
 
 #### GLES
 
