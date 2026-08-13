@@ -209,14 +209,13 @@ impl ContextWgpuCore {
     }
 
     /// Returns `true` if `texture` was created on `device`.
-    ///
-    /// Also requires both handles to belong to this context: resource ids are
-    /// only meaningful within the `Global` that allocated them.
     #[cfg(webgl)]
     pub fn texture_belongs_to_device(&self, texture: &CoreTexture, device: &CoreDevice) -> bool {
-        Arc::ptr_eq(&self.0, &texture.context.0)
-            && Arc::ptr_eq(&self.0, &device.context.0)
-            && self.0.texture_belongs_to_device(texture.id, device.id)
+        use wgc::resource::ParentDevice as _;
+        texture
+            .wgpu_texture
+            .same_device(&device.wgpu_device)
+            .is_ok()
     }
 
     pub unsafe fn texture_view_as_hal<A: hal::Api>(

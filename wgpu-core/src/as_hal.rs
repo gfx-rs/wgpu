@@ -10,7 +10,7 @@ use crate::{
         TextureViewId, TlasId,
     },
     lock::RankData,
-    resource::{ParentDevice, RawResourceAccess},
+    resource::RawResourceAccess,
     snatch::SnatchGuard,
 };
 
@@ -303,16 +303,6 @@ impl crate::resource::Tlas {
 }
 
 impl Global {
-    /// Returns `true` if the texture identified by `texture_id` was created on
-    /// the device identified by `device_id`.
-    ///
-    /// Both ids must have been allocated by this `Global`.
-    pub fn texture_belongs_to_device(&self, texture_id: TextureId, device_id: DeviceId) -> bool {
-        let texture = self.hub.textures.get(texture_id);
-        let device = self.hub.devices.get(device_id);
-        texture.same_device(&device).is_ok()
-    }
-
     /// # Safety
     ///
     /// - The raw buffer handle must not be manually destroyed
