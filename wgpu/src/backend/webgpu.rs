@@ -2795,7 +2795,7 @@ impl dispatch::QueueInterface for WebQueue {
         &self,
         buffer: &dispatch::DispatchBuffer,
         offset: crate::BufferAddress,
-        staging_buffer: &dispatch::DispatchQueueWriteBuffer,
+        staging_buffer: dispatch::DispatchQueueWriteBuffer,
     ) {
         let staging_buffer = staging_buffer.as_webgpu();
 

@@ -4,19 +4,15 @@ use core::ptr::NonNull;
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model::{
-        self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,
-        ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
-    },
+    binding_model::{self},
     command,
     device::{life::WaitIdleError, DeviceError, DeviceLostClosure},
     global::Global,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
     pipeline::{
-        self, RenderPipelineVertexProcessor, ResolvedComputePipelineDescriptor,
-        ResolvedFragmentState, ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState,
-        ResolvedProgrammableStageDescriptor, ResolvedTaskState, ResolvedVertexState,
+        self, MeshState, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
+        ResolvedGeneralRenderPipelineDescriptor, TaskState,
     },
     present,
     resource::{
@@ -27,6 +23,66 @@ use crate::{
 };
 
 use wgt::{BufferAddress, TextureFormat};
+
+pub type BindGroupDescriptor<'a> = binding_model::BindGroupDescriptor<
+    'a,
+    id::BindGroupLayoutId,
+    id::BufferId,
+    id::SamplerId,
+    id::TextureViewId,
+    id::TlasId,
+    id::ExternalTextureId,
+>;
+
+pub type BindGroupEntry<'a> = binding_model::BindGroupEntry<
+    'a,
+    id::BufferId,
+    id::SamplerId,
+    id::TextureViewId,
+    id::TlasId,
+    id::ExternalTextureId,
+>;
+
+pub type BufferBinding = binding_model::BufferBinding<id::BufferId>;
+
+pub type BindingResource<'a> = binding_model::BindingResource<
+    'a,
+    id::BufferId,
+    id::SamplerId,
+    id::TextureViewId,
+    id::TlasId,
+    id::ExternalTextureId,
+>;
+
+pub type ComputePipelineDescriptor<'a> = pipeline::ComputePipelineDescriptor<
+    'a,
+    id::PipelineLayoutId,
+    id::ShaderModuleId,
+    id::PipelineCacheId,
+>;
+
+pub type VertexState<'a> = pipeline::VertexState<'a, id::ShaderModuleId>;
+
+pub type MeshPipelineDescriptor<'a> = pipeline::MeshPipelineDescriptor<
+    'a,
+    id::PipelineLayoutId,
+    id::ShaderModuleId,
+    id::PipelineCacheId,
+>;
+
+pub type RenderPipelineDescriptor<'a> = pipeline::RenderPipelineDescriptor<
+    'a,
+    id::PipelineLayoutId,
+    id::ShaderModuleId,
+    id::PipelineCacheId,
+>;
+
+pub type GeneralRenderPipelineDescriptor<'a> = pipeline::GeneralRenderPipelineDescriptor<
+    'a,
+    id::PipelineLayoutId,
+    id::ShaderModuleId,
+    id::PipelineCacheId,
+>;
 
 impl Global {
     pub fn adapter_is_surface_supported(
@@ -454,7 +510,7 @@ impl Global {
     pub fn device_create_pipeline_layout(
         &self,
         device_id: DeviceId,
-        desc: &binding_model::PipelineLayoutDescriptor,
+        desc: &binding_model::PipelineLayoutDescriptor<id::BindGroupLayoutId>,
         id_in: Option<id::PipelineLayoutId>,
     ) -> (
         id::PipelineLayoutId,
@@ -473,7 +529,7 @@ impl Global {
                 .collect::<Vec<_>>()
         };
 
-        let desc = binding_model::ResolvedPipelineLayoutDescriptor {
+        let desc = binding_model::PipelineLayoutDescriptor {
             label: desc.label.clone(),
             bind_group_layouts: Cow::Owned(bind_group_layouts),
             immediate_size: desc.immediate_size,
@@ -493,7 +549,7 @@ impl Global {
     pub fn device_create_bind_group(
         &self,
         device_id: DeviceId,
-        desc: &binding_model::BindGroupDescriptor,
+        desc: &BindGroupDescriptor,
         id_in: Option<id::BindGroupId>,
     ) -> (id::BindGroupId, Option<binding_model::CreateBindGroupError>) {
         let hub = &self.hub;
@@ -510,10 +566,10 @@ impl Global {
             texture_view_storage: &Storage<Arc<resource::TextureView>>,
             tlas_storage: &Storage<Arc<resource::Tlas>>,
             external_texture_storage: &Storage<Arc<resource::ExternalTexture>>,
-        ) -> ResolvedBindGroupEntry<'a> {
+        ) -> binding_model::BindGroupEntry<'a> {
             let resolve_buffer = |bb: &BufferBinding| {
                 let buffer = buffer_storage.get(bb.buffer);
-                ResolvedBufferBinding {
+                binding_model::BufferBinding {
                     buffer,
                     offset: bb.offset,
                     size: bb.size,
@@ -526,38 +582,40 @@ impl Global {
                 |id: &id::ExternalTextureId| external_texture_storage.get(*id);
             let resource = match e.resource {
                 BindingResource::Buffer(ref buffer) => {
-                    ResolvedBindingResource::Buffer(resolve_buffer(buffer))
+                    binding_model::BindingResource::Buffer(resolve_buffer(buffer))
                 }
                 BindingResource::BufferArray(ref buffers) => {
                     let buffers = buffers.iter().map(resolve_buffer).collect::<Vec<_>>();
-                    ResolvedBindingResource::BufferArray(Cow::Owned(buffers))
+                    binding_model::BindingResource::BufferArray(Cow::Owned(buffers))
                 }
                 BindingResource::Sampler(ref sampler) => {
-                    ResolvedBindingResource::Sampler(resolve_sampler(sampler))
+                    binding_model::BindingResource::Sampler(resolve_sampler(sampler))
                 }
                 BindingResource::SamplerArray(ref samplers) => {
                     let samplers = samplers.iter().map(resolve_sampler).collect::<Vec<_>>();
-                    ResolvedBindingResource::SamplerArray(Cow::Owned(samplers))
+                    binding_model::BindingResource::SamplerArray(Cow::Owned(samplers))
                 }
                 BindingResource::TextureView(ref view) => {
-                    ResolvedBindingResource::TextureView(resolve_view(view))
+                    binding_model::BindingResource::TextureView(resolve_view(view))
                 }
                 BindingResource::TextureViewArray(ref views) => {
                     let views = views.iter().map(resolve_view).collect::<Vec<_>>();
-                    ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
+                    binding_model::BindingResource::TextureViewArray(Cow::Owned(views))
                 }
                 BindingResource::AccelerationStructure(ref tlas) => {
-                    ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas))
+                    binding_model::BindingResource::AccelerationStructure(resolve_tlas(tlas))
                 }
                 BindingResource::AccelerationStructureArray(ref tlas_array) => {
                     let tlas_array = tlas_array.iter().map(resolve_tlas).collect::<Vec<_>>();
-                    ResolvedBindingResource::AccelerationStructureArray(Cow::Owned(tlas_array))
+                    binding_model::BindingResource::AccelerationStructureArray(Cow::Owned(
+                        tlas_array,
+                    ))
                 }
                 BindingResource::ExternalTexture(ref et) => {
-                    ResolvedBindingResource::ExternalTexture(resolve_external_texture(et))
+                    binding_model::BindingResource::ExternalTexture(resolve_external_texture(et))
                 }
             };
-            ResolvedBindGroupEntry {
+            binding_model::BindGroupEntry {
                 binding: e.binding,
                 resource,
             }
@@ -585,7 +643,7 @@ impl Global {
         };
         let entries = Cow::Owned(entries);
 
-        let desc = ResolvedBindGroupDescriptor {
+        let desc = binding_model::BindGroupDescriptor {
             label: desc.label.clone(),
             layout,
             entries,
@@ -813,7 +871,7 @@ impl Global {
     pub fn device_create_render_pipeline(
         &self,
         device_id: DeviceId,
-        desc: &pipeline::RenderPipelineDescriptor,
+        desc: &RenderPipelineDescriptor,
         id_in: Option<id::RenderPipelineId>,
     ) -> (
         id::RenderPipelineId,
@@ -831,7 +889,7 @@ impl Global {
     pub fn device_create_mesh_pipeline(
         &self,
         device_id: DeviceId,
-        desc: &pipeline::MeshPipelineDescriptor,
+        desc: &MeshPipelineDescriptor,
         id_in: Option<id::RenderPipelineId>,
     ) -> (
         id::RenderPipelineId,
@@ -847,7 +905,7 @@ impl Global {
 
     fn device_create_general_render_pipeline(
         &self,
-        desc: pipeline::GeneralRenderPipelineDescriptor,
+        desc: GeneralRenderPipelineDescriptor,
         device: Arc<crate::device::resource::Device>,
         fid: crate::registry::FutureId<Arc<pipeline::RenderPipeline>>,
     ) -> (
@@ -863,13 +921,13 @@ impl Global {
         let vertex = match desc.vertex {
             RenderPipelineVertexProcessor::Vertex(ref vertex) => {
                 let module = hub.shader_modules.get(vertex.stage.module);
-                let stage = ResolvedProgrammableStageDescriptor {
+                let stage = ProgrammableStageDescriptor {
                     module,
                     entry_point: vertex.stage.entry_point.clone(),
                     constants: vertex.stage.constants.clone(),
                     zero_initialize_workgroup_memory: vertex.stage.zero_initialize_workgroup_memory,
                 };
-                RenderPipelineVertexProcessor::Vertex(ResolvedVertexState {
+                RenderPipelineVertexProcessor::Vertex(pipeline::VertexState {
                     stage,
                     buffers: vertex.buffers.clone(),
                 })
@@ -878,7 +936,7 @@ impl Global {
                 let task_module = if let Some(task) = task {
                     let module = hub.shader_modules.get(task.stage.module);
 
-                    let state = ResolvedProgrammableStageDescriptor {
+                    let state = ProgrammableStageDescriptor {
                         module,
                         entry_point: task.stage.entry_point.clone(),
                         constants: task.stage.constants.clone(),
@@ -886,34 +944,31 @@ impl Global {
                             .stage
                             .zero_initialize_workgroup_memory,
                     };
-                    Some(ResolvedTaskState { stage: state })
+                    Some(TaskState { stage: state })
                 } else {
                     None
                 };
                 let mesh_module = hub.shader_modules.get(mesh.stage.module);
-                let mesh_stage = ResolvedProgrammableStageDescriptor {
+                let mesh_stage = ProgrammableStageDescriptor {
                     module: mesh_module,
                     entry_point: mesh.stage.entry_point.clone(),
                     constants: mesh.stage.constants.clone(),
                     zero_initialize_workgroup_memory: mesh.stage.zero_initialize_workgroup_memory,
                 };
-                RenderPipelineVertexProcessor::Mesh(
-                    task_module,
-                    ResolvedMeshState { stage: mesh_stage },
-                )
+                RenderPipelineVertexProcessor::Mesh(task_module, MeshState { stage: mesh_stage })
             }
         };
 
         let fragment = if let Some(ref state) = desc.fragment {
             let module = hub.shader_modules.get(state.stage.module);
 
-            let stage = ResolvedProgrammableStageDescriptor {
+            let stage = ProgrammableStageDescriptor {
                 module,
                 entry_point: state.stage.entry_point.clone(),
                 constants: state.stage.constants.clone(),
                 zero_initialize_workgroup_memory: state.stage.zero_initialize_workgroup_memory,
             };
-            Some(ResolvedFragmentState {
+            Some(pipeline::FragmentState {
                 stage,
                 targets: state.targets.clone(),
             })
@@ -973,7 +1028,7 @@ impl Global {
     pub fn device_create_compute_pipeline(
         &self,
         device_id: DeviceId,
-        desc: &pipeline::ComputePipelineDescriptor,
+        desc: &ComputePipelineDescriptor,
         id_in: Option<id::ComputePipelineId>,
     ) -> (
         id::ComputePipelineId,
@@ -991,14 +1046,14 @@ impl Global {
 
         let module = hub.shader_modules.get(desc.stage.module);
 
-        let stage = ResolvedProgrammableStageDescriptor {
+        let stage = ProgrammableStageDescriptor {
             module,
             entry_point: desc.stage.entry_point.clone(),
             constants: desc.stage.constants.clone(),
             zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
         };
 
-        let desc = ResolvedComputePipelineDescriptor {
+        let desc = pipeline::ComputePipelineDescriptor {
             label: desc.label.clone(),
             layout,
             stage,

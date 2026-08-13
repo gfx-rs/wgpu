@@ -20,7 +20,6 @@ use wgt::error::{ErrorType, WebGpuError};
 use crate::{
     api_log,
     device::{bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
-    id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId, TlasId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
@@ -645,11 +644,11 @@ impl BindingTypeMaxCountValidator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BindGroupEntry<
     'a,
-    B = BufferId,
-    S = SamplerId,
-    TV = TextureViewId,
-    TLAS = TlasId,
-    ET = ExternalTextureId,
+    B = Arc<Buffer>,
+    S = Arc<Sampler>,
+    TV = Arc<TextureView>,
+    TLAS = Arc<Tlas>,
+    ET = Arc<ExternalTexture>,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -671,27 +670,18 @@ pub struct BindGroupEntry<
     pub resource: BindingResource<'a, B, S, TV, TLAS, ET>,
 }
 
-/// cbindgen:ignore
-pub type ResolvedBindGroupEntry<'a> = BindGroupEntry<
-    'a,
-    Arc<Buffer>,
-    Arc<Sampler>,
-    Arc<TextureView>,
-    Arc<Tlas>,
-    Arc<ExternalTexture>,
->;
-
 /// Describes a group of bindings and the resources to be bound.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// cbindgen:ignore
 pub struct BindGroupDescriptor<
     'a,
-    BGL = BindGroupLayoutId,
-    B = BufferId,
-    S = SamplerId,
-    TV = TextureViewId,
-    TLAS = TlasId,
-    ET = ExternalTextureId,
+    BGL = Arc<BindGroupLayout>,
+    B = Arc<Buffer>,
+    S = Arc<Sampler>,
+    TV = Arc<TextureView>,
+    TLAS = Arc<Tlas>,
+    ET = Arc<ExternalTexture>,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -720,17 +710,6 @@ pub struct BindGroupDescriptor<
     #[allow(clippy::type_complexity)]
     pub entries: Cow<'a, [BindGroupEntry<'a, B, S, TV, TLAS, ET>]>,
 }
-
-/// cbindgen:ignore
-pub type ResolvedBindGroupDescriptor<'a> = BindGroupDescriptor<
-    'a,
-    Arc<BindGroupLayout>,
-    Arc<Buffer>,
-    Arc<Sampler>,
-    Arc<TextureView>,
-    Arc<Tlas>,
-    Arc<ExternalTexture>,
->;
 
 /// Describes a [`BindGroupLayout`].
 #[derive(Clone, Debug)]
@@ -999,7 +978,8 @@ impl WebGpuError for ImmediateUploadError {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(bound = "BGL: Serialize"))]
-pub struct PipelineLayoutDescriptor<'a, BGL = BindGroupLayoutId>
+/// cbindgen:ignore
+pub struct PipelineLayoutDescriptor<'a, BGL = Arc<BindGroupLayout>>
 where
     [Option<BGL>]: ToOwned,
     <[Option<BGL>] as ToOwned>::Owned: fmt::Debug,
@@ -1022,10 +1002,6 @@ where
     /// If this value is non-zero, [`wgt::Features::IMMEDIATES`] must be enabled.
     pub immediate_size: u32,
 }
-
-/// cbindgen:ignore
-pub type ResolvedPipelineLayoutDescriptor<'a, BGL = Arc<BindGroupLayout>> =
-    PipelineLayoutDescriptor<'a, BGL>;
 
 #[derive(Debug)]
 pub struct PipelineLayout {
@@ -1130,7 +1106,7 @@ crate::impl_storage_item!(PipelineLayout);
 #[repr(C)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BufferBinding<B = BufferId> {
+pub struct BufferBinding<B = Arc<Buffer>> {
     pub buffer: B,
     pub offset: wgt::BufferAddress,
 
@@ -1144,19 +1120,17 @@ pub struct BufferBinding<B = BufferId> {
     pub size: Option<wgt::BufferAddress>,
 }
 
-pub type ResolvedBufferBinding = BufferBinding<Arc<Buffer>>;
-
 // Note: Duplicated in `wgpu-rs` as `BindingResource`
 // They're different enough that it doesn't make sense to share a common type
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BindingResource<
     'a,
-    B = BufferId,
-    S = SamplerId,
-    TV = TextureViewId,
-    TLAS = TlasId,
-    ET = ExternalTextureId,
+    B = Arc<Buffer>,
+    S = Arc<Sampler>,
+    TV = Arc<TextureView>,
+    TLAS = Arc<Tlas>,
+    ET = Arc<ExternalTexture>,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -1193,15 +1167,6 @@ pub enum BindingResource<
     AccelerationStructureArray(Cow<'a, [TLAS]>),
     ExternalTexture(ET),
 }
-
-pub type ResolvedBindingResource<'a> = BindingResource<
-    'a,
-    Arc<Buffer>,
-    Arc<Sampler>,
-    Arc<TextureView>,
-    Arc<Tlas>,
-    Arc<ExternalTexture>,
->;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]

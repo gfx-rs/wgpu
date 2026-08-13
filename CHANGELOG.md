@@ -82,7 +82,9 @@ Bottom level categories:
 
 - Zero-initialize padding (if any) at the end of a buffer allocation. This was application-visible in rare cases on Vulkan when a shader read beyond the valid range of a vertex buffer. By @andyleiserson in [#9791](https://github.com/gfx-rs/wgpu/pull/9791).
 - Fix required immediate slots calculation and remove `naga::valid::FunctionInfo::immediate_slots_used`. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
+- Fix a spurious assertion failure in `Device::maintain` when multiple threads race polling the same device. By @AdrianEddy in [#9958](https://github.com/gfx-rs/wgpu/pull/9958).
 - Fix `PendingSubmission` releasing its lock guards out of stacking order, which tripped `--cfg wgpu_validate_locks` on any submission. By @AdrianEddy in [#9960](https://github.com/gfx-rs/wgpu/pull/9960).
+- Fixed some cases where initialization tracking was not correct. By @andyleiserson in [#10002](https://github.com/gfx-rs/wgpu/pull/10002).
 
 #### naga
 
@@ -93,20 +95,31 @@ Bottom level categories:
 
 - Validate that the arguments are within the indirect buffer when encoding an indirect draw to a render bundle. Moves some indirect draw errors from `RenderPassErrorInner` to `RenderCommandError`. By @andyleiserson in [#9871](https://github.com/gfx-rs/wgpu/pull/9871).
 - When creating render pipelines, validate that a corresponding shader output is present for each color attachment with non-zero write mask, and that shader output includes alpha when the blend operation uses source alpha. By @andyleiserson in [#9939](https://github.com/gfx-rs/wgpu/pull/9939).
+- Reject bind group layout entries with `TASK` or `MESH` visibility unless `Features::EXPERIMENTAL_MESH_SHADER` is enabled. By @teoxoy in [#10042](https://github.com/gfx-rs/wgpu/issues/10042).
+- Reject bind group layout entries with `RAY_GENERATION`, `ANY_HIT`, `CLOSEST_HIT`, or `MISS` visibility unless `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES` is enabled. By @teoxoy in [#10042](https://github.com/gfx-rs/wgpu/issues/10042).
 
 #### Naga
 
 - Replace embedded NUL characters with `?` when writing debug strings to SPIR-V. By @andyleiserson in [#9904](https://github.com/gfx-rs/wgpu/pull/9904).
 - Fix invalid HLSL generated for `textureSampleLevel` with non-2D textures. By @mvanhorn in [#9717](https://github.com/gfx-rs/wgpu/issues/9717).
 
+#### DX12
+
+- Make sure padding bytes are 0 in the destination buffer after a `copy_texture_to_buffer` when `UnrestrictedBufferTextureCopyPitchSupported` is not available. By @teoxoy in [#10005](https://github.com/gfx-rs/wgpu/pull/10005).
+
 #### Vulkan
 
 - Add OpenHarmony surface support via `VK_OHOS_surface`. Previously the Vulkan backend could not create a surface on OpenHarmony, leaving GLES as the only usable backend. By @ozongzi in [#9908](https://github.com/gfx-rs/wgpu/pull/9908).
 - Stop passing an un-waited fence to `vkAcquireNextImageKHR` on non-Windows platforms, which triggered `VUID-vkAcquireNextImageKHR-fence-10066` validation errors every frame since v30.0.0. By @ErichDonGubler in [#9855](https://github.com/gfx-rs/wgpu/issues/9855).
 
+#### Metal
+
+- Fix bind group resources for the task, mesh, fragment, and compute shader stages being bound from the wrong offsets whenever a bind group contained resources visible to the task or mesh stages, which could bind the wrong buffer, texture, or sampler to a shader slot. By @teoxoy in [#10043](https://github.com/gfx-rs/wgpu/issues/10043).
+
 #### GLES
 
 - Fixed signed integer `%` (and `%=`) returning the wrong result for negative operands in the GLSL (OpenGL/GLES) backend, e.g. `-1 % 768` yielding `255` instead of `-1`. GLSL's `%` is undefined when either operand is negative, so signed remainder is now lowered as `a - b * (a / b)`, matching the SPIR-V, HLSL, and Metal backends. By @mstampfli in [#9687](https://github.com/gfx-rs/wgpu/pull/9687).
+- Fix negative argument for `atomicSub` yielding incorrect GLSL. By @ErichDonGubler in [#9924](https://github.com/gfx-rs/wgpu/pull/9924).
 
 #### WebGPU
 

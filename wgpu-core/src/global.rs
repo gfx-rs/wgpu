@@ -37,7 +37,7 @@ pub struct Global {
     pub(crate) surfaces: Registry<Arc<Surface>>,
     pub(crate) hub: Hub,
     // the instance must be dropped last
-    pub instance: Instance,
+    pub instance: Arc<Instance>,
 }
 
 impl Global {
@@ -77,7 +77,7 @@ impl Global {
     /// # Safety
     ///
     /// - The raw handles obtained from the Instance must not be manually destroyed
-    pub unsafe fn from_instance(instance: Instance) -> Self {
+    pub unsafe fn from_instance(instance: Arc<Instance>) -> Self {
         profiling::scope!("Global::new");
         Self {
             instance,

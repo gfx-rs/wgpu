@@ -57,11 +57,11 @@ pub use self::{
     encoder_command::{ArcCommand, ArcReferences, Command, IdReferences, ReferenceType},
     query::{QueryError, QueryUseError, ResolveError, SimplifiedQueryType},
     render::{
-        ArcRenderPassColorAttachment, AttachmentError, AttachmentErrorLocation,
-        ColorAttachmentError, ColorAttachments, LoadOp, PassChannel, RenderBasePass, RenderPass,
-        RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-        RenderPassError, RenderPassErrorInner, ResolvedPassChannel,
-        ResolvedRenderPassDepthStencilAttachment, ResolvedRenderPassDescriptor, StoreOp,
+        AttachmentError, AttachmentErrorLocation, ColorAttachmentError, ColorAttachments, LoadOp,
+        PassChannel, RenderBasePass, RenderPass, RenderPassColorAttachment,
+        RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPassError,
+        RenderPassErrorInner, ResolvedPassChannel, ResolvedRenderPassDepthStencilAttachment,
+        ResolvedRenderPassDescriptor, StoreOp,
     },
     render_command::ArcRenderCommand,
     transfer::{CopySide, TransferError},
@@ -83,10 +83,9 @@ pub(crate) use allocator::CommandAllocator;
 /// cbindgen:ignore
 pub use self::{compute_command::ComputeCommand, render_command::RenderCommand};
 
-pub(crate) use timestamp_writes::ArcPassTimestampWrites;
 pub use timestamp_writes::PassTimestampWrites;
 
-use crate::binding_model::BindingError;
+use crate::binding_model::{BindGroup, BindingError};
 use crate::device::queue::TempResource;
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::lock::{rank, Mutex};
@@ -969,7 +968,7 @@ impl CommandEncoder {
     pub(crate) fn validate_pass_timestamp_writes<E>(
         device: &Device,
         timestamp_writes: &PassTimestampWrites<Arc<QuerySet>>,
-    ) -> Result<ArcPassTimestampWrites, E>
+    ) -> Result<PassTimestampWrites, E>
     where
         E: From<TimestampWritesError>
             + From<QueryUseError>
@@ -1008,7 +1007,7 @@ impl CommandEncoder {
             return Err(TimestampWritesError::IndicesMissing.into());
         }
 
-        Ok(ArcPassTimestampWrites {
+        Ok(PassTimestampWrites {
             query_set: query_set.clone(),
             beginning_of_pass_write_index,
             end_of_pass_write_index,
@@ -1956,11 +1955,11 @@ impl<T: PartialEq_> PartialEq_ for Option<T> {
 }
 
 #[derive(Debug)]
-struct BindGroupStateChange<BG = id::BindGroupId> {
-    last_states: [StateChange<Option<BG>>; hal::MAX_BIND_GROUPS],
+struct BindGroupStateChange {
+    last_states: [StateChange<Option<Arc<BindGroup>>>; hal::MAX_BIND_GROUPS],
 }
 
-impl<BG: Clone + PartialEq_> BindGroupStateChange<BG> {
+impl BindGroupStateChange {
     fn new() -> Self {
         Self {
             last_states: [const { StateChange::new() }; hal::MAX_BIND_GROUPS],
@@ -1969,7 +1968,7 @@ impl<BG: Clone + PartialEq_> BindGroupStateChange<BG> {
 
     fn set_and_check_redundant(
         &mut self,
-        bind_group: &Option<BG>,
+        bind_group: &Option<Arc<BindGroup>>,
         index: u32,
         dynamic_offsets: &mut Vec<u32>,
         offsets: &[wgt::DynamicOffset],
@@ -2000,7 +1999,7 @@ impl<BG: Clone + PartialEq_> BindGroupStateChange<BG> {
     }
 }
 
-impl<BG: Clone + PartialEq_> Default for BindGroupStateChange<BG> {
+impl Default for BindGroupStateChange {
     fn default() -> Self {
         Self::new()
     }

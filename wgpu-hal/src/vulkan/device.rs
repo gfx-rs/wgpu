@@ -911,10 +911,6 @@ impl super::Device {
             return Ok(());
         };
 
-        // memory types not used by gpu-allocator
-        let invalid_flags =
-            vk::MemoryPropertyFlags::LAZILY_ALLOCATED | vk::MemoryPropertyFlags::PROTECTED;
-
         let preferred_flags = match location {
             MemoryLocation::GpuOnly => vk::MemoryPropertyFlags::DEVICE_LOCAL,
             MemoryLocation::CpuToGpu => {
@@ -937,7 +933,6 @@ impl super::Device {
             .find(|(i, ty)| {
                 (1 << i) & requirements.memory_type_bits != 0
                     && ty.property_flags.contains(preferred_flags)
-                    && !ty.property_flags.intersects(invalid_flags)
             });
 
         if selected_heap.is_none() {
@@ -955,7 +950,6 @@ impl super::Device {
                 .find(|(i, ty)| {
                     (1 << i) & requirements.memory_type_bits != 0
                         && ty.property_flags.contains(required_flags)
-                        && !ty.property_flags.intersects(invalid_flags)
                 });
         }
 
