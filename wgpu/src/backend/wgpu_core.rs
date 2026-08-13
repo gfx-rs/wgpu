@@ -2738,7 +2738,8 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                             custom_data: instance.custom_data,
                             mask: instance.mask,
                         })
-                }).collect();
+                })
+                .collect();
             wgc::ray_tracing::ArcTlasPackage {
                 tlas: e.inner.as_core().wgpu_tlas.clone(),
                 instances,
