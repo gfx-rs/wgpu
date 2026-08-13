@@ -137,6 +137,14 @@ impl Global {
     }
 }
 
+// Recording a render pass.
+//
+// The only error that should be returned from these methods is
+// `EncoderStateError::Ended`, when the pass has already ended and an immediate
+// validation error is raised.
+//
+// All other errors should be stored in the pass for later reporting when
+// `CommandEncoder.finish()` is called.
 impl Global {
     pub fn render_pass_set_bind_group(
         &self,
