@@ -427,39 +427,23 @@ impl Device {
         self.inner.as_webgpu_opt().map(|wd| &wd.inner)
     }
 
-    /// Wrap a foreign `web_sys::WebGlTexture` as a [`Texture`] without a copy.
-    ///
-    /// WebGL (GLES-on-wasm) counterpart of
+    /// Wrap an existing `web_sys::WebGlTexture` as a [`Texture`], without
+    /// copying. WebGL counterpart of
     /// [`Self::create_texture_from_webgpu_handle`].
     ///
-    /// `view_dimension` names the WebGL texture type of `texture`
-    /// ([`D2`] → `TEXTURE_2D`, [`D2Array`] → `TEXTURE_2D_ARRAY`, [`Cube`] →
-    /// `TEXTURE_CUBE_MAP`, [`D3`] → `TEXTURE_3D`). It cannot be inferred from
-    /// `desc`: a square 6-layer 2D array and a cube map have identical
-    /// descriptors, but a WebGL texture's type is fixed at its first bind and
-    /// binding it to the wrong target raises `INVALID_OPERATION`.
+    /// `view_dimension` names the WebGL texture type of `texture` ([`D2`] →
+    /// `TEXTURE_2D`, [`D2Array`] → `TEXTURE_2D_ARRAY`, [`Cube`] →
+    /// `TEXTURE_CUBE_MAP`, [`D3`] → `TEXTURE_3D`); it cannot be inferred from
+    /// `desc`.
     ///
-    /// Returns [`None`] if this device is not backed by the GLES backend on
-    /// WebGL. With both the `webgpu` and `webgl` features enabled the backend
-    /// is chosen at runtime (WebGPU where the browser supports it), so check
-    /// the result rather than assuming the WebGL fallback is in use — the
-    /// sibling accessors [`Self::as_webgl_texture`] and
-    /// [`Self::as_webgl_context`] return [`None`] under the same condition.
+    /// Returns [`None`] if this device is not using the GLES backend on WebGL.
     ///
-    /// The caller must guarantee:
-    ///
-    /// 1. `texture` was created by the same `WebGl2RenderingContext` backing
-    ///    this device.
-    /// 2. `desc` (format / size / dimension / mip / sample) and
-    ///    `view_dimension` match the actual WebGL texture. wgpu stores these
-    ///    verbatim without re-checking the handle; a mismatch yields silently
-    ///    incorrect metadata and GL errors (`INVALID_OPERATION`) downstream
-    ///    rather than memory unsafety — like WebGPU, every WebGL call is
-    ///    validated by the browser, which is why this method is not `unsafe`.
-    /// 3. The handle stays valid until wgpu is finished with the texture (or
-    ///    until `drop_callback` fires, if one is supplied). wgpu never
-    ///    `gl.deleteTexture`s the imported handle; on WebGL the callback need
-    ///    not be `Send`/`Sync`, so it may capture the handle and delete it.
+    /// `texture` must have been created by the `WebGl2RenderingContext`
+    /// backing this device, match `desc` and `view_dimension`, and stay valid
+    /// until wgpu is done with it (or until `drop_callback` fires, if one is
+    /// supplied); wgpu never deletes the imported handle. Violations yield GL
+    /// errors rather than memory unsafety, which is why this method is not
+    /// `unsafe`.
     ///
     /// [`D2`]: wgt::TextureViewDimension::D2
     /// [`D2Array`]: wgt::TextureViewDimension::D2Array

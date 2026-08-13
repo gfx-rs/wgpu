@@ -178,41 +178,20 @@ impl super::Device {
         }
     }
 
-    /// Wrap an externally-owned `WebGlTexture` as a wgpu-hal texture (zero-copy
-    /// import).
+    /// Wrap an existing `WebGlTexture` as a wgpu-hal texture, without copying.
     ///
-    /// The handle is registered with glow's resource tracker via
-    /// [`glow::Context::register_external_texture`], which inserts it into
-    /// glow's slotmap without allocating a new GL texture. wgpu-hal does **not**
-    /// take ownership of the underlying `WebGlTexture`: on destroy it calls
-    /// [`glow::Context::unregister_external_texture`] (which frees the slotmap
-    /// slot but never `gl.deleteTexture`s the handle), so the caller's handle
-    /// outlives the wgpu-hal texture. If `drop_callback` is [`Some`], it fires
-    /// once wgpu-hal is finished with the handle.
+    /// wgpu-hal never deletes the handle; if `drop_callback` is [`Some`], it
+    /// fires once wgpu-hal is done with it.
     ///
-    /// `view_dimension` names the WebGL texture type (bind target) of `handle`:
-    /// `D2` → `TEXTURE_2D`, `D2Array` → `TEXTURE_2D_ARRAY`, `Cube` →
-    /// `TEXTURE_CUBE_MAP`, `D3` → `TEXTURE_3D`. It must be passed explicitly
-    /// because a WebGL texture's type is fixed at its first bind and cannot be
-    /// inferred from `desc`: a square 6-layer 2D array and a cube map have
-    /// identical descriptors, and binding a texture to the wrong target raises
-    /// `INVALID_OPERATION`.
+    /// `view_dimension` selects the texture's bind target (`D2` →
+    /// `TEXTURE_2D`, `D2Array` → `TEXTURE_2D_ARRAY`, `Cube` →
+    /// `TEXTURE_CUBE_MAP`, `D3` → `TEXTURE_3D`) and must match the type
+    /// `handle` was created as; it cannot be inferred from `desc`.
     ///
-    /// The caller must guarantee:
-    ///
-    /// 1. `handle` was created by the same `WebGl2RenderingContext` this
-    ///    device wraps and respects `desc`.
-    /// 2. `view_dimension` matches the texture type `handle` was created with
-    ///    (`CubeArray` does not exist in WebGL2).
-    /// 3. `handle` remains valid until wgpu-hal is done with the texture
-    ///    (until the returned texture is destroyed, or the `drop_callback`
-    ///    fires if one is supplied).
-    ///
-    /// Unlike its native counterpart `texture_from_raw` (which hands a raw
-    /// name to an unvalidated native driver), this method is not `unsafe`:
-    /// every WebGL call is validated by the browser, so
-    /// violating the contract yields incorrect metadata and GL errors
-    /// (`INVALID_OPERATION`) rather than memory unsafety.
+    /// `handle` must have been created by this device's
+    /// `WebGl2RenderingContext`, match `desc`, and stay valid until wgpu-hal
+    /// is done with it. Violations yield GL errors rather than memory
+    /// unsafety, which is why this method is not `unsafe`.
     #[cfg(webgl)]
     pub fn texture_from_webgl_handle(
         &self,
@@ -221,7 +200,7 @@ impl super::Device {
         view_dimension: wgt::TextureViewDimension,
         drop_callback: Option<crate::DropCallback>,
     ) -> super::Texture {
-        debug_assert_eq!(
+        assert_eq!(
             view_dimension.compatible_texture_dimension(),
             desc.dimension,
             "view_dimension {view_dimension:?} is incompatible with the descriptor's dimension",
