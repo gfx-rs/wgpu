@@ -427,7 +427,17 @@ impl Device {
         self.inner.as_webgpu_opt().map(|wd| &wd.inner)
     }
 
-    /// Creates a new [`ExternalTexture`].
+    /// Creates a new [`ExternalTexture`] from plane textures the caller
+    /// already has.
+    ///
+    /// The planes and the [`ExternalTextureDescriptor`]'s conversion
+    /// parameters (YCbCr matrix, gamut and transfer functions) are supplied by
+    /// the caller, and wgpu performs the conversion when the texture is
+    /// sampled. Works on every backend.
+    ///
+    /// Use this when the video data already lives in wgpu textures, e.g.
+    /// frames you decoded yourself. To bind a web media source directly on the
+    /// WebGPU backend, use `Device::import_external_texture` instead.
     #[must_use]
     pub fn create_external_texture(
         &self,
@@ -444,12 +454,15 @@ impl Device {
     /// Imports a video source as an [`ExternalTexture`] on the WebGPU backend,
     /// without a copy.
     ///
-    /// This is the WebGPU counterpart of [`Self::create_external_texture`]: the
-    /// browser performs the YCbCr-to-RGB conversion internally, so no plane
-    /// textures or conversion matrices are supplied. The result is valid only
-    /// while `source` is: a `VideoFrame` until it is closed, an
-    /// `HTMLVideoElement` for the current task. [`ExternalTexture::destroy`] is
-    /// a no-op.
+    /// Unlike [`Self::create_external_texture`] — where the caller supplies
+    /// plane textures and conversion parameters — this hands `source` to the
+    /// browser's `importExternalTexture`, which performs the color conversion
+    /// internally. Use it whenever the frames come from a web media source
+    /// rather than from data you decoded yourself.
+    ///
+    /// The result is valid only while `source` is: a `VideoFrame` until it is
+    /// closed, an `HTMLVideoElement` for the current task.
+    /// [`ExternalTexture::destroy`] is a no-op.
     #[cfg(webgpu)]
     #[must_use]
     pub fn import_external_texture(
