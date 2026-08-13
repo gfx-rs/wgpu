@@ -175,6 +175,7 @@ impl GPU {
   }
 
   #[async_method]
+  #[reentrant]
   #[cppgc]
   async fn request_adapter(
     &self,

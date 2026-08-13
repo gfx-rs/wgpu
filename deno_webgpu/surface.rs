@@ -70,6 +70,7 @@ impl GPUCanvasContext {
     self.canvas.clone()
   }
 
+  #[reentrant]
   #[undefined]
   fn configure(
     &self,
