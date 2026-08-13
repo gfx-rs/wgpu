@@ -143,6 +143,12 @@ impl<T: Marker> IdentityManager<T> {
     }
 }
 
+impl<T: Marker> Default for IdentityManager<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[test]
 fn test_epoch_end_of_life() {
     use crate::id;
