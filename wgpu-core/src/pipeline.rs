@@ -24,7 +24,6 @@ use crate::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
         RenderPassContext,
     },
-    id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
     pipeline_cache,
     resource::{InvalidResourceError, Labeled, ResourceState, TrackingData},
     resource_log,
@@ -239,7 +238,8 @@ impl WebGpuError for CreateShaderModuleError {
 /// Describes a programmable pipeline stage.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
+/// cbindgen:ignore
+pub struct ProgrammableStageDescriptor<'a, SM = Arc<ShaderModule>> {
     /// The compiled shader module for this stage.
     pub module: SM,
 
@@ -271,10 +271,6 @@ pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     pub zero_initialize_workgroup_memory: bool,
 }
 
-/// cbindgen:ignore
-pub type ResolvedProgrammableStageDescriptor<'a> =
-    ProgrammableStageDescriptor<'a, Arc<ShaderModule>>;
-
 /// Number of implicit bind groups derived at pipeline creation.
 pub type ImplicitBindGroupCount = u8;
 
@@ -305,11 +301,12 @@ impl WebGpuError for ImplicitLayoutError {
 /// Describes a compute pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// cbindgen:ignore
 pub struct ComputePipelineDescriptor<
     'a,
-    PLL = PipelineLayoutId,
-    SM = ShaderModuleId,
-    PLC = PipelineCacheId,
+    PLL = Arc<PipelineLayout>,
+    SM = Arc<ShaderModule>,
+    PLC = Arc<PipelineCache>,
 > {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
@@ -319,10 +316,6 @@ pub struct ComputePipelineDescriptor<
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PLC>,
 }
-
-/// cbindgen:ignore
-pub type ResolvedComputePipelineDescriptor<'a> =
-    ComputePipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -602,48 +595,40 @@ impl Default for VertexBufferLayout<'_> {
 /// Describes the vertex process in a render pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct VertexState<'a, SM = ShaderModuleId> {
+/// cbindgen:ignore
+pub struct VertexState<'a, SM = Arc<ShaderModule>> {
     /// The compiled vertex stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a, SM>,
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: Cow<'a, [Option<VertexBufferLayout<'a>>]>,
 }
 
-/// cbindgen:ignore
-pub type ResolvedVertexState<'a> = VertexState<'a, Arc<ShaderModule>>;
-
 /// Describes fragment processing in a render pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FragmentState<'a, SM = ShaderModuleId> {
+/// cbindgen:ignore
+pub struct FragmentState<'a, SM = Arc<ShaderModule>> {
     /// The compiled fragment stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a, SM>,
     /// The effect of draw calls on the color aspect of the output target.
     pub targets: Cow<'a, [Option<wgt::ColorTargetState>]>,
 }
 
-/// cbindgen:ignore
-pub type ResolvedFragmentState<'a> = FragmentState<'a, Arc<ShaderModule>>;
-
 /// Describes the task shader in a mesh shader pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TaskState<'a, SM = ShaderModuleId> {
+pub struct TaskState<'a, SM = Arc<ShaderModule>> {
     /// The compiled task stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a, SM>,
 }
 
-pub type ResolvedTaskState<'a> = TaskState<'a, Arc<ShaderModule>>;
-
 /// Describes the mesh shader in a mesh shader pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct MeshState<'a, SM = ShaderModuleId> {
+pub struct MeshState<'a, SM = Arc<ShaderModule>> {
     /// The compiled mesh stage and its entry point.
     pub stage: ProgrammableStageDescriptor<'a, SM>,
 }
-
-pub type ResolvedMeshState<'a> = MeshState<'a, Arc<ShaderModule>>;
 
 /// Describes a vertex processor for either a conventional or mesh shading
 /// pipeline architecture.
@@ -655,7 +640,7 @@ pub type ResolvedMeshState<'a> = MeshState<'a, Arc<ShaderModule>>;
 #[doc(hidden)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum RenderPipelineVertexProcessor<'a, SM = ShaderModuleId> {
+pub enum RenderPipelineVertexProcessor<'a, SM = Arc<ShaderModule>> {
     Vertex(VertexState<'a, SM>),
     Mesh(Option<TaskState<'a, SM>>, MeshState<'a, SM>),
 }
@@ -665,9 +650,9 @@ pub enum RenderPipelineVertexProcessor<'a, SM = ShaderModuleId> {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RenderPipelineDescriptor<
     'a,
-    PLL = PipelineLayoutId,
-    SM = ShaderModuleId,
-    PLC = PipelineCacheId,
+    PLL = Arc<PipelineLayout>,
+    SM = Arc<ShaderModule>,
+    PLC = Arc<PipelineCache>,
 > {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
@@ -696,9 +681,9 @@ pub struct RenderPipelineDescriptor<
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MeshPipelineDescriptor<
     'a,
-    PLL = PipelineLayoutId,
-    SM = ShaderModuleId,
-    PLC = PipelineCacheId,
+    PLL = Arc<PipelineLayout>,
+    SM = Arc<ShaderModule>,
+    PLC = Arc<PipelineCache>,
 > {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
@@ -737,9 +722,9 @@ pub struct MeshPipelineDescriptor<
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GeneralRenderPipelineDescriptor<
     'a,
-    PLL = PipelineLayoutId,
-    SM = ShaderModuleId,
-    PLC = PipelineCacheId,
+    PLL = Arc<PipelineLayout>,
+    SM = Arc<ShaderModule>,
+    PLC = Arc<PipelineCache>,
 > {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.

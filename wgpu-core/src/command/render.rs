@@ -25,11 +25,11 @@ use crate::{
             QueryResetMap, QuerySetWrites,
         },
         render_command::ArcRenderCommand,
-        ArcCommand, ArcPassTimestampWrites, BasePass, BindGroupStateChange,
-        CommandBufferTextureMemoryActions, CommandEncoder, CommandEncoderError, DebugGroupError,
-        DrawCommandFamily, DrawError, DrawKind, EncoderStateError, EncodingState, ExecutionError,
-        InnerCommandEncoder, MapPassErr, PassErrorScope, PassStateError, PassTimestampWrites,
-        QueryUseError, Rect, RenderBundle, RenderCommandError, StateChange, TimestampWritesError,
+        ArcCommand, BasePass, BindGroupStateChange, CommandBufferTextureMemoryActions,
+        CommandEncoder, CommandEncoderError, DebugGroupError, DrawCommandFamily, DrawError,
+        DrawKind, EncoderStateError, EncodingState, ExecutionError, InnerCommandEncoder,
+        MapPassErr, PassErrorScope, PassStateError, PassTimestampWrites, QueryUseError, Rect,
+        RenderBundle, RenderCommandError, StateChange, TimestampWritesError,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -190,7 +190,7 @@ impl<V: Copy + Default> ResolvedPassChannel<V> {
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RenderPassColorAttachment<TV = id::TextureViewId> {
+pub struct RenderPassColorAttachment<TV = Arc<TextureView>> {
     /// The view to use as an attachment.
     pub view: TV,
     /// The depth slice index of a 3D view. It must not be provided if the view is not 3D.
@@ -207,14 +207,12 @@ pub struct RenderPassColorAttachment<TV = id::TextureViewId> {
     pub store_op: StoreOp,
 }
 
-pub type ArcRenderPassColorAttachment = RenderPassColorAttachment<Arc<TextureView>>;
-
 // Avoid allocation in the common case that there is only one color attachment,
 // but don't bloat `ArcCommand::RunRenderPass` excessively.
 pub type ColorAttachments<TV = Arc<TextureView>> =
     SmallVec<[Option<RenderPassColorAttachment<TV>>; 1]>;
 
-impl ArcRenderPassColorAttachment {
+impl RenderPassColorAttachment {
     fn hal_ops(&self) -> hal::AttachmentOps {
         load_hal_ops(self.load_op) | store_hal_ops(self.store_op)
     }
@@ -262,11 +260,11 @@ pub struct ResolvedRenderPassDepthStencilAttachment<TV> {
 pub struct RenderPassDescriptor<'a> {
     pub label: Label<'a>,
     /// The color attachments of the render pass.
-    pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment>]>,
+    pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment<id::TextureViewId>>]>,
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<id::TextureViewId>>,
     /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<PassTimestampWrites>,
+    pub timestamp_writes: Option<PassTimestampWrites<id::QuerySetId>>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<id::QuerySetId>,
     /// The multiview array layers that will be used
@@ -294,12 +292,12 @@ struct ArcRenderPassDescriptor<'a> {
     pub label: &'a Label<'a>,
     /// The color attachments of the render pass.
     pub color_attachments:
-        ArrayVec<Option<ArcRenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
+        ArrayVec<Option<RenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment:
         Option<ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>>,
     /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<ArcPassTimestampWrites>,
+    pub timestamp_writes: Option<PassTimestampWrites>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<Arc<QuerySet>>,
     /// The multiview array layers that will be used
@@ -326,15 +324,14 @@ pub struct RenderPass {
     /// See <https://www.w3.org/TR/webgpu/#encoder-state>
     parent: Option<Arc<CommandEncoder>>,
 
-    color_attachments:
-        ArrayVec<Option<ArcRenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
+    color_attachments: ArrayVec<Option<RenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil_attachment: Option<ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>>,
-    timestamp_writes: Option<ArcPassTimestampWrites>,
+    timestamp_writes: Option<PassTimestampWrites>,
     occlusion_query_set: Option<Arc<QuerySet>>,
     multiview_mask: Option<NonZeroU32>,
 
     // Resource binding dedupe state.
-    current_bind_groups: BindGroupStateChange<Arc<BindGroup>>,
+    current_bind_groups: BindGroupStateChange,
     current_pipeline: StateChange<Arc<RenderPipeline>>,
 }
 
@@ -1189,11 +1186,11 @@ impl RenderPassInfo {
     fn start(
         device: &Arc<Device>,
         hal_label: Option<&str>,
-        color_attachments: &[Option<ArcRenderPassColorAttachment>],
+        color_attachments: &[Option<RenderPassColorAttachment>],
         mut depth_stencil_attachment: Option<
             ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>,
         >,
-        mut timestamp_writes: Option<ArcPassTimestampWrites>,
+        mut timestamp_writes: Option<PassTimestampWrites>,
         mut occlusion_query_set: Option<Arc<QuerySet>>,
         encoder: &mut dyn hal::DynCommandEncoder,
         trackers: &mut Tracker,
@@ -1894,7 +1891,7 @@ impl CommandEncoder {
 
                     arc_desc
                         .color_attachments
-                        .push(Some(ArcRenderPassColorAttachment {
+                        .push(Some(RenderPassColorAttachment {
                             view: Arc::clone(view),
                             depth_slice: *depth_slice,
                             resolve_target: resolve_target.map(Arc::clone),
@@ -2274,43 +2271,7 @@ impl Global {
     }
 
     pub fn render_pass_end(&self, pass: &mut RenderPass) -> Result<(), EncoderStateError> {
-        profiling::scope!(
-            "CommandEncoder::run_render_pass {}",
-            pass.base.label.as_deref().unwrap_or("")
-        );
-
-        let cmd_enc = pass.parent.take().ok_or(EncoderStateError::Ended)?;
-        let mut cmd_buf_data = cmd_enc.data.lock();
-
-        cmd_buf_data.unlock_encoder()?;
-
-        let base = pass.base.take();
-
-        if let Err(RenderPassError { inner, scope: _ }) = &base {
-            if let RenderPassErrorInner::EncoderState(
-                err @ (EncoderStateError::Locked | EncoderStateError::Ended),
-            ) = inner.as_ref()
-            {
-                // Most encoding errors are detected and raised within `finish()`.
-                //
-                // However, we raise a validation error here if the pass was opened
-                // within another pass, or on a finished encoder. The latter is
-                // particularly important, because in that case reporting errors via
-                // `CommandEncoder::finish` is not possible.
-                return Err(err.clone());
-            }
-        }
-
-        cmd_buf_data.push_with(|| -> Result<_, RenderPassError> {
-            Ok(ArcCommand::RunRenderPass {
-                pass: base?,
-                color_attachments: SmallVec::from(pass.color_attachments.as_slice()),
-                depth_stencil_attachment: pass.depth_stencil_attachment.take(),
-                timestamp_writes: pass.timestamp_writes.take(),
-                occlusion_query_set: pass.occlusion_query_set.take(),
-                multiview_mask: pass.multiview_mask,
-            })
-        })
+        pass.end()
     }
 
     pub fn render_pass_end_with_id(
@@ -2336,7 +2297,7 @@ pub(super) fn encode_render_pass(
     mut depth_stencil_attachment: Option<
         ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>,
     >,
-    mut timestamp_writes: Option<ArcPassTimestampWrites>,
+    mut timestamp_writes: Option<PassTimestampWrites>,
     occlusion_query_set: Option<Arc<QuerySet>>,
     multiview_mask: Option<NonZeroU32>,
 ) -> Result<(), RenderPassError> {
