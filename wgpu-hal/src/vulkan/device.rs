@@ -2026,9 +2026,23 @@ impl crate::Device for super::Device {
             None => None,
         };
 
+        // Flipping Y in the vertex shader instead of the viewport inverts the
+        // winding of every triangle, so the front face must be inverted too.
+        let flip_winding = self
+            .shared
+            .workarounds
+            .contains(super::Workarounds::IGNORED_NEGATIVE_VIEWPORT_HEIGHT);
+        let front_face = if flip_winding {
+            match desc.primitive.front_face {
+                wgt::FrontFace::Ccw => wgt::FrontFace::Cw,
+                wgt::FrontFace::Cw => wgt::FrontFace::Ccw,
+            }
+        } else {
+            desc.primitive.front_face
+        };
         let mut vk_rasterization = vk::PipelineRasterizationStateCreateInfo::default()
             .polygon_mode(conv::map_polygon_mode(desc.primitive.polygon_mode))
-            .front_face(conv::map_front_face(desc.primitive.front_face))
+            .front_face(conv::map_front_face(front_face))
             .line_width(1.0)
             .depth_clamp_enable(desc.primitive.unclipped_depth);
         if let Some(face) = desc.primitive.cull_mode {
@@ -2066,6 +2080,11 @@ impl crate::Device for super::Device {
                 let s = &ds.stencil;
                 let front = conv::map_stencil_face(&s.front, s.read_mask, s.write_mask);
                 let back = conv::map_stencil_face(&s.back, s.read_mask, s.write_mask);
+                let (front, back) = if flip_winding {
+                    (back, front)
+                } else {
+                    (front, back)
+                };
                 vk_depth_stencil = vk_depth_stencil
                     .stencil_test_enable(true)
                     .front(front)
