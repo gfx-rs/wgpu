@@ -8,25 +8,11 @@ use crate::id::{AdapterId, DeviceId, QueueId};
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<()>;
 
 impl Global {
-    pub fn enumerate_adapters(
-        &self,
-        backends: Backends,
-        apply_limit_buckets: bool,
-    ) -> Vec<AdapterId> {
-        let adapters = self
-            .instance
-            .enumerate_adapters(backends, apply_limit_buckets);
-        adapters
-            .into_iter()
-            .map(|adapter| self.hub.adapters.prepare(None).assign(adapter))
-            .collect()
-    }
-
     pub fn request_adapter(
         &self,
         desc: &RequestAdapterOptions,
         backends: Backends,
-        id_in: Option<AdapterId>,
+        id_in: AdapterId,
     ) -> Result<AdapterId, wgt::RequestAdapterError> {
         let desc = wgt::RequestAdapterOptions {
             power_preference: desc.power_preference,
@@ -55,9 +41,9 @@ impl Global {
     pub unsafe fn create_adapter_from_hal(
         &self,
         hal_adapter: hal::DynExposedAdapter,
-        input: Option<AdapterId>,
+        id_in: AdapterId,
     ) -> AdapterId {
-        let fid = self.hub.adapters.prepare(input);
+        let fid = self.hub.adapters.prepare(id_in);
         fid.assign(unsafe { self.instance.create_adapter_from_hal(hal_adapter) })
     }
 
@@ -119,8 +105,8 @@ impl Global {
         &self,
         adapter_id: AdapterId,
         desc: &DeviceDescriptor,
-        device_id_in: Option<DeviceId>,
-        queue_id_in: Option<QueueId>,
+        device_id_in: DeviceId,
+        queue_id_in: QueueId,
     ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
         let device_fid = self.hub.devices.prepare(device_id_in);
         let queue_fid = self.hub.queues.prepare(queue_id_in);
@@ -153,8 +139,8 @@ impl Global {
         adapter_id: AdapterId,
         hal_device: hal::DynOpenDevice,
         desc: &DeviceDescriptor,
-        device_id_in: Option<DeviceId>,
-        queue_id_in: Option<QueueId>,
+        device_id_in: DeviceId,
+        queue_id_in: QueueId,
     ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
         let devices_fid = self.hub.devices.prepare(device_id_in);
         let queues_fid = self.hub.queues.prepare(queue_id_in);

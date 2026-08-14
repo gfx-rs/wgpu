@@ -18,7 +18,7 @@ impl Global {
         &self,
         encoder_id: CommandEncoderId,
         desc: &wgt::CommandBufferDescriptor<Label>,
-        id_in: Option<id::CommandBufferId>,
+        id_in: id::CommandBufferId,
     ) -> (id::CommandBufferId, Option<(String, CommandEncoderError)>) {
         let hub = &self.hub;
         let cmd_enc = hub.command_encoders.get(encoder_id);
