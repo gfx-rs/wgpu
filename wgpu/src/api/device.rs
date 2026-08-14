@@ -436,7 +436,8 @@ impl Device {
     /// `TEXTURE_CUBE_MAP`, [`D3`] → `TEXTURE_3D`); it cannot be inferred from
     /// `desc`.
     ///
-    /// Returns [`None`] if this device is not using the GLES backend on WebGL.
+    /// Fails with [`NotWebGlBackendError`] if this device is not using the
+    /// GLES backend on WebGL.
     ///
     /// `texture` must have been created by the `WebGl2RenderingContext`
     /// backing this device, match `desc` and `view_dimension`, and stay valid
@@ -450,14 +451,13 @@ impl Device {
     /// [`Cube`]: wgt::TextureViewDimension::Cube
     /// [`D3`]: wgt::TextureViewDimension::D3
     #[cfg(webgl)]
-    #[must_use]
     pub fn create_texture_from_webgl_handle(
         &self,
         texture: web_sys::WebGlTexture,
         desc: &TextureDescriptor<'_>,
         view_dimension: wgt::TextureViewDimension,
         drop_callback: Option<hal::DropCallback>,
-    ) -> Option<Texture> {
+    ) -> Result<Texture, NotWebGlBackendError> {
         use hal::api::Gles;
 
         // `texture_from_webgl_handle` reads only format / dimension / size / mip
@@ -479,13 +479,13 @@ impl Device {
         let hal_texture = {
             // SAFETY: the raw device is only borrowed to register the handle,
             // never destroyed through the guard.
-            let hal_device = unsafe { self.as_hal::<Gles>() }?;
+            let hal_device = unsafe { self.as_hal::<Gles>() }.ok_or(NotWebGlBackendError)?;
             hal_device.texture_from_webgl_handle(texture, &hal_desc, view_dimension, drop_callback)
         };
 
         // SAFETY: `hal_texture` was created on this device's raw handle
         // respecting `desc` just above, and carries no initial state.
-        Some(unsafe {
+        Ok(unsafe {
             self.create_texture_from_hal::<Gles>(hal_texture, desc, wgt::TextureUses::empty())
         })
     }
@@ -893,6 +893,26 @@ impl Device {
         }
     }
 }
+
+/// The operation requires the GLES backend on WebGL, but this [`Device`] is
+/// using a different backend.
+///
+/// Returned by [`Device::create_texture_from_webgl_handle`]. With both the
+/// `webgpu` and `webgl` features enabled, the backend is chosen at runtime.
+#[cfg(webgl)]
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct NotWebGlBackendError;
+
+#[cfg(webgl)]
+impl fmt::Display for NotWebGlBackendError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "this device is not using the WebGL (GLES) backend")
+    }
+}
+
+#[cfg(webgl)]
+impl error::Error for NotWebGlBackendError {}
 
 /// Requesting a device from an [`Adapter`] failed.
 #[derive(Clone, Debug)]
