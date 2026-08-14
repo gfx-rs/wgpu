@@ -25,6 +25,7 @@ members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
+    "wgpu-sync",
     "wgpu-types",
     "wgpu",
     "xtask",
@@ -50,6 +51,7 @@ default-members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
+    "wgpu-sync",
     "wgpu-types",
     "wgpu",
     "xtask",
@@ -93,6 +95,7 @@ wgpu = { version = "30.0.0", path = "./wgpu", default-features = false, features
 wgpu-core = { version = "30.0.0", path = "./wgpu-core" }
 wgpu-hal = { version = "30.0.0", path = "./wgpu-hal" }
 wgpu-naga-bridge = { version = "30.0.0", path = "./wgpu-naga-bridge" }
+wgpu-sync = { version = "30.0.0", path = "./wgpu-sync", default-features = false }
 wgpu-test = { version = "30.0.0", path = "./tests" }
 wgpu-types = { version = "30.0.0", path = "./wgpu-types", default-features = false }
 
@@ -151,6 +154,8 @@ libfuzzer-sys = ">0.4.0,<=0.4.7"
 libloading = "0.8"
 libm = { version = "0.2.6", default-features = false }
 libtest-mimic = "0.8"
+# Minimum version supported by parking_lot 0.12.3
+lock_api = { version = "0.4.6", default-features = false }
 log = "0.4.29"
 macro_rules_attribute = "0.2"
 nanoserde = "0.2"
