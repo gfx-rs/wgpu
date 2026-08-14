@@ -497,7 +497,6 @@ impl Global {
             buffer_storage: &Storage<Arc<resource::Buffer>>,
             sampler_storage: &Storage<Arc<resource::Sampler>>,
             texture_view_storage: &Storage<Arc<resource::TextureView>>,
-            tlas_storage: &Storage<Arc<resource::Tlas>>,
             external_texture_storage: &Storage<Arc<resource::ExternalTexture>>,
         ) -> binding_model::BindGroupEntry<'a> {
             let resolve_buffer = |bb: &BufferBinding| {
@@ -510,7 +509,6 @@ impl Global {
             };
             let resolve_sampler = |id: &id::SamplerId| sampler_storage.get(*id);
             let resolve_view = |id: &id::TextureViewId| texture_view_storage.get(*id);
-            let resolve_tlas = |id: &id::TlasId| tlas_storage.get(*id);
             let resolve_external_texture =
                 |id: &id::ExternalTextureId| external_texture_storage.get(*id);
             let resource = match e.resource {
@@ -535,14 +533,11 @@ impl Global {
                     let views = views.iter().map(resolve_view).collect::<Vec<_>>();
                     binding_model::BindingResource::TextureViewArray(Cow::Owned(views))
                 }
-                BindingResource::AccelerationStructure(ref tlas) => {
-                    binding_model::BindingResource::AccelerationStructure(resolve_tlas(tlas))
+                BindingResource::AccelerationStructure(_) => {
+                    unimplemented!()
                 }
-                BindingResource::AccelerationStructureArray(ref tlas_array) => {
-                    let tlas_array = tlas_array.iter().map(resolve_tlas).collect::<Vec<_>>();
-                    binding_model::BindingResource::AccelerationStructureArray(Cow::Owned(
-                        tlas_array,
-                    ))
+                BindingResource::AccelerationStructureArray(_) => {
+                    unimplemented!()
                 }
                 BindingResource::ExternalTexture(ref et) => {
                     binding_model::BindingResource::ExternalTexture(resolve_external_texture(et))
@@ -558,7 +553,6 @@ impl Global {
             let buffer_guard = hub.buffers.read();
             let texture_view_guard = hub.texture_views.read();
             let sampler_guard = hub.samplers.read();
-            let tlas_guard = hub.tlas_s.read();
             let external_texture_guard = hub.external_textures.read();
             desc.entries
                 .iter()
@@ -568,7 +562,6 @@ impl Global {
                         &buffer_guard,
                         &sampler_guard,
                         &texture_view_guard,
-                        &tlas_guard,
                         &external_texture_guard,
                     )
                 })
