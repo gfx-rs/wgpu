@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 
 use glow::HasContext;
 use hashbrown::HashMap;
-use parking_lot::{MappedMutexGuard, Mutex, MutexGuard, RwLock};
+use wgpu_sync::{MappedMutexGuard, Mutex, MutexGuard, RwLock};
 
 /// The amount of time to wait while trying to obtain a lock to the adapter context
 const CONTEXT_LOCK_TIMEOUT_SECS: u64 = 6;

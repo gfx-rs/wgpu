@@ -51,7 +51,7 @@ use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
 use bytemuck::{Pod, Zeroable};
 use hashbrown::HashSet;
-use parking_lot::{Mutex, RwLock};
+use wgpu_sync::{Mutex, RwLock};
 
 use naga::FastHashMap;
 use wgt::InternalCounter;

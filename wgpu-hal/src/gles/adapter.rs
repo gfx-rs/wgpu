@@ -2,7 +2,7 @@ use alloc::{borrow::ToOwned as _, format, string::String, sync::Arc, vec, vec::V
 use core::sync::atomic::AtomicU8;
 
 use glow::HasContext;
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 use wgt::AstcChannel;
 
 use crate::auxil::db;

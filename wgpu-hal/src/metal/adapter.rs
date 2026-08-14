@@ -11,8 +11,8 @@ use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
 use core::sync::atomic;
-use parking_lot::Mutex;
 use std::sync::OnceLock;
+use wgpu_sync::Mutex;
 
 use crate::metal::QueueShared;
 
