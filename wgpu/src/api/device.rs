@@ -463,14 +463,19 @@ impl Device {
     /// The result is valid only while `source` is: a `VideoFrame` until it is
     /// closed, an `HTMLVideoElement` for the current task.
     /// [`ExternalTexture::destroy`] is a no-op.
+    ///
+    /// Returns an error if this device is not on the WebGPU backend.
     #[cfg(webgpu)]
-    #[must_use]
     pub fn import_external_texture(
         &self,
         source: &webgpu::ExternalTextureSource,
-    ) -> ExternalTexture {
-        let inner = self.inner.as_webgpu().import_external_texture(source);
-        ExternalTexture { inner }
+    ) -> Result<ExternalTexture, NotWebGpuBackendError> {
+        let inner = self
+            .inner
+            .as_webgpu_opt()
+            .ok_or(NotWebGpuBackendError)?
+            .import_external_texture(source);
+        Ok(ExternalTexture { inner })
     }
 
     /// Creates a [`Buffer`] from a wgpu-hal Buffer.
@@ -816,6 +821,22 @@ impl Device {
         }
     }
 }
+
+/// The [`Device`] is not on the WebGPU backend.
+#[cfg(webgpu)]
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct NotWebGpuBackendError;
+
+#[cfg(webgpu)]
+impl fmt::Display for NotWebGpuBackendError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "this device is not using the WebGPU backend")
+    }
+}
+
+#[cfg(webgpu)]
+impl error::Error for NotWebGpuBackendError {}
 
 /// Requesting a device from an [`Adapter`] failed.
 #[derive(Clone, Debug)]
