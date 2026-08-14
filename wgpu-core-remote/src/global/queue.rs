@@ -1,10 +1,8 @@
-use core::ptr::NonNull;
-
 use wgpu_core::device::queue::{QueueSubmitError, QueueWriteError, SubmittedWorkDoneClosure};
 use wgpu_core::SubmissionIndex;
 
 use crate::global::Global;
-use crate::id::{BufferId, CommandBufferId, QueueId, StagingBufferId, TextureId};
+use crate::id::{BufferId, CommandBufferId, QueueId, TextureId};
 
 impl Global {
     pub fn queue_write_buffer(
@@ -18,34 +16,6 @@ impl Global {
         let buffer = self.hub.buffers.get(buffer_id);
 
         queue.write_buffer(buffer, buffer_offset, data)
-    }
-
-    pub fn queue_create_staging_buffer(
-        &self,
-        queue_id: QueueId,
-        buffer_size: wgt::BufferSize,
-        id_in: Option<StagingBufferId>,
-    ) -> Result<(StagingBufferId, NonNull<u8>), QueueWriteError> {
-        let queue = self.hub.queues.get(queue_id);
-        let (staging_buffer, ptr) = queue.create_staging_buffer(buffer_size)?;
-
-        let fid = self.hub.staging_buffers.prepare(id_in);
-        let id = fid.assign(staging_buffer);
-
-        Ok((id, ptr))
-    }
-
-    pub fn queue_write_staging_buffer(
-        &self,
-        queue_id: QueueId,
-        buffer_id: BufferId,
-        buffer_offset: wgt::BufferAddress,
-        staging_buffer_id: StagingBufferId,
-    ) -> Result<(), QueueWriteError> {
-        let queue = self.hub.queues.get(queue_id);
-        let buffer = self.hub.buffers.get(buffer_id);
-        let staging_buffer = self.hub.staging_buffers.remove(staging_buffer_id);
-        queue.write_staging_buffer(buffer, buffer_offset, staging_buffer)
     }
 
     pub fn queue_validate_write_buffer(

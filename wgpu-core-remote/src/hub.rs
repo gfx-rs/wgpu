@@ -115,9 +115,7 @@ use wgpu_core::{
     device::{queue::Queue, Device},
     instance::Adapter,
     pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
-    resource::{
-        Blas, Buffer, ExternalTexture, QuerySet, Sampler, StagingBuffer, Texture, TextureView, Tlas,
-    },
+    resource::{Blas, Buffer, ExternalTexture, QuerySet, Sampler, Texture, TextureView, Tlas},
 };
 
 use parking_lot::Mutex;
@@ -191,7 +189,6 @@ pub struct Hub {
     pub(crate) pipeline_caches: Registry<Arc<PipelineCache>>,
     pub(crate) query_sets: Registry<Arc<QuerySet>>,
     pub(crate) buffers: Registry<Arc<Buffer>>,
-    pub(crate) staging_buffers: Registry<StagingBuffer>,
     pub(crate) textures: Registry<Arc<Texture>>,
     pub(crate) texture_views: Registry<Arc<TextureView>>,
     pub(crate) external_textures: Registry<Arc<ExternalTexture>>,
@@ -228,7 +225,6 @@ impl Hub {
             pipeline_caches: Registry::new(),
             query_sets: Registry::new(),
             buffers: Registry::new(),
-            staging_buffers: Registry::new(),
             textures: Registry::new(),
             texture_views: Registry::new(),
             external_textures: Registry::new(),
