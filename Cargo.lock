@@ -4854,7 +4854,6 @@ dependencies = [
 name = "wgpu-core-remote"
 version = "30.0.0"
 dependencies = [
- "parking_lot",
  "raw-window-handle",
  "serde",
  "wgpu-core",

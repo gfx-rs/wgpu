@@ -32,6 +32,5 @@ serde = ["dep:serde", "wgpu-types/serde", "wgpu-core/serde"]
 wgpu-core = { workspace = true, default-features = false }
 wgpu-hal = { workspace = true, default-features = false }
 wgpu-types.workspace = true
-parking_lot.workspace = true
 raw-window-handle.workspace = true
 serde = { workspace = true, optional = true }
