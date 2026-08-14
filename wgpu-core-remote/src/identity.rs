@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
+use core::cell::RefCell;
 use core::{fmt::Debug, marker::PhantomData};
-use parking_lot::Mutex;
 
 use crate::{id::markers, id::Id, id::Marker, Epoch, Index};
 
@@ -63,24 +63,24 @@ impl IdentityValues {
 
 #[derive(Debug)]
 pub struct IdentityManager<T: Marker> {
-    pub(super) values: Mutex<IdentityValues>,
+    pub(super) values: RefCell<IdentityValues>,
     _phantom: PhantomData<T>,
 }
 
 impl<T: Marker> IdentityManager<T> {
     pub fn process(&self) -> Id<T> {
-        self.values.lock().alloc()
+        self.values.borrow_mut().alloc()
     }
 
     pub fn free(&self, id: Id<T>) {
-        self.values.lock().release(id)
+        self.values.borrow_mut().release(id)
     }
 }
 
 impl<T: Marker> IdentityManager<T> {
     pub fn new() -> Self {
         Self {
-            values: Mutex::new(IdentityValues {
+            values: RefCell::new(IdentityValues {
                 free: Vec::new(),
                 next_index: 0,
                 count: 0,
