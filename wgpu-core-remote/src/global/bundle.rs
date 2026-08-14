@@ -9,11 +9,7 @@ impl crate::global::Global {
         bind_group_id: Option<id::BindGroupId>,
         offsets: &[wgt::DynamicOffset],
     ) -> Result<(), PassStateError> {
-        let bundle_encoder = self.hub.render_bundle_encoders.get(bundle_encoder);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
+        let mut bundle_encoder = self.hub.render_bundle_encoders.get_mut(bundle_encoder);
 
         bundle_encoder.set_bind_group(
             index,
@@ -27,11 +23,7 @@ impl crate::global::Global {
         bundle_encoder: id::RenderBundleEncoderId,
         pipeline_id: id::RenderPipelineId,
     ) -> Result<(), PassStateError> {
-        let bundle_encoder = self.hub.render_bundle_encoders.get(bundle_encoder);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
+        let mut bundle_encoder = self.hub.render_bundle_encoders.get_mut(bundle_encoder);
 
         bundle_encoder.set_pipeline(self.hub.render_pipelines.get(pipeline_id))
     }
@@ -44,11 +36,7 @@ impl crate::global::Global {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) -> Result<(), PassStateError> {
-        let bundle_encoder = self.hub.render_bundle_encoders.get(bundle_encoder);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
+        let mut bundle_encoder = self.hub.render_bundle_encoders.get_mut(bundle_encoder);
 
         bundle_encoder.set_vertex_buffer(
             slot,
@@ -66,11 +54,7 @@ impl crate::global::Global {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) -> Result<(), PassStateError> {
-        let bundle_encoder = self.hub.render_bundle_encoders.get(bundle_encoder);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
+        let mut bundle_encoder = self.hub.render_bundle_encoders.get_mut(bundle_encoder);
 
         bundle_encoder.set_index_buffer(self.hub.buffers.get(buffer), index_format, offset, size)
     }
@@ -81,11 +65,7 @@ impl crate::global::Global {
         offset: u32,
         data: &[u8],
     ) -> Result<(), PassStateError> {
-        let bundle_encoder = self.hub.render_bundle_encoders.get(bundle_encoder);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
+        let mut bundle_encoder = self.hub.render_bundle_encoders.get_mut(bundle_encoder);
 
         bundle_encoder.set_immediates(offset, data)
     }
@@ -98,11 +78,7 @@ impl crate::global::Global {
         first_vertex: u32,
         first_instance: u32,
     ) -> Result<(), PassStateError> {
-        let bundle_encoder = self.hub.render_bundle_encoders.get(bundle_encoder);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
+        let mut bundle_encoder = self.hub.render_bundle_encoders.get_mut(bundle_encoder);
 
         bundle_encoder.draw(vertex_count, instance_count, first_vertex, first_instance)
     }
@@ -116,11 +92,7 @@ impl crate::global::Global {
         base_vertex: i32,
         first_instance: u32,
     ) -> Result<(), PassStateError> {
-        let bundle_encoder = self.hub.render_bundle_encoders.get(bundle_encoder);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
+        let mut bundle_encoder = self.hub.render_bundle_encoders.get_mut(bundle_encoder);
 
         bundle_encoder.draw_indexed(
             index_count,
@@ -137,11 +109,7 @@ impl crate::global::Global {
         buffer_id: id::BufferId,
         offset: wgt::BufferAddress,
     ) -> Result<(), PassStateError> {
-        let bundle_encoder = self.hub.render_bundle_encoders.get(bundle_encoder);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
+        let mut bundle_encoder = self.hub.render_bundle_encoders.get_mut(bundle_encoder);
 
         bundle_encoder.draw_indirect(self.hub.buffers.get(buffer_id), offset)
     }
@@ -152,11 +120,7 @@ impl crate::global::Global {
         buffer_id: id::BufferId,
         offset: wgt::BufferAddress,
     ) -> Result<(), PassStateError> {
-        let bundle_encoder = self.hub.render_bundle_encoders.get(bundle_encoder);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
+        let mut bundle_encoder = self.hub.render_bundle_encoders.get_mut(bundle_encoder);
 
         bundle_encoder.draw_indexed_indirect(self.hub.buffers.get(buffer_id), offset)
     }
@@ -166,11 +130,7 @@ impl crate::global::Global {
         bundle_encoder: id::RenderBundleEncoderId,
         label: &str,
     ) -> Result<(), PassStateError> {
-        let bundle_encoder = self.hub.render_bundle_encoders.get(bundle_encoder);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
+        let mut bundle_encoder = self.hub.render_bundle_encoders.get_mut(bundle_encoder);
 
         bundle_encoder.push_debug_group(label)
     }
@@ -179,11 +139,7 @@ impl crate::global::Global {
         &self,
         bundle_encoder: id::RenderBundleEncoderId,
     ) -> Result<(), PassStateError> {
-        let bundle_encoder = self.hub.render_bundle_encoders.get(bundle_encoder);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
+        let mut bundle_encoder = self.hub.render_bundle_encoders.get_mut(bundle_encoder);
 
         bundle_encoder.pop_debug_group()
     }
@@ -193,11 +149,7 @@ impl crate::global::Global {
         bundle_encoder: id::RenderBundleEncoderId,
         label: &str,
     ) -> Result<(), PassStateError> {
-        let bundle_encoder = self.hub.render_bundle_encoders.get(bundle_encoder);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
+        let mut bundle_encoder = self.hub.render_bundle_encoders.get_mut(bundle_encoder);
 
         bundle_encoder.insert_debug_marker(label)
     }

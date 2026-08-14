@@ -117,8 +117,6 @@ use wgpu_core::{
     resource::{Buffer, ExternalTexture, QuerySet, Sampler, Texture, TextureView},
 };
 
-use parking_lot::Mutex;
-
 #[allow(rustdoc::private_intra_doc_links)]
 /// All the resources tracked by a [`crate::global::Global`].
 ///
@@ -162,7 +160,7 @@ pub struct Hub {
     pub(crate) samplers: Registry<Arc<Sampler>>,
     pub(crate) render_passes: Registry<RenderPass>,
     pub(crate) compute_passes: Registry<ComputePass>,
-    pub(crate) render_bundle_encoders: Registry<Arc<Mutex<RenderBundleEncoder>>>,
+    pub(crate) render_bundle_encoders: Registry<RenderBundleEncoder>,
 }
 
 impl Hub {
