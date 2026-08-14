@@ -693,10 +693,7 @@ impl Global {
         let device = self.hub.devices.get(device_id);
         let (render_bundle_encoder, error) = device.create_render_bundle_encoder(desc);
 
-        // no lock rank here because only one thread should be using compute pass
-        // and it's only used by id variants of compute pass methods on global
-        // so no deadlock (or concurrent lock) should happen in practise
-        let id = fid.assign(Arc::new(parking_lot::Mutex::new(*render_bundle_encoder)));
+        let id = fid.assign(*render_bundle_encoder);
 
         (id, error)
     }
@@ -707,14 +704,10 @@ impl Global {
         desc: &command::RenderBundleDescriptor,
         id_in: id::RenderBundleId,
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
-        let bundle_encoder = self
+        let mut bundle_encoder = self
             .hub
             .render_bundle_encoders
-            .get(render_bundle_encoder_id);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
+            .get_mut(render_bundle_encoder_id);
 
         let fid = self.hub.render_bundles.prepare(id_in);
 
