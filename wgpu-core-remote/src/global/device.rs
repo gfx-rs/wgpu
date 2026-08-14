@@ -4,10 +4,10 @@ use core::ptr::NonNull;
 use wgpu_core::{
     binding_model::{self},
     command,
-    device::{Device, DeviceError, DeviceLostClosure, WaitIdleError},
+    device::{DeviceError, DeviceLostClosure, WaitIdleError},
     pipeline::{
-        self, MeshState, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
-        ResolvedGeneralRenderPipelineDescriptor, TaskState,
+        self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
+        ResolvedGeneralRenderPipelineDescriptor,
     },
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
@@ -60,21 +60,7 @@ pub type ComputePipelineDescriptor<'a> = pipeline::ComputePipelineDescriptor<
     id::PipelineCacheId,
 >;
 
-pub type MeshPipelineDescriptor<'a> = pipeline::MeshPipelineDescriptor<
-    'a,
-    id::PipelineLayoutId,
-    id::ShaderModuleId,
-    id::PipelineCacheId,
->;
-
 pub type RenderPipelineDescriptor<'a> = pipeline::RenderPipelineDescriptor<
-    'a,
-    id::PipelineLayoutId,
-    id::ShaderModuleId,
-    id::PipelineCacheId,
->;
-
-pub type GeneralRenderPipelineDescriptor<'a> = pipeline::GeneralRenderPipelineDescriptor<
     'a,
     id::PipelineLayoutId,
     id::ShaderModuleId,
@@ -805,80 +791,25 @@ impl Global {
 
         let device = self.hub.devices.get(device_id);
 
-        self.device_create_general_render_pipeline(desc.clone().into(), device, fid)
-    }
-
-    pub fn device_create_mesh_pipeline(
-        &self,
-        device_id: DeviceId,
-        desc: &MeshPipelineDescriptor,
-        id_in: Option<id::RenderPipelineId>,
-    ) -> (
-        id::RenderPipelineId,
-        Option<pipeline::CreateRenderPipelineError>,
-    ) {
-        let hub = &self.hub;
-
-        let fid = hub.render_pipelines.prepare(id_in);
-
-        let device = self.hub.devices.get(device_id);
-        self.device_create_general_render_pipeline(desc.clone().into(), device, fid)
-    }
-
-    fn device_create_general_render_pipeline(
-        &self,
-        desc: GeneralRenderPipelineDescriptor,
-        device: Arc<Device>,
-        fid: crate::registry::FutureId<Arc<pipeline::RenderPipeline>>,
-    ) -> (
-        id::RenderPipelineId,
-        Option<pipeline::CreateRenderPipelineError>,
-    ) {
-        let hub = &self.hub;
-
         let layout = desc.layout.map(|layout| hub.pipeline_layouts.get(layout));
 
         let cache = desc.cache.map(|cache| hub.pipeline_caches.get(cache));
 
-        let vertex = match desc.vertex {
-            RenderPipelineVertexProcessor::Vertex(ref vertex) => {
-                let module = hub.shader_modules.get(vertex.stage.module);
-                let stage = ProgrammableStageDescriptor {
-                    module,
-                    entry_point: vertex.stage.entry_point.clone(),
-                    constants: vertex.stage.constants.clone(),
-                    zero_initialize_workgroup_memory: vertex.stage.zero_initialize_workgroup_memory,
-                };
-                RenderPipelineVertexProcessor::Vertex(pipeline::VertexState {
-                    stage,
-                    buffers: vertex.buffers.clone(),
-                })
-            }
-            RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
-                let task_module = if let Some(task) = task {
-                    let module = hub.shader_modules.get(task.stage.module);
-
-                    let state = ProgrammableStageDescriptor {
-                        module,
-                        entry_point: task.stage.entry_point.clone(),
-                        constants: task.stage.constants.clone(),
-                        zero_initialize_workgroup_memory: task
-                            .stage
-                            .zero_initialize_workgroup_memory,
-                    };
-                    Some(TaskState { stage: state })
-                } else {
-                    None
-                };
-                let mesh_module = hub.shader_modules.get(mesh.stage.module);
-                let mesh_stage = ProgrammableStageDescriptor {
-                    module: mesh_module,
-                    entry_point: mesh.stage.entry_point.clone(),
-                    constants: mesh.stage.constants.clone(),
-                    zero_initialize_workgroup_memory: mesh.stage.zero_initialize_workgroup_memory,
-                };
-                RenderPipelineVertexProcessor::Mesh(task_module, MeshState { stage: mesh_stage })
-            }
+        let vertex = {
+            let module = hub.shader_modules.get(desc.vertex.stage.module);
+            let stage = ProgrammableStageDescriptor {
+                module,
+                entry_point: desc.vertex.stage.entry_point.clone(),
+                constants: desc.vertex.stage.constants.clone(),
+                zero_initialize_workgroup_memory: desc
+                    .vertex
+                    .stage
+                    .zero_initialize_workgroup_memory,
+            };
+            RenderPipelineVertexProcessor::Vertex(pipeline::VertexState {
+                stage,
+                buffers: desc.vertex.buffers.clone(),
+            })
         };
 
         let fragment = if let Some(ref state) = desc.fragment {
