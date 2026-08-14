@@ -23,7 +23,6 @@ mod device;
 mod instance;
 mod present;
 mod queue;
-mod ray_tracing;
 mod render_pass;
 
 #[derive(Debug, PartialEq, Eq)]
