@@ -328,6 +328,18 @@ impl Device {
     /// may be discarded), `initial_state` may be set to
     /// `TextureUses::UNINITIALIZED`.
     ///
+    /// # `cleared`
+    ///
+    /// Whether the wrapped resource's contents are already valid/defined.
+    /// This drives wgpu's lazy-clear tracking, which otherwise clears a
+    /// texture's subresources on first use to avoid exposing undefined
+    /// memory. Set `cleared` to `true` if the contents are already valid
+    /// (e.g. just cleared or written to on the driver side), or `false` if
+    /// they're undefined, so wgpu clears them before they are read.
+    ///
+    /// This is unrelated to `initial_state`, which only describes the
+    /// tracker's usage state, not the validity of the contents.
+    ///
     /// # Safety
     ///
     /// - `hal_texture` must be created from this device internal handle
