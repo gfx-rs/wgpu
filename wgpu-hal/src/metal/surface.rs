@@ -269,7 +269,7 @@ impl crate::Surface for super::Surface {
         match config.composite_alpha_mode {
             wgt::CompositeAlphaMode::Opaque => render_layer.setOpaque(true),
             wgt::CompositeAlphaMode::PreMultiplied => render_layer.setOpaque(false),
-            _ => (),
+            m => unreachable!("Unsupported alpha mode: {m:?}"),
         }
 
         let device_raw = &device.shared.device;
