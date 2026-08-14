@@ -172,6 +172,8 @@ webgpu:api,validation,encoding,cmds,debug:debug_group:*
 webgpu:api,validation,encoding,cmds,debug:debug_marker:*
 webgpu:api,validation,encoding,cmds,index_access:*
 webgpu:api,validation,encoding,cmds,render,draw:buffer_binding_overlap:*
+webgpu:api,validation,encoding,cmds,render,draw:index_buffer_format_dirtying:*
+webgpu:api,validation,encoding,cmds,render,draw:index_buffer_format:*
 webgpu:api,validation,encoding,cmds,render,draw:index_buffer_OOB:*
 webgpu:api,validation,encoding,cmds,render,draw:unused_buffer_bound:*
 webgpu:api,validation,encoding,cmds,render,draw:vertex_buffer_OOB:*
