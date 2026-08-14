@@ -263,8 +263,3 @@ impl fmt::Debug for Global {
         f.debug_struct("Global").finish()
     }
 }
-
-fn _test_send_sync(global: &Global) {
-    fn test_internal<T: Send + Sync>(_: T) {}
-    test_internal(global)
-}
