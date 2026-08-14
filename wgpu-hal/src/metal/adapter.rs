@@ -1134,7 +1134,7 @@ impl super::CapabilitiesQuery {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             mesh_shaders,
             max_task_workgroup_count: if mesh_shaders
-                && (metal4 || device.supportsFamily(MTLGPUFamily::Apple2))
+                && (metal4 || device.supportsFamily(MTLGPUFamily::Apple7))
             {
                 u32::MAX
             } else if mesh_shaders {
