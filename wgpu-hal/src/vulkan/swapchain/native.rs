@@ -4,7 +4,7 @@ use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::any::Any;
 
 use ash::{khr, vk};
-use parking_lot::{Mutex, MutexGuard};
+use wgpu_sync::{Mutex, MutexGuard};
 
 use crate::vulkan::{
     conv, map_host_device_oom_and_lost_err,
