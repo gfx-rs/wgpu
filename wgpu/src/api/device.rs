@@ -442,9 +442,12 @@ impl Device {
     /// `texture` must have been created by the `WebGl2RenderingContext`
     /// backing this device, match `desc` and `view_dimension`, and stay valid
     /// until wgpu is done with it (or until `drop_callback` fires, if one is
-    /// supplied); wgpu never deletes the imported handle. Violations yield GL
-    /// errors rather than memory unsafety, which is why this method is not
-    /// `unsafe`.
+    /// supplied). Violations yield GL errors rather than memory unsafety,
+    /// which is why this method is not `unsafe`.
+    ///
+    /// The handle is always externally owned — wgpu never deletes it — and
+    /// `drop_callback` is purely a notification. To delete the texture once
+    /// wgpu is done with it, do so in the callback.
     ///
     /// [`D2`]: wgt::TextureViewDimension::D2
     /// [`D2Array`]: wgt::TextureViewDimension::D2Array

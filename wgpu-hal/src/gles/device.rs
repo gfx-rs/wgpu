@@ -141,7 +141,6 @@ impl super::Device {
                 raw: glow::NativeTexture(name),
                 target: super::Texture::get_info_from_desc(desc),
             },
-            externally_owned: drop_callback.is_some(),
             drop_guard: crate::DropGuard::from_option(drop_callback),
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
@@ -168,7 +167,6 @@ impl super::Device {
             inner: super::TextureInner::Renderbuffer {
                 raw: glow::NativeRenderbuffer(name),
             },
-            externally_owned: drop_callback.is_some(),
             drop_guard: crate::DropGuard::from_option(drop_callback),
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
@@ -180,8 +178,12 @@ impl super::Device {
 
     /// Wrap an existing `WebGlTexture` as a wgpu-hal texture, without copying.
     ///
-    /// wgpu-hal never deletes the handle; if `drop_callback` is [`Some`], it
-    /// fires once wgpu-hal is done with it.
+    /// The handle is always externally owned: unlike `texture_from_raw` (the
+    /// native import), where a [`None`] callback transfers ownership of the raw GL name,
+    /// wgpu-hal never deletes a `WebGlTexture` — it is a GC-managed JS handle,
+    /// like the `GpuTexture`s the WebGPU backend wraps. If `drop_callback` is
+    /// [`Some`], it fires once wgpu-hal is done with the handle; deleting the
+    /// texture at that point, if desired, is the callback's job.
     ///
     /// `view_dimension` selects the texture's bind target (`D2` →
     /// `TEXTURE_2D`, `D2Array` → `TEXTURE_2D_ARRAY`, `Cube` →
@@ -216,8 +218,9 @@ impl super::Device {
                 raw,
                 target: super::Texture::target_for_view_dimension(view_dimension),
             },
-            externally_owned: true,
-            drop_guard: crate::DropGuard::from_option(drop_callback),
+            // Always a guard, even without a callback: its presence is what
+            // marks the handle as externally owned in `destroy_texture`.
+            drop_guard: Some(crate::DropGuard::external(drop_callback)),
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
             format: desc.format,
@@ -1160,7 +1163,6 @@ impl crate::Device for super::Device {
 
         Ok(super::Texture {
             inner,
-            externally_owned: false,
             drop_guard: None,
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
@@ -1171,17 +1173,7 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_texture(&self, texture: super::Texture) {
-        if texture.externally_owned {
-            // Never delete an externally-owned GL object. On WebGL an imported
-            // handle (from `texture_from_webgl_handle`) additionally occupies a
-            // slot in glow's resource tracker; reclaim it via
-            // `unregister_external_texture`, which does *not* `gl.deleteTexture`,
-            // so the caller's handle survives.
-            #[cfg(webgl)]
-            if let super::TextureInner::Texture { raw, .. } = texture.inner {
-                self.shared.context.lock().unregister_external_texture(raw);
-            }
-        } else if texture.drop_guard.is_none() {
+        if texture.drop_guard.is_none() {
             let gl = &self.shared.context.lock();
             match texture.inner {
                 super::TextureInner::Renderbuffer { raw, .. } => {
@@ -1195,6 +1187,16 @@ impl crate::Device for super::Device {
                 super::TextureInner::ExternalFramebuffer { .. } => {}
                 #[cfg(native)]
                 super::TextureInner::ExternalNativeFramebuffer { .. } => {}
+            }
+        } else {
+            // Externally owned: never delete the underlying GL object. On
+            // WebGL an imported handle (from `texture_from_webgl_handle`)
+            // additionally occupies a slot in glow's resource tracker;
+            // reclaim it via `unregister_external_texture`, which does *not*
+            // `gl.deleteTexture`, so the caller's handle survives.
+            #[cfg(webgl)]
+            if let super::TextureInner::Texture { raw, .. } = texture.inner {
+                self.shared.context.lock().unregister_external_texture(raw);
             }
         }
 

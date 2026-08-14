@@ -465,19 +465,20 @@ impl TextureInner {
 #[derive(Debug)]
 pub struct Texture {
     pub inner: TextureInner,
-    /// The underlying GL object is owned by external code and must never be
-    /// deleted by wgpu-hal. On WebGL, imported handles additionally occupy a
-    /// slot in glow's resource tracker, which `destroy_texture` reclaims via
-    /// `unregister_external_texture`.
-    pub externally_owned: bool,
     pub mip_level_count: u32,
     pub array_layer_count: u32,
     pub format: wgt::TextureFormat,
     pub format_desc: TextureFormatDesc,
     pub copy_size: CopyExtent,
 
-    // The `drop_guard` field must be the last field of this struct so it is dropped last.
-    // Do not add new fields after it.
+    /// `Some` marks the underlying GL object as externally owned: wgpu-hal
+    /// never deletes it (the guard's callback, if any, fires instead). On
+    /// WebGL, imported handles additionally occupy a slot in glow's resource
+    /// tracker, which `destroy_texture` reclaims via
+    /// `unregister_external_texture`.
+    ///
+    /// The `drop_guard` field must be the last field of this struct so it is
+    /// dropped last. Do not add new fields after it.
     pub drop_guard: Option<crate::DropGuard>,
 }
 
@@ -494,7 +495,6 @@ impl Texture {
     pub fn default_framebuffer(format: wgt::TextureFormat) -> Self {
         Self {
             inner: TextureInner::DefaultRenderbuffer,
-            externally_owned: false,
             drop_guard: None,
             mip_level_count: 1,
             array_layer_count: 1,

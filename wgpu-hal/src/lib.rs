@@ -367,10 +367,20 @@ unsafe impl Sync for DropGuard {}
 
 #[cfg(any(gles, vulkan, metal))]
 impl DropGuard {
+    #[cfg(any(native, Emscripten))]
     fn from_option(callback: Option<DropCallback>) -> Option<Self> {
         callback.map(Self::new)
     }
 
+    /// A guard that may carry no callback, for resources that are externally
+    /// owned regardless of whether the caller wants a notification: the
+    /// guard's presence is what marks the resource as never-deleted-by-wgpu.
+    #[cfg(webgl)]
+    fn external(callback: Option<DropCallback>) -> Self {
+        Self { callback }
+    }
+
+    #[cfg(any(native, Emscripten))]
     fn new(callback: DropCallback) -> Self {
         Self {
             callback: Some(callback),
