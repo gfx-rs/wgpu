@@ -160,7 +160,7 @@ pub struct Hub {
     pub(crate) texture_views: Registry<Arc<TextureView>>,
     pub(crate) external_textures: Registry<Arc<ExternalTexture>>,
     pub(crate) samplers: Registry<Arc<Sampler>>,
-    pub(crate) render_passes: Registry<Arc<Mutex<RenderPass>>>,
+    pub(crate) render_passes: Registry<RenderPass>,
     pub(crate) compute_passes: Registry<Arc<Mutex<ComputePass>>>,
     pub(crate) render_bundle_encoders: Registry<Arc<Mutex<RenderBundleEncoder>>>,
 }

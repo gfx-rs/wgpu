@@ -1,4 +1,4 @@
-use core::cell::{Ref, RefCell};
+use core::cell::{Ref, RefCell, RefMut};
 
 use crate::{
     id::Id,
@@ -68,5 +68,11 @@ impl<T: StorageItem> Registry<T> {
 impl<T: StorageItem + Clone> Registry<T> {
     pub(crate) fn get(&self, id: Id<T::Marker>) -> T {
         self.read().get(id)
+    }
+}
+
+impl<T: StorageItem> Registry<T> {
+    pub(crate) fn get_mut<'a>(&'a self, id: Id<T::Marker>) -> RefMut<'a, T> {
+        RefMut::map(self.storage.borrow_mut(), |storage| storage.get_mut(id))
     }
 }
