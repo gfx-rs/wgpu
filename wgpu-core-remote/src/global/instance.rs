@@ -1,46 +1,13 @@
 use wgpu_core::device::DeviceDescriptor;
-use wgpu_core::instance::{CreateSurfaceError, RequestDeviceError};
+use wgpu_core::instance::RequestDeviceError;
 use wgt::Backends;
 
 use crate::global::Global;
-use crate::id::{AdapterId, DeviceId, QueueId, SurfaceId};
+use crate::id::{AdapterId, DeviceId, QueueId};
 
-pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
+pub type RequestAdapterOptions = wgt::RequestAdapterOptions<()>;
 
 impl Global {
-    /// Creates a new surface targeting the given display/window handles.
-    ///
-    /// Internally attempts to create hal surfaces for all enabled backends.
-    ///
-    /// Fails only if creation for surfaces for all enabled backends fails in which case
-    /// the error for each enabled backend is listed.
-    /// Vice versa, if creation for any backend succeeds, success is returned.
-    /// Surface creation errors are logged to the debug log in any case.
-    ///
-    /// id_in:
-    /// - If `Some`, the id to assign to the surface. A new one will be generated otherwise.
-    ///
-    /// # Safety
-    ///
-    /// - `display_handle` must be a valid object to create a surface upon,
-    ///   falls back to the instance display handle otherwise.
-    /// - `window_handle` must remain valid as long as the returned
-    ///   [`SurfaceId`] is being used.
-    pub unsafe fn instance_create_surface(
-        &self,
-        display_handle: Option<raw_window_handle::RawDisplayHandle>,
-        window_handle: raw_window_handle::RawWindowHandle,
-        id_in: Option<SurfaceId>,
-    ) -> Result<SurfaceId, CreateSurfaceError> {
-        let surface = unsafe { self.instance.create_surface(display_handle, window_handle) }?;
-        let id = self.surfaces.prepare(id_in).assign(surface);
-        Ok(id)
-    }
-
-    pub fn surface_drop(&self, id: SurfaceId) {
-        self.surfaces.remove(id);
-    }
-
     pub fn enumerate_adapters(
         &self,
         backends: Backends,
@@ -61,11 +28,10 @@ impl Global {
         backends: Backends,
         id_in: Option<AdapterId>,
     ) -> Result<AdapterId, wgt::RequestAdapterError> {
-        let compatible_surface = desc.compatible_surface.map(|id| self.surfaces.get(id));
         let desc = wgt::RequestAdapterOptions {
             power_preference: desc.power_preference,
             force_fallback_adapter: desc.force_fallback_adapter,
-            compatible_surface: compatible_surface.as_deref(),
+            compatible_surface: None,
             apply_limit_buckets: desc.apply_limit_buckets,
         };
         let adapter = self.instance.request_adapter(&desc, backends)?;

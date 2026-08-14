@@ -4,7 +4,7 @@ use wgpu_core::binding_model::{BindGroupLayout, PipelineLayout};
 use wgpu_core::command::{CommandBuffer, CommandEncoder};
 use wgpu_core::device::queue::Queue;
 use wgpu_core::device::Device;
-use wgpu_core::instance::{Adapter, Instance, Surface};
+use wgpu_core::instance::{Adapter, Instance};
 use wgpu_core::pipeline::{ComputePipeline, RenderPipeline};
 use wgpu_core::resource::{Buffer, QuerySet, Texture};
 
@@ -13,7 +13,6 @@ use crate::id::{
     AdapterId, BindGroupLayoutId, BufferId, CommandBufferId, CommandEncoderId, ComputePipelineId,
     DeviceId, PipelineLayoutId, QuerySetId, QueueId, RenderPipelineId, TextureId,
 };
-use crate::registry::{Registry, RegistryReport};
 
 mod as_hal;
 mod bundle;
@@ -26,21 +25,16 @@ mod render_pass;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct GlobalReport {
-    pub surfaces: RegistryReport,
     pub hub: HubReport,
 }
 
 impl GlobalReport {
-    pub fn surfaces(&self) -> &RegistryReport {
-        &self.surfaces
-    }
     pub fn hub_report(&self) -> &HubReport {
         &self.hub
     }
 }
 
 pub struct Global {
-    pub(crate) surfaces: Registry<Arc<Surface>>,
     pub(crate) hub: Hub,
     // the instance must be dropped last
     pub instance: Arc<Instance>,
@@ -54,7 +48,6 @@ impl Global {
     ) -> Self {
         Self {
             instance: Instance::new(name, instance_desc, telemetry),
-            surfaces: Registry::new(),
             hub: Hub::new(),
         }
     }
@@ -65,7 +58,6 @@ impl Global {
     pub unsafe fn from_hal_instance<A: hal::Api>(name: &str, hal_instance: A::Instance) -> Self {
         Self {
             instance: Instance::from_hal_instance::<A>(name.to_owned(), hal_instance),
-            surfaces: Registry::new(),
             hub: Hub::new(),
         }
     }
@@ -83,14 +75,12 @@ impl Global {
     pub unsafe fn from_instance(instance: Arc<Instance>) -> Self {
         Self {
             instance,
-            surfaces: Registry::new(),
             hub: Hub::new(),
         }
     }
 
     pub fn generate_report(&self) -> GlobalReport {
         GlobalReport {
-            surfaces: self.surfaces.generate_report(),
             hub: self.hub.generate_report(),
         }
     }

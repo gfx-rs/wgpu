@@ -83,18 +83,6 @@ impl Global {
         unsafe { device.fence_as_hal::<A>() }
     }
 
-    /// # Safety
-    ///
-    /// - The raw surface handle must not be manually destroyed
-    pub unsafe fn surface_as_hal<A: hal::Api>(
-        &self,
-        id: SurfaceId,
-    ) -> Option<impl Deref<Target = A::Surface>> {
-        let surface = self.surfaces.get(id);
-
-        unsafe { surface.as_hal::<A>() }
-    }
-
     /// Encode commands using the raw HAL command encoder.
     ///
     /// # Panics
