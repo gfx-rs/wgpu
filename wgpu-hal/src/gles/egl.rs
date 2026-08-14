@@ -124,9 +124,18 @@ fn choose_config(
         log::debug!("\tTrying {name}");
 
         attributes.clear();
+        let mut surface_type = 0;
         for &(_, tier_attr) in tiers[..=tier_max].iter() {
-            attributes.extend_from_slice(tier_attr);
+            for attribute in tier_attr.chunks_exact(2) {
+                if attribute[0] == khronos_egl::SURFACE_TYPE {
+                    surface_type |= attribute[1];
+                } else {
+                    attributes.extend_from_slice(attribute);
+                }
+            }
         }
+        // Duplicate EGL attribute keys are undefined and make Mesa return no configs.
+        attributes.extend_from_slice(&[khronos_egl::SURFACE_TYPE, surface_type]);
         // make sure the Alpha is enough to support sRGB
         match srgb_kind {
             SrgbFrameBufferKind::None => {}

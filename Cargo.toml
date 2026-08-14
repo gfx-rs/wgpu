@@ -21,6 +21,7 @@ members = [
     "tests",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
+    "wgpu-core-remote",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
@@ -141,7 +142,7 @@ hashbrown = { version = "0.17", default-features = false, features = [
 image = { version = "0.25", default-features = false, features = ["png"] }
 indexmap = { version = "2.11.4", default-features = false }
 indicatif = "0.18"
-itertools = { version = "0.14" }
+itertools = { version = "0.15" }
 jobserver = "0.1"
 ktx2 = "0.5"
 libc = { version = "0.2.183", default-features = false }

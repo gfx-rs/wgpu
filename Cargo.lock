@@ -1995,15 +1995,6 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
@@ -2383,7 +2374,7 @@ dependencies = [
  "hashbrown 0.17.1",
  "hlsl-snapshots",
  "indexmap",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "libm",
  "log",
  "naga-test",
@@ -4860,6 +4851,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-core-remote"
+version = "30.0.0"
+dependencies = [
+ "raw-window-handle",
+ "serde",
+ "wgpu-core",
+ "wgpu-hal",
+ "wgpu-types",
+]
+
+[[package]]
 name = "wgpu-example-01-hello-compute"
 version = "0.0.0"
 dependencies = [
@@ -5037,7 +5039,7 @@ dependencies = [
  "glam",
  "half",
  "image",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "js-sys",
  "libtest-mimic",
  "log",

@@ -27,10 +27,7 @@ use crate::{
         TransferError,
     },
     device::{DeviceError, WaitIdleError},
-    get_lowest_common_denom,
-    global::Global,
-    hal_label,
-    id::{self, BlasId, QueueId},
+    get_lowest_common_denom, hal_label,
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
@@ -911,6 +908,18 @@ impl Queue {
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::write_texture");
         api_log!("Queue::write_texture");
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.device.trace.lock() {
+            use crate::device::trace::DataKind;
+            let data = trace.make_binary(DataKind::Bin, data);
+            trace.add(Action::WriteTexture {
+                to: destination.to_trace(),
+                data,
+                layout: *data_layout,
+                size: *size,
+            });
+        }
 
         self.device.check_is_valid()?;
 
@@ -1830,8 +1839,16 @@ impl Queue {
         Ok(SubmissionResult { snatch_guard })
     }
 
-    pub fn get_timestamp_period(&self) -> f32 {
+    pub(crate) fn get_raw_timestamp_period(&self) -> f32 {
         unsafe { self.raw().get_timestamp_period() }
+    }
+
+    pub fn get_timestamp_period(&self) -> f32 {
+        if self.device.timestamp_normalizer.get().unwrap().enabled() {
+            return 1.0;
+        }
+
+        self.get_raw_timestamp_period()
     }
 
     /// `closure` is guaranteed to be called.
@@ -1975,169 +1992,6 @@ impl Queue {
         api_log!("CommandEncoder::compact_blas {:?} (size: {old_blas_size}) -> {:?} (size: {new_blas_size})", Arc::as_ptr(blas), Arc::as_ptr(&new_blas));
 
         Ok(new_blas)
-    }
-}
-
-impl Global {
-    pub fn queue_write_buffer(
-        &self,
-        queue_id: QueueId,
-        buffer_id: id::BufferId,
-        buffer_offset: wgt::BufferAddress,
-        data: &[u8],
-    ) -> Result<(), QueueWriteError> {
-        let queue = self.hub.queues.get(queue_id);
-        let buffer = self.hub.buffers.get(buffer_id);
-
-        queue.write_buffer(buffer, buffer_offset, data)
-    }
-
-    pub fn queue_create_staging_buffer(
-        &self,
-        queue_id: QueueId,
-        buffer_size: wgt::BufferSize,
-        id_in: Option<id::StagingBufferId>,
-    ) -> Result<(id::StagingBufferId, NonNull<u8>), QueueWriteError> {
-        let queue = self.hub.queues.get(queue_id);
-        let (staging_buffer, ptr) = queue.create_staging_buffer(buffer_size)?;
-
-        let fid = self.hub.staging_buffers.prepare(id_in);
-        let id = fid.assign(staging_buffer);
-
-        Ok((id, ptr))
-    }
-
-    pub fn queue_write_staging_buffer(
-        &self,
-        queue_id: QueueId,
-        buffer_id: id::BufferId,
-        buffer_offset: wgt::BufferAddress,
-        staging_buffer_id: id::StagingBufferId,
-    ) -> Result<(), QueueWriteError> {
-        let queue = self.hub.queues.get(queue_id);
-        let buffer = self.hub.buffers.get(buffer_id);
-        let staging_buffer = self.hub.staging_buffers.remove(staging_buffer_id);
-        queue.write_staging_buffer(buffer, buffer_offset, staging_buffer)
-    }
-
-    pub fn queue_validate_write_buffer(
-        &self,
-        queue_id: QueueId,
-        buffer_id: id::BufferId,
-        buffer_offset: u64,
-        buffer_size: wgt::BufferSize,
-    ) -> Result<(), QueueWriteError> {
-        let queue = self.hub.queues.get(queue_id);
-        let buffer = self.hub.buffers.get(buffer_id);
-        queue.validate_write_buffer(buffer, buffer_offset, buffer_size)
-    }
-
-    pub fn queue_write_texture(
-        &self,
-        queue_id: QueueId,
-        destination: &wgt::TexelCopyTextureInfo<id::TextureId>,
-        data: &[u8],
-        data_layout: &wgt::TexelCopyBufferLayout,
-        size: &wgt::Extent3d,
-    ) -> Result<(), QueueWriteError> {
-        let queue = self.hub.queues.get(queue_id);
-        let texture = self.hub.textures.get(destination.texture);
-        let destination = wgt::TexelCopyTextureInfo {
-            texture,
-            mip_level: destination.mip_level,
-            origin: destination.origin,
-            aspect: destination.aspect,
-        };
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *queue.device.trace.lock() {
-            use crate::device::trace::DataKind;
-            let data = trace.make_binary(DataKind::Bin, data);
-            trace.add(Action::WriteTexture {
-                to: destination.to_trace(),
-                data,
-                layout: *data_layout,
-                size: *size,
-            });
-        }
-
-        queue.write_texture(destination, data, data_layout, size)
-    }
-
-    #[cfg(webgl)]
-    pub fn queue_copy_external_image_to_texture(
-        &self,
-        queue_id: QueueId,
-        source: &wgt::CopyExternalImageSourceInfo,
-        destination: crate::command::CopyExternalImageDestInfo,
-        size: wgt::Extent3d,
-    ) -> Result<(), QueueWriteError> {
-        let queue = self.hub.queues.get(queue_id);
-        let destination = wgt::CopyExternalImageDestInfo {
-            texture: self.hub.textures.get(destination.texture),
-            mip_level: destination.mip_level,
-            origin: destination.origin,
-            aspect: destination.aspect,
-            color_space: destination.color_space,
-            premultiplied_alpha: destination.premultiplied_alpha,
-        };
-        queue.copy_external_image_to_texture(source, destination, size)
-    }
-
-    pub fn queue_submit(
-        &self,
-        queue_id: QueueId,
-        command_buffer_ids: &[id::CommandBufferId],
-    ) -> Result<SubmissionIndex, (SubmissionIndex, QueueSubmitError)> {
-        let queue = self.hub.queues.get(queue_id);
-        let command_buffer_guard = self.hub.command_buffers.read();
-        let command_buffers = command_buffer_ids
-            .iter()
-            .map(|id| command_buffer_guard.get(*id))
-            .collect::<Vec<_>>();
-        drop(command_buffer_guard);
-        queue.submit(&command_buffers)
-    }
-
-    pub fn queue_get_timestamp_period(&self, queue_id: QueueId) -> f32 {
-        let queue = self.hub.queues.get(queue_id);
-
-        if queue.device.timestamp_normalizer.get().unwrap().enabled() {
-            return 1.0;
-        }
-
-        queue.get_timestamp_period()
-    }
-
-    pub fn queue_on_submitted_work_done(
-        &self,
-        queue_id: QueueId,
-        closure: SubmittedWorkDoneClosure,
-    ) -> SubmissionIndex {
-        api_log!("Queue::on_submitted_work_done {queue_id:?}");
-
-        let queue = self.hub.queues.get(queue_id);
-        let result = queue.on_submitted_work_done(closure);
-        result.unwrap_or(0) // '0' means no wait is necessary
-    }
-
-    pub fn queue_compact_blas(
-        &self,
-        queue_id: QueueId,
-        blas_id: BlasId,
-        id_in: Option<BlasId>,
-    ) -> (BlasId, Option<u64>, Option<CompactBlasError>) {
-        let fid = self.hub.blas_s.prepare(id_in);
-
-        let queue = self.hub.queues.get(queue_id);
-        let blas = self.hub.blas_s.get(blas_id);
-
-        let (blas, error) = queue.compact_blas(&blas);
-
-        let handle = blas.handle();
-        let id = fid.assign(blas);
-
-        (id, handle, error)
     }
 }
 
