@@ -6,8 +6,9 @@ use nt::FastHashMap;
 
 pub struct AdjustInfo<'a> {
     pub function_args: &'a [Handle<Expression>],
+    pub function_return: Option<Handle<Expression>>,
     pub expressions: &'a mut Arena<Expression>,
-    pub statements: &'a mut Vec<Statement>,
+    pub statements: &'a mut [Statement],
     pub expr_offset: u32,
     pub local_variable_offset: u32,
 }
@@ -21,6 +22,12 @@ impl AdjustInfo<'_> {
                 *expr = Expression::Literal(crate::Literal::Bool(false));
                 function_arg_map.insert(handle, self.function_args[idx as usize]);
             }
+        }
+        if let Some(function_return) = self.function_return {
+            function_arg_map.insert(
+                Handle::new(NonMaxU32::new(u32::MAX - 1).unwrap()),
+                function_return,
+            );
         }
         for (_, expr) in self.expressions.iter_mut().skip(self.expr_offset as usize) {
             adjust_expression(

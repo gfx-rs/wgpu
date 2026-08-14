@@ -64,36 +64,73 @@ pub fn inline(module: &mut Module, strategy: InlineStrategy) {
     };
     for i in 0..state.module.entry_points.len() {
         // Take these out so we can modify them while using the rest of the module without using unsafe code.
-        let function = core::mem::take(&mut state.module.entry_points[i].function);
+        let mut function = core::mem::take(&mut state.module.entry_points[i].function);
 
-        let function = state.inline_all_calls(function, false);
+        state.inline_all_calls(&mut function, false);
 
         state.module.entry_points[i].function = function;
     }
 }
 
 impl InlineState<'_> {
+    fn calls_inlinable_functions(&self, block: &Block) -> bool {
+        for st in &block.body {
+            match *st {
+                Statement::Call { function, .. } => {
+                    if self.funcs_needing_inline.contains_key(&function) {
+                        return true;
+                    }
+                }
+                Statement::Block(ref b) => {
+                    if self.calls_inlinable_functions(b) {
+                        return true;
+                    }
+                }
+                Statement::If {
+                    condition: _,
+                    accept: ref b1,
+                    reject: ref b2,
+                }
+                | Statement::Loop {
+                    body: ref b1,
+                    continuing: ref b2,
+                    break_if: _,
+                } => {
+                    if self.calls_inlinable_functions(b1) || self.calls_inlinable_functions(b2) {
+                        return true;
+                    }
+                }
+                Statement::Switch {
+                    selector: _,
+                    ref cases,
+                } => {
+                    if cases
+                        .iter()
+                        .any(|e| self.calls_inlinable_functions(&e.body))
+                    {
+                        return true;
+                    }
+                }
+                _ => (),
+            }
+        }
+        false
+    }
+
     /// Inline all function calls in a function, after each of those have been recursively inlined and then prepared.
-    fn inline_all_calls(
-        &mut self,
-        mut function: Function,
-        prepare_for_self_inline: bool,
-    ) -> Function {
+    ///
+    /// Also optionally prepare the function for itself being inlined in a caller. This involves transforming the
+    /// control flow.
+    fn inline_all_calls(&mut self, function: &mut Function, prepare_for_self_inline: bool) {
         if !prepare_for_self_inline {
             // If it doesn't need to be inlined itself, and doesn't need any of its calls inlined,
             // skip.
-            'a: {
-                for st in &function.body {
-                    if let &Statement::Call { function, .. } = st {
-                        if self.funcs_needing_inline.contains_key(&function) {
-                            break 'a;
-                        }
-                    }
-                }
-                return function;
+            if !self.calls_inlinable_functions(&function.body) {
+                return;
             }
         }
 
+        // Reconstruct the statements from scratch, though we may
         let mut new_block = Block::new();
         let bool_type = self.module.types.insert(
             Type {
@@ -102,6 +139,8 @@ impl InlineState<'_> {
             },
             Span::UNDEFINED,
         );
+        // Variable that is referenced in `if(is_done_var) {break}` statements emitted after
+        // switches and loops, in which the break is captured.
         let is_done_var = function.local_variables.append(
             LocalVariable {
                 name: None,
@@ -164,41 +203,42 @@ impl InlineState<'_> {
                         },
                         span,
                     );
-                    let mut pasted_body = prepared.body.clone();
                     let expr_offset = function.expressions.len() as u32;
                     let local_variable_offset = function.local_variables.len() as u32;
+                    let statement_offset = function.body.body.len();
                     for (_, expr, span) in prepared.expressions.iter_span() {
                         function.expressions.append(expr.clone(), *span);
                     }
                     for (_, var, span) in prepared.local_variables.iter_span() {
                         function.local_variables.append(var.clone(), *span);
                     }
+                    function.body.body.extend_from_slice(&prepared.body.body);
+                    function
+                        .body
+                        .span_info
+                        .extend_from_slice(&prepared.body.span_info);
 
                     let adjust_info = adjust::AdjustInfo {
                         function_args: arguments,
+                        function_return: *result,
                         expressions: &mut function.expressions,
-                        statements: &mut pasted_body.body,
+                        statements: &mut function.body.body[statement_offset..],
                         expr_offset,
                         local_variable_offset,
                     };
                     adjust_info.adjust_all();
 
-                    // Copy-paste the function body inside of a for-loop.
-                    new_block.push(
-                        Statement::Loop {
-                            body: pasted_body,
-                            continuing: Block::default(),
-                            break_if: Some(true_val),
-                        },
-                        span,
-                    );
                     // TODO: should we `Emit` the call result expression which is now a LocalVariable expression?
+                }
+                Statement::Return { value } if prepare_for_self_inline => {
+                    if let Some(v) = value {
+                        todo!()
+                    }
                 }
                 _ => new_block.push(st, span),
             }
         }
+        // TODO: wrap in for loop in some cases
         function.body = new_block;
-        // Update the expressions in info
-        function
     }
 }
