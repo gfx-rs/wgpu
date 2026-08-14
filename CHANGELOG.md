@@ -53,6 +53,7 @@ Bottom level categories:
 #### Hal
 
 - Add `BufferBinding::buffer`, a public read accessor for the bound buffer, which was previously inaccessible to out-of-tree `wgpu_hal::Api` implementations. By @danlehmann in [#9820](https://github.com/gfx-rs/wgpu/pull/9820).
+- Add `wgpu_hal::vulkan::Surface::set_next_present_chain`, which attaches a caller-provided `pNext` chain to the `VkPresentInfoKHR` of the surface's next presentation. With `Adapter::open_with_callback` to enable the device extension, this supports presentation extensions wgpu has no dedicated support for, such as [VK_NV_present_metering](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_present_metering.html) for metering the display timing of frame-generation frames. By @stuartparmenter in [#9847](https://github.com/gfx-rs/wgpu/pull/9847).
 
 #### Metal
 
