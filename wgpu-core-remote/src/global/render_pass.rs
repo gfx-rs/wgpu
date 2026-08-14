@@ -1,8 +1,6 @@
 use alloc::borrow::Cow;
-use alloc::sync::Arc;
 use core::num::NonZeroU32;
 
-use parking_lot::Mutex;
 use wgpu_core::command::{
     CommandEncoderError, EncoderStateError, PassStateError, PassTimestampWrites,
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, ResolvedRenderPassDescriptor,
@@ -101,18 +99,12 @@ impl Global {
 
         let (render_pass, error) = cmd_enc.begin_render_pass(desc);
 
-        // no lock rank here because only one thread should be using renderpass
-        // and it's only used by id variants of render pass methods on global
-        // so no deadlock (or concurrent lock) should happen in practise
-        let id = fid.assign(Arc::new(Mutex::new(render_pass)));
+        let id = fid.assign(render_pass);
         (id, error)
     }
 
     pub fn render_pass_end(&self, pass: id::RenderPassEncoderId) -> Result<(), EncoderStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be accessed concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.end()
     }
 
@@ -137,10 +129,7 @@ impl Global {
         bind_group_id: Option<id::BindGroupId>,
         offsets: &[DynamicOffset],
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.set_bind_group(
             index,
             bind_group_id.map(|id| self.hub.bind_groups.get(id)),
@@ -153,10 +142,7 @@ impl Global {
         pass: id::RenderPassEncoderId,
         pipeline_id: id::RenderPipelineId,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         let pipeline = self.resolve_render_pipeline_id(pipeline_id);
         pass.set_pipeline(pipeline)
     }
@@ -169,10 +155,7 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.set_index_buffer(
             self.resolve_buffer_id(buffer_id),
             index_format,
@@ -189,10 +172,7 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.set_vertex_buffer(
             slot,
             buffer_id.map(|id| self.resolve_buffer_id(id)),
@@ -206,10 +186,7 @@ impl Global {
         pass: id::RenderPassEncoderId,
         color: Color,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.set_blend_constant(color)
     }
 
@@ -218,10 +195,7 @@ impl Global {
         pass: id::RenderPassEncoderId,
         value: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.set_stencil_reference(value)
     }
 
@@ -235,10 +209,7 @@ impl Global {
         depth_min: f32,
         depth_max: f32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.set_viewport(x, y, w, h, depth_min, depth_max)
     }
 
@@ -250,10 +221,7 @@ impl Global {
         w: u32,
         h: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.set_scissor_rect(x, y, w, h)
     }
 
@@ -263,10 +231,7 @@ impl Global {
         offset: u32,
         data: &[u8],
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.set_immediates(offset, data)
     }
 
@@ -278,10 +243,7 @@ impl Global {
         first_vertex: u32,
         first_instance: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.draw(vertex_count, instance_count, first_vertex, first_instance)
     }
 
@@ -294,10 +256,7 @@ impl Global {
         base_vertex: i32,
         first_instance: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.draw_indexed(
             index_count,
             instance_count,
@@ -313,10 +272,7 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.draw_indirect(self.resolve_buffer_id(buffer_id), offset)
     }
 
@@ -326,10 +282,7 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.draw_indexed_indirect(self.resolve_buffer_id(buffer_id), offset)
     }
 
@@ -339,10 +292,7 @@ impl Global {
         label: &str,
         color: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.push_debug_group(label, color)
     }
 
@@ -350,10 +300,7 @@ impl Global {
         &self,
         pass: id::RenderPassEncoderId,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.pop_debug_group()
     }
 
@@ -363,10 +310,7 @@ impl Global {
         label: &str,
         color: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.insert_debug_marker(label, color)
     }
 
@@ -376,10 +320,7 @@ impl Global {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.write_timestamp(self.resolve_query_set_id(query_set_id), query_index)
     }
 
@@ -388,10 +329,7 @@ impl Global {
         pass: id::RenderPassEncoderId,
         query_index: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.begin_occlusion_query(query_index)
     }
 
@@ -399,10 +337,7 @@ impl Global {
         &self,
         pass: id::RenderPassEncoderId,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.end_occlusion_query()
     }
 
@@ -412,10 +347,7 @@ impl Global {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.begin_pipeline_statistics_query(self.resolve_query_set_id(query_set_id), query_index)
     }
 
@@ -423,10 +355,7 @@ impl Global {
         &self,
         pass: id::RenderPassEncoderId,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         pass.end_pipeline_statistics_query()
     }
 
@@ -435,10 +364,7 @@ impl Global {
         pass: id::RenderPassEncoderId,
         render_bundle_ids: &[id::RenderBundleId],
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.render_passes.get(pass);
-        let mut pass = pass
-            .try_lock()
-            .expect("RenderPasses should not be used concurrently");
+        let mut pass = self.hub.render_passes.get_mut(pass);
         let hub = &self.hub;
         let bundles = hub.render_bundles.read();
         let render_bundles = render_bundle_ids

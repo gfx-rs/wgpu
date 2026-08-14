@@ -122,6 +122,30 @@ where
     }
 }
 
+impl<T> Storage<T>
+where
+    T: StorageItem,
+{
+    /// Get a mutable reference to an item.
+    /// Panics if there is an epoch mismatch, the entry is empty or in error.
+    pub(crate) fn get_mut(&mut self, id: Id<T::Marker>) -> &mut T {
+        let (index, epoch) = id.unzip();
+        let (result, storage_epoch) = match self.map.get_mut(index as usize) {
+            Some(Element::Occupied(v, epoch)) => (v, *epoch),
+            None | Some(Element::Vacant) => {
+                panic!("Cannot get non-existent resource {id:?}");
+            }
+        };
+        assert_eq!(
+            epoch,
+            storage_epoch,
+            "Cannot get {id:?}, found other resource {other:?}",
+            other = Id::<T::Marker>::zip(index, storage_epoch),
+        );
+        result
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::id::Marker;
