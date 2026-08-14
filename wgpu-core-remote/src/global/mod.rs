@@ -8,7 +8,7 @@ use wgpu_core::instance::{Adapter, Instance};
 use wgpu_core::pipeline::{ComputePipeline, RenderPipeline};
 use wgpu_core::resource::{Buffer, QuerySet, Texture};
 
-use crate::hub::{Hub, HubReport};
+use crate::hub::Hub;
 use crate::id::{
     AdapterId, BindGroupLayoutId, BufferId, CommandBufferId, CommandEncoderId, ComputePipelineId,
     DeviceId, PipelineLayoutId, QuerySetId, QueueId, RenderPipelineId, TextureId,
@@ -22,17 +22,6 @@ mod device;
 mod instance;
 mod queue;
 mod render_pass;
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct GlobalReport {
-    pub hub: HubReport,
-}
-
-impl GlobalReport {
-    pub fn hub_report(&self) -> &HubReport {
-        &self.hub
-    }
-}
 
 pub struct Global {
     pub(crate) hub: Hub,
@@ -78,19 +67,13 @@ impl Global {
             hub: Hub::new(),
         }
     }
-
-    pub fn generate_report(&self) -> GlobalReport {
-        GlobalReport {
-            hub: self.hub.generate_report(),
-        }
-    }
 }
 
 // methods to import and resolve resources in the global hub
 impl Global {
     /// Import [`Arc<Adapter>`] into the global hub,
     /// returning an [`AdapterId`] under which the adapter is stored.
-    pub fn import_adapter(&self, adapter: Arc<Adapter>, id_in: Option<AdapterId>) -> AdapterId {
+    pub fn import_adapter(&self, adapter: Arc<Adapter>, id_in: AdapterId) -> AdapterId {
         let fid = self.hub.adapters.prepare(id_in);
         fid.assign(adapter)
     }
@@ -102,7 +85,7 @@ impl Global {
 
     /// Import [`Arc<Device>`] into the global hub,
     /// returning a [`DeviceId`] under which the device is stored.
-    pub fn import_device(&self, device: Arc<Device>, id_in: Option<DeviceId>) -> DeviceId {
+    pub fn import_device(&self, device: Arc<Device>, id_in: DeviceId) -> DeviceId {
         let fid = self.hub.devices.prepare(id_in);
         fid.assign(device)
     }
@@ -114,7 +97,7 @@ impl Global {
 
     /// Import [`Arc<Queue>`] into the global hub,
     /// returning a [`QueueId`] under which the queue is stored.
-    pub fn import_queue(&self, queue: Arc<Queue>, id_in: Option<QueueId>) -> QueueId {
+    pub fn import_queue(&self, queue: Arc<Queue>, id_in: QueueId) -> QueueId {
         let fid = self.hub.queues.prepare(id_in);
         fid.assign(queue)
     }
@@ -129,7 +112,7 @@ impl Global {
     pub fn import_pipeline_layout(
         &self,
         pipeline_layout: Arc<PipelineLayout>,
-        id_in: Option<PipelineLayoutId>,
+        id_in: PipelineLayoutId,
     ) -> PipelineLayoutId {
         let fid = self.hub.pipeline_layouts.prepare(id_in);
         fid.assign(pipeline_layout)
@@ -148,7 +131,7 @@ impl Global {
     pub fn import_bind_group_layout(
         &self,
         bind_group_layout: Arc<BindGroupLayout>,
-        id_in: Option<BindGroupLayoutId>,
+        id_in: BindGroupLayoutId,
     ) -> BindGroupLayoutId {
         let fid = self.hub.bind_group_layouts.prepare(id_in);
         fid.assign(bind_group_layout)
@@ -167,7 +150,7 @@ impl Global {
     pub fn import_command_encoder(
         &self,
         command_encoder: Arc<CommandEncoder>,
-        id_in: Option<CommandEncoderId>,
+        id_in: CommandEncoderId,
     ) -> CommandEncoderId {
         let fid = self.hub.command_encoders.prepare(id_in);
         fid.assign(command_encoder)
@@ -186,7 +169,7 @@ impl Global {
     pub fn import_command_buffer(
         &self,
         command_buffer: Arc<CommandBuffer>,
-        id_in: Option<CommandBufferId>,
+        id_in: CommandBufferId,
     ) -> CommandBufferId {
         let fid = self.hub.command_buffers.prepare(id_in);
         fid.assign(command_buffer)
@@ -205,7 +188,7 @@ impl Global {
     pub fn import_render_pipeline(
         &self,
         render_pipeline: Arc<RenderPipeline>,
-        id_in: Option<RenderPipelineId>,
+        id_in: RenderPipelineId,
     ) -> RenderPipelineId {
         let fid = self.hub.render_pipelines.prepare(id_in);
         fid.assign(render_pipeline)
@@ -224,7 +207,7 @@ impl Global {
     pub fn import_compute_pipeline(
         &self,
         compute_pipeline: Arc<ComputePipeline>,
-        id_in: Option<ComputePipelineId>,
+        id_in: ComputePipelineId,
     ) -> ComputePipelineId {
         let fid = self.hub.compute_pipelines.prepare(id_in);
         fid.assign(compute_pipeline)
@@ -240,11 +223,7 @@ impl Global {
 
     /// Import [`Arc<QuerySet>`] into the global hub,
     /// returning a [`QuerySetId`] under which the query set is stored.
-    pub fn import_query_set(
-        &self,
-        query_set: Arc<QuerySet>,
-        id_in: Option<QuerySetId>,
-    ) -> QuerySetId {
+    pub fn import_query_set(&self, query_set: Arc<QuerySet>, id_in: QuerySetId) -> QuerySetId {
         let fid = self.hub.query_sets.prepare(id_in);
         fid.assign(query_set)
     }
@@ -256,7 +235,7 @@ impl Global {
 
     /// Import [`Arc<Buffer>`] into the global hub,
     /// returning a [`BufferId`] under which the buffer is stored.
-    pub fn import_buffer(&self, buffer: Arc<Buffer>, id_in: Option<BufferId>) -> BufferId {
+    pub fn import_buffer(&self, buffer: Arc<Buffer>, id_in: BufferId) -> BufferId {
         let fid = self.hub.buffers.prepare(id_in);
         fid.assign(buffer)
     }
@@ -268,7 +247,7 @@ impl Global {
 
     /// Import [`Arc<Texture>`] into the global hub,
     /// returning a [`TextureId`] under which the texture is stored.
-    pub fn import_texture(&self, texture: Arc<Texture>, id_in: Option<TextureId>) -> TextureId {
+    pub fn import_texture(&self, texture: Arc<Texture>, id_in: TextureId) -> TextureId {
         let fid = self.hub.textures.prepare(id_in);
         fid.assign(texture)
     }

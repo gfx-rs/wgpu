@@ -1,30 +1,9 @@
-use alloc::sync::Arc;
 use parking_lot::{RwLock, RwLockReadGuard};
 
 use crate::{
     id::Id,
-    identity::IdentityManager,
-    storage::{Element, Storage, StorageItem},
+    storage::{Storage, StorageItem},
 };
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct RegistryReport {
-    /// Count of IDs allocated by [`IdentityManager`]
-    ///
-    /// This may be inconsistent with other fields of the report if
-    /// IDs are allocated or released concurrently with report
-    /// generation.
-    pub num_allocated: usize,
-    pub num_kept_from_user: usize,
-    pub num_released_from_user: usize,
-    pub element_size: usize,
-}
-
-impl RegistryReport {
-    pub fn is_empty(&self) -> bool {
-        self.num_allocated + self.num_kept_from_user == 0
-    }
-}
 
 /// Registry is the primary holder of each resource type
 /// Every resource is now arcanized so the last arc released
@@ -39,15 +18,12 @@ impl RegistryReport {
 ///
 #[derive(Debug)]
 pub(crate) struct Registry<T: StorageItem> {
-    // Must only contain an id which has either never been used or has been released from `storage`
-    identity: Arc<IdentityManager<T::Marker>>,
     storage: RwLock<Storage<T>>,
 }
 
 impl<T: StorageItem> Registry<T> {
     pub(crate) fn new() -> Self {
         Self {
-            identity: Arc::new(IdentityManager::new()),
             storage: RwLock::new(Storage::new()),
         }
     }
@@ -71,15 +47,9 @@ impl<T: StorageItem> FutureId<'_, T> {
 }
 
 impl<T: StorageItem> Registry<T> {
-    pub(crate) fn prepare(&self, id_in: Option<Id<T::Marker>>) -> FutureId<'_, T> {
+    pub(crate) fn prepare(&self, id_in: Id<T::Marker>) -> FutureId<'_, T> {
         FutureId {
-            id: match id_in {
-                Some(id_in) => {
-                    self.identity.mark_as_used(id_in);
-                    id_in
-                }
-                None => self.identity.process(),
-            },
+            id: id_in,
             data: &self.storage,
         }
     }
@@ -88,79 +58,15 @@ impl<T: StorageItem> Registry<T> {
     pub(crate) fn read<'a>(&'a self) -> RwLockReadGuard<'a, Storage<T>> {
         self.storage.read()
     }
+
     pub(crate) fn remove(&self, id: Id<T::Marker>) -> T {
         let value = self.storage.write().remove(id);
-        // This needs to happen *after* removing it from the storage, to maintain the
-        // invariant that `self.identity` only contains ids which are actually available
-        // See https://github.com/gfx-rs/wgpu/issues/5372
-        self.identity.free(id);
-        //Returning None is legal if it's an error ID
         value
-    }
-
-    pub(crate) fn generate_report(&self) -> RegistryReport {
-        let mut report = RegistryReport {
-            element_size: size_of::<T>(),
-            ..Default::default()
-        };
-
-        // Acquiring the identity values lock while holding the storage lock
-        // would require adding an edge in the lock graph, and would still not
-        // ensure a consistent report, because the storage lock is not otherwise
-        // acquired when managing IDs.
-        report.num_allocated = self.identity.values.lock().count();
-
-        let storage = self.storage.read();
-        for element in storage.map.iter() {
-            match *element {
-                Element::Occupied(..) => report.num_kept_from_user += 1,
-                Element::Vacant => report.num_released_from_user += 1,
-            }
-        }
-        report
     }
 }
 
 impl<T: StorageItem + Clone> Registry<T> {
     pub(crate) fn get(&self, id: Id<T::Marker>) -> T {
         self.read().get(id)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Registry;
-    use crate::{id::Marker, storage::StorageItem};
-    use alloc::sync::Arc;
-    use wgpu_core::resource::ResourceType;
-
-    struct TestData;
-    struct TestDataId;
-    impl Marker for TestDataId {
-        const TYPE: &'static str = "TestData";
-    }
-
-    impl ResourceType for TestData {
-        const TYPE: &'static str = "TestData";
-    }
-    impl StorageItem for TestData {
-        type Marker = TestDataId;
-    }
-
-    #[test]
-    fn simultaneous_registration() {
-        let registry = Registry::new();
-        std::thread::scope(|s| {
-            for _ in 0..5 {
-                s.spawn(|| {
-                    for _ in 0..1000 {
-                        let value = Arc::new(TestData);
-                        let new_id = registry.prepare(None);
-                        let id = new_id.assign(value);
-                        registry.remove(id);
-                    }
-                });
-            }
-        })
     }
 }

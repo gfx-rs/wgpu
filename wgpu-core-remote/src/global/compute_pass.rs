@@ -27,7 +27,7 @@ impl Global {
         &self,
         encoder_id: id::CommandEncoderId,
         desc: &ComputePassDescriptor<'_, PassTimestampWrites<id::QuerySetId>>,
-        id_in: Option<id::ComputePassEncoderId>,
+        id_in: id::ComputePassEncoderId,
     ) -> (id::ComputePassEncoderId, Option<CommandEncoderError>) {
         let fid = self.hub.compute_passes.prepare(id_in);
 

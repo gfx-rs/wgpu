@@ -92,7 +92,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &resource::BufferDescriptor,
-        id_in: Option<id::BufferId>,
+        id_in: id::BufferId,
     ) -> (id::BufferId, Option<CreateBufferError>) {
         let hub = &self.hub;
         let fid = hub.buffers.prepare(id_in);
@@ -137,7 +137,7 @@ impl Global {
     pub fn create_buffer_error(
         &self,
         device_id: DeviceId,
-        id_in: Option<id::BufferId>,
+        id_in: id::BufferId,
         desc: &resource::BufferDescriptor,
     ) {
         let fid = self.hub.buffers.prepare(id_in);
@@ -151,7 +151,7 @@ impl Global {
     pub fn create_render_bundle_error(
         &self,
         device_id: DeviceId,
-        id_in: Option<id::RenderBundleId>,
+        id_in: id::RenderBundleId,
         desc: &command::RenderBundleDescriptor,
     ) {
         let device = self.hub.devices.get(device_id);
@@ -165,7 +165,7 @@ impl Global {
     pub fn create_texture_error(
         &self,
         device_id: DeviceId,
-        id_in: Option<id::TextureId>,
+        id_in: id::TextureId,
         desc: &resource::TextureDescriptor,
     ) -> id::TextureId {
         let fid = self.hub.textures.prepare(id_in);
@@ -180,7 +180,7 @@ impl Global {
     pub fn create_external_texture_error(
         &self,
         device_id: DeviceId,
-        id_in: Option<id::ExternalTextureId>,
+        id_in: id::ExternalTextureId,
         desc: &resource::ExternalTextureDescriptor,
     ) {
         let fid = self.hub.external_textures.prepare(id_in);
@@ -199,7 +199,7 @@ impl Global {
     pub fn create_bind_group_layout_error(
         &self,
         device_id: DeviceId,
-        id_in: Option<id::BindGroupLayoutId>,
+        id_in: id::BindGroupLayoutId,
         label: Option<Cow<'_, str>>,
     ) {
         let fid = self.hub.bind_group_layouts.prepare(id_in);
@@ -228,7 +228,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &resource::TextureDescriptor,
-        id_in: Option<id::TextureId>,
+        id_in: id::TextureId,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
         let hub = &self.hub;
 
@@ -268,7 +268,7 @@ impl Global {
         device_id: DeviceId,
         desc: &resource::TextureDescriptor,
         initial_state: wgt::TextureUses,
-        id_in: Option<id::TextureId>,
+        id_in: id::TextureId,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
         let hub = &self.hub;
 
@@ -294,7 +294,7 @@ impl Global {
         hal_buffer: A::Buffer,
         device_id: DeviceId,
         desc: &resource::BufferDescriptor,
-        id_in: Option<id::BufferId>,
+        id_in: id::BufferId,
     ) -> (id::BufferId, Option<CreateBufferError>) {
         let hub = &self.hub;
         let fid = hub.buffers.prepare(id_in);
@@ -326,7 +326,7 @@ impl Global {
         &self,
         texture_id: id::TextureId,
         desc: &resource::TextureViewDescriptor,
-        id_in: Option<id::TextureViewId>,
+        id_in: id::TextureViewId,
     ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
         let hub = &self.hub;
 
@@ -352,7 +352,7 @@ impl Global {
         device_id: DeviceId,
         desc: &resource::ExternalTextureDescriptor,
         planes: &[id::TextureViewId],
-        id_in: Option<id::ExternalTextureId>,
+        id_in: id::ExternalTextureId,
     ) -> (
         id::ExternalTextureId,
         Option<resource::CreateExternalTextureError>,
@@ -393,7 +393,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &resource::SamplerDescriptor,
-        id_in: Option<id::SamplerId>,
+        id_in: id::SamplerId,
     ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
         let hub = &self.hub;
         let fid = hub.samplers.prepare(id_in);
@@ -417,7 +417,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &binding_model::BindGroupLayoutDescriptor,
-        id_in: Option<id::BindGroupLayoutId>,
+        id_in: id::BindGroupLayoutId,
     ) -> (
         id::BindGroupLayoutId,
         Option<binding_model::CreateBindGroupLayoutError>,
@@ -444,7 +444,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &binding_model::PipelineLayoutDescriptor<id::BindGroupLayoutId>,
-        id_in: Option<id::PipelineLayoutId>,
+        id_in: id::PipelineLayoutId,
     ) -> (
         id::PipelineLayoutId,
         Option<binding_model::CreatePipelineLayoutError>,
@@ -483,7 +483,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &BindGroupDescriptor,
-        id_in: Option<id::BindGroupId>,
+        id_in: id::BindGroupId,
     ) -> (id::BindGroupId, Option<binding_model::CreateBindGroupError>) {
         let hub = &self.hub;
         let fid = hub.bind_groups.prepare(id_in);
@@ -606,7 +606,7 @@ impl Global {
         device_id: DeviceId,
         desc: &pipeline::ShaderModuleDescriptor,
         source: pipeline::ShaderModuleSource,
-        id_in: Option<id::ShaderModuleId>,
+        id_in: id::ShaderModuleId,
     ) -> (
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
@@ -631,7 +631,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &pipeline::ShaderModuleDescriptorPassthrough<'_>,
-        id_in: Option<id::ShaderModuleId>,
+        id_in: id::ShaderModuleId,
     ) -> (
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
@@ -658,7 +658,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &wgt::CommandEncoderDescriptor<Label>,
-        id_in: Option<id::CommandEncoderId>,
+        id_in: id::CommandEncoderId,
     ) -> (id::CommandEncoderId, Option<DeviceError>) {
         let hub = &self.hub;
         let fid = hub.command_encoders.prepare(id_in);
@@ -683,7 +683,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &command::RenderBundleEncoderDescriptor,
-        id_in: Option<id::RenderBundleEncoderId>,
+        id_in: id::RenderBundleEncoderId,
     ) -> (
         id::RenderBundleEncoderId,
         Option<command::CreateRenderBundleError>,
@@ -705,7 +705,7 @@ impl Global {
         &self,
         render_bundle_encoder_id: id::RenderBundleEncoderId,
         desc: &command::RenderBundleDescriptor,
-        id_in: Option<id::RenderBundleId>,
+        id_in: id::RenderBundleId,
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
         let bundle_encoder = self
             .hub
@@ -741,7 +741,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &resource::QuerySetDescriptor,
-        id_in: Option<id::QuerySetId>,
+        id_in: id::QuerySetId,
     ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
         let hub = &self.hub;
         let fid = hub.query_sets.prepare(id_in);
@@ -773,7 +773,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &RenderPipelineDescriptor,
-        id_in: Option<id::RenderPipelineId>,
+        id_in: id::RenderPipelineId,
     ) -> (
         id::RenderPipelineId,
         Option<pipeline::CreateRenderPipelineError>,
@@ -847,7 +847,7 @@ impl Global {
         &self,
         pipeline_id: id::RenderPipelineId,
         index: u32,
-        id_in: Option<id::BindGroupLayoutId>,
+        id_in: id::BindGroupLayoutId,
     ) -> (
         id::BindGroupLayoutId,
         Option<binding_model::GetBindGroupLayoutError>,
@@ -875,7 +875,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &ComputePipelineDescriptor,
-        id_in: Option<id::ComputePipelineId>,
+        id_in: id::ComputePipelineId,
     ) -> (
         id::ComputePipelineId,
         Option<pipeline::CreateComputePipelineError>,
@@ -919,7 +919,7 @@ impl Global {
         &self,
         pipeline_id: id::ComputePipelineId,
         index: u32,
-        id_in: Option<id::BindGroupLayoutId>,
+        id_in: id::BindGroupLayoutId,
     ) -> (
         id::BindGroupLayoutId,
         Option<binding_model::GetBindGroupLayoutError>,
@@ -950,7 +950,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &pipeline::PipelineCacheDescriptor<'_>,
-        id_in: Option<id::PipelineCacheId>,
+        id_in: id::PipelineCacheId,
     ) -> (
         id::PipelineCacheId,
         Option<pipeline::CreatePipelineCacheError>,

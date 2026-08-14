@@ -45,7 +45,7 @@ impl Global {
         &self,
         encoder_id: id::CommandEncoderId,
         desc: &RenderPassDescriptor<'_>,
-        id_in: Option<id::RenderPassEncoderId>,
+        id_in: id::RenderPassEncoderId,
     ) -> (id::RenderPassEncoderId, Option<CommandEncoderError>) {
         let hub = &self.hub;
         let fid = hub.render_passes.prepare(id_in);
