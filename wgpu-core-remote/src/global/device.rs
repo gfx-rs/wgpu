@@ -5,12 +5,10 @@ use wgpu_core::{
     binding_model::{self},
     command,
     device::{Device, DeviceError, DeviceLostClosure, WaitIdleError},
-    instance::{self, Adapter, Surface},
     pipeline::{
         self, MeshState, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
         ResolvedGeneralRenderPipelineDescriptor, TaskState,
     },
-    present,
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
     },
@@ -19,11 +17,11 @@ use wgpu_core::{
 
 use crate::{
     global::Global,
-    id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
+    id::{self, DeviceId, QueueId},
     storage::Storage,
 };
 
-use wgt::{BufferAddress, TextureFormat};
+use wgt::BufferAddress;
 
 pub type BindGroupDescriptor<'a> = binding_model::BindGroupDescriptor<
     'a,
@@ -84,56 +82,6 @@ pub type GeneralRenderPipelineDescriptor<'a> = pipeline::GeneralRenderPipelineDe
 >;
 
 impl Global {
-    pub fn adapter_is_surface_supported(
-        &self,
-        adapter_id: AdapterId,
-        surface_id: SurfaceId,
-    ) -> bool {
-        let surface = self.surfaces.get(surface_id);
-        let adapter = self.hub.adapters.get(adapter_id);
-        adapter.is_surface_supported(&surface)
-    }
-
-    pub fn surface_get_capabilities(
-        &self,
-        surface_id: SurfaceId,
-        adapter_id: AdapterId,
-    ) -> Result<wgt::SurfaceCapabilities, instance::GetSurfaceSupportError> {
-        self.fetch_adapter_and_surface::<_, _>(surface_id, adapter_id, |adapter, surface| {
-            surface.get_capabilities(adapter)
-        })
-    }
-
-    /// Returns the HDR and luminance characteristics of the display backing
-    /// `surface_id` on `adapter_id`.
-    ///
-    /// Reports the raw display state, independent of the surface's configured
-    /// color space; see [`wgt::DisplayHdrInfo`] for per-field platform coverage.
-    /// Returns [`wgt::DisplayHdrInfo::default`] (all fields `None`) when nothing
-    /// is known: the surface is not on `adapter_id`'s backend, the backend has
-    /// no display-query path, or the Metal backend is queried off the main
-    /// thread.
-    pub fn surface_display_hdr_info(
-        &self,
-        surface_id: SurfaceId,
-        adapter_id: AdapterId,
-    ) -> wgt::DisplayHdrInfo {
-        self.fetch_adapter_and_surface(surface_id, adapter_id, |adapter, surface| {
-            surface.display_hdr_info(adapter)
-        })
-    }
-
-    fn fetch_adapter_and_surface<F: FnOnce(&Adapter, &Surface) -> B, B>(
-        &self,
-        surface_id: SurfaceId,
-        adapter_id: AdapterId,
-        get_supported_callback: F,
-    ) -> B {
-        let surface = self.surfaces.get(surface_id);
-        let adapter = self.hub.adapters.get(adapter_id);
-        get_supported_callback(&adapter, &surface)
-    }
-
     pub fn device_features(&self, device_id: DeviceId) -> wgt::Features {
         let device = self.hub.devices.get(device_id);
         *device.features()
@@ -1124,18 +1072,6 @@ impl Global {
         let hub = &self.hub;
 
         let _cache = hub.pipeline_caches.remove(pipeline_cache_id);
-    }
-
-    pub fn surface_configure(
-        &self,
-        surface_id: SurfaceId,
-        device_id: DeviceId,
-        config: &wgt::SurfaceConfiguration<Vec<TextureFormat>>,
-    ) -> Option<present::ConfigureSurfaceError> {
-        let device = self.hub.devices.get(device_id);
-        let surface = self.surfaces.get(surface_id);
-
-        surface.configure(&device, config)
     }
 
     /// Check `device_id` for freeable resources and completed buffer mappings.
