@@ -1,8 +1,5 @@
-use alloc::sync::Arc;
-
 use alloc::borrow::Cow;
 
-use parking_lot::Mutex;
 use wgpu_core::command::{
     CommandEncoderError, ComputePassDescriptor, EncoderStateError, PassStateError,
     PassTimestampWrites,
@@ -47,10 +44,7 @@ impl Global {
 
         let (pass, err) = cmd_enc.begin_compute_pass(&desc);
 
-        // no lock rank here because only one thread should be using compute pass
-        // and it's only used by id variants of compute pass methods on global
-        // so no deadlock (or concurrent lock) should happen in practise
-        let id = fid.assign(Arc::new(Mutex::new(pass)));
+        let id = fid.assign(pass);
 
         (id, err)
     }
@@ -59,10 +53,7 @@ impl Global {
         &self,
         pass_id: id::ComputePassEncoderId,
     ) -> Result<(), EncoderStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
+        let mut pass = self.hub.compute_passes.get_mut(pass_id);
         pass.end()
     }
 
@@ -87,10 +78,7 @@ impl Global {
         bind_group_id: Option<id::BindGroupId>,
         offsets: &[DynamicOffset],
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
+        let mut pass = self.hub.compute_passes.get_mut(pass_id);
         pass.set_bind_group(
             index,
             bind_group_id.map(|bind_group_id| self.hub.bind_groups.get(bind_group_id)),
@@ -103,10 +91,7 @@ impl Global {
         pass_id: id::ComputePassEncoderId,
         pipeline_id: id::ComputePipelineId,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
+        let mut pass = self.hub.compute_passes.get_mut(pass_id);
         let pipeline = self.hub.compute_pipelines.get(pipeline_id);
         pass.set_pipeline(pipeline)
     }
@@ -117,10 +102,7 @@ impl Global {
         offset: u32,
         data: &[u8],
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
+        let mut pass = self.hub.compute_passes.get_mut(pass_id);
         pass.set_immediates(offset, data)
     }
 
@@ -131,10 +113,7 @@ impl Global {
         groups_y: u32,
         groups_z: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
+        let mut pass = self.hub.compute_passes.get_mut(pass_id);
         pass.dispatch_workgroups(groups_x, groups_y, groups_z)
     }
 
@@ -144,10 +123,7 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
+        let mut pass = self.hub.compute_passes.get_mut(pass_id);
         pass.dispatch_workgroups_indirect(self.hub.buffers.get(buffer_id), offset)
     }
 
@@ -157,10 +133,7 @@ impl Global {
         label: &str,
         color: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
+        let mut pass = self.hub.compute_passes.get_mut(pass_id);
         pass.push_debug_group(label, color)
     }
 
@@ -168,10 +141,7 @@ impl Global {
         &self,
         pass_id: id::ComputePassEncoderId,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
+        let mut pass = self.hub.compute_passes.get_mut(pass_id);
         pass.pop_debug_group()
     }
 
@@ -181,10 +151,7 @@ impl Global {
         label: &str,
         color: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
+        let mut pass = self.hub.compute_passes.get_mut(pass_id);
         pass.insert_debug_marker(label, color)
     }
 
@@ -194,10 +161,7 @@ impl Global {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
+        let mut pass = self.hub.compute_passes.get_mut(pass_id);
         let query_set = self.hub.query_sets.get(query_set_id);
         pass.write_timestamp(query_set, query_index)
     }
@@ -208,10 +172,7 @@ impl Global {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
+        let mut pass = self.hub.compute_passes.get_mut(pass_id);
         let query_set = self.hub.query_sets.get(query_set_id);
         pass.begin_pipeline_statistics_query(query_set, query_index)
     }
@@ -220,10 +181,7 @@ impl Global {
         &self,
         pass_id: id::ComputePassEncoderId,
     ) -> Result<(), PassStateError> {
-        let pass = self.hub.compute_passes.get(pass_id);
-        let mut pass = pass
-            .try_lock()
-            .expect("ComputePasses should not be accessed concurrently");
+        let mut pass = self.hub.compute_passes.get_mut(pass_id);
         pass.end_pipeline_statistics_query()
     }
 }
