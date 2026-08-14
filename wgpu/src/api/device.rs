@@ -343,6 +343,7 @@ impl Device {
         hal_texture: A::Texture,
         desc: &TextureDescriptor<'_>,
         initial_state: wgt::TextureUses,
+        cleared: bool,
     ) -> Texture {
         let texture = unsafe {
             let core_device = self.inner.as_core();
@@ -351,6 +352,7 @@ impl Device {
                 core_device,
                 desc,
                 initial_state,
+                cleared,
             )
         };
         Texture {

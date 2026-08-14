@@ -265,6 +265,7 @@ impl Global {
         desc: &TextureDescriptor,
         initial_state: wgt::TextureUses,
         id_in: id::TextureId,
+        cleared: bool,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -274,7 +275,7 @@ impl Global {
         let device = devices.get(device_id);
 
         let (texture, error) =
-            unsafe { device.create_texture_from_hal(hal_texture, desc, initial_state) };
+            unsafe { device.create_texture_from_hal(hal_texture, desc, initial_state, cleared) };
 
         let id = textures.assign(id_in, texture);
         (id, error)
