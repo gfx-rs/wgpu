@@ -704,18 +704,6 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &command::RenderBundleEncoderDescriptor,
-    ) -> (
-        Box<command::RenderBundleEncoder>,
-        Option<command::CreateRenderBundleError>,
-    ) {
-        let device = self.hub.devices.get(device_id);
-        device.create_render_bundle_encoder(desc)
-    }
-
-    pub fn device_create_render_bundle_encoder_with_id(
-        &self,
-        device_id: DeviceId,
-        desc: &command::RenderBundleEncoderDescriptor,
         id_in: Option<id::RenderBundleEncoderId>,
     ) -> (
         id::RenderBundleEncoderId,
@@ -723,8 +711,8 @@ impl Global {
     ) {
         let fid = self.hub.render_bundle_encoders.prepare(id_in);
 
-        let (render_bundle_encoder, error) =
-            self.device_create_render_bundle_encoder(device_id, desc);
+        let device = self.hub.devices.get(device_id);
+        let (render_bundle_encoder, error) = device.create_render_bundle_encoder(desc);
 
         // no lock rank here because only one thread should be using compute pass
         // and it's only used by id variants of compute pass methods on global
@@ -735,23 +723,6 @@ impl Global {
     }
 
     pub fn render_bundle_encoder_finish(
-        &self,
-        bundle_encoder: &mut command::RenderBundleEncoder,
-        desc: &command::RenderBundleDescriptor,
-        id_in: Option<id::RenderBundleId>,
-    ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
-        let hub = &self.hub;
-
-        let fid = hub.render_bundles.prepare(id_in);
-
-        let (render_bundle, error) = bundle_encoder.finish(desc);
-
-        let id = fid.assign(render_bundle);
-
-        (id, error)
-    }
-
-    pub fn render_bundle_encoder_finish_with_id(
         &self,
         render_bundle_encoder_id: id::RenderBundleEncoderId,
         desc: &command::RenderBundleDescriptor,
@@ -766,7 +737,11 @@ impl Global {
             .try_lock()
             .expect("RenderBundleEncoders should not be accessed concurrently");
 
-        let (id, error) = self.render_bundle_encoder_finish(&mut bundle_encoder, desc, id_in);
+        let fid = self.hub.render_bundles.prepare(id_in);
+
+        let (render_bundle, error) = bundle_encoder.finish(desc);
+
+        let id = fid.assign(render_bundle);
 
         (id, error)
     }
