@@ -1,4 +1,4 @@
-use parking_lot::{RwLock, RwLockReadGuard};
+use core::cell::{Ref, RefCell};
 
 use crate::{
     id::Id,
@@ -18,13 +18,13 @@ use crate::{
 ///
 #[derive(Debug)]
 pub(crate) struct Registry<T: StorageItem> {
-    storage: RwLock<Storage<T>>,
+    storage: RefCell<Storage<T>>,
 }
 
 impl<T: StorageItem> Registry<T> {
     pub(crate) fn new() -> Self {
         Self {
-            storage: RwLock::new(Storage::new()),
+            storage: RefCell::new(Storage::new()),
         }
     }
 }
@@ -32,7 +32,7 @@ impl<T: StorageItem> Registry<T> {
 #[must_use]
 pub(crate) struct FutureId<'a, T: StorageItem> {
     id: Id<T::Marker>,
-    data: &'a RwLock<Storage<T>>,
+    data: &'a RefCell<Storage<T>>,
 }
 
 impl<T: StorageItem> FutureId<'_, T> {
@@ -40,7 +40,7 @@ impl<T: StorageItem> FutureId<'_, T> {
     ///
     /// Registers it with the registry.
     pub fn assign(self, value: T) -> Id<T::Marker> {
-        let mut data = self.data.write();
+        let mut data = self.data.borrow_mut();
         data.insert(self.id, value);
         self.id
     }
@@ -55,12 +55,12 @@ impl<T: StorageItem> Registry<T> {
     }
 
     #[track_caller]
-    pub(crate) fn read<'a>(&'a self) -> RwLockReadGuard<'a, Storage<T>> {
-        self.storage.read()
+    pub(crate) fn read<'a>(&'a self) -> Ref<'a, Storage<T>> {
+        self.storage.borrow()
     }
 
     pub(crate) fn remove(&self, id: Id<T::Marker>) -> T {
-        let value = self.storage.write().remove(id);
+        let value = self.storage.borrow_mut().remove(id);
         value
     }
 }
