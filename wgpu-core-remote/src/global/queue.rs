@@ -1,11 +1,10 @@
 use core::ptr::NonNull;
 
 use wgpu_core::device::queue::{QueueSubmitError, QueueWriteError, SubmittedWorkDoneClosure};
-use wgpu_core::ray_tracing::CompactBlasError;
 use wgpu_core::SubmissionIndex;
 
 use crate::global::Global;
-use crate::id::{BlasId, BufferId, CommandBufferId, QueueId, StagingBufferId, TextureId};
+use crate::id::{BufferId, CommandBufferId, QueueId, StagingBufferId, TextureId};
 
 impl Global {
     pub fn queue_write_buffer(
@@ -110,24 +109,5 @@ impl Global {
         let queue = self.hub.queues.get(queue_id);
         let result = queue.on_submitted_work_done(closure);
         result.unwrap_or(0) // '0' means no wait is necessary
-    }
-
-    pub fn queue_compact_blas(
-        &self,
-        queue_id: QueueId,
-        blas_id: BlasId,
-        id_in: Option<BlasId>,
-    ) -> (BlasId, Option<u64>, Option<CompactBlasError>) {
-        let fid = self.hub.blas_s.prepare(id_in);
-
-        let queue = self.hub.queues.get(queue_id);
-        let blas = self.hub.blas_s.get(blas_id);
-
-        let (blas, error) = queue.compact_blas(&blas);
-
-        let handle = blas.handle();
-        let id = fid.assign(blas);
-
-        (id, handle, error)
     }
 }
