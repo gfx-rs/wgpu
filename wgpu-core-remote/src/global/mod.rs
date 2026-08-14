@@ -21,7 +21,6 @@ mod command_encoder;
 mod compute_pass;
 mod device;
 mod instance;
-mod present;
 mod queue;
 mod render_pass;
 
