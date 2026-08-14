@@ -5022,6 +5022,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-sync"
+version = "30.0.0"
+dependencies = [
+ "cfg-if",
+ "lock_api",
+ "parking_lot",
+]
+
+[[package]]
 name = "wgpu-test"
 version = "30.0.0"
 dependencies = [
