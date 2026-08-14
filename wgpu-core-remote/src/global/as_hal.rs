@@ -118,32 +118,4 @@ impl Global {
 
         unsafe { queue.as_hal::<A>() }
     }
-
-    /// # Safety
-    ///
-    /// - The raw blas handle must not be manually destroyed
-    pub unsafe fn blas_as_hal<A: hal::Api>(
-        &self,
-        id: BlasId,
-    ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
-        let hub = &self.hub;
-
-        let blas = hub.blas_s.get(id);
-
-        unsafe { blas.as_hal::<A>() }
-    }
-
-    /// # Safety
-    ///
-    /// - The raw tlas handle must not be manually destroyed
-    pub unsafe fn tlas_as_hal<A: hal::Api>(
-        &self,
-        id: TlasId,
-    ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
-        let hub = &self.hub;
-
-        let tlas = hub.tlas_s.get(id);
-
-        unsafe { tlas.as_hal::<A>() }
-    }
 }
