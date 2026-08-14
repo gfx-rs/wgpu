@@ -1,14 +1,10 @@
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::ptr::NonNull;
 
-#[cfg(feature = "trace")]
-use crate::device::trace;
-use crate::{
+use wgpu_core::{
     binding_model::{self},
     command,
-    device::{life::WaitIdleError, DeviceError, DeviceLostClosure},
-    global::Global,
-    id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
+    device::{Device, DeviceError, DeviceLostClosure, WaitIdleError},
     instance::{self, Adapter, Surface},
     pipeline::{
         self, MeshState, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
@@ -18,8 +14,13 @@ use crate::{
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
     },
+    Label, LabelHelpers, SubmissionIndex,
+};
+
+use crate::{
+    global::Global,
+    id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     storage::Storage,
-    Label, LabelHelpers,
 };
 
 use wgt::{BufferAddress, TextureFormat};
@@ -60,8 +61,6 @@ pub type ComputePipelineDescriptor<'a> = pipeline::ComputePipelineDescriptor<
     id::ShaderModuleId,
     id::PipelineCacheId,
 >;
-
-pub type VertexState<'a> = pipeline::VertexState<'a, id::ShaderModuleId>;
 
 pub type MeshPipelineDescriptor<'a> = pipeline::MeshPipelineDescriptor<
     'a,
@@ -147,7 +146,7 @@ impl Global {
 
     pub fn device_adapter_info(&self, device_id: DeviceId) -> wgt::AdapterInfo {
         let device = self.hub.devices.get(device_id);
-        device.adapter.get_info()
+        device.adapter_info()
     }
 
     pub fn device_downlevel_properties(&self, device_id: DeviceId) -> wgt::DownlevelCapabilities {
@@ -906,7 +905,7 @@ impl Global {
     fn device_create_general_render_pipeline(
         &self,
         desc: GeneralRenderPipelineDescriptor,
-        device: Arc<crate::device::resource::Device>,
+        device: Arc<Device>,
         fid: crate::registry::FutureId<Arc<pipeline::RenderPipeline>>,
     ) -> (
         id::RenderPipelineId,
@@ -1145,7 +1144,7 @@ impl Global {
     pub fn device_poll(
         &self,
         device_id: DeviceId,
-        poll_type: wgt::PollType<crate::SubmissionIndex>,
+        poll_type: wgt::PollType<SubmissionIndex>,
     ) -> Result<wgt::PollStatus, WaitIdleError> {
         let device = self.hub.devices.get(device_id);
 
@@ -1229,15 +1228,6 @@ impl Global {
         device.generate_allocator_report()
     }
 
-    #[cfg(feature = "trace")]
-    pub fn device_take_trace(
-        &self,
-        device_id: DeviceId,
-    ) -> Option<Box<dyn trace::Trace + Send + Sync + 'static>> {
-        let device = self.hub.devices.get(device_id);
-        device.take_trace()
-    }
-
     pub fn queue_drop(&self, queue_id: QueueId) {
         self.hub.queues.remove(queue_id);
     }
@@ -1249,7 +1239,7 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<crate::SubmissionIndex, BufferAccessError> {
+    ) -> Result<SubmissionIndex, BufferAccessError> {
         let hub = &self.hub;
 
         let buffer = hub.buffers.get(buffer_id);

@@ -6,8 +6,6 @@ use wgt::error::{ErrorType, WebGpuError};
 use crate::{
     command::{encoder::EncodingState, ArcCommand, CommandEncoder, EncoderStateError},
     device::DeviceError,
-    global::Global,
-    id::{BufferId, CommandEncoderId, TextureId},
     resource::{Buffer, InvalidResourceError, ParentDevice, Texture},
     track::ResourceUsageCompatibilityError,
 };
@@ -45,42 +43,6 @@ impl CommandEncoder {
                     .collect::<Result<_, TransitionResourcesError>>()?,
             })
         })
-    }
-}
-
-impl Global {
-    pub fn command_encoder_transition_resources(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        buffer_transitions: impl Iterator<Item = wgt::BufferTransition<BufferId>>,
-        texture_transitions: impl Iterator<Item = wgt::TextureTransition<TextureId>>,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        let buffer_transitions = buffer_transitions
-            .map(|t| {
-                let buffer = hub.buffers.get(t.buffer);
-                wgt::BufferTransition {
-                    buffer,
-                    state: t.state,
-                }
-            })
-            .collect::<Vec<_>>();
-        let texture_transitions = texture_transitions
-            .map(|t| {
-                let texture = hub.textures.get(t.texture);
-                wgt::TextureTransition {
-                    texture,
-                    selector: t.selector,
-                    state: t.state,
-                }
-            })
-            .collect::<Vec<_>>();
-        cmd_enc.transition_resources(
-            buffer_transitions.into_iter(),
-            texture_transitions.into_iter(),
-        )
     }
 }
 

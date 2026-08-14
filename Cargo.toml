@@ -21,6 +21,7 @@ members = [
     "tests",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
+    "wgpu-core-remote",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
