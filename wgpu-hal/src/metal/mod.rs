@@ -56,7 +56,7 @@ use objc2_metal::{
     MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
-use parking_lot::{Condvar, Mutex, RwLock};
+use wgpu_sync::{Condvar, Mutex, RwLock};
 
 #[derive(Clone, Debug)]
 pub struct Api;
@@ -1270,7 +1270,7 @@ unsafe impl Sync for QuerySet {}
 
 #[derive(Debug)]
 pub struct Fence {
-    sync: Arc<(Mutex<crate::FenceValue>, Condvar)>,
+    sync: Arc<(wgpu_sync::CondvarMutex<crate::FenceValue>, Condvar)>,
     /// The pending fence values have to be ascending.
     pending_command_buffers: RwLock<Vec<PendingCommandBuffer>>,
     shared_event: Option<Retained<ProtocolObject<dyn MTLSharedEvent>>>,

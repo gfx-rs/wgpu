@@ -205,13 +205,11 @@ impl ExternalTextureParams {
 
 /// Because all operations are push/swap (no longlived lock),
 /// we can have mutex without lock rank
-pub(crate) struct DeferredBufferMapPendingClosures(
-    parking_lot::Mutex<Vec<BufferMapPendingClosure>>,
-);
+pub(crate) struct DeferredBufferMapPendingClosures(wgpu_sync::Mutex<Vec<BufferMapPendingClosure>>);
 
 impl DeferredBufferMapPendingClosures {
     pub(crate) fn new() -> Self {
-        Self(parking_lot::Mutex::new(Vec::new()))
+        Self(wgpu_sync::Mutex::new(Vec::new()))
     }
 
     pub(crate) fn push(&self, closure: BufferMapPendingClosure) {
@@ -782,10 +780,25 @@ impl Device {
         self.adapter.backend()
     }
 
+    /// Return true if `self` is still valid.
+    ///
+    /// Note that a `false` result here does *not* guarantee that no further activity will
+    /// occur on the `Device`. A [`Device`] can be marked invalid at any time, even while
+    /// locks are held, meaning that operations begun before the `Device` was marked
+    /// invalid will still generally run to completion. This is a consequence of
+    /// making [`Device::valid`] an `AtomicBool`. It could be avoided by making
+    /// [`Device::valid`] an ordinary `bool` field protected by the same locks that
+    /// all other operations acquire, but we use an `AtomicBool` because there
+    /// are many device validity checks and we want those to be cheap.
     pub fn is_valid(&self) -> bool {
         self.valid.load(Ordering::Acquire)
     }
 
+    /// Return `Err(DeviceError)` if `self` is not valid. Otherwise, return `Ok(())`.
+    ///
+    /// Note that an `Err` result here does *not* guarantee that no further activity will
+    /// occur on the `Device`. See the documentation for [`is_valid`][Self::is_valid] for
+    /// details.
     pub fn check_is_valid(&self) -> Result<(), DeviceError> {
         if self.is_valid() {
             Ok(())
@@ -1037,14 +1050,27 @@ impl Device {
             }
         };
 
-        // Prevent new commands from being submitted as we want to act on `queue_empty`.
-        let command_indices = self.command_indices.read();
-        // Check that the device is valid. This is combined with queue empty to decide whether
-        // to destroy all resources. Queue.submit blocks on command indices being writable
-        // and rejects if invalid so if the device in now invalid, and all submissions are
-        // finished, there will be no more submissions.
-        let device_valid = self.is_valid();
-        drop(command_indices);
+        // When a device is marked invalid, we must destroy all its hal resources once its
+        // queue is empty, by calling `release_gpu_resources`.
+        //
+        // However, checking device validity for this purpose is tricky. A device can be
+        // marked invalid at any time, regardless of what locks are held. This means that,
+        // even though queue submission does check device validity at the start (in
+        // `Queue::allocate_submission`), the submission will proceed even if the
+        // device gets marked invalid after that check. Thus, other threads can observe
+        // the queue becoming non-empty even after they have observed the device to be
+        // invalid.
+        //
+        // In this function, for `release_gpu_resources` to work as intended, we must be
+        // sure that no further work can be submitted. Specifically, we must be sure that
+        // if we see the device marked invalid, then so will any subsequent attempts to
+        // submit work to the queue, causing them to fail. To accomplish this, it suffices
+        // to hold the same lock while we call `is_valid` that `Queue::allocate_submission`
+        // holds while it does the submission.
+        let device_valid = {
+            let _command_indices_guard = self.command_indices.read();
+            self.is_valid()
+        };
 
         // Maintain all finished submissions on the queue, updating the relevant user closures and
         // collecting if the queue is empty.
@@ -5656,17 +5682,24 @@ impl Device {
         // initiate movement into those buckets, and it can do that by calling
         // "destroy" on all the resources we know about.
 
-        // During these iterations, we discard all errors. We don't care!
         let trackers = self.trackers.lock();
-        for buffer in trackers.buffers.used_resources() {
-            if let Some(buffer) = Weak::upgrade(buffer) {
-                buffer.destroy();
-            }
+        let buffers = trackers
+            .buffers
+            .used_resources()
+            .flat_map(Weak::upgrade)
+            .collect::<Vec<_>>();
+        let textures = trackers
+            .textures
+            .used_resources()
+            .flat_map(Weak::upgrade)
+            .collect::<Vec<_>>();
+        drop(trackers);
+
+        for buffer in buffers {
+            buffer.destroy();
         }
-        for texture in trackers.textures.used_resources() {
-            if let Some(texture) = Weak::upgrade(texture) {
-                texture.destroy();
-            }
+        for texture in textures {
+            texture.destroy();
         }
     }
 

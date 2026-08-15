@@ -17,7 +17,6 @@ mod compute_command;
 mod draw;
 mod encoder;
 mod encoder_command;
-pub mod ffi;
 mod memory_init;
 mod pass;
 mod query;
@@ -54,13 +53,13 @@ pub use self::{
     },
     compute_command::ArcComputeCommand,
     draw::{DrawError, Rect, RenderCommandError},
-    encoder_command::{ArcCommand, ArcReferences, Command, IdReferences, ReferenceType},
+    encoder_command::{ArcCommand, ArcReferences, Command, ReferenceType},
     query::{QueryError, QueryUseError, ResolveError, SimplifiedQueryType},
     render::{
         AttachmentError, AttachmentErrorLocation, ColorAttachmentError, ColorAttachments, LoadOp,
         PassChannel, RenderBasePass, RenderPass, RenderPassColorAttachment,
-        RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPassError,
-        RenderPassErrorInner, ResolvedPassChannel, ResolvedRenderPassDepthStencilAttachment,
+        RenderPassDepthStencilAttachment, RenderPassError, RenderPassErrorInner,
+        ResolvedPassChannel, ResolvedRenderPassDepthStencilAttachment,
         ResolvedRenderPassDescriptor, StoreOp,
     },
     render_command::ArcRenderCommand,
@@ -98,19 +97,12 @@ use crate::resource::{
     ParentDevice as _, QuerySet,
 };
 use crate::track::{DeviceTracker, ResourceUsageCompatibilityError, Tracker, UsageScope};
-use crate::{api_log, global::Global, id, resource_log, Label};
+use crate::{api_log, resource_log, Label};
 use crate::{hal_label, LabelHelpers};
 
 use wgt::error::{ErrorType, WebGpuError};
 
 use thiserror::Error;
-
-/// cbindgen:ignore
-pub type TexelCopyBufferInfo = ffi::TexelCopyBufferInfo;
-/// cbindgen:ignore
-pub type TexelCopyTextureInfo = ffi::TexelCopyTextureInfo;
-/// cbindgen:ignore
-pub type CopyExternalImageDestInfo = ffi::CopyExternalImageDestInfo;
 
 pub(crate) struct EncoderErrorState {
     error: CommandEncoderError,
@@ -1794,62 +1786,6 @@ impl CommandEncoder {
     }
 }
 
-impl Global {
-    /// Finishes a command encoder, creating a command buffer and returning errors that were
-    /// deferred until now.
-    ///
-    /// The returned `String` is the label of the command encoder, supplied so that `wgpu` can
-    /// include the label when printing deferred errors without having its own copy of the label.
-    /// This is a kludge and should be replaced if we think of a better solution to propagating
-    /// labels.
-    pub fn command_encoder_finish(
-        &self,
-        encoder_id: id::CommandEncoderId,
-        desc: &wgt::CommandBufferDescriptor<Label>,
-        id_in: Option<id::CommandBufferId>,
-    ) -> (id::CommandBufferId, Option<(String, CommandEncoderError)>) {
-        let hub = &self.hub;
-        let cmd_enc = hub.command_encoders.get(encoder_id);
-
-        let (cmd_buf, opt_error) = cmd_enc.finish(desc);
-        let cmd_buf_id = hub.command_buffers.prepare(id_in).assign(cmd_buf);
-
-        (cmd_buf_id, opt_error)
-    }
-
-    pub fn command_encoder_push_debug_group(
-        &self,
-        encoder_id: id::CommandEncoderId,
-        label: &str,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(encoder_id);
-        cmd_enc.push_debug_group(label)
-    }
-
-    pub fn command_encoder_insert_debug_marker(
-        &self,
-        encoder_id: id::CommandEncoderId,
-        label: &str,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(encoder_id);
-        cmd_enc.insert_debug_marker(label)
-    }
-
-    pub fn command_encoder_pop_debug_group(
-        &self,
-        encoder_id: id::CommandEncoderId,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(encoder_id);
-        cmd_enc.pop_debug_group()
-    }
-}
-
 pub(crate) fn push_debug_group(
     state: &mut EncodingState,
     label: &str,
@@ -1930,12 +1866,6 @@ impl<T: Clone + PartialEq_> Default for StateChange<T> {
 
 trait PartialEq_ {
     fn eq(&self, other: &Self) -> bool;
-}
-
-impl<T: id::Marker> PartialEq_ for id::Id<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self == other
-    }
 }
 
 impl<T> PartialEq_ for Arc<T> {
