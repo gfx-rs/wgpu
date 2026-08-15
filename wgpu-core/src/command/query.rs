@@ -5,8 +5,6 @@ use core::{iter, mem};
 use crate::{
     command::{encoder::EncodingState, ArcCommand, EncoderStateError, InnerCommandEncoder},
     device::{Device, DeviceError, MissingFeatures},
-    global::Global,
-    id,
     init_tracker::MemoryInitKind,
     resource::{
         Buffer, DestroyedResourceError, InvalidResourceError, MissingBufferUsageError,
@@ -465,42 +463,6 @@ impl super::CommandEncoder {
                 destination_offset,
             })
         })
-    }
-}
-
-impl Global {
-    pub fn command_encoder_write_timestamp(
-        &self,
-        command_encoder_id: id::CommandEncoderId,
-        query_set_id: id::QuerySetId,
-        query_index: u32,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        cmd_enc.write_timestamp(hub.query_sets.get(query_set_id), query_index)
-    }
-
-    pub fn command_encoder_resolve_query_set(
-        &self,
-        command_encoder_id: id::CommandEncoderId,
-        query_set_id: id::QuerySetId,
-        start_query: u32,
-        query_count: u32,
-        destination: id::BufferId,
-        destination_offset: BufferAddress,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-
-        cmd_enc.resolve_query_set(
-            hub.query_sets.get(query_set_id),
-            start_query,
-            query_count,
-            hub.buffers.get(destination),
-            destination_offset,
-        )
     }
 }
 

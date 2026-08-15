@@ -54,11 +54,14 @@ Bottom level categories:
 
 - Add `BufferBinding::buffer`, a public read accessor for the bound buffer, which was previously inaccessible to out-of-tree `wgpu_hal::Api` implementations. By @danlehmann in [#9820](https://github.com/gfx-rs/wgpu/pull/9820).
 - Added `CommandEncoder::encode_deferred_multi_draws` (default no-op). Backends may defer part of the work for indirect multi-draws recorded in a render pass; after ending such a pass, callers must invoke this method while recording a command buffer that the queue executes before the pass's. wgpu-core does this in its internal pre-pass. By @matthargett in [#9640](https://github.com/gfx-rs/wgpu/pull/9640).
+- Allow specifying a queue family ownership transfer when transitioning a texture. `hal::TextureBarrier` gained an optional `queue_family_ownership_transfer` field (honored only by the Vulkan backend) so that images imported from external memory can be acquired from and released back to the queue family of an external or foreign owner, described by the new `hal::QueueFamily` enum. Resolves [#2948](https://github.com/gfx-rs/wgpu/issues/2948). By @alexander-bruun in [#9668](https://github.com/gfx-rs/wgpu/pull/9668).
+- Add `wgpu_hal::vulkan::Surface::set_next_present_chain`, which attaches a caller-provided `pNext` chain to the `VkPresentInfoKHR` of the surface's next presentation. With `Adapter::open_with_callback` to enable the device extension, this supports presentation extensions wgpu has no dedicated support for, such as [VK_NV_present_metering](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_present_metering.html) for metering the display timing of frame-generation frames. By @stuartparmenter in [#9847](https://github.com/gfx-rs/wgpu/pull/9847).
 
 #### Metal
 
 - Fix Naga's Metal backend crashing when a storage texture was used as a function argument. By @ErichDonGubler in [#9867](https://github.com/gfx-rs/wgpu/pull/9867).
 - Metal now lowers fixed-count `multi_draw_indirect` / `multi_draw_indexed_indirect` (and their mesh-task counterpart) with 8 or more draws to GPU-generated indirect command buffers. The generation compute runs in the internal pre-pass command buffer that already carries indirect-draw validation, so the render pass is never interrupted. By @matthargett in [#9640](https://github.com/gfx-rs/wgpu/pull/9640).
+- Fix `max_task_workgroup_count` being misreported on pre-Apple7 devices. By @inner-daemons in [#10065](https://github.com/gfx-rs/wgpu/pull/10065).
 
 #### GLES
 
@@ -99,6 +102,8 @@ Bottom level categories:
 - When creating render pipelines, validate that a corresponding shader output is present for each color attachment with non-zero write mask, and that shader output includes alpha when the blend operation uses source alpha. By @andyleiserson in [#9939](https://github.com/gfx-rs/wgpu/pull/9939).
 - Reject bind group layout entries with `TASK` or `MESH` visibility unless `Features::EXPERIMENTAL_MESH_SHADER` is enabled. By @teoxoy in [#10042](https://github.com/gfx-rs/wgpu/issues/10042).
 - Reject bind group layout entries with `RAY_GENERATION`, `ANY_HIT`, `CLOSEST_HIT`, or `MISS` visibility unless `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES` is enabled. By @teoxoy in [#10042](https://github.com/gfx-rs/wgpu/issues/10042).
+- Numeric types must now match exactly on inter-stage interfaces. Previously, the receiving type was only required to be a subtype of the originating type. By @andyleiserson in [#9999](https://github.com/gfx-rs/wgpu/pull/9999).
+- Relaxed requirement that the pipeline scalar type for a color output be at least as wide as the shader output type. Now, only the scalar kind must match. By @andyleiserson in [#9999](https://github.com/gfx-rs/wgpu/pull/9999).
 
 #### Naga
 
@@ -120,12 +125,14 @@ Bottom level categories:
 
 #### GLES
 
+- Avoid duplicate `EGL_SURFACE_TYPE` attributes when selecting an EGL framebuffer configuration, which caused Mesa to return no matching configurations. By @BlueJayLouche and @scroix in [#10048](https://github.com/gfx-rs/wgpu/pull/10048).
 - Fixed signed integer `%` (and `%=`) returning the wrong result for negative operands in the GLSL (OpenGL/GLES) backend, e.g. `-1 % 768` yielding `255` instead of `-1`. GLSL's `%` is undefined when either operand is negative, so signed remainder is now lowered as `a - b * (a / b)`, matching the SPIR-V, HLSL, and Metal backends. By @mstampfli in [#9687](https://github.com/gfx-rs/wgpu/pull/9687).
 - Fix negative argument for `atomicSub` yielding incorrect GLSL. By @ErichDonGubler in [#9924](https://github.com/gfx-rs/wgpu/pull/9924).
 
 #### WebGPU
 
 - Recognize `GPUInternalError` when converting a WebGPU error, mapping it to `Error::Internal` instead of panicking with "Unexpected error". By @evilpies in [#9919](https://github.com/gfx-rs/wgpu/pull/9919).
+- Fix `pop_error_scope` panics when it returns `null`. By @beicause in [#10039](https://github.com/gfx-rs/wgpu/pull/10039).
 
 ### Documentation
 

@@ -87,7 +87,13 @@ impl crate::Error {
         } else if js_error.has_type::<webgpu_sys::GpuOutOfMemoryError>() {
             crate::Error::OutOfMemory { source }
         } else {
-            panic!("Unexpected error");
+            let constructor = js_error
+                .constructor()
+                .name()
+                .as_string()
+                .unwrap_or_default();
+            let value = js_error.to_string().as_string().unwrap_or_default();
+            panic!("Unexpected error: constructor={constructor} value={value}");
         }
     }
 }
@@ -1069,7 +1075,17 @@ fn future_request_device(
 fn future_pop_error_scope(
     result: Result<js_sys::JsOption<webgpu_sys::GpuError>, wasm_bindgen::JsValue>,
 ) -> Option<crate::Error> {
-    Some(crate::Error::from_js(result.ok()?.into_option()?.into()))
+    let js_option = result.ok()?;
+    // WebGPU's `popErrorScope()` resolves with `null` when the scope captured no error, but
+    // `wasm-bindgen`'s `JsOption` only treats `undefined` as absent (not `null`), so `null`
+    // must be checked explicitly here.
+    if js_option.is_empty() || JsValue::is_null(&js_option) {
+        return None;
+    }
+    let err = js_option
+        .into_option()
+        .expect("null/undefined checked above");
+    Some(crate::Error::from_js(err.into()))
 }
 
 fn future_compilation_info(

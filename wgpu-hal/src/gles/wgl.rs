@@ -24,8 +24,8 @@ use glutin_wgl_sys::wgl_extra::{
     CONTEXT_PROFILE_MASK_ARB,
 };
 use hashbrown::HashSet;
-use parking_lot::{Mutex, MutexGuard, RwLock};
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
+use wgpu_sync::{Mutex, MutexGuard, RwLock};
 use wgt::InstanceFlags;
 use windows::{
     core::{Error, PCSTR},

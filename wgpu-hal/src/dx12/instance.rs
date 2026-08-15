@@ -1,6 +1,6 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
 
-use parking_lot::RwLock;
+use wgpu_sync::RwLock;
 use windows::Win32::{Foundation, Graphics::Dxgi};
 
 use super::SurfaceTarget;
