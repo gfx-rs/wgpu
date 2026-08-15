@@ -2231,6 +2231,7 @@ impl BlockContext<'_> {
                 };
                 let layout_id = self.get_index_constant(layout as u32);
                 let stride_id = self.cached[data.stride];
+                let memory_operands = self.coop_memory_operands(data.pointer, true);
                 match self.write_access_chain(data.pointer, block, AccessTypeAdjustment::None)? {
                     ExpressionPointer::Ready { pointer_id } => {
                         let id = self.gen_id();
@@ -2240,6 +2241,7 @@ impl BlockContext<'_> {
                             pointer_id,
                             layout_id,
                             stride_id,
+                            memory_operands,
                         ));
                         id
                     }
@@ -2258,6 +2260,7 @@ impl BlockContext<'_> {
                                     pointer_id,
                                     layout_id,
                                     stride_id,
+                                    memory_operands,
                                 ));
                                 id
                             },
@@ -2906,21 +2909,31 @@ impl BlockContext<'_> {
                 None => (result_type_id, access_type_adjustment),
             };
 
+            let (pointer_space, is_atomic) =
+                match *self.fun_info[pointer].ty.inner_with(&self.ir_module.types) {
+                    crate::TypeInner::Pointer { base, space } => (
+                        Some(space),
+                        matches!(
+                            self.ir_module.types[base].inner,
+                            crate::TypeInner::Atomic { .. }
+                        ),
+                    ),
+                    crate::TypeInner::ValuePointer { space, .. } => (Some(space), false),
+                    _ => (None, false),
+                };
+            let memory_operands = match pointer_space {
+                Some(space) if !is_atomic => self.access_memory_operands(pointer, space, true),
+                _ => None,
+            };
+
             let load_id = match self.write_access_chain(pointer, block, access_type_adjustment)? {
                 ExpressionPointer::Ready { pointer_id } => {
                     let id = self.gen_id();
-                    let atomic_space =
-                        match *self.fun_info[pointer].ty.inner_with(&self.ir_module.types) {
-                            crate::TypeInner::Pointer { base, space } => {
-                                match self.ir_module.types[base].inner {
-                                    crate::TypeInner::Atomic { .. } => Some(space),
-                                    _ => None,
-                                }
-                            }
-                            _ => None,
-                        };
-                    let instruction = if let Some(space) = atomic_space {
-                        let (semantics, scope) = space.to_spirv_semantics_and_scope();
+                    let instruction = if is_atomic {
+                        let space = pointer_space.unwrap();
+                        let decorations = self.memory_decorations_for(pointer);
+                        let (semantics, scope) =
+                            self.writer.atomic_semantics_and_scope(space, decorations);
                         let scope_constant_id = self.get_scope_constant(scope as u32);
                         let semantics_id = self.get_index_constant(semantics.bits());
                         Instruction::atomic_load(
@@ -2931,7 +2944,7 @@ impl BlockContext<'_> {
                             semantics_id,
                         )
                     } else {
-                        Instruction::load(load_type_id, id, pointer_id, None)
+                        Instruction::load(load_type_id, id, pointer_id, memory_operands)
                     };
                     block.body.push(instruction);
                     id
@@ -2951,7 +2964,7 @@ impl BlockContext<'_> {
                                 load_type_id,
                                 value_id,
                                 pointer_id,
-                                None,
+                                memory_operands,
                             ));
                             value_id
                         },
@@ -3870,26 +3883,35 @@ impl BlockContext<'_> {
                 }
                 Statement::Store { pointer, value } => {
                     let value_id = self.cached[value];
+                    let (pointer_space, is_atomic) =
+                        match *self.fun_info[pointer].ty.inner_with(&self.ir_module.types) {
+                            crate::TypeInner::Pointer { base, space } => (
+                                Some(space),
+                                matches!(
+                                    self.ir_module.types[base].inner,
+                                    crate::TypeInner::Atomic { .. }
+                                ),
+                            ),
+                            crate::TypeInner::ValuePointer { space, .. } => (Some(space), false),
+                            _ => (None, false),
+                        };
+                    let memory_operands = match pointer_space {
+                        Some(space) if !is_atomic => {
+                            self.access_memory_operands(pointer, space, false)
+                        }
+                        _ => None,
+                    };
                     match self.write_access_chain(
                         pointer,
                         &mut block,
                         AccessTypeAdjustment::None,
                     )? {
                         ExpressionPointer::Ready { pointer_id } => {
-                            let atomic_space = match *self.fun_info[pointer]
-                                .ty
-                                .inner_with(&self.ir_module.types)
-                            {
-                                crate::TypeInner::Pointer { base, space } => {
-                                    match self.ir_module.types[base].inner {
-                                        crate::TypeInner::Atomic { .. } => Some(space),
-                                        _ => None,
-                                    }
-                                }
-                                _ => None,
-                            };
-                            let instruction = if let Some(space) = atomic_space {
-                                let (semantics, scope) = space.to_spirv_semantics_and_scope();
+                            let instruction = if is_atomic {
+                                let space = pointer_space.unwrap();
+                                let decorations = self.memory_decorations_for(pointer);
+                                let (semantics, scope) =
+                                    self.writer.atomic_semantics_and_scope(space, decorations);
                                 let scope_constant_id = self.get_scope_constant(scope as u32);
                                 let semantics_id = self.get_index_constant(semantics.bits());
                                 Instruction::atomic_store(
@@ -3899,7 +3921,7 @@ impl BlockContext<'_> {
                                     value_id,
                                 )
                             } else {
-                                Instruction::store(pointer_id, value_id, None)
+                                Instruction::store(pointer_id, value_id, memory_operands)
                             };
                             block.body.push(instruction);
                         }
@@ -3910,10 +3932,11 @@ impl BlockContext<'_> {
                             // The in-bounds path. Perform the access and the store.
                             let pointer_id = access.result_id.unwrap();
                             selection.block().body.push(access);
-                            selection
-                                .block()
-                                .body
-                                .push(Instruction::store(pointer_id, value_id, None));
+                            selection.block().body.push(Instruction::store(
+                                pointer_id,
+                                value_id,
+                                memory_operands,
+                            ));
 
                             // Finish the in-bounds block and start the merge block. This
                             // is the block we'll leave current on return.
@@ -3988,7 +4011,9 @@ impl BlockContext<'_> {
                         .inner_with(&self.ir_module.types)
                         .pointer_space()
                         .unwrap();
-                    let (semantics, scope) = space.to_spirv_semantics_and_scope();
+                    let decorations = self.memory_decorations_for(pointer);
+                    let (semantics, scope) =
+                        self.writer.atomic_semantics_and_scope(space, decorations);
                     let scope_constant_id = self.get_scope_constant(scope as u32);
                     let semantics_id = self.get_index_constant(semantics.bits());
                     let value_id = self.cached[value];
@@ -4249,6 +4274,7 @@ impl BlockContext<'_> {
                     };
                     let layout_id = self.get_index_constant(layout as u32);
                     let stride_id = self.cached[data.stride];
+                    let memory_operands = self.coop_memory_operands(data.pointer, false);
                     match self.write_access_chain(
                         data.pointer,
                         &mut block,
@@ -4256,7 +4282,11 @@ impl BlockContext<'_> {
                     )? {
                         ExpressionPointer::Ready { pointer_id } => {
                             block.body.push(Instruction::coop_store(
-                                target_id, pointer_id, layout_id, stride_id,
+                                target_id,
+                                pointer_id,
+                                layout_id,
+                                stride_id,
+                                memory_operands,
                             ));
                         }
                         ExpressionPointer::Conditional { condition, access } => {
@@ -4267,7 +4297,11 @@ impl BlockContext<'_> {
                             let pointer_id = access.result_id.unwrap();
                             selection.block().body.push(access);
                             selection.block().body.push(Instruction::coop_store(
-                                target_id, pointer_id, layout_id, stride_id,
+                                target_id,
+                                pointer_id,
+                                layout_id,
+                                stride_id,
+                                memory_operands,
                             ));
 
                             // Finish the in-bounds block and start the merge block. This

@@ -9,7 +9,9 @@ use core::num::NonZeroU32;
 
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
-use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
+use crate::front::wgsl::parse::directive::enable_extension::{
+    EnableExtensions, ImplementedEnableExtension,
+};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::wgsl::Result;
@@ -3320,6 +3322,30 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let rctx = ctx.runtime_expression_ctx(function_span)?;
                     rctx.block.push(
                         ir::Statement::ControlBarrier(ir::Barrier::STORAGE),
+                        function_span,
+                    );
+                    return Ok(None);
+                }
+                "storageFence" => {
+                    ctx.enable_extensions
+                        .require(ImplementedEnableExtension::WgpuMemoryFence, function_span)?;
+                    ctx.prepare_args(arguments, 0, function_span).finish()?;
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        ir::Statement::MemoryBarrier(ir::Barrier::STORAGE),
+                        function_span,
+                    );
+                    return Ok(None);
+                }
+                "workgroupFence" => {
+                    ctx.enable_extensions
+                        .require(ImplementedEnableExtension::WgpuMemoryFence, function_span)?;
+                    ctx.prepare_args(arguments, 0, function_span).finish()?;
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        ir::Statement::MemoryBarrier(ir::Barrier::WORK_GROUP),
                         function_span,
                     );
                     return Ok(None);

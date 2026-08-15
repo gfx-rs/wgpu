@@ -228,6 +228,7 @@ impl<W: core::fmt::Write> super::Writer<W> {
                     handle,
                     usage: crate::valid::GlobalUse::WRITE | crate::valid::GlobalUse::READ,
                     reference: false,
+                    lang_version: options.lang_version,
                 };
                 write!(self.out, "{}", back::INDENT)?;
                 tyvar.try_fmt(&mut self.out)?;

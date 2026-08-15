@@ -298,6 +298,7 @@ impl<W: Write> Writer<W> {
             cooperative_matrix: bool,
             draw_index: bool,
             ray_tracing_pipeline: bool,
+            memory_fence: bool,
             per_vertex: bool,
             binding_array: bool,
         }
@@ -305,6 +306,34 @@ impl<W: Write> Writer<W> {
             mesh_shaders: module.uses_mesh_shaders(),
             ..Default::default()
         };
+
+        fn contains_memory_barrier(block: &crate::Block) -> bool {
+            use crate::Statement as St;
+            block.iter().any(|stmt| match *stmt {
+                St::MemoryBarrier(_) => true,
+                St::Block(ref b) => contains_memory_barrier(b),
+                St::If {
+                    ref accept,
+                    ref reject,
+                    ..
+                } => contains_memory_barrier(accept) || contains_memory_barrier(reject),
+                St::Switch { ref cases, .. } => {
+                    cases.iter().any(|case| contains_memory_barrier(&case.body))
+                }
+                St::Loop {
+                    ref body,
+                    ref continuing,
+                    ..
+                } => contains_memory_barrier(body) || contains_memory_barrier(continuing),
+                _ => false,
+            })
+        }
+        needed.memory_fence = module
+            .entry_points
+            .iter()
+            .map(|ep| &ep.function)
+            .chain(module.functions.iter().map(|(_, f)| f))
+            .any(|f| contains_memory_barrier(&f.body));
 
         let check_binding = |binding: &crate::Binding, needed: &mut RequiredEnabled| match *binding
         {
@@ -470,6 +499,10 @@ impl<W: Write> Writer<W> {
         }
         if needed.ray_tracing_pipeline {
             writeln!(self.out, "enable wgpu_ray_tracing_pipeline;")?;
+            any_written = true;
+        }
+        if needed.memory_fence {
+            writeln!(self.out, "enable wgpu_memory_fence;")?;
             any_written = true;
         }
         if needed.per_vertex {
@@ -1046,7 +1079,23 @@ impl<W: Write> Writer<W> {
             Statement::Continue => {
                 writeln!(self.out, "{level}continue;")?;
             }
-            Statement::ControlBarrier(barrier) | Statement::MemoryBarrier(barrier) => {
+            Statement::MemoryBarrier(barrier) => {
+                if barrier.contains(crate::Barrier::STORAGE) {
+                    writeln!(self.out, "{level}storageFence();")?;
+                }
+                if barrier.contains(crate::Barrier::WORK_GROUP) {
+                    writeln!(self.out, "{level}workgroupFence();")?;
+                }
+                // WGSL has no fence-only form for these; fall back to the
+                // control barriers, which are strictly stronger.
+                if barrier.contains(crate::Barrier::SUB_GROUP) {
+                    writeln!(self.out, "{level}subgroupBarrier();")?;
+                }
+                if barrier.contains(crate::Barrier::TEXTURE) {
+                    writeln!(self.out, "{level}textureBarrier();")?;
+                }
+            }
+            Statement::ControlBarrier(barrier) => {
                 if barrier.contains(crate::Barrier::STORAGE) {
                     writeln!(self.out, "{level}storageBarrier();")?;
                 }
