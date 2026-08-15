@@ -59,6 +59,8 @@ pub struct ComputePass {
     /// See <https://www.w3.org/TR/webgpu/#encoder-state>
     parent: Option<Arc<CommandEncoder>>,
 
+    device: Arc<Device>,
+
     timestamp_writes: Option<PassTimestampWrites>,
 
     // Resource binding dedupe state.
@@ -82,6 +84,7 @@ impl ComputePass {
 
         Self {
             base: BasePass::new(&label),
+            device: parent.device().clone(),
             parent: Some(parent),
             timestamp_writes,
 
@@ -93,6 +96,7 @@ impl ComputePass {
     fn new_invalid(parent: Arc<CommandEncoder>, label: &Label, err: ComputePassError) -> Self {
         Self {
             base: BasePass::new_invalid(label, err),
+            device: parent.device().clone(),
             parent: Some(parent),
             timestamp_writes: None,
             current_bind_groups: BindGroupStateChange::new(),
@@ -103,6 +107,10 @@ impl ComputePass {
     #[inline]
     pub fn label(&self) -> Option<&str> {
         self.base.label.as_deref()
+    }
+
+    pub fn device(&self) -> &Arc<Device> {
+        &self.device
     }
 }
 

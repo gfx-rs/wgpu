@@ -289,6 +289,10 @@ impl RenderBundleEncoder {
         self.base.label.as_deref()
     }
 
+    pub fn device(&self) -> &Arc<Device> {
+        &self.device
+    }
+
     /// Convert this encoder's commands into a [`RenderBundle`].
     ///
     /// We want executing a [`RenderBundle`] to be quick, so we take
