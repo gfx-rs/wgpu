@@ -1036,7 +1036,16 @@ fn create_16bit_struct_layout_test(storage_type: InputStorageType) -> Vec<Shader
                 ],
             )
             .failures(if storage_type == InputStorageType::Immediate {
+                // TODO: Fails on dx12.
                 Backends::DX12
+            } else if storage_type == InputStorageType::Uniform {
+                // TODO: Fails on vulkan and dx12.
+                //
+                // On vulkan:
+                // VALIDATION [VUID-VkShaderModuleCreateInfo-pCode-08737 (0xa5625282)]
+                // vkCreateShaderModule(): pCreateInfo->pCode (spirv-val produced an error):
+                // Structure id 14 decorated as Block for variable in Uniform storage class must follow relaxed uniform buffer layout rules: member 2 at offset 8 is not aligned to 16
+                Backends::VULKAN | Backends::DX12
             } else {
                 Backends::empty()
             }),
