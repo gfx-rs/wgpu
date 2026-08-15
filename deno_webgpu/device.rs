@@ -30,7 +30,7 @@ use crate::adapter::GPUSupportedFeatures;
 use crate::adapter::GPUSupportedLimits;
 use crate::command_encoder::GPUCommandEncoder;
 use crate::error::{fmt_err, make_pipeline_error};
-use crate::error::{GPUError, GPUGenericError, GPUPipelineErrorReason};
+use crate::error::{GPUGenericError, GPUPipelineErrorReason};
 use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
 use crate::render_pipeline::GPURenderPipeline;
@@ -133,9 +133,6 @@ impl GPUDevice {
   #[undefined]
   fn destroy(&self) {
     self.wgpu_device.destroy();
-    self
-      .error_handler
-      .push_error(Some(GPUError::Lost(GPUDeviceLostReason::Destroyed)));
   }
 
   #[required(1)]
@@ -705,7 +702,7 @@ impl GPUDevice {
     &self,
     scope: &mut v8::HandleScope,
   ) -> Result<v8::Global<v8::Value>, JsErrorBox> {
-    if self.error_handler.is_lost.get().is_some() {
+    if !self.wgpu_device.is_valid() {
       let val = v8::null(scope).cast::<v8::Value>();
       return Ok(v8::Global::new(scope, val));
     }
