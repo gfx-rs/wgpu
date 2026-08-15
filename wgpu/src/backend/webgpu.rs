@@ -71,30 +71,28 @@ impl fmt::Debug for ContextWebGpu {
     }
 }
 
-impl crate::Error {
-    fn from_js(js_error: js_sys::Object) -> Self {
-        let source = Box::<dyn core::error::Error + Send + Sync>::from("<WebGPU Error>");
-        if let Some(js_error) = js_error.dyn_ref::<webgpu_sys::GpuValidationError>() {
-            crate::Error::Validation {
-                source,
-                description: js_error.message(),
-            }
-        } else if let Some(js_error) = js_error.dyn_ref::<webgpu_sys::GpuInternalError>() {
-            crate::Error::Internal {
-                source,
-                description: js_error.message(),
-            }
-        } else if js_error.has_type::<webgpu_sys::GpuOutOfMemoryError>() {
-            crate::Error::OutOfMemory { source }
-        } else {
-            let constructor = js_error
-                .constructor()
-                .name()
-                .as_string()
-                .unwrap_or_default();
-            let value = js_error.to_string().as_string().unwrap_or_default();
-            panic!("Unexpected error: constructor={constructor} value={value}");
+fn error_from_js(js_error: js_sys::Object) -> crate::Error {
+    let source = Box::<dyn core::error::Error + Send + Sync>::from("<WebGPU Error>");
+    if let Some(js_error) = js_error.dyn_ref::<webgpu_sys::GpuValidationError>() {
+        crate::Error::Validation {
+            source,
+            description: js_error.message(),
         }
+    } else if let Some(js_error) = js_error.dyn_ref::<webgpu_sys::GpuInternalError>() {
+        crate::Error::Internal {
+            source,
+            description: js_error.message(),
+        }
+    } else if js_error.has_type::<webgpu_sys::GpuOutOfMemoryError>() {
+        crate::Error::OutOfMemory { source }
+    } else {
+        let constructor = js_error
+            .constructor()
+            .name()
+            .as_string()
+            .unwrap_or_default();
+        let value = js_error.to_string().as_string().unwrap_or_default();
+        panic!("Unexpected error: constructor={constructor} value={value}");
     }
 }
 
@@ -1075,7 +1073,7 @@ fn future_request_device(
 fn future_pop_error_scope(
     result: Result<js_sys::JsNullable<webgpu_sys::GpuError>, wasm_bindgen::JsValue>,
 ) -> Option<crate::Error> {
-    Some(crate::Error::from_js(result.ok()?.into_option()?.into()))
+    Some(error_from_js(result.ok()?.into_option()?.into()))
 }
 
 fn future_compilation_info(
@@ -2680,7 +2678,7 @@ impl dispatch::DeviceInterface for WebDevice {
 
     fn on_uncaptured_error(&self, handler: Arc<dyn crate::UncapturedErrorHandler>) {
         let f = Closure::wrap(Box::new(move |event: webgpu_sys::GpuUncapturedErrorEvent| {
-            let error = crate::Error::from_js(event.error().value_of());
+            let error = error_from_js(event.error().value_of());
             handler(error);
         }) as Box<dyn FnMut(_)>);
         self.inner
