@@ -5449,6 +5449,20 @@ fn main() {
 }
 
 #[test]
+fn debug_printf_rejects_non_literal_format() {
+    check_error_matches(
+        r#"enable wgpu_debug_printf;
+
+@compute @workgroup_size(1)
+fn main() {
+    debugPrintf(1i);
+}
+"#,
+        "debugPrintf's first argument must be a string literal",
+    );
+}
+
+#[test]
 fn debug_printf_rejects_vector_argument() {
     check_validation! {
         r#"enable wgpu_debug_printf;

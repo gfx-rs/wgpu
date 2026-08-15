@@ -83,12 +83,12 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         return vk::FALSE;
     }
 
-    const VUID_DEBUG_PRINTF: i32 = 0x4fe1fef9;
-    if cd.message_id_number == VUID_DEBUG_PRINTF {
+    const UNASSIGNED_DEBUG_PRINTF: i32 = 0x4fe1fef9;
+    if cd.message_id_number == UNASSIGNED_DEBUG_PRINTF {
         let message =
             unsafe { cd.message_as_c_str() }.map_or(Cow::Borrowed(""), CStr::to_string_lossy);
 
-        log::warn!("[debugPrintf] {}", message);
+        log::info!("[debugPrintf] {}", message);
 
         return vk::FALSE;
     }
@@ -999,7 +999,7 @@ impl super::Instance {
 
             // Enable explicit validation features if available
             let mut validation_features;
-            let mut validation_feature_list: ArrayVec<_, 4>;
+            let mut validation_feature_list: ArrayVec<_, 3>;
             if validation_features_are_enabled {
                 validation_feature_list = ArrayVec::new();
 

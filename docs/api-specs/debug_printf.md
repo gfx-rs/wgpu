@@ -9,7 +9,9 @@ This is a debugging extension and is not part of core WebGPU.
 - Add `enable wgpu_debug_printf;` to each WGSL module that calls `debugPrintf`.
 - Use a backend that advertises the feature:
   - Metal with shader logging support, available in Metal 3.2 and later.
-  - Vulkan with `VK_KHR_shader_non_semantic_info` support.
+  - Vulkan 1.3, or Vulkan with `VK_KHR_shader_non_semantic_info` support.
+
+On Metal, `wgpu` attaches an `MTLLogState` to the device's command queue and forwards the shader log messages to `log::info`.
 
 On Vulkan, `debugPrintf` output is produced through the validation layer debug-printf path. It is not enabled when GPU-assisted validation is enabled, because the two validation features are mutually exclusive.
 To receive Vulkan `debugPrintf` output:

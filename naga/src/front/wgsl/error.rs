@@ -528,6 +528,10 @@ pub(crate) enum Error<'a> {
         span: Span,
         description: &'static str,
     },
+    ExpectedStringLiteral {
+        span: Span,
+        description: &'static str,
+    },
     Internal(&'static str),
     ExpectedConstExprConcreteIntegerScalar(Span),
     ExpectedNonNegative(Span),
@@ -1356,6 +1360,11 @@ impl<'a> Error<'a> {
             Error::InvalidStringLiteral { span, description } => ParseError {
                 message: description.to_string().into(),
                 labels: vec![(*span, "invalid string literal".into())],
+                notes: vec![],
+            },
+            Error::ExpectedStringLiteral { span, description } => ParseError {
+                message: description.to_string().into(),
+                labels: vec![(*span, "expected a string literal".into())],
                 notes: vec![],
             },
             Error::Internal(message) => ParseError {

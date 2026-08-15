@@ -197,32 +197,15 @@ fn try_push_job(jobs: &mut Vec<Job>, f: impl FnOnce(&mut Vec<Job>) -> anyhow::Re
 }
 
 fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Result<()> {
-    const DEBUG_PRINTF_IMPORT: &str = "OpExtInstImport \"NonSemantic.DebugPrintf\"";
-
-    let (second_line, normalize_debug_printf) = {
+    let second_line = {
         let mut file = BufReader::new(open_file(path)?);
-        let mut first_line = String::new();
-        file.read_line(&mut first_line)
+        let mut buf = String::new();
+        file.read_line(&mut buf)
             .with_context(|| format!("failed to read first line from {path:?}"))?;
-        let mut second_line = String::new();
-        file.read_line(&mut second_line)
+        buf.clear();
+        file.read_line(&mut buf)
             .with_context(|| format!("failed to read second line from {path:?}"))?;
-
-        let mut normalize_debug_printf =
-            first_line.contains(DEBUG_PRINTF_IMPORT) || second_line.contains(DEBUG_PRINTF_IMPORT);
-        let mut line = String::new();
-        while !normalize_debug_printf {
-            let bytes_read = file
-                .read_line(&mut line)
-                .with_context(|| format!("failed to read {path:?}"))?;
-            if bytes_read == 0 {
-                break;
-            }
-            normalize_debug_printf = line.contains(DEBUG_PRINTF_IMPORT);
-            line.clear();
-        }
-
-        (second_line, normalize_debug_printf)
+        buf
     };
     let expected_header_prefix = "; Version: ";
     let Some(version) = second_line
@@ -231,25 +214,38 @@ fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Resul
     else {
         bail!("no {expected_header_prefix:?} header found in {path:?}");
     };
+
+    // We pipe the snapshot into `spirv-as` instead of passing its path, so that we
+    // can rewrite `NonSemantic.DebugPrintf` instructions on the way in.
+    //
+    // Our `.spvasm` snapshots are produced by rspirv's disassembler, which prints the
+    // instruction operand of an `OpExtInst` for that set by its symbolic name:
+    //
+    //     %17 = OpExtInst %void %15 DebugPrintf %16 %12 %13 %14
+    //
+    // `spirv-as` doesn't accept that name:
+    //
+    //     error: Couldn't translate unknown extended instruction name 'DebugPrintf'
+    //     to unsigned integer.
+    //
+    // SPIRV-Tools treats `NonSemantic.DebugPrintf` as an unknown non-semantic set, and
+    // its assembler only accepts numeric instruction operands for such sets. (Its own
+    // `spirv-dis` emits the numeric form for the same reason.) So we replace the name
+    // with its instruction number, `1`, which is the only instruction in that set.
     let mut spirv_as_cmd = EasyCommand::new(spirv_as, |cmd| {
-        let cmd = cmd
+        cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .arg("--target-env")
-            .arg(format!("spv{version}"));
-
-        if normalize_debug_printf {
-            cmd.stdin(Stdio::piped()).args(["-o", "-", "-"])
-        } else {
-            cmd.args([path.to_str().unwrap(), "-o", "-"])
-        }
+            .arg(format!("spv{version}"))
+            .args(["-o", "-", "-"])
     });
-    let assembled_spirv = if normalize_debug_printf {
-        let mut spirv_as_process = spirv_as_cmd
-            .spawn()
-            .with_context(|| format!("Failed to run {spirv_as_cmd}"))?;
+    let mut spirv_as_process = spirv_as_cmd
+        .spawn()
+        .with_context(|| format!("Failed to run {spirv_as_cmd}"))?;
+    {
         let mut file = BufReader::new(open_file(path)?);
-        let mut line = String::new();
         let spirv_as_stdin = spirv_as_process.stdin.as_mut().unwrap();
+        let mut line = String::new();
         loop {
             let bytes_read = file
                 .read_line(&mut line)
@@ -267,14 +263,10 @@ fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Resul
 
             line.clear();
         }
-        spirv_as_process
-            .wait_with_output()
-            .with_context(|| format!("Failed to wait for {spirv_as_cmd}"))?
-    } else {
-        spirv_as_cmd
-            .output()
-            .with_context(|| format!("Failed to run {spirv_as_cmd}"))?
-    };
+    }
+    let assembled_spirv = spirv_as_process
+        .wait_with_output()
+        .with_context(|| format!("Failed to wait for {spirv_as_cmd}"))?;
 
     if !assembled_spirv.status.success() {
         bail!(

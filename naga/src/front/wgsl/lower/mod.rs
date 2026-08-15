@@ -3919,9 +3919,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let format = match ctx.ast_expressions[format_handle] {
                         ast::Expression::String(s) => s.to_string(),
                         _ => {
-                            return Err(Box::new(Error::Internal(
-                                "debugPrintf format must be a string literal",
-                            )))
+                            return Err(Box::new(Error::ExpectedStringLiteral {
+                                span: ctx.ast_expressions.get_span(format_handle),
+                                description:
+                                    "debugPrintf's first argument must be a string literal",
+                            }))
                         }
                     };
 

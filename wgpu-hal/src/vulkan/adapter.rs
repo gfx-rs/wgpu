@@ -1117,7 +1117,8 @@ impl PhysicalDeviceFeatures {
 
         features.set(
             F::DEBUG_PRINTF,
-            caps.supports_extension(c"VK_KHR_shader_non_semantic_info"),
+            caps.device_api_version >= vk::API_VERSION_1_3
+                || caps.supports_extension(khr::shader_non_semantic_info::NAME),
         );
 
         (features, dl_flags)
@@ -1365,6 +1366,11 @@ impl PhysicalDeviceProperties {
             // Optional `VK_EXT_load_store_op_none`
             if self.supports_extension(ext::load_store_op_none::NAME) {
                 extensions.push(ext::load_store_op_none::NAME);
+            }
+
+            // Require `VK_KHR_shader_non_semantic_info` if the associated feature was requested
+            if requested_features.contains(wgt::Features::DEBUG_PRINTF) {
+                extensions.push(khr::shader_non_semantic_info::NAME);
             }
         }
 

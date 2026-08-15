@@ -4473,6 +4473,11 @@ impl<W: Write> Writer<W> {
                     ref format,
                     ref arguments,
                 } => {
+                    // Shader logging is only available in MSL 3.2 and later.
+                    if context.expression.lang_version < (3, 2) {
+                        return Err(Error::UnsupportedDebugPrintf);
+                    }
+
                     write!(
                         self.out,
                         "{level}metal::os_log_default.log_info(\"{}\"",

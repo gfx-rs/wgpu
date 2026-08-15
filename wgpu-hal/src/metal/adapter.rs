@@ -2,7 +2,7 @@ use block2::StackBlock;
 use objc2::rc::{autoreleasepool, Retained};
 use objc2::runtime::{AnyObject, ProtocolObject, Sel};
 use objc2::{available, sel};
-use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo, NSString};
+use objc2_foundation::{NSError, NSOperatingSystemVersion, NSProcessInfo, NSString};
 use objc2_metal::{
     MTLArgumentBuffersTier, MTLCommandQueueDescriptor, MTLCounterSamplingPoint, MTLDevice,
     MTLFeatureSet, MTLGPUFamily, MTLIndirectAccelerationStructureInstanceDescriptor,
@@ -55,17 +55,16 @@ pub(super) const MAX_COMMAND_BUFFERS: usize = 4096;
 /// counting down from MAX_BUFFERS - 1.
 pub const MAX_BUFFERS: u32 = 31;
 
-/// Create an `MTLLogState` that forwards shader `debugPrintf` messages to stdout,
-/// or `None` if the log state could not be created.
+/// Create an `MTLLogState` that forwards shader `debugPrintf` messages to the
+/// `log` crate, or the error reported by Metal if the log state could not be
+/// created.
 fn create_debug_printf_log_state(
     device: &ProtocolObject<dyn MTLDevice>,
-) -> Option<Retained<ProtocolObject<dyn MTLLogState>>> {
+) -> Result<Retained<ProtocolObject<dyn MTLLogState>>, Retained<NSError>> {
     let log_desc = MTLLogStateDescriptor::new();
     log_desc.setLevel(MTLLogLevel::Debug);
 
-    let Ok(log_state) = device.newLogStateWithDescriptor_error(&log_desc) else {
-        return None;
-    };
+    let log_state = device.newLogStateWithDescriptor_error(&log_desc)?;
 
     let handler = StackBlock::new(
         |_subsystem: *mut NSString,
@@ -74,14 +73,14 @@ fn create_debug_printf_log_state(
          message: NonNull<NSString>| {
             // SAFETY: message is NonNull<NSString>.
             let message = unsafe { message.as_ref() }.to_string();
-            println!("[debugPrintf] {message}");
+            log::info!("[debugPrintf] {message}");
         },
     );
 
-    // SAFETY: handler is Send because it does not capture
+    // SAFETY: addLogHandler copies the block, so we don't need to keep it alive.
     unsafe { log_state.addLogHandler(&handler) };
 
-    Some(log_state)
+    Ok(log_state)
 }
 
 impl super::Adapter {
@@ -118,8 +117,11 @@ impl crate::Adapter for super::Adapter {
                 .store(use_debug_printf, atomic::Ordering::Relaxed);
 
             if use_debug_printf {
-                if let Some(log_state) = create_debug_printf_log_state(device) {
-                    cq_desc.setLogState(Some(&log_state));
+                match create_debug_printf_log_state(device) {
+                    Ok(log_state) => cq_desc.setLogState(Some(&log_state)),
+                    Err(err) => log::warn!(
+                        "Failed to create an MTLLogState, debugPrintf output will not be captured: {err:?}"
+                    ),
                 }
             }
 

@@ -235,6 +235,8 @@ pub enum Error {
     UnsupportedRayTracing,
     #[error("cooperative matrix is not supported prior to MSL 2.3")]
     UnsupportedCooperativeMatrix,
+    #[error("debugPrintf is not supported prior to MSL 3.2")]
+    UnsupportedDebugPrintf,
     #[error("overrides should not be present at this stage")]
     Override,
     #[error("bitcasting to {0:?} is not supported")]

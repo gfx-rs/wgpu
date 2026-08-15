@@ -1844,7 +1844,6 @@ bitflags_array! {
         /// remain compatible with previous wgpu behavior.
         #[name("primitive-index", "shader-primitive-index")]
         const PRIMITIVE_INDEX = WEBGPU_FEATURE_PRIMITIVE_INDEX;
-
     }
 }
 
