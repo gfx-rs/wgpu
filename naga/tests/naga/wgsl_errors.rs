@@ -1549,23 +1549,6 @@ fn int16_subgroup_bitwise_rejected() {
 }
 
 #[test]
-fn int16_in_immediate() {
-    check_validation! {
-        "enable wgpu_int16; var<immediate> input: i16;",
-        "enable wgpu_int16; var<immediate> input: u16;",
-        "enable wgpu_int16; var<immediate> input: vec2<i16>;",
-        "enable wgpu_int16; struct S { a: u16 }; var<immediate> input: S;":
-        Err(naga::valid::ValidationError::GlobalVariable {
-            source: naga::valid::GlobalVariableError::InvalidImmediateType(
-                naga::valid::ImmediateError::InvalidScalar(_)
-            ),
-            ..
-        }),
-        naga::valid::Capabilities::SHADER_INT16 | naga::valid::Capabilities::IMMEDIATES
-    }
-}
-
-#[test]
 fn array_in_immediate() {
     check_validation! {
         "var<immediate> input: array<u32, 4>;",

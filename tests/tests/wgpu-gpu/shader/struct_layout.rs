@@ -15,8 +15,10 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         IMMEDIATES_INPUT_INT64,
         UNIFORM_INPUT_F16,
         STORAGE_INPUT_F16,
+        IMMEDIATES_INPUT_F16,
         UNIFORM_INPUT_I16,
         STORAGE_INPUT_I16,
+        IMMEDIATES_INPUT_I16,
     ]);
 }
 
@@ -840,6 +842,25 @@ static STORAGE_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 #[apply(gpu_test!)]
+static IMMEDIATES_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::SHADER_F16 | Features::IMMEDIATES)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits {
+                max_immediate_size: MAX_BUFFER_SIZE as u32,
+                ..Limits::downlevel_defaults()
+            }),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Immediate,
+            create_16bit_struct_layout_test(),
+        )
+    });
+
+#[apply(gpu_test!)]
 static UNIFORM_INPUT_I16: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -867,6 +888,25 @@ static STORAGE_INPUT_I16: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(
             ctx,
             InputStorageType::Storage,
+            create_int16_struct_layout_test(),
+        )
+    });
+
+#[apply(gpu_test!)]
+static IMMEDIATES_INPUT_I16: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::SHADER_I16 | Features::IMMEDIATES)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits {
+                max_immediate_size: MAX_BUFFER_SIZE as u32,
+                ..Limits::downlevel_defaults()
+            }),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Immediate,
             create_int16_struct_layout_test(),
         )
     });

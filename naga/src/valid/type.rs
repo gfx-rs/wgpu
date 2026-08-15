@@ -183,8 +183,6 @@ pub enum WidthError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum ImmediateError {
-    #[error("The scalar type {0:?} is not supported in immediates")]
-    InvalidScalar(crate::Scalar),
     #[error("Arrays are not supported in the immediate address space")]
     InvalidArray,
 }
@@ -290,7 +288,7 @@ impl super::Validator {
         &self,
         scalar: crate::Scalar,
     ) -> Result<ImmediateCompatibility, WidthError> {
-        let mut immediates_compatibility = Ok(());
+        let immediates_compatibility = Ok(());
         let good = match scalar.kind {
             crate::ScalarKind::Bool => scalar.width == crate::BOOL_WIDTH,
             crate::ScalarKind::Float => match scalar.width {
@@ -324,8 +322,6 @@ impl super::Validator {
                         });
                     }
 
-                    immediates_compatibility = Err(ImmediateError::InvalidScalar(scalar));
-
                     true
                 } else if scalar.width == 8 {
                     if !self.capabilities.contains(Capabilities::SHADER_INT64) {
@@ -347,8 +343,6 @@ impl super::Validator {
                             flag: "SHADER_INT16",
                         });
                     }
-
-                    immediates_compatibility = Err(ImmediateError::InvalidScalar(scalar));
 
                     true
                 } else if scalar.width == 8 {
