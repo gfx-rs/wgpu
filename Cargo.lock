@@ -4857,7 +4857,16 @@ dependencies = [
  "raw-window-handle",
  "serde",
  "wgpu-core",
+ "wgpu-core-remote-types",
  "wgpu-hal",
+ "wgpu-types",
+]
+
+[[package]]
+name = "wgpu-core-remote-types"
+version = "30.0.0"
+dependencies = [
+ "serde",
  "wgpu-types",
 ]
 

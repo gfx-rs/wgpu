@@ -2,7 +2,8 @@ use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::{fmt::Debug, marker::PhantomData};
 
-use crate::{id::markers, id::Id, id::Marker, Epoch, Index};
+use crate::{id::markers, id::Id, id::Marker};
+use crate::{Epoch, Index};
 
 /// A simple structure to allocate [`Id`] identifiers.
 ///

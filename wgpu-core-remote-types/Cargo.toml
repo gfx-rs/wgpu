@@ -1,5 +1,5 @@
 [package]
-name = "wgpu-core-remote"
+name = "wgpu-core-remote-types"
 version.workspace = true
 edition.workspace = true
 description = "Remoting version of wgpu-core"
@@ -24,14 +24,6 @@ targets = [
     "wasm32-unknown-unknown",
 ]
 
-[features]
-## Enables serialization via `serde` on common wgpu types.
-serde = ["dep:serde", "wgpu-types/serde", "wgpu-core/serde"]
-
 [dependencies]
-wgpu-core = { workspace = true, default-features = false }
-wgpu-hal = { workspace = true, default-features = false }
-wgpu-types.workspace = true
-wgpu-core-remote-types.workspace = true
-raw-window-handle.workspace = true
-serde = { workspace = true, optional = true }
+wgpu-types = { workspace = true, features = ["serde"] }
+serde = { workspace = true }
