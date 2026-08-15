@@ -9,6 +9,7 @@ use wgpu_core::Label;
 use wgt::{BufferAddress, BufferSize, Color, DynamicOffset, IndexFormat};
 
 use crate::global::Global;
+use crate::hub::Hub;
 use crate::id;
 
 /// Describes the attachments of a render pass.
@@ -45,13 +46,17 @@ impl Global {
         desc: &RenderPassDescriptor<'_>,
         id_in: id::RenderPassEncoderId,
     ) -> (id::RenderPassEncoderId, Option<CommandEncoderError>) {
-        let hub = &self.hub;
-        let fid = hub.render_passes.prepare(id_in);
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            command_encoders,
+            render_passes,
+            texture_views,
+            query_sets,
+            ..
+        } = &mut *hub;
+        let fid = render_passes.prepare(id_in);
 
-        let cmd_enc = hub.command_encoders.get(encoder_id);
-
-        let texture_views = hub.texture_views.read();
-        let query_sets = hub.query_sets.read();
+        let cmd_enc = command_encoders.get(encoder_id);
 
         let desc = ResolvedRenderPassDescriptor {
             label: desc.label.as_deref().map(Cow::Borrowed),
@@ -94,9 +99,6 @@ impl Global {
             multiview_mask: desc.multiview_mask,
         };
 
-        drop(texture_views);
-        drop(query_sets);
-
         let (render_pass, error) = cmd_enc.begin_render_pass(desc);
 
         let id = fid.assign(render_pass);
@@ -104,12 +106,14 @@ impl Global {
     }
 
     pub fn render_pass_end(&self, pass: id::RenderPassEncoderId) -> Result<(), EncoderStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.end()
     }
 
     pub fn render_pass_drop(&self, pass: id::RenderPassEncoderId) {
-        self.hub.render_passes.remove(pass);
+        let mut hub = self.hub.borrow_mut();
+        hub.render_passes.remove(pass);
     }
 }
 
@@ -129,12 +133,14 @@ impl Global {
         bind_group_id: Option<id::BindGroupId>,
         offsets: &[DynamicOffset],
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
-        pass.set_bind_group(
-            index,
-            bind_group_id.map(|id| self.hub.bind_groups.get(id)),
-            offsets,
-        )
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            render_passes,
+            bind_groups,
+            ..
+        } = &mut *hub;
+        let pass = render_passes.get_mut(pass);
+        pass.set_bind_group(index, bind_group_id.map(|id| bind_groups.get(id)), offsets)
     }
 
     pub fn render_pass_set_pipeline(
@@ -142,8 +148,14 @@ impl Global {
         pass: id::RenderPassEncoderId,
         pipeline_id: id::RenderPipelineId,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
-        let pipeline = self.resolve_render_pipeline_id(pipeline_id);
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            render_passes,
+            render_pipelines,
+            ..
+        } = &mut *hub;
+        let pass = render_passes.get_mut(pass);
+        let pipeline = render_pipelines.get(pipeline_id);
         pass.set_pipeline(pipeline)
     }
 
@@ -155,13 +167,14 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
-        pass.set_index_buffer(
-            self.resolve_buffer_id(buffer_id),
-            index_format,
-            offset,
-            size,
-        )
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            render_passes,
+            buffers,
+            ..
+        } = &mut *hub;
+        let pass = render_passes.get_mut(pass);
+        pass.set_index_buffer(buffers.get(buffer_id), index_format, offset, size)
     }
 
     pub fn render_pass_set_vertex_buffer(
@@ -172,13 +185,14 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
-        pass.set_vertex_buffer(
-            slot,
-            buffer_id.map(|id| self.resolve_buffer_id(id)),
-            offset,
-            size,
-        )
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            render_passes,
+            buffers,
+            ..
+        } = &mut *hub;
+        let pass = render_passes.get_mut(pass);
+        pass.set_vertex_buffer(slot, buffer_id.map(|id| buffers.get(id)), offset, size)
     }
 
     pub fn render_pass_set_blend_constant(
@@ -186,7 +200,8 @@ impl Global {
         pass: id::RenderPassEncoderId,
         color: Color,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.set_blend_constant(color)
     }
 
@@ -195,7 +210,8 @@ impl Global {
         pass: id::RenderPassEncoderId,
         value: u32,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.set_stencil_reference(value)
     }
 
@@ -209,7 +225,8 @@ impl Global {
         depth_min: f32,
         depth_max: f32,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.set_viewport(x, y, w, h, depth_min, depth_max)
     }
 
@@ -221,7 +238,8 @@ impl Global {
         w: u32,
         h: u32,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.set_scissor_rect(x, y, w, h)
     }
 
@@ -231,7 +249,8 @@ impl Global {
         offset: u32,
         data: &[u8],
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.set_immediates(offset, data)
     }
 
@@ -243,7 +262,8 @@ impl Global {
         first_vertex: u32,
         first_instance: u32,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.draw(vertex_count, instance_count, first_vertex, first_instance)
     }
 
@@ -256,7 +276,8 @@ impl Global {
         base_vertex: i32,
         first_instance: u32,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.draw_indexed(
             index_count,
             instance_count,
@@ -272,8 +293,14 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
-        pass.draw_indirect(self.resolve_buffer_id(buffer_id), offset)
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            render_passes,
+            buffers,
+            ..
+        } = &mut *hub;
+        let pass = render_passes.get_mut(pass);
+        pass.draw_indirect(buffers.get(buffer_id), offset)
     }
 
     pub fn render_pass_draw_indexed_indirect(
@@ -282,8 +309,14 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
-        pass.draw_indexed_indirect(self.resolve_buffer_id(buffer_id), offset)
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            render_passes,
+            buffers,
+            ..
+        } = &mut *hub;
+        let pass = render_passes.get_mut(pass);
+        pass.draw_indexed_indirect(buffers.get(buffer_id), offset)
     }
 
     pub fn render_pass_push_debug_group(
@@ -292,7 +325,8 @@ impl Global {
         label: &str,
         color: u32,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.push_debug_group(label, color)
     }
 
@@ -300,7 +334,8 @@ impl Global {
         &self,
         pass: id::RenderPassEncoderId,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.pop_debug_group()
     }
 
@@ -310,7 +345,8 @@ impl Global {
         label: &str,
         color: u32,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.insert_debug_marker(label, color)
     }
 
@@ -320,8 +356,14 @@ impl Global {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
-        pass.write_timestamp(self.resolve_query_set_id(query_set_id), query_index)
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            render_passes,
+            query_sets,
+            ..
+        } = &mut *hub;
+        let pass = render_passes.get_mut(pass);
+        pass.write_timestamp(query_sets.get(query_set_id), query_index)
     }
 
     pub fn render_pass_begin_occlusion_query(
@@ -329,7 +371,8 @@ impl Global {
         pass: id::RenderPassEncoderId,
         query_index: u32,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.begin_occlusion_query(query_index)
     }
 
@@ -337,7 +380,8 @@ impl Global {
         &self,
         pass: id::RenderPassEncoderId,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.end_occlusion_query()
     }
 
@@ -347,15 +391,22 @@ impl Global {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
-        pass.begin_pipeline_statistics_query(self.resolve_query_set_id(query_set_id), query_index)
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            render_passes,
+            query_sets,
+            ..
+        } = &mut *hub;
+        let pass = render_passes.get_mut(pass);
+        pass.begin_pipeline_statistics_query(query_sets.get(query_set_id), query_index)
     }
 
     pub fn render_pass_end_pipeline_statistics_query(
         &self,
         pass: id::RenderPassEncoderId,
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
+        let mut hub = self.hub.borrow_mut();
+        let pass = hub.render_passes.get_mut(pass);
         pass.end_pipeline_statistics_query()
     }
 
@@ -364,12 +415,16 @@ impl Global {
         pass: id::RenderPassEncoderId,
         render_bundle_ids: &[id::RenderBundleId],
     ) -> Result<(), PassStateError> {
-        let mut pass = self.hub.render_passes.get_mut(pass);
-        let hub = &self.hub;
-        let bundles = hub.render_bundles.read();
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            render_passes,
+            render_bundles,
+            ..
+        } = &mut *hub;
+        let pass = render_passes.get_mut(pass);
         let render_bundles = render_bundle_ids
             .iter()
-            .map(|&id| bundles.get(id))
+            .map(|&id| render_bundles.get(id))
             .collect::<Vec<_>>();
 
         pass.execute_bundles(&render_bundles)

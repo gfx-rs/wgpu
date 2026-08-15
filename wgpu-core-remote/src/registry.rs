@@ -1,5 +1,3 @@
-use core::cell::{Ref, RefCell, RefMut};
-
 use crate::{
     id::Id,
     storage::{Storage, StorageItem},
@@ -18,13 +16,13 @@ use crate::{
 ///
 #[derive(Debug)]
 pub(crate) struct Registry<T: StorageItem> {
-    storage: RefCell<Storage<T>>,
+    storage: Storage<T>,
 }
 
 impl<T: StorageItem> Registry<T> {
     pub(crate) fn new() -> Self {
         Self {
-            storage: RefCell::new(Storage::new()),
+            storage: Storage::new(),
         }
     }
 }
@@ -32,7 +30,7 @@ impl<T: StorageItem> Registry<T> {
 #[must_use]
 pub(crate) struct FutureId<'a, T: StorageItem> {
     id: Id<T::Marker>,
-    data: &'a RefCell<Storage<T>>,
+    data: &'a mut Storage<T>,
 }
 
 impl<T: StorageItem> FutureId<'_, T> {
@@ -40,39 +38,32 @@ impl<T: StorageItem> FutureId<'_, T> {
     ///
     /// Registers it with the registry.
     pub fn assign(self, value: T) -> Id<T::Marker> {
-        let mut data = self.data.borrow_mut();
-        data.insert(self.id, value);
+        self.data.insert(self.id, value);
         self.id
     }
 }
 
 impl<T: StorageItem> Registry<T> {
-    pub(crate) fn prepare(&self, id_in: Id<T::Marker>) -> FutureId<'_, T> {
+    pub(crate) fn prepare(&mut self, id_in: Id<T::Marker>) -> FutureId<'_, T> {
         FutureId {
             id: id_in,
-            data: &self.storage,
+            data: &mut self.storage,
         }
     }
 
-    #[track_caller]
-    pub(crate) fn read<'a>(&'a self) -> Ref<'a, Storage<T>> {
-        self.storage.borrow()
-    }
-
-    pub(crate) fn remove(&self, id: Id<T::Marker>) -> T {
-        let value = self.storage.borrow_mut().remove(id);
-        value
+    pub(crate) fn remove(&mut self, id: Id<T::Marker>) -> T {
+        self.storage.remove(id)
     }
 }
 
 impl<T: StorageItem + Clone> Registry<T> {
     pub(crate) fn get(&self, id: Id<T::Marker>) -> T {
-        self.read().get(id)
+        self.storage.get(id)
     }
 }
 
 impl<T: StorageItem> Registry<T> {
-    pub(crate) fn get_mut<'a>(&'a self, id: Id<T::Marker>) -> RefMut<'a, T> {
-        RefMut::map(self.storage.borrow_mut(), |storage| storage.get_mut(id))
+    pub(crate) fn get_mut(&mut self, id: Id<T::Marker>) -> &mut T {
+        self.storage.get_mut(id)
     }
 }

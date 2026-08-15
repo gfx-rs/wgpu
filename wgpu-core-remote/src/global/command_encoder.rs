@@ -3,6 +3,7 @@ use wgpu_core::Label;
 use wgt::{BufferAddress, Extent3d, ImageSubresourceRange};
 
 use crate::global::Global;
+use crate::hub::Hub;
 use crate::id::{BufferId, CommandEncoderId, TextureId};
 use crate::{id, TexelCopyBufferInfo};
 
@@ -20,11 +21,16 @@ impl Global {
         desc: &wgt::CommandBufferDescriptor<Label>,
         id_in: id::CommandBufferId,
     ) -> (id::CommandBufferId, Option<(String, CommandEncoderError)>) {
-        let hub = &self.hub;
-        let cmd_enc = hub.command_encoders.get(encoder_id);
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            command_encoders,
+            command_buffers,
+            ..
+        } = &mut *hub;
+        let cmd_enc = command_encoders.get(encoder_id);
 
         let (cmd_buf, opt_error) = cmd_enc.finish(desc);
-        let cmd_buf_id = hub.command_buffers.prepare(id_in).assign(cmd_buf);
+        let cmd_buf_id = command_buffers.prepare(id_in).assign(cmd_buf);
 
         (cmd_buf_id, opt_error)
     }
@@ -34,7 +40,7 @@ impl Global {
         encoder_id: CommandEncoderId,
         label: &str,
     ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
+        let hub = self.hub.borrow();
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
         cmd_enc.push_debug_group(label)
@@ -45,7 +51,7 @@ impl Global {
         encoder_id: CommandEncoderId,
         label: &str,
     ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
+        let hub = self.hub.borrow();
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
         cmd_enc.insert_debug_marker(label)
@@ -55,7 +61,7 @@ impl Global {
         &self,
         encoder_id: CommandEncoderId,
     ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
+        let hub = self.hub.borrow();
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
         cmd_enc.pop_debug_group()
@@ -70,7 +76,7 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferAddress>,
     ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
+        let hub = self.hub.borrow();
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         cmd_enc.clear_buffer(hub.buffers.get(dst), offset, size)
@@ -82,7 +88,7 @@ impl Global {
         dst: TextureId,
         subresource_range: &ImageSubresourceRange,
     ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
+        let hub = self.hub.borrow();
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
 
@@ -97,7 +103,7 @@ impl Global {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
+        let hub = self.hub.borrow();
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         cmd_enc.write_timestamp(hub.query_sets.get(query_set_id), query_index)
@@ -112,7 +118,7 @@ impl Global {
         destination: BufferId,
         destination_offset: BufferAddress,
     ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
+        let hub = self.hub.borrow();
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
 
@@ -136,11 +142,11 @@ impl Global {
         destination_offset: BufferAddress,
         size: Option<BufferAddress>,
     ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
+        let hub = self.hub.borrow();
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        let source = self.resolve_buffer_id(source);
-        let destination = self.resolve_buffer_id(destination);
+        let source = hub.buffers.get(source);
+        let destination = hub.buffers.get(destination);
         cmd_enc.copy_buffer_to_buffer(source, source_offset, destination, destination_offset, size)
     }
 
@@ -151,13 +157,14 @@ impl Global {
         destination: &wgt::TexelCopyTextureInfo<TextureId>,
         copy_size: &Extent3d,
     ) -> Result<(), EncoderStateError> {
-        let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
+        let hub = self.hub.borrow();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let source = wgt::TexelCopyBufferInfo {
-            buffer: self.resolve_buffer_id(source.buffer),
+            buffer: hub.buffers.get(source.buffer),
             layout: source.layout,
         };
         let destination = wgt::TexelCopyTextureInfo {
-            texture: self.resolve_texture_id(destination.texture),
+            texture: hub.textures.get(destination.texture),
             mip_level: destination.mip_level,
             origin: destination.origin,
             aspect: destination.aspect,
@@ -172,16 +179,17 @@ impl Global {
         destination: &TexelCopyBufferInfo,
         copy_size: &Extent3d,
     ) -> Result<(), EncoderStateError> {
-        let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
+        let hub = self.hub.borrow();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
 
         let source = wgt::TexelCopyTextureInfo {
-            texture: self.resolve_texture_id(source.texture),
+            texture: hub.textures.get(source.texture),
             mip_level: source.mip_level,
             origin: source.origin,
             aspect: source.aspect,
         };
         let destination = wgt::TexelCopyBufferInfo {
-            buffer: self.resolve_buffer_id(destination.buffer),
+            buffer: hub.buffers.get(destination.buffer),
             layout: destination.layout,
         };
         cmd_enc.copy_texture_to_buffer(&source, &destination, copy_size)
@@ -194,16 +202,17 @@ impl Global {
         destination: &wgt::TexelCopyTextureInfo<TextureId>,
         copy_size: &Extent3d,
     ) -> Result<(), EncoderStateError> {
-        let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
+        let hub = self.hub.borrow();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
 
         let source = wgt::TexelCopyTextureInfo {
-            texture: self.resolve_texture_id(source.texture),
+            texture: hub.textures.get(source.texture),
             mip_level: source.mip_level,
             origin: source.origin,
             aspect: source.aspect,
         };
         let destination = wgt::TexelCopyTextureInfo {
-            texture: self.resolve_texture_id(destination.texture),
+            texture: hub.textures.get(destination.texture),
             mip_level: destination.mip_level,
             origin: destination.origin,
             aspect: destination.aspect,
@@ -219,7 +228,7 @@ impl Global {
         buffer_transitions: impl Iterator<Item = wgt::BufferTransition<BufferId>>,
         texture_transitions: impl Iterator<Item = wgt::TextureTransition<TextureId>>,
     ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
+        let hub = self.hub.borrow();
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let buffer_transitions = buffer_transitions
