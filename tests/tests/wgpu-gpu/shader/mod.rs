@@ -89,6 +89,10 @@ struct ShaderTest {
     ///
     /// Defaults to Backends::empty().
     failures: Backends,
+    /// Which backends this test will skip.
+    ///
+    /// Defaults to Backends::empty().
+    skip: Backends,
 }
 impl ShaderTest {
     fn default_comparison_function<O: bytemuck::Pod + Debug + PartialEq>(
@@ -158,6 +162,7 @@ impl ShaderTest {
             output_comparison_fn: Self::default_comparison_function::<O>,
             output_initialization: u32::MAX,
             failures: Backends::empty(),
+            skip: Backends::empty(),
         }
     }
 
@@ -189,6 +194,12 @@ impl ShaderTest {
 
     fn failures(mut self, failures: Backends) -> Self {
         self.failures = failures;
+
+        self
+    }
+
+    fn skip(mut self, skip: Backends) -> Self {
+        self.skip = skip;
 
         self
     }
@@ -292,6 +303,15 @@ async fn shader_input_output_test(
         assert!(test.output_values.len() <= MAX_BUFFER_SIZE as usize / 4);
 
         let test_name = test.name;
+
+        if test.skip == ctx.adapter_info.backend.into() {
+            log::info!(
+                "Skip shader test {} on {}",
+                test_name,
+                ctx.adapter_info.backend
+            );
+            return;
+        }
 
         // -- Building shader + pipeline --
 
