@@ -115,7 +115,7 @@ use core::{
     ops::Range,
     sync::atomic::{AtomicU32, AtomicU8},
 };
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 
 use arrayvec::ArrayVec;
 use glow::HasContext;

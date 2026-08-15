@@ -1,0 +1,38 @@
+[package]
+name = "wgpu-sync"
+version.workspace = true
+edition.workspace = true
+description = "Synchronization primitives for wgpu. Not meant for general use."
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+# Override the workspace's `rust-version` key. `wgpu-core` and its dependencies
+# have a less strict MSRV, to allow firefox more leeway in updating their Rust toolchain.
+#
+# See the repo README for more information on MSRV policy.
+rust-version = "1.87"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lints.rust]
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+std_instead_of_core = "warn"
+std_instead_of_alloc = "warn"
+alloc_instead_of_core = "warn"
+
+[lib]
+
+[features]
+default = ["std"]
+std = ["alloc", "dep:parking_lot"]
+alloc = []
+
+[dependencies]
+cfg-if.workspace = true
+lock_api = { workspace = true, default-features = false }
+parking_lot = { workspace = true, optional = true }

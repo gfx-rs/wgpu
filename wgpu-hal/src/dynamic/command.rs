@@ -268,6 +268,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
             texture: barrier.texture.expect_downcast_ref(),
             usage: barrier.usage.clone(),
             range: barrier.range,
+            queue_family_ownership_transfer: barrier.queue_family_ownership_transfer,
         });
         unsafe { self.transition_textures(barriers) };
     }

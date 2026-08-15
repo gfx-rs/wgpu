@@ -10,7 +10,6 @@ mod belt;
 mod device;
 mod encoder;
 mod init;
-mod mutex;
 mod panicking;
 mod spirv;
 mod texture_blitter;
@@ -29,8 +28,8 @@ pub use wgt::{
     math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs, TextureDataOrder,
 };
 
-pub(crate) use mutex::Mutex;
 pub(crate) use panicking::is_panicking;
+pub(crate) use wgpu_sync::Mutex;
 
 use crate::BufferUsages;
 
