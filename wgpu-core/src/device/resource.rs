@@ -36,6 +36,7 @@ use crate::{
         BufferMapPendingClosure, DeviceLostInvocation, HostMap, MissingDownlevelFlags,
         MissingFeatures, RenderPassContext,
     },
+    error::ErrorSink,
     hal_label,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
@@ -283,6 +284,8 @@ pub struct Device {
     /// device.lose or by the UserCallbacks returned from maintain when the device
     /// has been destroyed and its queues are empty.
     pub(crate) device_lost_closure: Mutex<Option<DeviceLostClosure>>,
+
+    pub(crate) error_sink: ErrorSink,
 
     /// Stores the state of buffers and textures.
     pub(crate) trackers: Mutex<DeviceTracker>,
@@ -654,6 +657,7 @@ impl Device {
                 snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
                 valid: AtomicBool::new(true),
                 device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
+                error_sink: ErrorSink::new(),
                 trackers: Mutex::new(
                     rank::DEVICE_TRACKERS,
                     DeviceTracker::new(ordered_buffer_usages, ordered_texture_usages),

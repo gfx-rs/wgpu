@@ -2,7 +2,6 @@ use alloc::borrow::ToOwned;
 use alloc::{
     borrow::Cow::{self, Borrowed},
     boxed::Box,
-    format,
     string::{String, ToString as _},
     sync::Arc,
     vec,
@@ -21,12 +20,9 @@ use hashbrown::HashMap;
 
 use arrayvec::ArrayVec;
 use smallvec::SmallVec;
-use wgc::{
-    error::ContextErrorSource, pipeline::CreateShaderModuleError,
-    resource::BlasPrepareCompactResult,
-};
+use wgc::{pipeline::CreateShaderModuleError, resource::BlasPrepareCompactResult};
 use wgt::{
-    error::{ErrorType, WebGpuError},
+    error::{ErrorSource as ContextErrorSource, ErrorType, WebGpuError},
     WasmNotSendSync,
 };
 
@@ -39,7 +35,7 @@ use crate::{
 };
 use crate::{dispatch::DispatchAdapter, util::Mutex};
 
-mod thread_id;
+use wgc::error::{format_error, thread_id};
 
 #[derive(Clone)]
 pub struct ContextWgpuCore(Arc<wgc::instance::Instance>);
@@ -264,7 +260,7 @@ impl ContextWgpuCore {
         });
         let final_error_handling = {
             let mut sink = sink_mutex.lock();
-            let description = || self.format_error(&*source);
+            let description = || format_error(&*source);
             let error = match error_type {
                 ErrorType::Internal => {
                     let description = description();
@@ -326,37 +322,7 @@ impl ContextWgpuCore {
         cause: impl Error + WasmNotSendSync + 'static,
         operation: &'static str,
     ) -> ! {
-        panic!("Error in {operation}: {f}", f = self.format_error(&cause));
-    }
-
-    #[inline(never)]
-    fn format_error(&self, err: &(dyn Error + 'static)) -> String {
-        let mut output = String::new();
-        let mut level = 1;
-
-        fn print_tree(output: &mut String, level: &mut usize, e: &(dyn Error + 'static)) {
-            let mut print = |e: &(dyn Error + 'static)| {
-                use core::fmt::Write;
-                writeln!(output, "{}{}", " ".repeat(*level * 2), e).unwrap();
-
-                if let Some(e) = e.source() {
-                    *level += 1;
-                    print_tree(output, level, e);
-                    *level -= 1;
-                }
-            };
-            if let Some(multi) = e.downcast_ref::<wgc::error::MultiError>() {
-                for e in multi.errors() {
-                    print(e);
-                }
-            } else {
-                print(e);
-            }
-        }
-
-        print_tree(&mut output, &mut level, err);
-
-        format!("Validation Error\n\nCaused by:\n{output}")
+        panic!("Error in {operation}: {f}", f = format_error(&cause));
     }
 
     pub unsafe fn queue_as_hal<A: hal::Api>(
@@ -2202,7 +2168,7 @@ impl dispatch::BufferInterface for CoreBuffer {
                 }
                 .into()
             })
-            .map_err(|err| crate::MapRangeError(self.context.format_error(&err)))
+            .map_err(|err| crate::MapRangeError(format_error(&err)))
     }
 
     fn unmap(&self) {
