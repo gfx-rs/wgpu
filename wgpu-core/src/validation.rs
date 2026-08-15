@@ -1103,14 +1103,11 @@ impl NumericType {
         }
     }
 
-    fn is_subtype_of(self, other: NumericType) -> bool {
-        if self.scalar.width > other.scalar.width {
+    fn compatible_with_shader_output(self, shader: NumericType) -> bool {
+        if self.scalar.kind != shader.scalar.kind {
             return false;
         }
-        if self.scalar.kind != other.scalar.kind {
-            return false;
-        }
-        match (self.dim, other.dim) {
+        match (self.dim, shader.dim) {
             (NumericDimension::Scalar, NumericDimension::Scalar) => true,
             (NumericDimension::Scalar, NumericDimension::Vector(_)) => true,
             (NumericDimension::Vector(s0), NumericDimension::Vector(s1)) => s0 <= s1,
@@ -1128,7 +1125,7 @@ pub fn check_color_attachment_compatibility(
     output_ty: NumericType,
 ) -> Result<(), ColorStateError> {
     let pipeline_ty = NumericType::from_texture_format(state.format);
-    if !pipeline_ty.is_subtype_of(output_ty) {
+    if !pipeline_ty.compatible_with_shader_output(output_ty) {
         return Err(ColorStateError::IncompatibleFormat {
             pipeline: pipeline_ty,
             shader: output_ty,
@@ -1763,7 +1760,7 @@ impl Interface {
                                         ));
                                     }
                                     (
-                                        iv.ty.is_subtype_of(provided.ty),
+                                        iv.ty == provided.ty,
                                         iv.per_primitive == provided.per_primitive,
                                     )
                                 }
