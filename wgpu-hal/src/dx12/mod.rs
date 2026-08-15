@@ -1063,9 +1063,13 @@ pub struct TextureView {
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,
     handle_rtv: Option<descriptor::Handle>,
-    handle_dsv_rr: Option<descriptor::Handle>,
+    /// Depth write stencil read-only view.
     handle_dsv_wr: Option<descriptor::Handle>,
+    /// Depth read-only stencil write view.
     handle_dsv_rw: Option<descriptor::Handle>,
+    /// Depth read-only stencil read-only view.
+    handle_dsv_rr: Option<descriptor::Handle>,
+    /// Depth write stencil write view.
     handle_dsv_ww: Option<descriptor::Handle>,
 }
 

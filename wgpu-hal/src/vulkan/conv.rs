@@ -251,7 +251,6 @@ pub fn derive_image_layout(usage: wgt::TextureUses, format: wgt::TextureFormat) 
             } else if is_color {
                 vk::ImageLayout::GENERAL
             } else {
-                // Note: depth textures are always sampled with RODS layout
                 match (
                     usage.contains(wgt::TextureUses::DEPTH_WRITE),
                     usage.contains(wgt::TextureUses::STENCIL_WRITE),
