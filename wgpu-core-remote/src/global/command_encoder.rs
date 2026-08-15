@@ -30,7 +30,7 @@ impl Global {
         let cmd_enc = command_encoders.get(encoder_id);
 
         let (cmd_buf, opt_error) = cmd_enc.finish(desc);
-        let cmd_buf_id = command_buffers.prepare(id_in).assign(cmd_buf);
+        let cmd_buf_id = command_buffers.assign(id_in, cmd_buf);
 
         (cmd_buf_id, opt_error)
     }

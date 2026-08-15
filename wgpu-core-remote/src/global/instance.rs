@@ -23,7 +23,7 @@ impl Global {
             apply_limit_buckets: desc.apply_limit_buckets,
         };
         let adapter = self.instance.request_adapter(&desc, backends)?;
-        let id = hub.adapters.prepare(id_in).assign(adapter);
+        let id = hub.adapters.assign(id_in, adapter);
         Ok(id)
     }
 
@@ -46,8 +46,9 @@ impl Global {
         id_in: AdapterId,
     ) -> AdapterId {
         let mut hub = self.hub.borrow_mut();
-        let fid = hub.adapters.prepare(id_in);
-        fid.assign(unsafe { self.instance.create_adapter_from_hal(hal_adapter) })
+        hub.adapters.assign(id_in, unsafe {
+            self.instance.create_adapter_from_hal(hal_adapter)
+        })
     }
 
     pub fn adapter_get_info(&self, adapter_id: AdapterId) -> wgt::AdapterInfo {
@@ -126,15 +127,13 @@ impl Global {
             queues,
             ..
         } = &mut *hub;
-        let device_fid = devices.prepare(device_id_in);
-        let queue_fid = queues.prepare(queue_id_in);
 
         let adapter = adapters.get(adapter_id);
         let (device, queue) = adapter.request_device(desc)?;
 
-        let device_id = device_fid.assign(device);
+        let device_id = devices.assign(device_id_in, device);
 
-        let queue_id = queue_fid.assign(queue);
+        let queue_id = queues.assign(queue_id_in, queue);
 
         Ok((device_id, queue_id))
     }
@@ -168,16 +167,14 @@ impl Global {
             queues,
             ..
         } = &mut *hub;
-        let devices_fid = devices.prepare(device_id_in);
-        let queues_fid = queues.prepare(queue_id_in);
 
         let adapter = adapters.get(adapter_id);
         let (device, queue) =
             unsafe { adapter.create_device_and_queue_from_hal(hal_device, desc) }?;
 
-        let device_id = devices_fid.assign(device);
+        let device_id = devices.assign(device_id_in, device);
 
-        let queue_id = queues_fid.assign(queue);
+        let queue_id = queues.assign(queue_id_in, queue);
 
         Ok((device_id, queue_id))
     }

@@ -27,28 +27,10 @@ impl<T: StorageItem> Registry<T> {
     }
 }
 
-#[must_use]
-pub(crate) struct FutureId<'a, T: StorageItem> {
-    id: Id<T::Marker>,
-    data: &'a mut Storage<T>,
-}
-
-impl<T: StorageItem> FutureId<'_, T> {
-    /// Assign a new resource to this ID.
-    ///
-    /// Registers it with the registry.
-    pub fn assign(self, value: T) -> Id<T::Marker> {
-        self.data.insert(self.id, value);
-        self.id
-    }
-}
-
 impl<T: StorageItem> Registry<T> {
-    pub(crate) fn prepare(&mut self, id_in: Id<T::Marker>) -> FutureId<'_, T> {
-        FutureId {
-            id: id_in,
-            data: &mut self.storage,
-        }
+    pub(crate) fn assign(&mut self, id: Id<T::Marker>, value: T) -> Id<T::Marker> {
+        self.storage.insert(id, value);
+        id
     }
 
     pub(crate) fn remove(&mut self, id: Id<T::Marker>) -> T {

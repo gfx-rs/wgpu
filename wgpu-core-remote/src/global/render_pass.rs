@@ -54,7 +54,6 @@ impl Global {
             query_sets,
             ..
         } = &mut *hub;
-        let fid = render_passes.prepare(id_in);
 
         let cmd_enc = command_encoders.get(encoder_id);
 
@@ -101,7 +100,7 @@ impl Global {
 
         let (render_pass, error) = cmd_enc.begin_render_pass(desc);
 
-        let id = fid.assign(render_pass);
+        let id = render_passes.assign(id_in, render_pass);
         (id, error)
     }
 

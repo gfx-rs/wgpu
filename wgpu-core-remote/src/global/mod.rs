@@ -76,8 +76,7 @@ impl Global {
     /// returning an [`AdapterId`] under which the adapter is stored.
     pub fn import_adapter(&self, adapter: Arc<Adapter>, id_in: AdapterId) -> AdapterId {
         let mut hub = self.hub.borrow_mut();
-        let fid = hub.adapters.prepare(id_in);
-        fid.assign(adapter)
+        hub.adapters.assign(id_in, adapter)
     }
 
     /// Resolve an [`AdapterId`] to the corresponding [`Arc<Adapter>`] in the global hub.
@@ -89,8 +88,7 @@ impl Global {
     /// returning a [`DeviceId`] under which the device is stored.
     pub fn import_device(&self, device: Arc<Device>, id_in: DeviceId) -> DeviceId {
         let mut hub = self.hub.borrow_mut();
-        let fid = hub.devices.prepare(id_in);
-        fid.assign(device)
+        hub.devices.assign(id_in, device)
     }
 
     /// Resolve a [`DeviceId`] to the corresponding [`Arc<Device>`] in the global hub.
@@ -102,8 +100,7 @@ impl Global {
     /// returning a [`QueueId`] under which the queue is stored.
     pub fn import_queue(&self, queue: Arc<Queue>, id_in: QueueId) -> QueueId {
         let mut hub = self.hub.borrow_mut();
-        let fid = hub.queues.prepare(id_in);
-        fid.assign(queue)
+        hub.queues.assign(id_in, queue)
     }
 
     /// Resolve a [`QueueId`] to the corresponding [`Arc<Queue>`] in the global hub.
@@ -119,8 +116,7 @@ impl Global {
         id_in: PipelineLayoutId,
     ) -> PipelineLayoutId {
         let mut hub = self.hub.borrow_mut();
-        let fid = hub.pipeline_layouts.prepare(id_in);
-        fid.assign(pipeline_layout)
+        hub.pipeline_layouts.assign(id_in, pipeline_layout)
     }
 
     /// Resolve a [`PipelineLayoutId`] to the corresponding [`Arc<PipelineLayout>`] in the global hub.
@@ -139,8 +135,7 @@ impl Global {
         id_in: BindGroupLayoutId,
     ) -> BindGroupLayoutId {
         let mut hub = self.hub.borrow_mut();
-        let fid = hub.bind_group_layouts.prepare(id_in);
-        fid.assign(bind_group_layout)
+        hub.bind_group_layouts.assign(id_in, bind_group_layout)
     }
 
     /// Resolve a [`BindGroupLayoutId`] to the corresponding [`Arc<BindGroupLayout>`] in the global hub.
@@ -162,8 +157,7 @@ impl Global {
         id_in: CommandEncoderId,
     ) -> CommandEncoderId {
         let mut hub = self.hub.borrow_mut();
-        let fid = hub.command_encoders.prepare(id_in);
-        fid.assign(command_encoder)
+        hub.command_encoders.assign(id_in, command_encoder)
     }
 
     /// Resolve a [`CommandEncoderId`] to the corresponding [`Arc<CommandEncoder>`] in the global hub.
@@ -182,8 +176,7 @@ impl Global {
         id_in: CommandBufferId,
     ) -> CommandBufferId {
         let mut hub = self.hub.borrow_mut();
-        let fid = hub.command_buffers.prepare(id_in);
-        fid.assign(command_buffer)
+        hub.command_buffers.assign(id_in, command_buffer)
     }
 
     /// Resolve a [`CommandBufferId`] to the corresponding [`Arc<CommandBuffer>`] in the global hub.
@@ -202,8 +195,7 @@ impl Global {
         id_in: RenderPipelineId,
     ) -> RenderPipelineId {
         let mut hub = self.hub.borrow_mut();
-        let fid = hub.render_pipelines.prepare(id_in);
-        fid.assign(render_pipeline)
+        hub.render_pipelines.assign(id_in, render_pipeline)
     }
 
     /// Resolve a [`RenderPipelineId`] to the corresponding [`Arc<RenderPipeline>`] in the global hub.
@@ -222,8 +214,7 @@ impl Global {
         id_in: ComputePipelineId,
     ) -> ComputePipelineId {
         let mut hub = self.hub.borrow_mut();
-        let fid = hub.compute_pipelines.prepare(id_in);
-        fid.assign(compute_pipeline)
+        hub.compute_pipelines.assign(id_in, compute_pipeline)
     }
 
     /// Resolve a [`ComputePipelineId`] to the corresponding [`Arc<ComputePipeline>`] in the global hub.
@@ -238,8 +229,7 @@ impl Global {
     /// returning a [`QuerySetId`] under which the query set is stored.
     pub fn import_query_set(&self, query_set: Arc<QuerySet>, id_in: QuerySetId) -> QuerySetId {
         let mut hub = self.hub.borrow_mut();
-        let fid = hub.query_sets.prepare(id_in);
-        fid.assign(query_set)
+        hub.query_sets.assign(id_in, query_set)
     }
 
     /// Resolve a [`QuerySetId`] to the corresponding [`Arc<QuerySet>`] in the global hub.
@@ -251,8 +241,7 @@ impl Global {
     /// returning a [`BufferId`] under which the buffer is stored.
     pub fn import_buffer(&self, buffer: Arc<Buffer>, id_in: BufferId) -> BufferId {
         let mut hub = self.hub.borrow_mut();
-        let fid = hub.buffers.prepare(id_in);
-        fid.assign(buffer)
+        hub.buffers.assign(id_in, buffer)
     }
 
     /// Resolve a [`BufferId`] to the corresponding [`Arc<Buffer>`] in the global hub.
@@ -264,8 +253,7 @@ impl Global {
     /// returning a [`TextureId`] under which the texture is stored.
     pub fn import_texture(&self, texture: Arc<Texture>, id_in: TextureId) -> TextureId {
         let mut hub = self.hub.borrow_mut();
-        let fid = hub.textures.prepare(id_in);
-        fid.assign(texture)
+        hub.textures.assign(id_in, texture)
     }
 
     /// Resolve a [`TextureId`] to the corresponding [`Arc<Texture>`] in the global hub.
