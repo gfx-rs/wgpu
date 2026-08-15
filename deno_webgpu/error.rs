@@ -5,7 +5,6 @@ use std::fmt::Formatter;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
-use deno_core::cppgc::make_cppgc_object;
 use deno_core::v8;
 
 use deno_core::JsRuntime;
@@ -38,15 +37,10 @@ use wgpu_core::resource::CreateTextureError;
 use wgpu_core::resource::CreateTextureViewError;
 use wgpu_types::error::{ErrorType, WebGpuError};
 
-use crate::device::GPUDeviceLostInfo;
-use crate::device::GPUDeviceLostReason;
-
 pub type ErrorHandler = std::rc::Rc<DeviceErrorHandler>;
 
 pub struct DeviceErrorHandler {
-  pub is_lost: OnceLock<()>,
   pub scopes: Mutex<Vec<(GPUErrorFilter, Option<GPUError>)>>,
-  lost_resolver: Mutex<Option<v8::Global<v8::PromiseResolver>>>,
   spawner: V8TaskSpawner,
 
   // The error handler is constructed before the device. A weak
@@ -56,14 +50,9 @@ pub struct DeviceErrorHandler {
 }
 
 impl DeviceErrorHandler {
-  pub fn new(
-    lost_resolver: v8::Global<v8::PromiseResolver>,
-    spawner: V8TaskSpawner,
-  ) -> Self {
+  pub fn new(spawner: V8TaskSpawner) -> Self {
     Self {
-      is_lost: Default::default(),
       scopes: Mutex::new(vec![]),
-      lost_resolver: Mutex::new(Some(lost_resolver)),
       device: OnceLock::new(),
       spawner,
     }
@@ -78,28 +67,10 @@ impl DeviceErrorHandler {
       return;
     };
 
-    if self.is_lost.get().is_some() {
-      return;
-    }
-
     let err = err.into();
 
-    if let GPUError::Lost(reason) = err {
-      let _ = self.is_lost.set(());
-      if let Some(resolver) = self.lost_resolver.lock().unwrap().take() {
-        self.spawner.spawn(move |scope| {
-          let resolver = v8::Local::new(scope, resolver);
-          let info = make_cppgc_object(scope, GPUDeviceLostInfo { reason });
-          let info = v8::Local::new(scope, info);
-          resolver.resolve(scope, info.into());
-        });
-      }
-
-      return;
-    }
-
     let error_filter = match err {
-      GPUError::Lost(_) => unreachable!(),
+      GPUError::Lost => return,
       GPUError::Validation(_) => GPUErrorFilter::Validation,
       GPUError::OutOfMemory => GPUErrorFilter::OutOfMemory,
       GPUError::Internal => GPUErrorFilter::Internal,
@@ -171,7 +142,7 @@ pub enum GPUErrorFilter {
 pub enum GPUError {
   // TODO(@crowlKats): consider adding an unreachable value that uses unreachable!()
   #[class("UNREACHABLE")]
-  Lost(GPUDeviceLostReason),
+  Lost,
   #[class("GPUValidationError")]
   Validation(String),
   #[class("GPUOutOfMemoryError")]
@@ -183,7 +154,7 @@ pub enum GPUError {
 impl Display for GPUError {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
-      GPUError::Lost(_) => Ok(()),
+      GPUError::Lost => Ok(()),
       GPUError::Validation(s) => f.write_str(s),
       GPUError::OutOfMemory => f.write_str("not enough memory left"),
       GPUError::Internal => Ok(()),
@@ -197,7 +168,7 @@ impl GPUError {
   fn from_webgpu(e: impl WebGpuError) -> Self {
     match e.webgpu_error_type() {
       ErrorType::Internal => GPUError::Internal,
-      ErrorType::DeviceLost => GPUError::Lost(GPUDeviceLostReason::Unknown), // TODO: this variant should be ignored, register the lost callback instead.
+      ErrorType::DeviceLost => GPUError::Lost, // TODO: this variant should be ignored, register the lost callback instead.
       ErrorType::OutOfMemory => GPUError::OutOfMemory,
       ErrorType::Validation => GPUError::Validation(fmt_err(&e)),
     }
