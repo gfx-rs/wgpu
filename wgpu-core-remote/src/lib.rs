@@ -27,9 +27,5 @@ pub type Command = wgpu_core::command::Command<id::IdReferences>;
 pub mod global;
 pub mod hub;
 pub mod id;
-pub mod identity;
 pub mod registry;
 pub mod storage;
-
-type Index = u32;
-type Epoch = u32;
