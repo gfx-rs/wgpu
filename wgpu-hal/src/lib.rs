@@ -2835,6 +2835,7 @@ impl<'a, T: DynTexture + ?Sized> Clone for TextureBarrier<'a, T> {
         Self {
             texture: self.texture,
             range: self.range,
+            queue_family_ownership_transfer: self.queue_family_ownership_transfer,
             usage: self.usage.clone(),
         }
     }
