@@ -1333,8 +1333,16 @@ impl PhysicalDeviceProperties {
                 extensions.push(khr::shader_integer_dot_product::NAME);
             }
 
-            // Optional `VK_KHR_dynamic_rendering`
-            if self.supports_extension(khr::dynamic_rendering::NAME) {
+            // Optional `VK_KHR_dynamic_rendering`.
+            // Depends on:
+            // - `VK_KHR_get_physical_device_properties2` or Vulkan 1.1, and `VK_KHR_depth_stencil_resolve`
+            // - or Vulkan 1.2
+            //
+            // We only check Vulkan 1.2 for now, as `VK_KHR_depth_stencil_resolve`
+            // also depends a bunch of extensions.
+            if self.device_api_version >= vk::API_VERSION_1_2
+                && self.supports_extension(khr::dynamic_rendering::NAME)
+            {
                 extensions.push(khr::dynamic_rendering::NAME);
             }
 
