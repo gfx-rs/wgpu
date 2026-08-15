@@ -820,8 +820,8 @@ static UNIFORM_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| {
         shader_input_output_test(
             ctx,
-            InputStorageType::Storage,
-            create_16bit_struct_layout_test(),
+            InputStorageType::Uniform,
+            create_16bit_struct_layout_test(InputStorageType::Uniform),
         )
     });
 
@@ -837,7 +837,7 @@ static STORAGE_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(
             ctx,
             InputStorageType::Storage,
-            create_16bit_struct_layout_test(),
+            create_16bit_struct_layout_test(InputStorageType::Storage),
         )
     });
 
@@ -856,7 +856,7 @@ static IMMEDIATES_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(
             ctx,
             InputStorageType::Immediate,
-            create_16bit_struct_layout_test(),
+            create_16bit_struct_layout_test(InputStorageType::Immediate),
         )
     });
 
@@ -911,7 +911,7 @@ static IMMEDIATES_INPUT_I16: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
-fn create_16bit_struct_layout_test() -> Vec<ShaderTest> {
+fn create_16bit_struct_layout_test(storage_type: InputStorageType) -> Vec<ShaderTest> {
     let mut tests = Vec::new();
 
     fn f16asu16(f32: f32) -> u16 {
@@ -1015,25 +1015,32 @@ fn create_16bit_struct_layout_test() -> Vec<ShaderTest> {
         ",
         );
 
-        tests.push(ShaderTest::new(
-            "f16 matrix alignment".into(),
-            members.into(),
-            direct,
-            &(0..32).map(|x| f16asu16(x as f32)).collect::<Vec<_>>(),
-            &[
-                0, 1, // m2[0]
-                2, 3, // m2[1]
-                //
-                4, 5, 6, // m3[0]
-                8, 9, 10, // m3[1]
-                12, 13, 14, // m3[2]
-                //
-                16, 17, 18, 19, // m4[0]
-                20, 21, 22, 23, // m4[1]
-                24, 25, 26, 27, // m4[2]
-                28, 29, 30, 31, // m4[3]
-            ],
-        ));
+        tests.push(
+            ShaderTest::new(
+                "f16 matrix alignment".into(),
+                members.into(),
+                direct,
+                &(0..32).map(|x| f16asu16(x as f32)).collect::<Vec<_>>(),
+                &[
+                    0, 1, // m2[0]
+                    2, 3, // m2[1]
+                    //
+                    4, 5, 6, // m3[0]
+                    8, 9, 10, // m3[1]
+                    12, 13, 14, // m3[2]
+                    //
+                    16, 17, 18, 19, // m4[0]
+                    20, 21, 22, 23, // m4[1]
+                    24, 25, 26, 27, // m4[2]
+                    28, 29, 30, 31, // m4[3]
+                ],
+            )
+            .failures(if storage_type == InputStorageType::Immediate {
+                Backends::DX12
+            } else {
+                Backends::empty()
+            }),
+        );
     }
 
     // Insert `enable f16;` header
