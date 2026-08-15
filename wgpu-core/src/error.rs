@@ -19,7 +19,7 @@ use crate::device::Device;
 /// Supports both std and no_std environments, though
 /// the no_std implementation is a stub that does not
 /// actually distinguish between threads.
-pub mod thread_id {
+mod thread_id {
     #[cfg(feature = "std")]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct ThreadId(std::thread::ThreadId);
@@ -46,17 +46,17 @@ pub mod thread_id {
     }
 }
 
-pub struct ErrorScope {
+struct ErrorScope {
     pub error: Option<Error>,
     pub filter: ErrorFilter,
 }
 
-pub struct InternalErrorSink {
-    pub scopes: HashMap<thread_id::ThreadId, Vec<ErrorScope>>,
+struct InternalErrorSink {
+    scopes: HashMap<thread_id::ThreadId, Vec<ErrorScope>>,
     uncaptured_handler: Option<Arc<dyn UncapturedErrorHandler>>,
 }
 
-pub struct ErrorSink(pub Mutex<InternalErrorSink>);
+pub struct ErrorSink(Mutex<InternalErrorSink>);
 
 impl ErrorSink {
     pub fn new() -> ErrorSink {
@@ -351,5 +351,72 @@ impl fmt::Display for MultiError {
 impl error::Error for MultiError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         self.inner[0].source()
+    }
+}
+
+// special implementations for wgpu
+impl Device {
+    pub fn push_error_scope_with_index(&self, filter: ErrorFilter) -> u32 {
+        let index = {
+            let mut error_sink = self.error_sink.0.lock();
+            let thread_id = thread_id::ThreadId::current();
+            let scopes = error_sink.scopes.entry(thread_id).or_default();
+            scopes
+                .len()
+                .try_into()
+                .expect("Greater than 2^32 nested error scopes")
+        };
+        self.push_error_scope(filter);
+        index
+    }
+
+    pub fn pop_error_scope_checked(&self, index: u32) -> Option<Error> {
+        #[cfg(feature = "std")]
+        fn is_panicking() -> bool {
+            std::thread::panicking()
+        }
+
+        #[cfg(not(feature = "std"))]
+        fn is_panicking() -> bool {
+            false
+        }
+
+        let mut error_sink = self.error_sink.0.lock();
+
+        // We go out of our way to avoid panicking while unwinding, because that would abort the process,
+        // and we are supposed to just drop the error scope on the floor.
+        let is_panicking = is_panicking();
+        let thread_id = thread_id::ThreadId::current();
+        let err = "Mismatched pop_error_scope call: no error scope for this thread. Error scopes are thread-local.";
+        let scopes = match error_sink.scopes.get_mut(&thread_id) {
+            Some(s) => s,
+            None => {
+                if !is_panicking {
+                    panic!("{err}");
+                } else {
+                    return None;
+                }
+            }
+        };
+        if scopes.is_empty() && !is_panicking {
+            panic!("{err}");
+        }
+        if index as usize != scopes.len() - 1 && !is_panicking {
+            panic!(
+                "Mismatched pop_error_scope call: error scopes must be popped in reverse order."
+            );
+        }
+
+        // It would be more correct in this case to use `remove` here so that when unwinding is occurring
+        // we would remove the correct error scope, but we don't have such a primitive on the web
+        // and having consistent behavior here is more important. If you are unwinding and it unwinds
+        // the guards in the wrong order, it's totally reasonable to have incorrect behavior.
+        let scope = match scopes.pop() {
+            Some(s) => s,
+            None if !is_panicking => unreachable!(),
+            None => return None,
+        };
+
+        scope.error
     }
 }
