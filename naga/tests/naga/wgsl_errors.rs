@@ -1566,6 +1566,22 @@ fn int16_in_immediate() {
 }
 
 #[test]
+fn array_in_immediate() {
+    check_validation! {
+        "var<immediate> input: array<u32, 4>;",
+        "var<immediate> input: array<u32>;",
+        "struct S { a: array<u32, 4> }; var<immediate> input: S;":
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::InvalidImmediateType(
+                naga::valid::ImmediateError::InvalidArray
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::IMMEDIATES
+    }
+}
+
+#[test]
 fn float16_in_atomic() {
     check_validation! {
         "enable f16; var<storage> a: atomic<f16>;":
