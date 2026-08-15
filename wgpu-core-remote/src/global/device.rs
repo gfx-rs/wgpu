@@ -103,13 +103,12 @@ impl Global {
         let Hub {
             buffers, devices, ..
         } = &mut *hub;
-        let fid = buffers.prepare(id_in);
 
         let device = devices.get(device_id);
 
         let (buffer, error) = device.create_buffer(desc);
 
-        let id = fid.assign(buffer);
+        let id = buffers.assign(id_in, buffer);
 
         (id, error)
     }
@@ -152,9 +151,8 @@ impl Global {
         let Hub {
             buffers, devices, ..
         } = &mut *hub;
-        let fid = buffers.prepare(id_in);
         let device = devices.get(device_id);
-        fid.assign(resource::Buffer::invalid(device, desc));
+        buffers.assign(id_in, resource::Buffer::invalid(device, desc));
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -173,8 +171,7 @@ impl Global {
             ..
         } = &mut *hub;
         let device = devices.get(device_id);
-        let fid = render_bundles.prepare(id_in);
-        fid.assign(command::RenderBundle::invalid(device, desc));
+        render_bundles.assign(id_in, command::RenderBundle::invalid(device, desc));
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -190,10 +187,9 @@ impl Global {
         let Hub {
             textures, devices, ..
         } = &mut *hub;
-        let fid = textures.prepare(id_in);
         let device = devices.get(device_id);
         let texture = device.create_texture_error(desc);
-        fid.assign(texture)
+        textures.assign(id_in, texture)
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -211,9 +207,8 @@ impl Global {
             devices,
             ..
         } = &mut *hub;
-        let fid = external_textures.prepare(id_in);
         let device = devices.get(device_id);
-        fid.assign(resource::ExternalTexture::invalid(device, desc));
+        external_textures.assign(id_in, resource::ExternalTexture::invalid(device, desc));
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -236,12 +231,11 @@ impl Global {
             devices,
             ..
         } = &mut *hub;
-        let fid = bind_group_layouts.prepare(id_in);
         let device = devices.get(device_id);
-        fid.assign(binding_model::BindGroupLayout::invalid(
-            &device,
-            label.to_string(),
-        ));
+        bind_group_layouts.assign(
+            id_in,
+            binding_model::BindGroupLayout::invalid(&device, label.to_string()),
+        );
     }
 
     pub fn buffer_destroy(&self, buffer_id: id::BufferId) {
@@ -269,13 +263,12 @@ impl Global {
         let Hub {
             textures, devices, ..
         } = &mut *hub;
-        let fid = textures.prepare(id_in);
 
         let device = devices.get(device_id);
 
         let (texture, error) = device.create_texture(desc);
 
-        let id = fid.assign(texture);
+        let id = textures.assign(id_in, texture);
 
         (id, error)
     }
@@ -311,14 +304,13 @@ impl Global {
         let Hub {
             textures, devices, ..
         } = &mut *hub;
-        let fid = textures.prepare(id_in);
 
         let device = devices.get(device_id);
 
         let (texture, error) =
             unsafe { device.create_texture_from_hal(hal_texture, desc, initial_state) };
 
-        let id = fid.assign(texture);
+        let id = textures.assign(id_in, texture);
         (id, error)
     }
 
@@ -339,13 +331,12 @@ impl Global {
         let Hub {
             buffers, devices, ..
         } = &mut *hub;
-        let fid = buffers.prepare(id_in);
 
         let device = devices.get(device_id);
 
         let (buffer, err) = unsafe { device.create_buffer_from_hal(Box::new(hal_buffer), desc) };
 
-        let id = fid.assign(buffer);
+        let id = buffers.assign(id_in, buffer);
 
         (id, err)
     }
@@ -377,13 +368,11 @@ impl Global {
             ..
         } = &mut *hub;
 
-        let fid = texture_views.prepare(id_in);
-
         let texture = textures.get(texture_id);
 
         let (view, error) = texture.create_view(desc);
 
-        let id = fid.assign(view);
+        let id = texture_views.assign(id_in, view);
 
         (id, error)
     }
@@ -412,8 +401,6 @@ impl Global {
             ..
         } = &mut *hub;
 
-        let fid = external_textures.prepare(id_in);
-
         let device = devices.get(device_id);
 
         let planes = planes
@@ -423,7 +410,7 @@ impl Global {
 
         let (external_texture, error) = device.create_external_texture(desc, &planes);
 
-        let id = fid.assign(external_texture);
+        let id = external_textures.assign(id_in, external_texture);
 
         (id, error)
     }
@@ -452,13 +439,12 @@ impl Global {
         let Hub {
             samplers, devices, ..
         } = &mut *hub;
-        let fid = samplers.prepare(id_in);
 
         let device = devices.get(device_id);
 
         let (sampler, error) = device.create_sampler(desc);
 
-        let id = fid.assign(sampler);
+        let id = samplers.assign(id_in, sampler);
 
         (id, error)
     }
@@ -484,13 +470,12 @@ impl Global {
             devices,
             ..
         } = &mut *hub;
-        let fid = bind_group_layouts.prepare(id_in);
 
         let device = devices.get(device_id);
 
         let (bgl, error) = device.create_bind_group_layout(desc);
 
-        let id = fid.assign(bgl);
+        let id = bind_group_layouts.assign(id_in, bgl);
 
         (id, error)
     }
@@ -517,7 +502,6 @@ impl Global {
             bind_group_layouts,
             ..
         } = &mut *hub;
-        let fid = pipeline_layouts.prepare(id_in);
 
         let device = devices.get(device_id);
 
@@ -534,7 +518,7 @@ impl Global {
         };
 
         let (layout, error) = device.create_pipeline_layout(&desc);
-        let id = fid.assign(layout);
+        let id = pipeline_layouts.assign(id_in, layout);
         (id, error)
     }
 
@@ -561,7 +545,6 @@ impl Global {
             external_textures,
             ..
         } = &mut *hub;
-        let fid = bind_groups.prepare(id_in);
 
         let device = devices.get(device_id);
 
@@ -638,7 +621,7 @@ impl Global {
 
         let (bind_group, error) = device.create_bind_group(&desc);
 
-        let id = fid.assign(bind_group);
+        let id = bind_groups.assign(id_in, bind_group);
         (id, error)
     }
 
@@ -678,13 +661,12 @@ impl Global {
             devices,
             ..
         } = &mut *hub;
-        let fid = shader_modules.prepare(id_in);
 
         let device = devices.get(device_id);
 
         let (shader, error) = device.create_shader_module(desc, source);
 
-        let id = fid.assign(shader);
+        let id = shader_modules.assign(id_in, shader);
 
         (id, error)
     }
@@ -708,13 +690,12 @@ impl Global {
             devices,
             ..
         } = &mut *hub;
-        let fid = shader_modules.prepare(id_in);
 
         let device = devices.get(device_id);
 
         let (shader, error) = unsafe { device.create_shader_module_passthrough(desc) };
 
-        let id = fid.assign(shader);
+        let id = shader_modules.assign(id_in, shader);
 
         (id, error)
     }
@@ -737,13 +718,12 @@ impl Global {
             devices,
             ..
         } = &mut *hub;
-        let fid = command_encoders.prepare(id_in);
 
         let device = devices.get(device_id);
 
         let (cmd_enc, error) = device.create_command_encoder(desc);
 
-        let id = fid.assign(cmd_enc);
+        let id = command_encoders.assign(id_in, cmd_enc);
         (id, error)
     }
 
@@ -772,12 +752,11 @@ impl Global {
             devices,
             ..
         } = &mut *hub;
-        let fid = render_bundle_encoders.prepare(id_in);
 
         let device = devices.get(device_id);
         let (render_bundle_encoder, error) = device.create_render_bundle_encoder(desc);
 
-        let id = fid.assign(*render_bundle_encoder);
+        let id = render_bundle_encoders.assign(id_in, *render_bundle_encoder);
 
         (id, error)
     }
@@ -796,11 +775,9 @@ impl Global {
         } = &mut *hub;
         let bundle_encoder = render_bundle_encoders.get_mut(render_bundle_encoder_id);
 
-        let fid = render_bundles.prepare(id_in);
-
         let (render_bundle, error) = bundle_encoder.finish(desc);
 
-        let id = fid.assign(render_bundle);
+        let id = render_bundles.assign(id_in, render_bundle);
 
         (id, error)
     }
@@ -827,13 +804,12 @@ impl Global {
             devices,
             ..
         } = &mut *hub;
-        let fid = query_sets.prepare(id_in);
 
         let device = devices.get(device_id);
 
         let (query_set, error) = device.create_query_set(desc);
 
-        let id = fid.assign(query_set);
+        let id = query_sets.assign(id_in, query_set);
 
         (id, error)
     }
@@ -870,8 +846,6 @@ impl Global {
             pipeline_caches,
             ..
         } = &mut *hub;
-
-        let fid = render_pipelines.prepare(id_in);
 
         let device = devices.get(device_id);
 
@@ -927,7 +901,7 @@ impl Global {
 
         let (pipeline, error) = device.create_render_pipeline(desc);
 
-        let id = fid.assign(pipeline);
+        let id = render_pipelines.assign(id_in, pipeline);
 
         (id, error)
     }
@@ -950,13 +924,11 @@ impl Global {
             ..
         } = &mut *hub;
 
-        let fid = bind_group_layouts.prepare(id_in);
-
         let pipeline = render_pipelines.get(pipeline_id);
 
         let (bgl, error) = pipeline.get_bind_group_layout(index);
 
-        let id = fid.assign(bgl);
+        let id = bind_group_layouts.assign(id_in, bgl);
 
         (id, error)
     }
@@ -986,8 +958,6 @@ impl Global {
             ..
         } = &mut *hub;
 
-        let fid = compute_pipelines.prepare(id_in);
-
         let device = devices.get(device_id);
 
         let layout = desc.layout.map(|layout| pipeline_layouts.get(layout));
@@ -1012,7 +982,7 @@ impl Global {
 
         let (pipeline, error) = device.create_compute_pipeline(desc);
 
-        let id = fid.assign(pipeline);
+        let id = compute_pipelines.assign(id_in, pipeline);
 
         (id, error)
     }
@@ -1035,13 +1005,11 @@ impl Global {
             ..
         } = &mut *hub;
 
-        let fid = bind_group_layouts.prepare(id_in);
-
         let pipeline = compute_pipelines.get(pipeline_id);
 
         let (bgl, error) = pipeline.get_bind_group_layout(index);
 
-        let id = fid.assign(bgl);
+        let id = bind_group_layouts.assign(id_in, bgl);
 
         (id, error)
     }
@@ -1070,12 +1038,11 @@ impl Global {
             ..
         } = &mut *hub;
 
-        let fid = pipeline_caches.prepare(id_in);
         let device = devices.get(device_id);
 
         let (cache, error) = unsafe { device.create_pipeline_cache(desc) };
 
-        let id = fid.assign(cache);
+        let id = pipeline_caches.assign(id_in, cache);
 
         (id, error)
     }
