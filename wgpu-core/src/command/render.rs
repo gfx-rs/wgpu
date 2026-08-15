@@ -305,6 +305,8 @@ pub struct RenderPass {
     /// See <https://www.w3.org/TR/webgpu/#encoder-state>
     parent: Option<Arc<CommandEncoder>>,
 
+    device: Arc<Device>,
+
     color_attachments: ArrayVec<Option<RenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil_attachment: Option<ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>>,
     timestamp_writes: Option<PassTimestampWrites>,
@@ -336,6 +338,7 @@ impl RenderPass {
 
         Self {
             base: BasePass::new(label),
+            device: parent.device().clone(),
             parent: Some(parent),
             color_attachments,
             depth_stencil_attachment,
@@ -351,6 +354,7 @@ impl RenderPass {
     fn new_invalid(parent: Arc<CommandEncoder>, label: &Label, err: RenderPassError) -> Self {
         Self {
             base: BasePass::new_invalid(label, err),
+            device: parent.device().clone(),
             parent: Some(parent),
             color_attachments: ArrayVec::new(),
             depth_stencil_attachment: None,
@@ -365,6 +369,10 @@ impl RenderPass {
     #[inline]
     pub fn label(&self) -> Option<&str> {
         self.base.label.as_deref()
+    }
+
+    pub fn device(&self) -> &Arc<Device> {
+        &self.device
     }
 }
 
