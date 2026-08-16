@@ -527,6 +527,11 @@ impl super::Adapter {
             wgt::Features::SHADER_EARLY_DEPTH_TEST,
             supported((3, 1), (4, 2)) || extensions.contains("GL_ARB_shader_image_load_store"),
         );
+        features.set(
+            wgt::Features::EXTERNAL_TEXTURE,
+            es_ver.is_some_and(|v| v >= (3, 0))
+                && extensions.contains("GL_OES_EGL_image_external_essl3"),
+        );
         if extensions.contains("GL_ARB_timer_query") {
             features.set(wgt::Features::TIMESTAMP_QUERY, true);
             features.set(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS, true);

@@ -42,8 +42,8 @@ binding_map = [
 
 [glsl]
 binding_map = [
-    { resource_binding = { group = 0, binding = 0 }, bind_target = 0 },
-    { resource_binding = { group = 0, binding = 1 }, bind_target = 0 },
+    { resource_binding = { group = 0, binding = 0 }, bind_target = { binding = 0 } },
+    { resource_binding = { group = 0, binding = 1 }, bind_target = { binding = 0 } },
 ]
 version.Embedded = { is_webgl = false, version = 320 }
 writer_flags = ""

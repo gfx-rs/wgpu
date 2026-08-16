@@ -59,6 +59,8 @@ bitflags::bitflags! {
         const SHADER_BARYCENTRICS = 1 << 26;
         /// Primitive index builtin
         const PRIMITIVE_INDEX = 1 << 27;
+        /// External texture (using samplerExternalOES)
+        const EXTERNAL_TEXTURE = 1 << 28;
     }
 }
 
@@ -139,6 +141,7 @@ impl FeaturesManager {
         check_feature!(TEXTURE_LEVELS, 130);
         check_feature!(IMAGE_SIZE, 430, 310);
         check_feature!(TEXTURE_SHADOW_LOD, 200, 300);
+        check_feature!(EXTERNAL_TEXTURE, 9999, 300);
 
         // Return an error if there are missing features
         if missing.is_empty() {
@@ -312,6 +315,11 @@ impl FeaturesManager {
             }
         }
 
+        if self.0.contains(Features::EXTERNAL_TEXTURE) && options.version.is_es() {
+            // https://www.khronos.org/registry/OpenGL/extensions/OES/OES_EGL_image_external_essl3.txt
+            writeln!(out, "#extension GL_OES_EGL_image_external_essl3 : require")?;
+        }
+
         Ok(())
     }
 }
@@ -457,8 +465,10 @@ impl<W> Writer<'_, W> {
                             }
                         }
                         ImageClass::Sampled { multi: false, .. }
-                        | ImageClass::Depth { multi: false }
-                        | ImageClass::External => {}
+                        | ImageClass::Depth { multi: false } => {}
+                        ImageClass::External => {
+                            self.features.request(Features::EXTERNAL_TEXTURE);
+                        }
                     }
                 }
                 _ => {}

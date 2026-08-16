@@ -411,6 +411,7 @@ impl Inner {
         flags: wgt::InstanceFlags,
         egl: Arc<EglInstance>,
         display: khronos_egl::Display,
+        client_api: wgt::GlClientApi,
         force_gles_minor_version: wgt::Gles3MinorVersion,
     ) -> Result<Self, crate::InstanceError> {
         let version = initialize_display(&egl, display)
@@ -472,6 +473,14 @@ impl Inner {
             false
         };
 
+        let use_opengl = match client_api {
+            wgt::GlClientApi::Auto | wgt::GlClientApi::OpenGl => supports_opengl,
+            wgt::GlClientApi::OpenGlEs => {
+                log::debug!("GlClientApi::OpenGlEs: skipping desktop OpenGL, forcing GLES");
+                false
+            }
+        };
+
         let mut khr_context_flags = 0;
         let supports_khr_context = display_extensions.contains("EGL_KHR_create_context");
 
@@ -482,7 +491,7 @@ impl Inner {
         gl_context_attributes.push(3);
         gl_context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
         gl_context_attributes.push(3);
-        if supports_opengl && force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
+        if use_opengl && force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
             log::warn!("Ignoring specified GLES minor version as OpenGL is used");
         }
         gles_context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
@@ -598,7 +607,7 @@ impl Inner {
                 }
             };
 
-            let result = if supports_opengl {
+            let result = if use_opengl {
                 create_context(khronos_egl::OPENGL_API, &gl_context_attributes).or_else(
                     |gl_error| {
                         log::debug!("Failed to create desktop OpenGL context: {gl_error}, falling back to OpenGL ES");
@@ -934,6 +943,7 @@ impl crate::Instance for Instance {
             desc.flags,
             egl,
             display,
+            desc.backend_options.gl.client_api,
             desc.backend_options.gl.gles_minor_version,
         )?;
 

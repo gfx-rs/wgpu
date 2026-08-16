@@ -805,6 +805,42 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         binding: binding.clone(),
                     });
                 }
+                super::RawBinding::ExternalTexture {
+                    raw,
+                    target,
+                    params_raw,
+                    params_offset,
+                    params_size,
+                } => {
+                    // Bind the texture to its texture unit slot
+                    dirty_textures |= 1 << slot;
+                    self.state.texture_slots[slot as usize].tex_target = target;
+                    self.cmd_buffer.commands.push(C::BindTexture {
+                        slot,
+                        texture: raw,
+                        target,
+                        aspects: crate::FormatAspects::COLOR,
+                        mip_levels: 0..1,
+                    });
+                    // Bind the params SSBO to its shader storage buffer binding point
+                    let params_slot = layout
+                        .naga_options
+                        .binding_map
+                        .get(&naga::ResourceBinding {
+                            group: index,
+                            binding: binding_layout.binding,
+                        })
+                        .and_then(|t| t.external_texture.as_ref())
+                        .map(|t| t.params as u32)
+                        .unwrap();
+                    self.cmd_buffer.commands.push(C::BindBuffer {
+                        target: glow::SHADER_STORAGE_BUFFER,
+                        slot: params_slot,
+                        buffer: params_raw,
+                        offset: params_offset,
+                        size: params_size,
+                    });
+                }
             }
         }
 

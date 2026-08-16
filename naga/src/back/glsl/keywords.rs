@@ -492,6 +492,9 @@ pub const RESERVED_KEYWORDS: &[&str] = &[
     super::MODF_FUNCTION,
     super::FREXP_FUNCTION,
     super::FIRST_INSTANCE_BINDING,
+    super::SAMPLE_EXTERNAL_TEXTURE_FUNCTION,
+    super::IMAGE_LOAD_EXTERNAL_FUNCTION,
+    super::IMAGE_SIZE_EXTERNAL_FUNCTION,
 ];
 
 /// The above set of reserved keywords, turned into a cached HashSet. This saves

@@ -87,12 +87,15 @@ const CLAMPED_LOD_SUFFIX: &str = "_clamped_lod";
 
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
+pub(crate) const SAMPLE_EXTERNAL_TEXTURE_FUNCTION: &str = "nagaSampleExternalTexture";
+pub(crate) const IMAGE_LOAD_EXTERNAL_FUNCTION: &str = "nagaTextureLoadExternal";
+pub(crate) const IMAGE_SIZE_EXTERNAL_FUNCTION: &str = "nagaTextureDimensionsExternal";
 
 #[cfg(feature = "deserialize")]
 #[derive(serde::Deserialize)]
 struct BindingMapSerialization {
     resource_binding: crate::ResourceBinding,
-    bind_target: u8,
+    bind_target: BindTarget,
 }
 
 #[cfg(feature = "deserialize")]
@@ -506,4 +509,5 @@ pub fn supported_capabilities() -> valid::Capabilities {
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
+        | Caps::TEXTURE_EXTERNAL
 }

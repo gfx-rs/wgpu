@@ -146,8 +146,33 @@ impl fmt::Display for Version {
     }
 }
 
-/// Mapping between resources and bindings.
-pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, u8>;
+/// Binding targets for a single external texture.
+///
+/// Holds both the texture unit for the `samplerExternalOES` and the uniform
+/// buffer binding point for the `NagaExternalTextureParams` UBO.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct ExternalTextureBindTarget {
+    /// The texture unit to bind the `samplerExternalOES` to.
+    pub texture: u8,
+    /// The uniform buffer binding point for `NagaExternalTextureParams`.
+    pub params: u8,
+}
+
+/// Binding target for a single resource.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct BindTarget {
+    /// Binding slot for regular resources (textures, buffers, storage images, samplers).
+    pub binding: Option<u8>,
+    /// Binding targets for external textures (`samplerExternalOES` + `NagaExternalTextureParams` UBO).
+    pub external_texture: Option<ExternalTextureBindTarget>,
+}
+
+/// Mapping between resources and binding targets.
+pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
 
 /// Separate type from `naga::ScalarKind` so that naga can easily add impl's
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
