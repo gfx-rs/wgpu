@@ -1289,6 +1289,36 @@ fn per_vertex_capability() {
 }
 
 #[test]
+fn linear_interpolation_capability() {
+    // Regression test for https://github.com/gfx-rs/wgpu/issues/9971: `@interpolate(linear)`
+    // has no GLSL ES equivalent, so it must be rejected during validation rather than
+    // silently passing and then failing in the GLSL backend at pipeline creation.
+    let source = r#"
+        @fragment
+        fn fs_main(@location(0) @interpolate(linear) v: f32) -> @location(0) vec4<f32> {
+            return vec4(v, 0.0, 0.0, 1.0);
+        }
+    "#;
+
+    check_one_validation! {
+        source,
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Fragment,
+            source: valid::EntryPointError::Argument(
+                0,
+                valid::VaryingError::UnsupportedCapability(Capabilities::LINEAR_INTERPOLATION),
+            ),
+            ..
+        })
+    }
+
+    no_validation_error(
+        source,
+        Capabilities::default() | Capabilities::LINEAR_INTERPOLATION,
+    );
+}
+
+#[test]
 fn multiple_enables_valid() {
     check_success(
         r#"

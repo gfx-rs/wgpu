@@ -785,12 +785,17 @@ impl VaryingContext<'_> {
                 // qualifiers, so we won't complain about that here.
                 let _ = sampling;
 
-                let required = match sampling {
+                let mut required = match sampling {
                     Some(crate::Sampling::Sample) => Capabilities::MULTISAMPLED_SHADING,
                     _ => Capabilities::empty(),
                 };
+                if interpolation == Some(crate::Interpolation::Linear) {
+                    required |= Capabilities::LINEAR_INTERPOLATION;
+                }
                 if !self.capabilities.contains(required) {
-                    return Err(VaryingError::UnsupportedCapability(required));
+                    return Err(VaryingError::UnsupportedCapability(
+                        required - self.capabilities,
+                    ));
                 }
 
                 if interpolation != Some(crate::Interpolation::PerVertex) {

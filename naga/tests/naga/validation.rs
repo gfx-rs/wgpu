@@ -538,6 +538,52 @@ fn no_flat_first_in_glsl() {
     ));
 }
 
+#[test]
+fn no_linear_interpolation_in_glsl_es() {
+    use dummy_interpolation_shader::DummyInterpolationShader;
+
+    let DummyInterpolationShader {
+        source: _,
+        module,
+        interpolate_attr,
+        entry_point,
+    } = DummyInterpolationShader::new(naga::Interpolation::Linear, None);
+
+    let mut validator = naga::valid::Validator::new(Default::default(), valid::Capabilities::all());
+    let module_info = validator.validate(&module).unwrap();
+
+    let options = naga::back::glsl::Options {
+        version: naga::back::glsl::Version::Embedded {
+            version: 300,
+            is_webgl: true,
+        },
+        ..Default::default()
+    };
+    let pipeline_options = naga::back::glsl::PipelineOptions {
+        shader_stage: naga::ShaderStage::Fragment,
+        entry_point: entry_point.to_owned(),
+        multiview: None,
+    };
+    let err = naga::back::glsl::Writer::new(
+        String::new(),
+        &module,
+        &module_info,
+        &options,
+        &pipeline_options,
+        Default::default(),
+    )
+    .err()
+    .unwrap_or_else(|| {
+        panic!("`{interpolate_attr}` should fail backend validation on GLSL ES");
+    });
+
+    // The message must name the version and the feature, so that it is actionable.
+    assert_eq!(
+        err.to_string(),
+        "GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER"
+    );
+}
+
 mod dummy_interpolation_shader {
     pub struct DummyInterpolationShader {
         pub source: String,

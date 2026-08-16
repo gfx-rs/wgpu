@@ -875,6 +875,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         // No DRAW_INDEX
         // No MEMORY_DECORATION_VOLATILE
         | Caps::MEMORY_DECORATION_COHERENT
+        | Caps::LINEAR_INTERPOLATION
 }
 
 #[test]
