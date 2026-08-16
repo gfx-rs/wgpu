@@ -220,9 +220,7 @@ bitflags::bitflags! {
         const SHADER_INT16 = 1 << 43;
         /// Support for [`Interpolation::Linear`] (`@interpolate(linear)` in WGSL).
         ///
-        /// This is core WebGPU, but GLSL ES (and thus WebGL2) has no
-        /// `noperspective` qualifier, so the GLES backend can only offer it on
-        /// desktop GL.
+        /// This is core WebGPU, but GLSL ES (and thus WebGL) has no `noperspective` qualifier (unless enabled by extensions).
         ///
         /// [`Interpolation::Linear`]: crate::Interpolation::Linear
         const LINEAR_INTERPOLATION = 1 << 44;
