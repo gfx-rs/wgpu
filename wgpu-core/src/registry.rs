@@ -63,6 +63,7 @@ impl<T: StorageItem> Registry<T> {
 #[must_use]
 pub(crate) struct FutureId<'a, T: StorageItem> {
     id: Id<T::Marker>,
+    identity: &'a IdentityManager<T::Marker>,
     data: &'a RwLock<Storage<T>>,
 }
 
@@ -73,7 +74,17 @@ impl<T: StorageItem> FutureId<'_, T> {
     pub fn assign(self, value: T) -> Id<T::Marker> {
         let mut data = self.data.write();
         data.insert(self.id, value);
-        self.id
+        // Assigned ids are freed by `Registry::remove`, not `Drop`.
+        let id = self.id;
+        core::mem::forget(self);
+        id
+    }
+}
+
+/// Free the id if it was never assigned, so that its index can be reused.
+impl<T: StorageItem> Drop for FutureId<'_, T> {
+    fn drop(&mut self) {
+        self.identity.free(self.id);
     }
 }
 
@@ -87,6 +98,7 @@ impl<T: StorageItem> Registry<T> {
                 }
                 None => self.identity.process(),
             },
+            identity: &self.identity,
             data: &self.storage,
         }
     }
@@ -168,5 +180,18 @@ mod tests {
                 });
             }
         })
+    }
+
+    #[test]
+    fn dropped_ids_are_reused() {
+        let registry = Registry::new();
+
+        let fid = registry.prepare(None);
+        let index = fid.id.unzip().0;
+        drop(fid);
+
+        let fid = registry.prepare(None);
+        assert_eq!(fid.id.unzip().0, index);
+        fid.assign(Arc::new(TestData));
     }
 }
