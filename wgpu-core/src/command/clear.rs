@@ -5,10 +5,7 @@ use crate::{
     api_log,
     command::{encoder::EncodingState, ArcCommand, EncoderStateError},
     device::{DeviceError, MissingFeatures},
-    get_lowest_common_denom,
-    global::Global,
-    hal_label,
-    id::{BufferId, CommandEncoderId, TextureId},
+    get_lowest_common_denom, hal_label,
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{
         Buffer, DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError,
@@ -145,34 +142,6 @@ impl super::CommandEncoder {
                 subresource_range: *subresource_range,
             })
         })
-    }
-}
-
-impl Global {
-    pub fn command_encoder_clear_buffer(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        dst: BufferId,
-        offset: BufferAddress,
-        size: Option<BufferAddress>,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        cmd_enc.clear_buffer(hub.buffers.get(dst), offset, size)
-    }
-
-    pub fn command_encoder_clear_texture(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        dst: TextureId,
-        subresource_range: &ImageSubresourceRange,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-
-        cmd_enc.clear_texture(hub.textures.get(dst), subresource_range)
     }
 }
 

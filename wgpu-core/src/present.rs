@@ -17,8 +17,7 @@ use crate::device::trace::{Action, IntoTrace};
 use crate::{
     conv,
     device::{queue::Queue, Device, DeviceError, MissingDownlevelFlags, WaitIdleError},
-    global::Global,
-    hal_label, id,
+    hal_label,
     instance::Surface,
     resource::{self, Labeled},
 };
@@ -152,17 +151,15 @@ impl WebGpuError for ConfigureSurfaceError {
     }
 }
 
-pub type ResolvedSurfaceOutput = SurfaceOutput<Arc<resource::Texture>>;
-
 #[repr(C)]
 #[derive(Debug)]
-pub struct SurfaceOutput<T = id::TextureId> {
+pub struct SurfaceOutput<T = Arc<resource::Texture>> {
     pub status: Status,
     pub texture: Option<T>,
 }
 
 impl Surface {
-    pub fn get_current_texture(self: &Arc<Self>) -> Result<ResolvedSurfaceOutput, SurfaceError> {
+    pub fn get_current_texture(self: &Arc<Self>) -> Result<SurfaceOutput, SurfaceError> {
         let output = self.get_current_texture_inner();
         #[cfg(feature = "trace")]
         if let Some(present) = self.presentation.lock().as_ref() {
@@ -178,7 +175,7 @@ impl Surface {
         output
     }
 
-    pub(crate) fn get_current_texture_inner(&self) -> Result<ResolvedSurfaceOutput, SurfaceError> {
+    pub(crate) fn get_current_texture_inner(&self) -> Result<SurfaceOutput, SurfaceError> {
         profiling::scope!("Surface::get_current_texture");
 
         let (device, config) = if let Some(ref present) = *self.presentation.lock() {
@@ -292,7 +289,7 @@ impl Surface {
             ),
         };
 
-        Ok(ResolvedSurfaceOutput { status, texture })
+        Ok(SurfaceOutput { status, texture })
     }
 
     pub fn present(self: &Arc<Self>) -> Result<Status, SurfaceError> {
@@ -481,45 +478,5 @@ impl Surface {
             .ok_or(SurfaceError::NothingToPresent)?;
 
         Ok(())
-    }
-}
-
-impl Global {
-    pub fn surface_get_current_texture(
-        &self,
-        surface_id: id::SurfaceId,
-        texture_id_in: Option<id::TextureId>,
-    ) -> Result<SurfaceOutput, SurfaceError> {
-        let surface = self.surfaces.get(surface_id);
-
-        let fid = self.hub.textures.prepare(texture_id_in);
-
-        let output = surface.get_current_texture()?;
-
-        let status = output.status;
-        let texture_id = output.texture.map(|texture| fid.assign(texture));
-
-        Ok(SurfaceOutput {
-            status,
-            texture: texture_id,
-        })
-    }
-
-    pub fn surface_present(&self, surface_id: id::SurfaceId) -> Result<Status, SurfaceError> {
-        let surface = self.surfaces.get(surface_id);
-
-        surface.present()
-    }
-
-    pub fn surface_texture_discard(&self, surface_id: id::SurfaceId) -> Result<(), SurfaceError> {
-        let surface = self.surfaces.get(surface_id);
-
-        surface.discard()
-    }
-
-    pub fn surface_texture_release(&self, surface_id: id::SurfaceId) -> Result<(), SurfaceError> {
-        let surface = self.surfaces.get(surface_id);
-
-        surface.release()
     }
 }

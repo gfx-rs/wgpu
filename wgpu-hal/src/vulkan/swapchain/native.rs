@@ -4,7 +4,7 @@ use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::any::Any;
 
 use ash::{khr, vk};
-use parking_lot::{Mutex, MutexGuard};
+use wgpu_sync::{Mutex, MutexGuard};
 
 use crate::vulkan::{
     conv, map_host_device_oom_and_lost_err,
@@ -299,6 +299,7 @@ impl Surface for NativeSurface {
             next_acquire_index: 0,
             present_semaphores,
             next_present_time: None,
+            next_present_chain: None,
         }))
     }
 
@@ -365,7 +366,25 @@ pub(crate) struct NativeSwapchain {
     /// This must only be set if [`wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING`] is enabled, and
     /// so the VK_GOOGLE_display_timing extension is present.
     next_present_time: Option<vk::PresentTimeGOOGLE>,
+
+    /// A caller-provided `pNext` chain to attach to the [`vk::PresentInfoKHR`] of the next
+    /// call to [`present()`](crate::Queue::present()).
+    ///
+    /// # Safety
+    ///
+    /// Set only through
+    /// [`Surface::set_next_present_chain()`](crate::vulkan::Surface::set_next_present_chain),
+    /// whose contract keeps the chain valid and unaliased until the next present.
+    next_present_chain: Option<PresentChain>,
 }
+
+/// See [`NativeSwapchain::next_present_chain`].
+struct PresentChain(*mut vk::BaseOutStructure<'static>);
+
+// SAFETY: The pointer is only dereferenced during the next present, and the contract on
+// `Surface::set_next_present_chain()` keeps the chain valid and unaliased until then.
+unsafe impl Send for PresentChain {}
+unsafe impl Sync for PresentChain {}
 
 impl Drop for NativeSwapchain {
     fn drop(&mut self) {
@@ -595,7 +614,7 @@ impl Swapchain for NativeSwapchain {
 
         let mut display_timing;
         let present_times;
-        let vk_info = if let Some(present_time) = self.next_present_time.take() {
+        let mut vk_info = if let Some(present_time) = self.next_present_time.take() {
             debug_assert!(
                 self.device
                     .features
@@ -609,6 +628,20 @@ impl Swapchain for NativeSwapchain {
         } else {
             vk_info
         };
+
+        if let Some(PresentChain(chain)) = self.next_present_chain.take() {
+            // Splice the caller's chain in front of anything already chained onto `vk_info`.
+            // SAFETY: The contract on `Surface::set_next_present_chain()` keeps the chain
+            // valid and unaliased until this present completes.
+            unsafe {
+                let mut tail = chain;
+                while !(*tail).p_next.is_null() {
+                    tail = (*tail).p_next;
+                }
+                (*tail).p_next = vk_info.p_next.cast_mut().cast();
+                vk_info.p_next = chain.cast();
+            }
+        }
 
         let suboptimal = {
             profiling::scope!("vkQueuePresentKHR");
@@ -661,6 +694,13 @@ impl NativeSwapchain {
                 features
             );
         }
+    }
+
+    /// # Safety
+    ///
+    /// See [`Surface::set_next_present_chain()`](crate::vulkan::Surface::set_next_present_chain).
+    pub unsafe fn set_next_present_chain(&mut self, chain: *mut core::ffi::c_void) {
+        self.next_present_chain = Some(PresentChain(chain.cast()));
     }
 
     /// Mark the current frame finished, advancing to the next acquire semaphore.

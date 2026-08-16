@@ -1,84 +1,73 @@
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::ptr::NonNull;
 
-#[cfg(feature = "trace")]
-use crate::device::trace;
-use crate::{
-    binding_model::{
-        self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,
-        ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
-    },
+use wgpu_core::{
+    binding_model::{self},
     command,
-    device::{life::WaitIdleError, DeviceError, DeviceLostClosure},
-    global::Global,
-    id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
-    instance::{self, Adapter, Surface},
+    device::{DeviceError, DeviceLostClosure, WaitIdleError},
     pipeline::{
-        self, RenderPipelineVertexProcessor, ResolvedComputePipelineDescriptor,
-        ResolvedFragmentState, ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState,
-        ResolvedProgrammableStageDescriptor, ResolvedTaskState, ResolvedVertexState,
+        self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
+        ResolvedGeneralRenderPipelineDescriptor,
     },
-    present,
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
     },
-    storage::Storage,
-    Label, LabelHelpers,
+    Label, LabelHelpers, SubmissionIndex,
 };
 
-use wgt::{BufferAddress, TextureFormat};
+use crate::{
+    global::Global,
+    id::{self, DeviceId, QueueId},
+    storage::Storage,
+};
+
+use wgt::BufferAddress;
+
+pub type BindGroupDescriptor<'a> = binding_model::BindGroupDescriptor<
+    'a,
+    id::BindGroupLayoutId,
+    id::BufferId,
+    id::SamplerId,
+    id::TextureViewId,
+    id::TlasId,
+    id::ExternalTextureId,
+>;
+
+pub type BindGroupEntry<'a> = binding_model::BindGroupEntry<
+    'a,
+    id::BufferId,
+    id::SamplerId,
+    id::TextureViewId,
+    id::TlasId,
+    id::ExternalTextureId,
+>;
+
+pub type BufferBinding = binding_model::BufferBinding<id::BufferId>;
+
+pub type BindingResource<'a> = binding_model::BindingResource<
+    'a,
+    id::BufferId,
+    id::SamplerId,
+    id::TextureViewId,
+    id::TlasId,
+    id::ExternalTextureId,
+>;
+
+pub type ComputePipelineDescriptor<'a> = pipeline::ComputePipelineDescriptor<
+    'a,
+    id::PipelineLayoutId,
+    id::ShaderModuleId,
+    id::PipelineCacheId,
+>;
+
+pub type RenderPipelineDescriptor<'a> = pipeline::RenderPipelineDescriptor<
+    'a,
+    id::PipelineLayoutId,
+    id::ShaderModuleId,
+    id::PipelineCacheId,
+>;
 
 impl Global {
-    pub fn adapter_is_surface_supported(
-        &self,
-        adapter_id: AdapterId,
-        surface_id: SurfaceId,
-    ) -> bool {
-        let surface = self.surfaces.get(surface_id);
-        let adapter = self.hub.adapters.get(adapter_id);
-        adapter.is_surface_supported(&surface)
-    }
-
-    pub fn surface_get_capabilities(
-        &self,
-        surface_id: SurfaceId,
-        adapter_id: AdapterId,
-    ) -> Result<wgt::SurfaceCapabilities, instance::GetSurfaceSupportError> {
-        self.fetch_adapter_and_surface::<_, _>(surface_id, adapter_id, |adapter, surface| {
-            surface.get_capabilities(adapter)
-        })
-    }
-
-    /// Returns the HDR and luminance characteristics of the display backing
-    /// `surface_id` on `adapter_id`.
-    ///
-    /// Reports the raw display state, independent of the surface's configured
-    /// color space; see [`wgt::DisplayHdrInfo`] for per-field platform coverage.
-    /// Returns [`wgt::DisplayHdrInfo::default`] (all fields `None`) when nothing
-    /// is known: the surface is not on `adapter_id`'s backend, the backend has
-    /// no display-query path, or the Metal backend is queried off the main
-    /// thread.
-    pub fn surface_display_hdr_info(
-        &self,
-        surface_id: SurfaceId,
-        adapter_id: AdapterId,
-    ) -> wgt::DisplayHdrInfo {
-        self.fetch_adapter_and_surface(surface_id, adapter_id, |adapter, surface| {
-            surface.display_hdr_info(adapter)
-        })
-    }
-
-    fn fetch_adapter_and_surface<F: FnOnce(&Adapter, &Surface) -> B, B>(
-        &self,
-        surface_id: SurfaceId,
-        adapter_id: AdapterId,
-        get_supported_callback: F,
-    ) -> B {
-        let surface = self.surfaces.get(surface_id);
-        let adapter = self.hub.adapters.get(adapter_id);
-        get_supported_callback(&adapter, &surface)
-    }
-
     pub fn device_features(&self, device_id: DeviceId) -> wgt::Features {
         let device = self.hub.devices.get(device_id);
         *device.features()
@@ -91,7 +80,7 @@ impl Global {
 
     pub fn device_adapter_info(&self, device_id: DeviceId) -> wgt::AdapterInfo {
         let device = self.hub.devices.get(device_id);
-        device.adapter.get_info()
+        device.adapter_info()
     }
 
     pub fn device_downlevel_properties(&self, device_id: DeviceId) -> wgt::DownlevelCapabilities {
@@ -103,7 +92,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &resource::BufferDescriptor,
-        id_in: Option<id::BufferId>,
+        id_in: id::BufferId,
     ) -> (id::BufferId, Option<CreateBufferError>) {
         let hub = &self.hub;
         let fid = hub.buffers.prepare(id_in);
@@ -148,7 +137,7 @@ impl Global {
     pub fn create_buffer_error(
         &self,
         device_id: DeviceId,
-        id_in: Option<id::BufferId>,
+        id_in: id::BufferId,
         desc: &resource::BufferDescriptor,
     ) {
         let fid = self.hub.buffers.prepare(id_in);
@@ -162,7 +151,7 @@ impl Global {
     pub fn create_render_bundle_error(
         &self,
         device_id: DeviceId,
-        id_in: Option<id::RenderBundleId>,
+        id_in: id::RenderBundleId,
         desc: &command::RenderBundleDescriptor,
     ) {
         let device = self.hub.devices.get(device_id);
@@ -176,7 +165,7 @@ impl Global {
     pub fn create_texture_error(
         &self,
         device_id: DeviceId,
-        id_in: Option<id::TextureId>,
+        id_in: id::TextureId,
         desc: &resource::TextureDescriptor,
     ) -> id::TextureId {
         let fid = self.hub.textures.prepare(id_in);
@@ -191,7 +180,7 @@ impl Global {
     pub fn create_external_texture_error(
         &self,
         device_id: DeviceId,
-        id_in: Option<id::ExternalTextureId>,
+        id_in: id::ExternalTextureId,
         desc: &resource::ExternalTextureDescriptor,
     ) {
         let fid = self.hub.external_textures.prepare(id_in);
@@ -210,7 +199,7 @@ impl Global {
     pub fn create_bind_group_layout_error(
         &self,
         device_id: DeviceId,
-        id_in: Option<id::BindGroupLayoutId>,
+        id_in: id::BindGroupLayoutId,
         label: Option<Cow<'_, str>>,
     ) {
         let fid = self.hub.bind_group_layouts.prepare(id_in);
@@ -239,7 +228,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &resource::TextureDescriptor,
-        id_in: Option<id::TextureId>,
+        id_in: id::TextureId,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
         let hub = &self.hub;
 
@@ -252,6 +241,18 @@ impl Global {
         let id = fid.assign(texture);
 
         (id, error)
+    }
+
+    pub fn device_validate_texture_descriptor(
+        &self,
+        device_id: DeviceId,
+        desc: &resource::TextureDescriptor,
+    ) -> Option<resource::CreateTextureError> {
+        self.hub
+            .devices
+            .get(device_id)
+            .validate_texture_descriptor(desc)
+            .err()
     }
 
     /// # Safety
@@ -267,7 +268,7 @@ impl Global {
         device_id: DeviceId,
         desc: &resource::TextureDescriptor,
         initial_state: wgt::TextureUses,
-        id_in: Option<id::TextureId>,
+        id_in: id::TextureId,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
         let hub = &self.hub;
 
@@ -293,7 +294,7 @@ impl Global {
         hal_buffer: A::Buffer,
         device_id: DeviceId,
         desc: &resource::BufferDescriptor,
-        id_in: Option<id::BufferId>,
+        id_in: id::BufferId,
     ) -> (id::BufferId, Option<CreateBufferError>) {
         let hub = &self.hub;
         let fid = hub.buffers.prepare(id_in);
@@ -325,7 +326,7 @@ impl Global {
         &self,
         texture_id: id::TextureId,
         desc: &resource::TextureViewDescriptor,
-        id_in: Option<id::TextureViewId>,
+        id_in: id::TextureViewId,
     ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
         let hub = &self.hub;
 
@@ -351,7 +352,7 @@ impl Global {
         device_id: DeviceId,
         desc: &resource::ExternalTextureDescriptor,
         planes: &[id::TextureViewId],
-        id_in: Option<id::ExternalTextureId>,
+        id_in: id::ExternalTextureId,
     ) -> (
         id::ExternalTextureId,
         Option<resource::CreateExternalTextureError>,
@@ -392,7 +393,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &resource::SamplerDescriptor,
-        id_in: Option<id::SamplerId>,
+        id_in: id::SamplerId,
     ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
         let hub = &self.hub;
         let fid = hub.samplers.prepare(id_in);
@@ -416,7 +417,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &binding_model::BindGroupLayoutDescriptor,
-        id_in: Option<id::BindGroupLayoutId>,
+        id_in: id::BindGroupLayoutId,
     ) -> (
         id::BindGroupLayoutId,
         Option<binding_model::CreateBindGroupLayoutError>,
@@ -442,8 +443,8 @@ impl Global {
     pub fn device_create_pipeline_layout(
         &self,
         device_id: DeviceId,
-        desc: &binding_model::PipelineLayoutDescriptor,
-        id_in: Option<id::PipelineLayoutId>,
+        desc: &binding_model::PipelineLayoutDescriptor<id::BindGroupLayoutId>,
+        id_in: id::PipelineLayoutId,
     ) -> (
         id::PipelineLayoutId,
         Option<binding_model::CreatePipelineLayoutError>,
@@ -461,7 +462,7 @@ impl Global {
                 .collect::<Vec<_>>()
         };
 
-        let desc = binding_model::ResolvedPipelineLayoutDescriptor {
+        let desc = binding_model::PipelineLayoutDescriptor {
             label: desc.label.clone(),
             bind_group_layouts: Cow::Owned(bind_group_layouts),
             immediate_size: desc.immediate_size,
@@ -481,8 +482,8 @@ impl Global {
     pub fn device_create_bind_group(
         &self,
         device_id: DeviceId,
-        desc: &binding_model::BindGroupDescriptor,
-        id_in: Option<id::BindGroupId>,
+        desc: &BindGroupDescriptor,
+        id_in: id::BindGroupId,
     ) -> (id::BindGroupId, Option<binding_model::CreateBindGroupError>) {
         let hub = &self.hub;
         let fid = hub.bind_groups.prepare(id_in);
@@ -496,12 +497,11 @@ impl Global {
             buffer_storage: &Storage<Arc<resource::Buffer>>,
             sampler_storage: &Storage<Arc<resource::Sampler>>,
             texture_view_storage: &Storage<Arc<resource::TextureView>>,
-            tlas_storage: &Storage<Arc<resource::Tlas>>,
             external_texture_storage: &Storage<Arc<resource::ExternalTexture>>,
-        ) -> ResolvedBindGroupEntry<'a> {
+        ) -> binding_model::BindGroupEntry<'a> {
             let resolve_buffer = |bb: &BufferBinding| {
                 let buffer = buffer_storage.get(bb.buffer);
-                ResolvedBufferBinding {
+                binding_model::BufferBinding {
                     buffer,
                     offset: bb.offset,
                     size: bb.size,
@@ -509,43 +509,41 @@ impl Global {
             };
             let resolve_sampler = |id: &id::SamplerId| sampler_storage.get(*id);
             let resolve_view = |id: &id::TextureViewId| texture_view_storage.get(*id);
-            let resolve_tlas = |id: &id::TlasId| tlas_storage.get(*id);
             let resolve_external_texture =
                 |id: &id::ExternalTextureId| external_texture_storage.get(*id);
             let resource = match e.resource {
                 BindingResource::Buffer(ref buffer) => {
-                    ResolvedBindingResource::Buffer(resolve_buffer(buffer))
+                    binding_model::BindingResource::Buffer(resolve_buffer(buffer))
                 }
                 BindingResource::BufferArray(ref buffers) => {
                     let buffers = buffers.iter().map(resolve_buffer).collect::<Vec<_>>();
-                    ResolvedBindingResource::BufferArray(Cow::Owned(buffers))
+                    binding_model::BindingResource::BufferArray(Cow::Owned(buffers))
                 }
                 BindingResource::Sampler(ref sampler) => {
-                    ResolvedBindingResource::Sampler(resolve_sampler(sampler))
+                    binding_model::BindingResource::Sampler(resolve_sampler(sampler))
                 }
                 BindingResource::SamplerArray(ref samplers) => {
                     let samplers = samplers.iter().map(resolve_sampler).collect::<Vec<_>>();
-                    ResolvedBindingResource::SamplerArray(Cow::Owned(samplers))
+                    binding_model::BindingResource::SamplerArray(Cow::Owned(samplers))
                 }
                 BindingResource::TextureView(ref view) => {
-                    ResolvedBindingResource::TextureView(resolve_view(view))
+                    binding_model::BindingResource::TextureView(resolve_view(view))
                 }
                 BindingResource::TextureViewArray(ref views) => {
                     let views = views.iter().map(resolve_view).collect::<Vec<_>>();
-                    ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
+                    binding_model::BindingResource::TextureViewArray(Cow::Owned(views))
                 }
-                BindingResource::AccelerationStructure(ref tlas) => {
-                    ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas))
+                BindingResource::AccelerationStructure(_) => {
+                    unimplemented!()
                 }
-                BindingResource::AccelerationStructureArray(ref tlas_array) => {
-                    let tlas_array = tlas_array.iter().map(resolve_tlas).collect::<Vec<_>>();
-                    ResolvedBindingResource::AccelerationStructureArray(Cow::Owned(tlas_array))
+                BindingResource::AccelerationStructureArray(_) => {
+                    unimplemented!()
                 }
                 BindingResource::ExternalTexture(ref et) => {
-                    ResolvedBindingResource::ExternalTexture(resolve_external_texture(et))
+                    binding_model::BindingResource::ExternalTexture(resolve_external_texture(et))
                 }
             };
-            ResolvedBindGroupEntry {
+            binding_model::BindGroupEntry {
                 binding: e.binding,
                 resource,
             }
@@ -555,7 +553,6 @@ impl Global {
             let buffer_guard = hub.buffers.read();
             let texture_view_guard = hub.texture_views.read();
             let sampler_guard = hub.samplers.read();
-            let tlas_guard = hub.tlas_s.read();
             let external_texture_guard = hub.external_textures.read();
             desc.entries
                 .iter()
@@ -565,7 +562,6 @@ impl Global {
                         &buffer_guard,
                         &sampler_guard,
                         &texture_view_guard,
-                        &tlas_guard,
                         &external_texture_guard,
                     )
                 })
@@ -573,7 +569,7 @@ impl Global {
         };
         let entries = Cow::Owned(entries);
 
-        let desc = ResolvedBindGroupDescriptor {
+        let desc = binding_model::BindGroupDescriptor {
             label: desc.label.clone(),
             layout,
             entries,
@@ -610,7 +606,7 @@ impl Global {
         device_id: DeviceId,
         desc: &pipeline::ShaderModuleDescriptor,
         source: pipeline::ShaderModuleSource,
-        id_in: Option<id::ShaderModuleId>,
+        id_in: id::ShaderModuleId,
     ) -> (
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
@@ -635,7 +631,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &pipeline::ShaderModuleDescriptorPassthrough<'_>,
-        id_in: Option<id::ShaderModuleId>,
+        id_in: id::ShaderModuleId,
     ) -> (
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
@@ -662,7 +658,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &wgt::CommandEncoderDescriptor<Label>,
-        id_in: Option<id::CommandEncoderId>,
+        id_in: id::CommandEncoderId,
     ) -> (id::CommandEncoderId, Option<DeviceError>) {
         let hub = &self.hub;
         let fid = hub.command_encoders.prepare(id_in);
@@ -687,69 +683,37 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &command::RenderBundleEncoderDescriptor,
-    ) -> (
-        Box<command::RenderBundleEncoder>,
-        Option<command::CreateRenderBundleError>,
-    ) {
-        let device = self.hub.devices.get(device_id);
-        device.create_render_bundle_encoder(desc)
-    }
-
-    pub fn device_create_render_bundle_encoder_with_id(
-        &self,
-        device_id: DeviceId,
-        desc: &command::RenderBundleEncoderDescriptor,
-        id_in: Option<id::RenderBundleEncoderId>,
+        id_in: id::RenderBundleEncoderId,
     ) -> (
         id::RenderBundleEncoderId,
         Option<command::CreateRenderBundleError>,
     ) {
         let fid = self.hub.render_bundle_encoders.prepare(id_in);
 
-        let (render_bundle_encoder, error) =
-            self.device_create_render_bundle_encoder(device_id, desc);
+        let device = self.hub.devices.get(device_id);
+        let (render_bundle_encoder, error) = device.create_render_bundle_encoder(desc);
 
-        // no lock rank here because only one thread should be using compute pass
-        // and it's only used by id variants of compute pass methods on global
-        // so no deadlock (or concurrent lock) should happen in practise
-        let id = fid.assign(Arc::new(parking_lot::Mutex::new(*render_bundle_encoder)));
+        let id = fid.assign(*render_bundle_encoder);
 
         (id, error)
     }
 
     pub fn render_bundle_encoder_finish(
         &self,
-        bundle_encoder: &mut command::RenderBundleEncoder,
+        render_bundle_encoder_id: id::RenderBundleEncoderId,
         desc: &command::RenderBundleDescriptor,
-        id_in: Option<id::RenderBundleId>,
+        id_in: id::RenderBundleId,
     ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
-        let hub = &self.hub;
+        let mut bundle_encoder = self
+            .hub
+            .render_bundle_encoders
+            .get_mut(render_bundle_encoder_id);
 
-        let fid = hub.render_bundles.prepare(id_in);
+        let fid = self.hub.render_bundles.prepare(id_in);
 
         let (render_bundle, error) = bundle_encoder.finish(desc);
 
         let id = fid.assign(render_bundle);
-
-        (id, error)
-    }
-
-    pub fn render_bundle_encoder_finish_with_id(
-        &self,
-        render_bundle_encoder_id: id::RenderBundleEncoderId,
-        desc: &command::RenderBundleDescriptor,
-        id_in: Option<id::RenderBundleId>,
-    ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
-        let bundle_encoder = self
-            .hub
-            .render_bundle_encoders
-            .get(render_bundle_encoder_id);
-
-        let mut bundle_encoder = bundle_encoder
-            .try_lock()
-            .expect("RenderBundleEncoders should not be accessed concurrently");
-
-        let (id, error) = self.render_bundle_encoder_finish(&mut bundle_encoder, desc, id_in);
 
         (id, error)
     }
@@ -770,7 +734,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &resource::QuerySetDescriptor,
-        id_in: Option<id::QuerySetId>,
+        id_in: id::QuerySetId,
     ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
         let hub = &self.hub;
         let fid = hub.query_sets.prepare(id_in);
@@ -801,8 +765,8 @@ impl Global {
     pub fn device_create_render_pipeline(
         &self,
         device_id: DeviceId,
-        desc: &pipeline::RenderPipelineDescriptor,
-        id_in: Option<id::RenderPipelineId>,
+        desc: &RenderPipelineDescriptor,
+        id_in: id::RenderPipelineId,
     ) -> (
         id::RenderPipelineId,
         Option<pipeline::CreateRenderPipelineError>,
@@ -812,96 +776,38 @@ impl Global {
         let fid = hub.render_pipelines.prepare(id_in);
 
         let device = self.hub.devices.get(device_id);
-
-        self.device_create_general_render_pipeline(desc.clone().into(), device, fid)
-    }
-
-    pub fn device_create_mesh_pipeline(
-        &self,
-        device_id: DeviceId,
-        desc: &pipeline::MeshPipelineDescriptor,
-        id_in: Option<id::RenderPipelineId>,
-    ) -> (
-        id::RenderPipelineId,
-        Option<pipeline::CreateRenderPipelineError>,
-    ) {
-        let hub = &self.hub;
-
-        let fid = hub.render_pipelines.prepare(id_in);
-
-        let device = self.hub.devices.get(device_id);
-        self.device_create_general_render_pipeline(desc.clone().into(), device, fid)
-    }
-
-    fn device_create_general_render_pipeline(
-        &self,
-        desc: pipeline::GeneralRenderPipelineDescriptor,
-        device: Arc<crate::device::resource::Device>,
-        fid: crate::registry::FutureId<Arc<pipeline::RenderPipeline>>,
-    ) -> (
-        id::RenderPipelineId,
-        Option<pipeline::CreateRenderPipelineError>,
-    ) {
-        let hub = &self.hub;
 
         let layout = desc.layout.map(|layout| hub.pipeline_layouts.get(layout));
 
         let cache = desc.cache.map(|cache| hub.pipeline_caches.get(cache));
 
-        let vertex = match desc.vertex {
-            RenderPipelineVertexProcessor::Vertex(ref vertex) => {
-                let module = hub.shader_modules.get(vertex.stage.module);
-                let stage = ResolvedProgrammableStageDescriptor {
-                    module,
-                    entry_point: vertex.stage.entry_point.clone(),
-                    constants: vertex.stage.constants.clone(),
-                    zero_initialize_workgroup_memory: vertex.stage.zero_initialize_workgroup_memory,
-                };
-                RenderPipelineVertexProcessor::Vertex(ResolvedVertexState {
-                    stage,
-                    buffers: vertex.buffers.clone(),
-                })
-            }
-            RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
-                let task_module = if let Some(task) = task {
-                    let module = hub.shader_modules.get(task.stage.module);
-
-                    let state = ResolvedProgrammableStageDescriptor {
-                        module,
-                        entry_point: task.stage.entry_point.clone(),
-                        constants: task.stage.constants.clone(),
-                        zero_initialize_workgroup_memory: task
-                            .stage
-                            .zero_initialize_workgroup_memory,
-                    };
-                    Some(ResolvedTaskState { stage: state })
-                } else {
-                    None
-                };
-                let mesh_module = hub.shader_modules.get(mesh.stage.module);
-                let mesh_stage = ResolvedProgrammableStageDescriptor {
-                    module: mesh_module,
-                    entry_point: mesh.stage.entry_point.clone(),
-                    constants: mesh.stage.constants.clone(),
-                    zero_initialize_workgroup_memory: mesh.stage.zero_initialize_workgroup_memory,
-                };
-                RenderPipelineVertexProcessor::Mesh(
-                    task_module,
-                    ResolvedMeshState { stage: mesh_stage },
-                )
-            }
+        let vertex = {
+            let module = hub.shader_modules.get(desc.vertex.stage.module);
+            let stage = ProgrammableStageDescriptor {
+                module,
+                entry_point: desc.vertex.stage.entry_point.clone(),
+                constants: desc.vertex.stage.constants.clone(),
+                zero_initialize_workgroup_memory: desc
+                    .vertex
+                    .stage
+                    .zero_initialize_workgroup_memory,
+            };
+            RenderPipelineVertexProcessor::Vertex(pipeline::VertexState {
+                stage,
+                buffers: desc.vertex.buffers.clone(),
+            })
         };
 
         let fragment = if let Some(ref state) = desc.fragment {
             let module = hub.shader_modules.get(state.stage.module);
 
-            let stage = ResolvedProgrammableStageDescriptor {
+            let stage = ProgrammableStageDescriptor {
                 module,
                 entry_point: state.stage.entry_point.clone(),
                 constants: state.stage.constants.clone(),
                 zero_initialize_workgroup_memory: state.stage.zero_initialize_workgroup_memory,
             };
-            Some(ResolvedFragmentState {
+            Some(pipeline::FragmentState {
                 stage,
                 targets: state.targets.clone(),
             })
@@ -934,7 +840,7 @@ impl Global {
         &self,
         pipeline_id: id::RenderPipelineId,
         index: u32,
-        id_in: Option<id::BindGroupLayoutId>,
+        id_in: id::BindGroupLayoutId,
     ) -> (
         id::BindGroupLayoutId,
         Option<binding_model::GetBindGroupLayoutError>,
@@ -961,8 +867,8 @@ impl Global {
     pub fn device_create_compute_pipeline(
         &self,
         device_id: DeviceId,
-        desc: &pipeline::ComputePipelineDescriptor,
-        id_in: Option<id::ComputePipelineId>,
+        desc: &ComputePipelineDescriptor,
+        id_in: id::ComputePipelineId,
     ) -> (
         id::ComputePipelineId,
         Option<pipeline::CreateComputePipelineError>,
@@ -979,14 +885,14 @@ impl Global {
 
         let module = hub.shader_modules.get(desc.stage.module);
 
-        let stage = ResolvedProgrammableStageDescriptor {
+        let stage = ProgrammableStageDescriptor {
             module,
             entry_point: desc.stage.entry_point.clone(),
             constants: desc.stage.constants.clone(),
             zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
         };
 
-        let desc = ResolvedComputePipelineDescriptor {
+        let desc = pipeline::ComputePipelineDescriptor {
             label: desc.label.clone(),
             layout,
             stage,
@@ -1006,7 +912,7 @@ impl Global {
         &self,
         pipeline_id: id::ComputePipelineId,
         index: u32,
-        id_in: Option<id::BindGroupLayoutId>,
+        id_in: id::BindGroupLayoutId,
     ) -> (
         id::BindGroupLayoutId,
         Option<binding_model::GetBindGroupLayoutError>,
@@ -1037,7 +943,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         desc: &pipeline::PipelineCacheDescriptor<'_>,
-        id_in: Option<id::PipelineCacheId>,
+        id_in: id::PipelineCacheId,
     ) -> (
         id::PipelineCacheId,
         Option<pipeline::CreatePipelineCacheError>,
@@ -1060,25 +966,13 @@ impl Global {
         let _cache = hub.pipeline_caches.remove(pipeline_cache_id);
     }
 
-    pub fn surface_configure(
-        &self,
-        surface_id: SurfaceId,
-        device_id: DeviceId,
-        config: &wgt::SurfaceConfiguration<Vec<TextureFormat>>,
-    ) -> Option<present::ConfigureSurfaceError> {
-        let device = self.hub.devices.get(device_id);
-        let surface = self.surfaces.get(surface_id);
-
-        surface.configure(&device, config)
-    }
-
     /// Check `device_id` for freeable resources and completed buffer mappings.
     ///
     /// Return `queue_empty` indicating whether there are more queue submissions still in flight.
     pub fn device_poll(
         &self,
         device_id: DeviceId,
-        poll_type: wgt::PollType<crate::SubmissionIndex>,
+        poll_type: wgt::PollType<SubmissionIndex>,
     ) -> Result<wgt::PollStatus, WaitIdleError> {
         let device = self.hub.devices.get(device_id);
 
@@ -1162,15 +1056,6 @@ impl Global {
         device.generate_allocator_report()
     }
 
-    #[cfg(feature = "trace")]
-    pub fn device_take_trace(
-        &self,
-        device_id: DeviceId,
-    ) -> Option<Box<dyn trace::Trace + Send + Sync + 'static>> {
-        let device = self.hub.devices.get(device_id);
-        device.take_trace()
-    }
-
     pub fn queue_drop(&self, queue_id: QueueId) {
         self.hub.queues.remove(queue_id);
     }
@@ -1182,7 +1067,7 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<crate::SubmissionIndex, BufferAccessError> {
+    ) -> Result<SubmissionIndex, BufferAccessError> {
         let hub = &self.hub;
 
         let buffer = hub.buffers.get(buffer_id);

@@ -2,7 +2,7 @@ use alloc::{borrow::ToOwned as _, boxed::Box, collections::BTreeMap, sync::Arc, 
 use core::{ffi::CStr, marker::PhantomData};
 
 use ash::{ext, google, khr, vk};
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 
 use crate::{vulkan::semaphore_list::SemaphoreList, AllocationSizes};
 
@@ -3012,11 +3012,10 @@ impl super::Adapter {
         let mut enabled_extensions = self.required_device_extensions(features);
         let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
 
-        let family_index = 0; //TODO
-        let family_info = vk::DeviceQueueCreateInfo::default()
-            .queue_family_index(family_index)
-            .queue_priorities(&[1.0]);
-        let mut family_infos = Vec::from([family_info]);
+        let default_family_index = 0;
+        let mut family_infos = vec![vk::DeviceQueueCreateInfo::default()
+            .queue_family_index(default_family_index)
+            .queue_priorities(&[1.0])];
 
         let mut pre_info = vk::DeviceCreateInfo::default();
 
@@ -3070,7 +3069,7 @@ impl super::Adapter {
                 features,
                 limits,
                 memory_hints,
-                family_info.queue_family_index,
+                family_infos[0].queue_family_index,
                 0,
             )
         }

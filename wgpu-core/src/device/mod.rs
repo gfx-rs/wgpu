@@ -21,7 +21,6 @@ use wgt::{
 };
 
 pub(crate) mod bgl;
-pub mod global;
 mod life;
 pub mod queue;
 pub mod ray_tracing;

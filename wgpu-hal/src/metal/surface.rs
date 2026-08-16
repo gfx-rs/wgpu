@@ -13,7 +13,7 @@ use objc2_core_graphics::CGColorSpace;
 use objc2_foundation::NSObjectProtocol;
 use objc2_metal::MTLTextureType;
 use objc2_quartz_core::{CAMetalDrawable, CAMetalLayer};
-use parking_lot::{Mutex, RwLock};
+use wgpu_sync::{Mutex, RwLock};
 
 use super::OsFeatures;
 

@@ -101,72 +101,21 @@ flagged as errors as well.
 [wrapped in a mutex]: trait.IdentityHandler.html#impl-IdentityHandler%3CI%3E-for-Mutex%3CIdentityManager%3E
 [WebGPU]: https://www.w3.org/TR/webgpu/
 
-## IDs and tracing
-
-As of `wgpu` v27, commands are encoded all at once when
-`CommandEncoder::finish` is called, not when the encoding methods are
-called for each command. This implies storing a representation of the
-commands in memory until `finish` is called.  `Arc`s are more suitable
-for this purpose than numeric ids. Rather than redundantly store both
-`Id`s and `Arc`s, tracing has been changed to work with `Arc`s. The
-serialized trace identifies resources by the integer value of
-`Arc::as_ptr`. These IDs have the type [`crate::id::PointerId`]. The
-trace player uses hash maps to go from `PointerId`s to `Arc`s
-when replaying a trace.
-
 */
 
 use alloc::sync::Arc;
-use core::fmt::Debug;
 
-use crate::{
+use crate::registry::Registry;
+use wgpu_core::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{
         CommandBuffer, CommandEncoder, ComputePass, RenderBundle, RenderBundleEncoder, RenderPass,
     },
     device::{queue::Queue, Device},
     instance::Adapter,
-    lock::rank,
     pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
-    registry::{Registry, RegistryReport},
-    resource::{
-        Blas, Buffer, ExternalTexture, QuerySet, Sampler, StagingBuffer, Texture, TextureView, Tlas,
-    },
+    resource::{Buffer, ExternalTexture, QuerySet, Sampler, Texture, TextureView},
 };
-
-use parking_lot::Mutex;
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct HubReport {
-    pub adapters: RegistryReport,
-    pub devices: RegistryReport,
-    pub queues: RegistryReport,
-    pub pipeline_layouts: RegistryReport,
-    pub shader_modules: RegistryReport,
-    pub bind_group_layouts: RegistryReport,
-    pub bind_groups: RegistryReport,
-    pub command_encoders: RegistryReport,
-    pub command_buffers: RegistryReport,
-    pub render_bundles: RegistryReport,
-    pub render_pipelines: RegistryReport,
-    pub compute_pipelines: RegistryReport,
-    pub pipeline_caches: RegistryReport,
-    pub query_sets: RegistryReport,
-    pub buffers: RegistryReport,
-    pub textures: RegistryReport,
-    pub texture_views: RegistryReport,
-    pub external_textures: RegistryReport,
-    pub samplers: RegistryReport,
-    pub render_passes: RegistryReport,
-    pub compute_passes: RegistryReport,
-    pub render_bundle_encoders: RegistryReport,
-}
-
-impl HubReport {
-    pub fn is_empty(&self) -> bool {
-        self.adapters.is_empty()
-    }
-}
 
 #[allow(rustdoc::private_intra_doc_links)]
 /// All the resources tracked by a [`crate::global::Global`].
@@ -205,16 +154,13 @@ pub struct Hub {
     pub(crate) pipeline_caches: Registry<Arc<PipelineCache>>,
     pub(crate) query_sets: Registry<Arc<QuerySet>>,
     pub(crate) buffers: Registry<Arc<Buffer>>,
-    pub(crate) staging_buffers: Registry<StagingBuffer>,
     pub(crate) textures: Registry<Arc<Texture>>,
     pub(crate) texture_views: Registry<Arc<TextureView>>,
     pub(crate) external_textures: Registry<Arc<ExternalTexture>>,
     pub(crate) samplers: Registry<Arc<Sampler>>,
-    pub(crate) blas_s: Registry<Arc<Blas>>,
-    pub(crate) tlas_s: Registry<Arc<Tlas>>,
-    pub(crate) render_passes: Registry<Arc<Mutex<RenderPass>>>,
-    pub(crate) compute_passes: Registry<Arc<Mutex<ComputePass>>>,
-    pub(crate) render_bundle_encoders: Registry<Arc<Mutex<RenderBundleEncoder>>>,
+    pub(crate) render_passes: Registry<RenderPass>,
+    pub(crate) compute_passes: Registry<ComputePass>,
+    pub(crate) render_bundle_encoders: Registry<RenderBundleEncoder>,
 }
 
 impl Hub {
@@ -233,52 +179,22 @@ impl Hub {
             pipeline_layouts: Registry::new(),
             shader_modules: Registry::new(),
             bind_group_layouts: Registry::new(),
-            bind_groups: Registry::with_rank(rank::HUB_BIND_GROUPS),
+            bind_groups: Registry::new(),
             command_encoders: Registry::new(),
             command_buffers: Registry::new(),
             render_bundles: Registry::new(),
-            render_pipelines: Registry::with_rank(rank::HUB_RENDER_PIPELINES),
+            render_pipelines: Registry::new(),
             compute_pipelines: Registry::new(),
             pipeline_caches: Registry::new(),
             query_sets: Registry::new(),
             buffers: Registry::new(),
-            staging_buffers: Registry::new(),
             textures: Registry::new(),
-            texture_views: Registry::with_rank(rank::HUB_TEXTURE_VIEWS),
-            external_textures: Registry::with_rank(rank::HUB_EXTERNAL_TEXTURES),
-            samplers: Registry::with_rank(rank::HUB_SAMPLERS),
-            blas_s: Registry::new(),
-            tlas_s: Registry::with_rank(rank::HUB_TLAS),
+            texture_views: Registry::new(),
+            external_textures: Registry::new(),
+            samplers: Registry::new(),
             render_passes: Registry::new(),
             compute_passes: Registry::new(),
             render_bundle_encoders: Registry::new(),
-        }
-    }
-
-    pub fn generate_report(&self) -> HubReport {
-        HubReport {
-            adapters: self.adapters.generate_report(),
-            devices: self.devices.generate_report(),
-            queues: self.queues.generate_report(),
-            pipeline_layouts: self.pipeline_layouts.generate_report(),
-            shader_modules: self.shader_modules.generate_report(),
-            bind_group_layouts: self.bind_group_layouts.generate_report(),
-            bind_groups: self.bind_groups.generate_report(),
-            command_encoders: self.command_encoders.generate_report(),
-            command_buffers: self.command_buffers.generate_report(),
-            render_bundles: self.render_bundles.generate_report(),
-            render_pipelines: self.render_pipelines.generate_report(),
-            compute_pipelines: self.compute_pipelines.generate_report(),
-            pipeline_caches: self.pipeline_caches.generate_report(),
-            query_sets: self.query_sets.generate_report(),
-            buffers: self.buffers.generate_report(),
-            textures: self.textures.generate_report(),
-            texture_views: self.texture_views.generate_report(),
-            external_textures: self.external_textures.generate_report(),
-            samplers: self.samplers.generate_report(),
-            render_passes: self.render_passes.generate_report(),
-            compute_passes: self.compute_passes.generate_report(),
-            render_bundle_encoders: self.render_bundle_encoders.generate_report(),
         }
     }
 }

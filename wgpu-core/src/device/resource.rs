@@ -205,13 +205,11 @@ impl ExternalTextureParams {
 
 /// Because all operations are push/swap (no longlived lock),
 /// we can have mutex without lock rank
-pub(crate) struct DeferredBufferMapPendingClosures(
-    parking_lot::Mutex<Vec<BufferMapPendingClosure>>,
-);
+pub(crate) struct DeferredBufferMapPendingClosures(wgpu_sync::Mutex<Vec<BufferMapPendingClosure>>);
 
 impl DeferredBufferMapPendingClosures {
     pub(crate) fn new() -> Self {
-        Self(parking_lot::Mutex::new(Vec::new()))
+        Self(wgpu_sync::Mutex::new(Vec::new()))
     }
 
     pub(crate) fn push(&self, closure: BufferMapPendingClosure) {
@@ -414,6 +412,10 @@ impl Device {
 
     pub fn downlevel(&self) -> &wgt::DownlevelCapabilities {
         &self.downlevel
+    }
+
+    pub fn adapter_info(&self) -> wgt::AdapterInfo {
+        self.adapter.get_info()
     }
 }
 
@@ -761,7 +763,7 @@ impl Device {
 
         let timestamp_normalizer = crate::timestamp_normalization::TimestampNormalizer::new(
             self,
-            queue.get_timestamp_period(),
+            queue.get_raw_timestamp_period(),
         )?;
 
         self.timestamp_normalizer
@@ -778,10 +780,25 @@ impl Device {
         self.adapter.backend()
     }
 
+    /// Return true if `self` is still valid.
+    ///
+    /// Note that a `false` result here does *not* guarantee that no further activity will
+    /// occur on the `Device`. A [`Device`] can be marked invalid at any time, even while
+    /// locks are held, meaning that operations begun before the `Device` was marked
+    /// invalid will still generally run to completion. This is a consequence of
+    /// making [`Device::valid`] an `AtomicBool`. It could be avoided by making
+    /// [`Device::valid`] an ordinary `bool` field protected by the same locks that
+    /// all other operations acquire, but we use an `AtomicBool` because there
+    /// are many device validity checks and we want those to be cheap.
     pub fn is_valid(&self) -> bool {
         self.valid.load(Ordering::Acquire)
     }
 
+    /// Return `Err(DeviceError)` if `self` is not valid. Otherwise, return `Ok(())`.
+    ///
+    /// Note that an `Err` result here does *not* guarantee that no further activity will
+    /// occur on the `Device`. See the documentation for [`is_valid`][Self::is_valid] for
+    /// details.
     pub fn check_is_valid(&self) -> Result<(), DeviceError> {
         if self.is_valid() {
             Ok(())
@@ -993,8 +1010,10 @@ impl Device {
             wgt::PollType::Poll => None,
         };
 
-        // Wait for the submission index if requested.
-        if let Some(target_submission_index) = wait_submission_index {
+        // If a target submission index was specified, wait for it, and set
+        // `wait_succeeded` to `Some(bool)` indicating success or timeout. If
+        // no target was specified, set `wait_succeeded` to `None`.
+        let wait_succeeded = if let Some(target_submission_index) = wait_submission_index {
             log::trace!("Device::maintain: waiting for submission index {target_submission_index}");
 
             let wait_timeout = match poll_type {
@@ -1009,13 +1028,16 @@ impl Device {
                     .wait(self.fence.as_ref(), target_submission_index, wait_timeout)
             };
 
-            // This error match is only about `DeviceErrors`. At this stage we do not care if
-            // the wait succeeded or not, and the `Ok(bool)`` variant is ignored.
-            if let Err(e) = wait_result {
-                let hal_error: WaitIdleError = self.handle_hal_error(e).into();
-                return (user_closures, Err(hal_error));
+            match wait_result {
+                Ok(succeeded) => Some(succeeded),
+                Err(e) => {
+                    let hal_error: WaitIdleError = self.handle_hal_error(e).into();
+                    return (user_closures, Err(hal_error));
+                }
             }
-        }
+        } else {
+            None
+        };
 
         // Get the currently finished submission index. This may be higher than the requested
         // wait, or it may be less than the requested wait if the wait failed.
@@ -1028,14 +1050,27 @@ impl Device {
             }
         };
 
-        // Prevent new commands from being submitted as we want to act on `queue_empty`.
-        let command_indices = self.command_indices.read();
-        // Check that the device is valid. This is combined with queue empty to decide whether
-        // to destroy all resources. Queue.submit blocks on command indices being writable
-        // and rejects if invalid so if the device in now invalid, and all submissions are
-        // finished, there will be no more submissions.
-        let device_valid = self.is_valid();
-        drop(command_indices);
+        // When a device is marked invalid, we must destroy all its hal resources once its
+        // queue is empty, by calling `release_gpu_resources`.
+        //
+        // However, checking device validity for this purpose is tricky. A device can be
+        // marked invalid at any time, regardless of what locks are held. This means that,
+        // even though queue submission does check device validity at the start (in
+        // `Queue::allocate_submission`), the submission will proceed even if the
+        // device gets marked invalid after that check. Thus, other threads can observe
+        // the queue becoming non-empty even after they have observed the device to be
+        // invalid.
+        //
+        // In this function, for `release_gpu_resources` to work as intended, we must be
+        // sure that no further work can be submitted. Specifically, we must be sure that
+        // if we see the device marked invalid, then so will any subsequent attempts to
+        // submit work to the queue, causing them to fail. To accomplish this, it suffices
+        // to hold the same lock while we call `is_valid` that `Queue::allocate_submission`
+        // holds while it does the submission.
+        let device_valid = {
+            let _command_indices_guard = self.command_indices.read();
+            self.is_valid()
+        };
 
         // Maintain all finished submissions on the queue, updating the relevant user closures and
         // collecting if the queue is empty.
@@ -1071,10 +1106,22 @@ impl Device {
 
         // Based on the queue empty status, and the current finished submission index, determine
         // the result of the poll.
-        let result = if queue_empty {
+        //
+        // After a successful wait, `current_finished_submission` should match or exceed
+        // the target. But after a timeout, more work may have finished before
+        // `current_finished_submission` is read, so it could be on either side of the
+        // target, and the queue can also become empty before `Queue::maintain`
+        // computes `queue_empty`.
+        //
+        // We report as accurately as we can with the information available. In
+        // particular, when our wait timed out but `queue_empty` comes back `true`, we
+        // report `WaitSucceeded` if `current_finished_submission` reached the target,
+        // and `Timeout` if it didn't. We don't want to risk reporting `QueueEmpty`
+        // without actually having seen that the target submission is retired.
+        let result = if queue_empty && wait_succeeded != Some(false) {
             if let Some(wait_submission_index) = wait_submission_index {
-                // Assert to ensure that if we received a queue empty status, the fence shows the
-                // correct value. This is defensive, as this should never be hit.
+                // Sanity-check that we don't report `QueueEmpty` without
+                // reaching the target submission index.
                 assert!(
                     current_finished_submission >= wait_submission_index,
                     concat!(
@@ -1084,6 +1131,8 @@ impl Device {
                     current_finished_submission,
                     wait_submission_index,
                 );
+            } else {
+                // We didn't wait (passive poll), safe to report `QueueEmpty`.
             }
 
             Ok(wgt::PollStatus::QueueEmpty)
@@ -1517,6 +1566,8 @@ impl Device {
         desc: &resource::TextureDescriptor,
         initial_state: wgt::TextureUses,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+        self.check_is_valid()?;
+
         let format_features = self
             .describe_format_features(desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
@@ -1662,10 +1713,29 @@ impl Device {
         }
     }
 
-    fn create_texture_inner(
+    /// Validate a texture descriptor.
+    ///
+    /// This applies the same validation as [`Self::create_texture`], without
+    /// actually creating a texture.
+    pub fn validate_texture_descriptor(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
-    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+    ) -> Result<(), resource::CreateTextureError> {
+        self.validate_texture_descriptor_inner(desc)?;
+        Ok(())
+    }
+
+    /// Validate a texture descriptor.
+    ///
+    /// Implements the [validating GPUTextureDescriptor] algorithm, with some
+    /// `wgpu` extensions.
+    ///
+    /// [validating GPUTextureDescriptor]: https://www.w3.org/TR/webgpu/#abstract-opdef-validating-gputexturedescriptor
+    fn validate_texture_descriptor_inner(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> Result<(wgt::TextureFormatFeatures, Vec<TextureFormat>), resource::CreateTextureError>
+    {
         use resource::{CreateTextureError, TextureDimensionError};
 
         self.check_is_valid()?;
@@ -1938,6 +2008,15 @@ impl Device {
         if !hal_view_formats.is_empty() {
             self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
         }
+
+        Ok((format_features, hal_view_formats))
+    }
+
+    fn create_texture_inner(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+        let (format_features, hal_view_formats) = self.validate_texture_descriptor_inner(desc)?;
 
         let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
 
@@ -3065,6 +3144,22 @@ impl Device {
                 ));
             }
 
+            if entry
+                .visibility
+                .intersects(wgt::ShaderStages::TASK | wgt::ShaderStages::MESH)
+            {
+                required_features |= wgt::Features::EXPERIMENTAL_MESH_SHADER;
+            }
+
+            if entry.visibility.intersects(
+                wgt::ShaderStages::RAY_GENERATION
+                    | wgt::ShaderStages::ANY_HIT
+                    | wgt::ShaderStages::CLOSEST_HIT
+                    | wgt::ShaderStages::MISS,
+            ) {
+                required_features |= wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES;
+            }
+
             if entry.visibility.contains(wgt::ShaderStages::VERTEX) {
                 if writable_storage == WritableStorage::Yes {
                     required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
@@ -3141,7 +3236,7 @@ impl Device {
 
     fn create_buffer_binding<'a>(
         &self,
-        bb: &'a binding_model::ResolvedBufferBinding,
+        bb: &'a binding_model::BufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         buffer_init_actions: &mut Vec<BufferInitTrackerAction>,
@@ -3536,7 +3631,7 @@ impl Device {
 
     pub fn create_bind_group(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedBindGroupDescriptor,
+        desc: &binding_model::BindGroupDescriptor,
     ) -> (Arc<BindGroup>, Option<CreateBindGroupError>) {
         profiling::scope!("Device::create_bind_group");
         #[cfg(feature = "trace")]
@@ -3570,9 +3665,9 @@ impl Device {
     // (not passing a duplicate) beforehand.
     pub fn create_bind_group_inner(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedBindGroupDescriptor,
+        desc: &binding_model::BindGroupDescriptor,
     ) -> Result<Arc<BindGroup>, CreateBindGroupError> {
-        use crate::binding_model::{CreateBindGroupError as Error, ResolvedBindingResource as Br};
+        use crate::binding_model::{BindingResource as Br, CreateBindGroupError as Error};
 
         self.check_is_valid()?;
 
@@ -4022,7 +4117,7 @@ impl Device {
 
     pub fn create_pipeline_layout(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedPipelineLayoutDescriptor,
+        desc: &binding_model::PipelineLayoutDescriptor,
     ) -> (
         Arc<binding_model::PipelineLayout>,
         Option<binding_model::CreatePipelineLayoutError>,
@@ -4052,7 +4147,7 @@ impl Device {
 
     fn create_pipeline_layout_impl(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedPipelineLayoutDescriptor,
+        desc: &binding_model::PipelineLayoutDescriptor,
         ignore_exclusive_pipeline_check: bool,
     ) -> Result<Arc<binding_model::PipelineLayout>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
@@ -4208,7 +4303,7 @@ impl Device {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
+        let layout_desc = binding_model::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: Cow::Owned(bind_group_layouts),
             immediate_size,
@@ -4220,7 +4315,7 @@ impl Device {
 
     pub fn create_compute_pipeline(
         self: &Arc<Self>,
-        desc: pipeline::ResolvedComputePipelineDescriptor,
+        desc: pipeline::ComputePipelineDescriptor,
     ) -> (
         Arc<pipeline::ComputePipeline>,
         Option<pipeline::CreateComputePipelineError>,
@@ -4251,7 +4346,7 @@ impl Device {
 
     pub fn create_compute_pipeline_inner(
         self: &Arc<Self>,
-        desc: pipeline::ResolvedComputePipelineDescriptor,
+        desc: pipeline::ComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
         self.check_is_valid()?;
 
@@ -4284,7 +4379,7 @@ impl Device {
             Some(pipeline_layout) => validation::BindingLayoutSource::Provided(pipeline_layout),
             None => validation::BindingLayoutSource::new_derived(&self.limits),
         };
-        let mut shader_binding_sizes = FastHashMap::default();
+        let mut minimum_binding_sizes = FastHashMap::default();
         let mut io = validation::StageIo::default();
 
         let final_entry_point_name;
@@ -4300,7 +4395,7 @@ impl Device {
             if let Some(interface) = shader_module_state.interface.interface() {
                 io = interface.check_stage(
                     &mut binding_layout_source,
-                    &mut shader_binding_sizes,
+                    &mut minimum_binding_sizes,
                     &final_entry_point_name,
                     stage,
                     io,
@@ -4325,7 +4420,7 @@ impl Device {
         };
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
+            Device::make_late_sized_buffer_groups(&minimum_binding_sizes, &pipeline_layout);
 
         let cache = match desc.cache {
             Some(cache) => {
@@ -4436,7 +4531,7 @@ impl Device {
 
         self.check_is_valid()?;
 
-        let mut shader_binding_sizes = FastHashMap::default();
+        let mut minimum_binding_sizes = FastHashMap::default();
 
         let color_targets = desc
             .fragment
@@ -4897,7 +4992,7 @@ impl Device {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
-                                &mut shader_binding_sizes,
+                                &mut minimum_binding_sizes,
                                 &_vertex_entry_point_name,
                                 stage,
                                 io,
@@ -4949,7 +5044,7 @@ impl Device {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
-                                &mut shader_binding_sizes,
+                                &mut minimum_binding_sizes,
                                 &_task_entry_point_name,
                                 stage,
                                 io,
@@ -4999,7 +5094,7 @@ impl Device {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
-                                &mut shader_binding_sizes,
+                                &mut minimum_binding_sizes,
                                 &_mesh_entry_point_name,
                                 stage,
                                 io,
@@ -5058,7 +5153,7 @@ impl Device {
                     io = interface
                         .check_stage(
                             &mut binding_layout_source,
-                            &mut shader_binding_sizes,
+                            &mut minimum_binding_sizes,
                             &fragment_entry_point_name,
                             stage,
                             io,
@@ -5188,7 +5283,7 @@ impl Device {
             .flags
             .contains(wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED)
         {
-            for (binding, size) in shader_binding_sizes.iter() {
+            for (binding, size) in minimum_binding_sizes.iter() {
                 if size.get() % 16 != 0 {
                     return Err(pipeline::CreateRenderPipelineError::UnalignedShader {
                         binding: binding.binding,
@@ -5200,7 +5295,7 @@ impl Device {
         }
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
+            Device::make_late_sized_buffer_groups(&minimum_binding_sizes, &pipeline_layout);
 
         let cache = match desc.cache {
             Some(cache) => {
@@ -5557,7 +5652,7 @@ impl Device {
         Ok(query_set)
     }
 
-    fn lose(&self, message: &str) {
+    pub(crate) fn lose(&self, message: &str) {
         // Follow the steps at https://gpuweb.github.io/gpuweb/#lose-the-device.
 
         // Mark the device explicitly as invalid. This is checked in various
@@ -5587,17 +5682,24 @@ impl Device {
         // initiate movement into those buckets, and it can do that by calling
         // "destroy" on all the resources we know about.
 
-        // During these iterations, we discard all errors. We don't care!
         let trackers = self.trackers.lock();
-        for buffer in trackers.buffers.used_resources() {
-            if let Some(buffer) = Weak::upgrade(buffer) {
-                buffer.destroy();
-            }
+        let buffers = trackers
+            .buffers
+            .used_resources()
+            .flat_map(Weak::upgrade)
+            .collect::<Vec<_>>();
+        let textures = trackers
+            .textures
+            .used_resources()
+            .flat_map(Weak::upgrade)
+            .collect::<Vec<_>>();
+        drop(trackers);
+
+        for buffer in buffers {
+            buffer.destroy();
         }
-        for texture in trackers.textures.used_resources() {
-            if let Some(texture) = Weak::upgrade(texture) {
-                texture.destroy();
-            }
+        for texture in textures {
+            texture.destroy();
         }
     }
 
