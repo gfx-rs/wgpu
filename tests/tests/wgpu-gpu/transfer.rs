@@ -65,6 +65,7 @@ async fn copy_texture_to_texture_3d(ctx: wgpu_test::TestingContext) {
         mip_level_count: 1,
         sample_count: 1,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     };
     let texel_count =
         (TEXTURE_SIZE.width * TEXTURE_SIZE.height * TEXTURE_SIZE.depth_or_array_layers) as usize;
@@ -138,6 +139,7 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new()
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let t2 = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -152,6 +154,7 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new()
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         fail(
