@@ -2,14 +2,10 @@ use alloc::sync::{Arc, Weak};
 use core::hash::Hash;
 
 use hashbrown::{hash_map::Entry, HashMap};
+use wgpu_sync::OnceCell;
 
 use crate::lock::{rank, Mutex};
 use crate::FastHashMap;
-
-#[cfg(feature = "std")]
-use once_cell::sync::OnceCell;
-#[cfg(not(feature = "std"))]
-use once_cell::unsync::OnceCell;
 
 type SlotInner<V> = Weak<V>;
 type ResourcePoolSlot<V> = Arc<OnceCell<SlotInner<V>>>;

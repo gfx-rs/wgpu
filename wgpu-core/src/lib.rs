@@ -220,11 +220,6 @@ pub(crate) fn get_greatest_common_divisor(mut a: u32, mut b: u32) -> u32 {
     }
 }
 
-#[cfg(not(feature = "std"))]
-use core::cell::OnceCell as OnceCellOrLock;
-#[cfg(feature = "std")]
-use std::sync::OnceLock as OnceCellOrLock;
-
 #[cfg(test)]
 mod tests {
     use super::*;
