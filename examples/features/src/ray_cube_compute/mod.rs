@@ -157,6 +157,7 @@ impl crate::framework::Example for Example {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING,
             view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+            texture_binding_view_dimension: None,
         });
 
         let rt_view = rt_target.create_view(&wgpu::TextureViewDescriptor {

@@ -126,6 +126,7 @@ async fn test_format(
         mip_level_count: 1,
         sample_count: 1,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = tex.create_view(&wgpu::TextureViewDescriptor {
         format: Some(format),
@@ -192,6 +193,7 @@ static IMAGE_ATOMICS_NOT_ENABLED: GpuTestConfiguration = GpuTestConfiguration::n
                     mip_level_count: 1,
                     sample_count: 1,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 });
             },
             Some("Texture usages TextureUsages(STORAGE_ATOMIC) are not allowed on a texture of type R32Uint"),
@@ -220,6 +222,7 @@ static IMAGE_ATOMICS_NOT_SUPPORTED: GpuTestConfiguration = GpuTestConfiguration:
                     mip_level_count: 1,
                     sample_count: 1,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 });
             },
             Some("Texture usages TextureUsages(STORAGE_ATOMIC) are not allowed on a texture of type R8Uint"),
