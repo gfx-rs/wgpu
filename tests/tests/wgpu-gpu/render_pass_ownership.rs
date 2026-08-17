@@ -485,6 +485,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
         format: target_format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[target_format],
+        texture_binding_view_dimension: None,
     };
     let target_tex = ctx.device.create_texture(&target_desc);
     let target_tex_resolve = ctx.device.create_texture(&wgpu::TextureDescriptor {
