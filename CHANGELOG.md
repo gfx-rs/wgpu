@@ -48,6 +48,14 @@ Bottom level categories:
 
 - Stop passing an un-waited fence to `vkAcquireNextImageKHR` on non-Windows platforms, which triggered `VUID-vkAcquireNextImageKHR-fence-10066` validation errors every frame since v30.0.0. By @ErichDonGubler in [#9855](https://github.com/gfx-rs/wgpu/issues/9855).
 
+## v30.0.1
+
+### Bug Fixes
+
+#### WebGPU
+
+- Upgrade vendored WebGPU bindings and `wasm-bindgen` to 0.2.127. This fixes a panic “`can't access property "info", arg0 is null`” when using the WebGPU backend and `requestAdapter()` fails. By @beicause in [#10034](https://github.com/gfx-rs/wgpu/pull/10034), backported in [#10105](https://github.com/gfx-rs/wgpu/pull/10105).
+
 ## v30.0.0 (2026-07-01)
 
 ### Major changes
