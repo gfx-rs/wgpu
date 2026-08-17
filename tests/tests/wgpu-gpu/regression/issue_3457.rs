@@ -135,6 +135,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration = GpuTestConfiguration::ne
                 format: TextureFormat::Rgba8Unorm,
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&TextureViewDescriptor::default());
 

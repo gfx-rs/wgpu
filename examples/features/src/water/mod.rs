@@ -195,6 +195,7 @@ impl Example {
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let draw_depth_buffer = device.create_texture(&wgpu::TextureDescriptor {
@@ -208,6 +209,7 @@ impl Example {
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let color_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -834,13 +836,17 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     base_test_parameters: wgpu_test::TestParameters::default()
         .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
         // To be fixed in <https://github.com/gfx-rs/wgpu/issues/5231>.
-        .expect_fail(wgpu_test::FailureCase {
-            backends: Some(wgpu::Backends::VULKAN),
-            reasons: vec![wgpu_test::FailureReason::validation_error()
-                .with_message("WRITE_AFTER_WRITE hazard detected.")],
-            behavior: wgpu_test::FailureBehavior::AssertFailure,
-            ..Default::default()
-        }),
+        // Flaky: doesn't reproduce on all Vulkan driver versions.
+        .expect_fail(
+            wgpu_test::FailureCase {
+                backends: Some(wgpu::Backends::VULKAN),
+                reasons: vec![wgpu_test::FailureReason::validation_error()
+                    .with_message("WRITE_AFTER_WRITE hazard detected.")],
+                behavior: wgpu_test::FailureBehavior::AssertFailure,
+                ..Default::default()
+            }
+            .flaky(),
+        ),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.018)], // Bounded by Apple A9
     _phantom: std::marker::PhantomData::<Example>,
 };

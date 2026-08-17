@@ -103,6 +103,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     ctx.queue.write_texture(

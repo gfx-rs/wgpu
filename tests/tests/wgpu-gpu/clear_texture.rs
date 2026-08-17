@@ -244,6 +244,7 @@ async fn single_texture_clear_test(
         format,
         usage: wgpu::TextureUsages::COPY_SRC | extra_usages,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut encoder = ctx
         .device
@@ -350,12 +351,14 @@ static CLEAR_TEXTURE_UNCOMPRESSED_GLES: GpuTestConfiguration = GpuTestConfigurat
 static CLEAR_TEXTURE_UNCOMPRESSED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
+            // Flaky: doesn't reproduce on all GL driver versions.
             .expect_fail(
                 FailureCase::backend(wgpu::Backends::GL)
                     .panic("texture with format Rg8Snorm was not fully cleared")
                     .panic("texture with format Rgb9e5Ufloat was not fully cleared")
                     .validation_error("GL_INVALID_FRAMEBUFFER_OPERATION")
-                    .validation_error("GL_INVALID_OPERATION"),
+                    .validation_error("GL_INVALID_OPERATION")
+                    .flaky(),
             )
             .features(wgpu::Features::CLEAR_TEXTURE),
     )

@@ -42,6 +42,7 @@ async fn run(_path: Option<String>) {
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
+        texture_binding_view_dimension: None,
     });
     let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,

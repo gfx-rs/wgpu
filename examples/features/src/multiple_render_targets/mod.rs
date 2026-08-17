@@ -45,6 +45,7 @@ impl MultiTargetRenderer {
             format: wgpu::TextureFormat::R8Unorm, // we need only the red channel for black/white image,
             usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let ball_texture_data = &create_ball_texture_data(WIDTH, HEIGHT);
@@ -397,6 +398,7 @@ impl TextureTargets {
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[format],
+            texture_binding_view_dimension: None,
         });
         let green_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -409,6 +411,7 @@ impl TextureTargets {
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[format],
+            texture_binding_view_dimension: None,
         });
         let red_view = red_texture.create_view(&wgpu::TextureViewDescriptor {
             format: Some(format),

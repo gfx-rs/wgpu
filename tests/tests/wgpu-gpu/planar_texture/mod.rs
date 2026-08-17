@@ -87,6 +87,7 @@ fn test_planar_texture_creation_sampling(
         format: target_format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let target_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -246,6 +247,7 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let y_view = tex.create_view(&wgpu::TextureViewDescriptor {
             format: Some(wgpu::TextureFormat::R8Unorm),
@@ -289,6 +291,7 @@ static P010_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let y_view = tex.create_view(&wgpu::TextureViewDescriptor {
             format: Some(wgpu::TextureFormat::R16Unorm),
@@ -329,6 +332,7 @@ static NV12_TEXTURE_RENDERING: GpuTestConfiguration = GpuTestConfiguration::new(
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let y_view = tex.create_view(&wgpu::TextureViewDescriptor {
             format: Some(wgpu::TextureFormat::R8Unorm),
@@ -373,6 +377,7 @@ static NV12_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let output_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -383,6 +388,7 @@ static NV12_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let mut command_encoder = ctx
@@ -430,6 +436,7 @@ static NV12_PLANE_TO_SINGLE_PLANE_COPY: GpuTestConfiguration = GpuTestConfigurat
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         // Distinct patterns per plane so a swap or plane-0-fallback would fail
@@ -492,6 +499,7 @@ static NV12_PLANE_TO_SINGLE_PLANE_COPY: GpuTestConfiguration = GpuTestConfigurat
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let rg8 = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("rg8 dst"),
@@ -502,6 +510,7 @@ static NV12_PLANE_TO_SINGLE_PLANE_COPY: GpuTestConfiguration = GpuTestConfigurat
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let r8_readback = ctx.device.create_buffer(&wgpu::BufferDescriptor {
@@ -631,6 +640,7 @@ static P010_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let output_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -641,6 +651,7 @@ static P010_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         let mut command_encoder = ctx

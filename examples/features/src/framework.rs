@@ -674,6 +674,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                     format,
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 });
 
                 let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());
