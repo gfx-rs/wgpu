@@ -24,35 +24,7 @@ use crate::{
 
 use wgt::BufferAddress;
 
-pub type BindGroupDescriptor<'a> = binding_model::BindGroupDescriptor<
-    'a,
-    id::BindGroupLayoutId,
-    id::BufferId,
-    id::SamplerId,
-    id::TextureViewId,
-    id::TlasId,
-    id::ExternalTextureId,
->;
-
-pub type BindGroupEntry<'a> = binding_model::BindGroupEntry<
-    'a,
-    id::BufferId,
-    id::SamplerId,
-    id::TextureViewId,
-    id::TlasId,
-    id::ExternalTextureId,
->;
-
-pub type BufferBinding = binding_model::BufferBinding<id::BufferId>;
-
-pub type BindingResource<'a> = binding_model::BindingResource<
-    'a,
-    id::BufferId,
-    id::SamplerId,
-    id::TextureViewId,
-    id::TlasId,
-    id::ExternalTextureId,
->;
+pub use wgpu_core_remote_types::binding_model::*;
 
 pub type ComputePipelineDescriptor<'a> = pipeline::ComputePipelineDescriptor<
     'a,
@@ -551,7 +523,7 @@ impl Global {
         let layout = bind_group_layouts.get(desc.layout);
 
         fn resolve_entry<'a>(
-            e: &BindGroupEntry<'a>,
+            e: &'a BindGroupEntry,
             buffers: &mut Registry<Arc<resource::Buffer>>,
             samplers: &mut Registry<Arc<resource::Sampler>>,
             texture_views: &mut Registry<Arc<resource::TextureView>>,
@@ -572,29 +544,11 @@ impl Global {
                 BindingResource::Buffer(ref buffer) => {
                     binding_model::BindingResource::Buffer(resolve_buffer(buffer))
                 }
-                BindingResource::BufferArray(ref buffers) => {
-                    let buffers = buffers.iter().map(resolve_buffer).collect::<Vec<_>>();
-                    binding_model::BindingResource::BufferArray(Cow::Owned(buffers))
-                }
                 BindingResource::Sampler(ref sampler) => {
                     binding_model::BindingResource::Sampler(resolve_sampler(sampler))
                 }
-                BindingResource::SamplerArray(ref samplers) => {
-                    let samplers = samplers.iter().map(resolve_sampler).collect::<Vec<_>>();
-                    binding_model::BindingResource::SamplerArray(Cow::Owned(samplers))
-                }
                 BindingResource::TextureView(ref view) => {
                     binding_model::BindingResource::TextureView(resolve_view(view))
-                }
-                BindingResource::TextureViewArray(ref views) => {
-                    let views = views.iter().map(resolve_view).collect::<Vec<_>>();
-                    binding_model::BindingResource::TextureViewArray(Cow::Owned(views))
-                }
-                BindingResource::AccelerationStructure(_) => {
-                    unimplemented!()
-                }
-                BindingResource::AccelerationStructureArray(_) => {
-                    unimplemented!()
                 }
                 BindingResource::ExternalTexture(ref et) => {
                     binding_model::BindingResource::ExternalTexture(resolve_external_texture(et))
