@@ -320,6 +320,77 @@ impl Surface {
             .expect("Surface should have a native Vulkan swapchain");
         unsafe { swapchain.set_next_present_chain(chain) };
     }
+
+    /// Set a `pNext` chain of extension structs to attach to the
+    /// [`vk::SwapchainCreateInfoKHR`] used by the next configuration of this surface.
+    ///
+    /// This supports swapchain extensions that `wgpu-hal` has no dedicated support
+    /// for. One example is `VkSwapchainLatencyCreateInfoNV` from [VK_NV_low_latency2].
+    /// The device extension itself must be enabled at device creation, for example
+    /// with [`Adapter::open_with_callback()`](super::vulkan::Adapter::open_with_callback).
+    ///
+    /// The next configuration consumes the chain. A later call replaces a chain that
+    /// hasn't been consumed yet. If the surface is dropped first, the chain is
+    /// discarded unread. Every configuration creates a new swapchain, so you must set
+    /// the chain again before each configuration, including on resize.
+    ///
+    /// # Safety
+    ///
+    /// - `chain` must point to a valid `pNext` chain of structs that can extend
+    ///   [`vk::SwapchainCreateInfoKHR`]. The extensions in the chain must be enabled
+    ///   on the device the surface is configured with.
+    /// - The chain must stay valid until the configuration that consumes it returns
+    ///   or the surface is dropped. Don't read or write the chain during that time.
+    ///   Fields the driver wrote during swapchain creation may be read afterwards.
+    ///
+    /// # Panics
+    ///
+    /// - If the surface isn't a native Vulkan surface, such as a DXGI surface.
+    ///
+    /// [VK_NV_low_latency2]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_low_latency2.html
+    #[track_caller]
+    pub unsafe fn set_next_swapchain_create_chain(&self, chain: *mut c_void) {
+        let surface = self
+            .inner
+            .as_any()
+            .downcast_ref::<swapchain::NativeSurface>()
+            .expect("Surface should be a native Vulkan surface");
+        unsafe { surface.set_next_swapchain_create_chain(chain) };
+    }
+}
+
+/// A caller-provided `pNext` chain, stashed by one of the `set_next_*_chain`
+/// setters until the Vulkan call that consumes it.
+pub(crate) struct PnextChain(*mut vk::BaseOutStructure<'static>);
+
+// SAFETY: The pointer is only dereferenced at the Vulkan call that consumes the
+// chain. Each setter's contract keeps the chain valid and unaliased until then.
+unsafe impl Send for PnextChain {}
+unsafe impl Sync for PnextChain {}
+
+impl PnextChain {
+    /// Wraps the raw chain pointer that a `set_next_*_chain` setter received.
+    pub(crate) fn new(chain: *mut c_void) -> Self {
+        Self(chain.cast())
+    }
+
+    /// Splices this chain in front of `existing`, the current `p_next` of a
+    /// Vulkan info struct, and returns the new chain head.
+    ///
+    /// # Safety
+    ///
+    /// The chain must still be valid, and the info struct must be passed to the
+    /// Vulkan call that consumes the chain.
+    pub(crate) unsafe fn splice_into(self, existing: *const c_void) -> *const c_void {
+        unsafe {
+            let mut tail = self.0;
+            while !(*tail).p_next.is_null() {
+                tail = (*tail).p_next;
+            }
+            (*tail).p_next = existing.cast_mut().cast();
+        }
+        self.0.cast()
+    }
 }
 
 #[derive(Debug)]
@@ -700,6 +771,11 @@ pub struct Queue {
     relay_semaphores: Mutex<RelaySemaphores>,
     signal_semaphores: Mutex<SemaphoreList>,
     wait_semaphores: Mutex<SemaphoreList>,
+    /// A caller-provided `pNext` chain to attach to the [`vk::SubmitInfo`] of the
+    /// next call to [`submit()`](crate::Queue::submit).
+    ///
+    /// Set only through [`Queue::set_next_submit_chain()`].
+    next_submit_chain: Mutex<Option<PnextChain>>,
 }
 
 impl fmt::Debug for Queue {
@@ -711,6 +787,7 @@ impl fmt::Debug for Queue {
             relay_semaphores: _,
             signal_semaphores: _,
             wait_semaphores: _,
+            next_submit_chain: _,
         } = self;
         f.debug_struct("Queue")
             .field("family_index", family_index)
@@ -1536,6 +1613,13 @@ impl crate::Queue for Queue {
             &mut vk_timeline_info,
         );
 
+        let submit_chain = self.next_submit_chain.lock().take();
+        if let Some(chain) = submit_chain {
+            // SAFETY: The contract on `Queue::set_next_submit_chain()` keeps the chain
+            // valid and unaliased until this submission is made.
+            vk_info.p_next = unsafe { chain.splice_into(vk_info.p_next) };
+        }
+
         profiling::scope!("vkQueueSubmit");
         unsafe {
             self.device
@@ -1619,6 +1703,33 @@ impl Queue {
     /// already consumed it, this is a no-op that returns `false`.
     pub fn remove_wait_semaphore(&self, semaphore: vk::Semaphore) -> bool {
         self.wait_semaphores.lock().remove(semaphore)
+    }
+
+    /// Set a `pNext` chain of extension structs to attach to the [`vk::SubmitInfo`]
+    /// of the next [`submit()`](crate::Queue::submit) on this queue.
+    ///
+    /// This supports submission extensions that `wgpu-hal` has no dedicated support
+    /// for. One example is `VkLatencySubmissionPresentIdNV` from `VK_NV_low_latency2`.
+    /// The device extension itself must be enabled at device creation, for example
+    /// with [`Adapter::open_with_callback()`](super::vulkan::Adapter::open_with_callback).
+    ///
+    /// The next submission on this queue consumes the chain, and a later call
+    /// replaces a chain that hasn't been submitted yet. One `wgpu` or `wgpu-core`
+    /// submit maps to one submission here, but layers above `wgpu-hal` also make
+    /// housekeeping submissions of their own, for example when a buffer is mapped,
+    /// and those consume the chain too. Set the chain right before the submission
+    /// it applies to, with no other queue or buffer-mapping work in between.
+    ///
+    /// # Safety
+    ///
+    /// - `chain` must point to a valid `pNext` chain of structs that can extend
+    ///   [`vk::SubmitInfo`]. The extensions in the chain must be enabled on this
+    ///   queue's device.
+    /// - The chain must stay valid until the next submission on this queue is made
+    ///   or the queue is dropped. Don't read or write the chain during that time.
+    ///   Fields the driver wrote during submission may be read afterwards.
+    pub unsafe fn set_next_submit_chain(&self, chain: *mut c_void) {
+        *self.next_submit_chain.lock() = Some(PnextChain::new(chain));
     }
 }
 
