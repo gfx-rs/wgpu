@@ -34,7 +34,6 @@ use alloc::{
     vec::Vec,
 };
 use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
-use std::sync::OnceLock;
 
 use bitflags::bitflags;
 use hashbrown::HashMap;
@@ -56,7 +55,7 @@ use objc2_metal::{
     MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
-use wgpu_sync::{Condvar, Mutex, RwLock};
+use wgpu_sync::{Condvar, Mutex, OnceCell, RwLock};
 
 #[derive(Clone, Debug)]
 pub struct Api;
@@ -483,7 +482,7 @@ impl Queue {
                 command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
                 pending_waits: Mutex::new(Vec::new()),
                 pending_signals: Mutex::new(Vec::new()),
-                relay: OnceLock::new(),
+                relay: OnceCell::new(),
             }),
             timestamp_period,
         }
@@ -628,7 +627,7 @@ pub struct QueueShared {
     command_buffer_created_not_submitted: atomic::AtomicUsize,
     pending_waits: PendingEvents,
     pending_signals: PendingEvents,
-    relay: OnceLock<Relay>,
+    relay: OnceCell<Relay>,
 }
 
 #[derive(Debug)]
