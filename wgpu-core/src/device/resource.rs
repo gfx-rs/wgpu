@@ -16,6 +16,7 @@ use hal::ShouldBeNonZeroExt;
 use arrayvec::ArrayVec;
 use bitflags::Flags;
 use smallvec::SmallVec;
+use wgpu_sync::OnceCell;
 use wgt::{
     math::align_to, ColorWrites, DeviceLostReason, TextureFormat, TextureSampleType,
     TextureViewDimension,
@@ -57,7 +58,7 @@ use crate::{
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
     validation::{self, check_color_attachment_count, PassthroughInterface, ShaderMetaData},
     weak_vec::WeakVec,
-    FastHashMap, LabelHelpers, OnceCellOrLock,
+    FastHashMap, LabelHelpers,
 };
 
 use super::{
@@ -243,7 +244,7 @@ struct DeviceResources<'a> {
 pub struct Device {
     raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
-    pub(crate) queue: OnceCellOrLock<Weak<Queue>>,
+    pub(crate) queue: OnceCell<Weak<Queue>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     pub(crate) empty_bgl: ManuallyDrop<Box<dyn hal::DynBindGroupLayout>>,
     /// The `label` from the descriptor used to create the resource.
@@ -313,8 +314,7 @@ pub struct Device {
     pub(crate) usage_scopes: UsageScopePool,
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
     // Optional so that we can late-initialize this after the queue is created.
-    pub(crate) timestamp_normalizer:
-        OnceCellOrLock<crate::timestamp_normalization::TimestampNormalizer>,
+    pub(crate) timestamp_normalizer: OnceCell<crate::timestamp_normalization::TimestampNormalizer>,
     /// Uniform buffer containing [`ExternalTextureParams`] with values such
     /// that a [`TextureView`] bound to a [`wgt::BindingType::ExternalTexture`]
     /// binding point will be rendered correctly. Intended to be used as the
@@ -636,7 +636,7 @@ impl Device {
             Ok(Self {
                 raw: raw_device,
                 adapter: adapter.clone(),
-                queue: OnceCellOrLock::new(),
+                queue: OnceCell::new(),
                 zero_buffer: ManuallyDrop::new(zero_buffer),
                 empty_bgl: ManuallyDrop::new(empty_bgl),
                 default_external_texture_params_buffer: ManuallyDrop::new(
@@ -675,7 +675,7 @@ impl Device {
                 instance_flags,
                 deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
                 usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
-                timestamp_normalizer: OnceCellOrLock::new(),
+                timestamp_normalizer: OnceCell::new(),
                 indirect_validation,
                 deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures::new(),
             })
@@ -3233,7 +3233,7 @@ impl Device {
             }),
             device: self.clone(),
             entries: entry_map,
-            exclusive_pipeline: OnceCellOrLock::new(),
+            exclusive_pipeline: OnceCell::new(),
             label: label.to_string(),
         };
 
