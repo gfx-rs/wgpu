@@ -11,10 +11,7 @@ use core::{
     time::Duration,
 };
 use std::{
-    sync::{
-        mpsc::{sync_channel, SyncSender},
-        LazyLock,
-    },
+    sync::mpsc::{sync_channel, SyncSender},
     thread,
 };
 
@@ -25,7 +22,7 @@ use glutin_wgl_sys::wgl_extra::{
 };
 use hashbrown::HashSet;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
-use wgpu_sync::{Mutex, MutexGuard, RwLock};
+use wgpu_sync::{Lazy, Mutex, MutexGuard, RwLock};
 use wgt::InstanceFlags;
 use windows::{
     core::{Error, PCSTR},
@@ -341,8 +338,8 @@ fn create_global_window_class() -> Result<CString, crate::InstanceError> {
 }
 
 fn get_global_window_class() -> Result<CString, crate::InstanceError> {
-    static GLOBAL: LazyLock<Result<CString, crate::InstanceError>> =
-        LazyLock::new(create_global_window_class);
+    static GLOBAL: Lazy<Result<CString, crate::InstanceError>> =
+        Lazy::new(create_global_window_class);
     GLOBAL.clone()
 }
 
