@@ -5037,6 +5037,7 @@ version = "30.0.0"
 dependencies = [
  "cfg-if",
  "lock_api",
+ "once_cell",
  "parking_lot",
 ]
 

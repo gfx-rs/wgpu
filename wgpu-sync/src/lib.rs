@@ -28,6 +28,18 @@ pub use rwlock::RawRwLock;
 #[cfg(feature = "std")]
 pub use parking_lot::{Condvar, Mutex as CondvarMutex};
 
+#[cfg(feature = "alloc")]
+pub use once_cell::race::OnceBox;
+pub use once_cell::race::{OnceBool, OnceNonZeroUsize, OnceRef};
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "std")] {
+        pub use once_cell::sync::{Lazy, OnceCell};
+    } else {
+        pub use once_cell::unsync::{Lazy, OnceCell};
+    }
+}
+
 /// A [`Mutex`](lock_api::Mutex) using [`RawMutex`] for its backing implementation.
 pub type Mutex<T> = lock_api::Mutex<RawMutex, T>;
 
