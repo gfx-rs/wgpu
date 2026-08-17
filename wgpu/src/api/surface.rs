@@ -175,6 +175,7 @@ impl Surface<'_> {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
+            texture_binding_view_dimension: None,
             view_formats: &[],
         };
 

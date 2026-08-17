@@ -150,6 +150,7 @@ fn create_texture_and_view(
         format,
         usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     if let Some(data) = data {
         ctx.queue.write_texture(

@@ -208,6 +208,7 @@ impl<'ctx> DiscardTestCase<'ctx> {
                 | TextureUsages::RENDER_ATTACHMENT
                 | extra_usages,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         // Clear using a write_texture operation. We could also clear using a render_pass clear.
@@ -460,6 +461,7 @@ static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8: GpuTestCo
                     | TextureUsages::COPY_SRC
                     | TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
 
             let stencil_bytes_per_row = size.width;
@@ -746,6 +748,7 @@ async fn check_write_aspect_leaves_other_uninit(
         format,
         usage: TextureUsages::COPY_DST | TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let write_bytes_per_row = write.size.width * write.bpp;
@@ -1058,6 +1061,7 @@ fn create_3d_texture(ctx: &TestingContext, label: &str, depth: u32) -> Texture {
         format: TextureFormat::R8Uint,
         usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     })
 }
 
@@ -1433,6 +1437,7 @@ async fn check_vertex_buffer_tail_init(
         format: TextureFormat::Rgba8UnormSrgb,
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let output_view = output_texture.create_view(&Default::default());
 
@@ -1674,6 +1679,7 @@ async fn test_copy_texture_to_buffer_padding_init(
         format,
         usage: TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let readback = ctx.device.create_buffer(&BufferDescriptor {

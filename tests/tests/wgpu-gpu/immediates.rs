@@ -240,6 +240,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
         usage: TextureUsages::RENDER_ATTACHMENT,
         label: Some("Output Texture"),
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let output_texture_view = output_texture.create_view(&Default::default());
 

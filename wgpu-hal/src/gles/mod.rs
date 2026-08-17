@@ -508,35 +508,30 @@ impl Texture {
 
     /// Returns the `target`, whether the image is 3d and whether the image is a cubemap.
     fn get_info_from_desc(desc: &TextureDescriptor) -> u32 {
-        match desc.dimension {
-            // WebGL (1 and 2) as well as some GLES versions do not have 1D textures, so we are
-            // doing `TEXTURE_2D` instead
-            wgt::TextureDimension::D1 => glow::TEXTURE_2D,
-            wgt::TextureDimension::D2 => {
-                // HACK: detect a cube map; forces cube compatible textures to be cube textures
-                match (desc.is_cube_compatible(), desc.size.depth_or_array_layers) {
-                    (false, 1) => glow::TEXTURE_2D,
-                    (false, _) => glow::TEXTURE_2D_ARRAY,
-                    (true, 6) => glow::TEXTURE_CUBE_MAP,
-                    (true, _) => glow::TEXTURE_CUBE_MAP_ARRAY,
+        if let Some(dim) = desc.texture_binding_view_dimension {
+            conv::map_view_dimension(dim)
+        } else {
+            match desc.dimension {
+                // WebGL (1 and 2) as well as some GLES versions do not have 1D textures, so we are
+                // doing `TEXTURE_2D` instead
+                wgt::TextureDimension::D1 => glow::TEXTURE_2D,
+                wgt::TextureDimension::D2 => {
+                    // HACK: detect a cube map; forces cube compatible textures to be cube textures
+                    match (desc.is_cube_compatible(), desc.size.depth_or_array_layers) {
+                        (false, 1) => glow::TEXTURE_2D,
+                        (false, _) => glow::TEXTURE_2D_ARRAY,
+                        (true, 6) => glow::TEXTURE_CUBE_MAP,
+                        (true, _) => glow::TEXTURE_CUBE_MAP_ARRAY,
+                    }
                 }
+                wgt::TextureDimension::D3 => glow::TEXTURE_3D,
             }
-            wgt::TextureDimension::D3 => glow::TEXTURE_3D,
         }
     }
 
-    /// More information can be found in issues #1614 and #1574
+    /// More information can be found in issues #1614, #7428 and #1574
     fn log_failing_target_heuristics(view_dimension: wgt::TextureViewDimension, target: u32) {
-        let expected_target = match view_dimension {
-            wgt::TextureViewDimension::D1 => glow::TEXTURE_2D,
-            wgt::TextureViewDimension::D2 => glow::TEXTURE_2D,
-            wgt::TextureViewDimension::D2Array => glow::TEXTURE_2D_ARRAY,
-            wgt::TextureViewDimension::Cube => glow::TEXTURE_CUBE_MAP,
-            wgt::TextureViewDimension::CubeArray => glow::TEXTURE_CUBE_MAP_ARRAY,
-            wgt::TextureViewDimension::D3 => glow::TEXTURE_3D,
-        };
-
-        if expected_target == target {
+        if conv::map_view_dimension(view_dimension) == target {
             return;
         }
 
@@ -569,6 +564,8 @@ impl Texture {
                 "`D2` textures with ",
                 "`depth_or_array_layers > 6 && depth_or_array_layers % 6 == 0` ",
                 "are assumed to have view dimension `CubeArray`\n",
+                "Specify texture_binding_view_dimension in TextureDescriptor ",
+                "to select the target explicitly.\n",
             ),
             got,
             view_dimension,

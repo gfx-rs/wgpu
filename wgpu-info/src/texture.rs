@@ -16,6 +16,7 @@ fn test_compute_render_extent() {
             format,
             usage: wgpu::TextureUsages::empty(),
             view_formats: &[],
+            texture_binding_view_dimension: None,
         };
 
         if format.is_multi_planar_format() {
@@ -39,6 +40,7 @@ fn test_compute_render_extent() {
             format,
             usage: wgpu::TextureUsages::empty(),
             view_formats: &[],
+            texture_binding_view_dimension: None,
         };
 
         assert_eq!(

@@ -70,6 +70,8 @@ impl crate::framework::Example for Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
+            // This example in particular is not compatible with 'compatibility mode/glsl'
+            texture_binding_view_dimension: None,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::TEXTURE_BINDING,

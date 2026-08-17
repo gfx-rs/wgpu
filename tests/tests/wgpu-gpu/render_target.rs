@@ -139,6 +139,7 @@ async fn run_test(
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
@@ -167,6 +168,7 @@ async fn run_test(
                 format: wgpu::TextureFormat::R8Unorm,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
             let ms_texture_view = ms_texture.create_view(&wgpu::TextureViewDescriptor::default());
             Some(ms_texture_view)
@@ -361,6 +363,7 @@ async fn run_test_3d(ctx: TestingContext) {
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {

@@ -2030,6 +2030,7 @@ impl Device {
             usage: hal_usage,
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: hal_view_formats,
+            texture_binding_view_dimension: desc.texture_binding_view_dimension,
         };
 
         let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }

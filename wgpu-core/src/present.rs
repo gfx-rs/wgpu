@@ -207,6 +207,7 @@ impl Surface {
                     mip_level_count: 1,
                     format: config.format,
                     dimension: wgt::TextureDimension::D2,
+                    texture_binding_view_dimension: None,
                     usage: config.usage,
                     view_formats: config.view_formats,
                 };
