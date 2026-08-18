@@ -4795,7 +4795,6 @@ dependencies = [
  "naga",
  "naga-types",
  "num-traits",
- "portable-atomic",
  "profiling",
  "proptest",
  "raw-window-handle",

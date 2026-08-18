@@ -9,13 +9,13 @@ use core::{
     fmt,
     mem::{self, ManuallyDrop},
     num::NonZeroU32,
-    sync::atomic::{AtomicBool, Ordering},
 };
 use hal::ShouldBeNonZeroExt;
 
 use arrayvec::ArrayVec;
 use bitflags::Flags;
 use smallvec::SmallVec;
+use wgpu_sync::atomic::{AtomicBool, Ordering};
 use wgpu_sync::OnceCell;
 use wgt::{
     math::align_to, ColorWrites, DeviceLostReason, TextureFormat, TextureSampleType,
@@ -66,10 +66,7 @@ use super::{
     ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
 
-#[cfg(supports_64bit_atomics)]
-use core::sync::atomic::AtomicU64;
-#[cfg(not(supports_64bit_atomics))]
-use portable_atomic::AtomicU64;
+use wgpu_sync::atomic::AtomicU64;
 
 pub(crate) struct CommandIndices {
     /// The index of the last command submission that was attempted.
