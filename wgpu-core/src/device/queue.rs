@@ -290,26 +290,57 @@ impl Drop for Queue {
             }
         }
 
-        let last_successful_submission_index = self
-            .device
-            .last_successful_submission_index
-            .load(Ordering::Acquire);
+        // Drain the life tracker until it reports the queue empty.
+        //
+        // `wait_for_idle()` above guarantees the GPU has finished executing every
+        // submission that was enqueued before this drop runs.  However, there is a
+        // race window between `wait_for_idle()` returning and `maintain()` acquiring
+        // the life-tracker lock: a concurrent thread may call `track_submission()`
+        // in that window, registering a submission that the GPU has already retired.
+        // When that happens, `queue_empty` returns false even though no GPU work is
+        // outstanding, and the old unconditional `assert!(queue_empty)` would panic.
+        //
+        // We therefore loop until the tracker is empty.  The loop terminates in at
+        // most two iterations:
+        //
+        //   Iteration 1 — `maintain` drains everything registered *before* our
+        //                  `life_tracker` lock.  If a concurrent `track_submission`
+        //                  snuck in just before we locked, `queue_empty` is false.
+        //
+        //   Iteration 2 — `maintain` locks the tracker again.  At this point no
+        //                  new submission can arrive: `Queue::drop` takes `&mut self`,
+        //                  so the `Arc<Queue>` strong count has already reached zero.
+        //                  Any thread that held a weak reference and tries to upgrade
+        //                  it to call `track_submission` will fail; and `submit` only
+        //                  calls `track_submission` while holding a live `Arc<Queue>`.
+        //                  The tracker is therefore guaranteed to be empty here.
+        loop {
+            // Re-read the index on every iteration so that a submission registered
+            // after the previous `maintain()` call is included in the next triage.
+            let last_index = self
+                .device
+                .last_successful_submission_index
+                .load(Ordering::Acquire);
 
-        let snatch_guard = self.device.snatchable_lock.read();
-        let (submission_closures, mapping_closures, blas_compact_ready_closures, queue_empty) =
-            self.maintain(last_successful_submission_index, &snatch_guard);
-        drop(snatch_guard);
+            let snatch_guard = self.device.snatchable_lock.read();
+            let (submission_closures, mapping_closures, blas_compact_ready_closures, queue_empty) =
+                self.maintain(last_index, &snatch_guard);
+            // Drop the snatch guard before firing closures: a closure may access
+            // GPU resources and attempt to re-acquire the snatch lock.
+            drop(snatch_guard);
 
-        assert!(queue_empty);
+            let closures = crate::device::UserClosures {
+                mappings: mapping_closures,
+                blas_compact_ready: blas_compact_ready_closures,
+                submissions: submission_closures,
+                device_lost_invocations: SmallVec::new(),
+            };
+            closures.fire();
 
-        let closures = crate::device::UserClosures {
-            mappings: mapping_closures,
-            blas_compact_ready: blas_compact_ready_closures,
-            submissions: submission_closures,
-            device_lost_invocations: SmallVec::new(),
-        };
-
-        closures.fire();
+            if queue_empty {
+                break;
+            }
+        }
     }
 }
 
