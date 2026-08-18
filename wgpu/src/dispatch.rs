@@ -292,6 +292,18 @@ pub trait TextureInterface: CommonTraits {
     fn create_view(&self, desc: &crate::TextureViewDescriptor<'_>) -> DispatchTextureView;
 
     fn destroy(&self);
+
+    fn size(&self) -> wgt::Extent3d;
+
+    fn mip_level_count(&self) -> u32;
+
+    fn sample_count(&self) -> u32;
+
+    fn dimension(&self) -> wgt::TextureDimension;
+
+    fn format(&self) -> wgt::TextureFormat;
+
+    fn usage(&self) -> wgt::TextureUsages;
 }
 pub trait ExternalTextureInterface: CommonTraits {
     fn destroy(&self);
@@ -609,6 +621,7 @@ pub trait SurfaceInterface: CommonTraits {
     fn configure(&self, device: &DispatchDevice, config: &crate::SurfaceConfiguration);
     fn get_current_texture(
         &self,
+        desc: Option<crate::TextureDescriptor<'static>>,
     ) -> (
         Option<DispatchTexture>,
         crate::SurfaceStatus,

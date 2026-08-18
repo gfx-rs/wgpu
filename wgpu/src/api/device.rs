@@ -294,14 +294,7 @@ impl Device {
     pub fn create_texture(&self, desc: &TextureDescriptor<'_>) -> Texture {
         let texture = self.inner.create_texture(desc);
 
-        Texture {
-            inner: texture,
-            descriptor: TextureDescriptor {
-                label: None,
-                view_formats: &[],
-                ..desc.clone()
-            },
-        }
+        Texture { inner: texture }
     }
 
     /// Creates a [`Texture`] from a wgpu-hal Texture.
@@ -355,11 +348,6 @@ impl Device {
         };
         Texture {
             inner: texture.into(),
-            descriptor: TextureDescriptor {
-                label: None,
-                view_formats: &[],
-                ..desc.clone()
-            },
         }
     }
 
@@ -409,15 +397,8 @@ impl Device {
         let inner = self
             .inner
             .as_webgpu()
-            .wrap_external_texture(texture, drop_callback);
-        Texture {
-            inner,
-            descriptor: TextureDescriptor {
-                label: None,
-                view_formats: &[],
-                ..desc.clone()
-            },
-        }
+            .wrap_external_texture(texture, desc, drop_callback);
+        Texture { inner }
     }
 
     /// Returns the underlying [`webgpu::GpuDevice`] handle if this `Device`

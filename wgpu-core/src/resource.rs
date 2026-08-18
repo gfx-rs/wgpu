@@ -2158,6 +2158,10 @@ impl Texture {
 
         (view, error)
     }
+
+    pub fn descriptor(&self) -> &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>> {
+        &self.desc
+    }
 }
 
 /// A texture that has been marked as destroyed and is staged for actual deletion soon.
