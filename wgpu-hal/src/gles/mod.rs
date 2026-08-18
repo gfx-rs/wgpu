@@ -110,12 +110,11 @@ pub use self::wgl::{AdapterContext, AdapterContextLock, Instance, Surface};
 pub use fence::Fence;
 
 use alloc::{boxed::Box, string::String, string::ToString as _, sync::Arc, vec::Vec};
-use core::{
-    fmt,
-    ops::Range,
-    sync::atomic::{AtomicU32, AtomicU8},
+use core::{fmt, ops::Range};
+use wgpu_sync::{
+    atomic::{AtomicU32, AtomicU8},
+    Mutex,
 };
-use wgpu_sync::Mutex;
 
 use arrayvec::ArrayVec;
 use glow::HasContext;

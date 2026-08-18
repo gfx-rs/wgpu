@@ -1,8 +1,7 @@
 use alloc::{borrow::ToOwned as _, format, string::String, sync::Arc, vec, vec::Vec};
-use core::sync::atomic::AtomicU8;
 
 use glow::HasContext;
-use wgpu_sync::Mutex;
+use wgpu_sync::{atomic::AtomicU8, Mutex};
 use wgt::AstcChannel;
 
 use crate::auxil::db;

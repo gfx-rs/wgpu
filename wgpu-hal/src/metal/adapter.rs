@@ -10,8 +10,7 @@ use objc2_metal::{
 use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
-use core::sync::atomic;
-use wgpu_sync::{Mutex, OnceCell};
+use wgpu_sync::{atomic, Mutex, OnceCell};
 
 use crate::metal::QueueShared;
 
