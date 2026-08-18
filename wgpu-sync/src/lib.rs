@@ -9,7 +9,6 @@
 
 //! Provides [`Mutex`] and [`RwLock`] types with an appropriate implementation.
 
-#[cfg(feature = "alloc")]
 extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
@@ -26,9 +25,7 @@ pub use rwlock::RawRwLock;
 #[cfg(feature = "std")]
 pub use parking_lot::{Condvar, Mutex as CondvarMutex};
 
-#[cfg(feature = "alloc")]
-pub use once_cell::race::OnceBox;
-pub use once_cell::race::{OnceBool, OnceNonZeroUsize, OnceRef};
+pub use once_cell::race::{OnceBool, OnceBox, OnceNonZeroUsize, OnceRef};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "std")] {
