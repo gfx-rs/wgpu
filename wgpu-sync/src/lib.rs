@@ -9,8 +9,6 @@
 
 //! Provides [`Mutex`] and [`RwLock`] types with an appropriate implementation.
 
-// alloc and std aren't directly used by this crate, but we reserve features
-// for them and ensure the respective crates and linked to allow future usage.
 #[cfg(feature = "alloc")]
 extern crate alloc;
 #[cfg(feature = "std")]
