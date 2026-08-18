@@ -305,10 +305,10 @@ windows = { version = "0.62", default-features = false }
 # wasm32 dependencies
 console_error_panic_hook = "0.1.5"
 console_log = "1"
-js-sys = { version = "0.3.85", default-features = false }
-wasm-bindgen = { version = "0.2.108", default-features = false }
-wasm-bindgen-futures = { version = "0.4.58", default-features = false }
-web-sys = { version = "0.3.85", default-features = false }
+js-sys = { version = "0.3.104", default-features = false }
+wasm-bindgen = { version = "0.2.127", default-features = false }
+wasm-bindgen-futures = { version = "0.4.77", default-features = false }
+web-sys = { version = "0.3.104", default-features = false }
 web-time = "1.1.0"
 
 # deno dependencies
