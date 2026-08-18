@@ -1,8 +1,8 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
-use core::{ptr, sync::atomic::AtomicU64};
+use core::ptr;
 use std::thread;
 
-use wgpu_sync::Mutex;
+use wgpu_sync::{atomic::AtomicU64, Mutex};
 use windows::{
     core::Interface as _,
     Win32::{
