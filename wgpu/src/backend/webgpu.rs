@@ -1404,6 +1404,7 @@ pub struct WebTexture {
     drop_guard: Option<Rc<DropGuard>>,
     /// Unique identifier for this Texture.
     ident: crate::cmp::Identifier,
+    desc: crate::TextureDescriptor<'static>,
 }
 
 #[derive(Debug, Clone)]
@@ -1885,12 +1886,18 @@ impl WebDevice {
     pub(crate) fn wrap_external_texture(
         &self,
         texture: webgpu_sys::GpuTexture,
+        desc: &crate::TextureDescriptor<'_>,
         drop_callback: Option<DropCallback>,
     ) -> dispatch::DispatchTexture {
         WebTexture {
             inner: texture,
             drop_guard: Some(Rc::new(DropGuard::new(drop_callback))),
             ident: crate::cmp::Identifier::create(),
+            desc: crate::TextureDescriptor {
+                label: None,
+                view_formats: &[],
+                ..desc.clone()
+            },
         }
         .into()
     }
@@ -2503,6 +2510,11 @@ impl dispatch::DeviceInterface for WebDevice {
             inner: texture,
             drop_guard: None,
             ident: crate::cmp::Identifier::create(),
+            desc: crate::TextureDescriptor {
+                label: None,
+                view_formats: &[],
+                ..desc.clone()
+            },
         }
         .into()
     }
@@ -3033,6 +3045,30 @@ impl dispatch::TextureInterface for WebTexture {
         if self.drop_guard.is_none() {
             self.inner.destroy();
         }
+    }
+
+    fn size(&self) -> wgt::Extent3d {
+        self.desc.size
+    }
+
+    fn mip_level_count(&self) -> u32 {
+        self.desc.mip_level_count
+    }
+
+    fn sample_count(&self) -> u32 {
+        self.desc.sample_count
+    }
+
+    fn dimension(&self) -> wgt::TextureDimension {
+        self.desc.dimension
+    }
+
+    fn format(&self) -> wgt::TextureFormat {
+        self.desc.format
+    }
+
+    fn usage(&self) -> wgt::TextureUsages {
+        self.desc.usage
     }
 }
 impl Drop for WebTexture {
@@ -4347,6 +4383,7 @@ impl dispatch::SurfaceInterface for WebSurface {
 
     fn get_current_texture(
         &self,
+        desc: Option<crate::TextureDescriptor<'static>>,
     ) -> (
         Option<dispatch::DispatchTexture>,
         crate::SurfaceStatus,
@@ -4371,6 +4408,7 @@ impl dispatch::SurfaceInterface for WebSurface {
         };
 
         let web_surface_texture = WebTexture {
+            desc: desc.unwrap(),
             inner: surface_texture,
             drop_guard: None,
             ident: crate::cmp::Identifier::create(),
