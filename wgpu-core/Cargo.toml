@@ -185,7 +185,7 @@ wgpu-core-deps-windows = { workspace = true, optional = true }
 naga.workspace = true
 naga-types.workspace = true
 wgpu-naga-bridge.workspace = true
-wgpu-hal.workspace = true
+wgpu-hal = { workspace = true, default-features = true }
 wgpu-sync = { workspace = true, default-features = false }
 wgpu-types.workspace = true
 
