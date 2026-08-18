@@ -30,7 +30,6 @@ members = [
     "wgpu-types",
     "wgpu",
     "xtask",
-    "fuzzgpu-core-test",
 ]
 exclude = []
 default-members = [
