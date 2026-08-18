@@ -5,6 +5,7 @@ use wgpu_core::{
     binding_model::{self},
     command,
     device::{DeviceError, DeviceLostClosure, WaitIdleError},
+    error::EmptyErrorScopeStack,
     pipeline::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
         ResolvedGeneralRenderPipelineDescriptor,
@@ -22,7 +23,7 @@ use crate::{
     registry::Registry,
 };
 
-use wgt::BufferAddress;
+use wgt::{error::WebGpuError, BufferAddress};
 
 pub use wgpu_core_remote_types::binding_model::*;
 
@@ -1141,5 +1142,50 @@ impl Global {
         let buffer = hub.buffers.get(buffer_id);
 
         buffer.unmap()
+    }
+
+    pub fn device_on_uncaptured_error(
+        &self,
+        device_id: DeviceId,
+        handler: Arc<dyn wgt::error::UncapturedErrorHandler>,
+    ) {
+        let hub = self.hub.borrow();
+        let device = hub.devices.get(device_id);
+
+        device.on_uncaptured_error(handler);
+    }
+
+    pub fn device_push_error_scope(
+        &self,
+        device_id: DeviceId,
+        error_scope: wgt::error::ErrorFilter,
+    ) {
+        let hub = self.hub.borrow();
+        let device = hub.devices.get(device_id);
+
+        device.push_error_scope(error_scope)
+    }
+
+    pub fn device_pop_error_scope(
+        &self,
+        device_id: DeviceId,
+    ) -> Result<Option<wgt::error::Error>, EmptyErrorScopeStack> {
+        let hub = self.hub.borrow();
+        let device = hub.devices.get(device_id);
+
+        device.pop_error_scope()
+    }
+
+    pub fn device_handle_error(
+        &self,
+        device_id: DeviceId,
+        source: impl WebGpuError + Send + Sync + 'static,
+        label: Option<&str>,
+        fn_ident: &'static str,
+    ) {
+        let hub = self.hub.borrow();
+        let device = hub.devices.get(device_id);
+
+        device.handle_error(source, label, fn_ident);
     }
 }
