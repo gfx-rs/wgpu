@@ -5038,6 +5038,8 @@ dependencies = [
  "lock_api",
  "once_cell",
  "parking_lot",
+ "portable-atomic",
+ "portable-atomic-util",
 ]
 
 [[package]]
