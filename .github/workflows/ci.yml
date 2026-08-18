@@ -333,7 +333,7 @@ jobs:
           # Check with all compatible features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga-types --no-default-features --features serialize,deserialize
-          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-sync --no-default-features --features alloc
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-sync --no-default-features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features dot-out,spv-in,spv-out,glsl-out,msl-out,serialize,deserialize,wgsl-in,wgsl-out,hlsl-out
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features fragile-send-sync-non-atomic-wasm
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-core --no-default-features --features api_log_info,resource_log_info,strict_asserts,serde,wgsl,spirv,counters,noop

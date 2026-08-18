@@ -29,11 +29,10 @@ alloc_instead_of_core = "warn"
 
 [features]
 default = ["std"]
-std = ["alloc", "dep:parking_lot", "once_cell/std"]
-alloc = ["once_cell/alloc"]
+std = ["dep:parking_lot", "once_cell/std"]
 
 [dependencies]
 cfg-if.workspace = true
 lock_api = { workspace = true, default-features = false }
 parking_lot = { workspace = true, optional = true }
-once_cell = { workspace = true, default-features = false, features = ["race"] }
+once_cell = { workspace = true, default-features = false, features = ["alloc", "race"] }
