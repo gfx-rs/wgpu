@@ -4722,7 +4722,6 @@ dependencies = [
  "js-sys",
  "log",
  "naga",
- "portable-atomic",
  "profiling",
  "raw-window-handle",
  "smallvec",

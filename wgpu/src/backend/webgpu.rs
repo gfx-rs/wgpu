@@ -20,9 +20,9 @@ use core::{
     future::Future,
     ops::Range,
     pin::Pin,
-    sync::atomic::{AtomicU8, Ordering},
     task::{self, Poll},
 };
+use wgpu_sync::atomic::{AtomicU8, Ordering};
 use wgt::Backends;
 
 use js_sys::Promise;
