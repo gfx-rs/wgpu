@@ -1,0 +1,15 @@
+[package]
+name = "wgpu-bug-repro-10085-matrix"
+version = "0.1.0"
+edition = "2021"
+description = "Aggressive pure-wgpu reproducer for gfx-rs/wgpu#10085"
+publish = false
+
+[[bin]]
+name = "wgpu-bug-repro-10085-matrix"
+path = "src/main.rs"
+
+[dependencies]
+wgpu = { path = "../../../wgpu" }
+pollster = "0.4"
+bytemuck = "1"

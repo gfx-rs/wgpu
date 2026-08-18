@@ -1,0 +1,25 @@
+[package]
+name = "fuzzgpu-core-wgpu-patched"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "../../../fuzzgpu/crates/fuzzgpu-core/src/lib.rs"
+
+[features]
+default = ["gpu"]
+gpu = ["wgpu", "pollster", "bytemuck"]
+
+[dependencies]
+wgpu      = { workspace = true, optional = true }
+pollster  = { workspace = true, optional = true }
+bytemuck  = { workspace = true, optional = true }
+thiserror = "2"
+log       = "0.4"
+rayon     = "1.10"
+
+[dev-dependencies]
+wgpu = { workspace = true }
+proptest = { workspace = true }
+criterion = "0.5"

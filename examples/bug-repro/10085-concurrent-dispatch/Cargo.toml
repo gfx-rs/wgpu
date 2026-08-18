@@ -1,0 +1,13 @@
+[package]
+name = "wgpu-bug-repro-10085"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Reproducer for gfx-rs/wgpu#10085: heap corruption under >=3 concurrent dispatchers on a shared Device (Intel Iris Xe, DX12/Vulkan)"
+
+[dependencies]
+pollster.workspace = true
+wgpu.workspace = true
+bytemuck = { workspace = true, features = ["derive"] }
+log = "0.4"
+env_logger = "0.11"
