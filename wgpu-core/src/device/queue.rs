@@ -1874,14 +1874,22 @@ impl Queue {
                 submit_surface_textures.push(raw);
             }
 
-            unsafe {
+            if let Err(e) = unsafe {
                 self.raw().submit(
                     &hal_command_buffers,
                     &submit_surface_textures,
                     (self.device.fence.as_ref(), submit_index),
                 )
+            } {
+                // The HAL may have enqueued the command lists before reporting
+                // the error (e.g. a DX12 `Signal` failing after
+                // `ExecuteCommandLists` succeeded). Track the submission anyway,
+                // so a concurrent `Device::maintain` cannot observe an empty
+                // queue and release GPU resources while the device is being
+                // lost but the GPU may still be executing.
+                self.lock_life().track_submission(submit_index, executions);
+                return Err(self.device.handle_hal_error(e));
             }
-            .map_err(|e| self.device.handle_hal_error(e))?;
 
             // Submissions must have strictly increasing indices, so we must hold the
             // command index guard until we have submitted, to prevent another submission
