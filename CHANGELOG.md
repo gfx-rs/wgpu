@@ -76,6 +76,7 @@ Bottom level categories:
 - Remove the never-constructed `CreateBlasError::InvalidAabbStride` variant. `create_blas` takes no stride, so it could never be produced; AABB stride is validated at build time as `BuildAccelerationStructureError::InvalidAabbStride`. By @mstampfli in [#9935](https://github.com/gfx-rs/wgpu/pull/9935).
 
 - Added `DownlevelFlags::LINEAR_INTERPOLATION`, indicating that the adapter supports `@interpolate(linear)`. It is absent on GLES/WebGL2, since GLSL ES has no `noperspective` qualifier. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
+- Add immediates support to WebGPU backend and remove `Features::IMMEDIATES` as it is unconditionally available on all platforms. By @beicause in [#10098](https://github.com/gfx-rs/wgpu/pull/10098).
 
 #### naga
 

@@ -22,7 +22,6 @@ const UPLEVEL_FEATURES: wgt::Features = {
         .union(Features::DUAL_SOURCE_BLENDING)
         .union(Features::PRIMITIVE_INDEX)
         .union(Features::SUBGROUP)
-        .union(Features::IMMEDIATES)
 };
 
 fn create_noop_instance(options: wgt::NoopBackendOptions) -> Arc<wgc::instance::Instance> {

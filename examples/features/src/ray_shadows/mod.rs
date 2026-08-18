@@ -82,7 +82,7 @@ fn create_matrix(config: &wgpu::SurfaceConfiguration) -> Uniforms {
 
 impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
-        wgpu::Features::EXPERIMENTAL_RAY_QUERY | wgpu::Features::IMMEDIATES
+        wgpu::Features::EXPERIMENTAL_RAY_QUERY
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {

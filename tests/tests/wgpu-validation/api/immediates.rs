@@ -21,7 +21,6 @@ fn setup_compute() -> (
     wgpu::BindGroup,
 ) {
     let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor {
-        required_features: wgpu::Features::IMMEDIATES,
         required_limits: wgpu::Limits {
             max_immediate_size: 64,
             ..Default::default()
@@ -162,7 +161,6 @@ const STRUCT_SHADER: &str = "
 #[test]
 fn struct_padding_slots_not_required() {
     let (device, _q) = wgpu::Device::noop(&wgpu::DeviceDescriptor {
-        required_features: wgpu::Features::IMMEDIATES,
         required_limits: wgpu::Limits {
             max_immediate_size: 64,
             ..Default::default()
@@ -310,7 +308,6 @@ fn pipeline_without_immediates_needs_none() {
 #[test]
 fn auto_layout_infers_immediate_size() {
     let (device, _q) = wgpu::Device::noop(&wgpu::DeviceDescriptor {
-        required_features: wgpu::Features::IMMEDIATES,
         required_limits: wgpu::Limits {
             max_immediate_size: 64,
             ..Default::default()
@@ -412,7 +409,7 @@ fn begin_render_pass<'b, 'a: 'b>(
 
 fn setup_render() -> (wgpu::Device, wgpu::Queue, wgpu::TextureView) {
     let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor {
-        required_features: wgpu::Features::IMMEDIATES | wgpu::Features::SHADER_F16,
+        required_features: wgpu::Features::SHADER_F16,
         required_limits: wgpu::Limits {
             max_immediate_size: 64,
             ..Default::default()

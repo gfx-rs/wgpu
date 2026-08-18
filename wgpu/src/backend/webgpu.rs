@@ -3547,8 +3547,10 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         }
     }
 
-    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
-        panic!("IMMEDIATES feature must be enabled to call set_immediates")
+    fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        self.inner
+            .set_immediates_with_u8_slice(offset, data)
+            .unwrap();
     }
 
     fn insert_debug_marker(&mut self, label: &str) {
@@ -3688,8 +3690,10 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         }
     }
 
-    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
-        panic!("IMMEDIATES feature must be enabled to call set_immediates")
+    fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        self.inner
+            .set_immediates_with_u8_slice(offset, data)
+            .unwrap();
     }
 
     fn set_blend_constant(&mut self, color: crate::Color) {
@@ -3979,8 +3983,10 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         }
     }
 
-    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
-        panic!("IMMEDIATES feature must be enabled to call set_immediates")
+    fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        self.inner
+            .set_immediates_with_u8_slice(offset, data)
+            .unwrap();
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {

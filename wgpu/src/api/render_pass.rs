@@ -523,7 +523,6 @@ impl RenderPass<'_> {
     }
 }
 
-/// [`Features::IMMEDIATES`] must be enabled on the device in order to call these functions.
 impl RenderPass<'_> {
     /// Set immediate data for subsequent draw calls.
     ///

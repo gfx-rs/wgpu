@@ -490,7 +490,6 @@ impl super::Adapter {
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::CLEAR_TEXTURE
-            | wgt::Features::IMMEDIATES
             | wgt::Features::DEPTH32FLOAT_STENCIL8
             | wgt::Features::PASSTHROUGH_SHADERS;
         features.set(
