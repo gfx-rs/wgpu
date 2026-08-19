@@ -1,9 +1,6 @@
 use alloc::borrow::Cow;
 
-use wgpu_core::command::{
-    CommandEncoderError, ComputePassDescriptor, EncoderStateError, PassStateError,
-    PassTimestampWrites,
-};
+use wgpu_core::command::{ComputePassDescriptor, PassTimestampWrites};
 use wgt::{BufferAddress, DynamicOffset};
 
 use crate::global::Global;
@@ -26,7 +23,7 @@ impl Global {
         encoder_id: id::CommandEncoderId,
         desc: &ComputePassDescriptor<'_, PassTimestampWrites<id::QuerySetId>>,
         id_in: id::ComputePassEncoderId,
-    ) -> (id::ComputePassEncoderId, Option<CommandEncoderError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             command_encoders,
@@ -49,17 +46,12 @@ impl Global {
                 }),
         };
 
-        let (pass, err) = cmd_enc.begin_compute_pass(&desc);
+        let pass = cmd_enc.begin_compute_pass(&desc);
 
-        let id = compute_passes.assign(id_in, pass);
-
-        (id, err)
+        compute_passes.assign(id_in, pass);
     }
 
-    pub fn compute_pass_end(
-        &self,
-        pass_id: id::ComputePassEncoderId,
-    ) -> Result<(), EncoderStateError> {
+    pub fn compute_pass_end(&self, pass_id: id::ComputePassEncoderId) {
         let mut hub = self.hub.borrow_mut();
         let pass = hub.compute_passes.get_mut(pass_id);
         pass.end()
@@ -86,7 +78,7 @@ impl Global {
         index: u32,
         bind_group_id: Option<id::BindGroupId>,
         offsets: &[DynamicOffset],
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             compute_passes,
@@ -105,7 +97,7 @@ impl Global {
         &self,
         pass_id: id::ComputePassEncoderId,
         pipeline_id: id::ComputePipelineId,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             compute_passes,
@@ -122,7 +114,7 @@ impl Global {
         pass_id: id::ComputePassEncoderId,
         offset: u32,
         data: &[u8],
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let pass = hub.compute_passes.get_mut(pass_id);
         pass.set_immediates(offset, data)
@@ -134,7 +126,7 @@ impl Global {
         groups_x: u32,
         groups_y: u32,
         groups_z: u32,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let pass = hub.compute_passes.get_mut(pass_id);
         pass.dispatch_workgroups(groups_x, groups_y, groups_z)
@@ -145,7 +137,7 @@ impl Global {
         pass_id: id::ComputePassEncoderId,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             compute_passes,
@@ -161,16 +153,13 @@ impl Global {
         pass_id: id::ComputePassEncoderId,
         label: &str,
         color: u32,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let pass = hub.compute_passes.get_mut(pass_id);
         pass.push_debug_group(label, color)
     }
 
-    pub fn compute_pass_pop_debug_group(
-        &self,
-        pass_id: id::ComputePassEncoderId,
-    ) -> Result<(), PassStateError> {
+    pub fn compute_pass_pop_debug_group(&self, pass_id: id::ComputePassEncoderId) {
         let mut hub = self.hub.borrow_mut();
         let pass = hub.compute_passes.get_mut(pass_id);
         pass.pop_debug_group()
@@ -181,7 +170,7 @@ impl Global {
         pass_id: id::ComputePassEncoderId,
         label: &str,
         color: u32,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let pass = hub.compute_passes.get_mut(pass_id);
         pass.insert_debug_marker(label, color)
@@ -192,7 +181,7 @@ impl Global {
         pass_id: id::ComputePassEncoderId,
         query_set_id: id::QuerySetId,
         query_index: u32,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             compute_passes,
@@ -209,7 +198,7 @@ impl Global {
         pass_id: id::ComputePassEncoderId,
         query_set_id: id::QuerySetId,
         query_index: u32,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             compute_passes,
@@ -221,10 +210,7 @@ impl Global {
         pass.begin_pipeline_statistics_query(query_set, query_index)
     }
 
-    pub fn compute_pass_end_pipeline_statistics_query(
-        &self,
-        pass_id: id::ComputePassEncoderId,
-    ) -> Result<(), PassStateError> {
+    pub fn compute_pass_end_pipeline_statistics_query(&self, pass_id: id::ComputePassEncoderId) {
         let mut hub = self.hub.borrow_mut();
         let pass = hub.compute_passes.get_mut(pass_id);
         pass.end_pipeline_statistics_query()
