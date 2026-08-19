@@ -45,27 +45,31 @@ fn trace_test(test_type: TestType) {
     });
     assert!(error.is_none());
 
-    let (encoder, error) = device.create_command_encoder(&wgt::CommandEncoderDescriptor::default());
-    assert!(error.is_none());
+    device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let encoder = device.create_command_encoder(&wgt::CommandEncoderDescriptor::default());
+    assert!(matches!(device.pop_error_scope(), Ok(None)));
 
     match test_type {
         TestType::Normal => {
-            encoder.clear_buffer(buffer, 0, None).unwrap();
-            let (cmdbuf, error) = encoder.finish(&wgt::CommandBufferDescriptor::default());
-            assert!(error.is_none());
+            device.push_error_scope(wgpu::ErrorFilter::Validation);
+            encoder.clear_buffer(buffer, 0, None);
+            let cmdbuf = encoder.finish(&wgt::CommandBufferDescriptor::default());
+            assert!(matches!(device.pop_error_scope(), Ok(None)));
             queue.submit(&[cmdbuf]).unwrap();
         }
         TestType::FailedCommands => {
+            device.push_error_scope(wgpu::ErrorFilter::Validation);
             // Try to clear past the end of the buffer.
-            encoder.clear_buffer(buffer, 0, Some(2048)).unwrap();
-            let (_cmdbuf, error) = encoder.finish(&wgt::CommandBufferDescriptor::default());
-            assert!(error.is_some());
+            encoder.clear_buffer(buffer, 0, Some(2048));
+            let _cmdbuf = encoder.finish(&wgt::CommandBufferDescriptor::default());
+            assert!(matches!(device.pop_error_scope(), Ok(Some(_))));
         }
         TestType::FailedSubmit => {
+            device.push_error_scope(wgpu::ErrorFilter::Validation);
             // Destroy the buffer after encoding the clear command, before submitting it.
-            encoder.clear_buffer(buffer.clone(), 0, None).unwrap();
-            let (cmdbuf, error) = encoder.finish(&wgt::CommandBufferDescriptor::default());
-            assert!(error.is_none());
+            encoder.clear_buffer(buffer.clone(), 0, None);
+            let cmdbuf = encoder.finish(&wgt::CommandBufferDescriptor::default());
+            assert!(matches!(device.pop_error_scope(), Ok(None)));
             buffer.destroy();
             queue.submit(&[cmdbuf]).unwrap_err();
         }

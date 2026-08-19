@@ -48,7 +48,7 @@ struct TlasStore<'a> {
 }
 
 impl super::CommandEncoder {
-    pub fn mark_acceleration_structures_built(
+    fn mark_acceleration_structures_built_inner(
         self: &Arc<Self>,
         blases: &[Arc<Blas>],
         tlases: &[Arc<Tlas>],
@@ -86,7 +86,21 @@ impl super::CommandEncoder {
         )
     }
 
-    pub fn build_acceleration_structures<'a>(
+    pub fn mark_acceleration_structures_built(
+        self: &Arc<Self>,
+        blases: &[Arc<Blas>],
+        tlases: &[Arc<Tlas>],
+    ) {
+        if let Err(err) = self.mark_acceleration_structures_built_inner(blases, tlases) {
+            self.device.handle_error(
+                err,
+                Some(self.label()),
+                "CommandEncoder::mark_acceleration_structures_built",
+            );
+        }
+    }
+
+    fn build_acceleration_structures_inner<'a>(
         self: &Arc<Self>,
         blas_iter: impl Iterator<Item = BlasBuildEntry<'a, Arc<Blas>, Arc<Buffer>>>,
         tlas_iter: impl Iterator<Item = TlasPackage<'a, Arc<Tlas>, Arc<Blas>>>,
@@ -183,6 +197,20 @@ impl super::CommandEncoder {
 
             Ok(ArcCommand::BuildAccelerationStructures { blas, tlas })
         })
+    }
+
+    pub fn build_acceleration_structures<'a>(
+        self: &Arc<Self>,
+        blas_iter: impl Iterator<Item = BlasBuildEntry<'a, Arc<Blas>, Arc<Buffer>>>,
+        tlas_iter: impl Iterator<Item = TlasPackage<'a, Arc<Tlas>, Arc<Blas>>>,
+    ) {
+        if let Err(err) = self.build_acceleration_structures_inner(blas_iter, tlas_iter) {
+            self.device.handle_error(
+                err,
+                Some(self.label()),
+                "CommandEncoder::build_acceleration_structures",
+            );
+        }
     }
 }
 
