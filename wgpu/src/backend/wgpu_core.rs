@@ -2134,20 +2134,12 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                     end_of_pass_write_index: tw.end_of_pass_write_index,
                 });
 
-        let (pass, err) =
+        let pass =
             self.wgpu_command_encoder
                 .begin_compute_pass(&wgc::command::ComputePassDescriptor {
                     label: desc.label.map(Borrowed),
                     timestamp_writes,
                 });
-
-        if let Some(cause) = err {
-            self.wgpu_command_encoder.device().handle_error(
-                cause,
-                desc.label,
-                "CommandEncoder::begin_compute_pass",
-            );
-        }
 
         CoreComputePass {
             pass,
@@ -2470,14 +2462,8 @@ impl dispatch::ComputePassInterface for CoreComputePass {
     fn set_pipeline(&mut self, pipeline: &dispatch::DispatchComputePipeline) {
         let pipeline = pipeline.as_core();
 
-        if let Err(cause) = self
-            .pass
-            .set_pipeline(pipeline.wgpu_compute_pipeline.clone())
-        {
-            self.pass
-                .device()
-                .handle_error(cause, self.pass.label(), "ComputePass::set_pipeline");
-        }
+        self.pass
+            .set_pipeline(pipeline.wgpu_compute_pipeline.clone());
     }
 
     fn set_bind_group(
@@ -2488,68 +2474,30 @@ impl dispatch::ComputePassInterface for CoreComputePass {
     ) {
         let bg = bind_group.map(|bg| bg.as_core().wgpu_bind_group.clone());
 
-        if let Err(cause) = self.pass.set_bind_group(index, bg, offsets) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "ComputePass::set_bind_group",
-            );
-        }
+        self.pass.set_bind_group(index, bg, offsets);
     }
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {
-        if let Err(cause) = self.pass.set_immediates(offset, data) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "ComputePass::set_immediates",
-            );
-        }
+        self.pass.set_immediates(offset, data);
     }
 
     fn insert_debug_marker(&mut self, label: &str) {
-        if let Err(cause) = self.pass.insert_debug_marker(label, 0) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "ComputePass::insert_debug_marker",
-            );
-        }
+        self.pass.insert_debug_marker(label, 0);
     }
 
     fn push_debug_group(&mut self, group_label: &str) {
-        if let Err(cause) = self.pass.push_debug_group(group_label, 0) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "ComputePass::push_debug_group",
-            );
-        }
+        self.pass.push_debug_group(group_label, 0);
     }
 
     fn pop_debug_group(&mut self) {
-        if let Err(cause) = self.pass.pop_debug_group() {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "ComputePass::pop_debug_group",
-            );
-        }
+        self.pass.pop_debug_group();
     }
 
     fn write_timestamp(&mut self, query_set: &dispatch::DispatchQuerySet, query_index: u32) {
         let query_set = query_set.as_core();
 
-        if let Err(cause) = self
-            .pass
-            .write_timestamp(query_set.wgpu_query_set.clone(), query_index)
-        {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "ComputePass::write_timestamp",
-            );
-        }
+        self.pass
+            .write_timestamp(query_set.wgpu_query_set.clone(), query_index);
     }
 
     fn begin_pipeline_statistics_query(
@@ -2559,36 +2507,16 @@ impl dispatch::ComputePassInterface for CoreComputePass {
     ) {
         let query_set = query_set.as_core();
 
-        if let Err(cause) = self
-            .pass
-            .begin_pipeline_statistics_query(query_set.wgpu_query_set.clone(), query_index)
-        {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "ComputePass::begin_pipeline_statistics_query",
-            );
-        }
+        self.pass
+            .begin_pipeline_statistics_query(query_set.wgpu_query_set.clone(), query_index);
     }
 
     fn end_pipeline_statistics_query(&mut self) {
-        if let Err(cause) = self.pass.end_pipeline_statistics_query() {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "ComputePass::end_pipeline_statistics_query",
-            );
-        }
+        self.pass.end_pipeline_statistics_query();
     }
 
     fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
-        if let Err(cause) = self.pass.dispatch_workgroups(x, y, z) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "ComputePass::dispatch_workgroups",
-            );
-        }
+        self.pass.dispatch_workgroups(x, y, z);
     }
 
     fn dispatch_workgroups_indirect(
@@ -2598,16 +2526,8 @@ impl dispatch::ComputePassInterface for CoreComputePass {
     ) {
         let indirect_buffer = indirect_buffer.as_core();
 
-        if let Err(cause) = self
-            .pass
-            .dispatch_workgroups_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset)
-        {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "ComputePass::dispatch_workgroups_indirect",
-            );
-        }
+        self.pass
+            .dispatch_workgroups_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset);
     }
 
     fn transition_resources<'a>(
@@ -2619,7 +2539,7 @@ impl dispatch::ComputePassInterface for CoreComputePass {
             Item = wgt::TextureTransition<&'a dispatch::DispatchTextureView>,
         >,
     ) {
-        let result = self.pass.transition_resources(
+        self.pass.transition_resources(
             buffer_transitions.map(|t| wgt::BufferTransition {
                 buffer: t.buffer.as_core().wgpu_buffer.clone(),
                 state: t.state,
@@ -2630,24 +2550,12 @@ impl dispatch::ComputePassInterface for CoreComputePass {
                 state: t.state,
             }),
         );
-
-        if let Err(cause) = result {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "ComputePass::transition_resources",
-            );
-        }
     }
 }
 
 impl Drop for CoreComputePass {
     fn drop(&mut self) {
-        if let Err(cause) = self.pass.end() {
-            self.pass
-                .device()
-                .handle_error(cause, self.pass.label(), "ComputePass::end");
-        }
+        self.pass.end();
     }
 }
 

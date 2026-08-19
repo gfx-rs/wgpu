@@ -164,14 +164,11 @@ impl GPUCommandEncoder {
       timestamp_writes,
     };
 
-    let (compute_pass, err) = self
+    let compute_pass = self
       .wgpu_command_encoder
       .begin_compute_pass(&wgpu_descriptor);
 
-    self.error_handler.push_error(err);
-
     GPUComputePassEncoder {
-      error_handler: self.error_handler.clone(),
       compute_pass: RefCell::new(compute_pass),
       label: descriptor.label,
     }
