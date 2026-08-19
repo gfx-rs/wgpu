@@ -582,7 +582,8 @@ jobs:
 
   wasm-test:
     # runtime is normally 2 minutes
-    timeout-minutes: 10
+    # but sometimes APT takes very long
+    timeout-minutes: 30
 
     name: Test WebAssembly
     runs-on: ubuntu-latest
