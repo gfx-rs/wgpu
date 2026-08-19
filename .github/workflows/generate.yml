@@ -46,7 +46,7 @@ jobs:
     name: "${{ matrix.name }}"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # We can't rely on an override here, as that would only set
       # the toolchain for the current directory, not the newly generated project.
