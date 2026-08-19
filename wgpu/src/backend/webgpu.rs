@@ -1824,6 +1824,12 @@ impl dispatch::AdapterInterface for WebAdapter {
             mapped_desc.set_label(label);
         }
 
+        if let Some(default_queue_label) = desc.default_queue.label {
+            let default_queue_desc = webgpu_sys::GpuQueueDescriptor::new();
+            default_queue_desc.set_label(default_queue_label);
+            mapped_desc.set_default_queue(&default_queue_desc);
+        }
+
         let device_promise = self.inner.request_device_with_descriptor(&mapped_desc);
 
         Box::pin(MakeSendFuture::new(

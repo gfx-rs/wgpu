@@ -34,6 +34,15 @@ crate::cmp::impl_eq_ord_hash_proxy!(Device => .inner);
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(DeviceDescriptor<'_>: Send, Sync);
 
+/// Describes a [`Queue`].
+///
+/// For use within a [`DeviceDescriptor`].
+///
+/// Corresponds to [WebGPU `GPUQueueDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuqueuedescriptor).
+pub type QueueDescriptor<'a> = wgt::QueueDescriptor<Label<'a>>;
+static_assertions::assert_impl_all!(QueueDescriptor<'_>: Send, Sync);
+
 impl Device {
     #[cfg(custom)]
     /// Returns custom implementation of Device (if custom backend and is internally T)
