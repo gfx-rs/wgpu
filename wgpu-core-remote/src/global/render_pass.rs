@@ -1,5 +1,8 @@
 use alloc::borrow::Cow;
 use core::num::NonZeroU32;
+use wgpu_core_remote_types::encoders::{
+    BindingCommand, DebugCommand, RenderCommand, RenderPassEncoderCommand,
+};
 
 use wgpu_core::command::{
     PassTimestampWrites, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
@@ -409,5 +412,132 @@ impl Global {
             .collect::<Vec<_>>();
 
         pass.execute_bundles(&render_bundles)
+    }
+}
+
+impl Global {
+    pub fn handle_render_pass_command(
+        &self,
+        pass_id: id::RenderPassEncoderId,
+        command: RenderPassEncoderCommand,
+    ) {
+        match command {
+            RenderPassEncoderCommand::SetViewport {
+                x,
+                y,
+                width,
+                height,
+                min_depth,
+                max_depth,
+            } => self.render_pass_set_viewport(pass_id, x, y, width, height, min_depth, max_depth),
+            RenderPassEncoderCommand::SetScissorRect {
+                x,
+                y,
+                width,
+                height,
+            } => self.render_pass_set_scissor_rect(pass_id, x, y, width, height),
+            RenderPassEncoderCommand::SetBlendConstant(color) => {
+                self.render_pass_set_blend_constant(pass_id, color)
+            }
+            RenderPassEncoderCommand::SetStencilReference(value) => {
+                self.render_pass_set_stencil_reference(pass_id, value)
+            }
+            RenderPassEncoderCommand::BeginOcclusionQuery(query_index) => {
+                self.render_pass_begin_occlusion_query(pass_id, query_index)
+            }
+            RenderPassEncoderCommand::EndOcclusionQuery => {
+                self.render_pass_end_occlusion_query(pass_id)
+            }
+            RenderPassEncoderCommand::ExecuteBundles(ids) => {
+                self.render_pass_execute_bundles(pass_id, &ids)
+            }
+            RenderPassEncoderCommand::BindingCommand(binding_command) => match binding_command {
+                BindingCommand::SetBindGroup {
+                    index,
+                    bind_group,
+                    dynamic_offsets,
+                } => self.render_pass_set_bind_group(pass_id, index, bind_group, &dynamic_offsets),
+                BindingCommand::SetImmediates { range_offset, data } => {
+                    self.render_pass_set_immediates(pass_id, range_offset, &data)
+                }
+            },
+            RenderPassEncoderCommand::RenderCommand(render_command) => match render_command {
+                RenderCommand::SetPipeline(pipeline_id) => {
+                    self.render_pass_set_pipeline(pass_id, pipeline_id)
+                }
+                RenderCommand::SetIndexBuffer {
+                    buffer,
+                    index_format,
+                    offset,
+                    size,
+                } => self.render_pass_set_index_buffer(
+                    pass_id,
+                    buffer,
+                    index_format,
+                    offset,
+                    size.and_then(core::num::NonZeroU64::new), // pass size directly once https://github.com/gfx-rs/wgpu/issues/3170 is resolved
+                ),
+                RenderCommand::SetVertexBuffer {
+                    slot,
+                    buffer,
+                    offset,
+                    size,
+                } => self.render_pass_set_vertex_buffer(
+                    pass_id,
+                    slot,
+                    buffer,
+                    offset,
+                    size.and_then(core::num::NonZeroU64::new), // pass size directly once https://github.com/gfx-rs/wgpu/issues/3170 is resolved
+                ),
+                RenderCommand::Draw {
+                    vertex_count,
+                    instance_count,
+                    first_vertex,
+                    first_instance,
+                } => self.render_pass_draw(
+                    pass_id,
+                    vertex_count,
+                    instance_count,
+                    first_vertex,
+                    first_instance,
+                ),
+                RenderCommand::DrawIndexed {
+                    index_count,
+                    instance_count,
+                    first_index,
+                    base_vertex,
+                    first_instance,
+                } => self.render_pass_draw_indexed(
+                    pass_id,
+                    index_count,
+                    instance_count,
+                    first_index,
+                    base_vertex,
+                    first_instance,
+                ),
+                RenderCommand::DrawIndirect {
+                    indirect_buffer,
+                    indirect_offset,
+                } => self.render_pass_draw_indirect(pass_id, indirect_buffer, indirect_offset),
+                RenderCommand::DrawIndexedIndirect {
+                    indirect_buffer,
+                    indirect_offset,
+                } => self.render_pass_draw_indexed_indirect(
+                    pass_id,
+                    indirect_buffer,
+                    indirect_offset,
+                ),
+            },
+            RenderPassEncoderCommand::DebugCommand(debug_command) => match debug_command {
+                DebugCommand::PushDebugGroup(label) => {
+                    self.render_pass_push_debug_group(pass_id, &label, 0)
+                }
+                DebugCommand::PopDebugGroup => self.render_pass_pop_debug_group(pass_id),
+                DebugCommand::InsertDebugMarker(label) => {
+                    self.render_pass_insert_debug_marker(pass_id, &label, 0)
+                }
+            },
+            RenderPassEncoderCommand::End => self.render_pass_end(pass_id),
+        }
     }
 }

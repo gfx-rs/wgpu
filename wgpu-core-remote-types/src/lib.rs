@@ -10,5 +10,6 @@ pub mod id;
 pub mod identity;
 
 pub mod binding_model;
+pub mod encoders;
 
 pub type Label<'a> = Option<Cow<'a, str>>;

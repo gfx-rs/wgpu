@@ -1,6 +1,7 @@
 use alloc::borrow::Cow;
 
 use wgpu_core::command::{ComputePassDescriptor, PassTimestampWrites};
+use wgpu_core_remote_types::encoders::{BindingCommand, ComputePassEncoderCommand, DebugCommand};
 use wgt::{BufferAddress, DynamicOffset};
 
 use crate::global::Global;
@@ -214,5 +215,57 @@ impl Global {
         let mut hub = self.hub.borrow_mut();
         let pass = hub.compute_passes.get_mut(pass_id);
         pass.end_pipeline_statistics_query()
+    }
+}
+
+impl Global {
+    pub fn handle_compute_pass_command(
+        &self,
+        pass_id: id::ComputePassEncoderId,
+        command: ComputePassEncoderCommand,
+    ) {
+        match command {
+            ComputePassEncoderCommand::BindingCommand(command) => match command {
+                BindingCommand::SetBindGroup {
+                    index,
+                    bind_group,
+                    dynamic_offsets,
+                } => self.compute_pass_set_bind_group(pass_id, index, bind_group, &dynamic_offsets),
+                BindingCommand::SetImmediates { range_offset, data } => {
+                    self.compute_pass_set_immediates(pass_id, range_offset, &data)
+                }
+            },
+            ComputePassEncoderCommand::SetPipeline(pipeline_id) => {
+                self.compute_pass_set_pipeline(pass_id, pipeline_id)
+            }
+            ComputePassEncoderCommand::DispatchWorkgroups {
+                workgroup_count_x,
+                workgroup_count_y,
+                workgroup_count_z,
+            } => self.compute_pass_dispatch_workgroups(
+                pass_id,
+                workgroup_count_x,
+                workgroup_count_y,
+                workgroup_count_z,
+            ),
+            ComputePassEncoderCommand::DispatchWorkgroupsIndirect {
+                indirect_buffer,
+                indirect_offset,
+            } => self.compute_pass_dispatch_workgroups_indirect(
+                pass_id,
+                indirect_buffer,
+                indirect_offset,
+            ),
+            ComputePassEncoderCommand::DebugCommand(debug_command) => match debug_command {
+                DebugCommand::PushDebugGroup(label) => {
+                    self.compute_pass_push_debug_group(pass_id, &label, 0)
+                }
+                DebugCommand::PopDebugGroup => self.compute_pass_pop_debug_group(pass_id),
+                DebugCommand::InsertDebugMarker(label) => {
+                    self.compute_pass_insert_debug_marker(pass_id, &label, 0)
+                }
+            },
+            ComputePassEncoderCommand::End => self.compute_pass_end(pass_id),
+        }
     }
 }
