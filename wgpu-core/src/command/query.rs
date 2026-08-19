@@ -7,8 +7,8 @@ use crate::{
     device::{Device, DeviceError, MissingFeatures},
     init_tracker::MemoryInitKind,
     resource::{
-        Buffer, DestroyedResourceError, InvalidResourceError, MissingBufferUsageError,
-        ParentDevice, QuerySet, RawResourceAccess, Trackable,
+        Buffer, DestroyedResourceError, InvalidResourceError, Labeled as _,
+        MissingBufferUsageError, ParentDevice, QuerySet, RawResourceAccess, Trackable,
     },
     snatch::SnatchGuard,
     track::{QuerySetTracker, TrackerIndex},
@@ -426,7 +426,7 @@ pub(super) fn end_pipeline_statistics_query(
 }
 
 impl super::CommandEncoder {
-    pub fn write_timestamp(
+    fn write_timestamp_inner(
         self: &Arc<Self>,
         query_set: Arc<QuerySet>,
         query_index: u32,
@@ -442,7 +442,14 @@ impl super::CommandEncoder {
         })
     }
 
-    pub fn resolve_query_set(
+    pub fn write_timestamp(self: &Arc<Self>, query_set: Arc<QuerySet>, query_index: u32) {
+        if let Err(err) = self.write_timestamp_inner(query_set, query_index) {
+            self.device
+                .handle_error(err, None, "CommandEncoder::write_timestamp");
+        }
+    }
+
+    fn resolve_query_set_inner(
         self: &Arc<Self>,
         query_set: Arc<QuerySet>,
         start_query: u32,
@@ -463,6 +470,26 @@ impl super::CommandEncoder {
                 destination_offset,
             })
         })
+    }
+
+    pub fn resolve_query_set(
+        self: &Arc<Self>,
+        query_set: Arc<QuerySet>,
+        start_query: u32,
+        query_count: u32,
+        destination: Arc<Buffer>,
+        destination_offset: BufferAddress,
+    ) {
+        if let Err(err) = self.resolve_query_set_inner(
+            query_set,
+            start_query,
+            query_count,
+            destination,
+            destination_offset,
+        ) {
+            self.device
+                .handle_error(err, Some(self.label()), "CommandEncoder::resolve_query_set");
+        }
     }
 }
 

@@ -576,13 +576,10 @@ impl GPUDevice {
     #[cfg(target_vendor = "apple")]
     scope.adjust_amount_of_external_allocated_memory(EXTERNAL_MEMORY_AMOUNT);
 
-    let (wgpu_command_encoder, err) =
+    let wgpu_command_encoder =
       self.wgpu_device.create_command_encoder(&wgpu_descriptor);
 
-    self.error_handler.push_error(err);
-
     let encoder = GPUCommandEncoder {
-      error_handler: self.error_handler.clone(),
       wgpu_command_encoder,
       label,
       #[cfg(target_vendor = "apple")]

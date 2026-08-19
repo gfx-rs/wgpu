@@ -1503,13 +1503,9 @@ impl dispatch::DeviceInterface for CoreDevice {
         &self,
         desc: &crate::CommandEncoderDescriptor<'_>,
     ) -> dispatch::DispatchCommandEncoder {
-        let (wgpu_command_encoder, error) = self
+        let wgpu_command_encoder = self
             .wgpu_device
             .create_command_encoder(&desc.map_label(|l| l.map(Borrowed)));
-        if let Some(cause) = error {
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_command_encoder");
-        }
 
         CoreCommandEncoder {
             context: self.context.clone(),
@@ -2057,17 +2053,13 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         let source = source.as_core();
         let destination = destination.as_core();
 
-        if let Err(cause) = self.wgpu_command_encoder.copy_buffer_to_buffer(
+        self.wgpu_command_encoder.copy_buffer_to_buffer(
             source.wgpu_buffer.clone(),
             source_offset,
             destination.wgpu_buffer.clone(),
             destination_offset,
             copy_size,
-        ) {
-            self.wgpu_command_encoder
-                .device()
-                .handle_error_nolabel(cause, "CommandEncoder::copy_buffer_to_buffer");
-        }
+        )
     }
 
     fn copy_buffer_to_texture(
@@ -2076,15 +2068,11 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         destination: crate::TexelCopyTextureInfo<'_>,
         copy_size: crate::Extent3d,
     ) {
-        if let Err(cause) = self.wgpu_command_encoder.copy_buffer_to_texture(
+        self.wgpu_command_encoder.copy_buffer_to_texture(
             &map_buffer_copy_view(source),
             &map_texture_copy_view(destination),
             &copy_size,
-        ) {
-            self.wgpu_command_encoder
-                .device()
-                .handle_error_nolabel(cause, "CommandEncoder::copy_buffer_to_texture");
-        }
+        )
     }
 
     fn copy_texture_to_buffer(
@@ -2093,15 +2081,11 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         destination: crate::TexelCopyBufferInfo<'_>,
         copy_size: crate::Extent3d,
     ) {
-        if let Err(cause) = self.wgpu_command_encoder.copy_texture_to_buffer(
+        self.wgpu_command_encoder.copy_texture_to_buffer(
             &map_texture_copy_view(source),
             &map_buffer_copy_view(destination),
             &copy_size,
-        ) {
-            self.wgpu_command_encoder
-                .device()
-                .handle_error_nolabel(cause, "CommandEncoder::copy_texture_to_buffer");
-        }
+        );
     }
 
     fn copy_texture_to_texture(
@@ -2110,15 +2094,11 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         destination: crate::TexelCopyTextureInfo<'_>,
         copy_size: crate::Extent3d,
     ) {
-        if let Err(cause) = self.wgpu_command_encoder.copy_texture_to_texture(
+        self.wgpu_command_encoder.copy_texture_to_texture(
             &map_texture_copy_view(source),
             &map_texture_copy_view(destination),
             &copy_size,
-        ) {
-            self.wgpu_command_encoder
-                .device()
-                .handle_error_nolabel(cause, "CommandEncoder::copy_texture_to_texture");
-        }
+        );
     }
 
     fn begin_compute_pass(
@@ -2208,15 +2188,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
 
     fn finish(&mut self) -> dispatch::DispatchCommandBuffer {
         let descriptor = wgt::CommandBufferDescriptor::default();
-        let (wgpu_command_buffer, opt_label_and_error) =
-            self.wgpu_command_encoder.finish(&descriptor);
-        if let Some((label, cause)) = opt_label_and_error {
-            self.wgpu_command_encoder.device().handle_error(
-                cause,
-                Some(&label),
-                "a CommandEncoder",
-            );
-        }
+        let wgpu_command_buffer = self.wgpu_command_encoder.finish(&descriptor);
         CoreCommandBuffer {
             context: self.context.clone(),
             wgpu_command_buffer,
@@ -2231,14 +2203,8 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
     ) {
         let texture = texture.as_core();
 
-        if let Err(cause) = self
-            .wgpu_command_encoder
+        self.wgpu_command_encoder
             .clear_texture(texture.wgpu_texture.clone(), subresource_range)
-        {
-            self.wgpu_command_encoder
-                .device()
-                .handle_error_nolabel(cause, "CommandEncoder::clear_texture");
-        }
     }
 
     fn clear_buffer(
@@ -2249,51 +2215,27 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
     ) {
         let buffer = buffer.as_core();
 
-        if let Err(cause) =
-            self.wgpu_command_encoder
-                .clear_buffer(buffer.wgpu_buffer.clone(), offset, size)
-        {
-            self.wgpu_command_encoder
-                .device()
-                .handle_error_nolabel(cause, "CommandEncoder::fill_buffer");
-        }
+        self.wgpu_command_encoder
+            .clear_buffer(buffer.wgpu_buffer.clone(), offset, size)
     }
 
     fn insert_debug_marker(&self, label: &str) {
-        if let Err(cause) = self.wgpu_command_encoder.insert_debug_marker(label) {
-            self.wgpu_command_encoder
-                .device()
-                .handle_error_nolabel(cause, "CommandEncoder::insert_debug_marker");
-        }
+        self.wgpu_command_encoder.insert_debug_marker(label)
     }
 
     fn push_debug_group(&self, label: &str) {
-        if let Err(cause) = self.wgpu_command_encoder.push_debug_group(label) {
-            self.wgpu_command_encoder
-                .device()
-                .handle_error_nolabel(cause, "CommandEncoder::push_debug_group");
-        }
+        self.wgpu_command_encoder.push_debug_group(label)
     }
 
     fn pop_debug_group(&self) {
-        if let Err(cause) = self.wgpu_command_encoder.pop_debug_group() {
-            self.wgpu_command_encoder
-                .device()
-                .handle_error_nolabel(cause, "CommandEncoder::pop_debug_group");
-        }
+        self.wgpu_command_encoder.pop_debug_group()
     }
 
     fn write_timestamp(&self, query_set: &dispatch::DispatchQuerySet, query_index: u32) {
         let query_set = query_set.as_core();
 
-        if let Err(cause) = self
-            .wgpu_command_encoder
+        self.wgpu_command_encoder
             .write_timestamp(query_set.wgpu_query_set.clone(), query_index)
-        {
-            self.wgpu_command_encoder
-                .device()
-                .handle_error_nolabel(cause, "CommandEncoder::write_timestamp");
-        }
     }
 
     fn resolve_query_set(
@@ -2307,17 +2249,13 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         let query_set = query_set.as_core();
         let destination = destination.as_core();
 
-        if let Err(cause) = self.wgpu_command_encoder.resolve_query_set(
+        self.wgpu_command_encoder.resolve_query_set(
             query_set.wgpu_query_set.clone(),
             first_query,
             query_count,
             destination.wgpu_buffer.clone(),
             destination_offset,
-        ) {
-            self.wgpu_command_encoder
-                .device()
-                .handle_error_nolabel(cause, "CommandEncoder::resolve_query_set");
-        }
+        );
     }
 
     fn mark_acceleration_structures_built<'a>(
@@ -2331,15 +2269,8 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         let tlas = tlas
             .map(|t| t.inner.as_core().wgpu_tlas.clone())
             .collect::<SmallVec<[_; 4]>>();
-        if let Err(cause) = self
-            .wgpu_command_encoder
+        self.wgpu_command_encoder
             .mark_acceleration_structures_built(&blas, &tlas)
-        {
-            self.wgpu_command_encoder.device().handle_error_nolabel(
-                cause,
-                "CommandEncoder::build_acceleration_structures_unsafe_tlas",
-            );
-        }
     }
 
     fn build_acceleration_structures<'a>(
@@ -2408,15 +2339,8 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             }
         });
 
-        if let Err(cause) = self
-            .wgpu_command_encoder
+        self.wgpu_command_encoder
             .build_acceleration_structures(blas, tlas)
-        {
-            self.wgpu_command_encoder.device().handle_error_nolabel(
-                cause,
-                "CommandEncoder::build_acceleration_structures_unsafe_tlas",
-            );
-        }
     }
 
     fn transition_resources<'a>(
@@ -2428,7 +2352,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             Item = wgt::TextureTransition<&'a dispatch::DispatchTexture>,
         >,
     ) {
-        let result = self.wgpu_command_encoder.transition_resources(
+        self.wgpu_command_encoder.transition_resources(
             buffer_transitions.map(|t| wgt::BufferTransition {
                 buffer: t.buffer.as_core().wgpu_buffer.clone(),
                 state: t.state,
@@ -2439,12 +2363,6 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 state: t.state,
             }),
         );
-
-        if let Err(cause) = result {
-            self.wgpu_command_encoder
-                .device()
-                .handle_error_nolabel(cause, "CommandEncoder::transition_resources");
-        }
     }
 }
 

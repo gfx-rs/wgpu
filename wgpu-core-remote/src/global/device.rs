@@ -4,7 +4,7 @@ use core::ptr::NonNull;
 use wgpu_core::{
     binding_model::{self},
     command,
-    device::{DeviceError, DeviceLostClosure, WaitIdleError},
+    device::{DeviceLostClosure, WaitIdleError},
     error::EmptyErrorScopeStack,
     pipeline::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
@@ -666,7 +666,7 @@ impl Global {
         device_id: DeviceId,
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: id::CommandEncoderId,
-    ) -> (id::CommandEncoderId, Option<DeviceError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             command_encoders,
@@ -676,10 +676,9 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (cmd_enc, error) = device.create_command_encoder(desc);
+        let cmd_enc = device.create_command_encoder(desc);
 
-        let id = command_encoders.assign(id_in, cmd_enc);
-        (id, error)
+        command_encoders.assign(id_in, cmd_enc);
     }
 
     pub fn command_encoder_drop(&self, command_encoder_id: id::CommandEncoderId) {
