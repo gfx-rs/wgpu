@@ -319,6 +319,10 @@ pub trait BlasInterface: CommonTraits {
 pub trait TlasInterface: CommonTraits {}
 pub trait QuerySetInterface: CommonTraits {
     fn destroy(&self);
+
+    fn ty(&self) -> crate::QueryType;
+
+    fn count(&self) -> u32;
 }
 pub trait PipelineLayoutInterface: CommonTraits {}
 pub trait RenderPipelineInterface: CommonTraits {

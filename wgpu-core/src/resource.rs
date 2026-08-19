@@ -3093,6 +3093,10 @@ impl QuerySet {
             life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
     }
+
+    pub fn descriptor(&self) -> &wgt::QuerySetDescriptor<String> {
+        &self.desc
+    }
 }
 
 impl Drop for QuerySet {
