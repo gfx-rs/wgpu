@@ -5638,9 +5638,8 @@ impl Device {
                 raw: Snatchable::new(raw),
             }),
             device: self.clone(),
-            label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.query_sets.clone()),
-            desc: desc.map_label(|_| ()),
+            desc: desc.map_label(|l| l.to_string()),
             initialized_slots: Mutex::new(
                 rank::QUERY_SET_INITIALIZED_SLOTS,
                 bit_vec::BitVec::from_elem(desc.count as usize, false),
