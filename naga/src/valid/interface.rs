@@ -1416,18 +1416,23 @@ impl super::Validator {
                 mesh_output_type: MeshOutputType::None,
                 has_task_payload: ep.task_payload.is_some(),
             };
-            ctx.validate(ep, fr.ty, fr.binding.as_ref())
-                .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
+            let mut validate_result = || {
+                ctx.validate(ep, fr.ty, fr.binding.as_ref())
+                    .map_err_inner(|e| EntryPointError::Result(e).with_span())
+            };
             match ep.stage {
                 nt::ShaderStage::Vertex => {
+                    validate_result()?;
                     if !result_built_ins.contains(&crate::BuiltIn::Position { invariant: false }) {
                         return Err(EntryPointError::MissingVertexOutputPosition.with_span());
                     }
                 }
                 nt::ShaderStage::Mesh => {
-                    return Err(EntryPointError::UnexpectedMeshShaderEntryResult.with_span())
+                    let _ = validate_result();
+                    return Err(EntryPointError::UnexpectedMeshShaderEntryResult.with_span());
                 }
                 nt::ShaderStage::Task => {
+                    validate_result()?;
                     let ok = module.types[fr.ty].inner
                         == crate::TypeInner::Vector {
                             size: crate::VectorSize::Tri,
@@ -1438,13 +1443,14 @@ impl super::Validator {
                     }
                 }
                 nt::ShaderStage::Compute => {
-                    return Err(EntryPointError::UnexpectedComputeShaderEntryResult.with_span())
+                    let _ = validate_result();
+                    return Err(EntryPointError::UnexpectedComputeShaderEntryResult.with_span());
                 }
                 nt::ShaderStage::Fragment
                 | nt::ShaderStage::RayGeneration
                 | nt::ShaderStage::Miss
                 | nt::ShaderStage::AnyHit
-                | nt::ShaderStage::ClosestHit => {}
+                | nt::ShaderStage::ClosestHit => validate_result()?,
             }
         } else {
             match ep.stage {

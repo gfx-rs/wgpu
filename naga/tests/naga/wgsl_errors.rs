@@ -5677,12 +5677,7 @@ fn compute_shaders_dont_accept_result_types() {
         Err(
             naga::valid::ValidationError::EntryPoint {
                 stage: naga::ShaderStage::Compute,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::InvalidAttributeInStage(
-                        "location",
-                        naga::ShaderStage::Compute,
-                    ),
-                ),
+                source: naga::valid::EntryPointError::UnexpectedComputeShaderEntryResult,
                 ..
             },
         )
@@ -5700,12 +5695,7 @@ fn compute_shaders_dont_accept_result_types() {
         Err(
             naga::valid::ValidationError::EntryPoint {
                 stage: naga::ShaderStage::Compute,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::InvalidAttributeInStage(
-                        "location",
-                        naga::ShaderStage::Compute,
-                    ),
-                ),
+                source: naga::valid::EntryPointError::UnexpectedComputeShaderEntryResult,
                 ..
             },
         )
