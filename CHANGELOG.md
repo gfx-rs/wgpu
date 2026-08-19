@@ -42,6 +42,24 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major changes
+
+#### `DeviceDescriptor` has new field `default_queue`
+
+`DeviceDescriptor` has new field `default_queue` of type `QueueDescriptor`, which allows setting label for default device queue:
+
+```diff
+ wgpu::DeviceDescriptor {
+   label: None
+   required_features: adapter.features(),
+   required_limits: adapter.limits(),
++  default_queue: wgpu::QueueDescriptor { label: None },
+   // ...
+ }
+```
+
+By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
+
 ### Added/New Features
 
 #### General
