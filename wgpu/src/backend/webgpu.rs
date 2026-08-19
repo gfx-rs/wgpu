@@ -71,30 +71,28 @@ impl fmt::Debug for ContextWebGpu {
     }
 }
 
-impl crate::Error {
-    fn from_js(js_error: js_sys::Object) -> Self {
-        let source = Box::<dyn core::error::Error + Send + Sync>::from("<WebGPU Error>");
-        if let Some(js_error) = js_error.dyn_ref::<webgpu_sys::GpuValidationError>() {
-            crate::Error::Validation {
-                source,
-                description: js_error.message(),
-            }
-        } else if let Some(js_error) = js_error.dyn_ref::<webgpu_sys::GpuInternalError>() {
-            crate::Error::Internal {
-                source,
-                description: js_error.message(),
-            }
-        } else if js_error.has_type::<webgpu_sys::GpuOutOfMemoryError>() {
-            crate::Error::OutOfMemory { source }
-        } else {
-            let constructor = js_error
-                .constructor()
-                .name()
-                .as_string()
-                .unwrap_or_default();
-            let value = js_error.to_string().as_string().unwrap_or_default();
-            panic!("Unexpected error: constructor={constructor} value={value}");
+fn error_from_js(js_error: js_sys::Object) -> crate::Error {
+    let source = Box::<dyn core::error::Error + Send + Sync>::from("<WebGPU Error>");
+    if let Some(js_error) = js_error.dyn_ref::<webgpu_sys::GpuValidationError>() {
+        crate::Error::Validation {
+            source,
+            description: js_error.message(),
         }
+    } else if let Some(js_error) = js_error.dyn_ref::<webgpu_sys::GpuInternalError>() {
+        crate::Error::Internal {
+            source,
+            description: js_error.message(),
+        }
+    } else if js_error.has_type::<webgpu_sys::GpuOutOfMemoryError>() {
+        crate::Error::OutOfMemory { source }
+    } else {
+        let constructor = js_error
+            .constructor()
+            .name()
+            .as_string()
+            .unwrap_or_default();
+        let value = js_error.to_string().as_string().unwrap_or_default();
+        panic!("Unexpected error: constructor={constructor} value={value}");
     }
 }
 
@@ -1075,7 +1073,7 @@ fn future_request_device(
 fn future_pop_error_scope(
     result: Result<js_sys::JsNullable<webgpu_sys::GpuError>, wasm_bindgen::JsValue>,
 ) -> Option<crate::Error> {
-    Some(crate::Error::from_js(result.ok()?.into_option()?.into()))
+    Some(error_from_js(result.ok()?.into_option()?.into()))
 }
 
 fn future_compilation_info(
@@ -1342,6 +1340,8 @@ pub struct WebBuffer {
     mapping: Rc<RefCell<WebBufferMapState>>,
     /// Unique identifier for this Buffer.
     ident: crate::cmp::Identifier,
+    size: wgt::BufferAddress,
+    usage: wgt::BufferUsages,
 }
 
 impl WebBuffer {
@@ -1354,6 +1354,8 @@ impl WebBuffer {
                 range: 0..desc.size,
             })),
             ident: crate::cmp::Identifier::create(),
+            size: desc.size,
+            usage: desc.usage,
         }
     }
 
@@ -1404,6 +1406,7 @@ pub struct WebTexture {
     drop_guard: Option<Rc<DropGuard>>,
     /// Unique identifier for this Texture.
     ident: crate::cmp::Identifier,
+    desc: crate::TextureDescriptor<'static>,
 }
 
 #[derive(Debug, Clone)]
@@ -1429,6 +1432,8 @@ pub struct WebQuerySet {
     pub(crate) inner: webgpu_sys::GpuQuerySet,
     /// Unique identifier for this QuerySet.
     ident: crate::cmp::Identifier,
+    ty: wgt::QueryType,
+    count: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -1817,6 +1822,12 @@ impl dispatch::AdapterInterface for WebAdapter {
             mapped_desc.set_label(label);
         }
 
+        if let Some(default_queue_label) = desc.default_queue.label {
+            let default_queue_desc = webgpu_sys::GpuQueueDescriptor::new();
+            default_queue_desc.set_label(default_queue_label);
+            mapped_desc.set_default_queue(&default_queue_desc);
+        }
+
         let device_promise = self.inner.request_device_with_descriptor(&mapped_desc);
 
         Box::pin(MakeSendFuture::new(
@@ -1885,12 +1896,18 @@ impl WebDevice {
     pub(crate) fn wrap_external_texture(
         &self,
         texture: webgpu_sys::GpuTexture,
+        desc: &crate::TextureDescriptor<'_>,
         drop_callback: Option<DropCallback>,
     ) -> dispatch::DispatchTexture {
         WebTexture {
             inner: texture,
             drop_guard: Some(Rc::new(DropGuard::new(drop_callback))),
             ident: crate::cmp::Identifier::create(),
+            desc: crate::TextureDescriptor {
+                label: None,
+                view_formats: &[],
+                ..desc.clone()
+            },
         }
         .into()
     }
@@ -2503,6 +2520,11 @@ impl dispatch::DeviceInterface for WebDevice {
             inner: texture,
             drop_guard: None,
             ident: crate::cmp::Identifier::create(),
+            desc: crate::TextureDescriptor {
+                label: None,
+                view_formats: &[],
+                ..desc.clone()
+            },
         }
         .into()
     }
@@ -2570,6 +2592,8 @@ impl dispatch::DeviceInterface for WebDevice {
         WebQuerySet {
             inner: query_set,
             ident: crate::cmp::Identifier::create(),
+            ty: desc.ty,
+            count: desc.count,
         }
         .into()
     }
@@ -2654,7 +2678,7 @@ impl dispatch::DeviceInterface for WebDevice {
 
     fn on_uncaptured_error(&self, handler: Arc<dyn crate::UncapturedErrorHandler>) {
         let f = Closure::wrap(Box::new(move |event: webgpu_sys::GpuUncapturedErrorEvent| {
-            let error = crate::Error::from_js(event.error().value_of());
+            let error = error_from_js(event.error().value_of());
             handler(error);
         }) as Box<dyn FnMut(_)>);
         self.inner
@@ -2987,6 +3011,14 @@ impl dispatch::BufferInterface for WebBuffer {
     fn destroy(&self) {
         self.inner.destroy();
     }
+
+    fn size(&self) -> crate::BufferAddress {
+        self.size
+    }
+
+    fn usage(&self) -> crate::BufferUsages {
+        self.usage
+    }
 }
 impl Drop for WebBuffer {
     fn drop(&mut self) {
@@ -3034,6 +3066,30 @@ impl dispatch::TextureInterface for WebTexture {
             self.inner.destroy();
         }
     }
+
+    fn size(&self) -> wgt::Extent3d {
+        self.desc.size
+    }
+
+    fn mip_level_count(&self) -> u32 {
+        self.desc.mip_level_count
+    }
+
+    fn sample_count(&self) -> u32 {
+        self.desc.sample_count
+    }
+
+    fn dimension(&self) -> wgt::TextureDimension {
+        self.desc.dimension
+    }
+
+    fn format(&self) -> wgt::TextureFormat {
+        self.desc.format
+    }
+
+    fn usage(&self) -> wgt::TextureUsages {
+        self.desc.usage
+    }
 }
 impl Drop for WebTexture {
     fn drop(&mut self) {
@@ -3077,6 +3133,14 @@ impl Drop for WebTlas {
 impl dispatch::QuerySetInterface for WebQuerySet {
     fn destroy(&self) {
         self.inner.destroy();
+    }
+
+    fn ty(&self) -> crate::QueryType {
+        self.ty
+    }
+
+    fn count(&self) -> u32 {
+        self.count
     }
 }
 
@@ -4347,6 +4411,7 @@ impl dispatch::SurfaceInterface for WebSurface {
 
     fn get_current_texture(
         &self,
+        desc: Option<crate::TextureDescriptor<'static>>,
     ) -> (
         Option<dispatch::DispatchTexture>,
         crate::SurfaceStatus,
@@ -4371,6 +4436,7 @@ impl dispatch::SurfaceInterface for WebSurface {
         };
 
         let web_surface_texture = WebTexture {
+            desc: desc.unwrap(),
             inner: surface_texture,
             drop_guard: None,
             ident: crate::cmp::Identifier::create(),

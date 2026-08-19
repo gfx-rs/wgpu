@@ -4795,7 +4795,6 @@ dependencies = [
  "naga",
  "naga-types",
  "num-traits",
- "once_cell",
  "portable-atomic",
  "profiling",
  "proptest",
@@ -4983,7 +4982,6 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "objc2-metal 0.3.2",
  "objc2-quartz-core 0.3.2",
- "once_cell",
  "ordered-float",
  "portable-atomic",
  "portable-atomic-util",
@@ -5037,6 +5035,7 @@ version = "30.0.0"
 dependencies = [
  "cfg-if",
  "lock_api",
+ "once_cell",
  "parking_lot",
 ]
 

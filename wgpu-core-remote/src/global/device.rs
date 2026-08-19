@@ -4,7 +4,8 @@ use core::ptr::NonNull;
 use wgpu_core::{
     binding_model::{self},
     command,
-    device::{DeviceError, DeviceLostClosure, WaitIdleError},
+    device::{DeviceLostClosure, WaitIdleError},
+    error::EmptyErrorScopeStack,
     pipeline::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
         ResolvedGeneralRenderPipelineDescriptor,
@@ -22,7 +23,7 @@ use crate::{
     registry::Registry,
 };
 
-use wgt::BufferAddress;
+use wgt::{error::WebGpuError, BufferAddress};
 
 pub use wgpu_core_remote_types::binding_model::*;
 
@@ -665,7 +666,7 @@ impl Global {
         device_id: DeviceId,
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: id::CommandEncoderId,
-    ) -> (id::CommandEncoderId, Option<DeviceError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             command_encoders,
@@ -675,10 +676,9 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (cmd_enc, error) = device.create_command_encoder(desc);
+        let cmd_enc = device.create_command_encoder(desc);
 
-        let id = command_encoders.assign(id_in, cmd_enc);
-        (id, error)
+        command_encoders.assign(id_in, cmd_enc);
     }
 
     pub fn command_encoder_drop(&self, command_encoder_id: id::CommandEncoderId) {
@@ -720,7 +720,7 @@ impl Global {
         render_bundle_encoder_id: id::RenderBundleEncoderId,
         desc: &command::RenderBundleDescriptor,
         id_in: id::RenderBundleId,
-    ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_bundle_encoders,
@@ -729,11 +729,9 @@ impl Global {
         } = &mut *hub;
         let bundle_encoder = render_bundle_encoders.get_mut(render_bundle_encoder_id);
 
-        let (render_bundle, error) = bundle_encoder.finish(desc);
+        let render_bundle = bundle_encoder.finish(desc);
 
-        let id = render_bundles.assign(id_in, render_bundle);
-
-        (id, error)
+        render_bundles.assign(id_in, render_bundle);
     }
 
     pub fn render_bundle_encoder_drop(&self, render_bundle_encoder_id: id::RenderBundleEncoderId) {
@@ -1141,5 +1139,50 @@ impl Global {
         let buffer = hub.buffers.get(buffer_id);
 
         buffer.unmap()
+    }
+
+    pub fn device_on_uncaptured_error(
+        &self,
+        device_id: DeviceId,
+        handler: Arc<dyn wgt::error::UncapturedErrorHandler>,
+    ) {
+        let hub = self.hub.borrow();
+        let device = hub.devices.get(device_id);
+
+        device.on_uncaptured_error(handler);
+    }
+
+    pub fn device_push_error_scope(
+        &self,
+        device_id: DeviceId,
+        error_scope: wgt::error::ErrorFilter,
+    ) {
+        let hub = self.hub.borrow();
+        let device = hub.devices.get(device_id);
+
+        device.push_error_scope(error_scope)
+    }
+
+    pub fn device_pop_error_scope(
+        &self,
+        device_id: DeviceId,
+    ) -> Result<Option<wgt::error::Error>, EmptyErrorScopeStack> {
+        let hub = self.hub.borrow();
+        let device = hub.devices.get(device_id);
+
+        device.pop_error_scope()
+    }
+
+    pub fn device_handle_error(
+        &self,
+        device_id: DeviceId,
+        source: impl WebGpuError + Send + Sync + 'static,
+        label: Option<&str>,
+        fn_ident: &'static str,
+    ) {
+        let hub = self.hub.borrow();
+        let device = hub.devices.get(device_id);
+
+        device.handle_error(source, label, fn_ident);
     }
 }

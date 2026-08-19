@@ -1,6 +1,5 @@
 use crate::hub::Hub;
 use crate::id;
-use wgpu_core::command::PassStateError;
 
 impl crate::global::Global {
     pub fn render_bundle_encoder_set_bind_group(
@@ -9,7 +8,7 @@ impl crate::global::Global {
         index: u32,
         bind_group_id: Option<id::BindGroupId>,
         offsets: &[wgt::DynamicOffset],
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_bundle_encoders,
@@ -25,7 +24,7 @@ impl crate::global::Global {
         &self,
         bundle_encoder: id::RenderBundleEncoderId,
         pipeline_id: id::RenderPipelineId,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_bundle_encoders,
@@ -44,7 +43,7 @@ impl crate::global::Global {
         buffer_id: Option<id::BufferId>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_bundle_encoders,
@@ -63,7 +62,7 @@ impl crate::global::Global {
         index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_bundle_encoders,
@@ -80,7 +79,7 @@ impl crate::global::Global {
         bundle_encoder: id::RenderBundleEncoderId,
         offset: u32,
         data: &[u8],
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let bundle_encoder = hub.render_bundle_encoders.get_mut(bundle_encoder);
 
@@ -94,7 +93,7 @@ impl crate::global::Global {
         instance_count: u32,
         first_vertex: u32,
         first_instance: u32,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let bundle_encoder = hub.render_bundle_encoders.get_mut(bundle_encoder);
 
@@ -109,7 +108,7 @@ impl crate::global::Global {
         first_index: u32,
         base_vertex: i32,
         first_instance: u32,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let bundle_encoder = hub.render_bundle_encoders.get_mut(bundle_encoder);
 
@@ -127,7 +126,7 @@ impl crate::global::Global {
         bundle_encoder: id::RenderBundleEncoderId,
         buffer_id: id::BufferId,
         offset: wgt::BufferAddress,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_bundle_encoders,
@@ -144,7 +143,7 @@ impl crate::global::Global {
         bundle_encoder: id::RenderBundleEncoderId,
         buffer_id: id::BufferId,
         offset: wgt::BufferAddress,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_bundle_encoders,
@@ -160,17 +159,14 @@ impl crate::global::Global {
         &self,
         bundle_encoder: id::RenderBundleEncoderId,
         label: &str,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let bundle_encoder = hub.render_bundle_encoders.get_mut(bundle_encoder);
 
         bundle_encoder.push_debug_group(label)
     }
 
-    pub fn render_bundle_encoder_pop_debug_group(
-        &self,
-        bundle_encoder: id::RenderBundleEncoderId,
-    ) -> Result<(), PassStateError> {
+    pub fn render_bundle_encoder_pop_debug_group(&self, bundle_encoder: id::RenderBundleEncoderId) {
         let mut hub = self.hub.borrow_mut();
         let bundle_encoder = hub.render_bundle_encoders.get_mut(bundle_encoder);
 
@@ -181,7 +177,7 @@ impl crate::global::Global {
         &self,
         bundle_encoder: id::RenderBundleEncoderId,
         label: &str,
-    ) -> Result<(), PassStateError> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let bundle_encoder = hub.render_bundle_encoders.get_mut(bundle_encoder);
 

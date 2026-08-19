@@ -9,9 +9,6 @@
 
 //! Provides [`Mutex`] and [`RwLock`] types with an appropriate implementation.
 
-// alloc and std aren't directly used by this crate, but we reserve features
-// for them and ensure the respective crates and linked to allow future usage.
-#[cfg(feature = "alloc")]
 extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
@@ -27,6 +24,16 @@ pub use rwlock::RawRwLock;
 // * `Condvar` only works with the specific `RawMutex` implementation from `parking_lot`.
 #[cfg(feature = "std")]
 pub use parking_lot::{Condvar, Mutex as CondvarMutex};
+
+pub use once_cell::race::{OnceBool, OnceBox, OnceNonZeroUsize, OnceRef};
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "std")] {
+        pub use once_cell::sync::{Lazy, OnceCell};
+    } else {
+        pub use once_cell::unsync::{Lazy, OnceCell};
+    }
+}
 
 /// A [`Mutex`](lock_api::Mutex) using [`RawMutex`] for its backing implementation.
 pub type Mutex<T> = lock_api::Mutex<RawMutex, T>;
