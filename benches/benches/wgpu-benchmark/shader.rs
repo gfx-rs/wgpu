@@ -443,7 +443,14 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
     }));
 
     results.push(iter_auto(&ctx, "hlsl", "bytes", total_bytes, || {
-        let options = naga::back::hlsl::Options::default();
+        let options = naga::back::hlsl::Options {
+            immediates_target: Some(naga::back::hlsl::BindTarget {
+                space: 0,
+                register: 0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
         let mut string = String::new();
         for input in &inputs.inner {
             if input.options.targets.unwrap().contains(Targets::HLSL) {
