@@ -1434,6 +1434,8 @@ pub struct WebQuerySet {
     pub(crate) inner: webgpu_sys::GpuQuerySet,
     /// Unique identifier for this QuerySet.
     ident: crate::cmp::Identifier,
+    ty: wgt::QueryType,
+    count: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -2586,6 +2588,8 @@ impl dispatch::DeviceInterface for WebDevice {
         WebQuerySet {
             inner: query_set,
             ident: crate::cmp::Identifier::create(),
+            ty: desc.ty,
+            count: desc.count,
         }
         .into()
     }
@@ -3125,6 +3129,14 @@ impl Drop for WebTlas {
 impl dispatch::QuerySetInterface for WebQuerySet {
     fn destroy(&self) {
         self.inner.destroy();
+    }
+
+    fn ty(&self) -> crate::QueryType {
+        self.ty
+    }
+
+    fn count(&self) -> u32 {
+        self.count
     }
 }
 

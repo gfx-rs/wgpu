@@ -2327,6 +2327,14 @@ impl dispatch::QuerySetInterface for CoreQuerySet {
     fn destroy(&self) {
         self.wgpu_query_set.destroy();
     }
+
+    fn ty(&self) -> crate::QueryType {
+        self.wgpu_query_set.descriptor().ty
+    }
+
+    fn count(&self) -> u32 {
+        self.wgpu_query_set.descriptor().count
+    }
 }
 
 impl dispatch::PipelineLayoutInterface for CorePipelineLayout {}
