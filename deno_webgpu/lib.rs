@@ -116,6 +116,7 @@ deno_core::extension!(
   lazy_loaded_esm = ["01_webgpu.js"],
 );
 
+pub(crate) type WeakDeviceHM = HashMap<usize, v8::Weak<v8::Object>>;
 pub(crate) type LostPromiseResolverHM =
   HashMap<usize, v8::Global<v8::PromiseResolver>>;
 
@@ -129,6 +130,7 @@ pub fn op_create_gpu(
   uncaptured_error_event_class: v8::Local<v8::Value>,
   pipeline_error_class: v8::Local<v8::Value>,
 ) -> GPU {
+  state.put(WeakDeviceHM::new());
   state.put(LostPromiseResolverHM::new());
   state.put(EventTargetSetup {
     brand: v8::Global::new(scope, webidl_brand),

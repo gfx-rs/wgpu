@@ -13,6 +13,7 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_error::JsErrorBox;
 use wgpu_core::binding_model::BindingResource;
+use wgpu_core::error::EmptyErrorScopeStack;
 use wgpu_core::pipeline::ProgrammableStageDescriptor;
 use wgpu_types::BindingType;
 
@@ -29,7 +30,7 @@ use crate::adapter::GPUAdapterInfo;
 use crate::adapter::GPUSupportedFeatures;
 use crate::adapter::GPUSupportedLimits;
 use crate::command_encoder::GPUCommandEncoder;
-use crate::error::{fmt_err, make_pipeline_error};
+use crate::error::{fmt_err, make_pipeline_error, GPUError};
 use crate::error::{GPUGenericError, GPUPipelineErrorReason};
 use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
@@ -688,12 +689,7 @@ impl GPUDevice {
   #[required(1)]
   #[undefined]
   fn push_error_scope(&self, #[webidl] filter: super::error::GPUErrorFilter) {
-    self
-      .error_handler
-      .scopes
-      .lock()
-      .unwrap()
-      .push((filter, None));
+    self.wgpu_device.push_error_scope(filter.into());
   }
 
   #[async_method(fake)]
@@ -702,26 +698,21 @@ impl GPUDevice {
     &self,
     scope: &mut v8::HandleScope,
   ) -> Result<v8::Global<v8::Value>, JsErrorBox> {
-    if !self.wgpu_device.is_valid() {
-      let val = v8::null(scope).cast::<v8::Value>();
-      return Ok(v8::Global::new(scope, val));
-    }
-
-    let Some((_, error)) = self.error_handler.scopes.lock().unwrap().pop()
-    else {
-      return Err(JsErrorBox::new(
+    match self.wgpu_device.pop_error_scope() {
+      Ok(maybe_error) => {
+        let val = if let Some(err) = maybe_error {
+          let err: GPUError = err.into();
+          deno_core::error::to_v8_error(scope, &err)
+        } else {
+          v8::null(scope).cast::<v8::Value>()
+        };
+        Ok(v8::Global::new(scope, val))
+      }
+      Err(EmptyErrorScopeStack {}) => Err(JsErrorBox::new(
         "DOMExceptionOperationError",
         "There are no error scopes on the error scope stack",
-      ));
-    };
-
-    let val = if let Some(err) = error {
-      deno_core::error::to_v8_error(scope, &err)
-    } else {
-      v8::null(scope).into()
-    };
-
-    Ok(v8::Global::new(scope, val))
+      )),
+    }
   }
 
   #[fast]
