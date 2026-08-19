@@ -37,6 +37,13 @@ pub(crate) enum GPUPowerPreference {
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
+struct GPUQueueDescriptor {
+  #[webidl(default = String::new())]
+  label: String,
+}
+
+#[derive(WebIDL)]
+#[webidl(dictionary)]
 struct GPUDeviceDescriptor {
   #[webidl(default = String::new())]
   label: String,
@@ -46,6 +53,8 @@ struct GPUDeviceDescriptor {
   #[webidl(default = Default::default())]
   #[options(enforce_range = true)]
   required_limits: indexmap::IndexMap<String, Option<u64>>,
+  #[webidl(default = GPUQueueDescriptor { label: String::new() })]
+  default_queue: GPUQueueDescriptor,
 }
 
 pub struct GPUAdapter {
@@ -149,6 +158,9 @@ impl GPUAdapter {
       label: crate::transform_label(descriptor.label.clone()),
       required_features,
       required_limits,
+      default_queue: wgpu_types::QueueDescriptor {
+        label: crate::transform_label(descriptor.default_queue.label),
+      },
       experimental_features: wgpu_types::ExperimentalFeatures::disabled(),
       memory_hints: Default::default(),
       trace,
