@@ -265,7 +265,7 @@ impl Writer {
                 {
                     self.write_epilogue_position_y_flip(res_member.id, body)?;
                 }
-                Some(crate::BuiltIn::FragDepth)
+                Some(crate::BuiltIn::FragDepth { .. })
                     if self.flags.contains(WriterFlags::CLAMP_FRAG_DEPTH) =>
                 {
                     self.write_epilogue_frag_depth_clamp(res_member.id, body)?;

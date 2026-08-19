@@ -308,7 +308,9 @@ pub enum EarlyDepthTest {
 ///     - `depth_any` option behaves as if the layout qualifier was not present.
 ///   - HLSL: `SV_DepthGreaterEqual`/`SV_DepthLessEqual`/`SV_Depth`
 ///   - SPIR-V: `ExecutionMode Depth<Greater/Less/Unchanged>`
-///   - WGSL: `@early_depth_test(greater_equal/less_equal/unchanged)`
+///   - WGSL: `@builtin(frag_depth, greater)`/`@builtin(frag_depth, less)`
+///
+/// Standard WGSL does not provide an `unchanged` qualifier.
 ///
 /// For more, see:
 ///   - <https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_conservative_depth.txt>
@@ -408,8 +410,14 @@ pub enum BuiltIn {
     /// Read in vertex & task shaders, or mesh shaders in pipelines without task shaders
     DrawIndex,
 
-    /// Written in fragment shaders
-    FragDepth,
+    /// Written in fragment shaders.
+    ///
+    /// `conservative_depth` records the optional WGSL `frag_depth` qualifier.
+    /// The `Unchanged` variant is reserved for the native early-depth extension
+    /// and is not valid for the standard WGSL builtin qualifier.
+    FragDepth {
+        conservative_depth: Option<ConservativeDepth>,
+    },
     /// Read in fragment shaders
     PointCoord,
     /// Read in fragment shaders

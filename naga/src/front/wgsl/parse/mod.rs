@@ -189,11 +189,25 @@ impl<'a> BindingParser<'a> {
             "builtin" => {
                 lexer.expect(Token::Paren('('))?;
                 let (raw, span) = lexer.next_ident_with_span()?;
-                self.built_in.set(
-                    conv::map_built_in(&lexer.enable_extensions, raw, span)?,
-                    name_span,
-                )?;
-                lexer.next_if(Token::Separator(','));
+                let mut built_in = conv::map_built_in(&lexer.enable_extensions, raw, span)?;
+                if lexer.next_if(Token::Separator(','))
+                    && !matches!(lexer.peek().0, Token::Paren(')'))
+                {
+                    let (qualifier, qualifier_span) = lexer.next_ident_with_span()?;
+                    let conservative_depth = match qualifier {
+                        "greater" => crate::ConservativeDepth::GreaterEqual,
+                        "less" => crate::ConservativeDepth::LessEqual,
+                        _ => return Err(Box::new(Error::UnknownAttribute(qualifier_span))),
+                    };
+                    if !matches!(built_in, crate::BuiltIn::FragDepth { .. }) {
+                        return Err(Box::new(Error::UnknownAttribute(qualifier_span)));
+                    }
+                    built_in = crate::BuiltIn::FragDepth {
+                        conservative_depth: Some(conservative_depth),
+                    };
+                    lexer.next_if(Token::Separator(','));
+                }
+                self.built_in.set(built_in, name_span)?;
                 lexer.expect(Token::Paren(')'))?;
             }
             "interpolate" => {

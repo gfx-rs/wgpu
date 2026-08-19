@@ -1,0 +1,36 @@
+; SPIR-V
+; Version: 1.0
+
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %less_early_first "less_early_first" %depth_less_early_first
+               OpEntryPoint Fragment %less_depth_first "less_depth_first" %depth_less_depth_first
+               OpExecutionMode %less_early_first OriginUpperLeft
+               OpExecutionMode %less_early_first EarlyFragmentTests
+               OpExecutionMode %less_early_first DepthLess
+               OpExecutionMode %less_early_first DepthReplacing
+               OpExecutionMode %less_depth_first OriginUpperLeft
+               OpExecutionMode %less_depth_first DepthLess
+               OpExecutionMode %less_depth_first EarlyFragmentTests
+               OpExecutionMode %less_depth_first DepthReplacing
+               OpDecorate %depth_less_early_first BuiltIn FragDepth
+               OpDecorate %depth_less_depth_first BuiltIn FragDepth
+       %void = OpTypeVoid
+      %void_fn = OpTypeFunction %void
+      %float = OpTypeFloat 32
+      %ptr_output_float = OpTypePointer Output %float
+      %depth_less_early_first = OpVariable %ptr_output_float Output
+      %depth_less_depth_first = OpVariable %ptr_output_float Output
+      %half = OpConstant %float 0.5
+
+%less_early_first = OpFunction %void None %void_fn
+%label_less_early_first = OpLabel
+               OpStore %depth_less_early_first %half
+               OpReturn
+               OpFunctionEnd
+
+%less_depth_first = OpFunction %void None %void_fn
+%label_less_depth_first = OpLabel
+               OpStore %depth_less_depth_first %half
+               OpReturn
+               OpFunctionEnd

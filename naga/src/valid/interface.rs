@@ -123,6 +123,8 @@ pub enum VaryingError {
     PerVertexNotArrayOfThree,
     #[error("Per vertex can only have Center sampling or no sampling modifier")]
     InvalidPerVertexSampling,
+    #[error("`@builtin(frag_depth, unchanged)` is not a valid standard WGSL builtin qualifier")]
+    InvalidFragDepthQualifier,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -134,6 +136,8 @@ pub enum EntryPointError {
     MissingVertexOutputPosition,
     #[error("Early depth test is not applicable")]
     UnexpectedEarlyDepthTest,
+    #[error("The standard fragment depth qualifier cannot be combined with `@early_depth_test`")]
+    ConflictingFragDepthQualifiers,
     #[error("Workgroup size is not applicable")]
     UnexpectedWorkgroupSize,
     #[error("Workgroup size is out of range")]
@@ -228,6 +232,27 @@ struct VaryingContext<'a> {
     has_task_payload: bool,
 }
 
+fn has_conservative_frag_depth(
+    module: &crate::Module,
+    binding: Option<&crate::Binding>,
+    ty: Handle<crate::Type>,
+) -> bool {
+    if matches!(
+        binding,
+        Some(crate::Binding::BuiltIn(crate::BuiltIn::FragDepth {
+            conservative_depth: Some(_),
+        }))
+    ) {
+        true
+    } else if let crate::TypeInner::Struct { ref members, .. } = module.types[ty].inner {
+        members
+            .iter()
+            .any(|member| has_conservative_frag_depth(module, member.binding.as_ref(), member.ty))
+    } else {
+        false
+    }
+}
+
 impl VaryingContext<'_> {
     fn validate_impl(
         &mut self,
@@ -240,6 +265,15 @@ impl VaryingContext<'_> {
         let ty_inner = &self.types[ty].inner;
         match *binding {
             crate::Binding::BuiltIn(built_in) => {
+                if matches!(
+                    built_in,
+                    crate::BuiltIn::FragDepth {
+                        conservative_depth: Some(crate::ConservativeDepth::Unchanged),
+                    }
+                ) {
+                    return Err(VaryingError::InvalidFragDepthQualifier);
+                }
+
                 // Ignore the `invariant` field for the sake of duplicate checks,
                 // but use the original in error messages.
                 let canonical = match built_in {
@@ -249,6 +283,9 @@ impl VaryingContext<'_> {
                     crate::BuiltIn::Barycentric { .. } => {
                         crate::BuiltIn::Barycentric { perspective: false }
                     }
+                    crate::BuiltIn::FragDepth { .. } => crate::BuiltIn::FragDepth {
+                        conservative_depth: None,
+                    },
                     x => x,
                 };
 
@@ -353,7 +390,7 @@ impl VaryingContext<'_> {
                         },
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
-                    Bi::FragDepth => (
+                    Bi::FragDepth { .. } => (
                         self.stage == St::Fragment && self.output,
                         *ty_inner == Ti::Scalar(crate::Scalar::F32),
                     ),
@@ -1269,6 +1306,12 @@ impl super::Validator {
             _ => {}
         }
         if ep.early_depth_test.is_some() {
+            if ep.function.result.as_ref().is_some_and(|result| {
+                has_conservative_frag_depth(module, result.binding.as_ref(), result.ty)
+            }) {
+                return Err(EntryPointError::ConflictingFragDepthQualifiers.with_span());
+            }
+
             let required = Capabilities::EARLY_DEPTH_TEST;
             if !self.capabilities.contains(required) {
                 return Err(

@@ -1,0 +1,5 @@
+targets = "GLSL"
+wgsl = { explicit_types = true }
+
+[glsl]
+version.Desktop = 330

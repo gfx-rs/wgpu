@@ -102,7 +102,9 @@ pub fn map_built_in(
         "clip_distances" => crate::BuiltIn::ClipDistances,
         // fragment
         "front_facing" => crate::BuiltIn::FrontFacing,
-        "frag_depth" => crate::BuiltIn::FragDepth,
+        "frag_depth" => crate::BuiltIn::FragDepth {
+            conservative_depth: None,
+        },
         "primitive_index" => crate::BuiltIn::PrimitiveIndex,
         "draw_index" => crate::BuiltIn::DrawIndex,
         "barycentric" => crate::BuiltIn::Barycentric { perspective: true },

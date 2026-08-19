@@ -166,7 +166,9 @@ impl Frontend {
                 inner: TypeInner::Scalar(Scalar::F32),
                 builtin: match name {
                     "gl_PointSize" => BuiltIn::PointSize,
-                    "gl_FragDepth" => BuiltIn::FragDepth,
+                    "gl_FragDepth" => BuiltIn::FragDepth {
+                        conservative_depth: None,
+                    },
                     _ => unreachable!(),
                 },
                 mutable: true,

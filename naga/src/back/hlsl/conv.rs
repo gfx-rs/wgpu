@@ -162,7 +162,15 @@ impl crate::BuiltIn {
             Self::InstanceIndex => "SV_InstanceID",
             Self::VertexIndex => "SV_VertexID",
             // fragment
-            Self::FragDepth => "SV_Depth",
+            Self::FragDepth {
+                conservative_depth: Some(crate::ConservativeDepth::GreaterEqual),
+            } => "SV_DepthGreaterEqual",
+            Self::FragDepth {
+                conservative_depth: Some(crate::ConservativeDepth::LessEqual),
+            } => "SV_DepthLessEqual",
+            Self::FragDepth {
+                conservative_depth: None | Some(crate::ConservativeDepth::Unchanged),
+            } => "SV_Depth",
             Self::FrontFacing => "SV_IsFrontFace",
             Self::PrimitiveIndex => "SV_PrimitiveID",
             Self::Barycentric { .. } => "SV_Barycentrics",

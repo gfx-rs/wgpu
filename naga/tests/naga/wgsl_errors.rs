@@ -586,6 +586,91 @@ fn unknown_conservative_depth() {
 }
 
 #[test]
+fn fragment_depth_qualifier_syntax() {
+    for input in [
+        "@fragment fn main() -> @builtin(frag_depth) f32 { return 0.0; }",
+        "@fragment fn main() -> @builtin(frag_depth,) f32 { return 0.0; }",
+        "@fragment fn main() -> @builtin(frag_depth, greater) f32 { return 0.0; }",
+        "@fragment fn main() -> @builtin(frag_depth, greater,) f32 { return 0.0; }",
+        "@fragment fn main() -> @builtin(frag_depth, less) f32 { return 0.0; }",
+        "requires fragment_depth; @fragment fn main() -> @builtin(frag_depth, greater) f32 { return 0.0; }",
+    ] {
+        check_success(input);
+    }
+
+    for (input, expected) in [
+        (
+            "@fragment fn main() -> @builtin(frag_depth, any) f32 { return 0.0; }",
+            "unknown attribute",
+        ),
+        (
+            "@fragment fn main() -> @builtin(frag_depth, unchanged) f32 { return 0.0; }",
+            "unknown attribute",
+        ),
+        (
+            "@fragment fn main() -> @builtin(position, greater) vec4<f32> { return vec4<f32>(); }",
+            "unknown attribute",
+        ),
+        (
+            "@fragment fn main() -> @builtin(frag_depth, greater, less) f32 { return 0.0; }",
+            "expected `)`, found",
+        ),
+    ] {
+        check_error_matches(input, expected);
+    }
+}
+
+#[test]
+fn fragment_depth_qualifier_conflicts_with_early_depth() {
+    let error = validation_error(
+        "@fragment
+         @early_depth_test(less_equal)
+         fn main() -> @builtin(frag_depth, greater) f32 { return 0.0; }",
+        naga::valid::Capabilities::all(),
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::ConflictingFragDepthQualifiers,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn fragment_depth_unchanged_is_rejected_by_validation() {
+    let mut module = naga::front::wgsl::parse_str(
+        "@fragment fn main() -> @builtin(frag_depth) f32 { return 0.0; }",
+    )
+    .unwrap();
+    module.entry_points[0]
+        .function
+        .result
+        .as_mut()
+        .unwrap()
+        .binding = Some(naga::Binding::BuiltIn(naga::BuiltIn::FragDepth {
+        conservative_depth: Some(naga::ConservativeDepth::Unchanged),
+    }));
+    let error = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::all(),
+    )
+    .validate(&module)
+    .unwrap_err()
+    .into_inner();
+    assert!(matches!(
+        error,
+        naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Result(
+                naga::valid::VaryingError::InvalidFragDepthQualifier
+            ),
+            ..
+        }
+    ));
+}
+
+#[test]
 fn struct_member_size_too_low() {
     check(
         r#"

@@ -658,7 +658,15 @@ impl ResolvedBinding {
                     Bi::PointSize => "point_size",
                     Bi::VertexIndex => "vertex_id",
                     // fragment
-                    Bi::FragDepth => "depth(any)",
+                    Bi::FragDepth {
+                        conservative_depth: Some(crate::ConservativeDepth::GreaterEqual),
+                    } => "depth(greater)",
+                    Bi::FragDepth {
+                        conservative_depth: Some(crate::ConservativeDepth::LessEqual),
+                    } => "depth(less)",
+                    Bi::FragDepth {
+                        conservative_depth: None | Some(crate::ConservativeDepth::Unchanged),
+                    } => "depth(any)",
                     Bi::PointCoord => "point_coord",
                     Bi::FrontFacing => "front_facing",
                     Bi::PrimitiveIndex => "primitive_id",

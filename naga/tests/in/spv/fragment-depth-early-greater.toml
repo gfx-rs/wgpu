@@ -1,0 +1,7 @@
+capabilities = "EARLY_DEPTH_TEST"
+targets = "IR | SPIRV"
+
+[spv]
+clamp_frag_depth = true
+separate_entry_points = true
+version = [1, 0]

@@ -6,7 +6,9 @@ use spirv::Word;
 
 use super::{
     block::DebugInfoInner,
-    helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
+    helpers::{
+        contains_builtin, find_frag_depth_conservative, global_needs_wrapper, map_storage_class,
+    },
     Block, BlockContext, CachedConstant, CachedExpressions, CooperativeType, DebugInfo,
     EntryPointContext, Error, Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction,
     LocalImageType, LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType,
@@ -1852,12 +1854,28 @@ impl Writer {
                         result.binding.as_ref(),
                         result.ty,
                         &ir_module.types,
-                        crate::BuiltIn::FragDepth,
+                        crate::BuiltIn::FragDepth {
+                            conservative_depth: None,
+                        },
                     ) {
                         self.write_execution_mode(
                             function_id,
                             spirv::ExecutionMode::DepthReplacing,
                         )?;
+                    }
+                    if let Some(conservative_depth) = find_frag_depth_conservative(
+                        result.binding.as_ref(),
+                        result.ty,
+                        &ir_module.types,
+                    ) {
+                        let mode = match conservative_depth {
+                            crate::ConservativeDepth::GreaterEqual => {
+                                spirv::ExecutionMode::DepthGreater
+                            }
+                            crate::ConservativeDepth::LessEqual => spirv::ExecutionMode::DepthLess,
+                            crate::ConservativeDepth::Unchanged => unreachable!(),
+                        };
+                        self.write_execution_mode(function_id, mode)?;
                     }
                 }
                 spirv::ExecutionModel::Fragment
@@ -3222,7 +3240,7 @@ impl Writer {
                         BuiltIn::DrawIndex
                     }
                     // fragment
-                    Bi::FragDepth => BuiltIn::FragDepth,
+                    Bi::FragDepth { .. } => BuiltIn::FragDepth,
                     Bi::PointCoord => BuiltIn::PointCoord,
                     Bi::FrontFacing => BuiltIn::FrontFacing,
                     Bi::PrimitiveIndex => {

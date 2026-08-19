@@ -712,6 +712,9 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                     ImplementedLanguageExtension::ImmediateAddressSpace => {
                         crate::WgslLanguageFeatures::ImmediateAddressSpace
                     }
+                    ImplementedLanguageExtension::FragmentDepth => {
+                        crate::WgslLanguageFeatures::FragmentDepth
+                    }
                 }
             },
         )

@@ -166,7 +166,7 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::InstanceIndex => "instance_index",
             Bi::VertexIndex => "vertex_index",
             Bi::ClipDistances => "clip_distances",
-            Bi::FragDepth => "frag_depth",
+            Bi::FragDepth { .. } => "frag_depth",
             Bi::FrontFacing => "front_facing",
             Bi::PrimitiveIndex => "primitive_index",
             Bi::DrawIndex => "draw_index",

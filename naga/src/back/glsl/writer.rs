@@ -201,6 +201,25 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
+        if self.entry_point.early_depth_test.is_none()
+            && self.options.version >= Version::Desktop(420)
+        {
+            if let Some(result) = self.entry_point.function.result.as_ref() {
+                if let Some(conservative_depth) = find_frag_depth_conservative(
+                    self.module,
+                    result.binding.as_ref(),
+                    Some(result.ty),
+                ) {
+                    let depth = match conservative_depth {
+                        crate::ConservativeDepth::GreaterEqual => "greater",
+                        crate::ConservativeDepth::LessEqual => "less",
+                        crate::ConservativeDepth::Unchanged => unreachable!(),
+                    };
+                    writeln!(self.out, "layout(depth_{depth}) out float gl_FragDepth;")?;
+                }
+            }
+        }
+
         if self.entry_point.stage == ShaderStage::Vertex && self.options.version.is_webgl() {
             if let Some(multiview) = self.multiview.as_ref() {
                 writeln!(self.out, "layout(num_views = {multiview}) in;")?;
@@ -4667,5 +4686,25 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             _ => unreachable!(),
         }
+    }
+}
+
+fn find_frag_depth_conservative(
+    module: &crate::Module,
+    binding: Option<&crate::Binding>,
+    ty: Option<Handle<crate::Type>>,
+) -> Option<crate::ConservativeDepth> {
+    let ty = ty?;
+    if let Some(&crate::Binding::BuiltIn(crate::BuiltIn::FragDepth {
+        conservative_depth: Some(conservative_depth),
+    })) = binding
+    {
+        Some(conservative_depth)
+    } else if let TypeInner::Struct { ref members, .. } = module.types[ty].inner {
+        members.iter().find_map(|member| {
+            find_frag_depth_conservative(module, member.binding.as_ref(), Some(member.ty))
+        })
+    } else {
+        None
     }
 }

@@ -1,0 +1,28 @@
+(
+    vertex:[
+    ],
+    fragment:[
+        (
+            entry_point:"greater",
+            target_profile:"ps_5_1",
+        ),
+        (
+            entry_point:"less",
+            target_profile:"ps_5_1",
+        ),
+        (
+            entry_point:"plain",
+            target_profile:"ps_5_1",
+        ),
+        (
+            entry_point:"struct_greater",
+            target_profile:"ps_5_1",
+        ),
+    ],
+    compute:[
+    ],
+    task:[
+    ],
+    mesh:[
+    ],
+)

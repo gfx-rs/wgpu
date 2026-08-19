@@ -18,6 +18,7 @@ impl LanguageExtension {
     const UNRESTRICTED_POINTER_PARAMETERS: &'static str = "unrestricted_pointer_parameters";
     const POINTER_COMPOSITE_ACCESS: &'static str = "pointer_composite_access";
     const IMMEDIATE_ADDRESS_SPACE: &'static str = "immediate_address_space";
+    const FRAGMENT_DEPTH: &'static str = "fragment_depth";
 
     /// Convert from a sentinel word in WGSL into its associated [`LanguageExtension`], if possible.
     pub fn from_ident(s: &str) -> Option<Self> {
@@ -37,6 +38,7 @@ impl LanguageExtension {
             Self::IMMEDIATE_ADDRESS_SPACE => {
                 Self::Implemented(ImplementedLanguageExtension::ImmediateAddressSpace)
             }
+            Self::FRAGMENT_DEPTH => Self::Implemented(ImplementedLanguageExtension::FragmentDepth),
             _ => return None,
         })
     }
@@ -62,6 +64,7 @@ pub enum ImplementedLanguageExtension {
     Packed4x8IntegerDotProduct,
     PointerCompositeAccess,
     ImmediateAddressSpace,
+    FragmentDepth,
 }
 
 impl ImplementedLanguageExtension {
@@ -71,6 +74,7 @@ impl ImplementedLanguageExtension {
         Self::Packed4x8IntegerDotProduct,
         Self::PointerCompositeAccess,
         Self::ImmediateAddressSpace,
+        Self::FragmentDepth,
     ];
 
     /// Returns slice of all variants of [`ImplementedLanguageExtension`].
@@ -93,6 +97,7 @@ impl ImplementedLanguageExtension {
             ImplementedLanguageExtension::ImmediateAddressSpace => {
                 LanguageExtension::IMMEDIATE_ADDRESS_SPACE
             }
+            ImplementedLanguageExtension::FragmentDepth => LanguageExtension::FRAGMENT_DEPTH,
         }
     }
 }

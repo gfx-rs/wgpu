@@ -21,6 +21,8 @@ bitflags::bitflags! {
         const PointerCompositeAccess = 1 << 3;
         /// <https://www.w3.org/TR/WGSL/#language_extension-immediate_address_space>
         const ImmediateAddressSpace = 1 << 4;
+        /// <https://www.w3.org/TR/WGSL/#language_extension-fragment_depth>
+        const FragmentDepth = 1 << 5;
     }
 }
 

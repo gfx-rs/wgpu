@@ -300,6 +300,7 @@ impl<W: Write> Writer<W> {
             ray_tracing_pipeline: bool,
             per_vertex: bool,
             binding_array: bool,
+            fragment_depth: bool,
         }
         let mut needed = RequiredEnabled {
             mesh_shaders: module.uses_mesh_shaders(),
@@ -332,6 +333,9 @@ impl<W: Write> Writer<W> {
                 needed.per_vertex = true;
             }
             crate::Binding::BuiltIn(crate::BuiltIn::DrawIndex) => needed.draw_index = true,
+            crate::Binding::BuiltIn(crate::BuiltIn::FragDepth {
+                conservative_depth: Some(_),
+            }) => needed.fragment_depth = true,
             crate::Binding::BuiltIn(
                 crate::BuiltIn::RayInvocationId
                 | crate::BuiltIn::NumRayInvocations
@@ -476,6 +480,10 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, "enable wgpu_per_vertex;")?;
             any_written = true;
         }
+        if needed.fragment_depth {
+            writeln!(self.out, "requires fragment_depth;")?;
+            any_written = true;
+        }
         if any_written {
             // Empty line for readability
             writeln!(self.out)?;
@@ -587,7 +595,15 @@ impl<W: Write> Writer<W> {
                 Attribute::BlendSrc(blend_src) => write!(self.out, "@blend_src({blend_src}) ")?,
                 Attribute::BuiltIn(builtin_attrib) => {
                     let builtin = builtin_attrib.to_wgsl_if_implemented()?;
-                    write!(self.out, "@builtin({builtin}) ")?;
+                    match builtin_attrib {
+                        crate::BuiltIn::FragDepth {
+                            conservative_depth: Some(crate::ConservativeDepth::GreaterEqual),
+                        } => write!(self.out, "@builtin({builtin}, greater) ")?,
+                        crate::BuiltIn::FragDepth {
+                            conservative_depth: Some(crate::ConservativeDepth::LessEqual),
+                        } => write!(self.out, "@builtin({builtin}, less) ")?,
+                        _ => write!(self.out, "@builtin({builtin}) ")?,
+                    }
                 }
                 Attribute::Stage(shader_stage) => {
                     let stage_str = match shader_stage {

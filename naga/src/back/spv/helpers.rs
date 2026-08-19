@@ -89,12 +89,38 @@ pub(super) fn contains_builtin(
 ) -> bool {
     if let Some(&crate::Binding::BuiltIn(bi)) = binding {
         bi == built_in
+            || matches!(
+                (bi, built_in),
+                (
+                    crate::BuiltIn::FragDepth { .. },
+                    crate::BuiltIn::FragDepth { .. }
+                )
+            )
     } else if let crate::TypeInner::Struct { ref members, .. } = arena[ty].inner {
         members
             .iter()
             .any(|member| contains_builtin(member.binding.as_ref(), member.ty, arena, built_in))
     } else {
         false // unreachable
+    }
+}
+
+pub(super) fn find_frag_depth_conservative(
+    binding: Option<&crate::Binding>,
+    ty: Handle<crate::Type>,
+    arena: &UniqueArena<crate::Type>,
+) -> Option<crate::ConservativeDepth> {
+    if let Some(&crate::Binding::BuiltIn(crate::BuiltIn::FragDepth {
+        conservative_depth: Some(conservative_depth),
+    })) = binding
+    {
+        Some(conservative_depth)
+    } else if let crate::TypeInner::Struct { ref members, .. } = arena[ty].inner {
+        members.iter().find_map(|member| {
+            find_frag_depth_conservative(member.binding.as_ref(), member.ty, arena)
+        })
+    } else {
+        None
     }
 }
 

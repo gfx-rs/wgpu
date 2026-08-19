@@ -1,0 +1,24 @@
+targets = "SPIRV | GLSL | HLSL | METAL | WGSL"
+wgsl = { explicit_types = true }
+
+[glsl]
+version.Desktop = 420
+
+[hlsl]
+fake_missing_bindings = false
+restrict_indexing = true
+special_constants_binding = { register = 0, space = 1 }
+zero_initialize_workgroup_memory = true
+
+[msl]
+fake_missing_bindings = false
+lang_version = [2, 1]
+spirv_cross_compatibility = false
+zero_initialize_workgroup_memory = true
+
+[spv]
+adjust_coordinate_space = false
+clamp_frag_depth = true
+force_point_size = true
+separate_entry_points = true
+version = [1, 0]

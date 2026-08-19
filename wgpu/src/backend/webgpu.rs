@@ -1771,6 +1771,7 @@ impl dispatch::InstanceInterface for ContextWebGpu {
                     "immediate_address_space" => {
                         Some(crate::WgslLanguageFeatures::ImmediateAddressSpace)
                     }
+                    "fragment_depth" => Some(crate::WgslLanguageFeatures::FragmentDepth),
                     _ => None,
                 })
                 .for_each(|wlf| {

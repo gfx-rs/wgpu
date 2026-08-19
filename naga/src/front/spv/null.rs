@@ -22,7 +22,9 @@ pub fn generate_default_built_in(
             }
         }
         Some(crate::BuiltIn::PointSize) => crate::Expression::Literal(crate::Literal::F32(1.0)),
-        Some(crate::BuiltIn::FragDepth) => crate::Expression::Literal(crate::Literal::F32(0.0)),
+        Some(crate::BuiltIn::FragDepth { .. }) => {
+            crate::Expression::Literal(crate::Literal::F32(0.0))
+        }
         Some(crate::BuiltIn::SampleMask) => {
             crate::Expression::Literal(crate::Literal::U32(u32::MAX))
         }

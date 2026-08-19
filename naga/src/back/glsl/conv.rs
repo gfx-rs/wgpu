@@ -104,7 +104,7 @@ pub(in crate::back::glsl) const fn glsl_built_in(
         Bi::VertexIndex => "uint(gl_VertexID)",
         Bi::DrawIndex => "gl_DrawID",
         // fragment
-        Bi::FragDepth => "gl_FragDepth",
+        Bi::FragDepth { .. } => "gl_FragDepth",
         Bi::PointCoord => "gl_PointCoord",
         Bi::FrontFacing => "gl_FrontFacing",
         Bi::PrimitiveIndex => "uint(gl_PrimitiveID)",

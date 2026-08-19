@@ -9,6 +9,18 @@ use crate::{
 
 pub type BlockId = u32;
 
+const fn set_frag_depth_conservative(
+    binding: &mut crate::Binding,
+    conservative_depth: crate::ConservativeDepth,
+) {
+    if let &mut crate::Binding::BuiltIn(crate::BuiltIn::FragDepth {
+        conservative_depth: ref mut depth,
+    }) = binding
+    {
+        *depth = Some(conservative_depth);
+    }
+}
+
 impl<I: Iterator<Item = u32>> super::Frontend<I> {
     // Registers a function call. It will generate a dummy handle to call, which
     // gets resolved after all the functions are processed.
@@ -404,6 +416,13 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         let mut next_member_offset = 0;
         let mut struct_alignment = crate::proc::Alignment::ONE;
         let mut components = Vec::new();
+        // SPIR-V permits EarlyFragmentTests together with a conservative depth
+        // mode. Naga's forced early-test representation cannot carry both, so
+        // preserve the forced test and discard the redundant hint.
+        let conservative_depth = match ep.early_depth_test {
+            Some(crate::EarlyDepthTest::Force) => None,
+            _ => ep.conservative_depth,
+        };
         for &v_id in ep.variable_ids.iter() {
             let lvar = self.lookup_variable.lookup(v_id)?;
             if let super::Variable::Output(ref result) = lvar.inner {
@@ -458,6 +477,9 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                             let mut sm = sm.clone();
 
                             if let Some(ref mut binding) = sm.binding {
+                                if let Some(conservative_depth) = conservative_depth {
+                                    set_frag_depth_conservative(binding, conservative_depth);
+                                }
                                 if ep.stage == crate::ShaderStage::Vertex {
                                     binding.apply_default_interpolation(&module.types[sm.ty].inner);
                                 }
@@ -482,6 +504,9 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     ref inner => {
                         let mut binding = result.binding.clone();
                         if let Some(ref mut binding) = binding {
+                            if let Some(conservative_depth) = conservative_depth {
+                                set_frag_depth_conservative(binding, conservative_depth);
+                            }
                             if ep.stage == crate::ShaderStage::Vertex {
                                 binding.apply_default_interpolation(inner);
                             }

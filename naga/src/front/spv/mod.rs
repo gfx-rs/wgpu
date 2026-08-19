@@ -317,6 +317,7 @@ struct EntryPoint {
     stage: crate::ShaderStage,
     name: String,
     early_depth_test: Option<crate::EarlyDepthTest>,
+    conservative_depth: Option<crate::ConservativeDepth>,
     workgroup_size: [u32; 3],
     variable_ids: Vec<spirv::Word>,
 }
@@ -1941,6 +1942,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             },
             name,
             early_depth_test: None,
+            conservative_depth: None,
             workgroup_size: [0; 3],
             variable_ids: self.data.by_ref().take(left as usize).collect(),
         };
@@ -1984,32 +1986,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 }
             }
             ExecutionMode::DepthGreater => {
-                if let &mut Some(ref mut early_depth_test) = &mut ep.early_depth_test {
-                    if let &mut crate::EarlyDepthTest::Allow {
-                        ref mut conservative,
-                    } = early_depth_test
-                    {
-                        *conservative = crate::ConservativeDepth::GreaterEqual;
-                    }
-                } else {
-                    ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
-                        conservative: crate::ConservativeDepth::GreaterEqual,
-                    });
-                }
+                ep.conservative_depth = Some(crate::ConservativeDepth::GreaterEqual);
             }
             ExecutionMode::DepthLess => {
-                if let &mut Some(ref mut early_depth_test) = &mut ep.early_depth_test {
-                    if let &mut crate::EarlyDepthTest::Allow {
-                        ref mut conservative,
-                    } = early_depth_test
-                    {
-                        *conservative = crate::ConservativeDepth::LessEqual;
-                    }
-                } else {
-                    ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
-                        conservative: crate::ConservativeDepth::LessEqual,
-                    });
-                }
+                ep.conservative_depth = Some(crate::ConservativeDepth::LessEqual);
             }
             ExecutionMode::DepthReplacing => {
                 // Ignored because it can be deduced from the IR.
