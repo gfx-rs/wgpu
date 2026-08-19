@@ -2186,7 +2186,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                     end_of_pass_write_index: tw.end_of_pass_write_index,
                 });
 
-        let (pass, err) = self.wgpu_command_encoder.begin_render_pass(
+        let pass = self.wgpu_command_encoder.begin_render_pass(
             wgc::command::ResolvedRenderPassDescriptor {
                 label: desc.label.map(Borrowed),
                 timestamp_writes,
@@ -2198,14 +2198,6 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 multiview_mask: desc.multiview_mask,
             },
         );
-
-        if let Some(cause) = err {
-            self.wgpu_command_encoder.device().handle_error(
-                cause,
-                desc.label,
-                "CommandEncoder::begin_render_pass",
-            );
-        }
 
         CoreRenderPass {
             pass,
@@ -2563,14 +2555,8 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     fn set_pipeline(&mut self, pipeline: &dispatch::DispatchRenderPipeline) {
         let pipeline = pipeline.as_core();
 
-        if let Err(cause) = self
-            .pass
-            .set_pipeline(pipeline.wgpu_render_pipeline.clone())
-        {
-            self.pass
-                .device()
-                .handle_error(cause, self.pass.label(), "RenderPass::set_pipeline");
-        }
+        self.pass
+            .set_pipeline(pipeline.wgpu_render_pipeline.clone());
     }
 
     fn set_bind_group(
@@ -2581,11 +2567,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     ) {
         let bg = bind_group.map(|bg| bg.as_core().wgpu_bind_group.clone());
 
-        if let Err(cause) = self.pass.set_bind_group(index, bg, offsets) {
-            self.pass
-                .device()
-                .handle_error(cause, self.pass.label(), "RenderPass::set_bind_group");
-        }
+        self.pass.set_bind_group(index, bg, offsets);
     }
 
     fn set_index_buffer(
@@ -2597,16 +2579,8 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     ) {
         let buffer = buffer.as_core();
 
-        if let Err(cause) =
-            self.pass
-                .set_index_buffer(buffer.wgpu_buffer.clone(), index_format, offset, size)
-        {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::set_index_buffer",
-            );
-        }
+        self.pass
+            .set_index_buffer(buffer.wgpu_buffer.clone(), index_format, offset, size)
     }
 
     fn set_vertex_buffer(
@@ -2618,41 +2592,19 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     ) {
         let buffer = buffer.map(|buffer| buffer.as_core().wgpu_buffer.clone());
 
-        if let Err(cause) = self.pass.set_vertex_buffer(slot, buffer, offset, size) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::set_vertex_buffer",
-            );
-        }
+        self.pass.set_vertex_buffer(slot, buffer, offset, size);
     }
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {
-        if let Err(cause) = self.pass.set_immediates(offset, data) {
-            self.pass
-                .device()
-                .handle_error(cause, self.pass.label(), "RenderPass::set_immediates");
-        }
+        self.pass.set_immediates(offset, data);
     }
 
     fn set_blend_constant(&mut self, color: crate::Color) {
-        if let Err(cause) = self.pass.set_blend_constant(color) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::set_blend_constant",
-            );
-        }
+        self.pass.set_blend_constant(color);
     }
 
     fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
-        if let Err(cause) = self.pass.set_scissor_rect(x, y, width, height) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::set_scissor_rect",
-            );
-        }
+        self.pass.set_scissor_rect(x, y, width, height);
     }
 
     fn set_viewport(
@@ -2664,64 +2616,36 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         min_depth: f32,
         max_depth: f32,
     ) {
-        if let Err(cause) = self
-            .pass
-            .set_viewport(x, y, width, height, min_depth, max_depth)
-        {
-            self.pass
-                .device()
-                .handle_error(cause, self.pass.label(), "RenderPass::set_viewport");
-        }
+        self.pass
+            .set_viewport(x, y, width, height, min_depth, max_depth);
     }
 
     fn set_stencil_reference(&mut self, reference: u32) {
-        if let Err(cause) = self.pass.set_stencil_reference(reference) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::set_stencil_reference",
-            );
-        }
+        self.pass.set_stencil_reference(reference);
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-        if let Err(cause) = self.pass.draw(
+        self.pass.draw(
             vertices.end - vertices.start,
             instances.end - instances.start,
             vertices.start,
             instances.start,
-        ) {
-            self.pass
-                .device()
-                .handle_error(cause, self.pass.label(), "RenderPass::draw");
-        }
+        );
     }
 
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-        if let Err(cause) = self.pass.draw_indexed(
+        self.pass.draw_indexed(
             indices.end - indices.start,
             instances.end - instances.start,
             indices.start,
             base_vertex,
             instances.start,
-        ) {
-            self.pass
-                .device()
-                .handle_error(cause, self.pass.label(), "RenderPass::draw_indexed");
-        }
+        );
     }
 
     fn draw_mesh_tasks(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
-        if let Err(cause) = self
-            .pass
-            .draw_mesh_tasks(group_count_x, group_count_y, group_count_z)
-        {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::draw_mesh_tasks",
-            );
-        }
+        self.pass
+            .draw_mesh_tasks(group_count_x, group_count_y, group_count_z);
     }
 
     fn draw_indirect(
@@ -2731,14 +2655,8 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     ) {
         let indirect_buffer = indirect_buffer.as_core();
 
-        if let Err(cause) = self
-            .pass
-            .draw_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset)
-        {
-            self.pass
-                .device()
-                .handle_error(cause, self.pass.label(), "RenderPass::draw_indirect");
-        }
+        self.pass
+            .draw_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset);
     }
 
     fn draw_indexed_indirect(
@@ -2748,16 +2666,8 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     ) {
         let indirect_buffer = indirect_buffer.as_core();
 
-        if let Err(cause) = self
-            .pass
-            .draw_indexed_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset)
-        {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::draw_indexed_indirect",
-            );
-        }
+        self.pass
+            .draw_indexed_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset);
     }
 
     fn draw_mesh_tasks_indirect(
@@ -2767,16 +2677,8 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     ) {
         let indirect_buffer = indirect_buffer.as_core();
 
-        if let Err(cause) = self
-            .pass
-            .draw_mesh_tasks_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset)
-        {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::draw_mesh_tasks_indirect",
-            );
-        }
+        self.pass
+            .draw_mesh_tasks_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset);
     }
 
     fn multi_draw_indirect(
@@ -2787,17 +2689,8 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     ) {
         let indirect_buffer = indirect_buffer.as_core();
 
-        if let Err(cause) = self.pass.multi_draw_indirect(
-            indirect_buffer.wgpu_buffer.clone(),
-            indirect_offset,
-            count,
-        ) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::multi_draw_indirect",
-            );
-        }
+        self.pass
+            .multi_draw_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset, count);
     }
 
     fn multi_draw_indexed_indirect(
@@ -2808,17 +2701,11 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     ) {
         let indirect_buffer = indirect_buffer.as_core();
 
-        if let Err(cause) = self.pass.multi_draw_indexed_indirect(
+        self.pass.multi_draw_indexed_indirect(
             indirect_buffer.wgpu_buffer.clone(),
             indirect_offset,
             count,
-        ) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::multi_draw_indexed_indirect",
-            );
-        }
+        );
     }
 
     fn multi_draw_mesh_tasks_indirect(
@@ -2829,17 +2716,11 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     ) {
         let indirect_buffer = indirect_buffer.as_core();
 
-        if let Err(cause) = self.pass.multi_draw_mesh_tasks_indirect(
+        self.pass.multi_draw_mesh_tasks_indirect(
             indirect_buffer.wgpu_buffer.clone(),
             indirect_offset,
             count,
-        ) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::multi_draw_mesh_tasks_indirect",
-            );
-        }
+        );
     }
 
     fn multi_draw_indirect_count(
@@ -2853,19 +2734,13 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         let indirect_buffer = indirect_buffer.as_core();
         let count_buffer = count_buffer.as_core();
 
-        if let Err(cause) = self.pass.multi_draw_indirect_count(
+        self.pass.multi_draw_indirect_count(
             indirect_buffer.wgpu_buffer.clone(),
             indirect_offset,
             count_buffer.wgpu_buffer.clone(),
             count_buffer_offset,
             max_count,
-        ) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::multi_draw_indirect_count",
-            );
-        }
+        );
     }
 
     fn multi_draw_indexed_indirect_count(
@@ -2879,19 +2754,13 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         let indirect_buffer = indirect_buffer.as_core();
         let count_buffer = count_buffer.as_core();
 
-        if let Err(cause) = self.pass.multi_draw_indexed_indirect_count(
+        self.pass.multi_draw_indexed_indirect_count(
             indirect_buffer.wgpu_buffer.clone(),
             indirect_offset,
             count_buffer.wgpu_buffer.clone(),
             count_buffer_offset,
             max_count,
-        ) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::multi_draw_indexed_indirect_count",
-            );
-        }
+        );
     }
 
     fn multi_draw_mesh_tasks_indirect_count(
@@ -2905,84 +2774,40 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         let indirect_buffer = indirect_buffer.as_core();
         let count_buffer = count_buffer.as_core();
 
-        if let Err(cause) = self.pass.multi_draw_mesh_tasks_indirect_count(
+        self.pass.multi_draw_mesh_tasks_indirect_count(
             indirect_buffer.wgpu_buffer.clone(),
             indirect_offset,
             count_buffer.wgpu_buffer.clone(),
             count_buffer_offset,
             max_count,
-        ) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::multi_draw_mesh_tasks_indirect_count",
-            );
-        }
+        );
     }
 
     fn insert_debug_marker(&mut self, label: &str) {
-        if let Err(cause) = self.pass.insert_debug_marker(label, 0) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::insert_debug_marker",
-            );
-        }
+        self.pass.insert_debug_marker(label, 0);
     }
 
     fn push_debug_group(&mut self, group_label: &str) {
-        if let Err(cause) = self.pass.push_debug_group(group_label, 0) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::push_debug_group",
-            );
-        }
+        self.pass.push_debug_group(group_label, 0);
     }
 
     fn pop_debug_group(&mut self) {
-        if let Err(cause) = self.pass.pop_debug_group() {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::pop_debug_group",
-            );
-        }
+        self.pass.pop_debug_group();
     }
 
     fn write_timestamp(&mut self, query_set: &dispatch::DispatchQuerySet, query_index: u32) {
         let query_set = query_set.as_core();
 
-        if let Err(cause) = self
-            .pass
-            .write_timestamp(query_set.wgpu_query_set.clone(), query_index)
-        {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::write_timestamp",
-            );
-        }
+        self.pass
+            .write_timestamp(query_set.wgpu_query_set.clone(), query_index);
     }
 
     fn begin_occlusion_query(&mut self, query_index: u32) {
-        if let Err(cause) = self.pass.begin_occlusion_query(query_index) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::begin_occlusion_query",
-            );
-        }
+        self.pass.begin_occlusion_query(query_index);
     }
 
     fn end_occlusion_query(&mut self) {
-        if let Err(cause) = self.pass.end_occlusion_query() {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::end_occlusion_query",
-            );
-        }
+        self.pass.end_occlusion_query();
     }
 
     fn begin_pipeline_statistics_query(
@@ -2992,26 +2817,12 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
     ) {
         let query_set = query_set.as_core();
 
-        if let Err(cause) = self
-            .pass
-            .begin_pipeline_statistics_query(query_set.wgpu_query_set.clone(), query_index)
-        {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::begin_pipeline_statistics_query",
-            );
-        }
+        self.pass
+            .begin_pipeline_statistics_query(query_set.wgpu_query_set.clone(), query_index);
     }
 
     fn end_pipeline_statistics_query(&mut self) {
-        if let Err(cause) = self.pass.end_pipeline_statistics_query() {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::end_pipeline_statistics_query",
-            );
-        }
+        self.pass.end_pipeline_statistics_query();
     }
 
     fn execute_bundles(
@@ -3021,23 +2832,13 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         let temp_render_bundles = render_bundles
             .map(|rb| rb.as_core().wgpu_render_bundle.clone())
             .collect::<SmallVec<[_; 4]>>();
-        if let Err(cause) = self.pass.execute_bundles(&temp_render_bundles) {
-            self.pass.device().handle_error(
-                cause,
-                self.pass.label(),
-                "RenderPass::execute_bundles",
-            );
-        }
+        self.pass.execute_bundles(&temp_render_bundles);
     }
 }
 
 impl Drop for CoreRenderPass {
     fn drop(&mut self) {
-        if let Err(cause) = self.pass.end() {
-            self.pass
-                .device()
-                .handle_error(cause, self.pass.label(), "RenderPass::end");
-        }
+        self.pass.end()
     }
 }
 
@@ -3047,7 +2848,6 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
 
         self.encoder
             .set_pipeline(pipeline.wgpu_render_pipeline.clone())
-            .expect("RenderBundleEncoder should not have ended")
     }
 
     fn set_bind_group(
@@ -3058,9 +2858,7 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     ) {
         let bg = bind_group.map(|bg| bg.as_core().wgpu_bind_group.clone());
 
-        self.encoder
-            .set_bind_group(index, bg, offsets)
-            .expect("RenderBundleEncoder should not have ended");
+        self.encoder.set_bind_group(index, bg, offsets);
     }
 
     fn set_index_buffer(
@@ -3073,8 +2871,7 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         let buffer = buffer.as_core();
 
         self.encoder
-            .set_index_buffer(buffer.wgpu_buffer.clone(), index_format, offset, size)
-            .expect("RenderBundleEncoder should not have ended");
+            .set_index_buffer(buffer.wgpu_buffer.clone(), index_format, offset, size);
     }
 
     fn set_vertex_buffer(
@@ -3086,9 +2883,7 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
     ) {
         let buffer = buffer.map(|buffer| buffer.as_core().wgpu_buffer.clone());
 
-        self.encoder
-            .set_vertex_buffer(slot, buffer, offset, size)
-            .expect("RenderBundleEncoder should not have ended");
+        self.encoder.set_vertex_buffer(slot, buffer, offset, size);
     }
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {
@@ -3104,32 +2899,26 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
             return;
         }
 
-        self.encoder
-            .set_immediates(offset, data)
-            .expect("RenderBundleEncoder should not have ended");
+        self.encoder.set_immediates(offset, data);
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-        self.encoder
-            .draw(
-                vertices.end - vertices.start,
-                instances.end - instances.start,
-                vertices.start,
-                instances.start,
-            )
-            .expect("RenderBundleEncoder should not have ended");
+        self.encoder.draw(
+            vertices.end - vertices.start,
+            instances.end - instances.start,
+            vertices.start,
+            instances.start,
+        );
     }
 
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-        self.encoder
-            .draw_indexed(
-                indices.end - indices.start,
-                instances.end - instances.start,
-                indices.start,
-                base_vertex,
-                instances.start,
-            )
-            .expect("RenderBundleEncoder should not have ended");
+        self.encoder.draw_indexed(
+            indices.end - indices.start,
+            instances.end - instances.start,
+            indices.start,
+            base_vertex,
+            instances.start,
+        );
     }
 
     fn draw_indirect(
@@ -3140,8 +2929,7 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         let indirect_buffer = indirect_buffer.as_core();
 
         self.encoder
-            .draw_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset)
-            .expect("RenderBundleEncoder should not have ended");
+            .draw_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset);
     }
 
     fn draw_indexed_indirect(
@@ -3152,23 +2940,14 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         let indirect_buffer = indirect_buffer.as_core();
 
         self.encoder
-            .draw_indexed_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset)
-            .expect("RenderBundleEncoder should not have ended");
+            .draw_indexed_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset);
     }
 
     fn finish(mut self, desc: &crate::RenderBundleDescriptor<'_>) -> dispatch::DispatchRenderBundle
     where
         Self: Sized,
     {
-        let label = self.encoder.label().map(alloc::string::ToString::to_string);
-        let (wgpu_render_bundle, error) = self.encoder.finish(&desc.map_label(|l| l.map(Borrowed)));
-        if let Some(err) = error {
-            self.encoder.device().handle_error(
-                err,
-                label.as_deref(),
-                "RenderBundleEncoder::finish",
-            );
-        }
+        let wgpu_render_bundle = self.encoder.finish(&desc.map_label(|l| l.map(Borrowed)));
         CoreRenderBundle { wgpu_render_bundle }.into()
     }
 

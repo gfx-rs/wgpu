@@ -132,13 +132,10 @@ impl GPUCommandEncoder {
       multiview_mask: NonZero::new(descriptor.multiview_mask),
     };
 
-    let (render_pass, err) =
+    let render_pass =
       self.wgpu_command_encoder.begin_render_pass(wgpu_descriptor);
 
-    self.error_handler.push_error(err);
-
     Ok(GPURenderPassEncoder {
-      error_handler: self.error_handler.clone(),
       render_pass: RefCell::new(render_pass),
       label: descriptor.label,
     })

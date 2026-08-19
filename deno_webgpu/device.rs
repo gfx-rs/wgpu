@@ -649,7 +649,6 @@ impl GPUDevice {
     self.error_handler.push_error(err);
 
     GPURenderBundleEncoder {
-      error_handler: self.error_handler.clone(),
       encoder: RefCell::new(encoder),
       label: descriptor.label,
     }
