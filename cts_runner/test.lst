@@ -500,6 +500,7 @@ webgpu:shader,validation,shader_io,locations:duplicates:*
 webgpu:shader,validation,shader_io,locations:location_fp16:*
 webgpu:shader,validation,shader_io,locations:nesting:*
 webgpu:shader,validation,shader_io,locations:out_of_order:*
+webgpu:shader,validation,shader_io,locations:stage_inout:*
 webgpu:shader,validation,shader_io,locations:type:*
 webgpu:shader,validation,shader_io,locations:validation:*
 webgpu:shader,validation,shader_io,size:*
