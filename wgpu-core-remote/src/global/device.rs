@@ -721,7 +721,7 @@ impl Global {
         render_bundle_encoder_id: id::RenderBundleEncoderId,
         desc: &command::RenderBundleDescriptor,
         id_in: id::RenderBundleId,
-    ) -> (id::RenderBundleId, Option<command::RenderBundleError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_bundle_encoders,
@@ -730,11 +730,9 @@ impl Global {
         } = &mut *hub;
         let bundle_encoder = render_bundle_encoders.get_mut(render_bundle_encoder_id);
 
-        let (render_bundle, error) = bundle_encoder.finish(desc);
+        let render_bundle = bundle_encoder.finish(desc);
 
-        let id = render_bundles.assign(id_in, render_bundle);
-
-        (id, error)
+        render_bundles.assign(id_in, render_bundle);
     }
 
     pub fn render_bundle_encoder_drop(&self, render_bundle_encoder_id: id::RenderBundleEncoderId) {

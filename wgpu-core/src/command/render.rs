@@ -1812,7 +1812,7 @@ fn check_transient_attachment_ops<V>(load_op: LoadOp<V>, store_op: StoreOp) -> b
 }
 
 impl CommandEncoder {
-    pub fn begin_render_pass(
+    fn begin_render_pass_inner(
         self: &Arc<Self>,
         desc: ResolvedRenderPassDescriptor<'_>,
     ) -> (RenderPass, Option<CommandEncoderError>) {
@@ -2129,10 +2129,22 @@ impl CommandEncoder {
             }
         }
     }
+
+    pub fn begin_render_pass(
+        self: &Arc<Self>,
+        desc: ResolvedRenderPassDescriptor<'_>,
+    ) -> RenderPass {
+        let (pass, err) = self.begin_render_pass_inner(desc);
+        if let Some(err) = err {
+            self.device
+                .handle_error(err, pass.label(), "CommandEncoder::begin_render_pass");
+        }
+        pass
+    }
 }
 
 impl RenderPass {
-    pub fn end(&mut self) -> Result<(), EncoderStateError> {
+    fn end_inner(&mut self) -> Result<(), EncoderStateError> {
         profiling::scope!(
             "CommandEncoder::run_render_pass {}",
             self.base.label.as_deref().unwrap_or("")
@@ -2170,6 +2182,13 @@ impl RenderPass {
                 multiview_mask: self.multiview_mask,
             })
         })
+    }
+
+    pub fn end(&mut self) {
+        if let Err(err) = self.end_inner() {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::end");
+        }
     }
 }
 
@@ -3535,7 +3554,7 @@ fn execute_bundle(
 // that the `pass_try!` and `pass_base!` macros may return early from the
 // function that invokes them, like the `?` operator.
 impl RenderPass {
-    pub fn set_bind_group(
+    fn set_bind_group_inner(
         &mut self,
         index: u32,
         bind_group: Option<Arc<BindGroup>>,
@@ -3573,7 +3592,19 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn set_pipeline(&mut self, pipeline: Arc<RenderPipeline>) -> Result<(), PassStateError> {
+    pub fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: Option<Arc<BindGroup>>,
+        offsets: &[DynamicOffset],
+    ) {
+        if let Err(err) = self.set_bind_group_inner(index, bind_group, offsets) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::set_bind_group");
+        }
+    }
+
+    fn set_pipeline_inner(&mut self, pipeline: Arc<RenderPipeline>) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetPipelineRender;
 
         let redundant = self.current_pipeline.set_and_check_redundant(&pipeline);
@@ -3593,7 +3624,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn set_index_buffer(
+    pub fn set_pipeline(&mut self, pipeline: Arc<RenderPipeline>) {
+        if let Err(err) = self.set_pipeline_inner(pipeline) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::set_pipeline");
+        }
+    }
+
+    fn set_index_buffer_inner(
         &mut self,
         buffer: Arc<Buffer>,
         index_format: IndexFormat,
@@ -3615,7 +3653,20 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn set_vertex_buffer(
+    pub fn set_index_buffer(
+        &mut self,
+        buffer: Arc<Buffer>,
+        index_format: IndexFormat,
+        offset: BufferAddress,
+        size: Option<BufferSize>,
+    ) {
+        if let Err(err) = self.set_index_buffer_inner(buffer, index_format, offset, size) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::set_index_buffer");
+        }
+    }
+
+    fn set_vertex_buffer_inner(
         &mut self,
         slot: u32,
         buffer: Option<Arc<Buffer>>,
@@ -3642,7 +3693,20 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn set_blend_constant(&mut self, color: Color) -> Result<(), PassStateError> {
+    pub fn set_vertex_buffer(
+        &mut self,
+        slot: u32,
+        buffer: Option<Arc<Buffer>>,
+        offset: BufferAddress,
+        size: Option<BufferSize>,
+    ) {
+        if let Err(err) = self.set_vertex_buffer_inner(slot, buffer, offset, size) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::set_vertex_buffer");
+        }
+    }
+
+    fn set_blend_constant_inner(&mut self, color: Color) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetBlendConstant;
         let base = pass_base!(self, scope);
 
@@ -3652,7 +3716,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn set_stencil_reference(&mut self, value: u32) -> Result<(), PassStateError> {
+    pub fn set_blend_constant(&mut self, color: Color) {
+        if let Err(err) = self.set_blend_constant_inner(color) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::set_blend_constant");
+        }
+    }
+
+    fn set_stencil_reference_inner(&mut self, value: u32) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetStencilReference;
         let base = pass_base!(self, scope);
         let value = convert_stencil_value(
@@ -3667,7 +3738,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn set_viewport(
+    pub fn set_stencil_reference(&mut self, value: u32) {
+        if let Err(err) = self.set_stencil_reference_inner(value) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::set_stencil_reference");
+        }
+    }
+
+    fn set_viewport_inner(
         &mut self,
         x: f32,
         y: f32,
@@ -3688,7 +3766,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn set_scissor_rect(
+    pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, depth_min: f32, depth_max: f32) {
+        if let Err(err) = self.set_viewport_inner(x, y, w, h, depth_min, depth_max) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::set_viewport");
+        }
+    }
+
+    fn set_scissor_rect_inner(
         &mut self,
         x: u32,
         y: u32,
@@ -3704,7 +3789,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) -> Result<(), PassStateError> {
+    pub fn set_scissor_rect(&mut self, x: u32, y: u32, w: u32, h: u32) {
+        if let Err(err) = self.set_scissor_rect_inner(x, y, w, h) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::set_scissor_rect");
+        }
+    }
+
+    fn set_immediates_inner(&mut self, offset: u32, data: &[u8]) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(self, scope);
 
@@ -3725,7 +3817,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn draw(
+    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        if let Err(err) = self.set_immediates_inner(offset, data) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::set_immediates");
+        }
+    }
+
+    fn draw_inner(
         &mut self,
         vertex_count: u32,
         instance_count: u32,
@@ -3748,7 +3847,22 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn draw_indexed(
+    pub fn draw(
+        &mut self,
+        vertex_count: u32,
+        instance_count: u32,
+        first_vertex: u32,
+        first_instance: u32,
+    ) {
+        if let Err(err) =
+            self.draw_inner(vertex_count, instance_count, first_vertex, first_instance)
+        {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::draw");
+        }
+    }
+
+    fn draw_indexed_inner(
         &mut self,
         index_count: u32,
         instance_count: u32,
@@ -3773,7 +3887,27 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn draw_mesh_tasks(
+    pub fn draw_indexed(
+        &mut self,
+        index_count: u32,
+        instance_count: u32,
+        first_index: u32,
+        base_vertex: i32,
+        first_instance: u32,
+    ) {
+        if let Err(err) = self.draw_indexed_inner(
+            index_count,
+            instance_count,
+            first_index,
+            base_vertex,
+            first_instance,
+        ) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::draw_indexed");
+        }
+    }
+
+    fn draw_mesh_tasks_inner(
         &mut self,
         group_count_x: u32,
         group_count_y: u32,
@@ -3793,7 +3927,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn draw_indirect(
+    pub fn draw_mesh_tasks(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
+        if let Err(err) = self.draw_mesh_tasks_inner(group_count_x, group_count_y, group_count_z) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::draw_mesh_tasks");
+        }
+    }
+
+    fn draw_indirect_inner(
         &mut self,
         buffer: Arc<Buffer>,
         offset: BufferAddress,
@@ -3819,7 +3960,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn draw_indexed_indirect(
+    pub fn draw_indirect(&mut self, buffer: Arc<Buffer>, offset: BufferAddress) {
+        if let Err(err) = self.draw_indirect_inner(buffer, offset) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::draw_indirect");
+        }
+    }
+
+    fn draw_indexed_indirect_inner(
         &mut self,
         buffer: Arc<Buffer>,
         offset: BufferAddress,
@@ -3845,7 +3993,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn draw_mesh_tasks_indirect(
+    pub fn draw_indexed_indirect(&mut self, buffer: Arc<Buffer>, offset: BufferAddress) {
+        if let Err(err) = self.draw_indexed_indirect_inner(buffer, offset) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::draw_indexed_indirect");
+        }
+    }
+
+    fn draw_mesh_tasks_indirect_inner(
         &mut self,
         buffer: Arc<Buffer>,
         offset: BufferAddress,
@@ -3871,7 +4026,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn multi_draw_indirect(
+    pub fn draw_mesh_tasks_indirect(&mut self, buffer: Arc<Buffer>, offset: BufferAddress) {
+        if let Err(err) = self.draw_mesh_tasks_indirect_inner(buffer, offset) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::draw_mesh_tasks_indirect");
+        }
+    }
+
+    fn multi_draw_indirect_inner(
         &mut self,
         buffer: Arc<Buffer>,
         offset: BufferAddress,
@@ -3890,6 +4052,40 @@ impl RenderPass {
             offset,
             count,
             family: DrawCommandFamily::Draw,
+
+            vertex_or_index_limit: None,
+            instance_limit: None,
+        });
+
+        Ok(())
+    }
+
+    pub fn multi_draw_indirect(&mut self, buffer: Arc<Buffer>, offset: BufferAddress, count: u32) {
+        if let Err(err) = self.multi_draw_indirect_inner(buffer, offset, count) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::multi_draw_indirect");
+        }
+    }
+
+    fn multi_draw_indexed_indirect_inner(
+        &mut self,
+        buffer: Arc<Buffer>,
+        offset: BufferAddress,
+        count: u32,
+    ) -> Result<(), PassStateError> {
+        let scope = PassErrorScope::Draw {
+            kind: DrawKind::MultiDrawIndirect,
+            family: DrawCommandFamily::DrawIndexed,
+        };
+        let base = pass_base!(self, scope);
+
+        pass_try!(base, scope, buffer.check_is_valid());
+
+        base.commands.push(ArcRenderCommand::DrawIndirect {
+            buffer,
+            offset,
+            count,
+            family: DrawCommandFamily::DrawIndexed,
 
             vertex_or_index_limit: None,
             instance_limit: None,
@@ -3903,29 +4099,14 @@ impl RenderPass {
         buffer: Arc<Buffer>,
         offset: BufferAddress,
         count: u32,
-    ) -> Result<(), PassStateError> {
-        let scope = PassErrorScope::Draw {
-            kind: DrawKind::MultiDrawIndirect,
-            family: DrawCommandFamily::DrawIndexed,
-        };
-        let base = pass_base!(self, scope);
-
-        pass_try!(base, scope, buffer.check_is_valid());
-
-        base.commands.push(ArcRenderCommand::DrawIndirect {
-            buffer,
-            offset,
-            count,
-            family: DrawCommandFamily::DrawIndexed,
-
-            vertex_or_index_limit: None,
-            instance_limit: None,
-        });
-
-        Ok(())
+    ) {
+        if let Err(err) = self.multi_draw_indexed_indirect_inner(buffer, offset, count) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::multi_draw_indexed_indirect");
+        }
     }
 
-    pub fn multi_draw_mesh_tasks_indirect(
+    fn multi_draw_mesh_tasks_indirect_inner(
         &mut self,
         buffer: Arc<Buffer>,
         offset: BufferAddress,
@@ -3952,7 +4133,22 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn multi_draw_indirect_count(
+    pub fn multi_draw_mesh_tasks_indirect(
+        &mut self,
+        buffer: Arc<Buffer>,
+        offset: BufferAddress,
+        count: u32,
+    ) {
+        if let Err(err) = self.multi_draw_mesh_tasks_indirect_inner(buffer, offset, count) {
+            self.device.handle_error(
+                err,
+                self.label(),
+                "RenderPass::multi_draw_mesh_tasks_indirect",
+            );
+        }
+    }
+
+    fn multi_draw_indirect_count_inner(
         &mut self,
         buffer: Arc<Buffer>,
         offset: BufferAddress,
@@ -3981,7 +4177,27 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn multi_draw_indexed_indirect_count(
+    pub fn multi_draw_indirect_count(
+        &mut self,
+        buffer: Arc<Buffer>,
+        offset: BufferAddress,
+        count_buffer: Arc<Buffer>,
+        count_buffer_offset: BufferAddress,
+        max_count: u32,
+    ) {
+        if let Err(err) = self.multi_draw_indirect_count_inner(
+            buffer,
+            offset,
+            count_buffer,
+            count_buffer_offset,
+            max_count,
+        ) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::multi_draw_indirect_count");
+        }
+    }
+
+    fn multi_draw_indexed_indirect_count_inner(
         &mut self,
         buffer: Arc<Buffer>,
         offset: BufferAddress,
@@ -4011,7 +4227,30 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn multi_draw_mesh_tasks_indirect_count(
+    pub fn multi_draw_indexed_indirect_count(
+        &mut self,
+        buffer: Arc<Buffer>,
+        offset: BufferAddress,
+        count_buffer: Arc<Buffer>,
+        count_buffer_offset: BufferAddress,
+        max_count: u32,
+    ) {
+        if let Err(err) = self.multi_draw_indexed_indirect_count_inner(
+            buffer,
+            offset,
+            count_buffer,
+            count_buffer_offset,
+            max_count,
+        ) {
+            self.device.handle_error(
+                err,
+                self.label(),
+                "RenderPass::multi_draw_indexed_indirect_count",
+            );
+        }
+    }
+
+    fn multi_draw_mesh_tasks_indirect_count_inner(
         &mut self,
         buffer: Arc<Buffer>,
         offset: BufferAddress,
@@ -4041,7 +4280,30 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn push_debug_group(&mut self, label: &str, color: u32) -> Result<(), PassStateError> {
+    pub fn multi_draw_mesh_tasks_indirect_count(
+        &mut self,
+        buffer: Arc<Buffer>,
+        offset: BufferAddress,
+        count_buffer: Arc<Buffer>,
+        count_buffer_offset: BufferAddress,
+        max_count: u32,
+    ) {
+        if let Err(err) = self.multi_draw_mesh_tasks_indirect_count_inner(
+            buffer,
+            offset,
+            count_buffer,
+            count_buffer_offset,
+            max_count,
+        ) {
+            self.device.handle_error(
+                err,
+                self.label(),
+                "RenderPass::multi_draw_mesh_tasks_indirect_count",
+            );
+        }
+    }
+
+    fn push_debug_group_inner(&mut self, label: &str, color: u32) -> Result<(), PassStateError> {
         let base = pass_base!(self, PassErrorScope::PushDebugGroup);
 
         let bytes = label.as_bytes();
@@ -4055,7 +4317,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn pop_debug_group(&mut self) -> Result<(), PassStateError> {
+    pub fn push_debug_group(&mut self, label: &str, color: u32) {
+        if let Err(err) = self.push_debug_group_inner(label, color) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::push_debug_group");
+        }
+    }
+
+    fn pop_debug_group_inner(&mut self) -> Result<(), PassStateError> {
         let base = pass_base!(self, PassErrorScope::PopDebugGroup);
 
         base.commands.push(ArcRenderCommand::PopDebugGroup);
@@ -4063,7 +4332,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn insert_debug_marker(&mut self, label: &str, color: u32) -> Result<(), PassStateError> {
+    pub fn pop_debug_group(&mut self) {
+        if let Err(err) = self.pop_debug_group_inner() {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::pop_debug_group");
+        }
+    }
+
+    fn insert_debug_marker_inner(&mut self, label: &str, color: u32) -> Result<(), PassStateError> {
         let base = pass_base!(self, PassErrorScope::InsertDebugMarker);
 
         let bytes = label.as_bytes();
@@ -4077,7 +4353,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn write_timestamp(
+    pub fn insert_debug_marker(&mut self, label: &str, color: u32) {
+        if let Err(err) = self.insert_debug_marker_inner(label, color) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::insert_debug_marker");
+        }
+    }
+
+    fn write_timestamp_inner(
         &mut self,
         query_set: Arc<QuerySet>,
         query_index: u32,
@@ -4094,7 +4377,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn begin_occlusion_query(&mut self, query_index: u32) -> Result<(), PassStateError> {
+    pub fn write_timestamp(&mut self, query_set: Arc<QuerySet>, query_index: u32) {
+        if let Err(err) = self.write_timestamp_inner(query_set, query_index) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::write_timestamp");
+        }
+    }
+
+    fn begin_occlusion_query_inner(&mut self, query_index: u32) -> Result<(), PassStateError> {
         let scope = PassErrorScope::BeginOcclusionQuery;
         let base = pass_base!(self, scope);
 
@@ -4104,7 +4394,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn end_occlusion_query(&mut self) -> Result<(), PassStateError> {
+    pub fn begin_occlusion_query(&mut self, query_index: u32) {
+        if let Err(err) = self.begin_occlusion_query_inner(query_index) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::begin_occlusion_query");
+        }
+    }
+
+    fn end_occlusion_query_inner(&mut self) -> Result<(), PassStateError> {
         let scope = PassErrorScope::EndOcclusionQuery;
         let base = pass_base!(self, scope);
 
@@ -4113,7 +4410,14 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn begin_pipeline_statistics_query(
+    pub fn end_occlusion_query(&mut self) {
+        if let Err(err) = self.end_occlusion_query_inner() {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::end_occlusion_query");
+        }
+    }
+
+    fn begin_pipeline_statistics_query_inner(
         &mut self,
         query_set: Arc<QuerySet>,
         query_index: u32,
@@ -4131,7 +4435,17 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn end_pipeline_statistics_query(&mut self) -> Result<(), PassStateError> {
+    pub fn begin_pipeline_statistics_query(&mut self, query_set: Arc<QuerySet>, query_index: u32) {
+        if let Err(err) = self.begin_pipeline_statistics_query_inner(query_set, query_index) {
+            self.device.handle_error(
+                err,
+                self.label(),
+                "RenderPass::begin_pipeline_statistics_query",
+            );
+        }
+    }
+
+    fn end_pipeline_statistics_query_inner(&mut self) -> Result<(), PassStateError> {
         let scope = PassErrorScope::EndPipelineStatisticsQuery;
         let base = pass_base!(self, scope);
 
@@ -4141,7 +4455,17 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn execute_bundles(
+    pub fn end_pipeline_statistics_query(&mut self) {
+        if let Err(err) = self.end_pipeline_statistics_query_inner() {
+            self.device.handle_error(
+                err,
+                self.label(),
+                "RenderPass::end_pipeline_statistics_query",
+            );
+        }
+    }
+
+    fn execute_bundles_inner(
         &mut self,
         render_bundles: &[Arc<RenderBundle>],
     ) -> Result<(), PassStateError> {
@@ -4158,6 +4482,13 @@ impl RenderPass {
         self.current_bind_groups.reset();
 
         Ok(())
+    }
+
+    pub fn execute_bundles(&mut self, render_bundles: &[Arc<RenderBundle>]) {
+        if let Err(err) = self.execute_bundles_inner(render_bundles) {
+            self.device
+                .handle_error(err, self.label(), "RenderPass::execute_bundles");
+        }
     }
 }
 
