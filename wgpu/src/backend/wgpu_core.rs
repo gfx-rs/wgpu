@@ -2218,6 +2218,14 @@ impl dispatch::BufferInterface for CoreBuffer {
     fn destroy(&self) {
         self.wgpu_buffer.destroy();
     }
+
+    fn size(&self) -> crate::BufferAddress {
+        self.wgpu_buffer.size()
+    }
+
+    fn usage(&self) -> crate::BufferUsages {
+        self.wgpu_buffer.usage()
+    }
 }
 
 impl dispatch::TextureInterface for CoreTexture {

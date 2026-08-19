@@ -287,6 +287,10 @@ pub trait BufferInterface: CommonTraits {
     fn unmap(&self);
 
     fn destroy(&self);
+
+    fn size(&self) -> crate::BufferAddress;
+
+    fn usage(&self) -> crate::BufferUsages;
 }
 pub trait TextureInterface: CommonTraits {
     fn create_view(&self, desc: &crate::TextureViewDescriptor<'_>) -> DispatchTextureView;

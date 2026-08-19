@@ -1181,6 +1181,14 @@ impl Buffer {
             life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
     }
+
+    pub fn size(&self) -> wgt::BufferAddress {
+        self.size
+    }
+
+    pub fn usage(&self) -> wgt::BufferUsages {
+        self.usage
+    }
 }
 
 #[derive(Clone, Debug, Error)]
