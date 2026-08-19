@@ -483,8 +483,7 @@ pub fn supported_capabilities() -> valid::Capabilities {
 
     // Lots of these aren't supported on GLES in general, but naga is able to write them without panicking.
 
-    Caps::IMMEDIATES
-        | Caps::FLOAT64
+    Caps::FLOAT64
         | Caps::PRIMITIVE_INDEX
         | Caps::CLIP_DISTANCES
         | Caps::MULTIVIEW

@@ -1,4 +1,3 @@
-capabilities = "IMMEDIATES"
 targets = "SPIRV"
 
 [bounds_check_policies]

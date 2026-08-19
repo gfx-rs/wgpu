@@ -1591,7 +1591,7 @@ fn int16_in_immediate() {
             ),
             ..
         }),
-        naga::valid::Capabilities::SHADER_INT16 | naga::valid::Capabilities::IMMEDIATES
+        naga::valid::Capabilities::SHADER_INT16
     }
 }
 

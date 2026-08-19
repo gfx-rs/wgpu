@@ -1089,11 +1089,6 @@ impl super::Validator {
                 (TypeFlags::DATA | TypeFlags::SIZED, false)
             }
             crate::AddressSpace::Immediate => {
-                if !self.capabilities.contains(Capabilities::IMMEDIATES) {
-                    return Err(GlobalVariableError::UnsupportedCapability(
-                        Capabilities::IMMEDIATES,
-                    ));
-                }
                 if let Err(ref err) = type_info.immediates_compatibility {
                     return Err(GlobalVariableError::InvalidImmediateType(err.clone()));
                 }

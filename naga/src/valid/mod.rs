@@ -86,53 +86,49 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct Capabilities: u64 {
-        /// Support for [`AddressSpace::Immediate`][1].
-        ///
-        /// [1]: crate::AddressSpace::Immediate
-        const IMMEDIATES = 1 << 0;
         /// Float values with width = 8.
-        const FLOAT64 = 1 << 1;
+        const FLOAT64 = 1 << 0;
         /// Support for [`BuiltIn::PrimitiveIndex`][1].
         ///
         /// [1]: crate::BuiltIn::PrimitiveIndex
-        const PRIMITIVE_INDEX = 1 << 2;
+        const PRIMITIVE_INDEX = 1 << 1;
         /// Support for binding arrays of sampled textures and samplers.
-        const TEXTURE_AND_SAMPLER_BINDING_ARRAY = 1 << 3;
+        const TEXTURE_AND_SAMPLER_BINDING_ARRAY = 1 << 2;
         /// Support for binding arrays of uniform buffers.
-        const BUFFER_BINDING_ARRAY = 1 << 4;
+        const BUFFER_BINDING_ARRAY = 1 << 3;
         /// Support for binding arrays of storage textures.
-        const STORAGE_TEXTURE_BINDING_ARRAY = 1 << 5;
+        const STORAGE_TEXTURE_BINDING_ARRAY = 1 << 4;
         /// Support for binding arrays of storage buffers.
-        const STORAGE_BUFFER_BINDING_ARRAY = 1 << 6;
+        const STORAGE_BUFFER_BINDING_ARRAY = 1 << 5;
         /// Support for [`BuiltIn::ClipDistances`].
         ///
         /// [`BuiltIn::ClipDistances`]: crate::BuiltIn::ClipDistances
-        const CLIP_DISTANCES = 1 << 7;
+        const CLIP_DISTANCES = 1 << 6;
         /// Support for [`BuiltIn::CullDistance`].
         ///
         /// [`BuiltIn::CullDistance`]: crate::BuiltIn::CullDistance
-        const CULL_DISTANCE = 1 << 8;
+        const CULL_DISTANCE = 1 << 7;
         /// Support for 16-bit normalized storage texture formats.
-        const STORAGE_TEXTURE_16BIT_NORM_FORMATS = 1 << 9;
+        const STORAGE_TEXTURE_16BIT_NORM_FORMATS = 1 << 8;
         /// Support for [`BuiltIn::ViewIndex`].
         ///
         /// [`BuiltIn::ViewIndex`]: crate::BuiltIn::ViewIndex
-        const MULTIVIEW = 1 << 10;
+        const MULTIVIEW = 1 << 9;
         /// Support for `early_depth_test`.
-        const EARLY_DEPTH_TEST = 1 << 11;
+        const EARLY_DEPTH_TEST = 1 << 10;
         /// Support for [`BuiltIn::SampleIndex`] and [`Sampling::Sample`].
         ///
         /// [`BuiltIn::SampleIndex`]: crate::BuiltIn::SampleIndex
         /// [`Sampling::Sample`]: crate::Sampling::Sample
-        const MULTISAMPLED_SHADING = 1 << 12;
+        const MULTISAMPLED_SHADING = 1 << 11;
         /// Support for ray queries and acceleration structures.
-        const RAY_QUERY = 1 << 13;
+        const RAY_QUERY = 1 << 12;
         /// Support for generating two sources for blending from fragment shaders.
-        const DUAL_SOURCE_BLENDING = 1 << 14;
+        const DUAL_SOURCE_BLENDING = 1 << 13;
         /// Support for arrayed cube textures.
-        const CUBE_ARRAY_TEXTURES = 1 << 15;
+        const CUBE_ARRAY_TEXTURES = 1 << 14;
         /// Support for 64-bit signed and unsigned integers.
-        const SHADER_INT64 = 1 << 16;
+        const SHADER_INT64 = 1 << 15;
         /// Support for subgroup operations (except barriers) in fragment and compute shaders.
         ///
         /// Subgroup operations in the vertex stage require
@@ -143,17 +139,17 @@ bitflags::bitflags! {
         ///
         /// Subgroup barriers require [`Capabilities::SUBGROUP_BARRIER`] in addition to
         /// `Capabilities::SUBGROUP`.
-        const SUBGROUP = 1 << 17;
+        const SUBGROUP = 1 << 16;
         /// Support for subgroup barriers in compute shaders.
         ///
         /// Requires [`Capabilities::SUBGROUP`]. Without it, enables nothing.
-        const SUBGROUP_BARRIER = 1 << 18;
+        const SUBGROUP_BARRIER = 1 << 17;
         /// Support for subgroup operations (not including barriers) in the vertex stage.
         ///
         /// Without [`Capabilities::SUBGROUP`], enables nothing. (But note that
         /// `create_validator` automatically sets `Capabilities::SUBGROUP`
         /// whenever `Features::SUBGROUP_VERTEX` is available.)
-        const SUBGROUP_VERTEX_STAGE = 1 << 19;
+        const SUBGROUP_VERTEX_STAGE = 1 << 18;
         /// Support for [`AtomicFunction::Min`] and [`AtomicFunction::Max`] on
         /// 64-bit integers in the [`Storage`] address space, when the return
         /// value is not used.
@@ -163,9 +159,9 @@ bitflags::bitflags! {
         /// [`AtomicFunction::Min`]: crate::AtomicFunction::Min
         /// [`AtomicFunction::Max`]: crate::AtomicFunction::Max
         /// [`Storage`]: crate::AddressSpace::Storage
-        const SHADER_INT64_ATOMIC_MIN_MAX = 1 << 20;
+        const SHADER_INT64_ATOMIC_MIN_MAX = 1 << 19;
         /// Support for all atomic operations on 64-bit integers.
-        const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 21;
+        const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 20;
         /// Support for [`AtomicFunction::Add`], [`AtomicFunction::Sub`],
         /// and [`AtomicFunction::Exchange { compare: None }`] on 32-bit floating-point numbers
         /// in the [`Storage`] address space.
@@ -174,56 +170,56 @@ bitflags::bitflags! {
         /// [`AtomicFunction::Sub`]: crate::AtomicFunction::Sub
         /// [`AtomicFunction::Exchange { compare: None }`]: crate::AtomicFunction::Exchange
         /// [`Storage`]: crate::AddressSpace::Storage
-        const SHADER_FLOAT32_ATOMIC = 1 << 22;
+        const SHADER_FLOAT32_ATOMIC = 1 << 21;
         /// Support for atomic operations on images.
-        const TEXTURE_ATOMIC = 1 << 23;
+        const TEXTURE_ATOMIC = 1 << 22;
         /// Support for atomic operations on 64-bit images.
-        const TEXTURE_INT64_ATOMIC = 1 << 24;
+        const TEXTURE_INT64_ATOMIC = 1 << 23;
         /// Support for ray queries returning vertex position
-        const RAY_HIT_VERTEX_POSITION = 1 << 25;
+        const RAY_HIT_VERTEX_POSITION = 1 << 24;
         /// Support for 16-bit floating-point types.
-        const SHADER_FLOAT16 = 1 << 26;
+        const SHADER_FLOAT16 = 1 << 25;
         /// Support for [`ImageClass::External`]
-        const TEXTURE_EXTERNAL = 1 << 27;
+        const TEXTURE_EXTERNAL = 1 << 26;
         /// Support for `quantizeToF16`, `pack2x16float`, and `unpack2x16float`, which store
         /// `f16`-precision values in `f32`s.
-        const SHADER_FLOAT16_IN_FLOAT32 = 1 << 28;
+        const SHADER_FLOAT16_IN_FLOAT32 = 1 << 27;
         /// Support for fragment shader barycentric coordinates.
-        const SHADER_BARYCENTRICS = 1 << 29;
+        const SHADER_BARYCENTRICS = 1 << 28;
         /// Support for task shaders, mesh shaders, and per-primitive fragment inputs
-        const MESH_SHADER = 1 << 30;
+        const MESH_SHADER = 1 << 29;
         /// Support for mesh shaders which output points.
-        const MESH_SHADER_POINT_TOPOLOGY = 1 << 31;
+        const MESH_SHADER_POINT_TOPOLOGY = 1 << 30;
         /// Support for non-uniform indexing of binding arrays of sampled textures and samplers.
-        const TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 32;
+        const TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 31;
         /// Support for non-uniform indexing of binding arrays of uniform buffers.
-        const BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 33;
+        const BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 32;
         /// Support for non-uniform indexing of binding arrays of storage textures.
-        const STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 34;
+        const STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 33;
         /// Support for non-uniform indexing of binding arrays of storage buffers.
-        const STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 35;
+        const STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 34;
         /// Support for cooperative matrix types and operations
-        const COOPERATIVE_MATRIX = 1 << 36;
+        const COOPERATIVE_MATRIX = 1 << 35;
         /// Support for per-vertex fragment input.
-        const PER_VERTEX = 1 << 37;
+        const PER_VERTEX = 1 << 36;
         /// Support for ray generation, any hit, closest hit, and miss shaders.
-        const RAY_TRACING_PIPELINE = 1 << 38;
+        const RAY_TRACING_PIPELINE = 1 << 37;
         /// Support for draw index builtin
-        const DRAW_INDEX = 1 << 39;
+        const DRAW_INDEX = 1 << 38;
         /// Support for binding arrays of acceleration structures.
-        const ACCELERATION_STRUCTURE_BINDING_ARRAY = 1 << 40;
+        const ACCELERATION_STRUCTURE_BINDING_ARRAY = 1 << 39;
         /// Support for the `@coherent` memory decoration on storage buffers.
-        const MEMORY_DECORATION_COHERENT = 1 << 41;
+        const MEMORY_DECORATION_COHERENT = 1 << 40;
         /// Support for the `@volatile` memory decoration on storage buffers.
-        const MEMORY_DECORATION_VOLATILE = 1 << 42;
+        const MEMORY_DECORATION_VOLATILE = 1 << 41;
         /// Support for 16-bit integer types.
-        const SHADER_INT16 = 1 << 43;
+        const SHADER_INT16 = 1 << 42;
         /// Support for [`Interpolation::Linear`] (`@interpolate(linear)` in WGSL).
         ///
         /// This is core WebGPU, but GLSL ES (and thus WebGL) has no `noperspective` qualifier (unless enabled by extensions).
         ///
         /// [`Interpolation::Linear`]: crate::Interpolation::Linear
-        const LINEAR_INTERPOLATION = 1 << 44;
+        const LINEAR_INTERPOLATION = 1 << 43;
     }
 }
 

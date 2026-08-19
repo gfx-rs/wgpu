@@ -832,9 +832,8 @@ pub fn write_string(
 
 pub fn supported_capabilities() -> crate::valid::Capabilities {
     use crate::valid::Capabilities as Caps;
-    Caps::IMMEDIATES
-        // No FLOAT64
-        | Caps::PRIMITIVE_INDEX
+    // No FLOAT64
+    Caps::PRIMITIVE_INDEX
         | Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY
         // No BUFFER_BINDING_ARRAY
         | Caps::STORAGE_TEXTURE_BINDING_ARRAY
