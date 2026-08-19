@@ -1342,6 +1342,8 @@ pub struct WebBuffer {
     mapping: Rc<RefCell<WebBufferMapState>>,
     /// Unique identifier for this Buffer.
     ident: crate::cmp::Identifier,
+    size: wgt::BufferAddress,
+    usage: wgt::BufferUsages,
 }
 
 impl WebBuffer {
@@ -1354,6 +1356,8 @@ impl WebBuffer {
                 range: 0..desc.size,
             })),
             ident: crate::cmp::Identifier::create(),
+            size: desc.size,
+            usage: desc.usage,
         }
     }
 
@@ -2998,6 +3002,14 @@ impl dispatch::BufferInterface for WebBuffer {
 
     fn destroy(&self) {
         self.inner.destroy();
+    }
+
+    fn size(&self) -> crate::BufferAddress {
+        self.size
+    }
+
+    fn usage(&self) -> crate::BufferUsages {
+        self.usage
     }
 }
 impl Drop for WebBuffer {

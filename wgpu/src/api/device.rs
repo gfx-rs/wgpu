@@ -282,8 +282,6 @@ impl Device {
         Buffer {
             inner: buffer,
             map_context: Arc::new(Mutex::new(map_context)),
-            size: desc.size,
-            usage: desc.usage,
         }
     }
 
@@ -458,8 +456,6 @@ impl Device {
         Buffer {
             inner: buffer.into(),
             map_context: Arc::new(Mutex::new(map_context)),
-            size: desc.size,
-            usage: desc.usage,
         }
     }
 
