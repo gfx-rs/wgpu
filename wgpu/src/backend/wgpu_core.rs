@@ -2253,6 +2253,30 @@ impl dispatch::TextureInterface for CoreTexture {
     fn destroy(&self) {
         self.wgpu_texture.destroy();
     }
+
+    fn size(&self) -> wgt::Extent3d {
+        self.wgpu_texture.descriptor().size
+    }
+
+    fn mip_level_count(&self) -> u32 {
+        self.wgpu_texture.descriptor().mip_level_count
+    }
+
+    fn sample_count(&self) -> u32 {
+        self.wgpu_texture.descriptor().sample_count
+    }
+
+    fn dimension(&self) -> wgt::TextureDimension {
+        self.wgpu_texture.descriptor().dimension
+    }
+
+    fn format(&self) -> wgt::TextureFormat {
+        self.wgpu_texture.descriptor().format
+    }
+
+    fn usage(&self) -> wgt::TextureUsages {
+        self.wgpu_texture.descriptor().usage
+    }
 }
 
 impl dispatch::BlasInterface for CoreBlas {
@@ -3696,6 +3720,7 @@ impl dispatch::SurfaceInterface for CoreSurface {
 
     fn get_current_texture(
         &self,
+        _desc: Option<crate::TextureDescriptor<'static>>,
     ) -> (
         Option<dispatch::DispatchTexture>,
         crate::SurfaceStatus,
