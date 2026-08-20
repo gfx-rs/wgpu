@@ -2285,7 +2285,7 @@ impl Device {
             mapped_at_creation: false,
         };
         let params = self.create_buffer_inner(&params_desc)?;
-        self.get_queue().unwrap().write_buffer(
+        self.get_queue().unwrap().write_buffer_inner(
             params.clone(),
             0,
             bytemuck::bytes_of(&params_data),

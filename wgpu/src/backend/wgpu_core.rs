@@ -1601,16 +1601,8 @@ impl dispatch::QueueInterface for CoreQueue {
     ) {
         let buffer = buffer.as_core();
 
-        match self
-            .wgpu_queue
+        self.wgpu_queue
             .write_buffer(buffer.wgpu_buffer.clone(), offset, data)
-        {
-            Ok(()) => (),
-            Err(err) => self
-                .wgpu_queue
-                .device()
-                .handle_error_nolabel(err, "Queue::write_buffer"),
-        }
     }
 
     fn create_staging_buffer(
@@ -1702,18 +1694,8 @@ impl dispatch::QueueInterface for CoreQueue {
         data_layout: crate::TexelCopyBufferLayout,
         size: crate::Extent3d,
     ) {
-        match self.wgpu_queue.write_texture(
-            map_texture_copy_view(texture),
-            data,
-            &data_layout,
-            &size,
-        ) {
-            Ok(()) => (),
-            Err(err) => self
-                .wgpu_queue
-                .device()
-                .handle_error_nolabel(err, "Queue::write_texture"),
-        }
+        self.wgpu_queue
+            .write_texture(map_texture_copy_view(texture), data, &data_layout, &size);
     }
 
     // This method needs to exist if either webgpu or webgl is enabled,

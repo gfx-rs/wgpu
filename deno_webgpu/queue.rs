@@ -131,12 +131,11 @@ impl GPUQueue {
   ) -> Result<(), JsErrorBox> {
     let data = get_data_slice(scope, data_arg, data_offset, size)?;
 
-    let err = self
-      .wgpu_queue
-      .write_buffer(buffer.wgpu_buffer.clone(), buffer_offset, data)
-      .err();
-
-    self.error_handler.push_error(err);
+    self.wgpu_queue.write_buffer(
+      buffer.wgpu_buffer.clone(),
+      buffer_offset,
+      data,
+    );
 
     Ok(())
   }
@@ -163,12 +162,9 @@ impl GPUQueue {
       rows_per_image: data_layout.rows_per_image,
     };
 
-    let err = self
+    self
       .wgpu_queue
-      .write_texture(destination, buf, &data_layout, &size.into())
-      .err();
-
-    self.error_handler.push_error(err);
+      .write_texture(destination, buf, &data_layout, &size.into());
   }
 }
 
