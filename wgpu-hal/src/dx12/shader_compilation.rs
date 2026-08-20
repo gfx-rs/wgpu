@@ -373,9 +373,15 @@ fn compile_dxc(
 ) -> Result<crate::dx12::CompiledShader, crate::PipelineError> {
     profiling::scope!("compile_dxc");
 
-    let source_name = source_name.and_then(|cstr| cstr.to_str().ok());
-
-    let source_name = source_name.map(OPCWSTR::new);
+    // DXC reads this name as the input file's path, then probes its parent
+    // directory. A name with a colon but no slash is parsed as a `C:file`
+    // drive-relative path there and never resolves, so anchor it to the current
+    // directory. An empty label would leave a bare `./`, which would error since
+    // it is a directory, so we filter those.
+    let source_name = source_name
+        .and_then(|cstr| cstr.to_str().ok())
+        .filter(|name| !name.is_empty())
+        .map(|name| OPCWSTR::new(&format!("./{name}")));
     let raw_ep = OPCWSTR::new(raw_ep);
     let full_stage = OPCWSTR::new(full_stage);
 
