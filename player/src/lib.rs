@@ -396,7 +396,7 @@ impl Player {
                 queue.write_texture(to, &bin, &layout, &size);
             }
             Action::Submit(_index, ref commands) if commands.is_empty() => {
-                queue.submit(&[]).unwrap();
+                queue.submit(&[]);
             }
             Action::Submit(_index, commands) => {
                 let resolved_commands: Vec<_> = commands
@@ -404,7 +404,7 @@ impl Player {
                     .map(|cmd| self.resolve_command(cmd))
                     .collect();
                 let buffer = wgc::command::CommandBuffer::from_trace(device, resolved_commands);
-                queue.submit(&[buffer]).unwrap();
+                queue.submit(&[buffer]);
             }
             Action::FailedCommands {
                 commands,

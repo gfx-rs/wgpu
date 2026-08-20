@@ -23,8 +23,6 @@ use crate::webidl::GPUExtent3D;
 use crate::webidl::GPUOrigin3D;
 
 pub struct GPUQueue {
-  pub error_handler: super::error::ErrorHandler,
-
   pub label: String,
 
   pub wgpu_queue: Arc<wgpu_core::device::queue::Queue>,
@@ -67,11 +65,7 @@ impl GPUQueue {
       .map(|cb| cb.wgpu_command_buffer.clone())
       .collect::<Vec<_>>();
 
-    let err = self.wgpu_queue.submit(&ids).err();
-
-    if let Some((_, err)) = err {
-      self.error_handler.push_error(Some(err));
-    }
+    self.wgpu_queue.submit(&ids);
 
     Ok(())
   }

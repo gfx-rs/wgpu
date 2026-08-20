@@ -1,4 +1,4 @@
-use wgpu_core::device::queue::{QueueSubmitError, SubmittedWorkDoneClosure};
+use wgpu_core::device::queue::SubmittedWorkDoneClosure;
 use wgpu_core::SubmissionIndex;
 
 use crate::global::Global;
@@ -44,7 +44,7 @@ impl Global {
         &self,
         queue_id: QueueId,
         command_buffer_ids: &[CommandBufferId],
-    ) -> Result<SubmissionIndex, (SubmissionIndex, QueueSubmitError)> {
+    ) -> SubmissionIndex {
         let hub = self.hub.borrow();
         let queue = hub.queues.get(queue_id);
         let command_buffers = command_buffer_ids
