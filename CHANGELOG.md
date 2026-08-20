@@ -123,6 +123,7 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 - Fix a spurious assertion failure in `Device::maintain` when multiple threads race polling the same device. By @AdrianEddy in [#9958](https://github.com/gfx-rs/wgpu/pull/9958).
 - Fix `PendingSubmission` releasing its lock guards out of stacking order, which tripped `--cfg wgpu_validate_locks` on any submission. By @AdrianEddy in [#9960](https://github.com/gfx-rs/wgpu/pull/9960).
 - Fix initialization tracking for some cases of array textures, 3d textures, and depth/stencil textures with divergent usage in a render pass. By @andyleiserson in [#10002](https://github.com/gfx-rs/wgpu/pull/10002) and [#10060](https://github.com/gfx-rs/wgpu/pull/10060).
+- Fixed a deadlock between `Queue::compact_blas` and `Queue::submit`, which acquired `Device::command_indices` and `Queue::pending_writes` in opposite orders. By @mstampfli in [#10118](https://github.com/gfx-rs/wgpu/pull/10118).
 
 #### naga
 
