@@ -1,12 +1,15 @@
 use alloc::borrow::Cow;
 
-use wgpu_core::command::{ComputePassDescriptor, PassTimestampWrites};
+use wgpu_core::command::PassTimestampWrites;
 use wgpu_core_remote_types::encoders::{BindingCommand, ComputePassEncoderCommand, DebugCommand};
 use wgt::{BufferAddress, DynamicOffset};
 
 use crate::global::Global;
 use crate::hub::Hub;
 use crate::id;
+
+pub type ComputePassDescriptor<'a> =
+    wgpu_core::command::ComputePassDescriptor<'a, PassTimestampWrites<id::QuerySetId>>;
 
 impl Global {
     /// Creates a compute pass.
@@ -19,10 +22,10 @@ impl Global {
     /// If successful, puts the encoder into the [`Locked`] state.
     ///
     /// [`Locked`]: crate::command::CommandEncoderStatus::Locked
-    pub fn command_encoder_begin_compute_pass(
+    pub fn command_encoder_begin_compute_pass<'a>(
         &self,
         encoder_id: id::CommandEncoderId,
-        desc: &ComputePassDescriptor<'_, PassTimestampWrites<id::QuerySetId>>,
+        desc: &ComputePassDescriptor<'a>,
         id_in: id::ComputePassEncoderId,
     ) {
         let mut hub = self.hub.borrow_mut();
@@ -35,7 +38,7 @@ impl Global {
 
         let cmd_enc = command_encoders.get(encoder_id);
 
-        let desc = ComputePassDescriptor {
+        let desc = wgpu_core::command::ComputePassDescriptor {
             label: desc.label.as_deref().map(Cow::Borrowed),
             timestamp_writes: desc
                 .timestamp_writes

@@ -43,10 +43,10 @@ impl Global {
     /// If successful, puts the encoder into the [`Locked`] state.
     ///
     /// [`Locked`]: crate::command::CommandEncoderStatus::Locked
-    pub fn command_encoder_begin_render_pass(
+    pub fn command_encoder_begin_render_pass<'a>(
         &self,
         encoder_id: id::CommandEncoderId,
-        desc: &RenderPassDescriptor<'_>,
+        desc: &RenderPassDescriptor<'a>,
         id_in: id::RenderPassEncoderId,
     ) {
         let mut hub = self.hub.borrow_mut();

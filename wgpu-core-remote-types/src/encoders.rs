@@ -1,6 +1,59 @@
 use crate::{id, Label};
 
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
+pub type CommandBufferDescriptor<'a> = wgt::CommandBufferDescriptor<Label<'a>>;
+
+#[derive(serde::Serialize, serde::Deserialize)]
+/// Corresponds to [`GPUCommandEncoder`](https://www.w3.org/TR/webgpu/#gpucommandencoder).
+pub enum CommandEncoderCommand<'a, RPD, CPD> {
+    BeginRenderPass {
+        desc: RPD,
+        render_pass_encoder_id: id::RenderPassEncoderId,
+    },
+    BeginComputePass {
+        desc: CPD, // optional, defaults to {}
+        compute_pass_encoder_id: id::ComputePassEncoderId,
+    },
+    CopyBufferToBuffer {
+        source: id::BufferId,
+        source_offset: u64,
+        destination: id::BufferId,
+        destination_offset: u64,
+        size: Option<u64>,
+    },
+    CopyBufferToTexture {
+        source: wgt::TexelCopyBufferInfo<id::BufferId>,
+        destination: wgt::TexelCopyTextureInfo<id::TextureId>,
+        copy_size: wgt::Extent3d,
+    },
+    CopyTextureToBuffer {
+        source: wgt::TexelCopyTextureInfo<id::TextureId>,
+        destination: wgt::TexelCopyBufferInfo<id::BufferId>,
+        copy_size: wgt::Extent3d,
+    },
+    CopyTextureToTexture {
+        source: wgt::TexelCopyTextureInfo<id::TextureId>,
+        destination: wgt::TexelCopyTextureInfo<id::TextureId>,
+        copy_size: wgt::Extent3d,
+    },
+    ClearBuffer {
+        buffer: id::BufferId,
+        offset: u64, // optional, defaults to 0
+        size: Option<u64>,
+    },
+    ResolveQuerySet {
+        query_set: id::QuerySetId,
+        first_query: u32,
+        query_count: u32,
+        destination: id::BufferId,
+        destination_offset: u64,
+    },
+    DebugCommand(DebugCommand),
+    Finish {
+        desc: CommandBufferDescriptor<'a>,
+        command_buffer_id: id::CommandBufferId,
+    },
+}
 
 #[derive(serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPURenderPassEncoder`](https://www.w3.org/TR/webgpu/#gpurenderpassencoder).

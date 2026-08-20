@@ -1,6 +1,9 @@
 use wgpu_core::Label;
+use wgpu_core_remote_types::encoders::{CommandEncoderCommand, DebugCommand};
 use wgt::{BufferAddress, Extent3d, ImageSubresourceRange};
 
+use crate::global::compute_pass::ComputePassDescriptor;
+use crate::global::render_pass::RenderPassDescriptor;
 use crate::global::Global;
 use crate::hub::Hub;
 use crate::id::{BufferId, CommandEncoderId, TextureId};
@@ -204,5 +207,110 @@ impl Global {
             aspect: destination.aspect,
         };
         cmd_enc.copy_texture_to_texture(&source, &destination, copy_size)
+    }
+}
+
+impl Global {
+    pub fn handle_command_encoder_command<'a>(
+        &self,
+        command_encoder_id: CommandEncoderId,
+        command: CommandEncoderCommand<'a, RenderPassDescriptor<'a>, ComputePassDescriptor<'a>>,
+    ) {
+        match command {
+            CommandEncoderCommand::BeginRenderPass {
+                desc,
+                render_pass_encoder_id,
+            } => self.command_encoder_begin_render_pass(
+                command_encoder_id,
+                &desc,
+                render_pass_encoder_id,
+            ),
+            CommandEncoderCommand::BeginComputePass {
+                desc,
+                compute_pass_encoder_id,
+            } => self.command_encoder_begin_compute_pass(
+                command_encoder_id,
+                &desc,
+                compute_pass_encoder_id,
+            ),
+            CommandEncoderCommand::CopyBufferToBuffer {
+                source,
+                source_offset,
+                destination,
+                destination_offset,
+                size,
+            } => self.command_encoder_copy_buffer_to_buffer(
+                command_encoder_id,
+                source,
+                source_offset,
+                destination,
+                destination_offset,
+                size,
+            ),
+            CommandEncoderCommand::CopyBufferToTexture {
+                source,
+                destination,
+                copy_size,
+            } => self.command_encoder_copy_buffer_to_texture(
+                command_encoder_id,
+                &source,
+                &destination,
+                &copy_size,
+            ),
+            CommandEncoderCommand::CopyTextureToBuffer {
+                source,
+                destination,
+                copy_size,
+            } => self.command_encoder_copy_texture_to_buffer(
+                command_encoder_id,
+                &source,
+                &destination,
+                &copy_size,
+            ),
+            CommandEncoderCommand::CopyTextureToTexture {
+                source,
+                destination,
+                copy_size,
+            } => self.command_encoder_copy_texture_to_texture(
+                command_encoder_id,
+                &source,
+                &destination,
+                &copy_size,
+            ),
+            CommandEncoderCommand::ClearBuffer {
+                buffer,
+                offset,
+                size,
+            } => self.command_encoder_clear_buffer(command_encoder_id, buffer, offset, size),
+            CommandEncoderCommand::ResolveQuerySet {
+                query_set,
+                first_query,
+                query_count,
+                destination,
+                destination_offset,
+            } => self.command_encoder_resolve_query_set(
+                command_encoder_id,
+                query_set,
+                first_query,
+                query_count,
+                destination,
+                destination_offset,
+            ),
+            CommandEncoderCommand::DebugCommand(debug_command) => match debug_command {
+                DebugCommand::PushDebugGroup(label) => {
+                    self.command_encoder_push_debug_group(command_encoder_id, &label)
+                }
+                DebugCommand::PopDebugGroup => {
+                    self.command_encoder_pop_debug_group(command_encoder_id)
+                }
+                DebugCommand::InsertDebugMarker(label) => {
+                    self.command_encoder_insert_debug_marker(command_encoder_id, &label)
+                }
+            },
+            CommandEncoderCommand::Finish {
+                desc,
+                command_buffer_id,
+            } => self.command_encoder_finish(command_encoder_id, &desc, command_buffer_id),
+        }
     }
 }
