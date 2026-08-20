@@ -225,16 +225,15 @@ impl Device {
     }
 
     /// Creates an empty [`RenderBundleEncoder`].
-    #[must_use]
     pub fn create_render_bundle_encoder<'a>(
         &self,
         desc: &RenderBundleEncoderDescriptor<'_>,
-    ) -> RenderBundleEncoder<'a> {
-        let encoder = self.inner.create_render_bundle_encoder(desc);
-        RenderBundleEncoder {
+    ) -> Result<RenderBundleEncoder<'a>, CreateRenderBundleEncoderError> {
+        let encoder = self.inner.create_render_bundle_encoder(desc)?;
+        Ok(RenderBundleEncoder {
             inner: encoder,
             _p: PhantomData,
-        }
+        })
     }
 
     /// Creates a new [`BindGroup`].

@@ -2846,17 +2846,22 @@ impl Device {
     pub fn create_render_bundle_encoder(
         self: &Arc<Self>,
         desc: &command::RenderBundleEncoderDescriptor,
-    ) -> (
-        Box<command::RenderBundleEncoder>,
-        Option<command::CreateRenderBundleError>,
-    ) {
+    ) -> Result<Box<command::RenderBundleEncoder>, MissingFeatures> {
         profiling::scope!("Device::create_render_bundle_encoder");
         api_log!("Device::create_render_bundle_encoder");
-        let (encoder, error) = match command::RenderBundleEncoder::new(self, desc) {
-            Ok(encoder) => (encoder, None),
-            Err(e) => (command::RenderBundleEncoder::dummy(self), Some(e)),
-        };
-        (Box::new(encoder), error)
+        command::RenderBundleEncoder::new(self, desc)
+            .or_else(|err| match err {
+                command::CreateRenderBundleError::MissingFeatures(missing) => Err(missing),
+                err => {
+                    self.handle_error(
+                        err,
+                        desc.label.as_ref().map(|l| l.as_ref()),
+                        "Device::create_render_bundle_encoder",
+                    );
+                    Ok(command::RenderBundleEncoder::dummy(self))
+                }
+            })
+            .map(Box::new)
     }
 
     /// Generate information about late-validated buffer bindings for pipelines.

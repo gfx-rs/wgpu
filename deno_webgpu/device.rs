@@ -618,7 +618,7 @@ impl GPUDevice {
     &self,
     #[webidl]
     descriptor: super::render_bundle::GPURenderBundleEncoderDescriptor,
-  ) -> GPURenderBundleEncoder {
+  ) -> Result<GPURenderBundleEncoder, JsErrorBox> {
     let wgpu_descriptor = wgpu_core::command::RenderBundleEncoderDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
       color_formats: Cow::Owned(
@@ -639,16 +639,18 @@ impl GPUDevice {
       multiview: None,
     };
 
-    let (encoder, err) = self
+    let encoder = self
       .wgpu_device
-      .create_render_bundle_encoder(&wgpu_descriptor);
+      .create_render_bundle_encoder(&wgpu_descriptor)
+      .map_err(|err| {
+        let err = fmt_err(&err);
+        JsErrorBox::type_error(err)
+      })?;
 
-    self.error_handler.push_error(err);
-
-    GPURenderBundleEncoder {
+    Ok(GPURenderBundleEncoder {
       encoder: RefCell::new(encoder),
       label: descriptor.label,
-    }
+    })
   }
 
   #[required(1)]

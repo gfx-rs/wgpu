@@ -5,7 +5,7 @@ use wgpu_core_remote_types::encoders::RenderBundleDescriptor;
 use wgpu_core::{
     binding_model::{self},
     command,
-    device::{DeviceLostClosure, WaitIdleError},
+    device::{DeviceLostClosure, MissingFeatures, WaitIdleError},
     error::EmptyErrorScopeStack,
     pipeline::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
@@ -697,10 +697,7 @@ impl Global {
         device_id: DeviceId,
         desc: &command::RenderBundleEncoderDescriptor,
         id_in: id::RenderBundleEncoderId,
-    ) -> (
-        id::RenderBundleEncoderId,
-        Option<command::CreateRenderBundleError>,
-    ) {
+    ) -> Result<(), MissingFeatures> {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_bundle_encoders,
@@ -709,11 +706,11 @@ impl Global {
         } = &mut *hub;
 
         let device = devices.get(device_id);
-        let (render_bundle_encoder, error) = device.create_render_bundle_encoder(desc);
+        let render_bundle_encoder = device.create_render_bundle_encoder(desc)?;
 
-        let id = render_bundle_encoders.assign(id_in, *render_bundle_encoder);
+        render_bundle_encoders.assign(id_in, *render_bundle_encoder);
 
-        (id, error)
+        Ok(())
     }
 
     pub fn render_bundle_encoder_finish(
