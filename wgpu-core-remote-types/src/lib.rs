@@ -5,6 +5,8 @@ use alloc::borrow::Cow;
 
 pub type Index = u32;
 pub type Epoch = u32;
+pub type SubmissionIndex = u64;
+pub type SubmittedWorkDoneClosure = Box<dyn FnOnce() + Send + 'static>;
 
 pub mod id;
 pub mod identity;

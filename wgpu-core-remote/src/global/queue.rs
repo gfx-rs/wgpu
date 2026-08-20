@@ -1,5 +1,4 @@
-use wgpu_core::device::queue::SubmittedWorkDoneClosure;
-use wgpu_core::SubmissionIndex;
+use wgpu_core_remote_types::{SubmissionIndex, SubmittedWorkDoneClosure};
 
 use crate::global::Global;
 use crate::id::{BufferId, CommandBufferId, QueueId, TextureId};
