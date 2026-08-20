@@ -1502,7 +1502,7 @@ impl Queue {
         }
     }
 
-    pub fn submit(
+    fn submit_inner(
         &self,
         command_buffers: &[Arc<CommandBuffer>],
     ) -> Result<SubmissionIndex, (SubmissionIndex, QueueSubmitError)> {
@@ -1757,6 +1757,17 @@ impl Queue {
         api_log!("Queue::submit returned submit index {submit_index}");
 
         Ok(submit_index)
+    }
+
+    pub fn submit(&self, command_buffers: &[Arc<CommandBuffer>]) -> SubmissionIndex {
+        match self.submit_inner(command_buffers) {
+            Ok(submit_index) => submit_index,
+            Err((submit_index, e)) => {
+                self.device
+                    .handle_error(e, Some(self.label()), "Queue::submit");
+                submit_index
+            }
+        }
     }
 
     /// Allocate a submission index and prepare for a submission.

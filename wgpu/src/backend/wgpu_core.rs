@@ -1732,15 +1732,7 @@ impl dispatch::QueueInterface for CoreQueue {
             .map(|cmdbuf| cmdbuf.as_core().wgpu_command_buffer.clone())
             .collect::<SmallVec<[_; 4]>>();
 
-        let index = match self.wgpu_queue.submit(&command_buffers) {
-            Ok(index) => index,
-            Err((index, err)) => {
-                self.wgpu_queue
-                    .device()
-                    .handle_error_nolabel(err, "Queue::submit");
-                index
-            }
-        };
+        let index = self.wgpu_queue.submit(&command_buffers);
 
         drop(temp_command_buffers);
 
