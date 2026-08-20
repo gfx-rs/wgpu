@@ -1,5 +1,6 @@
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::ptr::NonNull;
+use wgpu_core_remote_types::encoders::RenderBundleDescriptor;
 
 use wgpu_core::{
     binding_model::{self},
@@ -718,7 +719,7 @@ impl Global {
     pub fn render_bundle_encoder_finish(
         &self,
         render_bundle_encoder_id: id::RenderBundleEncoderId,
-        desc: &command::RenderBundleDescriptor,
+        desc: RenderBundleDescriptor,
         id_in: id::RenderBundleId,
     ) {
         let mut hub = self.hub.borrow_mut();
@@ -729,7 +730,10 @@ impl Global {
         } = &mut *hub;
         let bundle_encoder = render_bundle_encoders.get_mut(render_bundle_encoder_id);
 
-        let render_bundle = bundle_encoder.finish(desc);
+        let RenderBundleDescriptor { label } = desc;
+        let desc = wgt::RenderBundleDescriptor { label };
+
+        let render_bundle = bundle_encoder.finish(&desc);
 
         render_bundles.assign(id_in, render_bundle);
     }

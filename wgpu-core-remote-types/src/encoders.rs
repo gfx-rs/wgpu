@@ -1,4 +1,6 @@
-use crate::id;
+use crate::{id, Label};
+
+pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPURenderPassEncoder`](https://www.w3.org/TR/webgpu/#gpurenderpassencoder).
@@ -26,6 +28,18 @@ pub enum RenderPassEncoderCommand {
     RenderCommand(RenderCommand),
     DebugCommand(DebugCommand),
     End,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+/// Corresponds to [`GPURenderBundleEncoder`](https://www.w3.org/TR/webgpu/#gpurenderbundleencoder).
+pub enum RenderBundleEncoderCommand<'a> {
+    BindingCommand(BindingCommand),
+    RenderCommand(RenderCommand),
+    DebugCommand(DebugCommand),
+    Finish {
+        desc: RenderBundleDescriptor<'a>, // optional, defaults to {}
+        render_bundle_id: id::RenderBundleId,
+    },
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
