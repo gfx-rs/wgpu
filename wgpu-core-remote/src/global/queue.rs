@@ -19,19 +19,6 @@ impl Global {
         queue.write_buffer(buffer, buffer_offset, data)
     }
 
-    pub fn queue_validate_write_buffer(
-        &self,
-        queue_id: QueueId,
-        buffer_id: BufferId,
-        buffer_offset: u64,
-        buffer_size: wgt::BufferSize,
-    ) -> Result<(), QueueWriteError> {
-        let hub = self.hub.borrow();
-        let queue = hub.queues.get(queue_id);
-        let buffer = hub.buffers.get(buffer_id);
-        queue.validate_write_buffer(buffer, buffer_offset, buffer_size)
-    }
-
     pub fn queue_write_texture(
         &self,
         queue_id: QueueId,
@@ -65,13 +52,6 @@ impl Global {
             .map(|id| hub.command_buffers.get(*id))
             .collect::<Vec<_>>();
         queue.submit(&command_buffers)
-    }
-
-    pub fn queue_get_timestamp_period(&self, queue_id: QueueId) -> f32 {
-        let hub = self.hub.borrow();
-        let queue = hub.queues.get(queue_id);
-
-        queue.get_timestamp_period()
     }
 
     pub fn queue_on_submitted_work_done(
