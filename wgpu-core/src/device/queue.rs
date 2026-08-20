@@ -719,7 +719,7 @@ impl<'a> PendingSubmission<'a> {
 //TODO: move out common parts of write_xxx.
 
 impl Queue {
-    pub fn write_buffer(
+    pub(crate) fn write_buffer_inner(
         &self,
         buffer: Arc<Buffer>,
         buffer_offset: wgt::BufferAddress,
@@ -787,6 +787,18 @@ impl Queue {
         pending_writes.consume(staging_buffer);
 
         result
+    }
+
+    pub fn write_buffer(
+        &self,
+        buffer: Arc<Buffer>,
+        buffer_offset: wgt::BufferAddress,
+        data: &[u8],
+    ) {
+        if let Err(error) = self.write_buffer_inner(buffer, buffer_offset, data) {
+            self.device
+                .handle_error(error, Some(self.label()), "Queue::write_buffer");
+        }
     }
 
     pub fn create_staging_buffer(
@@ -950,7 +962,7 @@ impl Queue {
         Ok(())
     }
 
-    pub fn write_texture(
+    pub fn write_texture_inner(
         &self,
         destination: wgt::TexelCopyTextureInfo<Arc<Texture>>,
         data: &[u8],
@@ -1199,6 +1211,19 @@ impl Queue {
         pending_writes.insert_texture(&dst);
 
         Ok(())
+    }
+
+    pub fn write_texture(
+        &self,
+        destination: wgt::TexelCopyTextureInfo<Arc<Texture>>,
+        data: &[u8],
+        data_layout: &wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    ) {
+        if let Err(error) = self.write_texture_inner(destination, data, data_layout, size) {
+            self.device
+                .handle_error(error, Some(self.label()), "Queue::write_texture");
+        }
     }
 
     #[cfg(webgl)]

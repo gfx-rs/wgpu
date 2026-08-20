@@ -1,4 +1,4 @@
-use wgpu_core::device::queue::{QueueSubmitError, QueueWriteError, SubmittedWorkDoneClosure};
+use wgpu_core::device::queue::{QueueSubmitError, SubmittedWorkDoneClosure};
 use wgpu_core::SubmissionIndex;
 
 use crate::global::Global;
@@ -11,7 +11,7 @@ impl Global {
         buffer_id: BufferId,
         buffer_offset: wgt::BufferAddress,
         data: &[u8],
-    ) -> Result<(), QueueWriteError> {
+    ) {
         let hub = self.hub.borrow();
         let queue = hub.queues.get(queue_id);
         let buffer = hub.buffers.get(buffer_id);
@@ -26,7 +26,7 @@ impl Global {
         data: &[u8],
         data_layout: &wgt::TexelCopyBufferLayout,
         size: &wgt::Extent3d,
-    ) -> Result<(), QueueWriteError> {
+    ) {
         let hub = self.hub.borrow();
         let queue = hub.queues.get(queue_id);
         let texture = hub.textures.get(destination.texture);
