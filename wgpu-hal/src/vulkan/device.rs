@@ -3030,7 +3030,13 @@ impl super::DeviceShared {
                 .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
                 .map_err(super::map_host_device_oom_err)?;
 
-            self.set_object_name(semaphore, name);
+            if !self
+                .instance
+                .flags
+                .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+            {
+                self.set_object_name(semaphore, name);
+            }
 
             Ok(semaphore)
         }
