@@ -857,9 +857,6 @@ impl Global {
         pipeline_id: id::RenderPipelineId,
         index: u32,
         id_in: id::BindGroupLayoutId,
-    ) -> (
-        id::BindGroupLayoutId,
-        Option<binding_model::GetBindGroupLayoutError>,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -870,11 +867,9 @@ impl Global {
 
         let pipeline = render_pipelines.get(pipeline_id);
 
-        let (bgl, error) = pipeline.get_bind_group_layout(index);
+        let bgl = pipeline.get_bind_group_layout(index);
 
-        let id = bind_group_layouts.assign(id_in, bgl);
-
-        (id, error)
+        bind_group_layouts.assign(id_in, bgl);
     }
 
     pub fn render_pipeline_drop(&self, render_pipeline_id: id::RenderPipelineId) {
