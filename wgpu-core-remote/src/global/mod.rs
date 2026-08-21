@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned as _, sync::Arc};
+use alloc::sync::Arc;
 use core::cell::RefCell;
 use core::fmt;
 use wgpu_core::binding_model::{BindGroupLayout, PipelineLayout};
@@ -24,6 +24,13 @@ mod instance;
 mod queue;
 mod render_pass;
 
+/// Wrapper around [`Instance`] that uses [`Hub`] to store all resources created by the instance behind an [`Id`].
+///
+/// All resource methods are implemented on [`Global`] and accept types from [`wgpu_core_remote_types`]
+/// (which use [`Id`]s instead of concrete resources) and maps them into [`wgpu_core`] types
+/// (the process which also includes resolving the IDs).
+///
+/// [`Id`]: crate::id::Id
 pub struct Global {
     pub(crate) hub: RefCell<Hub>,
     // the instance must be dropped last
@@ -42,31 +49,15 @@ impl Global {
         }
     }
 
-    /// # Safety
-    ///
-    /// Refer to the creation of wgpu-hal Instance for every backend.
-    pub unsafe fn from_hal_instance<A: hal::Api>(name: &str, hal_instance: A::Instance) -> Self {
-        Self {
-            instance: Instance::from_hal_instance::<A>(name.to_owned(), hal_instance),
-            hub: RefCell::new(Hub::new()),
-        }
-    }
-
-    /// # Safety
-    ///
-    /// - The raw instance handle returned must not be manually destroyed.
-    pub unsafe fn instance_as_hal<A: hal::Api>(&self) -> Option<&A::Instance> {
-        unsafe { self.instance.as_hal::<A>() }
-    }
-
-    /// # Safety
-    ///
-    /// - The raw handles obtained from the Instance must not be manually destroyed
-    pub unsafe fn from_instance(instance: Arc<Instance>) -> Self {
+    pub fn from_instance(instance: Arc<Instance>) -> Self {
         Self {
             instance,
             hub: RefCell::new(Hub::new()),
         }
+    }
+
+    pub fn instance(&self) -> &Arc<Instance> {
+        &self.instance
     }
 }
 

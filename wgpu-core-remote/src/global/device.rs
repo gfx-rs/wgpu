@@ -112,7 +112,7 @@ impl Global {
     /// [`GPUBufferDescriptor`]: https://www.w3.org/TR/webgpu/#dictdef-gpubufferdescriptor
     /// [`GPUBuffer`]: https://www.w3.org/TR/webgpu/#gpubuffer
     /// [`wgpu_types::BufferDescriptor`]: wgt::BufferDescriptor
-    /// [`Device::create_buffer`]: crate::device::Device::create_buffer
+    /// [`Device::create_buffer`]: wgpu_core::device::Device::create_buffer
     /// [`usage`]: https://www.w3.org/TR/webgpu/#dom-gputexturedescriptor-usage
     /// [`wgpu_types::BufferUsages`]: wgt::BufferUsages
     pub fn create_buffer_error(
