@@ -294,16 +294,26 @@ impl Surface {
     }
 
     pub fn present(self: &Arc<Self>) -> Result<Status, SurfaceError> {
+        self.present_with_damage(&[])
+    }
+
+    pub fn present_with_damage(
+        self: &Arc<Self>,
+        damage_rects: &[wgt::DamageRect],
+    ) -> Result<Status, SurfaceError> {
         #[cfg(feature = "trace")]
         if let Some(present) = self.presentation.lock().as_ref() {
             if let Some(ref mut trace) = *present.device.trace.lock() {
                 trace.add(Action::Present(self.to_trace()));
             }
         }
-        self.present_inner()
+        self.present_inner(damage_rects)
     }
 
-    pub(crate) fn present_inner(&self) -> Result<Status, SurfaceError> {
+    pub(crate) fn present_inner(
+        &self,
+        damage_rects: &[wgt::DamageRect],
+    ) -> Result<Status, SurfaceError> {
         profiling::scope!("Surface::present");
 
         let presentation = self.presentation.lock();
@@ -319,12 +329,20 @@ impl Surface {
             .ok_or(SurfaceError::Device(DeviceError::Lost))?;
         drop(presentation);
 
-        queue.present(self)
+        queue.present_with_damage(self, damage_rects)
     }
 }
 
 impl Queue {
     pub fn present(&self, surface: &Surface) -> Result<Status, SurfaceError> {
+        self.present_with_damage(surface, &[])
+    }
+
+    pub fn present_with_damage(
+        &self,
+        surface: &Surface,
+        damage_rects: &[wgt::DamageRect],
+    ) -> Result<Status, SurfaceError> {
         profiling::scope!("Queue::present");
 
         let texture = {
@@ -377,7 +395,7 @@ impl Queue {
                 // other present calls. Locking command indices prevents submits which must increment the
                 // submission index, and by `write`ing prevents other present calls.
                 let _command_indices = device.command_indices.write();
-                unsafe { raw_queue.present(raw_surface, raw) }
+                unsafe { raw_queue.present(raw_surface, raw, damage_rects) }
             }
             _ => unreachable!(),
         };

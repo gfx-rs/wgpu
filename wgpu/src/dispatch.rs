@@ -263,6 +263,16 @@ pub trait QueueInterface: CommonTraits {
     fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
 
     fn present(&self, detail: &DispatchSurfaceOutputDetail);
+
+    /// Present with damage hints. Backends that cannot make use of the hints
+    /// fall back to a full present.
+    fn present_with_damage(
+        &self,
+        detail: &DispatchSurfaceOutputDetail,
+        _damage_rects: &[wgt::DamageRect],
+    ) {
+        self.present(detail);
+    }
 }
 
 pub trait ShaderModuleInterface: CommonTraits {
