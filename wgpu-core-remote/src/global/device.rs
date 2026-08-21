@@ -363,9 +363,6 @@ impl Global {
         desc: &resource::ExternalTextureDescriptor,
         planes: &[id::TextureViewId],
         id_in: id::ExternalTextureId,
-    ) -> (
-        id::ExternalTextureId,
-        Option<resource::CreateExternalTextureError>,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -382,11 +379,9 @@ impl Global {
             .map(|plane_id| texture_views.get(*plane_id))
             .collect::<Vec<_>>();
 
-        let (external_texture, error) = device.create_external_texture(desc, &planes);
+        let external_texture = device.create_external_texture(desc, &planes);
 
-        let id = external_textures.assign(id_in, external_texture);
-
-        (id, error)
+        external_textures.assign(id_in, external_texture);
     }
 
     pub fn external_texture_destroy(&self, external_texture_id: id::ExternalTextureId) {

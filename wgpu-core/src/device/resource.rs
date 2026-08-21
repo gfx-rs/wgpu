@@ -2171,16 +2171,19 @@ impl Device {
         self: &Arc<Self>,
         desc: &resource::ExternalTextureDescriptor,
         planes: &[Arc<TextureView>],
-    ) -> (
-        Arc<ExternalTexture>,
-        Option<resource::CreateExternalTextureError>,
-    ) {
+    ) -> Arc<ExternalTexture> {
         profiling::scope!("Device::create_external_texture");
 
-        let (external_texture, error) = match self.create_external_texture_inner(desc, planes) {
-            Ok(external_texture) => (external_texture, None),
-            Err(e) => (ExternalTexture::invalid(Arc::clone(self), desc), Some(e)),
-        };
+        let external_texture = self
+            .create_external_texture_inner(desc, planes)
+            .unwrap_or_else(|err| {
+                self.handle_error(
+                    err,
+                    desc.label.as_deref(),
+                    "Device::create_external_texture",
+                );
+                ExternalTexture::invalid(Arc::clone(self), desc)
+            });
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
@@ -2205,7 +2208,7 @@ impl Device {
             Arc::as_ptr(&external_texture)
         );
 
-        (external_texture, error)
+        external_texture
     }
 
     pub(crate) fn create_external_texture_inner(

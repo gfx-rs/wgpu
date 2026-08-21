@@ -1412,12 +1412,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             .iter()
             .map(|plane| plane.inner.as_core().wgpu_texture_view.clone())
             .collect::<Vec<_>>();
-        let (wgpu_external_texture, error) =
-            self.wgpu_device.create_external_texture(&wgt_desc, &planes);
-        if let Some(cause) = error {
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_external_texture");
-        }
+        let wgpu_external_texture = self.wgpu_device.create_external_texture(&wgt_desc, &planes);
 
         CoreExternalTexture {
             wgpu_external_texture,
