@@ -943,6 +943,63 @@ pub(super) struct StatementContext<'a> {
     pub(super) result_struct: Option<&'a str>,
 }
 
+/// Does any case body perform a subgroup operation?
+///
+/// Used to decide whether a `switch` needs the nested-`if` workaround for
+/// Apple's Metal compiler; see the use site in `put_block`.
+fn cases_use_subgroup_ops(cases: &[crate::SwitchCase]) -> bool {
+    cases.iter().any(|case| block_uses_subgroup_ops(&case.body))
+}
+
+fn block_uses_subgroup_ops(block: &crate::Block) -> bool {
+    block.iter().any(|stmt| match *stmt {
+        crate::Statement::SubgroupBallot { .. }
+        | crate::Statement::SubgroupGather { .. }
+        | crate::Statement::SubgroupCollectiveOperation { .. } => true,
+        crate::Statement::Block(ref inner) => block_uses_subgroup_ops(inner),
+        crate::Statement::If {
+            ref accept,
+            ref reject,
+            ..
+        } => block_uses_subgroup_ops(accept) || block_uses_subgroup_ops(reject),
+        crate::Statement::Loop {
+            ref body,
+            ref continuing,
+            ..
+        } => block_uses_subgroup_ops(body) || block_uses_subgroup_ops(continuing),
+        crate::Statement::Switch { ref cases, .. } => cases_use_subgroup_ops(cases),
+        _ => false,
+    })
+}
+
+/// Is this `switch` equivalent to a chain of `if`/`else` statements?
+///
+/// It is when no case falls through and no case body contains a `break` bound
+/// to the switch itself: in an if/else chain such a `break` would bind to an
+/// enclosing loop instead, changing the meaning of the program.
+fn cases_convertible_to_if_chain(cases: &[crate::SwitchCase]) -> bool {
+    cases
+        .iter()
+        .all(|case| !case.fall_through && !block_breaks_out_of_switch(&case.body))
+}
+
+/// Does this block `break` out of the enclosing `switch`?
+///
+/// Deliberately does not recurse into `Loop` or nested `Switch` statements: a
+/// `break` inside those binds to the inner construct, not to our switch.
+fn block_breaks_out_of_switch(block: &crate::Block) -> bool {
+    block.iter().any(|stmt| match *stmt {
+        crate::Statement::Break => true,
+        crate::Statement::Block(ref inner) => block_breaks_out_of_switch(inner),
+        crate::Statement::If {
+            ref accept,
+            ref reject,
+            ..
+        } => block_breaks_out_of_switch(accept) || block_breaks_out_of_switch(reject),
+        _ => false,
+    })
+}
+
 impl<W: Write> Writer<W> {
     /// Creates a new `Writer` instance.
     pub fn new(out: W) -> Self {
@@ -3920,6 +3977,73 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Emit a `switch` as nested `if`/`else` statements.
+    ///
+    /// Only valid for switches satisfying [`cases_convertible_to_if_chain`].
+    /// The `default` case becomes the innermost `else`, regardless of where it
+    /// appears in the case list, matching `switch` semantics.
+    ///
+    /// Emits *nested* `else { if ... }` rather than a flat `else if` chain so
+    /// the output has the same shape as this backend's [`crate::Statement::If`]
+    /// lowering, which is the form observed to be compiled correctly.
+    fn put_switch_as_if_chain(
+        &mut self,
+        level: back::Level,
+        selector: Handle<crate::Expression>,
+        cases: &[crate::SwitchCase],
+        context: &StatementContext,
+    ) -> BackendResult {
+        let default_body = cases
+            .iter()
+            .find(|case| matches!(case.value, crate::SwitchValue::Default))
+            .map(|case| &case.body);
+        let value_cases: Vec<&crate::SwitchCase> = cases
+            .iter()
+            .filter(|case| !matches!(case.value, crate::SwitchValue::Default))
+            .collect();
+
+        self.put_switch_if_chain_tail(level, selector, &value_cases, default_body, context)
+    }
+
+    fn put_switch_if_chain_tail(
+        &mut self,
+        level: back::Level,
+        selector: Handle<crate::Expression>,
+        cases: &[&crate::SwitchCase],
+        default_body: Option<&crate::Block>,
+        context: &StatementContext,
+    ) -> BackendResult {
+        let Some((case, rest)) = cases.split_first() else {
+            // No value cases left: whatever remains runs unconditionally.
+            if let Some(body) = default_body {
+                self.put_block(level, body, context)?;
+            }
+            return Ok(());
+        };
+
+        let value = match case.value {
+            crate::SwitchValue::I32(value) => value.to_string(),
+            crate::SwitchValue::U32(value) => format!("{value}u"),
+            // Filtered out by `put_switch_as_if_chain`.
+            crate::SwitchValue::Default => unreachable!(),
+        };
+
+        write!(self.out, "{level}if (")?;
+        self.put_expression(selector, &context.expression, true)?;
+        writeln!(self.out, " == {value}) {{")?;
+        self.put_block(level.next(), &case.body, context)?;
+
+        if rest.is_empty() && default_body.is_none() {
+            writeln!(self.out, "{level}}}")?;
+        } else {
+            writeln!(self.out, "{level}}} else {{")?;
+            self.put_switch_if_chain_tail(level.next(), selector, rest, default_body, context)?;
+            writeln!(self.out, "{level}}}")?;
+        }
+
+        Ok(())
+    }
+
     fn put_block(
         &mut self,
         level: back::Level,
@@ -4040,6 +4164,21 @@ impl<W: Write> Writer<W> {
                     selector,
                     ref cases,
                 } => {
+                    // Apple's Metal compiler miscompiles subgroup operations
+                    // performed inside a `switch`: on A14 / iOS 26.5,
+                    // `simd_broadcast_first` in a switch case returns lane 0's
+                    // value for every lane, ignoring the branch's active mask.
+                    // Emitting the same control flow as nested `if`/`else`
+                    // statements produces spec-conformant results.
+                    //
+                    // Restricted to switches that are provably equivalent to an
+                    // if/else chain: no fall-through, and no `break` bound to
+                    // this switch (in an if/else chain such a `break` would
+                    // bind to an enclosing loop instead).
+                    if cases_use_subgroup_ops(cases) && cases_convertible_to_if_chain(cases) {
+                        self.put_switch_as_if_chain(level, selector, cases, context)?;
+                        continue;
+                    }
                     write!(self.out, "{level}switch(")?;
                     self.put_expression(selector, &context.expression, true)?;
                     writeln!(self.out, ") {{")?;
