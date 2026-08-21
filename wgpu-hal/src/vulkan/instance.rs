@@ -9,7 +9,7 @@ use std::thread;
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
-use parking_lot::RwLock;
+use wgpu_sync::RwLock;
 
 /// Name of the `VK_OHOS_surface` extension. Used with [`super::Instance::create_surface_ohos`].
 #[cfg(target_env = "ohos")]
@@ -213,10 +213,9 @@ fn error_is_waived(message_id_number: i32) -> bool {
     not(target_vendor = "apple")
 ))]
 fn cts_error_is_waived(message_id_number: i32) -> bool {
-    use std::sync::LazyLock;
+    use wgpu_sync::Lazy;
 
-    static WGPU_CTS_XTASK: LazyLock<bool> =
-        LazyLock::new(|| std::env::var_os("WGPU_CTS_XTASK").is_some());
+    static WGPU_CTS_XTASK: Lazy<bool> = Lazy::new(|| std::env::var_os("WGPU_CTS_XTASK").is_some());
 
     if !*WGPU_CTS_XTASK {
         return false;

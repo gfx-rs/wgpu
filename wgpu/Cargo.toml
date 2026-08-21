@@ -35,7 +35,6 @@ ignored = ["cfg_aliases"]
 [features]
 default = [
     "std",
-    "parking_lot",
     "dx12",
     "metal",
     "gles",
@@ -179,6 +178,7 @@ web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web"]
 ## support.
 std = [
     "raw-window-handle/std",
+    "wgpu-sync/std",
     "wgpu-types/std",
     "wgpu-core?/std",
     "js-sys?/std",
@@ -186,14 +186,6 @@ std = [
     "wasm-bindgen?/std",
     "wasm-bindgen-futures?/std",
 ]
-
-## Uses `parking_lot` as the implementation for locking primitives.
-##
-## This is a recommended feature for most users and should only be disabled when
-## required, e.g., for `no_std` support.
-## If disabled, either `std::sync::Mutex` or `core::cell::RefCell` will be used,
-## based on whether `std` is enabled or not.
-parking_lot = ["dep:parking_lot"]
 
 ## Enables `exhaust` method for `TextureFormat` of `wgpu-types`.
 ##
@@ -207,6 +199,7 @@ exhaust = ["wgpu-types/exhaust"]
 [dependencies]
 naga = { workspace = true, optional = true, features = ["termcolor"] }
 wgpu-core = { workspace = true, optional = true }
+wgpu-sync = { workspace = true, default-features = false }
 wgpu-types.workspace = true
 
 # Needed for both wgpu-core and webgpu
@@ -217,7 +210,6 @@ cfg-if.workspace = true
 document-features.workspace = true
 log.workspace = true
 hashbrown.workspace = true
-parking_lot = { workspace = true, optional = true }
 profiling.workspace = true
 raw-window-handle = { workspace = true, features = ["alloc"] }
 static_assertions.workspace = true

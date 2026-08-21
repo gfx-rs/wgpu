@@ -1289,6 +1289,36 @@ fn per_vertex_capability() {
 }
 
 #[test]
+fn linear_interpolation_capability() {
+    // Regression test for https://github.com/gfx-rs/wgpu/issues/9971: `@interpolate(linear)`
+    // has no GLSL ES equivalent, so it must be rejected during validation rather than
+    // silently passing and then failing in the GLSL backend at pipeline creation.
+    let source = r#"
+        @fragment
+        fn fs_main(@location(0) @interpolate(linear) v: f32) -> @location(0) vec4<f32> {
+            return vec4(v, 0.0, 0.0, 1.0);
+        }
+    "#;
+
+    check_one_validation! {
+        source,
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Fragment,
+            source: valid::EntryPointError::Argument(
+                0,
+                valid::VaryingError::UnsupportedCapability(Capabilities::LINEAR_INTERPOLATION),
+            ),
+            ..
+        })
+    }
+
+    no_validation_error(
+        source,
+        Capabilities::default() | Capabilities::LINEAR_INTERPOLATION,
+    );
+}
+
+#[test]
 fn multiple_enables_valid() {
     check_success(
         r#"
@@ -5635,6 +5665,88 @@ fn unterminated_block_comment_errors() {
         "const N: u32 = 1u; /* Trailing unterminated",
         "unterminated block comment",
     )
+}
+
+#[test]
+fn compute_shaders_dont_accept_result_types() {
+    check_validation! {
+        "
+        @compute @workgroup_size(1)
+        fn main() -> @location(0) u32 { return 0; }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Compute,
+                source: naga::valid::EntryPointError::UnexpectedComputeShaderEntryResult,
+                ..
+            },
+        )
+    }
+
+    check_validation! {
+        "
+        struct ComputeOutput {
+            @location(0) output0: vec4<f32>,
+            @location(1) output1: u32,
+        }
+        @compute @workgroup_size(1)
+        fn main() -> ComputeOutput { return ComputeOutput(vec4(0.0), 1); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Compute,
+                source: naga::valid::EntryPointError::UnexpectedComputeShaderEntryResult,
+                ..
+            },
+        )
+    }
+}
+
+#[test]
+fn user_locations_not_accepted_in_compute_entry_point_arguments() {
+    check_validation! {
+        "
+        @compute @workgroup_size(1)
+        fn main(@location(0) _input: u32) { return; }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Compute,
+                source: naga::valid::EntryPointError::Argument(
+                    0,
+                    naga::valid::VaryingError::InvalidAttributeInStage(
+                        "location",
+                        naga::ShaderStage::Compute,
+                    ),
+                ),
+                ..
+            },
+        )
+    }
+
+    check_validation! {
+        "
+        struct ComputeInput {
+            @location(0) input0: vec4<f32>,
+            @location(1) input1: u32,
+        }
+        @compute @workgroup_size(1)
+        fn main(_input: ComputeInput) { return; }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Compute,
+                source: naga::valid::EntryPointError::Argument(
+                    0,
+                    naga::valid::VaryingError::InvalidAttributeInStage(
+                        "location",
+                        naga::ShaderStage::Compute
+                    ),
+                ),
+                ..
+            },
+        )
+    }
 }
 
 #[test]

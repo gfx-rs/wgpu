@@ -13,6 +13,7 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_error::JsErrorBox;
 use wgpu_core::binding_model::BindingResource;
+use wgpu_core::error::EmptyErrorScopeStack;
 use wgpu_core::pipeline::ProgrammableStageDescriptor;
 use wgpu_types::BindingType;
 
@@ -29,8 +30,8 @@ use crate::adapter::GPUAdapterInfo;
 use crate::adapter::GPUSupportedFeatures;
 use crate::adapter::GPUSupportedLimits;
 use crate::command_encoder::GPUCommandEncoder;
-use crate::error::{fmt_err, make_pipeline_error};
-use crate::error::{GPUError, GPUGenericError, GPUPipelineErrorReason};
+use crate::error::{fmt_err, make_pipeline_error, GPUError};
+use crate::error::{GPUGenericError, GPUPipelineErrorReason};
 use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
 use crate::render_pipeline::GPURenderPipeline;
@@ -133,9 +134,6 @@ impl GPUDevice {
   #[undefined]
   fn destroy(&self) {
     self.wgpu_device.destroy();
-    self
-      .error_handler
-      .push_error(Some(GPUError::Lost(GPUDeviceLostReason::Destroyed)));
   }
 
   #[required(1)]
@@ -578,13 +576,10 @@ impl GPUDevice {
     #[cfg(target_vendor = "apple")]
     scope.adjust_amount_of_external_allocated_memory(EXTERNAL_MEMORY_AMOUNT);
 
-    let (wgpu_command_encoder, err) =
+    let wgpu_command_encoder =
       self.wgpu_device.create_command_encoder(&wgpu_descriptor);
 
-    self.error_handler.push_error(err);
-
     let encoder = GPUCommandEncoder {
-      error_handler: self.error_handler.clone(),
       wgpu_command_encoder,
       label,
       #[cfg(target_vendor = "apple")]
@@ -651,7 +646,6 @@ impl GPUDevice {
     self.error_handler.push_error(err);
 
     GPURenderBundleEncoder {
-      error_handler: self.error_handler.clone(),
       encoder: RefCell::new(encoder),
       label: descriptor.label,
     }
@@ -691,12 +685,7 @@ impl GPUDevice {
   #[required(1)]
   #[undefined]
   fn push_error_scope(&self, #[webidl] filter: super::error::GPUErrorFilter) {
-    self
-      .error_handler
-      .scopes
-      .lock()
-      .unwrap()
-      .push((filter, None));
+    self.wgpu_device.push_error_scope(filter.into());
   }
 
   #[async_method(fake)]
@@ -705,26 +694,21 @@ impl GPUDevice {
     &self,
     scope: &mut v8::HandleScope,
   ) -> Result<v8::Global<v8::Value>, JsErrorBox> {
-    if self.error_handler.is_lost.get().is_some() {
-      let val = v8::null(scope).cast::<v8::Value>();
-      return Ok(v8::Global::new(scope, val));
-    }
-
-    let Some((_, error)) = self.error_handler.scopes.lock().unwrap().pop()
-    else {
-      return Err(JsErrorBox::new(
+    match self.wgpu_device.pop_error_scope() {
+      Ok(maybe_error) => {
+        let val = if let Some(err) = maybe_error {
+          let err: GPUError = err.into();
+          deno_core::error::to_v8_error(scope, &err)
+        } else {
+          v8::null(scope).cast::<v8::Value>()
+        };
+        Ok(v8::Global::new(scope, val))
+      }
+      Err(EmptyErrorScopeStack {}) => Err(JsErrorBox::new(
         "DOMExceptionOperationError",
         "There are no error scopes on the error scope stack",
-      ));
-    };
-
-    let val = if let Some(err) = error {
-      deno_core::error::to_v8_error(scope, &err)
-    } else {
-      v8::null(scope).into()
-    };
-
-    Ok(v8::Global::new(scope, val))
+      )),
+    }
   }
 
   #[fast]

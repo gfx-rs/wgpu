@@ -2,7 +2,7 @@ use alloc::{borrow::ToOwned as _, boxed::Box, collections::BTreeMap, sync::Arc, 
 use core::{ffi::CStr, marker::PhantomData};
 
 use ash::{ext, google, khr, vk};
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 
 use crate::{vulkan::semaphore_list::SemaphoreList, AllocationSizes};
 
@@ -696,7 +696,8 @@ impl PhysicalDeviceFeatures {
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
             | Df::NONBLOCKING_QUERY_RESOLVE
             | Df::SHADER_F16_IN_F32
-            | Df::MSL2_1;
+            | Df::MSL2_1
+            | Df::LINEAR_INTERPOLATION;
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,

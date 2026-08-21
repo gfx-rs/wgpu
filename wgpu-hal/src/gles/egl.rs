@@ -1,10 +1,9 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::{ffi, mem::ManuallyDrop, ptr, time::Duration};
-use std::sync::LazyLock;
 
 use glow::HasContext;
 use hashbrown::HashMap;
-use parking_lot::{MappedMutexGuard, Mutex, MutexGuard, RwLock};
+use wgpu_sync::{Lazy, MappedMutexGuard, Mutex, MutexGuard, RwLock};
 
 /// The amount of time to wait while trying to obtain a lock to the adapter context
 const CONTEXT_LOCK_TIMEOUT_SECS: u64 = 6;
@@ -124,9 +123,18 @@ fn choose_config(
         log::debug!("\tTrying {name}");
 
         attributes.clear();
+        let mut surface_type = 0;
         for &(_, tier_attr) in tiers[..=tier_max].iter() {
-            attributes.extend_from_slice(tier_attr);
+            for attribute in tier_attr.chunks_exact(2) {
+                if attribute[0] == khronos_egl::SURFACE_TYPE {
+                    surface_type |= attribute[1];
+                } else {
+                    attributes.extend_from_slice(attribute);
+                }
+            }
         }
+        // Duplicate EGL attribute keys are undefined and make Mesa return no configs.
+        attributes.extend_from_slice(&[khronos_egl::SURFACE_TYPE, surface_type]);
         // make sure the Alpha is enough to support sRGB
         match srgb_kind {
             SrgbFrameBufferKind::None => {}
@@ -354,8 +362,7 @@ unsafe impl Sync for Inner {}
 // Different calls to `eglGetPlatformDisplay` may return the same `Display`, making it a global
 // state of all our `EglContext`s. This forces us to track the number of such context to prevent
 // terminating the display if it's currently used by another `EglContext`.
-static DISPLAYS_REFERENCE_COUNT: LazyLock<Mutex<HashMap<usize, usize>>> =
-    LazyLock::new(Default::default);
+static DISPLAYS_REFERENCE_COUNT: Lazy<Mutex<HashMap<usize, usize>>> = Lazy::new(Default::default);
 
 fn initialize_display(
     egl: &EglInstance,
