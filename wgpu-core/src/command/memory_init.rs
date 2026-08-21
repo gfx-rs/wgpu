@@ -62,14 +62,29 @@ impl CommandBufferTextureMemoryActions {
         self.discards.push(discard);
     }
 
-    // Registers a TextureInitTrackerAction.
-    // Returns previously discarded surface that need to be initialized *immediately* now.
-    // Only returns a non-empty list if action is MemoryInitKind::NeedsInitializedMemory.
+    /// Registers a [`TextureInitTrackerAction`].
+    ///
+    /// Returns previously discarded surfaces that need to be initialized
+    /// *immediately*. Only returns a non-empty list if `action.kind` is
+    /// [`MemoryInitKind::NeedsInitializedMemory`]. These surfaces are removed
+    /// from the pending discard list, so the caller takes on the obligation to
+    /// clear them (via [`fixup_discarded_surfaces`]).
+    ///
+    /// `depth_slices` is the range of depth slices that `action` physically
+    /// accesses, or `None` if the access is to all slices of a 3D texture or
+    /// to some other texture type. The depth slice information does not flow to
+    /// the global init tracker, whose granularity is a whole mip level, but it
+    /// is important in deciding which pending discards have to be repaired
+    /// ahead of this action, as opposed to at the end of the command buffer.
     #[must_use]
     pub(crate) fn register_init_action(
         &mut self,
         action: &TextureInitTrackerAction,
+        depth_slices: Option<Range<u32>>,
     ) -> SurfacesInDiscardState {
+        let is_3d = action.texture.desc.dimension == wgt::TextureDimension::D3;
+        debug_assert!(depth_slices.is_none() || is_3d);
+
         // Texture subresources from `self.discards` that were discarded earlier in this
         // command buffer and which the present `action` requires be initialized. These
         // require inline initialization, which will be done by `fixup_discarded_surfaces`.
@@ -95,23 +110,41 @@ impl CommandBufferTextureMemoryActions {
         // self.discards is empty!)
         let init_actions = &mut self.init_actions;
         self.discards.retain(|discarded_surface| {
-            if discarded_surface.texture.is_equal(&action.texture)
-                && discarded_surface.texture.desc.dimension != wgt::TextureDimension::D3
-                && action
-                    .range
-                    .layer_range
-                    .contains(&discarded_surface.layer_or_depth_slice)
-                && action
+            if !discarded_surface.texture.is_equal(&action.texture)
+                || !action
                     .range
                     .mip_range
                     .contains(&discarded_surface.mip_level)
             {
-                if let MemoryInitKind::NeedsInitializedMemory = action.kind {
-                    immediately_necessary_clears.push(discarded_surface.clone());
+                return true;
+            }
 
-                    // Mark surface as implicitly initialized (this is relevant
-                    // because it might have been uninitialized prior to
-                    // discarding
+            let overlaps_discard = if is_3d {
+                // The `layer_range` for a `TextureInitTrackerAction` does not identify
+                // depth slices, so the caller passed that information separately.
+                depth_slices
+                    .as_ref()
+                    .is_none_or(|slices| slices.contains(&discarded_surface.layer_or_depth_slice))
+            } else {
+                action
+                    .range
+                    .layer_range
+                    .contains(&discarded_surface.layer_or_depth_slice)
+            };
+            if !overlaps_discard {
+                return true;
+            }
+
+            if let MemoryInitKind::NeedsInitializedMemory = action.kind {
+                immediately_necessary_clears.push(discarded_surface.clone());
+
+                // Mark surface as implicitly initialized. This matters for non-3D textures
+                // where the discarded layer range may differ from the action layer range,
+                // and may have been uninitialized prior to discarding. For 3D textures,
+                // init state does not vary per layer, so we either emitted an init action
+                // above for the whole mip level, or it was already initialized and none
+                // is necessary.
+                if !is_3d {
                     let layer = discarded_surface.layer_or_depth_slice;
                     init_actions.push(TextureInitTrackerAction {
                         texture: discarded_surface.texture.clone(),
@@ -123,31 +156,8 @@ impl CommandBufferTextureMemoryActions {
                         kind: MemoryInitKind::ImplicitlyInitialized,
                     });
                 }
-                false
-            } else if discarded_surface.texture.is_equal(&action.texture)
-                && discarded_surface.texture.desc.dimension == wgt::TextureDimension::D3
-                && action
-                    .range
-                    .mip_range
-                    .contains(&discarded_surface.mip_level)
-            {
-                if let MemoryInitKind::NeedsInitializedMemory = action.kind {
-                    immediately_necessary_clears.push(discarded_surface.clone());
-
-                    // Init tracking of 3D textures is for mip levels only (not depth
-                    // slices). If a mip was uninitialized at the start of the
-                    // command buffer, we recorded an init action above. We don't need
-                    // to additionally record `ImplicitlyInitialized` for it here.
-                    // When the actual initialization commands are prepared in
-                    // [`Queue::submit`], `initialize_texture_memory` collects a list of any
-                    // slices remaining in `self.discards` and returns it, and they will be
-                    // reinitialized before the conclusion of the command buffer by
-                    // `initialize_discarded_depth_slices`.
-                }
-                false
-            } else {
-                true
             }
+            false
         });
 
         immediately_necessary_clears
@@ -160,11 +170,14 @@ impl CommandBufferTextureMemoryActions {
         texture: &Arc<Texture>,
         range: TextureInitRange,
     ) {
-        let must_be_empty = self.register_init_action(&TextureInitTrackerAction {
-            texture: texture.clone(),
-            range,
-            kind: MemoryInitKind::ImplicitlyInitialized,
-        });
+        let must_be_empty = self.register_init_action(
+            &TextureInitTrackerAction {
+                texture: texture.clone(),
+                range,
+                kind: MemoryInitKind::ImplicitlyInitialized,
+            },
+            None,
+        );
         assert!(must_be_empty.is_empty());
     }
 }

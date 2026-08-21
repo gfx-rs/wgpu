@@ -53,6 +53,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
         COPY_BUFFER_TO_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12,
         COPY_BUFFER_TO_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8,
+        DISCARDING_3D_DEPTH_SLICE_ALONGSIDE_ANOTHER_SLICE_IN_SAME_PASS,
         DISCARDING_3D_DEPTH_SLICE_PRESERVES_OTHER_SLICES,
         DISCARDING_BOTH_DEPTH_AND_STENCIL_WITH_DIVERGING_LOAD_OPS,
         DISCARDING_COLOR_TARGET_AT_NONZERO_MIP_AND_LAYER,
@@ -675,6 +676,51 @@ impl<'ctx> RenderTargetInitCase<'ctx> {
         });
     }
 
+    /// Record a render pass with one color attachment per entry of `targets`, which must all
+    /// be distinct depth slices of the same mip level of a 3D texture.
+    fn record_multi_slice_pass(
+        &self,
+        encoder: &mut CommandEncoder,
+        targets: &[(RenderTarget, PassOps)],
+    ) {
+        let views: Vec<TextureView> = targets
+            .iter()
+            .map(|(target, _)| {
+                self.texture.create_view(&TextureViewDescriptor {
+                    label: None,
+                    format: Some(self.spec.format),
+                    dimension: Some(self.view_dimension),
+                    usage: Some(TextureUsages::RENDER_ATTACHMENT),
+                    aspect: TextureAspect::All,
+                    base_mip_level: target.mip(),
+                    mip_level_count: Some(1),
+                    base_array_layer: 0,
+                    array_layer_count: Some(1),
+                })
+            })
+            .collect();
+        let attachments: Vec<Option<RenderPassColorAttachment<'_>>> = targets
+            .iter()
+            .zip(&views)
+            .map(|((target, ops), view)| {
+                Some(RenderPassColorAttachment {
+                    view,
+                    depth_slice: Some(target.subresource_index()),
+                    resolve_target: None,
+                    ops: ops.color,
+                })
+            })
+            .collect();
+        encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Render targets under test"),
+            color_attachments: &attachments,
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+    }
+
     fn create_command_encoder(&mut self) {
         self.encoder = Some(
             self.ctx
@@ -692,6 +738,12 @@ impl<'ctx> RenderTargetInitCase<'ctx> {
     fn pass(&mut self, target: RenderTarget, ops: PassOps) {
         let mut encoder = self.encoder.take().unwrap();
         self.record_pass(&mut encoder, target, ops);
+        self.encoder = Some(encoder);
+    }
+
+    fn multi_slice_pass(&mut self, targets: &[(RenderTarget, PassOps)]) {
+        let mut encoder = self.encoder.take().unwrap();
+        self.record_multi_slice_pass(&mut encoder, targets);
         self.encoder = Some(encoder);
     }
 
@@ -1368,6 +1420,91 @@ static DISCARDING_3D_DEPTH_SLICE_PRESERVES_OTHER_SLICES: GpuTestConfiguration =
                     )
                     .await;
                 }
+            }
+        });
+
+// Distinct depth slices of one 3D mip level do not overlap, so a single render pass may
+// attach several of them at once. Those attachments are processed by successive calls to
+// [`CommandBufferTextureMemoryActions::register_init_action`]. Global init tracking for 3D
+// textures operates per mip level, but pending discards within a single command buffer
+// _are_ tracked per depth slice, and it is important that they be matched that way against
+// init actions, due to the following case.
+//
+// A pending discard of a slice is repaired by clearing it ahead of a subsequent operation in
+// the same command buffer that needs the mip level initialized, or otherwise at the end of
+// the command buffer. Doing that without checking depth slices is correct when the discard
+// came from an earlier pass, but not when it came from another attachment to the same
+// pass:
+//
+// - attachment 0: mip 0, depth_slice 0, `LoadOp::Clear` / `StoreOp::Discard`
+// - attachment 1: mip 0, depth_slice 1, `LoadOp::Load` / `StoreOp::Store`
+//
+// Attachment 1 needs mip 0 initialized, so if depth slices were not considered, it would
+// repair slice 0's discard. But that clear would be emitted ahead of the pass, so slice 0
+// would be left holding the discarded contents with the mip level recorded as initialized.
+// The repair has to be deferred to the end of the command buffer instead. We test both
+// `Load` and `Clear` for attachment 1 (`other`). Either requires that the whole mip level
+// be initialized, because a mip level is the finest granularity the init tracker can record
+// (after the command buffer concludes).
+//
+// Attachment 0 clears to the sentinel value so that slice 0 holds something other than zero
+// when the discard takes effect. Under `LoadOp::Load` the pass would write nothing there,
+// and a misplaced pre-pass clear to zero would coincidentally match the expected result,
+// leaving the test unable to tell whether the discard was correctly tracked.
+#[apply(gpu_test!)]
+static DISCARDING_3D_DEPTH_SLICE_ALONGSIDE_ANOTHER_SLICE_IN_SAME_PASS: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                // https://github.com/gfx-rs/wgpu/issues/10162
+                .expect_fail(FailureCase::webgl2())
+                // https://github.com/gfx-rs/wgpu/issues/9184
+                .expect_fail(
+                    FailureCase::molten_vk()
+                        .validation_error("VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT"),
+                ),
+        )
+        .run_async(|ctx| async move {
+            let discarded = RenderTarget::Volume {
+                mip: 0,
+                depth_slice: 0,
+            };
+            let other = RenderTarget::Volume {
+                mip: 0,
+                depth_slice: 1,
+            };
+
+            for (other_ops, other_desc) in [
+                (
+                    PassOps::clear_store(sentinel_for(color_3d_spec().format)),
+                    "clear + store",
+                ),
+                (PassOps::load_store(), "load + store"),
+            ] {
+                let mut case = RenderTargetInitCase::new(
+                    &ctx,
+                    color_3d_spec(),
+                    TextureViewDimension::D3,
+                    PreInit::Sentinel,
+                    format!("clear + discard of {discarded} alongside {other_desc} of {other}"),
+                );
+
+                let sentinel = case.sentinel;
+                case.create_command_encoder();
+                case.multi_slice_pass(&[
+                    (discarded, PassOps::clear_discard(sentinel)),
+                    (other, other_ops),
+                ]);
+                case.submit_command_encoder();
+
+                case.create_command_encoder();
+                case.copy_texture_to_buffer();
+                case.submit_command_encoder();
+
+                // Every slice the pass did not discard holds the sentinel: the ones it did not
+                // touch keep what `PreInit::Sentinel` wrote, and the other attachment either
+                // cleared its slice to the sentinel or loaded and stored it unchanged.
+                case.assert_only_target(discarded, Expected::Zero).await;
             }
         });
 

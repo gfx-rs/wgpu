@@ -161,7 +161,7 @@ pub(super) fn flush_bindings_helper(state: &mut PassState) -> Result<(), Destroy
                 state
                     .base
                     .texture_memory_actions
-                    .register_init_action(action),
+                    .register_init_action(action, None),
             );
         }
 
