@@ -14,14 +14,6 @@ use crate::global::Global;
 use crate::hub::Hub;
 use crate::id;
 
-fn map_clear_value<V1, V2>(load_op: wgt::LoadOp<V1>, f: impl FnOnce(V1) -> V2) -> wgt::LoadOp<V2> {
-    match load_op {
-        wgt::LoadOp::Clear(value) => wgt::LoadOp::Clear(f(value)),
-        wgt::LoadOp::Load => wgt::LoadOp::Load,
-        wgt::LoadOp::DontCare(token) => wgt::LoadOp::DontCare(token),
-    }
-}
-
 impl Global {
     /// Creates a render pass.
     ///
@@ -61,7 +53,7 @@ impl Global {
                                 .resolve_target
                                 .as_ref()
                                 .map(|rt| texture_views.get(*rt)),
-                            load_op: at.load_op,
+                            load_op: at.load_op.to_wgt(),
                             store_op: at.store_op,
                         })
                     })
@@ -75,7 +67,7 @@ impl Global {
                             .depth
                             .load_op
                             .to_std()
-                            .map(|x| map_clear_value(x, FfiOption::to_std)),
+                            .map(|x| x.map_clear_value(FfiOption::to_std).to_wgt()),
                         store_op: at.depth.store_op.to_std(),
                         read_only: at.depth.read_only,
                     },
@@ -84,7 +76,7 @@ impl Global {
                             .stencil
                             .load_op
                             .to_std()
-                            .map(|x| map_clear_value(x, FfiOption::to_std)),
+                            .map(|x| x.map_clear_value(FfiOption::to_std).to_wgt()),
                         store_op: at.stencil.store_op.to_std(),
                         read_only: at.stencil.read_only,
                     },
