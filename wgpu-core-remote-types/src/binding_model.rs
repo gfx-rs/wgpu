@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId};
 use crate::Label;
 
+/// Corresponds to [`GPUBufferBinding`](https://www.w3.org/TR/webgpu/#dictdef-gpubufferbinding).
 #[repr(C)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BufferBinding {
@@ -21,6 +22,7 @@ pub struct BufferBinding {
     pub size: Option<wgt::BufferAddress>,
 }
 
+/// Corresponds to [`GPUBindingResource`](https://www.w3.org/TR/webgpu/#typedefdef-gpubindingresource).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BindingResource {
     Buffer(BufferBinding),
@@ -30,6 +32,8 @@ pub enum BindingResource {
 }
 
 /// Bindable resource and the slot to bind it to.
+///
+/// This corresponds to [`GPUBindGroupEntry`](https://www.w3.org/TR/webgpu/#dictdef-gpubindgroupentry).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BindGroupEntry {
     /// Slot for which binding provides resource. Corresponds to an entry of the same
@@ -40,6 +44,8 @@ pub struct BindGroupEntry {
 }
 
 /// Describes a group of bindings and the resources to be bound.
+///
+/// This corresponds to [`GPUBindGroupDescriptor`](https://www.w3.org/TR/webgpu/#dictdef-gpubindgroupdescriptor).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BindGroupDescriptor<'a> {
     /// Debug label of the bind group.
@@ -52,7 +58,7 @@ pub struct BindGroupDescriptor<'a> {
     pub entries: Cow<'a, [BindGroupEntry]>,
 }
 
-/// Describes a [`BindGroupLayout`].
+/// Corresponds to [`GPUBindGroupLayoutDescriptor`](https://www.w3.org/TR/webgpu/#dictdef-gpubindgrouplayoutdescriptor).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BindGroupLayoutDescriptor<'a> {
     /// Debug label of the bind group layout.

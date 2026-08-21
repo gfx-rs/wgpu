@@ -32,14 +32,14 @@ impl Global {
     /// The HAL adapter may be obtained e.g. by calling `enumerate_adapters` on
     /// the HAL directly.
     ///
-    /// If [limit bucketing][lt] is desired, [`crate::limits::apply_limit_buckets`]
+    /// If [limit bucketing][lt] is desired, [`wgpu_core::limits::apply_limit_buckets`]
     /// should be called with the HAL adapter before calling this function.
     ///
     /// # Safety
     ///
     /// `hal_adapter` must be created from this global internal instance handle.
     ///
-    /// [lt]: crate::limits#Limit-bucketing
+    /// [lt]: wgpu_core::limits#Limit-bucketing
     pub unsafe fn create_adapter_from_hal(
         &self,
         hal_adapter: hal::DynExposedAdapter,

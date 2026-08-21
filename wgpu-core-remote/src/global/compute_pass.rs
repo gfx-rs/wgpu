@@ -19,9 +19,7 @@ impl Global {
     /// ultimately be generated when the parent encoder is finished, and it is
     /// not possible to run any commands from the invalid pass.
     ///
-    /// If successful, puts the encoder into the [`Locked`] state.
-    ///
-    /// [`Locked`]: crate::command::CommandEncoderStatus::Locked
+    /// If successful, puts the encoder into the `Locked` state.
     pub fn command_encoder_begin_compute_pass<'a>(
         &self,
         encoder_id: id::CommandEncoderId,
