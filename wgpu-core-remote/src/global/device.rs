@@ -408,7 +408,7 @@ impl Global {
         device_id: DeviceId,
         desc: &resource::SamplerDescriptor,
         id_in: id::SamplerId,
-    ) -> (id::SamplerId, Option<resource::CreateSamplerError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             samplers, devices, ..
@@ -416,11 +416,9 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (sampler, error) = device.create_sampler(desc);
+        let sampler = device.create_sampler(desc);
 
-        let id = samplers.assign(id_in, sampler);
-
-        (id, error)
+        samplers.assign(id_in, sampler);
     }
 
     pub fn sampler_drop(&self, sampler_id: id::SamplerId) {

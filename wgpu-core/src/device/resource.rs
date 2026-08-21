@@ -2303,16 +2303,13 @@ impl Device {
         Ok(external_texture)
     }
 
-    pub fn create_sampler(
-        self: &Arc<Self>,
-        desc: &resource::SamplerDescriptor,
-    ) -> (Arc<Sampler>, Option<resource::CreateSamplerError>) {
+    pub fn create_sampler(self: &Arc<Self>, desc: &resource::SamplerDescriptor) -> Arc<Sampler> {
         profiling::scope!("Device::create_sampler");
 
-        let (sampler, error) = match self.create_sampler_inner(desc) {
-            Ok(sampler) => (sampler, None),
-            Err(e) => (Sampler::invalid(Arc::clone(self), desc), Some(e)),
-        };
+        let sampler = self.create_sampler_inner(desc).unwrap_or_else(|err| {
+            self.handle_error(err, desc.label.as_deref(), "Device::create_sampler");
+            Sampler::invalid(Arc::clone(self), desc)
+        });
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
@@ -2322,7 +2319,7 @@ impl Device {
 
         api_log!("Device::create_sampler -> {:?}", Arc::as_ptr(&sampler));
 
-        (sampler, error)
+        sampler
     }
 
     pub(crate) fn create_sampler_inner(

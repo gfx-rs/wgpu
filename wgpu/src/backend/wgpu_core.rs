@@ -1480,11 +1480,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             border_color: desc.border_color,
         };
 
-        let (wgpu_sampler, error) = self.wgpu_device.create_sampler(&descriptor);
-        if let Some(cause) = error {
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_sampler");
-        }
+        let wgpu_sampler = self.wgpu_device.create_sampler(&descriptor);
         CoreSampler { wgpu_sampler }.into()
     }
 
