@@ -1319,19 +1319,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
         };
 
-        let (wgpu_compute_pipeline, error) = self.wgpu_device.create_compute_pipeline(descriptor);
-        if let Some(cause) = error {
-            if let wgc::pipeline::CreateComputePipelineError::Internal(ref error) = cause {
-                log::error!(
-                    "Shader translation error for stage {:?}: {}",
-                    wgt::ShaderStages::COMPUTE,
-                    error
-                );
-                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
-            }
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_compute_pipeline");
-        }
+        let wgpu_compute_pipeline = self.wgpu_device.create_compute_pipeline(descriptor);
         CoreComputePipeline {
             wgpu_compute_pipeline,
         }

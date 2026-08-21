@@ -319,7 +319,7 @@ impl Player {
             }
             Action::CreateComputePipeline { id, desc } => {
                 let resolved_desc = self.resolve_compute_pipeline_descriptor(desc);
-                let (pipeline, _error) = device.create_compute_pipeline(resolved_desc);
+                let pipeline = device.create_compute_pipeline(resolved_desc);
                 self.compute_pipelines.insert(id, pipeline);
             }
             Action::DropComputePipeline(id) => {

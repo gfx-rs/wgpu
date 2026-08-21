@@ -880,9 +880,6 @@ impl Global {
         device_id: DeviceId,
         desc: &ComputePipelineDescriptor,
         id_in: id::ComputePipelineId,
-    ) -> (
-        id::ComputePipelineId,
-        Option<pipeline::CreateComputePipelineError>,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -916,11 +913,61 @@ impl Global {
             cache,
         };
 
-        let (pipeline, error) = device.create_compute_pipeline(desc);
+        let pipeline = device.create_compute_pipeline(desc);
 
-        let id = compute_pipelines.assign(id_in, pipeline);
+        compute_pipelines.assign(id_in, pipeline);
+    }
 
-        (id, error)
+    /// Error-returning version of `device_create_compute_pipeline` to implement
+    /// [GPUDevice.createComputePipelineAsync](https://gpuweb.github.io/gpuweb/#dom-gpudevice-createcomputepipelineasync).
+    /// Returns an error if the pipeline creation fails instead of handling error in device.
+    ///
+    /// Id is assigned to the pipeline only if the creation succeeds.
+    pub fn device_create_compute_pipeline_or_error(
+        &self,
+        device_id: DeviceId,
+        desc: &ComputePipelineDescriptor,
+        id_in: id::ComputePipelineId,
+    ) -> Result<(), pipeline::CreateComputePipelineError> {
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            compute_pipelines,
+            devices,
+            shader_modules,
+            pipeline_layouts,
+            pipeline_caches,
+            ..
+        } = &mut *hub;
+
+        let device = devices.get(device_id);
+
+        let layout = desc.layout.map(|layout| pipeline_layouts.get(layout));
+
+        let cache = desc.cache.map(|cache| pipeline_caches.get(cache));
+
+        let module = shader_modules.get(desc.stage.module);
+
+        let stage = ProgrammableStageDescriptor {
+            module,
+            entry_point: desc.stage.entry_point.clone(),
+            constants: desc.stage.constants.clone(),
+            zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
+        };
+
+        let desc = pipeline::ComputePipelineDescriptor {
+            label: desc.label.clone(),
+            layout,
+            stage,
+            cache,
+        };
+
+        match device.create_compute_pipeline_or_error(desc) {
+            Ok(pipeline) => {
+                compute_pipelines.assign(id_in, pipeline);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,

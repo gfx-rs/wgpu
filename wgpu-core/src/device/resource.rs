@@ -4319,21 +4319,26 @@ impl Device {
         Ok(layout)
     }
 
+    /// Creates a compute pipeline. If the creation fails,
+    /// it will handle error in device and return an invalid compute pipeline.
+    ///
+    /// Corresponds to [GPUDevice.createComputePipeline](https://www.w3.org/TR/webgpu/#dom-gpudevice-createcomputepipeline)
     pub fn create_compute_pipeline(
         self: &Arc<Self>,
         desc: pipeline::ComputePipelineDescriptor,
-    ) -> (
-        Arc<pipeline::ComputePipeline>,
-        Option<pipeline::CreateComputePipelineError>,
-    ) {
+    ) -> Arc<pipeline::ComputePipeline> {
         profiling::scope!("Device::create_compute_pipeline");
-        let (compute_pipeline, error) = match self.create_compute_pipeline_inner(desc.clone()) {
-            Ok(compute_pipeline) => (compute_pipeline, None),
-            Err(error) => (
-                pipeline::ComputePipeline::invalid(self.clone(), desc.label.to_string()),
-                Some(error),
-            ),
-        };
+        let compute_pipeline = self
+            .create_compute_pipeline_or_error(desc.clone())
+            .unwrap_or_else(|err| {
+                self.handle_error(
+                    err,
+                    desc.label.as_deref(),
+                    "Device::create_compute_pipeline",
+                );
+
+                pipeline::ComputePipeline::invalid(self.clone(), desc.label.to_string())
+            });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace;
@@ -4347,10 +4352,13 @@ impl Device {
             "Device::create_compute_pipeline -> {:?}",
             Arc::as_ptr(&compute_pipeline)
         );
-        (compute_pipeline, error)
+        compute_pipeline
     }
 
-    pub fn create_compute_pipeline_inner(
+    /// Creates a compute pipeline without raising any error to device.
+    ///
+    /// Corresponds to [GPUDevice.createComputePipelineAsync](https://www.w3.org/TR/webgpu/#dom-gpudevice-createcomputepipelineasync)
+    pub fn create_compute_pipeline_or_error(
         self: &Arc<Self>,
         desc: pipeline::ComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
