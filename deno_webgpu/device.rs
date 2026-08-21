@@ -743,7 +743,6 @@ impl GPUDevice {
 
     (
       GPUComputePipeline {
-        error_handler: self.error_handler.clone(),
         wgpu_compute_pipeline,
         label: descriptor.label.clone(),
       },
