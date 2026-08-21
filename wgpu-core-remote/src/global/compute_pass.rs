@@ -42,8 +42,8 @@ impl Global {
                 .as_ref()
                 .map(|tw| PassTimestampWrites {
                     query_set: query_sets.get(tw.query_set),
-                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index.to_std(),
+                    end_of_pass_write_index: tw.end_of_pass_write_index.to_std(),
                 }),
         };
 

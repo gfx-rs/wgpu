@@ -525,7 +525,7 @@ impl Global {
                 binding_model::BufferBinding {
                     buffer,
                     offset: bb.offset,
-                    size: bb.size,
+                    size: bb.size.to_std(),
                 }
             };
             let resolve_sampler = |id: &id::SamplerId| samplers.get(*id);

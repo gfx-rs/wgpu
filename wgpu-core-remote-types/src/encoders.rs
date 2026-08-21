@@ -1,5 +1,6 @@
 use alloc::borrow::Cow;
 
+use crate::ffi::FfiOption;
 use crate::{id, Label};
 
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
@@ -14,7 +15,7 @@ pub struct RenderPassColorAttachment {
     /// The view to use as an attachment.
     pub view: id::TextureViewId,
     /// The depth slice index of a 3D view. It must not be provided if the view is not 3D.
-    pub depth_slice: Option<u32>,
+    pub depth_slice: FfiOption<u32>,
     /// The view that will receive the resolved output if multisampling is used.
     pub resolve_target: Option<id::TextureViewId>,
     /// Operation to perform to the output attachment at the start of a
@@ -39,9 +40,9 @@ pub struct PassChannel<V> {
     ///
     /// This must be clear if it is the first renderpass rendering to a swap
     /// chain image.
-    pub load_op: Option<wgt::LoadOp<V>>,
+    pub load_op: FfiOption<wgt::LoadOp<V>>,
     /// Operation to perform to the output attachment at the end of a renderpass.
-    pub store_op: Option<wgt::StoreOp>,
+    pub store_op: FfiOption<wgt::StoreOp>,
     /// If true, the relevant channel is not changed by a renderpass, and the
     /// corresponding attachment can be used inside the pass by other read-only
     /// usages.
@@ -57,9 +58,9 @@ pub struct RenderPassDepthStencilAttachment {
     /// The view to use as an attachment.
     pub view: id::TextureViewId,
     /// What operations will be performed on the depth part of the attachment.
-    pub depth: PassChannel<Option<f32>>,
+    pub depth: PassChannel<FfiOption<f32>>,
     /// What operations will be performed on the stencil part of the attachment.
-    pub stencil: PassChannel<Option<u32>>,
+    pub stencil: PassChannel<FfiOption<u32>>,
 }
 
 /// Describes the writing of timestamp values in a render or compute pass.
@@ -71,9 +72,9 @@ pub struct PassTimestampWrites {
     /// The query set to write the timestamps to.
     pub query_set: id::QuerySetId,
     /// The index of the query set at which a start timestamp of this pass is written, if any.
-    pub beginning_of_pass_write_index: Option<u32>,
+    pub beginning_of_pass_write_index: FfiOption<u32>,
     /// The index of the query set at which an end timestamp of this pass is written, if any.
-    pub end_of_pass_write_index: Option<u32>,
+    pub end_of_pass_write_index: FfiOption<u32>,
 }
 
 /// Describes the attachments of a render pass.
