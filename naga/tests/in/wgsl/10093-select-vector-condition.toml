@@ -1,0 +1,4 @@
+targets = "GLSL"
+
+[glsl]
+version.Embedded = { is_webgl = false, version = 310 }
