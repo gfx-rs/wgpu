@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ffi::FfiOption;
 use crate::id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId};
-use crate::Label;
+use crate::{assert_ffi_safe, Label};
 
 /// Corresponds to [`GPUBufferBinding`](https://www.w3.org/TR/webgpu/#dictdef-gpubufferbinding).
 #[repr(C)]
@@ -23,6 +23,8 @@ pub struct BufferBinding {
     pub size: FfiOption<wgt::BufferAddress>,
 }
 
+assert_ffi_safe!(BufferBinding);
+
 /// Corresponds to [`GPUBindingResource`](https://www.w3.org/TR/webgpu/#typedefdef-gpubindingresource).
 #[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +34,8 @@ pub enum BindingResource {
     TextureView(TextureViewId),
     ExternalTexture(ExternalTextureId),
 }
+
+assert_ffi_safe!(BindingResource);
 
 /// Bindable resource and the slot to bind it to.
 ///
@@ -45,6 +49,8 @@ pub struct BindGroupEntry {
     /// Resource to attach to the binding
     pub resource: BindingResource,
 }
+
+assert_ffi_safe!(BindGroupEntry);
 
 /// Describes a group of bindings and the resources to be bound.
 ///
