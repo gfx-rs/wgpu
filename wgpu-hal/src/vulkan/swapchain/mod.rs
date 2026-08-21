@@ -81,10 +81,13 @@ pub(super) trait Swapchain: Send + Sync + 'static {
     ) -> Result<(), crate::SurfaceError>;
 
     /// Presents the given surface texture using the queue.
+    ///
+    /// See [`crate::Queue::present`] for the meaning of `damage_rects`.
     unsafe fn present(
         &mut self,
         queue: &super::Queue,
         texture: crate::vulkan::SurfaceTexture,
+        damage_rects: &[wgt::DamageRect],
     ) -> Result<(), crate::SurfaceError>;
 
     /// Allows downcasting to the concrete type.

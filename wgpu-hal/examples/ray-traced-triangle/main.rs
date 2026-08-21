@@ -1059,7 +1059,7 @@ impl<A: hal::Api> Example<A> {
                     (&mut ctx.fence, ctx.fence_value),
                 )
                 .unwrap();
-            self.queue.present(&self.surface, surface_tex).unwrap();
+            self.queue.present(&self.surface, surface_tex, &[]).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
             ctx.used_views.push(surface_tex_view);
         };

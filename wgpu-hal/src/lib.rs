@@ -1315,6 +1315,10 @@ pub trait Queue: WasmNotSendSync {
     ///
     /// This consumes the surface texture, returning it to the swapchain.
     ///
+    /// `damage_rects` are the regions that changed since the last present, as a
+    /// hint for backends that support incremental presentation. An empty slice
+    /// means the whole surface is damaged.
+    ///
     /// # Safety
     ///
     /// - `texture` must have been acquired from `surface` via
@@ -1340,6 +1344,7 @@ pub trait Queue: WasmNotSendSync {
         &self,
         surface: &<Self::A as Api>::Surface,
         texture: <Self::A as Api>::SurfaceTexture,
+        damage_rects: &[wgt::DamageRect],
     ) -> Result<(), SurfaceError>;
     /// Block until all previously submitted work on this queue has completed,
     /// including any pending presentations.

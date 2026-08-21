@@ -383,6 +383,22 @@ impl Queue {
         self.inner.present(&surface_texture.detail);
     }
 
+    /// Schedule a surface texture to be presented on the owning surface, hinting which regions
+    /// changed since the last present.
+    ///
+    /// Backends that support incremental presentation forward `damage_rects` to the compositor
+    /// so it can limit repainting; others ignore them. Passing an empty slice is equivalent to
+    /// [`present`](Self::present).
+    pub fn present_with_damage(
+        &self,
+        mut surface_texture: SurfaceTexture,
+        damage_rects: &[wgt::DamageRect],
+    ) {
+        surface_texture.presented = true;
+        self.inner
+            .present_with_damage(&surface_texture.detail, damage_rects);
+    }
+
     /// Compact a BLAS, it must have had [`Blas::prepare_compaction_async`] called on it and had the
     /// callback provided called.
     ///

@@ -1382,6 +1382,11 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::swapchain_mutable_format::NAME);
         }
 
+        // Optional `VK_KHR_incremental_present`
+        if self.supports_extension(khr::incremental_present::NAME) {
+            extensions.push(khr::incremental_present::NAME);
+        }
+
         // Optional `VK_EXT_robustness2`
         if self.supports_extension(ext::robustness2::NAME) {
             extensions.push(ext::robustness2::NAME);
@@ -2530,6 +2535,8 @@ impl super::Instance {
                 || phd_capabilities.supports_extension(khr::load_store_op_none::NAME)
                 || phd_capabilities.supports_extension(ash::qcom::render_pass_store_ops::NAME)
                 || phd_capabilities.supports_extension(ext::load_store_op_none::NAME),
+            incremental_present: phd_capabilities
+                .supports_extension(khr::incremental_present::NAME),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),

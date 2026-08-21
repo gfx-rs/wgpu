@@ -265,6 +265,34 @@ pub fn derive_image_layout(usage: wgt::TextureUses, format: wgt::TextureFormat) 
     }
 }
 
+/// Convert damage rects to `VkRectLayerKHR`, clipped to a surface of `extent`.
+///
+/// Rects that clip to nothing are dropped, so an entirely out-of-range set yields an
+/// empty `Vec`, which Vulkan reads as "the entire image changed".
+pub fn map_damage_rects(
+    damage_rects: &[wgt::DamageRect],
+    extent: wgt::Extent3d,
+) -> Vec<vk::RectLayerKHR> {
+    damage_rects
+        .iter()
+        .filter_map(|&rect| {
+            let clipped = crate::auxil::clip_damage_rect(rect, extent)?;
+            Some(
+                vk::RectLayerKHR::default()
+                    .offset(vk::Offset2D {
+                        x: clipped.left,
+                        y: clipped.top,
+                    })
+                    .extent(vk::Extent2D {
+                        width: clipped.width(),
+                        height: clipped.height(),
+                    })
+                    .layer(0),
+            )
+        })
+        .collect()
+}
+
 pub fn map_queue_family(family: crate::QueueFamily) -> u32 {
     match family {
         crate::QueueFamily::Explicit(index) => index,
@@ -1147,6 +1175,57 @@ pub fn map_texture_component_swizzle(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn extent(width: u32, height: u32) -> wgt::Extent3d {
+        wgt::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        }
+    }
+
+    fn rect(x: i32, y: i32, width: u32, height: u32) -> wgt::DamageRect {
+        wgt::DamageRect {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    /// Clipping itself is covered in `auxil`; this checks the mapping onto Vulkan's
+    /// offset/extent representation, which needs an edge-to-size conversion.
+    #[test]
+    fn maps_onto_offset_and_extent() {
+        let mapped = map_damage_rects(&[rect(-50, 20, 100, 50)], extent(800, 600));
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].offset, vk::Offset2D { x: 0, y: 20 });
+        assert_eq!(
+            mapped[0].extent,
+            vk::Extent2D {
+                width: 50,
+                height: 50
+            }
+        );
+        assert_eq!(mapped[0].layer, 0);
+    }
+
+    /// An empty result means "the entire image changed" to Vulkan, so fully
+    /// out-of-range damage degrades to a full present rather than a stale window.
+    #[test]
+    fn all_rects_dropped_yields_empty() {
+        let rects = [rect(900, 0, 10, 10), rect(0, 700, 10, 10)];
+        assert!(map_damage_rects(&rects, extent(800, 600)).is_empty());
+    }
+
+    #[test]
+    fn rects_are_mapped_in_order_skipping_dropped() {
+        let rects = [rect(0, 0, 10, 10), rect(900, 0, 10, 10), rect(20, 20, 5, 5)];
+        let mapped = map_damage_rects(&rects, extent(800, 600));
+        assert_eq!(mapped.len(), 2, "the out-of-range rect should be dropped");
+        assert_eq!(mapped[0].offset, vk::Offset2D { x: 0, y: 0 });
+        assert_eq!(mapped[1].offset, vk::Offset2D { x: 20, y: 20 });
+    }
 
     /// `map_vk_color_space` and `map_surface_color_space` must stay mutually
     /// inverse so that a color space reported in the surface capabilities is

@@ -221,9 +221,143 @@ pub fn cap_limits_to_be_under_the_sum_limit<const N: usize>(
     }
 }
 
+/// A [`wgt::DamageRect`] clipped to a surface, as edge coordinates.
+///
+/// `right` and `bottom` are exclusive, and the rect is guaranteed non-empty:
+/// `left < right` and `top < bottom`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClippedDamageRect {
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+}
+
+impl ClippedDamageRect {
+    pub fn width(&self) -> u32 {
+        (self.right - self.left) as u32
+    }
+
+    pub fn height(&self) -> u32 {
+        (self.bottom - self.top) as u32
+    }
+}
+
+/// Clip a damage rect to a surface of `extent`, or return `None` if nothing remains.
+///
+/// Both `VkRectLayerKHR` and DXGI dirty rects must lie within the surface, so
+/// out-of-range damage is clipped rather than forwarded. Clipping preserves edges: a
+/// rect straddling an edge keeps its opposite edge, rather than sliding inwards.
+///
+/// Callers that drop every rect should present the whole surface, which is what both
+/// backends do when handed an empty set.
+pub fn clip_damage_rect(rect: wgt::DamageRect, extent: wgt::Extent3d) -> Option<ClippedDamageRect> {
+    // A `u32` extent above `i32::MAX` would make the clamp bounds invalid, and
+    // `i32::clamp` panics when `min > max`.
+    let max_x = extent.width.min(i32::MAX as u32) as i32;
+    let max_y = extent.height.min(i32::MAX as u32) as i32;
+
+    let left = rect.x.clamp(0, max_x);
+    let top = rect.y.clamp(0, max_y);
+    let right = rect
+        .x
+        .saturating_add_unsigned(rect.width)
+        .clamp(left, max_x);
+    let bottom = rect
+        .y
+        .saturating_add_unsigned(rect.height)
+        .clamp(top, max_y);
+
+    if right == left || bottom == top {
+        return None;
+    }
+    Some(ClippedDamageRect {
+        left,
+        top,
+        right,
+        bottom,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn extent(width: u32, height: u32) -> wgt::Extent3d {
+        wgt::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        }
+    }
+
+    fn rect(x: i32, y: i32, width: u32, height: u32) -> wgt::DamageRect {
+        wgt::DamageRect {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    #[track_caller]
+    fn assert_clips_to(input: wgt::DamageRect, expected: (i32, i32, u32, u32)) {
+        let clipped = clip_damage_rect(input, extent(800, 600))
+            .unwrap_or_else(|| panic!("{input:?} was unexpectedly dropped"));
+        let (left, top, width, height) = expected;
+        assert_eq!(
+            (clipped.left, clipped.top, clipped.width(), clipped.height()),
+            (left, top, width, height),
+            "clipping {input:?}"
+        );
+    }
+
+    #[track_caller]
+    fn assert_dropped(input: wgt::DamageRect) {
+        assert!(
+            clip_damage_rect(input, extent(800, 600)).is_none(),
+            "{input:?} should have clipped to nothing"
+        );
+    }
+
+    #[test]
+    fn rect_within_surface_is_unchanged() {
+        assert_clips_to(rect(10, 20, 100, 50), (10, 20, 100, 50));
+        assert_clips_to(rect(0, 0, 800, 600), (0, 0, 800, 600));
+    }
+
+    /// Clipping keeps the edge opposite the one being clipped, rather than sliding
+    /// the rect inwards.
+    #[test]
+    fn rect_straddling_an_edge_is_clipped() {
+        assert_clips_to(rect(-50, 0, 100, 50), (0, 0, 50, 50));
+        assert_clips_to(rect(0, -30, 100, 50), (0, 0, 100, 20));
+        assert_clips_to(rect(750, 0, 100, 50), (750, 0, 50, 50));
+        assert_clips_to(rect(0, 570, 100, 50), (0, 570, 100, 30));
+    }
+
+    #[test]
+    fn rect_outside_surface_is_dropped() {
+        assert_dropped(rect(900, 0, 100, 50));
+        assert_dropped(rect(0, 700, 100, 50));
+        assert_dropped(rect(-200, 0, 100, 50));
+        assert_dropped(rect(0, 0, 0, 0));
+    }
+
+    /// Hostile input must not overflow `x + width`.
+    #[test]
+    fn extreme_values_do_not_overflow() {
+        assert_dropped(rect(i32::MAX, i32::MAX, u32::MAX, u32::MAX));
+        assert_dropped(rect(i32::MIN, i32::MIN, 100, 100));
+        assert_clips_to(rect(i32::MIN, 0, u32::MAX, 50), (0, 0, 800, 50));
+    }
+
+    /// `clamp` panics if `min > max`, which a bare `as i32` cast of a huge extent
+    /// could produce.
+    #[test]
+    fn absurd_extent_does_not_panic() {
+        assert!(clip_damage_rect(rect(0, 0, 100, 100), extent(u32::MAX, u32::MAX)).is_some());
+    }
 
     #[test]
     fn test_cap_limits_to_be_under_the_sum_limit() {
