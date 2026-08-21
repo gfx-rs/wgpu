@@ -49,6 +49,8 @@ default-members = [
     "tests",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
+    "wgpu-core-remote",
+    "wgpu-core-remote-types",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
