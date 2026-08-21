@@ -24,6 +24,7 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+mod icb_probe;
 mod library_from_metallib;
 mod surface;
 mod time;
