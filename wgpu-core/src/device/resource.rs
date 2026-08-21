@@ -4126,18 +4126,14 @@ impl Device {
     pub fn create_pipeline_layout(
         self: &Arc<Self>,
         desc: &binding_model::PipelineLayoutDescriptor,
-    ) -> (
-        Arc<binding_model::PipelineLayout>,
-        Option<binding_model::CreatePipelineLayoutError>,
-    ) {
+    ) -> Arc<binding_model::PipelineLayout> {
         profiling::scope!("Device::create_pipeline_layout");
-        let (layout, error) = match self.create_pipeline_layout_impl(desc, false) {
-            Ok(layout) => (layout, None),
-            Err(e) => (
-                binding_model::PipelineLayout::invalid(Arc::clone(self), desc.label.to_string()),
-                Some(e),
-            ),
-        };
+        let layout = self
+            .create_pipeline_layout_impl(desc, false)
+            .unwrap_or_else(|err| {
+                self.handle_error(err, desc.label.as_deref(), "Device::create_pipeline_layout");
+                binding_model::PipelineLayout::invalid(Arc::clone(self), desc.label.to_string())
+            });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace::IntoTrace;
@@ -4150,7 +4146,7 @@ impl Device {
             "Device::create_pipeline_layout -> {:?}",
             Arc::as_ptr(&layout)
         );
-        (layout, error)
+        layout
     }
 
     fn create_pipeline_layout_impl(
