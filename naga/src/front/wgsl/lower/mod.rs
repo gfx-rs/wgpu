@@ -1925,7 +1925,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         crate::TypeInner::RayQuery { .. } => {
                             // Initializers are disallowed for ray queries as any store is disallowed.
                             // However, in loops ray queries need to be reset using a special piece of
-                            // IR which makes checking this any later impossible.
+                            // IR.
+
+                            // Because we have a special case for ray queries, and initializers are always
+                            // disallowed for ray queries, we remove them here. This prevents having to
+                            // special-case them and then just emitting invalid IR anyway and gives a
+                            // clearer error message.
                             if let Some(expr) = initializer {
                                 return Err(Box::new(Error::RayQueryWithInitializer(
                                     ctx.function.expressions.get_span(expr),
