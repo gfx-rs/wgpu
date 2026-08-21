@@ -100,6 +100,15 @@ impl Version {
         *self >= Version::Desktop(450)
     }
 
+    /// Returns true if the version has the `mix` overloads that take a boolean
+    /// selector with non-float components (`genIType`, `genUType`, `genBType`).
+    ///
+    /// Older versions only provide the float overloads, so a vector `select` on
+    /// integers or booleans has to be lowered componentwise instead.
+    pub fn supports_integer_mix(&self) -> bool {
+        *self >= Version::Desktop(450) || *self >= Version::new_gles(310)
+    }
+
     // For supports_pack_unpack_4x8, supports_pack_unpack_snorm_2x16, supports_pack_unpack_unorm_2x16
     // see:
     // https://registry.khronos.org/OpenGL-Refpages/gl4/html/unpackUnorm.xhtml
@@ -229,5 +238,24 @@ impl GlslUniformType {
                 scalar,
             } => rows.alignment() * scalar.width as u32 * *columns as u32,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Version;
+
+    #[test]
+    fn integer_mix_version_gate() {
+        // ES: the genIType/genUType/genBType `mix` overloads land in 3.10.
+        assert!(!Version::new_gles(300).supports_integer_mix());
+        assert!(Version::new_gles(310).supports_integer_mix());
+        assert!(Version::new_gles(320).supports_integer_mix());
+
+        // Desktop: they land in 4.50.
+        assert!(!Version::Desktop(330).supports_integer_mix());
+        assert!(!Version::Desktop(440).supports_integer_mix());
+        assert!(Version::Desktop(450).supports_integer_mix());
+        assert!(Version::Desktop(460).supports_integer_mix());
     }
 }
