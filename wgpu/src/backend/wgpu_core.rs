@@ -1963,13 +1963,7 @@ impl dispatch::PipelineLayoutInterface for CorePipelineLayout {}
 
 impl dispatch::RenderPipelineInterface for CoreRenderPipeline {
     fn get_bind_group_layout(&self, index: u32) -> dispatch::DispatchBindGroupLayout {
-        let (wgpu_bind_group_layout, error) =
-            self.wgpu_render_pipeline.get_bind_group_layout(index);
-        if let Some(err) = error {
-            self.wgpu_render_pipeline
-                .device()
-                .handle_error_nolabel(err, "RenderPipeline::get_bind_group_layout")
-        }
+        let wgpu_bind_group_layout = self.wgpu_render_pipeline.get_bind_group_layout(index);
         CoreBindGroupLayout {
             wgpu_bind_group_layout,
         }

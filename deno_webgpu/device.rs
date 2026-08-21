@@ -903,7 +903,6 @@ impl GPUDevice {
 
     (
       GPURenderPipeline {
-        error_handler: self.error_handler.clone(),
         wgpu_render_pipeline,
         label: descriptor.label,
       },

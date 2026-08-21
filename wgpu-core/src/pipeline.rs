@@ -1131,17 +1131,14 @@ impl RenderPipeline {
         self.layout()?.get_bind_group_layout(index, self.into())
     }
 
-    pub fn get_bind_group_layout(
-        self: &Arc<Self>,
-        index: u32,
-    ) -> (Arc<BindGroupLayout>, Option<GetBindGroupLayoutError>) {
-        let (bgl, error) = match self.get_bind_group_layout_inner(index) {
-            Ok(bgl) => (bgl, None),
-            Err(e) => (
-                BindGroupLayout::invalid(&self.device, String::new()),
-                Some(e),
-            ),
-        };
+    pub fn get_bind_group_layout(self: &Arc<Self>, index: u32) -> Arc<BindGroupLayout> {
+        let bgl = self
+            .get_bind_group_layout_inner(index)
+            .unwrap_or_else(|err| {
+                self.device
+                    .handle_error_nolabel(err, "RenderPipeline::get_bind_group_layout");
+                BindGroupLayout::invalid(&self.device, String::new())
+            });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.device.trace.lock() {
             use crate::device::trace;
@@ -1152,7 +1149,7 @@ impl RenderPipeline {
                 index,
             });
         };
-        (bgl, error)
+        bgl
     }
 }
 
