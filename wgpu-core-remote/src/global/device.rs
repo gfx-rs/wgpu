@@ -458,9 +458,6 @@ impl Global {
         device_id: DeviceId,
         desc: &binding_model::PipelineLayoutDescriptor<id::BindGroupLayoutId>,
         id_in: id::PipelineLayoutId,
-    ) -> (
-        id::PipelineLayoutId,
-        Option<binding_model::CreatePipelineLayoutError>,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -484,9 +481,8 @@ impl Global {
             immediate_size: desc.immediate_size,
         };
 
-        let (layout, error) = device.create_pipeline_layout(&desc);
-        let id = pipeline_layouts.assign(id_in, layout);
-        (id, error)
+        let layout = device.create_pipeline_layout(&desc);
+        pipeline_layouts.assign(id_in, layout);
     }
 
     pub fn pipeline_layout_drop(&self, pipeline_layout_id: id::PipelineLayoutId) {

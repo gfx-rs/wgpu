@@ -1099,11 +1099,8 @@ impl dispatch::DeviceInterface for CoreDevice {
             immediate_size: desc.immediate_size,
         };
 
-        let (wgpu_pipeline_layout, error) = self.wgpu_device.create_pipeline_layout(&descriptor);
-        if let Some(cause) = error {
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_pipeline_layout");
-        }
+        let wgpu_pipeline_layout = self.wgpu_device.create_pipeline_layout(&descriptor);
+
         CorePipelineLayout {
             wgpu_pipeline_layout,
         }

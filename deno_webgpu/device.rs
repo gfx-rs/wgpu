@@ -370,10 +370,8 @@ impl GPUDevice {
       immediate_size: descriptor.immediate_size,
     };
 
-    let (wgpu_pipeline_layout, err) =
+    let wgpu_pipeline_layout =
       self.wgpu_device.create_pipeline_layout(&wgpu_descriptor);
-
-    self.error_handler.push_error(err);
 
     GPUPipelineLayout {
       wgpu_pipeline_layout,
