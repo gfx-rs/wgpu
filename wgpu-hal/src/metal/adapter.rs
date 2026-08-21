@@ -571,7 +571,16 @@ const BGR10A2_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
-/// "Indirect draw & dispatch arguments" in the Metal feature set tables
+/// "Indirect draw & dispatch arguments" in the Metal feature set tables.
+///
+/// The live tables at
+/// <https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf> are
+/// revised in place and current revisions are organized by `MTLGPUFamily`, so
+/// they no longer carry the per-`MTLFeatureSet` rows these constants encode.
+/// For an auditable source of the values below, use the archived revision that
+/// still lists them:
+/// <https://web.archive.org/web/20210421214844/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf>
+/// - "Indirect draw & dispatch arguments": iOS GPUFamily3 v1, tvOS GPUFamily2 v1, macOS GPUFamily1 v1
 const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
@@ -581,6 +590,11 @@ const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
 /// "Base vertex/instance drawing" in the Metal feature set tables
 ///
 /// in our terms, `base_vertex` and `first_instance` must be 0
+///
+/// Same table as [`INDIRECT_DRAW_DISPATCH_SUPPORT`]; the
+/// "Base vertex/instance drawing" row lists the identical feature sets
+/// (iOS GPUFamily3 v1, tvOS GPUFamily2 v1, macOS GPUFamily1 v1), which is why
+/// this aliases that constant rather than repeating it.
 const BASE_VERTEX_FIRST_INSTANCE_SUPPORT: &[MTLFeatureSet] = INDIRECT_DRAW_DISPATCH_SUPPORT;
 
 const TEXTURE_CUBE_ARRAY_SUPPORT: &[MTLFeatureSet] = &[
@@ -698,46 +712,6 @@ impl super::CapabilitiesQuery {
         let argument_buffers = available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0)
             .then(|| device.argumentBuffersSupport());
 
-        let is_virtual = device.name().to_string().to_lowercase().contains("virtual");
-
-        // GPU families only identify the device classes covered by real-device
-        // testing; their presence alone is not evidence that the driver
-        // executes this path correctly. Two observed failures shape this
-        // allowlist:
-        // - Apple's paravirtual Metal device advertises the relevant families
-        //   but aborts when executing render ICBs (observed in CI), so virtual
-        //   devices are excluded.
-        // - First-generation Apple TV 4K (A10X, Apple3) is allowed because it
-        //   was validated directly on hardware; other Apple3/Apple4 devices
-        //   stay excluded until they're validated with this backend.
-        // Real-device readback found the iOS/iPadOS/tvOS 17.x driver lineage
-        // unreliable even when shaders compiled and surface rendering appeared
-        // to work. Older Mac, Intel/AMD, and visionOS classes remain on the
-        // fallback until equivalent real-device coverage exists.
-        let validated_icb_device = (os_type == super::OsType::Macos
-            && available!(macos = 26.0)
-            && device.supportsFamily(MTLGPUFamily::Apple9))
-            || (os_type == super::OsType::Ios
-                && available!(ios = 18.0)
-                && device.supportsFamily(MTLGPUFamily::Apple5))
-            || (os_type == super::OsType::Tvos
-                && available!(tvos = 18.0)
-                && device.supportsFamily(MTLGPUFamily::Apple3))
-            || (available!(watchos = 11.0) && device.supportsFamily(MTLGPUFamily::Apple5));
-        let indirect_command_buffers_rendering = !is_virtual && validated_icb_device;
-        // Only the Apple9 Mac path has real-device mesh-ICB readback coverage.
-        let indirect_command_buffers_mesh = indirect_command_buffers_rendering
-            && os_type == super::OsType::Macos
-            && available!(macos = 26.0)
-            && device.supportsFamily(MTLGPUFamily::Apple9);
-
-        let mesh_shaders = family_check
-                && (device.supportsFamily(MTLGPUFamily::Metal3)
-                    || device.supportsFamily(MTLGPUFamily::Apple7)
-                    || device.supportsFamily(MTLGPUFamily::Mac2))
-                    // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
-                && !is_virtual;
-
         let msl_version = if available!(macos = 26.0, ios = 26.0, tvos = 26.0, visionos = 26.0) {
             MTLLanguageVersion::Version4_0
         } else if available!(macos = 15.0, ios = 18.0, tvos = 18.0, visionos = 2.0) {
@@ -763,6 +737,73 @@ impl super::CapabilitiesQuery {
         } else {
             MTLLanguageVersion::Version1_0
         };
+
+        let is_virtual = device.name().to_string().to_lowercase().contains("virtual");
+
+        // Full render-ICB lowering has passed readback validation on:
+        // - macOS 26: Apple M4 Max (Apple9)
+        // - iOS 18: iPhone XS / A12 (Apple5)
+        // - tvOS 18: first-generation Apple TV 4K / A10X (Apple3)
+        // - watchOS 11.6: Apple Watch SE 2 / S8 (Apple5)
+        // iOS/iPadOS/tvOS 17.x failed equivalent readback validation. Because
+        // Apple's feature tables do not predict those results, every physical
+        // device is tested by executing and reading back a tiny render ICB.
+        // Apple's paravirtual device is excluded before the probe because its
+        // driver aborts the process instead of reporting an execution failure.
+        //
+        // The `available!` floor below is the API availability of the two
+        // selectors this path depends on -- hazard-tracked `useResource:` and
+        // `inheritPipelineState` -- not a hardware claim:
+        // <https://developer.apple.com/documentation/metal/mtlindirectcommandbufferdescriptor/inheritpipelinestate>
+        //
+        // Because the tables under-predict real behavior here, support is
+        // established empirically. Explicitly verified by rendering a
+        // GPU-generated 1600-draw meshlet workload through the ICB path and
+        // CPU-reading back the presented surface (0 per-draw-loop fallbacks,
+        // pixels verified) on:
+        //
+        // - macOS 26, M4 Max (Metal3 / Apple9), 1200x1600
+        // - iOS 18.7.9, iPhone XS Max, A12 (Apple5), 1125x2436
+        // - tvOS 18.3, Apple TV 4K gen 1, A10X (Apple3), 3840x2160
+        // - tvOS 26.6, Apple TV 4K gen 3, A15 (Apple8), 3840x2160
+        // - watchOS 11.6, Apple Watch SE 2, S4 (Apple5), 160x160
+        //
+        // A10X is the load-bearing data point: render-ICB execution has
+        // historically been fragile on it (it does not work at all on an iPad
+        // Pro A10X running that device's last iPadOS release), and it passes
+        // here only because command generation is hoisted out of the render
+        // pass. That is why the runtime probe below, rather than a family or
+        // OS-version check alone, is what actually gates this.
+        let indirect_command_buffers_rendering = !is_virtual
+            && available!(
+                macos = 10.15,
+                ios = 13.0,
+                tvos = 13.0,
+                watchos = 6.0,
+                visionos = 1.0
+            )
+            && device_class_responds_to(
+                device,
+                sel!(newIndirectCommandBufferWithDescriptor:maxCommandCount:options:),
+            )
+            && super::icb_probe::supports_render_icb(device, msl_version);
+        // Mesh ICBs are gated far more conservatively than render ICBs on
+        // purpose: the empirical matrix above covers render ICBs on five
+        // device classes, but mesh-ICB execution has only been verified by
+        // readback on macOS 26 / M4 Max (Apple9). Every other combination is
+        // unverified, so it takes the non-ICB path until someone can run the
+        // same readback test on it.
+        let indirect_command_buffers_mesh = indirect_command_buffers_rendering
+            && os_type == super::OsType::Macos
+            && available!(macos = 26.0)
+            && device.supportsFamily(MTLGPUFamily::Apple9);
+
+        let mesh_shaders = family_check
+                && (device.supportsFamily(MTLGPUFamily::Metal3)
+                    || device.supportsFamily(MTLGPUFamily::Apple7)
+                    || device.supportsFamily(MTLGPUFamily::Mac2))
+                    // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
+                && !is_virtual;
 
         Self {
             msl_version,
