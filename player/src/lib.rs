@@ -169,7 +169,7 @@ impl Player {
                     .expect("invalid external texture");
             }
             Action::CreateSampler(id, desc) => {
-                let (sampler, _error) = device.create_sampler(&desc);
+                let sampler = device.create_sampler(&desc);
                 self.samplers.insert(id, sampler);
             }
             Action::DropSampler(id) => {

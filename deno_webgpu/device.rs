@@ -263,9 +263,7 @@ impl GPUDevice {
       border_color: None,
     };
 
-    let (wgpu_sampler, err) = self.wgpu_device.create_sampler(&wgpu_descriptor);
-
-    self.error_handler.push_error(err);
+    let wgpu_sampler = self.wgpu_device.create_sampler(&wgpu_descriptor);
 
     Ok(GPUSampler {
       wgpu_sampler,
