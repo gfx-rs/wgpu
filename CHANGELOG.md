@@ -132,6 +132,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Fix invalid HLSL generated for `textureSampleLevel` with non-2D textures. By @mvanhorn in [#9717](https://github.com/gfx-rs/wgpu/issues/9717).
 - Reject return types on compute shader entrypoints. By @ErichDonGubler in [#10026](https://github.com/gfx-rs/wgpu/pull/10026).
 - Reject `@location(…)`s in compute shaders. By @ErichDonGubler in [#10026](https://github.com/gfx-rs/wgpu/pull/10026).
+- Prevent invalid IR from being generated when using a ray query in a loop. By @Vecvec in [#9945](https://github.com/gfx-rs/wgpu/pull/9945)
 
 #### DX12
 
