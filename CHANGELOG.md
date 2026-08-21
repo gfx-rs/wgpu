@@ -232,6 +232,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Reject WGSL loads of structs and arrays that contain atomics, which previously caused a panic in the HLSL backend. By @drakeo338 in [#10458](https://github.com/gfx-rs/wgpu/issues/10458).
 - Panic when a SPIR-V's instruction's word count is greater than `u16::MAX`, instead of emitting a malformed instruction. By @ErichDonGubler in [#10537](https://github.com/gfx-rs/wgpu/pull/10537).
 - Accept a `ViewIndex` input declared as a signed integer in the SPIR-V frontend, as glslang and Slang emit it, by reading it as a `u32`. By @VoxelBoy in [#10568](https://github.com/gfx-rs/wgpu/pull/10568).
+- Fix WGSL `select` with a vector condition generating GLSL `mix` for integer, unsigned, and boolean components, which those types' `mix` overloads do not support below GLSL 4.50 / GLSL ES 3.10. Affected WebGL2 and older desktop GL targets. By @arcusbuilds in [#PRNUM](https://github.com/gfx-rs/wgpu/pull/PRNUM).
 
 #### Validation
 
