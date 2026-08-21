@@ -92,15 +92,23 @@ pub struct RenderPassDescriptor<'a> {
     pub timestamp_writes: Option<PassTimestampWrites>,
 }
 
+/// Corresponds to [`GPUComputePassDescriptor`](https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepassdescriptor)
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct ComputePassDescriptor<'a> {
+    pub label: Label<'a>,
+    /// Defines where and when timestamp values will be written for this pass.
+    pub timestamp_writes: Option<PassTimestampWrites>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPUCommandEncoder`](https://www.w3.org/TR/webgpu/#gpucommandencoder).
-pub enum CommandEncoderCommand<'a, CPD> {
+pub enum CommandEncoderCommand<'a> {
     BeginRenderPass {
         desc: RenderPassDescriptor<'a>,
         render_pass_encoder_id: id::RenderPassEncoderId,
     },
     BeginComputePass {
-        desc: CPD, // optional, defaults to {}
+        desc: ComputePassDescriptor<'a>, // optional, defaults to {}
         compute_pass_encoder_id: id::ComputePassEncoderId,
     },
     CopyBufferToBuffer {
