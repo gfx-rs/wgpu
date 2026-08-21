@@ -1588,7 +1588,7 @@ impl BlockContext<'_> {
                 // Reset the ray query initialization tracker to zero as this is equivalent to it being a new variable.
 
                 let zero_value = self.writer.get_constant_scalar(crate::Literal::U32(
-                    spirv::RayQueryIntersection::RayQueryCandidateIntersectionKHR as _,
+                    RayQueryPoint::empty().bits(),
                 ));
 
                 block.body.push(Instruction::store(
