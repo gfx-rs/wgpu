@@ -666,13 +666,19 @@ fn handle_texture_init(
         kind: init_kind,
     };
 
-    // Record the initialization action. Simultaneously, collect a list of any
-    // ranges of the texture that were discarded within the current command
-    // buffer, for immediate initialization. (The analogous case for passes is
-    // in `fixup_discarded_surfaces`.)
+    // Record the initialization action. Simultaneously, collect a list of any ranges of the
+    // texture that were discarded within the current command buffer, for immediate
+    // initialization. (The analogous case for passes is in `fixup_discarded_surfaces`.)
+    //
+    // Depth slices are only relevant to deciding which pending discards (in a command
+    // buffer with prior render passes) have to be repaired ahead of this copy. Any
+    // initialization that gets generated covers the whole mip level, because that is the
+    // granularity of the init tracker.
+    let accessed_depth_slices = (texture.desc.dimension == wgt::TextureDimension::D3)
+        .then(|| copy_texture.origin.z..copy_texture.origin.z + copy_size.depth_or_array_layers);
     let immediate_inits = state
         .texture_memory_actions
-        .register_init_action(&{ init_action });
+        .register_init_action(&{ init_action }, accessed_depth_slices);
 
     // In rare cases we may need to insert an init operation immediately onto the command buffer.
     if !immediate_inits.is_empty() {
