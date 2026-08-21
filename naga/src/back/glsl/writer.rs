@@ -946,6 +946,28 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.need_bake_expressions.insert(right);
                 }
             }
+
+            if let Expression::Select {
+                condition,
+                accept,
+                reject,
+            } = *expr
+            {
+                // A vector `select` on non-float components is lowered to a componentwise
+                // `?:` in `write_expr` when the target version lacks the integer `mix`
+                // overloads. That names each operand once per component, so bake all three
+                // to avoid re-evaluating them.
+                if !self.options.version.supports_integer_mix()
+                    && !matches!(inner.scalar_kind(), Some(crate::ScalarKind::Float))
+                {
+                    let cond_inner = info[condition].ty.inner_with(&self.module.types);
+                    if let TypeInner::Vector { .. } = *cond_inner {
+                        self.need_bake_expressions.insert(condition);
+                        self.need_bake_expressions.insert(accept);
+                        self.need_bake_expressions.insert(reject);
+                    }
+                }
+            }
         }
 
         for statement in func.body.iter() {
@@ -3041,16 +3063,52 @@ impl<'a, W: Write> Writer<'a, W> {
                     false
                 };
 
-                // TODO: Boolean mix on desktop required GL_EXT_shader_integer_mix
                 if vec_select {
-                    // Glsl defines that for mix when the condition is a boolean the first element
-                    // is picked if condition is false and the second if condition is true
-                    write!(self.out, "mix(")?;
-                    self.write_expr(reject, ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(accept, ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(condition, ctx)?;
+                    let result_ty = ctx.resolve_type(accept, &self.module.types);
+                    let size = match *result_ty {
+                        TypeInner::Vector { size, .. } => size,
+                        // A vector condition requires vector operands; the
+                        // validator rejects anything else.
+                        _ => unreachable!(),
+                    };
+                    let is_float =
+                        matches!(result_ty.scalar_kind(), Some(crate::ScalarKind::Float));
+
+                    if is_float || self.options.version.supports_integer_mix() {
+                        // Glsl defines that for mix when the condition is a boolean the first
+                        // element is picked if condition is false and the second if condition
+                        // is true
+                        write!(self.out, "mix(")?;
+                        self.write_expr(reject, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(accept, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(condition, ctx)?;
+                        write!(self.out, ")")?;
+                    } else {
+                        // The `mix` overloads taking a boolean selector only accept float
+                        // components before GLSL 4.50 / ES 3.10, so select each component
+                        // with `?:` instead. The operands are baked in
+                        // `update_expressions_to_bake`, so naming them once per component
+                        // does not evaluate them more than once.
+                        self.write_value_type(result_ty)?;
+                        write!(self.out, "(")?;
+
+                        for i in 0..size as usize {
+                            if i != 0 {
+                                write!(self.out, ", ")?;
+                            }
+
+                            self.write_expr(condition, ctx)?;
+                            write!(self.out, ".{} ? ", back::COMPONENTS[i])?;
+                            self.write_expr(accept, ctx)?;
+                            write!(self.out, ".{} : ", back::COMPONENTS[i])?;
+                            self.write_expr(reject, ctx)?;
+                            write!(self.out, ".{}", back::COMPONENTS[i])?;
+                        }
+
+                        write!(self.out, ")")?;
+                    }
                 } else {
                     write!(self.out, "(")?;
                     self.write_expr(condition, ctx)?;
@@ -3058,9 +3116,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.write_expr(accept, ctx)?;
                     write!(self.out, " : ")?;
                     self.write_expr(reject, ctx)?;
+                    write!(self.out, ")")?;
                 }
-
-                write!(self.out, ")")?
             }
             // `Derivative` is a function call to a glsl provided function
             Expression::Derivative { axis, ctrl, expr } => {
