@@ -3640,18 +3640,15 @@ impl Device {
     pub fn create_bind_group(
         self: &Arc<Self>,
         desc: &binding_model::BindGroupDescriptor,
-    ) -> (Arc<BindGroup>, Option<CreateBindGroupError>) {
+    ) -> Arc<BindGroup> {
         profiling::scope!("Device::create_bind_group");
         #[cfg(feature = "trace")]
         let trace_desc = (&desc).to_trace();
 
-        let (bind_group, error) = match self.create_bind_group_inner(desc) {
-            Ok(bind_group) => (bind_group, None),
-            Err(e) => (
-                BindGroup::invalid(self.clone(), desc.label.to_string(), desc.layout.clone()),
-                Some(e),
-            ),
-        };
+        let bind_group = self.create_bind_group_inner(desc).unwrap_or_else(|err| {
+            self.handle_error(err, desc.label.as_deref(), "Device::create_bind_group");
+            BindGroup::invalid(self.clone(), desc.label.to_string(), desc.layout.clone())
+        });
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
@@ -3666,7 +3663,7 @@ impl Device {
             Arc::as_ptr(&bind_group)
         );
 
-        (bind_group, error)
+        bind_group
     }
 
     // This function expects the provided bind group layout to be resolved

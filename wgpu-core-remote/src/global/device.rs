@@ -496,7 +496,7 @@ impl Global {
         device_id: DeviceId,
         desc: &BindGroupDescriptor,
         id_in: id::BindGroupId,
-    ) -> (id::BindGroupId, Option<binding_model::CreateBindGroupError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             bind_groups,
@@ -564,10 +564,9 @@ impl Global {
             entries,
         };
 
-        let (bind_group, error) = device.create_bind_group(&desc);
+        let bind_group = device.create_bind_group(&desc);
 
-        let id = bind_groups.assign(id_in, bind_group);
-        (id, error)
+        bind_groups.assign(id_in, bind_group);
     }
 
     pub fn bind_group_drop(&self, bind_group_id: id::BindGroupId) {
