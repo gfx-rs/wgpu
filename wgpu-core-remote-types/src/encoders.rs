@@ -6,6 +6,45 @@ use crate::{assert_ffi_safe, id, Label};
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 pub type CommandBufferDescriptor<'a> = wgt::CommandBufferDescriptor<Label<'a>>;
 
+/// Operation to perform to the output attachment at the start of a render pass.
+///
+/// Corresponds to [WebGPU `GPULoadOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpuloadop),
+/// plus the corresponding clearValue.
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LoadOp<V> {
+    /// Loads the specified value for this attachment into the render pass.
+    ///
+    /// On some GPU hardware (primarily mobile), "clear" is significantly cheaper
+    /// because it avoids loading data from main memory into tile-local memory.
+    ///
+    /// On other GPU hardware, there isn’t a significant difference.
+    ///
+    /// As a result, it is recommended to use "clear" rather than "load" in cases
+    /// where the initial value doesn’t matter
+    /// (e.g. the render target will be cleared using a skybox).
+    Clear(V) = 0,
+    /// Loads the existing value for this attachment into the render pass.
+    Load = 1,
+}
+
+impl<T> LoadOp<T> {
+    pub fn to_wgt(self) -> wgt::LoadOp<T> {
+        match self {
+            Self::Clear(value) => wgt::LoadOp::Clear(value),
+            Self::Load => wgt::LoadOp::Load,
+        }
+    }
+
+    pub fn map_clear_value<U>(self, f: impl FnOnce(T) -> U) -> LoadOp<U> {
+        match self {
+            Self::Clear(value) => LoadOp::Clear(f(value)),
+            Self::Load => LoadOp::Load,
+        }
+    }
+}
+
 /// Describes a color attachment to a render pass.
 ///
 /// Corresponds to [`GPURenderColorAttachment`](https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpasscolorattachment)
@@ -23,12 +62,12 @@ pub struct RenderPassColorAttachment {
     ///
     /// This must be clear if it is the first renderpass rendering to a swap
     /// chain image.
-    pub load_op: wgt::LoadOp<wgt::Color>,
+    pub load_op: LoadOp<wgt::Color>,
     /// Operation to perform to the output attachment at the end of a renderpass.
     pub store_op: wgt::StoreOp,
 }
 
-//assert_ffi_safe!(RenderPassColorAttachment);
+assert_ffi_safe!(RenderPassColorAttachment);
 
 /// Describes an individual channel within a render pass, such as color, depth, or stencil.
 ///
@@ -42,7 +81,7 @@ pub struct PassChannel<V> {
     ///
     /// This must be clear if it is the first renderpass rendering to a swap
     /// chain image.
-    pub load_op: FfiOption<wgt::LoadOp<V>>,
+    pub load_op: FfiOption<LoadOp<V>>,
     /// Operation to perform to the output attachment at the end of a renderpass.
     pub store_op: FfiOption<wgt::StoreOp>,
     /// If true, the relevant channel is not changed by a renderpass, and the
@@ -65,7 +104,7 @@ pub struct RenderPassDepthStencilAttachment {
     pub stencil: PassChannel<FfiOption<u32>>,
 }
 
-//assert_ffi_safe!(RenderPassDepthStencilAttachment);
+assert_ffi_safe!(RenderPassDepthStencilAttachment);
 
 /// Describes the writing of timestamp values in a render or compute pass.
 ///
