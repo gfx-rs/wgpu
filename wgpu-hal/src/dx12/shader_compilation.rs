@@ -373,15 +373,10 @@ fn compile_dxc(
 ) -> Result<crate::dx12::CompiledShader, crate::PipelineError> {
     profiling::scope!("compile_dxc");
 
-    // DXC reads this name as the input file's path, then probes its parent
-    // directory. A name with a colon but no slash is parsed as a `C:file`
-    // drive-relative path there and never resolves, so anchor it to the current
-    // directory. An empty label would leave a bare `./`, which would error since
-    // it is a directory, so we filter those.
     let source_name = source_name
         .and_then(|cstr| cstr.to_str().ok())
-        .filter(|name| !name.is_empty())
-        .map(|name| OPCWSTR::new(&format!("./{name}")));
+        .and_then(sanitize_source_name);
+    let source_name = source_name.as_deref().map(OPCWSTR::new);
     let raw_ep = OPCWSTR::new(raw_ep);
     let full_stage = OPCWSTR::new(full_stage);
 
@@ -453,4 +448,93 @@ fn compile_dxc(
     let blob = get_output::<Dxc::IDxcBlob>(&compile_res, Dxc::DXC_OUT_OBJECT)?;
 
     Ok(crate::dx12::CompiledShader::Dxc(blob))
+}
+
+/// Prepare a shader module label for use as DXC's input file name.
+///
+/// `compile_dxc` passes this as the first positional argument, which DXC reads
+/// as the input file's path. Characters that it would misread there are mapped
+/// to `-`: control characters and exotic whitespace, path separators, and
+/// colons, which DXC takes for a drive designator when the name has no
+/// separator.
+///
+/// The result is anchored to the current directory, so that a label starting
+/// with `-` cannot be parsed as a command-line flag. An empty label would leave
+/// a bare `./`, which would error since it is a directory, so we drop those.
+fn sanitize_source_name(name: &str) -> Option<String> {
+    if name.is_empty() {
+        return None;
+    }
+
+    let name: String = name
+        .chars()
+        .map(|c| {
+            let unsafe_char = c.is_control()
+                || std::path::is_separator(c)
+                || c == ':'
+                || (c.is_whitespace() && c != ' ');
+            if unsafe_char {
+                '-'
+            } else {
+                c
+            }
+        })
+        .collect();
+
+    Some(format!("./{name}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_source_name;
+
+    #[test]
+    fn sanitize_source_name_anchors_to_current_dir() {
+        assert_eq!(sanitize_source_name("shader").as_deref(), Some("./shader"));
+        assert_eq!(
+            sanitize_source_name("shader with spaces").as_deref(),
+            Some("./shader with spaces")
+        );
+    }
+
+    #[test]
+    fn sanitize_source_name_replaces_path_syntax() {
+        assert_eq!(
+            sanitize_source_name("Renderer::shader").as_deref(),
+            Some("./Renderer--shader")
+        );
+        assert_eq!(
+            sanitize_source_name("renderer/shader").as_deref(),
+            Some("./renderer-shader")
+        );
+        assert_eq!(
+            sanitize_source_name("renderer\\shader").as_deref(),
+            Some("./renderer-shader")
+        );
+        assert_eq!(
+            sanitize_source_name("C:/shader").as_deref(),
+            Some("./C--shader")
+        );
+    }
+
+    #[test]
+    fn sanitize_source_name_defuses_command_line_flags() {
+        assert_eq!(sanitize_source_name("-foo").as_deref(), Some("./-foo"));
+        assert_eq!(sanitize_source_name("/foo").as_deref(), Some("./-foo"));
+    }
+
+    #[test]
+    fn sanitize_source_name_replaces_control_chars() {
+        assert_eq!(
+            sanitize_source_name("shader\twith\ttabs").as_deref(),
+            Some("./shader-with-tabs")
+        );
+        assert_eq!(sanitize_source_name("a\nb").as_deref(), Some("./a-b"));
+        assert_eq!(sanitize_source_name("a\u{7}b").as_deref(), Some("./a-b"));
+    }
+
+    #[test]
+    fn sanitize_source_name_drops_empty() {
+        assert_eq!(sanitize_source_name(""), None);
+    }
 }

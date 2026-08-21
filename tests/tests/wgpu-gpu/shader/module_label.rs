@@ -32,6 +32,9 @@ static SHADER_MODULE_LABEL_PUNCTUATION: GpuTestConfiguration = GpuTestConfigurat
             "renderer/shader",
             "C:/shader",
             "shader with spaces",
+            "shader\twith\ttabs",
+            "/foo",
+            "-foo",
             "",
         ] {
             create_pipeline(&ctx, label);
