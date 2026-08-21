@@ -429,10 +429,7 @@ impl GPUDevice {
       entries: Cow::Owned(entries),
     };
 
-    let (wgpu_bind_group, err) =
-      self.wgpu_device.create_bind_group(&wgpu_descriptor);
-
-    self.error_handler.push_error(err);
+    let wgpu_bind_group = self.wgpu_device.create_bind_group(&wgpu_descriptor);
 
     GPUBindGroup {
       wgpu_bind_group,

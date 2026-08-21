@@ -1067,11 +1067,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             entries: Borrowed(&entries),
         };
 
-        let (wgpu_bind_group, error) = self.wgpu_device.create_bind_group(&descriptor);
-        if let Some(cause) = error {
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_bind_group");
-        }
+        let wgpu_bind_group = self.wgpu_device.create_bind_group(&descriptor);
         CoreBindGroup { wgpu_bind_group }.into()
     }
 
