@@ -1,13 +1,102 @@
+use alloc::borrow::Cow;
+
 use crate::{id, Label};
 
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 pub type CommandBufferDescriptor<'a> = wgt::CommandBufferDescriptor<Label<'a>>;
 
+/// Describes a color attachment to a render pass.
+///
+/// Corresponds to [`GPURenderColorAttachment`](https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpasscolorattachment)
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RenderPassColorAttachment {
+    /// The view to use as an attachment.
+    pub view: id::TextureViewId,
+    /// The depth slice index of a 3D view. It must not be provided if the view is not 3D.
+    pub depth_slice: Option<u32>,
+    /// The view that will receive the resolved output if multisampling is used.
+    pub resolve_target: Option<id::TextureViewId>,
+    /// Operation to perform to the output attachment at the start of a
+    /// renderpass.
+    ///
+    /// This must be clear if it is the first renderpass rendering to a swap
+    /// chain image.
+    pub load_op: wgt::LoadOp<wgt::Color>,
+    /// Operation to perform to the output attachment at the end of a renderpass.
+    pub store_op: wgt::StoreOp,
+}
+
+/// Describes an individual channel within a render pass, such as color, depth, or stencil.
+///
+/// A channel must either be read-only, or it must specify both load and store
+/// operations.
+#[repr(C)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PassChannel<V> {
+    /// Operation to perform to the output attachment at the start of a
+    /// renderpass.
+    ///
+    /// This must be clear if it is the first renderpass rendering to a swap
+    /// chain image.
+    pub load_op: Option<wgt::LoadOp<V>>,
+    /// Operation to perform to the output attachment at the end of a renderpass.
+    pub store_op: Option<wgt::StoreOp>,
+    /// If true, the relevant channel is not changed by a renderpass, and the
+    /// corresponding attachment can be used inside the pass by other read-only
+    /// usages.
+    pub read_only: bool,
+}
+
+/// Describes a depth/stencil attachment to a render pass.
+///
+/// Corresponds to [`GPURenderDepthStencilAttachment`](https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpassdepthstencilattachment)
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RenderPassDepthStencilAttachment {
+    /// The view to use as an attachment.
+    pub view: id::TextureViewId,
+    /// What operations will be performed on the depth part of the attachment.
+    pub depth: PassChannel<Option<f32>>,
+    /// What operations will be performed on the stencil part of the attachment.
+    pub stencil: PassChannel<Option<u32>>,
+}
+
+/// Describes the writing of timestamp values in a render or compute pass.
+///
+/// Corresponds to [`GPURenderPassTimestampWrites`](https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpasstimestampwrites)
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PassTimestampWrites {
+    /// The query set to write the timestamps to.
+    pub query_set: id::QuerySetId,
+    /// The index of the query set at which a start timestamp of this pass is written, if any.
+    pub beginning_of_pass_write_index: Option<u32>,
+    /// The index of the query set at which an end timestamp of this pass is written, if any.
+    pub end_of_pass_write_index: Option<u32>,
+}
+
+/// Describes the attachments of a render pass.
+///
+/// Corresponds to [`GPURenderPassDescriptor`](https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpassdescriptor)
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RenderPassDescriptor<'a> {
+    pub label: Label<'a>,
+    /// The color attachments of the render pass.
+    pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment>]>,
+    /// The depth and stencil attachment of the render pass, if any.
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment>,
+    /// Defines where the occlusion query results will be stored for this pass.
+    pub occlusion_query_set: Option<id::QuerySetId>,
+    /// Defines where and when timestamp values will be written for this pass.
+    pub timestamp_writes: Option<PassTimestampWrites>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPUCommandEncoder`](https://www.w3.org/TR/webgpu/#gpucommandencoder).
-pub enum CommandEncoderCommand<'a, RPD, CPD> {
+pub enum CommandEncoderCommand<'a, CPD> {
     BeginRenderPass {
-        desc: RPD,
+        desc: RenderPassDescriptor<'a>,
         render_pass_encoder_id: id::RenderPassEncoderId,
     },
     BeginComputePass {

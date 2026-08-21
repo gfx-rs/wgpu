@@ -3,7 +3,6 @@ use wgpu_core_remote_types::encoders::{CommandEncoderCommand, DebugCommand};
 use wgt::{BufferAddress, Extent3d, ImageSubresourceRange};
 
 use crate::global::compute_pass::ComputePassDescriptor;
-use crate::global::render_pass::RenderPassDescriptor;
 use crate::global::Global;
 use crate::hub::Hub;
 use crate::id::{BufferId, CommandEncoderId, TextureId};
@@ -214,7 +213,7 @@ impl Global {
     pub fn handle_command_encoder_command<'a>(
         &self,
         command_encoder_id: CommandEncoderId,
-        command: CommandEncoderCommand<'a, RenderPassDescriptor<'a>, ComputePassDescriptor<'a>>,
+        command: CommandEncoderCommand<'a, ComputePassDescriptor<'a>>,
     ) {
         match command {
             CommandEncoderCommand::BeginRenderPass {
