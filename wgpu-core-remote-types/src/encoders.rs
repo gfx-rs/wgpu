@@ -1,7 +1,7 @@
 use alloc::borrow::Cow;
 
 use crate::ffi::FfiOption;
-use crate::{id, Label};
+use crate::{assert_ffi_safe, id, Label};
 
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 pub type CommandBufferDescriptor<'a> = wgt::CommandBufferDescriptor<Label<'a>>;
@@ -27,6 +27,8 @@ pub struct RenderPassColorAttachment {
     /// Operation to perform to the output attachment at the end of a renderpass.
     pub store_op: wgt::StoreOp,
 }
+
+//assert_ffi_safe!(RenderPassColorAttachment);
 
 /// Describes an individual channel within a render pass, such as color, depth, or stencil.
 ///
@@ -63,6 +65,8 @@ pub struct RenderPassDepthStencilAttachment {
     pub stencil: PassChannel<FfiOption<u32>>,
 }
 
+//assert_ffi_safe!(RenderPassDepthStencilAttachment);
+
 /// Describes the writing of timestamp values in a render or compute pass.
 ///
 /// Corresponds to [`GPURenderPassTimestampWrites`](https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpasstimestampwrites)
@@ -76,6 +80,8 @@ pub struct PassTimestampWrites {
     /// The index of the query set at which an end timestamp of this pass is written, if any.
     pub end_of_pass_write_index: FfiOption<u32>,
 }
+
+assert_ffi_safe!(PassTimestampWrites);
 
 /// Describes the attachments of a render pass.
 ///

@@ -30,3 +30,14 @@ impl<T> FfiOption<T> {
         }
     }
 }
+
+#[macro_export]
+macro_rules! assert_ffi_safe {
+    ($ty:ty) => {
+        const _: () = {
+            #[deny(improper_ctypes_definitions)]
+            #[export_name = concat!("_compile_check_ffi_export_", stringify!($ty))]
+            pub extern "C" fn _compile_check_ffi_export(_x: $ty) {}
+        };
+    };
+}
