@@ -290,6 +290,7 @@ impl ExampleContext {
                 required_features: (E::optional_features() & adapter.features())
                     | E::required_features(),
                 required_limits: needed_limits,
+                default_queue: wgpu::QueueDescriptor { label: None },
                 experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: match std::env::var_os("WGPU_TRACE") {

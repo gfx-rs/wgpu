@@ -1236,6 +1236,13 @@ bitflags::bitflags! {
         ///
         /// See <https://www.w3.org/TR/webgpu/#adapter-capability-guarantees>.
         const TEXTURE_COMPRESSION = 1 << 25;
+
+        /// Supports `@interpolate(linear)` (a.k.a. `noperspective`) on shader inter-stage
+        /// variables.
+        ///
+        /// GLSL ES has no `noperspective` qualifier, so the GLES backend only supports this
+        /// on desktop OpenGL, not on GLES/WebGL2.
+        const LINEAR_INTERPOLATION = 1 << 26;
     }
 }
 

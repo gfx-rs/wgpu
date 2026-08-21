@@ -108,7 +108,7 @@ impl WebGpuError for ClearError {
 }
 
 impl super::CommandEncoder {
-    pub fn clear_buffer(
+    fn clear_buffer_inner(
         self: &Arc<Self>,
         dst: Arc<Buffer>,
         offset: BufferAddress,
@@ -125,7 +125,19 @@ impl super::CommandEncoder {
         })
     }
 
-    pub fn clear_texture(
+    pub fn clear_buffer(
+        self: &Arc<Self>,
+        dst: Arc<Buffer>,
+        offset: BufferAddress,
+        size: Option<BufferAddress>,
+    ) {
+        if let Err(err) = self.clear_buffer_inner(dst, offset, size) {
+            self.device
+                .handle_error(err, Some(self.label()), "CommandEncoder::clear_buffer");
+        }
+    }
+
+    fn clear_texture_inner(
         self: &Arc<Self>,
         dst: Arc<Texture>,
         subresource_range: &ImageSubresourceRange,
@@ -142,6 +154,17 @@ impl super::CommandEncoder {
                 subresource_range: *subresource_range,
             })
         })
+    }
+
+    pub fn clear_texture(
+        self: &Arc<Self>,
+        dst: Arc<Texture>,
+        subresource_range: &ImageSubresourceRange,
+    ) {
+        if let Err(err) = self.clear_texture_inner(dst, subresource_range) {
+            self.device
+                .handle_error(err, Some(self.label()), "CommandEncoder::clear_texture");
+        }
     }
 }
 

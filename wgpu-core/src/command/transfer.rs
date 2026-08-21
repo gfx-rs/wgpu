@@ -19,8 +19,8 @@ use crate::{
         TextureInitTrackerAction,
     },
     resource::{
-        Buffer, MissingBufferUsageError, MissingTextureUsageError, ParentDevice, RawResourceAccess,
-        Texture, TextureErrorDimension,
+        Buffer, Labeled, MissingBufferUsageError, MissingTextureUsageError, ParentDevice,
+        RawResourceAccess, Texture, TextureErrorDimension,
     },
 };
 
@@ -823,7 +823,7 @@ fn handle_buffer_init(
 }
 
 impl super::CommandEncoder {
-    pub fn copy_buffer_to_buffer(
+    fn copy_buffer_to_buffer_inner(
         self: &Arc<Self>,
         source: Arc<Buffer>,
         source_offset: BufferAddress,
@@ -853,7 +853,30 @@ impl super::CommandEncoder {
         })
     }
 
-    pub fn copy_buffer_to_texture(
+    pub fn copy_buffer_to_buffer(
+        self: &Arc<Self>,
+        source: Arc<Buffer>,
+        source_offset: BufferAddress,
+        destination: Arc<Buffer>,
+        destination_offset: BufferAddress,
+        size: Option<BufferAddress>,
+    ) {
+        if let Err(err) = self.copy_buffer_to_buffer_inner(
+            source,
+            source_offset,
+            destination,
+            destination_offset,
+            size,
+        ) {
+            self.device.handle_error(
+                err,
+                Some(self.label()),
+                "CommandEncoder::copy_buffer_to_buffer",
+            );
+        }
+    }
+
+    fn copy_buffer_to_texture_inner(
         self: &Arc<Self>,
         source: &wgt::TexelCopyBufferInfo<Arc<Buffer>>,
         destination: &wgt::TexelCopyTextureInfo<Arc<Texture>>,
@@ -889,7 +912,22 @@ impl super::CommandEncoder {
         })
     }
 
-    pub fn copy_texture_to_buffer(
+    pub fn copy_buffer_to_texture(
+        self: &Arc<Self>,
+        source: &wgt::TexelCopyBufferInfo<Arc<Buffer>>,
+        destination: &wgt::TexelCopyTextureInfo<Arc<Texture>>,
+        copy_size: &Extent3d,
+    ) {
+        if let Err(err) = self.copy_buffer_to_texture_inner(source, destination, copy_size) {
+            self.device.handle_error(
+                err,
+                Some(self.label()),
+                "CommandEncoder::copy_buffer_to_texture",
+            );
+        }
+    }
+
+    fn copy_texture_to_buffer_inner(
         self: &Arc<Self>,
         source: &wgt::TexelCopyTextureInfo<Arc<Texture>>,
         destination: &wgt::TexelCopyBufferInfo<Arc<Buffer>>,
@@ -925,7 +963,22 @@ impl super::CommandEncoder {
         })
     }
 
-    pub fn copy_texture_to_texture(
+    pub fn copy_texture_to_buffer(
+        self: &Arc<Self>,
+        source: &wgt::TexelCopyTextureInfo<Arc<Texture>>,
+        destination: &wgt::TexelCopyBufferInfo<Arc<Buffer>>,
+        copy_size: &Extent3d,
+    ) {
+        if let Err(err) = self.copy_texture_to_buffer_inner(source, destination, copy_size) {
+            self.device.handle_error(
+                err,
+                Some(self.label()),
+                "CommandEncoder::copy_texture_to_buffer",
+            );
+        }
+    }
+
+    fn copy_texture_to_texture_inner(
         self: &Arc<Self>,
         source: &wgt::TexelCopyTextureInfo<Arc<Texture>>,
         destination: &wgt::TexelCopyTextureInfo<Arc<Texture>>,
@@ -961,6 +1014,21 @@ impl super::CommandEncoder {
                 size: *copy_size,
             })
         })
+    }
+
+    pub fn copy_texture_to_texture(
+        self: &Arc<Self>,
+        source: &wgt::TexelCopyTextureInfo<Arc<Texture>>,
+        destination: &wgt::TexelCopyTextureInfo<Arc<Texture>>,
+        copy_size: &Extent3d,
+    ) {
+        if let Err(err) = self.copy_texture_to_texture_inner(source, destination, copy_size) {
+            self.device.handle_error(
+                err,
+                Some(self.label()),
+                "CommandEncoder::copy_texture_to_texture",
+            );
+        }
     }
 }
 

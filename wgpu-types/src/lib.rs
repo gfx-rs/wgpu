@@ -40,6 +40,8 @@ mod features;
 pub mod instance;
 mod limits;
 mod macros;
+#[doc(hidden)] // for use in wgpu-core,wgpu-core-remote-types
+pub mod markers;
 pub mod math;
 mod origin_extent;
 mod ray_tracing;

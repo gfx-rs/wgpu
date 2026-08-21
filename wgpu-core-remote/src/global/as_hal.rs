@@ -11,7 +11,7 @@ impl Global {
         &self,
         id: BufferId,
     ) -> Option<impl Deref<Target = A::Buffer>> {
-        let hub = &self.hub;
+        let hub = &self.hub.borrow();
 
         let buffer = hub.buffers.get(id);
 
@@ -25,7 +25,7 @@ impl Global {
         &self,
         id: TextureId,
     ) -> Option<impl Deref<Target = A::Texture>> {
-        let hub = &self.hub;
+        let hub = &self.hub.borrow();
 
         let texture = hub.textures.get(id);
 
@@ -39,7 +39,7 @@ impl Global {
         &self,
         id: TextureViewId,
     ) -> Option<impl Deref<Target = A::TextureView>> {
-        let hub = &self.hub;
+        let hub = &self.hub.borrow();
 
         let view = hub.texture_views.get(id);
 
@@ -53,7 +53,7 @@ impl Global {
         &self,
         id: AdapterId,
     ) -> Option<impl Deref<Target = A::Adapter>> {
-        let hub = &self.hub;
+        let hub = &self.hub.borrow();
         let adapter = hub.adapters.get(id);
 
         unsafe { adapter.as_hal::<A>() }
@@ -66,7 +66,8 @@ impl Global {
         &self,
         id: DeviceId,
     ) -> Option<impl Deref<Target = A::Device>> {
-        let device = self.hub.devices.get(id);
+        let hub = &self.hub.borrow();
+        let device = hub.devices.get(id);
 
         unsafe { device.as_hal::<A>() }
     }
@@ -78,7 +79,8 @@ impl Global {
         &self,
         id: DeviceId,
     ) -> Option<impl Deref<Target = A::Fence>> {
-        let device = self.hub.devices.get(id);
+        let hub = &self.hub.borrow();
+        let device = hub.devices.get(id);
 
         unsafe { device.fence_as_hal::<A>() }
     }
@@ -101,7 +103,7 @@ impl Global {
         id: CommandEncoderId,
         hal_command_encoder_callback: F,
     ) -> R {
-        let hub = &self.hub;
+        let hub = &self.hub.borrow();
 
         let cmd_enc = hub.command_encoders.get(id);
         unsafe { cmd_enc.as_hal_mut::<A, F, R>(hal_command_encoder_callback) }
@@ -114,7 +116,8 @@ impl Global {
         &self,
         id: QueueId,
     ) -> Option<impl Deref<Target = A::Queue>> {
-        let queue = self.hub.queues.get(id);
+        let hub = &self.hub.borrow();
+        let queue = hub.queues.get(id);
 
         unsafe { queue.as_hal::<A>() }
     }
