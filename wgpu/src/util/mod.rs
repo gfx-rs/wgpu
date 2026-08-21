@@ -10,6 +10,7 @@ mod belt;
 mod device;
 mod encoder;
 mod init;
+#[cfg(webgpu)]
 mod panicking;
 mod spirv;
 mod texture_blitter;
@@ -28,6 +29,7 @@ pub use wgt::{
     math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs, TextureDataOrder,
 };
 
+#[cfg(webgpu)]
 pub(crate) use panicking::is_panicking;
 pub(crate) use wgpu_sync::Mutex;
 

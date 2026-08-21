@@ -1,6 +1,6 @@
 #[cfg(feature = "trace")]
 use alloc::string::ToString as _;
-use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
 use core::{
     iter,
     mem::{self, ManuallyDrop},
@@ -26,7 +26,7 @@ use crate::{
         CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
         TransferError,
     },
-    device::{DeviceError, WaitIdleError},
+    device::{DeviceError, QueueDescriptor, WaitIdleError},
     get_lowest_common_denom, hal_label,
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
@@ -42,7 +42,7 @@ use crate::{
     scratch::ScratchBuffer,
     snatch::{SnatchGuard, Snatchable},
     track::{self, Tracker, TrackerIndex},
-    FastHashMap, SubmissionIndex,
+    FastHashMap, LabelHelpers, SubmissionIndex,
 };
 use crate::{device::resource::CommandIndices, resource::RawResourceAccess};
 
@@ -50,6 +50,7 @@ pub struct Queue {
     raw: Box<dyn hal::DynQueue>,
     pub(crate) pending_writes: Mutex<PendingWrites>,
     life_tracker: Mutex<LifetimeTracker>,
+    label: String,
     // The device needs to be dropped last (`Device.zero_buffer` might be referenced by the encoder in pending writes).
     pub(crate) device: Arc<Device>,
 }
@@ -58,6 +59,7 @@ impl Queue {
     pub(crate) fn new(
         device: Arc<Device>,
         raw: Box<dyn hal::DynQueue>,
+        desc: QueueDescriptor,
         instance_flags: wgt::InstanceFlags,
     ) -> Result<Self, DeviceError> {
         let pending_encoder = device
@@ -103,6 +105,7 @@ impl Queue {
         Ok(Queue {
             raw,
             device,
+            label: desc.label.to_string(),
             pending_writes: Mutex::new(rank::QUEUE_PENDING_WRITES, pending_writes),
             life_tracker: Mutex::new(rank::QUEUE_LIFE_TRACKER, LifetimeTracker::new()),
         })
@@ -262,12 +265,7 @@ impl Queue {
 }
 
 crate::impl_resource_type!(Queue);
-// TODO: https://github.com/gfx-rs/wgpu/issues/4014
-impl Labeled for Queue {
-    fn label(&self) -> &str {
-        ""
-    }
-}
+crate::impl_labeled!(Queue);
 crate::impl_parent_device!(Queue);
 crate::impl_storage_item!(Queue);
 
@@ -721,7 +719,7 @@ impl<'a> PendingSubmission<'a> {
 //TODO: move out common parts of write_xxx.
 
 impl Queue {
-    pub fn write_buffer(
+    pub(crate) fn write_buffer_inner(
         &self,
         buffer: Arc<Buffer>,
         buffer_offset: wgt::BufferAddress,
@@ -789,6 +787,18 @@ impl Queue {
         pending_writes.consume(staging_buffer);
 
         result
+    }
+
+    pub fn write_buffer(
+        &self,
+        buffer: Arc<Buffer>,
+        buffer_offset: wgt::BufferAddress,
+        data: &[u8],
+    ) {
+        if let Err(error) = self.write_buffer_inner(buffer, buffer_offset, data) {
+            self.device
+                .handle_error(error, Some(self.label()), "Queue::write_buffer");
+        }
     }
 
     pub fn create_staging_buffer(
@@ -952,7 +962,7 @@ impl Queue {
         Ok(())
     }
 
-    pub fn write_texture(
+    pub fn write_texture_inner(
         &self,
         destination: wgt::TexelCopyTextureInfo<Arc<Texture>>,
         data: &[u8],
@@ -1201,6 +1211,19 @@ impl Queue {
         pending_writes.insert_texture(&dst);
 
         Ok(())
+    }
+
+    pub fn write_texture(
+        &self,
+        destination: wgt::TexelCopyTextureInfo<Arc<Texture>>,
+        data: &[u8],
+        data_layout: &wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    ) {
+        if let Err(error) = self.write_texture_inner(destination, data, data_layout, size) {
+            self.device
+                .handle_error(error, Some(self.label()), "Queue::write_texture");
+        }
     }
 
     #[cfg(webgl)]
@@ -1468,7 +1491,7 @@ impl Queue {
         &self,
         submit_index: SubmissionIndex,
         commands: Option<Vec<crate::command::Command<crate::command::PointerReferences>>>,
-        error: alloc::string::String,
+        error: String,
     ) {
         if let Some(ref mut trace) = *self.device.trace.lock() {
             trace.add(Action::FailedCommands {
@@ -1479,7 +1502,7 @@ impl Queue {
         }
     }
 
-    pub fn submit(
+    fn submit_inner(
         &self,
         command_buffers: &[Arc<CommandBuffer>],
     ) -> Result<SubmissionIndex, (SubmissionIndex, QueueSubmitError)> {
@@ -1734,6 +1757,17 @@ impl Queue {
         api_log!("Queue::submit returned submit index {submit_index}");
 
         Ok(submit_index)
+    }
+
+    pub fn submit(&self, command_buffers: &[Arc<CommandBuffer>]) -> SubmissionIndex {
+        match self.submit_inner(command_buffers) {
+            Ok(submit_index) => submit_index,
+            Err((submit_index, e)) => {
+                self.device
+                    .handle_error(e, Some(self.label()), "Queue::submit");
+                submit_index
+            }
+        }
     }
 
     /// Allocate a submission index and prepare for a submission.

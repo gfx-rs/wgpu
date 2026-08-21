@@ -6,12 +6,12 @@ use wgt::error::{ErrorType, WebGpuError};
 use crate::{
     command::{encoder::EncodingState, ArcCommand, CommandEncoder, EncoderStateError},
     device::DeviceError,
-    resource::{Buffer, InvalidResourceError, ParentDevice, Texture},
+    resource::{Buffer, InvalidResourceError, Labeled as _, ParentDevice, Texture},
     track::ResourceUsageCompatibilityError,
 };
 
 impl CommandEncoder {
-    pub fn transition_resources(
+    fn transition_resources_inner(
         self: &Arc<Self>,
         buffer_transitions: impl Iterator<Item = wgt::BufferTransition<Arc<Buffer>>>,
         texture_transitions: impl Iterator<Item = wgt::TextureTransition<Arc<Texture>>>,
@@ -43,6 +43,20 @@ impl CommandEncoder {
                     .collect::<Result<_, TransitionResourcesError>>()?,
             })
         })
+    }
+
+    pub fn transition_resources(
+        self: &Arc<Self>,
+        buffer_transitions: impl Iterator<Item = wgt::BufferTransition<Arc<Buffer>>>,
+        texture_transitions: impl Iterator<Item = wgt::TextureTransition<Arc<Texture>>>,
+    ) {
+        if let Err(err) = self.transition_resources_inner(buffer_transitions, texture_transitions) {
+            self.device.handle_error(
+                err,
+                Some(self.label()),
+                "CommandEncoder::transition_resources",
+            );
+        }
     }
 }
 

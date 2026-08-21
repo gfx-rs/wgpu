@@ -22,6 +22,7 @@ members = [
     "wgpu-core",
     "wgpu-core/platform-deps/*",
     "wgpu-core-remote",
+    "wgpu-core-remote-types",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
@@ -93,6 +94,8 @@ wgpu = { version = "30.0.0", path = "./wgpu", default-features = false, features
     "static-dxc",
 ] }
 wgpu-core = { version = "30.0.0", path = "./wgpu-core" }
+wgpu-core-remote = { version = "30.0.0", path = "./wgpu-core-remote" }
+wgpu-core-remote-types = { version = "30.0.0", path = "./wgpu-core-remote-types" }
 wgpu-hal = { version = "30.0.0", path = "./wgpu-hal" }
 wgpu-naga-bridge = { version = "30.0.0", path = "./wgpu-naga-bridge" }
 wgpu-sync = { version = "30.0.0", path = "./wgpu-sync", default-features = false }
@@ -311,10 +314,10 @@ windows = { version = "0.62", default-features = false }
 # wasm dependencies
 console_error_panic_hook = "0.1.5"
 console_log = "1"
-js-sys = { version = "0.3.100", default-features = false }
-wasm-bindgen = { version = "0.2.123", default-features = false }
-wasm-bindgen-futures = { version = "0.4.73", default-features = false }
-web-sys = { version = "0.3.100", default-features = false }
+js-sys = { version = "0.3.104", default-features = false }
+wasm-bindgen = { version = "0.2.127", default-features = false }
+wasm-bindgen-futures = { version = "0.4.77", default-features = false }
+web-sys = { version = "0.3.104", default-features = false }
 web-time = "1.1.0"
 
 # deno dependencies

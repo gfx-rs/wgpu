@@ -80,6 +80,7 @@ impl Test<'_> {
                 label: None,
                 required_features: self.features,
                 required_limits: wgt::Limits::default(),
+                default_queue: wgt::QueueDescriptor { label: None },
                 experimental_features: unsafe { wgt::ExperimentalFeatures::enabled() },
                 memory_hints: wgt::MemoryHints::default(),
                 trace: wgt::Trace::Off,

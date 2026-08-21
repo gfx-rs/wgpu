@@ -269,7 +269,9 @@ fn compile_dxil(entry: &str, stage_str: &str, test_hash: u64) -> Cow<'static, [u
             &out_path,
         ])
         .output()
-        .unwrap();
+        .unwrap_or_else(|e| {
+            panic!("failed to run `dxc` (required to compile the passthrough test shaders; install the DirectX Shader Compiler and ensure `dxc` is on PATH): {e}")
+        });
     let file = std::fs::read(&out_path);
     let _ = std::fs::remove_file(out_path);
     // Remove the file before checking for status
@@ -358,7 +360,9 @@ fn spirv_source(test_hash: u64) -> Cow<'static, [u32]> {
             &out_path,
         ])
         .output()
-        .unwrap();
+        .unwrap_or_else(|e| {
+            panic!("failed to run `dxc` (required to compile the passthrough test shaders; install the DirectX Shader Compiler and ensure `dxc` is on PATH): {e}")
+        });
     let file = std::fs::read(&out_path);
     let _ = std::fs::remove_file(out_path);
     // Remove the file before checking for status
