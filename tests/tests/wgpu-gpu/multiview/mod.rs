@@ -54,7 +54,7 @@ static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration
                  right: None",
             ));
             // https://github.com/gfx-rs/wgpu/issues/9184 and https://github.com/gfx-rs/wgpu/issues/9187
-            failures.append(&mut FailureCase::mac_vulkan(|case| {
+            failures.extend(FailureCase::mac_vulkan().into_iter().map(|case| {
                 case.panic(
                     "assertion `left == right` failed: Expected 0\n  left: Some(255)\n right: None",
                 )

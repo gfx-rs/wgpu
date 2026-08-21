@@ -6,8 +6,7 @@
 //! The `wgpu` Rust API always uses the `Features` bit flag type to represent a
 //! set of features. However, the WebGPU-defined JavaScript API uses
 //! `kebab-case` feature name strings, so some utilities are provided for
-//! working with those names. See [`Features::as_str`] and [`<Features as
-//! FromStr>::from_str`].
+//! working with those names. See [`Features::as_str`] and [`Features::from_str`].
 //!
 //! The [`bitflags`] crate names flags by stringifying the
 //! `SCREAMING_SNAKE_CASE` identifier. These names are returned by

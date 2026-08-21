@@ -22,7 +22,7 @@ use objc2_metal::{
     MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTextureUsage, MTLTriangleFillMode,
     MTLVertexDescriptor, MTLVertexStepFunction,
 };
-use parking_lot::{Condvar, Mutex, RwLock};
+use wgpu_sync::{Condvar, CondvarMutex, RwLock};
 
 use super::{adapter::MAX_BUFFERS, conv, AttachmentInfo, PassthroughShader, ShaderModuleSource};
 use crate::{auxil::map_naga_stage, DropCallback, DropGuard, TlasInstance};
@@ -2072,7 +2072,7 @@ impl crate::Device for super::Device {
             None
         };
         Ok(super::Fence {
-            sync: Arc::new((Mutex::new(0), Condvar::new())),
+            sync: Arc::new((CondvarMutex::new(0), Condvar::new())),
             pending_command_buffers: RwLock::new(Vec::new()),
             shared_event,
         })

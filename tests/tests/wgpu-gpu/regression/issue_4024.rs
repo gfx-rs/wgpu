@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 use wgpu::*;

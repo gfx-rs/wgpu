@@ -21,9 +21,12 @@ members = [
     "tests",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
+    "wgpu-core-remote",
+    "wgpu-core-remote-types",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
+    "wgpu-sync",
     "wgpu-types",
     "wgpu",
     "xtask",
@@ -49,6 +52,7 @@ default-members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
+    "wgpu-sync",
     "wgpu-types",
     "wgpu",
     "xtask",
@@ -90,8 +94,11 @@ wgpu = { version = "30.0.0", path = "./wgpu", default-features = false, features
     "static-dxc",
 ] }
 wgpu-core = { version = "30.0.0", path = "./wgpu-core" }
+wgpu-core-remote = { version = "30.0.0", path = "./wgpu-core-remote" }
+wgpu-core-remote-types = { version = "30.0.0", path = "./wgpu-core-remote-types" }
 wgpu-hal = { version = "30.0.0", path = "./wgpu-hal" }
 wgpu-naga-bridge = { version = "30.0.0", path = "./wgpu-naga-bridge" }
+wgpu-sync = { version = "30.0.0", path = "./wgpu-sync", default-features = false }
 wgpu-test = { version = "30.0.0", path = "./tests" }
 wgpu-types = { version = "30.0.0", path = "./wgpu-types", default-features = false }
 
@@ -141,7 +148,7 @@ hashbrown = { version = "0.17", default-features = false, features = [
 image = { version = "0.25", default-features = false, features = ["png"] }
 indexmap = { version = "2.11.4", default-features = false }
 indicatif = "0.18"
-itertools = { version = "0.14" }
+itertools = { version = "0.15" }
 jobserver = "0.1"
 ktx2 = "0.5"
 libc = { version = "0.2.183", default-features = false }
@@ -150,6 +157,8 @@ libfuzzer-sys = ">0.4.0,<=0.4.7"
 libloading = "0.8"
 libm = { version = "0.2.6", default-features = false }
 libtest-mimic = "0.8"
+# Minimum version supported by parking_lot 0.12.3
+lock_api = { version = "0.4.6", default-features = false }
 log = "0.4.29"
 macro_rules_attribute = "0.2"
 nanoserde = "0.2"
@@ -173,11 +182,13 @@ pico-args = { version = "0.5", features = [
     "combined-flags",
 ] }
 png = "0.18"
-pollster = "0.4"
+pollster = "1.0"
 portable-atomic = "1.10"
 portable-atomic-util = "0.2.4"
 pp-rs = "0.2.1"
 profiling = { version = "1.0.1", default-features = false }
+# Limit to versions that use rand 0.8
+proptest = ">=1, <1.7"
 raw-window-handle = { version = "0.6.2", default-features = false }
 rayon = "1.3"
 regex-lite = "0.1"
@@ -300,10 +311,10 @@ windows = { version = "0.62", default-features = false }
 # wasm dependencies
 console_error_panic_hook = "0.1.5"
 console_log = "1"
-js-sys = { version = "0.3.100", default-features = false }
-wasm-bindgen = { version = "0.2.123", default-features = false }
-wasm-bindgen-futures = { version = "0.4.73", default-features = false }
-web-sys = { version = "0.3.100", default-features = false }
+js-sys = { version = "0.3.104", default-features = false }
+wasm-bindgen = { version = "0.2.127", default-features = false }
+wasm-bindgen-futures = { version = "0.4.77", default-features = false }
+web-sys = { version = "0.3.104", default-features = false }
 web-time = "1.1.0"
 
 # deno dependencies

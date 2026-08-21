@@ -18,8 +18,6 @@ use crate::error::GPUGenericError;
 use crate::get_data_slice;
 
 pub struct GPUComputePassEncoder {
-  pub error_handler: super::error::ErrorHandler,
-
   pub compute_pass: RefCell<wgpu_core::command::ComputePass>,
   pub label: String,
 }
@@ -54,12 +52,10 @@ impl GPUComputePassEncoder {
     &self,
     #[webidl] pipeline: Ptr<crate::compute_pipeline::GPUComputePipeline>,
   ) {
-    let err = self
+    self
       .compute_pass
       .borrow_mut()
-      .set_pipeline(pipeline.wgpu_compute_pipeline.clone())
-      .err();
-    self.error_handler.push_error(err);
+      .set_pipeline(pipeline.wgpu_compute_pipeline.clone());
   }
 
   #[undefined]
@@ -71,16 +67,11 @@ impl GPUComputePassEncoder {
     #[webidl(default = 1, options(enforce_range = true))]
     work_group_count_z: u32,
   ) {
-    let err = self
-      .compute_pass
-      .borrow_mut()
-      .dispatch_workgroups(
-        work_group_count_x,
-        work_group_count_y,
-        work_group_count_z,
-      )
-      .err();
-    self.error_handler.push_error(err);
+    self.compute_pass.borrow_mut().dispatch_workgroups(
+      work_group_count_x,
+      work_group_count_y,
+      work_group_count_z,
+    );
   }
 
   #[undefined]
@@ -89,55 +80,38 @@ impl GPUComputePassEncoder {
     #[webidl] indirect_buffer: Ptr<crate::buffer::GPUBuffer>,
     #[webidl(options(enforce_range = true))] indirect_offset: u64,
   ) {
-    let err = self
-      .compute_pass
-      .borrow_mut()
-      .dispatch_workgroups_indirect(
-        indirect_buffer.wgpu_buffer.clone(),
-        indirect_offset,
-      )
-      .err();
-    self.error_handler.push_error(err);
+    self.compute_pass.borrow_mut().dispatch_workgroups_indirect(
+      indirect_buffer.wgpu_buffer.clone(),
+      indirect_offset,
+    );
   }
 
   #[fast]
   #[undefined]
   fn end(&self) {
-    let err = self.compute_pass.borrow_mut().end().err();
-    self.error_handler.push_error(err);
+    self.compute_pass.borrow_mut().end();
   }
 
   #[undefined]
   fn push_debug_group(&self, #[webidl] group_label: String) {
-    let err = self
-      .compute_pass
-      .borrow_mut()
-      .push_debug_group(
-        &group_label,
-        0, // wgpu#975
-      )
-      .err();
-    self.error_handler.push_error(err);
+    self.compute_pass.borrow_mut().push_debug_group(
+      &group_label,
+      0, // wgpu#975
+    );
   }
 
   #[fast]
   #[undefined]
   fn pop_debug_group(&self) {
-    let err = self.compute_pass.borrow_mut().pop_debug_group().err();
-    self.error_handler.push_error(err);
+    self.compute_pass.borrow_mut().pop_debug_group();
   }
 
   #[undefined]
   fn insert_debug_marker(&self, #[webidl] marker_label: String) {
-    let err = self
-      .compute_pass
-      .borrow_mut()
-      .insert_debug_marker(
-        &marker_label,
-        0, // wgpu#975
-      )
-      .err();
-    self.error_handler.push_error(err);
+    self.compute_pass.borrow_mut().insert_debug_marker(
+      &marker_label,
+      0, // wgpu#975
+    );
   }
 
   #[undefined]
@@ -152,8 +126,7 @@ impl GPUComputePassEncoder {
   ) -> Result<(), WebIdlError> {
     const PREFIX: &str =
       "Failed to execute 'setBindGroup' on 'GPUComputePassEncoder'";
-    let err = if let Ok(uint_32) = dynamic_offsets.try_cast::<v8::Uint32Array>()
-    {
+    if let Ok(uint_32) = dynamic_offsets.try_cast::<v8::Uint32Array>() {
       let start = u64::convert(
         scope,
         dynamic_offsets_data_start,
@@ -185,17 +158,13 @@ impl GPUComputePassEncoder {
 
       let offsets = &data[start..(start + len)];
 
-      self
-        .compute_pass
-        .borrow_mut()
-        .set_bind_group(
-          index,
-          bind_group
-            .into_option()
-            .map(|bind_group| bind_group.wgpu_bind_group.clone()),
-          offsets,
-        )
-        .err()
+      self.compute_pass.borrow_mut().set_bind_group(
+        index,
+        bind_group
+          .into_option()
+          .map(|bind_group| bind_group.wgpu_bind_group.clone()),
+        offsets,
+      )
     } else {
       let offsets = <Option<Vec<u32>>>::convert(
         scope,
@@ -209,20 +178,14 @@ impl GPUComputePassEncoder {
       )?
       .unwrap_or_default();
 
-      self
-        .compute_pass
-        .borrow_mut()
-        .set_bind_group(
-          index,
-          bind_group
-            .into_option()
-            .map(|bind_group| bind_group.wgpu_bind_group.clone()),
-          &offsets,
-        )
-        .err()
+      self.compute_pass.borrow_mut().set_bind_group(
+        index,
+        bind_group
+          .into_option()
+          .map(|bind_group| bind_group.wgpu_bind_group.clone()),
+        &offsets,
+      )
     };
-
-    self.error_handler.push_error(err);
 
     Ok(())
   }
@@ -239,12 +202,7 @@ impl GPUComputePassEncoder {
   ) -> Result<(), JsErrorBox> {
     let data = get_data_slice(scope, data_arg, data_offset, data_size)?;
 
-    let err = self
-      .compute_pass
-      .borrow_mut()
-      .set_immediates(offset, data)
-      .err();
-    self.error_handler.push_error(err);
+    self.compute_pass.borrow_mut().set_immediates(offset, data);
     Ok(())
   }
 }

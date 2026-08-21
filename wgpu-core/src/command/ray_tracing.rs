@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 use core::{
     cmp::max,
     num::NonZeroU64,
@@ -9,18 +9,13 @@ use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 
 use crate::{
     command::encoder::EncodingState,
-    ray_tracing::{
-        AsAction, AsBuild, BlasAabbGeometry, BlasTriangleGeometry, TlasBuild, TlasInstance,
-        ValidateAsActionsError,
-    },
+    ray_tracing::{AsAction, AsBuild, TlasBuild, ValidateAsActionsError},
     resource::{Buffer, InvalidResourceError},
 };
 use crate::{command::EncoderStateError, device::resource::CommandIndices};
 use crate::{
     command::{ArcCommand, ArcReferences, CommandBufferMutable},
     device::queue::TempResource,
-    global::Global,
-    id::CommandEncoderId,
     init_tracker::MemoryInitKind,
     ray_tracing::{
         ArcBlasAabbGeometry, ArcBlasBuildEntry, ArcBlasGeometries, ArcBlasTriangleGeometry,
@@ -34,8 +29,6 @@ use crate::{
     FastHashSet,
 };
 use crate::{lock::RwLockWriteGuard, resource::RawResourceAccess};
-
-use crate::id::{BlasId, TlasId};
 
 struct BlasStore<'a> {
     blas: Arc<Blas>,
@@ -55,7 +48,7 @@ struct TlasStore<'a> {
 }
 
 impl super::CommandEncoder {
-    pub fn mark_acceleration_structures_built(
+    fn mark_acceleration_structures_built_inner(
         self: &Arc<Self>,
         blases: &[Arc<Blas>],
         tlases: &[Arc<Tlas>],
@@ -93,7 +86,21 @@ impl super::CommandEncoder {
         )
     }
 
-    pub fn build_acceleration_structures<'a>(
+    pub fn mark_acceleration_structures_built(
+        self: &Arc<Self>,
+        blases: &[Arc<Blas>],
+        tlases: &[Arc<Tlas>],
+    ) {
+        if let Err(err) = self.mark_acceleration_structures_built_inner(blases, tlases) {
+            self.device.handle_error(
+                err,
+                Some(self.label()),
+                "CommandEncoder::mark_acceleration_structures_built",
+            );
+        }
+    }
+
+    fn build_acceleration_structures_inner<'a>(
         self: &Arc<Self>,
         blas_iter: impl Iterator<Item = BlasBuildEntry<'a, Arc<Blas>, Arc<Buffer>>>,
         tlas_iter: impl Iterator<Item = TlasPackage<'a, Arc<Tlas>, Arc<Blas>>>,
@@ -191,83 +198,19 @@ impl super::CommandEncoder {
             Ok(ArcCommand::BuildAccelerationStructures { blas, tlas })
         })
     }
-}
 
-impl Global {
-    pub fn command_encoder_mark_acceleration_structures_built(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        blas_ids: &[BlasId],
-        tlas_ids: &[TlasId],
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-
-        let blases = blas_ids
-            .iter()
-            .map(|&id| hub.blas_s.get(id))
-            .collect::<Vec<_>>();
-        let tlases = tlas_ids
-            .iter()
-            .map(|&id| hub.tlas_s.get(id))
-            .collect::<Vec<_>>();
-        cmd_enc.mark_acceleration_structures_built(&blases, &tlases)
-    }
-
-    pub fn command_encoder_build_acceleration_structures<'a>(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        blas_iter: impl Iterator<Item = BlasBuildEntry<'a>>,
-        tlas_iter: impl Iterator<Item = TlasPackage<'a>>,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        let blases = blas_iter.map(|e| BlasBuildEntry {
-            blas: hub.blas_s.get(e.blas),
-            geometries: match e.geometries {
-                BlasGeometries::TriangleGeometries(triangle_geometries) => {
-                    let triangle_geometries = triangle_geometries.map(|tg| BlasTriangleGeometry {
-                        size: tg.size,
-                        vertex_buffer: hub.buffers.get(tg.vertex_buffer),
-                        index_buffer: tg
-                            .index_buffer
-                            .map(|index_buffer| hub.buffers.get(index_buffer)),
-                        transform_buffer: tg
-                            .transform_buffer
-                            .map(|transform_buffer| hub.buffers.get(transform_buffer)),
-                        first_vertex: tg.first_vertex,
-                        vertex_stride: tg.vertex_stride,
-                        first_index: tg.first_index,
-                        transform_buffer_offset: tg.transform_buffer_offset,
-                    });
-                    BlasGeometries::TriangleGeometries(Box::new(triangle_geometries.into_iter()))
-                }
-                BlasGeometries::AabbGeometries(aabb_geometries) => {
-                    let aabb_geometries = aabb_geometries.map(|ag| BlasAabbGeometry {
-                        size: ag.size,
-                        stride: ag.stride,
-                        aabb_buffer: hub.buffers.get(ag.aabb_buffer),
-                        primitive_offset: ag.primitive_offset,
-                    });
-                    BlasGeometries::AabbGeometries(Box::new(aabb_geometries.into_iter()))
-                }
-            },
-        });
-        let tlases = tlas_iter.map(|e| TlasPackage {
-            tlas: hub.tlas_s.get(e.tlas),
-            instances: Box::new(e.instances.map(|instance| {
-                instance.as_ref().map(|instance| TlasInstance {
-                    blas: hub.blas_s.get(instance.blas),
-                    transform: instance.transform,
-                    custom_data: instance.custom_data,
-                    mask: instance.mask,
-                })
-            })),
-            lowest_unmodified: e.lowest_unmodified,
-        });
-        cmd_enc.build_acceleration_structures(blases.into_iter(), tlases.into_iter())
+    pub fn build_acceleration_structures<'a>(
+        self: &Arc<Self>,
+        blas_iter: impl Iterator<Item = BlasBuildEntry<'a, Arc<Blas>, Arc<Buffer>>>,
+        tlas_iter: impl Iterator<Item = TlasPackage<'a, Arc<Tlas>, Arc<Blas>>>,
+    ) {
+        if let Err(err) = self.build_acceleration_structures_inner(blas_iter, tlas_iter) {
+            self.device.handle_error(
+                err,
+                Some(self.label()),
+                "CommandEncoder::build_acceleration_structures",
+            );
+        }
     }
 }
 

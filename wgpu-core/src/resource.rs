@@ -1181,6 +1181,14 @@ impl Buffer {
             life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
     }
+
+    pub fn size(&self) -> wgt::BufferAddress {
+        self.size
+    }
+
+    pub fn usage(&self) -> wgt::BufferUsages {
+        self.usage
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -2169,6 +2177,10 @@ impl Texture {
 
         (view, error)
     }
+
+    pub fn descriptor(&self) -> &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>> {
+        &self.desc
+    }
 }
 
 /// A texture that has been marked as destroyed and is staged for actual deletion soon.
@@ -3015,10 +3027,8 @@ pub(crate) struct QuerySetState {
 pub struct QuerySet {
     pub(crate) state: ResourceState<QuerySetState>,
     pub(crate) device: Arc<Device>,
-    /// The `label` from the descriptor used to create the resource.
-    pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
-    pub(crate) desc: wgt::QuerySetDescriptor<()>,
+    pub(crate) desc: wgt::QuerySetDescriptor<String>,
     pub(crate) initialized_slots: Mutex<bit_vec::BitVec>,
 }
 
@@ -3045,9 +3055,8 @@ impl QuerySet {
     pub fn invalid(device: Arc<Device>, desc: &QuerySetDescriptor) -> Arc<Self> {
         Arc::new(QuerySet {
             state: ResourceState::Invalid,
-            label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.query_sets.clone()),
-            desc: desc.clone().map_label(|_| ()),
+            desc: desc.map_label(|l| l.to_string()),
             initialized_slots: Mutex::new(
                 rank::QUERY_SET_INITIALIZED_SLOTS,
                 bit_vec::BitVec::new(),
@@ -3103,6 +3112,10 @@ impl QuerySet {
             life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
     }
+
+    pub fn descriptor(&self) -> &wgt::QuerySetDescriptor<String> {
+        &self.desc
+    }
 }
 
 impl Drop for QuerySet {
@@ -3130,7 +3143,11 @@ impl Drop for QuerySet {
 }
 
 crate::impl_resource_type!(QuerySet);
-crate::impl_labeled!(QuerySet);
+impl Labeled for QuerySet {
+    fn label(&self) -> &str {
+        &self.desc.label
+    }
+}
 crate::impl_parent_device!(QuerySet);
 crate::impl_storage_item!(QuerySet);
 crate::impl_trackable!(QuerySet);

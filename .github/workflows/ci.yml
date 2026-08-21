@@ -3,9 +3,6 @@ name: CI
 on:
   push:
     branches-ignore: [
-        # Renovate branches are always PRs, so they will be covered
-        # by the pull_request event.
-        "renovate/**",
         # Branches with the `gh-readonly-queue` prefix are used by the
         # merge queue, so they are already covered by the `merge_group` event.
         "gh-readonly-queue/**",
@@ -26,7 +23,7 @@ env:
   REPO_MSRV: "1.93"
   # This is the MSRV used by `wgpu` itself.
   WGPU_MSRV: "1.87"
-  # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
+  # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, `wgpu-sync`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
   CORE_MSRV: "1.87"
 
@@ -220,7 +217,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install toolchain (repo MSRV - tier 1 or 2)
         if: matrix.tier == 1 || matrix.tier == 2
@@ -327,16 +324,20 @@ jobs:
           # check with no features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga-types --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-sync --no-default-features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-core --no-default-features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features
 
           # Check with all compatible features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga-types --no-default-features --features serialize,deserialize
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-sync --no-default-features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features dot-out,spv-in,spv-out,glsl-out,msl-out,serialize,deserialize,wgsl-in,wgsl-out,hlsl-out
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features fragile-send-sync-non-atomic-wasm
-          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features --features serde
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-core --no-default-features --features api_log_info,resource_log_info,strict_asserts,serde,wgsl,spirv,counters,noop
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features --features webgpu,drm,wgsl,strict_asserts,serde,counters
 
       # Building for native platforms with standard tests.
       - name: Check native
@@ -415,7 +416,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install core MSRV toolchain
         run: |
@@ -489,7 +490,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install core MSRV toolchain
         run: |
@@ -547,7 +548,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install toolchain
         run: |
@@ -588,7 +589,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install repo MSRV toolchain
         run: |
@@ -641,7 +642,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install repo MSRV toolchain
         run: |
@@ -770,7 +771,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install repo MSRV toolchain
         run: |
@@ -801,7 +802,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Miri is *only* available on nightly.
       - name: Install nightly toolchain
@@ -836,7 +837,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install repo MSRV toolchain
         run: |
@@ -872,7 +873,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install MSRV toolchain
         run: |
@@ -912,7 +913,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v2
@@ -930,7 +931,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v2
