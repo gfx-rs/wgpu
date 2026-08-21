@@ -374,6 +374,8 @@ jobs:
 
           cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} \
                 --package wgpu-core \
+                --package wgpu-core-remote \
+                --package wgpu-core-remote-types \
                 --package wgpu-hal \
                 --package naga \
                 --package wgpu \
@@ -529,8 +531,8 @@ jobs:
         run: |
           set -e
 
-          # check `wgpu-core` with all features. This will also get `wgpu-hal` and `wgpu-types`.
-          cargo check --target ${{ matrix.target }} --all-features -p wgpu-core
+          # check `wgpu-core-remote` and `wgpu-core` all features. This will also get `wgpu-core-remote-types` and `wgpu-hal` and `wgpu-types`.
+          cargo check --target ${{ matrix.target }} --all-features -p wgpu-core -p wgpu-core-remote
 
   # Check that the libraries build — but not that there are no warnings or that tests pass -
   # with `-Zdirect-minimal-versions` which lowers all dependencies from the workspace packages
