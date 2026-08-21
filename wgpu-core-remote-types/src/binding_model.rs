@@ -2,6 +2,7 @@ use alloc::borrow::Cow;
 
 use serde::{Deserialize, Serialize};
 
+use crate::ffi::FfiOption;
 use crate::id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId};
 use crate::Label;
 
@@ -19,10 +20,11 @@ pub struct BufferBinding {
     /// because JavaScript bindings cannot readily express `Option<NonZeroU64>`.
     /// The `wgpu` API uses `Option<BufferSize>` (i.e. `NonZeroU64`) for this
     /// field.
-    pub size: Option<wgt::BufferAddress>,
+    pub size: FfiOption<wgt::BufferAddress>,
 }
 
 /// Corresponds to [`GPUBindingResource`](https://www.w3.org/TR/webgpu/#typedefdef-gpubindingresource).
+#[repr(C)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BindingResource {
     Buffer(BufferBinding),
@@ -34,6 +36,7 @@ pub enum BindingResource {
 /// Bindable resource and the slot to bind it to.
 ///
 /// This corresponds to [`GPUBindGroupEntry`](https://www.w3.org/TR/webgpu/#dictdef-gpubindgroupentry).
+#[repr(C)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BindGroupEntry {
     /// Slot for which binding provides resource. Corresponds to an entry of the same

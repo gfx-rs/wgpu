@@ -7,11 +7,20 @@ use wgpu_core::command::{
     PassTimestampWrites, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
     ResolvedRenderPassDescriptor,
 };
+use wgpu_core_remote_types::ffi::FfiOption;
 use wgt::{BufferAddress, BufferSize, Color, DynamicOffset, IndexFormat};
 
 use crate::global::Global;
 use crate::hub::Hub;
 use crate::id;
+
+fn map_clear_value<V1, V2>(load_op: wgt::LoadOp<V1>, f: impl FnOnce(V1) -> V2) -> wgt::LoadOp<V2> {
+    match load_op {
+        wgt::LoadOp::Clear(value) => wgt::LoadOp::Clear(f(value)),
+        wgt::LoadOp::Load => wgt::LoadOp::Load,
+        wgt::LoadOp::DontCare(token) => wgt::LoadOp::DontCare(token),
+    }
+}
 
 impl Global {
     /// Creates a render pass.
@@ -47,7 +56,7 @@ impl Global {
                     .map(|at| {
                         at.as_ref().map(|at| RenderPassColorAttachment {
                             view: texture_views.get(at.view),
-                            depth_slice: at.depth_slice,
+                            depth_slice: at.depth_slice.to_std(),
                             resolve_target: at
                                 .resolve_target
                                 .as_ref()
@@ -62,13 +71,21 @@ impl Global {
                 RenderPassDepthStencilAttachment {
                     view: texture_views.get(at.view),
                     depth: wgpu_core::command::PassChannel {
-                        load_op: at.depth.load_op,
-                        store_op: at.depth.store_op,
+                        load_op: at
+                            .depth
+                            .load_op
+                            .to_std()
+                            .map(|x| map_clear_value(x, FfiOption::to_std)),
+                        store_op: at.depth.store_op.to_std(),
                         read_only: at.depth.read_only,
                     },
                     stencil: wgpu_core::command::PassChannel {
-                        load_op: at.stencil.load_op,
-                        store_op: at.stencil.store_op,
+                        load_op: at
+                            .stencil
+                            .load_op
+                            .to_std()
+                            .map(|x| map_clear_value(x, FfiOption::to_std)),
+                        store_op: at.stencil.store_op.to_std(),
                         read_only: at.stencil.read_only,
                     },
                 }
@@ -78,8 +95,8 @@ impl Global {
                 .as_ref()
                 .map(|tw| PassTimestampWrites {
                     query_set: query_sets.get(tw.query_set),
-                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index.to_std(),
+                    end_of_pass_write_index: tw.end_of_pass_write_index.to_std(),
                 }),
             occlusion_query_set: desc
                 .occlusion_query_set
