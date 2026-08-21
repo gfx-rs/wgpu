@@ -1,36 +1,17 @@
 use alloc::borrow::Cow;
-use core::num::NonZeroU32;
 use wgpu_core_remote_types::encoders::{
-    BindingCommand, DebugCommand, RenderCommand, RenderPassEncoderCommand,
+    BindingCommand, DebugCommand, RenderCommand, RenderPassDescriptor, RenderPassEncoderCommand,
 };
 
 use wgpu_core::command::{
     PassTimestampWrites, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
     ResolvedRenderPassDescriptor,
 };
-use wgpu_core::Label;
 use wgt::{BufferAddress, BufferSize, Color, DynamicOffset, IndexFormat};
 
 use crate::global::Global;
 use crate::hub::Hub;
 use crate::id;
-
-/// Describes the attachments of a render pass.
-#[derive(Clone, Debug, Default, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct RenderPassDescriptor<'a> {
-    pub label: Label<'a>,
-    /// The color attachments of the render pass.
-    pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment<id::TextureViewId>>]>,
-    /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<id::TextureViewId>>,
-    /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<PassTimestampWrites<id::QuerySetId>>,
-    /// Defines where the occlusion query results will be stored for this pass.
-    pub occlusion_query_set: Option<id::QuerySetId>,
-    /// The multiview array layers that will be used
-    pub multiview_mask: Option<NonZeroU32>,
-}
 
 impl Global {
     /// Creates a render pass.
@@ -80,8 +61,16 @@ impl Global {
             depth_stencil_attachment: desc.depth_stencil_attachment.as_ref().map(|at| {
                 RenderPassDepthStencilAttachment {
                     view: texture_views.get(at.view),
-                    depth: at.depth.clone(),
-                    stencil: at.stencil.clone(),
+                    depth: wgpu_core::command::PassChannel {
+                        load_op: at.depth.load_op,
+                        store_op: at.depth.store_op,
+                        read_only: at.depth.read_only,
+                    },
+                    stencil: wgpu_core::command::PassChannel {
+                        load_op: at.stencil.load_op,
+                        store_op: at.stencil.store_op,
+                        read_only: at.stencil.read_only,
+                    },
                 }
             }),
             timestamp_writes: desc
@@ -96,7 +85,7 @@ impl Global {
                 .occlusion_query_set
                 .as_ref()
                 .map(|query_set| query_sets.get(*query_set)),
-            multiview_mask: desc.multiview_mask,
+            multiview_mask: None,
         };
 
         let render_pass = cmd_enc.begin_render_pass(desc);
