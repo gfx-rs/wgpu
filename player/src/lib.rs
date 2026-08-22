@@ -378,9 +378,7 @@ impl Player {
                 let buffer = self.resolve_buffer_id(id);
                 let bin = loader.load(&data);
                 if queued {
-                    queue
-                        .write_buffer(buffer, offset, &bin[..size.try_into().unwrap()])
-                        .expect("Queue::write_buffer error");
+                    queue.write_buffer(buffer, offset, &bin[..size.try_into().unwrap()]);
                 } else {
                     device
                         .set_buffer_data(&buffer, offset, &bin[..size.try_into().unwrap()])
@@ -395,12 +393,10 @@ impl Player {
             } => {
                 let to = self.resolve_texel_copy_texture_info(to);
                 let bin = loader.load(&data);
-                queue
-                    .write_texture(to, &bin, &layout, &size)
-                    .expect("Queue::write_texture error");
+                queue.write_texture(to, &bin, &layout, &size);
             }
             Action::Submit(_index, ref commands) if commands.is_empty() => {
-                queue.submit(&[]).unwrap();
+                queue.submit(&[]);
             }
             Action::Submit(_index, commands) => {
                 let resolved_commands: Vec<_> = commands
@@ -408,7 +404,7 @@ impl Player {
                     .map(|cmd| self.resolve_command(cmd))
                     .collect();
                 let buffer = wgc::command::CommandBuffer::from_trace(device, resolved_commands);
-                queue.submit(&[buffer]).unwrap();
+                queue.submit(&[buffer]);
             }
             Action::FailedCommands {
                 commands,

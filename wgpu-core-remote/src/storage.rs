@@ -2,8 +2,8 @@ use alloc::vec::Vec;
 use core::mem;
 
 use crate::id::Id;
-use crate::{Epoch, Index};
 pub use wgpu_core::storage::StorageItem;
+use wgpu_core_remote_types::{Epoch, Index};
 
 /// An entry in a `Storage::map` table.
 #[derive(Debug)]

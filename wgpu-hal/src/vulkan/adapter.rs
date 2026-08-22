@@ -695,7 +695,8 @@ impl PhysicalDeviceFeatures {
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
             | Df::NONBLOCKING_QUERY_RESOLVE
             | Df::SHADER_F16_IN_F32
-            | Df::MSL2_1;
+            | Df::MSL2_1
+            | Df::LINEAR_INTERPOLATION;
 
         // `VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL`
         // and `VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL`

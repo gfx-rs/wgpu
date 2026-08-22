@@ -1187,10 +1187,17 @@ impl Adapter {
         profiling::scope!("Adapter::create_device_and_queue_from_hal");
         api_log!("Adapter::create_device_and_queue_from_hal");
 
+        let default_queue_desc = desc.default_queue.clone();
+
         let device = Device::new(hal_device.device, self, desc, self.instance.flags)?;
         let device = Arc::new(device);
 
-        let queue = Queue::new(device.clone(), hal_device.queue, self.instance.flags)?;
+        let queue = Queue::new(
+            device.clone(),
+            hal_device.queue,
+            default_queue_desc,
+            self.instance.flags,
+        )?;
         let queue = Arc::new(queue);
 
         device.set_queue(&queue);

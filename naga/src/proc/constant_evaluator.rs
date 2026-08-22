@@ -2725,7 +2725,7 @@ impl<'a> ConstantEvaluator<'a> {
                 components: ref src_components,
             } => {
                 match self.types[ty].inner {
-                    TypeInner::Vector { .. } | TypeInner::Matrix { .. } => (),
+                    TypeInner::Vector { .. } => (),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
                 }
 

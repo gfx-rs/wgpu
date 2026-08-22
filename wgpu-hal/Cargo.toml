@@ -145,7 +145,6 @@ dx12 = [
     "dep:bytemuck",
     "dep:gpu-allocator",
     "dep:libloading",
-    "dep:once_cell",
     "dep:ordered-float",
     "dep:profiling",
     "dep:range-alloc",
@@ -154,7 +153,6 @@ dx12 = [
     "gpu-allocator/d3d12",
     "naga/hlsl-out",
     "wgpu-sync/std", # Required for send/sync
-    "once_cell/std",
     "windows/Win32_Devices_DeviceAndDriverInstallation",
     "windows/Win32_Devices_Display",
     "windows/Win32_Graphics_Direct3D_Dxc",
@@ -283,7 +281,6 @@ windows-result = { workspace = true, optional = true }
 # Backend: Dx12
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
-once_cell = { workspace = true, optional = true }
 # backend: GLES
 glutin_wgl_sys = { workspace = true, optional = true }
 

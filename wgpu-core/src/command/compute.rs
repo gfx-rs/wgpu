@@ -59,6 +59,8 @@ pub struct ComputePass {
     /// See <https://www.w3.org/TR/webgpu/#encoder-state>
     parent: Option<Arc<CommandEncoder>>,
 
+    device: Arc<Device>,
+
     timestamp_writes: Option<PassTimestampWrites>,
 
     // Resource binding dedupe state.
@@ -82,6 +84,7 @@ impl ComputePass {
 
         Self {
             base: BasePass::new(&label),
+            device: parent.device().clone(),
             parent: Some(parent),
             timestamp_writes,
 
@@ -93,6 +96,7 @@ impl ComputePass {
     fn new_invalid(parent: Arc<CommandEncoder>, label: &Label, err: ComputePassError) -> Self {
         Self {
             base: BasePass::new_invalid(label, err),
+            device: parent.device().clone(),
             parent: Some(parent),
             timestamp_writes: None,
             current_bind_groups: BindGroupStateChange::new(),
@@ -103,6 +107,10 @@ impl ComputePass {
     #[inline]
     pub fn label(&self) -> Option<&str> {
         self.base.label.as_deref()
+    }
+
+    pub fn device(&self) -> &Arc<Device> {
+        &self.device
     }
 }
 
@@ -462,7 +470,7 @@ fn transition_resources(
 }
 
 impl CommandEncoder {
-    pub fn begin_compute_pass(
+    fn begin_compute_pass_inner(
         self: &Arc<Self>,
         desc: &ComputePassDescriptor<'_, PassTimestampWrites<Arc<QuerySet>>>,
     ) -> (ComputePass, Option<CommandEncoderError>) {
@@ -549,11 +557,23 @@ impl CommandEncoder {
             }
         }
     }
+
+    pub fn begin_compute_pass(
+        self: &Arc<Self>,
+        desc: &ComputePassDescriptor<'_, PassTimestampWrites<Arc<QuerySet>>>,
+    ) -> ComputePass {
+        let (pass, err) = self.begin_compute_pass_inner(desc);
+        if let Some(err) = err {
+            self.device
+                .handle_error(err, pass.label(), "CommandEncoder::begin_compute_pass");
+        }
+        pass
+    }
 }
 
 // Running the compute pass.
 impl ComputePass {
-    pub fn end(&mut self) -> Result<(), EncoderStateError> {
+    fn end_inner(&mut self) -> Result<(), EncoderStateError> {
         profiling::scope!(
             "CommandEncoder::run_compute_pass {}",
             self.base.label.as_deref().unwrap_or("")
@@ -589,6 +609,13 @@ impl ComputePass {
                 timestamp_writes: self.timestamp_writes.take(),
             })
         })
+    }
+
+    pub fn end(&mut self) {
+        if let Err(err) = self.end_inner() {
+            self.device
+                .handle_error(err, self.label(), "ComputePass::end");
+        }
     }
 }
 
@@ -1145,7 +1172,7 @@ fn dispatch_workgroups_indirect(
 // that the `pass_try!` and `pass_base!` macros may return early from the
 // function that invokes them, like the `?` operator.
 impl ComputePass {
-    pub fn set_bind_group(
+    fn set_bind_group_inner(
         &mut self,
         index: u32,
         bind_group: Option<Arc<BindGroup>>,
@@ -1183,7 +1210,19 @@ impl ComputePass {
         Ok(())
     }
 
-    pub fn set_pipeline(
+    pub fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: Option<Arc<BindGroup>>,
+        offsets: &[DynamicOffset],
+    ) {
+        if let Err(error) = self.set_bind_group_inner(index, bind_group, offsets) {
+            self.device
+                .handle_error(error, self.label(), "ComputePass::set_bind_group");
+        }
+    }
+
+    fn set_pipeline_inner(
         &mut self,
         compute_pipeline: Arc<ComputePipeline>,
     ) -> Result<(), PassStateError> {
@@ -1209,7 +1248,14 @@ impl ComputePass {
         Ok(())
     }
 
-    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) -> Result<(), PassStateError> {
+    pub fn set_pipeline(&mut self, compute_pipeline: Arc<ComputePipeline>) {
+        if let Err(error) = self.set_pipeline_inner(compute_pipeline) {
+            self.device
+                .handle_error(error, self.label(), "ComputePass::set_pipeline");
+        }
+    }
+
+    fn set_immediates_inner(&mut self, offset: u32, data: &[u8]) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(self, scope);
 
@@ -1230,7 +1276,14 @@ impl ComputePass {
         Ok(())
     }
 
-    pub fn dispatch_workgroups(
+    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        if let Err(error) = self.set_immediates_inner(offset, data) {
+            self.device
+                .handle_error(error, self.label(), "ComputePass::set_immediates");
+        }
+    }
+
+    fn dispatch_workgroups_inner(
         &mut self,
         groups_x: u32,
         groups_y: u32,
@@ -1247,7 +1300,14 @@ impl ComputePass {
         Ok(())
     }
 
-    pub fn dispatch_workgroups_indirect(
+    pub fn dispatch_workgroups(&mut self, groups_x: u32, groups_y: u32, groups_z: u32) {
+        if let Err(error) = self.dispatch_workgroups_inner(groups_x, groups_y, groups_z) {
+            self.device
+                .handle_error(error, self.label(), "ComputePass::dispatch_workgroups");
+        }
+    }
+
+    fn dispatch_workgroups_indirect_inner(
         &mut self,
         buffer: Arc<Buffer>,
         offset: BufferAddress,
@@ -1263,7 +1323,17 @@ impl ComputePass {
         Ok(())
     }
 
-    pub fn push_debug_group(&mut self, label: &str, color: u32) -> Result<(), PassStateError> {
+    pub fn dispatch_workgroups_indirect(&mut self, buffer: Arc<Buffer>, offset: BufferAddress) {
+        if let Err(error) = self.dispatch_workgroups_indirect_inner(buffer, offset) {
+            self.device.handle_error(
+                error,
+                self.label(),
+                "ComputePass::dispatch_workgroups_indirect",
+            );
+        }
+    }
+
+    fn push_debug_group_inner(&mut self, label: &str, color: u32) -> Result<(), PassStateError> {
         let base = pass_base!(self, PassErrorScope::PushDebugGroup);
 
         let bytes = label.as_bytes();
@@ -1277,7 +1347,14 @@ impl ComputePass {
         Ok(())
     }
 
-    pub fn pop_debug_group(&mut self) -> Result<(), PassStateError> {
+    pub fn push_debug_group(&mut self, label: &str, color: u32) {
+        if let Err(error) = self.push_debug_group_inner(label, color) {
+            self.device
+                .handle_error(error, self.label(), "ComputePass::push_debug_group");
+        }
+    }
+
+    fn pop_debug_group_inner(&mut self) -> Result<(), PassStateError> {
         let base = pass_base!(self, PassErrorScope::PopDebugGroup);
 
         base.commands.push(ArcComputeCommand::PopDebugGroup);
@@ -1285,7 +1362,14 @@ impl ComputePass {
         Ok(())
     }
 
-    pub fn insert_debug_marker(&mut self, label: &str, color: u32) -> Result<(), PassStateError> {
+    pub fn pop_debug_group(&mut self) {
+        if let Err(error) = self.pop_debug_group_inner() {
+            self.device
+                .handle_error(error, self.label(), "ComputePass::pop_debug_group");
+        }
+    }
+
+    fn insert_debug_marker_inner(&mut self, label: &str, color: u32) -> Result<(), PassStateError> {
         let base = pass_base!(self, PassErrorScope::InsertDebugMarker);
 
         let bytes = label.as_bytes();
@@ -1299,7 +1383,14 @@ impl ComputePass {
         Ok(())
     }
 
-    pub fn write_timestamp(
+    pub fn insert_debug_marker(&mut self, label: &str, color: u32) {
+        if let Err(error) = self.insert_debug_marker_inner(label, color) {
+            self.device
+                .handle_error(error, self.label(), "ComputePass::insert_debug_marker");
+        }
+    }
+
+    fn write_timestamp_inner(
         &mut self,
         query_set: Arc<QuerySet>,
         query_index: u32,
@@ -1317,7 +1408,14 @@ impl ComputePass {
         Ok(())
     }
 
-    pub fn begin_pipeline_statistics_query(
+    pub fn write_timestamp(&mut self, query_set: Arc<QuerySet>, query_index: u32) {
+        if let Err(error) = self.write_timestamp_inner(query_set, query_index) {
+            self.device
+                .handle_error(error, self.label(), "ComputePass::write_timestamp");
+        }
+    }
+
+    fn begin_pipeline_statistics_query_inner(
         &mut self,
         query_set: Arc<QuerySet>,
         query_index: u32,
@@ -1336,7 +1434,17 @@ impl ComputePass {
         Ok(())
     }
 
-    pub fn end_pipeline_statistics_query(&mut self) -> Result<(), PassStateError> {
+    pub fn begin_pipeline_statistics_query(&mut self, query_set: Arc<QuerySet>, query_index: u32) {
+        if let Err(error) = self.begin_pipeline_statistics_query_inner(query_set, query_index) {
+            self.device.handle_error(
+                error,
+                self.label(),
+                "ComputePass::begin_pipeline_statistics_query",
+            );
+        }
+    }
+
+    fn end_pipeline_statistics_query_inner(&mut self) -> Result<(), PassStateError> {
         pass_base!(self, PassErrorScope::EndPipelineStatisticsQuery)
             .commands
             .push(ArcComputeCommand::EndPipelineStatisticsQuery);
@@ -1344,7 +1452,17 @@ impl ComputePass {
         Ok(())
     }
 
-    pub fn transition_resources(
+    pub fn end_pipeline_statistics_query(&mut self) {
+        if let Err(error) = self.end_pipeline_statistics_query_inner() {
+            self.device.handle_error(
+                error,
+                self.label(),
+                "ComputePass::end_pipeline_statistics_query",
+            );
+        }
+    }
+
+    fn transition_resources_inner(
         &mut self,
         buffer_transitions: impl Iterator<Item = wgt::BufferTransition<Arc<Buffer>>>,
         texture_transitions: impl Iterator<Item = wgt::TextureTransition<Arc<TextureView>>>,
@@ -1389,5 +1507,17 @@ impl ComputePass {
         });
 
         Ok(())
+    }
+
+    pub fn transition_resources(
+        &mut self,
+        buffer_transitions: impl Iterator<Item = wgt::BufferTransition<Arc<Buffer>>>,
+        texture_transitions: impl Iterator<Item = wgt::TextureTransition<Arc<TextureView>>>,
+    ) {
+        if let Err(error) = self.transition_resources_inner(buffer_transitions, texture_transitions)
+        {
+            self.device
+                .handle_error(error, self.label(), "ComputePass::transition_resources");
+        }
     }
 }
