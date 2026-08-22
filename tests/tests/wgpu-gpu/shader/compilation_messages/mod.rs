@@ -53,11 +53,9 @@ static SHADER_COMPILE_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
         let msg = source
             .source()
             .unwrap()
-            .source()
+            .downcast_ref::<wgpu_core::pipeline::CreateShaderModuleError>()
             .unwrap()
-            .downcast_ref::<naga::error::ShaderError<naga::front::wgsl::ParseError>>()
-            .unwrap()
-            .to_string();
+            .compilation_message();
 
         let compilation_info = sm.get_compilation_info().await;
         let error_message = compilation_info
@@ -66,6 +64,7 @@ static SHADER_COMPILE_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
             .find(|message| message.message_type == wgpu::CompilationMessageType::Error)
             .expect("Expected error message not found");
         assert_eq!(error_message.message, msg);
+        assert!(error_message.message.contains("/*🐈🐈🐈🐈🐈🐈🐈*/?\n"));
         let span = error_message.location.expect("Expected span not found");
         assert_eq!(
             span.offset, 32,
