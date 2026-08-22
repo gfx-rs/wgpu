@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-example-03-hdr-surface"
-edition = "2021"
+edition = "2024"
 rust-version = "1.87"
 publish = false
 
