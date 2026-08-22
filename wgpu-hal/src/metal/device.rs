@@ -657,7 +657,7 @@ impl crate::Device for super::Device {
                 .array_layer_count
                 .unwrap_or(texture.array_layers - desc.range.base_array_layer);
 
-            autoreleasepool(|_| {
+            autoreleasepool(|_| -> Result<_, crate::DeviceError> {
                 let level_range = NSRange {
                     location: desc.range.base_mip_level as _,
                     length: mip_level_count as _,
@@ -675,13 +675,34 @@ impl crate::Device for super::Device {
                             level_range,
                             slice_range,
                         )
-                        .unwrap()
-                };
+                }
+                .ok_or_else(|| {
+                    // Metal rejects some views that WebGPU permits, and returns
+                    // nil rather than reporting why. The one we have hit in
+                    // practice is a view of a memoryless texture, which is
+                    // refused on some GPU families (an iPhone XS / A12 refuses
+                    // it; an iPhone 12 / A14 allows it), so log enough to tell
+                    // that case apart from an ordinary allocation failure.
+                    log::error!(
+                        "Metal returned no texture view for format {:?}, type {:?}, \
+                         mip levels {}..{}, array layers {}..{}, storage mode {:?}. \
+                         Note that Metal cannot create views of memoryless textures \
+                         on every GPU family.",
+                        raw_format,
+                        raw_type,
+                        level_range.location,
+                        level_range.location + level_range.length,
+                        slice_range.location,
+                        slice_range.location + slice_range.length,
+                        texture.raw.storageMode(),
+                    );
+                    crate::DeviceError::Unexpected
+                })?;
                 if let Some(label) = desc.label {
                     raw.setLabel(Some(&NSString::from_str(label)));
                 }
-                raw
-            })
+                Ok(raw)
+            })?
         };
 
         self.counters.texture_views.add(1);
