@@ -303,6 +303,7 @@ fn map_pass_channel<V: Copy>(ops: Option<&Operations<V>>) -> wgc::command::PassC
     }
 }
 
+#[derive(Clone)]
 pub struct CoreSurface {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_surface: Arc<wgc::instance::Surface>,
@@ -321,6 +322,7 @@ impl fmt::Debug for CoreSurface {
     }
 }
 
+#[derive(Clone)]
 pub struct CoreAdapter {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_adapter: Arc<wgc::instance::Adapter>,
@@ -335,67 +337,67 @@ impl fmt::Debug for CoreAdapter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreDevice {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_device: Arc<wgc::device::Device>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreBuffer {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_buffer: Arc<wgc::resource::Buffer>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreShaderModule {
     pub(crate) wgpu_shader_module: Arc<wgc::pipeline::ShaderModule>,
     compilation_info: CompilationInfo,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreBindGroupLayout {
     pub(crate) wgpu_bind_group_layout: Arc<wgc::binding_model::BindGroupLayout>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreBindGroup {
     pub(crate) wgpu_bind_group: Arc<wgc::binding_model::BindGroup>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreTexture {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_texture: Arc<wgc::resource::Texture>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreTextureView {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_texture_view: Arc<wgc::resource::TextureView>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreExternalTexture {
     pub(crate) wgpu_external_texture: Arc<wgc::resource::ExternalTexture>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreSampler {
     pub(crate) wgpu_sampler: Arc<wgc::resource::Sampler>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreQuerySet {
     pub(crate) wgpu_query_set: Arc<wgc::resource::QuerySet>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CorePipelineLayout {
     pub(crate) wgpu_pipeline_layout: Arc<wgc::binding_model::PipelineLayout>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CorePipelineCache {
     pub(crate) wgpu_pipeline_cache: Arc<wgc::pipeline::PipelineCache>,
 }
@@ -422,11 +424,12 @@ pub struct CoreRenderBundleEncoder {
     encoder: Box<wgc::command::RenderBundleEncoder>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreRenderBundle {
     pub(crate) wgpu_render_bundle: Arc<wgc::command::RenderBundle>,
 }
 
+#[derive(Clone)]
 pub struct CoreQueue {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_queue: Arc<wgc::device::queue::Queue>,
@@ -441,12 +444,12 @@ impl fmt::Debug for CoreQueue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreComputePipeline {
     pub(crate) wgpu_compute_pipeline: Arc<wgc::pipeline::ComputePipeline>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreRenderPipeline {
     pub(crate) wgpu_render_pipeline: Arc<wgc::pipeline::RenderPipeline>,
 }
@@ -482,18 +485,19 @@ impl fmt::Debug for CoreCommandEncoder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreBlas {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_blas: Arc<wgc::resource::Blas>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreTlas {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_tlas: Arc<wgc::resource::Tlas>,
 }
 
+#[derive(Clone)]
 pub struct CoreSurfaceOutputDetail {
     pub(crate) context: ContextWgpuCore,
     wgpu_surface: Arc<wgc::instance::Surface>,
