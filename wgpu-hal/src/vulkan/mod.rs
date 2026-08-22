@@ -552,6 +552,8 @@ struct RenderPassKey {
     depth_stencil: Option<DepthStencilAttachmentKey>,
     sample_count: u32,
     multiview_mask: Option<NonZeroU32>,
+    depth_read_only: bool,
+    stencil_read_only: bool,
 }
 
 struct DeviceShared {

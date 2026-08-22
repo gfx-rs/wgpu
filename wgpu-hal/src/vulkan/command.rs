@@ -817,6 +817,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             depth_stencil: None,
             sample_count: desc.sample_count,
             multiview_mask: desc.multiview_mask,
+            depth_read_only: false,
+            stencil_read_only: false,
         };
         let mut fb_key = super::FramebufferKey {
             raw_pass: vk::RenderPass::null(),
@@ -862,10 +864,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 rp_key.colors.push(None);
             }
         }
-        let (mut depth_read_only, mut stencil_read_only) = (false, false);
         if let Some(ref ds) = desc.depth_stencil_attachment {
-            depth_read_only = ds.depth_read_only;
-            stencil_read_only = ds.stencil_read_only;
+            rp_key.depth_read_only = ds.depth_read_only;
+            rp_key.stencil_read_only = ds.stencil_read_only;
             vk_clear_values.push(vk::ClearValue {
                 depth_stencil: vk::ClearDepthStencilValue {
                     depth: ds.clear_value.0,
@@ -895,10 +896,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             max_depth: 1.0,
         }];
 
-        let raw_pass = self
-            .device
-            .make_render_pass(rp_key, depth_read_only, stencil_read_only)
-            .unwrap();
+        let raw_pass = self.device.make_render_pass(rp_key).unwrap();
         fb_key.raw_pass = raw_pass;
         let raw_framebuffer = self.make_framebuffer(fb_key).unwrap();
 

@@ -76,8 +76,6 @@ impl super::DeviceShared {
     pub fn make_render_pass(
         &self,
         key: super::RenderPassKey,
-        depth_read_only: bool,
-        stencil_read_only: bool,
     ) -> Result<vk::RenderPass, crate::DeviceError> {
         Ok(match self.render_passes.lock().entry(key) {
             Entry::Occupied(e) => *e.get(),
@@ -87,6 +85,8 @@ impl super::DeviceShared {
                     ref depth_stencil,
                     sample_count,
                     multiview_mask,
+                    depth_read_only,
+                    stencil_read_only,
                 } = *e.key();
 
                 let mut vk_attachments = Vec::new();
@@ -2060,14 +2060,19 @@ impl crate::Device for super::Device {
         }
 
         let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::default();
-        let (mut depth_read_only, mut stencil_read_only) = (false, false);
         if let Some(ref ds) = desc.depth_stencil {
-            (depth_read_only, stencil_read_only) = (
+            (
+                compatible_rp_key.depth_read_only,
+                compatible_rp_key.stencil_read_only,
+            ) = (
                 ds.is_depth_read_only(),
                 ds.is_stencil_read_only(desc.primitive.cull_mode),
             );
             let vk_format = self.shared.private_caps.map_texture_format(ds.format);
-            let vk_layout = match (depth_read_only, stencil_read_only) {
+            let vk_layout = match (
+                compatible_rp_key.depth_read_only,
+                compatible_rp_key.stencil_read_only,
+            ) {
                 (true, true) => vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
                 (true, false) => vk::ImageLayout::DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL,
                 (false, true) => vk::ImageLayout::DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
@@ -2160,9 +2165,7 @@ impl crate::Device for super::Device {
         let vk_dynamic_state =
             vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
-        let raw_pass =
-            self.shared
-                .make_render_pass(compatible_rp_key, depth_read_only, stencil_read_only)?;
+        let raw_pass = self.shared.make_render_pass(compatible_rp_key)?;
 
         let vk_infos = [{
             vk::GraphicsPipelineCreateInfo::default()
