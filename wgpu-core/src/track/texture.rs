@@ -54,13 +54,19 @@ impl ResourceUses for TextureUses {
     }
 
     fn is_invalid(self) -> bool {
-        (self.any_exclusive() && self.bits().count_ones() != 1)||
-        // Besides exclusive uses, depth/stencil can't be sampled while written.
-        (self.contains(Self::DEPTH_WRITE | Self::RESOURCE) && !self.contains(Self::STENCIL_READ))
-            || (self.contains(Self::STENCIL_WRITE | Self::RESOURCE)
-                && !self.contains(Self::DEPTH_READ))
-            || self.contains(Self::DEPTH_WRITE | Self::DEPTH_SAMPLED)
-            || self.contains(Self::STENCIL_WRITE | Self::STENCIL_SAMPLED)
+        let valid_ds = [
+            Self::DEPTH_WRITE | Self::STENCIL_WRITE,
+            Self::DEPTH_WRITE | Self::STENCIL_READ,
+            Self::STENCIL_WRITE | Self::DEPTH_READ,
+            Self::DEPTH_WRITE | Self::RESOURCE | Self::STENCIL_READ,
+            Self::STENCIL_WRITE | Self::RESOURCE | Self::DEPTH_READ,
+            Self::DEPTH_WRITE | Self::RESOURCE | Self::STENCIL_READ | Self::STENCIL_SAMPLED,
+            Self::STENCIL_WRITE | Self::RESOURCE | Self::DEPTH_READ | Self::DEPTH_SAMPLED,
+        ];
+        (self.any_exclusive() && self.bits().count_ones() != 1)
+            || (self.intersects(Self::DEPTH_WRITE | Self::STENCIL_WRITE)
+                && self.bits().count_ones() != 1
+                && !valid_ds.contains(&self))
     }
 }
 
