@@ -40,6 +40,21 @@ use alloc::{
 };
 use core::iter;
 
+/// Returns true if the transition from `old` to `new` does not require a barrier,
+/// ignoring which read-only aspect was sampled (`DEPTH_SAMPLED`/`STENCIL_SAMPLED`).
+fn skip_barrier_ignore_texture_flags(
+    old: TextureUses,
+    ordered_uses_mask: TextureUses,
+    new: TextureUses,
+) -> bool {
+    let aspect_sampled = TextureUses::DEPTH_SAMPLED | TextureUses::STENCIL_SAMPLED;
+    skip_barrier(
+        old - aspect_sampled,
+        ordered_uses_mask,
+        new - aspect_sampled,
+    )
+}
+
 impl ResourceUses for TextureUses {
     const EXCLUSIVE: Self = Self::EXCLUSIVE;
 
@@ -1337,7 +1352,7 @@ unsafe fn barrier(
 
     match (current_state, new_state) {
         (SingleOrManyStates::Single(current_simple), SingleOrManyStates::Single(new_simple)) => {
-            if skip_barrier(current_simple, ordered_uses_mask, new_simple) {
+            if skip_barrier_ignore_texture_flags(current_simple, ordered_uses_mask, new_simple) {
                 return;
             }
 
@@ -1356,7 +1371,7 @@ unsafe fn barrier(
                     continue;
                 }
 
-                if skip_barrier(current_simple, ordered_uses_mask, new_state) {
+                if skip_barrier_ignore_texture_flags(current_simple, ordered_uses_mask, new_state) {
                     continue;
                 }
 
@@ -1379,7 +1394,11 @@ unsafe fn barrier(
                         continue;
                     }
 
-                    if skip_barrier(current_layer_state, ordered_uses_mask, new_simple) {
+                    if skip_barrier_ignore_texture_flags(
+                        current_layer_state,
+                        ordered_uses_mask,
+                        new_simple,
+                    ) {
                         continue;
                     }
 
@@ -1411,7 +1430,11 @@ unsafe fn barrier(
                             continue;
                         }
 
-                        if skip_barrier(*current_layer_state, ordered_uses_mask, new_state) {
+                        if skip_barrier_ignore_texture_flags(
+                            *current_layer_state,
+                            ordered_uses_mask,
+                            new_state,
+                        ) {
                             continue;
                         }
 
