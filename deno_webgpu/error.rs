@@ -209,17 +209,6 @@ pub(crate) fn fmt_err(err: &(dyn std::error::Error + 'static)) -> String {
 
   let mut e = err.source();
   while let Some(source) = e {
-    // Don't print detailed compiler messages when formatting error's description.
-    //
-    // per the WebGPU specification <https://gpuweb.github.io/gpuweb/#dom-gpudevice-createshadermodule>,
-    // the message of the validation error raised by `createShaderModule` should not include those details,
-    // since they are accessible via `getCompilationInfo()`.
-    match err.downcast_ref::<CreateShaderModuleError>() {
-      Some(CreateShaderModuleError::Parsing(_)) => break,
-      Some(CreateShaderModuleError::Validation(_)) => break,
-      _ => {}
-    };
-
     output.push_str(&format!(": {source}"));
     e = source.source();
   }
