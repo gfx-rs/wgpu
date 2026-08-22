@@ -107,7 +107,6 @@ impl ContextWgpuCore {
         let device = CoreDevice {
             context: self.clone(),
             wgpu_device: device.clone(),
-            features: desc.required_features,
         };
         let queue = CoreQueue {
             context: self.clone(),
@@ -340,7 +339,6 @@ impl fmt::Debug for CoreAdapter {
 pub struct CoreDevice {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_device: Arc<wgc::device::Device>,
-    features: Features,
 }
 
 #[derive(Debug)]
@@ -753,7 +751,6 @@ impl dispatch::AdapterInterface for CoreAdapter {
         let device = CoreDevice {
             context: self.context.clone(),
             wgpu_device: device,
-            features: desc.required_features,
         };
         let queue = CoreQueue {
             context: self.context.clone(),
@@ -945,7 +942,11 @@ impl dispatch::DeviceInterface for CoreDevice {
 
         let mut arrayed_texture_views = Vec::new();
         let mut arrayed_samplers = Vec::new();
-        if self.features.contains(Features::TEXTURE_BINDING_ARRAY) {
+        if self
+            .wgpu_device
+            .features()
+            .contains(Features::TEXTURE_BINDING_ARRAY)
+        {
             // gather all the array view first
             for entry in desc.entries.iter() {
                 if let BindingResource::TextureViewArray(array) = entry.resource {
@@ -968,7 +969,11 @@ impl dispatch::DeviceInterface for CoreDevice {
         let mut remaining_arrayed_samplers = &arrayed_samplers[..];
 
         let mut arrayed_buffer_bindings = Vec::new();
-        if self.features.contains(Features::BUFFER_BINDING_ARRAY) {
+        if self
+            .wgpu_device
+            .features()
+            .contains(Features::BUFFER_BINDING_ARRAY)
+        {
             // gather all the buffers first
             for entry in desc.entries.iter() {
                 if let BindingResource::BufferArray(array) = entry.resource {
@@ -984,7 +989,8 @@ impl dispatch::DeviceInterface for CoreDevice {
 
         let mut arrayed_acceleration_structures = Vec::new();
         if self
-            .features
+            .wgpu_device
+            .features()
             .contains(Features::ACCELERATION_STRUCTURE_BINDING_ARRAY)
         {
             // Gather all the TLAS IDs used by TLAS arrays first (same pattern as other arrayed resources).
