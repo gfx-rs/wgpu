@@ -308,7 +308,7 @@ pub struct CoreSurface {
     pub(crate) wgpu_surface: Arc<wgc::instance::Surface>,
     /// Configured device is needed to know which backend
     /// code to execute when acquiring a new frame.
-    configured_device: Mutex<Option<Arc<wgc::device::Device>>>,
+    configured_device: Arc<Mutex<Option<Arc<wgc::device::Device>>>>,
 }
 
 impl fmt::Debug for CoreSurface {
@@ -653,7 +653,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
         Ok(CoreSurface {
             context: self.clone(),
             wgpu_surface,
-            configured_device: Mutex::default(),
+            configured_device: Arc::new(Mutex::default()),
         }
         .into())
     }
