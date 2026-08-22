@@ -365,30 +365,21 @@ impl GPURenderPassEncoder {
     #[webidl(default = 0, options(enforce_range = true))]
     draw_count_buffer_offset: u64,
   ) {
-    let err = if let Some(draw_count_buffer) = draw_count_buffer {
-      self
-        .render_pass
-        .borrow_mut()
-        .multi_draw_indirect_count(
-          indirect_buffer.wgpu_buffer.clone(),
-          indirect_offset,
-          draw_count_buffer.wgpu_buffer.clone(),
-          draw_count_buffer_offset,
-          max_draw_count,
-        )
-        .err()
+    if let Some(draw_count_buffer) = draw_count_buffer {
+      self.render_pass.borrow_mut().multi_draw_indirect_count(
+        indirect_buffer.wgpu_buffer.clone(),
+        indirect_offset,
+        draw_count_buffer.wgpu_buffer.clone(),
+        draw_count_buffer_offset,
+        max_draw_count,
+      );
     } else {
-      self
-        .render_pass
-        .borrow_mut()
-        .multi_draw_indirect(
-          indirect_buffer.wgpu_buffer.clone(),
-          indirect_offset,
-          max_draw_count,
-        )
-        .err()
-    };
-    self.error_handler.push_error(err);
+      self.render_pass.borrow_mut().multi_draw_indirect(
+        indirect_buffer.wgpu_buffer.clone(),
+        indirect_offset,
+        max_draw_count,
+      );
+    }
   }
 
   #[required(3)]
@@ -402,7 +393,7 @@ impl GPURenderPassEncoder {
     #[webidl(default = 0, options(enforce_range = true))]
     draw_count_buffer_offset: u64,
   ) {
-    let err = if let Some(draw_count_buffer) = draw_count_buffer {
+    if let Some(draw_count_buffer) = draw_count_buffer {
       self
         .render_pass
         .borrow_mut()
@@ -412,20 +403,14 @@ impl GPURenderPassEncoder {
           draw_count_buffer.wgpu_buffer.clone(),
           draw_count_buffer_offset,
           max_draw_count,
-        )
-        .err()
+        );
     } else {
-      self
-        .render_pass
-        .borrow_mut()
-        .multi_draw_indexed_indirect(
-          indirect_buffer.wgpu_buffer.clone(),
-          indirect_offset,
-          max_draw_count,
-        )
-        .err()
-    };
-    self.error_handler.push_error(err);
+      self.render_pass.borrow_mut().multi_draw_indexed_indirect(
+        indirect_buffer.wgpu_buffer.clone(),
+        indirect_offset,
+        max_draw_count,
+      );
+    }
   }
 
   #[required(2)]
