@@ -34,7 +34,6 @@ use alloc::{
     vec::Vec,
 };
 use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
-use std::sync::OnceLock;
 
 use bitflags::bitflags;
 use hashbrown::HashMap;
@@ -56,7 +55,7 @@ use objc2_metal::{
     MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
-use parking_lot::{Condvar, Mutex, RwLock};
+use wgpu_sync::{Condvar, Mutex, OnceCell, RwLock};
 
 #[derive(Clone, Debug)]
 pub struct Api;
@@ -483,7 +482,7 @@ impl Queue {
                 command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
                 pending_waits: Mutex::new(Vec::new()),
                 pending_signals: Mutex::new(Vec::new()),
-                relay: OnceLock::new(),
+                relay: OnceCell::new(),
             }),
             timestamp_period,
         }
@@ -628,7 +627,7 @@ pub struct QueueShared {
     command_buffer_created_not_submitted: atomic::AtomicUsize,
     pending_waits: PendingEvents,
     pending_signals: PendingEvents,
-    relay: OnceLock<Relay>,
+    relay: OnceCell<Relay>,
 }
 
 #[derive(Debug)]
@@ -942,18 +941,18 @@ struct ResourceData<T> {
 #[derive(Clone, Debug, Default)]
 struct MultiStageData<T> {
     vs: T,
-    fs: T,
-    cs: T,
     ts: T,
     ms: T,
+    fs: T,
+    cs: T,
 }
 
 const NAGA_STAGES: MultiStageData<naga::ShaderStage> = MultiStageData {
     vs: naga::ShaderStage::Vertex,
-    fs: naga::ShaderStage::Fragment,
-    cs: naga::ShaderStage::Compute,
     ts: naga::ShaderStage::Task,
     ms: naga::ShaderStage::Mesh,
+    fs: naga::ShaderStage::Fragment,
+    cs: naga::ShaderStage::Compute,
 };
 
 impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
@@ -977,34 +976,42 @@ impl<T> MultiStageData<T> {
     fn map_ref<Y>(&self, fun: impl Fn(&T) -> Y) -> MultiStageData<Y> {
         MultiStageData {
             vs: fun(&self.vs),
-            fs: fun(&self.fs),
-            cs: fun(&self.cs),
             ts: fun(&self.ts),
             ms: fun(&self.ms),
+            fs: fun(&self.fs),
+            cs: fun(&self.cs),
         }
     }
+
     fn map<Y>(self, fun: impl Fn(T) -> Y) -> MultiStageData<Y> {
         MultiStageData {
             vs: fun(self.vs),
-            fs: fun(self.fs),
-            cs: fun(self.cs),
             ts: fun(self.ts),
             ms: fun(self.ms),
+            fs: fun(self.fs),
+            cs: fun(self.cs),
         }
     }
+
+    /// The iteration order here is load-bearing: `Device::create_bind_group`
+    /// uses it to lay out each bind group's flat per-kind resource arrays,
+    /// and `CommandEncoder::set_bind_group` uses the same order to compute
+    /// each stage's base offset into those arrays.
     fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T> {
         iter::once(&self.vs)
-            .chain(iter::once(&self.fs))
-            .chain(iter::once(&self.cs))
             .chain(iter::once(&self.ts))
             .chain(iter::once(&self.ms))
+            .chain(iter::once(&self.fs))
+            .chain(iter::once(&self.cs))
     }
+
+    /// See [`Self::iter`].
     fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = &'a mut T> {
         iter::once(&mut self.vs)
-            .chain(iter::once(&mut self.fs))
-            .chain(iter::once(&mut self.cs))
             .chain(iter::once(&mut self.ts))
             .chain(iter::once(&mut self.ms))
+            .chain(iter::once(&mut self.fs))
+            .chain(iter::once(&mut self.cs))
     }
 }
 
@@ -1252,7 +1259,7 @@ unsafe impl Sync for QuerySet {}
 
 #[derive(Debug)]
 pub struct Fence {
-    sync: Arc<(Mutex<crate::FenceValue>, Condvar)>,
+    sync: Arc<(wgpu_sync::CondvarMutex<crate::FenceValue>, Condvar)>,
     /// The pending fence values have to be ascending.
     pending_command_buffers: RwLock<Vec<PendingCommandBuffer>>,
     shared_event: Option<Retained<ProtocolObject<dyn MTLSharedEvent>>>,

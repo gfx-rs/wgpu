@@ -5,12 +5,10 @@ use core::{iter, mem};
 use crate::{
     command::{encoder::EncodingState, ArcCommand, EncoderStateError, InnerCommandEncoder},
     device::{Device, DeviceError, MissingFeatures},
-    global::Global,
-    id,
     init_tracker::MemoryInitKind,
     resource::{
-        Buffer, DestroyedResourceError, InvalidResourceError, MissingBufferUsageError,
-        ParentDevice, QuerySet, RawResourceAccess, Trackable,
+        Buffer, DestroyedResourceError, InvalidResourceError, Labeled as _,
+        MissingBufferUsageError, ParentDevice, QuerySet, RawResourceAccess, Trackable,
     },
     snatch::SnatchGuard,
     track::{QuerySetTracker, TrackerIndex},
@@ -41,7 +39,7 @@ pub(crate) struct DeferredQuerySetResolve {
 pub(crate) type QuerySetWrites = FastHashMap<TrackerIndex, BitVec>;
 
 pub(super) fn record_pass_timestamp_writes(
-    tw: &crate::command::ArcPassTimestampWrites,
+    tw: &crate::command::PassTimestampWrites,
     query_set_writes: &mut QuerySetWrites,
 ) {
     for index in tw
@@ -428,7 +426,7 @@ pub(super) fn end_pipeline_statistics_query(
 }
 
 impl super::CommandEncoder {
-    pub fn write_timestamp(
+    fn write_timestamp_inner(
         self: &Arc<Self>,
         query_set: Arc<QuerySet>,
         query_index: u32,
@@ -444,7 +442,14 @@ impl super::CommandEncoder {
         })
     }
 
-    pub fn resolve_query_set(
+    pub fn write_timestamp(self: &Arc<Self>, query_set: Arc<QuerySet>, query_index: u32) {
+        if let Err(err) = self.write_timestamp_inner(query_set, query_index) {
+            self.device
+                .handle_error(err, None, "CommandEncoder::write_timestamp");
+        }
+    }
+
+    fn resolve_query_set_inner(
         self: &Arc<Self>,
         query_set: Arc<QuerySet>,
         start_query: u32,
@@ -466,41 +471,25 @@ impl super::CommandEncoder {
             })
         })
     }
-}
 
-impl Global {
-    pub fn command_encoder_write_timestamp(
-        &self,
-        command_encoder_id: id::CommandEncoderId,
-        query_set_id: id::QuerySetId,
-        query_index: u32,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        cmd_enc.write_timestamp(hub.query_sets.get(query_set_id), query_index)
-    }
-
-    pub fn command_encoder_resolve_query_set(
-        &self,
-        command_encoder_id: id::CommandEncoderId,
-        query_set_id: id::QuerySetId,
+    pub fn resolve_query_set(
+        self: &Arc<Self>,
+        query_set: Arc<QuerySet>,
         start_query: u32,
         query_count: u32,
-        destination: id::BufferId,
+        destination: Arc<Buffer>,
         destination_offset: BufferAddress,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-
-        cmd_enc.resolve_query_set(
-            hub.query_sets.get(query_set_id),
+    ) {
+        if let Err(err) = self.resolve_query_set_inner(
+            query_set,
             start_query,
             query_count,
-            hub.buffers.get(destination),
+            destination,
             destination_offset,
-        )
+        ) {
+            self.device
+                .handle_error(err, Some(self.label()), "CommandEncoder::resolve_query_set");
+        }
     }
 }
 

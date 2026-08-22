@@ -16,6 +16,7 @@ use hal::ShouldBeNonZeroExt;
 use arrayvec::ArrayVec;
 use bitflags::Flags;
 use smallvec::SmallVec;
+use wgpu_sync::OnceCell;
 use wgt::{
     math::align_to, ColorWrites, DeviceLostReason, TextureFormat, TextureSampleType,
     TextureViewDimension,
@@ -36,6 +37,7 @@ use crate::{
         BufferMapPendingClosure, DeviceLostInvocation, HostMap, MissingDownlevelFlags,
         MissingFeatures, RenderPassContext,
     },
+    error::ErrorSink,
     hal_label,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
@@ -56,7 +58,7 @@ use crate::{
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
     validation::{self, check_color_attachment_count, PassthroughInterface, ShaderMetaData},
     weak_vec::WeakVec,
-    FastHashMap, LabelHelpers, OnceCellOrLock,
+    FastHashMap, LabelHelpers,
 };
 
 use super::{
@@ -205,13 +207,11 @@ impl ExternalTextureParams {
 
 /// Because all operations are push/swap (no longlived lock),
 /// we can have mutex without lock rank
-pub(crate) struct DeferredBufferMapPendingClosures(
-    parking_lot::Mutex<Vec<BufferMapPendingClosure>>,
-);
+pub(crate) struct DeferredBufferMapPendingClosures(wgpu_sync::Mutex<Vec<BufferMapPendingClosure>>);
 
 impl DeferredBufferMapPendingClosures {
     pub(crate) fn new() -> Self {
-        Self(parking_lot::Mutex::new(Vec::new()))
+        Self(wgpu_sync::Mutex::new(Vec::new()))
     }
 
     pub(crate) fn push(&self, closure: BufferMapPendingClosure) {
@@ -244,7 +244,7 @@ struct DeviceResources<'a> {
 pub struct Device {
     raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
-    pub(crate) queue: OnceCellOrLock<Weak<Queue>>,
+    pub(crate) queue: OnceCell<Weak<Queue>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     pub(crate) empty_bgl: ManuallyDrop<Box<dyn hal::DynBindGroupLayout>>,
     /// The `label` from the descriptor used to create the resource.
@@ -286,6 +286,8 @@ pub struct Device {
     /// has been destroyed and its queues are empty.
     pub(crate) device_lost_closure: Mutex<Option<DeviceLostClosure>>,
 
+    pub(crate) error_sink: ErrorSink,
+
     /// Stores the state of buffers and textures.
     pub(crate) trackers: Mutex<DeviceTracker>,
     pub(crate) tracker_indices: TrackerIndexAllocators,
@@ -312,8 +314,7 @@ pub struct Device {
     pub(crate) usage_scopes: UsageScopePool,
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
     // Optional so that we can late-initialize this after the queue is created.
-    pub(crate) timestamp_normalizer:
-        OnceCellOrLock<crate::timestamp_normalization::TimestampNormalizer>,
+    pub(crate) timestamp_normalizer: OnceCell<crate::timestamp_normalization::TimestampNormalizer>,
     /// Uniform buffer containing [`ExternalTextureParams`] with values such
     /// that a [`TextureView`] bound to a [`wgt::BindingType::ExternalTexture`]
     /// binding point will be rendered correctly. Intended to be used as the
@@ -414,6 +415,10 @@ impl Device {
 
     pub fn downlevel(&self) -> &wgt::DownlevelCapabilities {
         &self.downlevel
+    }
+
+    pub fn adapter_info(&self) -> wgt::AdapterInfo {
+        self.adapter.get_info()
     }
 }
 
@@ -631,7 +636,7 @@ impl Device {
             Ok(Self {
                 raw: raw_device,
                 adapter: adapter.clone(),
-                queue: OnceCellOrLock::new(),
+                queue: OnceCell::new(),
                 zero_buffer: ManuallyDrop::new(zero_buffer),
                 empty_bgl: ManuallyDrop::new(empty_bgl),
                 default_external_texture_params_buffer: ManuallyDrop::new(
@@ -652,6 +657,7 @@ impl Device {
                 snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
                 valid: AtomicBool::new(true),
                 device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
+                error_sink: ErrorSink::new(),
                 trackers: Mutex::new(
                     rank::DEVICE_TRACKERS,
                     DeviceTracker::new(ordered_buffer_usages, ordered_texture_usages),
@@ -669,7 +675,7 @@ impl Device {
                 instance_flags,
                 deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
                 usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
-                timestamp_normalizer: OnceCellOrLock::new(),
+                timestamp_normalizer: OnceCell::new(),
                 indirect_validation,
                 deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures::new(),
             })
@@ -761,7 +767,7 @@ impl Device {
 
         let timestamp_normalizer = crate::timestamp_normalization::TimestampNormalizer::new(
             self,
-            queue.get_timestamp_period(),
+            queue.get_raw_timestamp_period(),
         )?;
 
         self.timestamp_normalizer
@@ -778,10 +784,25 @@ impl Device {
         self.adapter.backend()
     }
 
+    /// Return true if `self` is still valid.
+    ///
+    /// Note that a `false` result here does *not* guarantee that no further activity will
+    /// occur on the `Device`. A [`Device`] can be marked invalid at any time, even while
+    /// locks are held, meaning that operations begun before the `Device` was marked
+    /// invalid will still generally run to completion. This is a consequence of
+    /// making [`Device::valid`] an `AtomicBool`. It could be avoided by making
+    /// [`Device::valid`] an ordinary `bool` field protected by the same locks that
+    /// all other operations acquire, but we use an `AtomicBool` because there
+    /// are many device validity checks and we want those to be cheap.
     pub fn is_valid(&self) -> bool {
         self.valid.load(Ordering::Acquire)
     }
 
+    /// Return `Err(DeviceError)` if `self` is not valid. Otherwise, return `Ok(())`.
+    ///
+    /// Note that an `Err` result here does *not* guarantee that no further activity will
+    /// occur on the `Device`. See the documentation for [`is_valid`][Self::is_valid] for
+    /// details.
     pub fn check_is_valid(&self) -> Result<(), DeviceError> {
         if self.is_valid() {
             Ok(())
@@ -1033,14 +1054,27 @@ impl Device {
             }
         };
 
-        // Prevent new commands from being submitted as we want to act on `queue_empty`.
-        let command_indices = self.command_indices.read();
-        // Check that the device is valid. This is combined with queue empty to decide whether
-        // to destroy all resources. Queue.submit blocks on command indices being writable
-        // and rejects if invalid so if the device in now invalid, and all submissions are
-        // finished, there will be no more submissions.
-        let device_valid = self.is_valid();
-        drop(command_indices);
+        // When a device is marked invalid, we must destroy all its hal resources once its
+        // queue is empty, by calling `release_gpu_resources`.
+        //
+        // However, checking device validity for this purpose is tricky. A device can be
+        // marked invalid at any time, regardless of what locks are held. This means that,
+        // even though queue submission does check device validity at the start (in
+        // `Queue::allocate_submission`), the submission will proceed even if the
+        // device gets marked invalid after that check. Thus, other threads can observe
+        // the queue becoming non-empty even after they have observed the device to be
+        // invalid.
+        //
+        // In this function, for `release_gpu_resources` to work as intended, we must be
+        // sure that no further work can be submitted. Specifically, we must be sure that
+        // if we see the device marked invalid, then so will any subsequent attempts to
+        // submit work to the queue, causing them to fail. To accomplish this, it suffices
+        // to hold the same lock while we call `is_valid` that `Queue::allocate_submission`
+        // holds while it does the submission.
+        let device_valid = {
+            let _command_indices_guard = self.command_indices.read();
+            self.is_valid()
+        };
 
         // Maintain all finished submissions on the queue, updating the relevant user closures and
         // collecting if the queue is empty.
@@ -2251,7 +2285,7 @@ impl Device {
             mapped_at_creation: false,
         };
         let params = self.create_buffer_inner(&params_desc)?;
-        self.get_queue().unwrap().write_buffer(
+        self.get_queue().unwrap().write_buffer_inner(
             params.clone(),
             0,
             bytemuck::bytes_of(&params_data),
@@ -2766,23 +2800,27 @@ impl Device {
     pub fn create_command_encoder(
         self: &Arc<Self>,
         desc: &wgt::CommandEncoderDescriptor<crate::Label>,
-    ) -> (Arc<command::CommandEncoder>, Option<DeviceError>) {
+    ) -> Arc<command::CommandEncoder> {
         profiling::scope!("Device::create_command_encoder");
 
-        let (cmd_enc, error) = match self.create_command_encoder_inner(&desc.label) {
-            Ok(cmd_enc) => (cmd_enc, None),
-            Err(e) => (
-                command::CommandEncoder::new_invalid(self, &desc.label, e.clone().into()),
-                Some(e),
-            ),
-        };
+        let cmd_enc = self
+            .create_command_encoder_inner(&desc.label)
+            .unwrap_or_else(|err| {
+                let error = err.clone().into();
+                self.handle_error(
+                    err,
+                    desc.label.as_ref().map(|l| l.as_ref()),
+                    "Device::create_command_encoder",
+                );
+                command::CommandEncoder::new_invalid(self, &desc.label, error)
+            });
 
         api_log!(
             "Device::create_command_encoder -> {:?}",
             Arc::as_ptr(&cmd_enc)
         );
 
-        (cmd_enc, error)
+        cmd_enc
     }
 
     pub(crate) fn create_command_encoder_inner(
@@ -3114,6 +3152,22 @@ impl Device {
                 ));
             }
 
+            if entry
+                .visibility
+                .intersects(wgt::ShaderStages::TASK | wgt::ShaderStages::MESH)
+            {
+                required_features |= wgt::Features::EXPERIMENTAL_MESH_SHADER;
+            }
+
+            if entry.visibility.intersects(
+                wgt::ShaderStages::RAY_GENERATION
+                    | wgt::ShaderStages::ANY_HIT
+                    | wgt::ShaderStages::CLOSEST_HIT
+                    | wgt::ShaderStages::MISS,
+            ) {
+                required_features |= wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES;
+            }
+
             if entry.visibility.contains(wgt::ShaderStages::VERTEX) {
                 if writable_storage == WritableStorage::Yes {
                     required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
@@ -3179,7 +3233,7 @@ impl Device {
             }),
             device: self.clone(),
             entries: entry_map,
-            exclusive_pipeline: OnceCellOrLock::new(),
+            exclusive_pipeline: OnceCell::new(),
             label: label.to_string(),
         };
 
@@ -3190,7 +3244,7 @@ impl Device {
 
     fn create_buffer_binding<'a>(
         &self,
-        bb: &'a binding_model::ResolvedBufferBinding,
+        bb: &'a binding_model::BufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         buffer_init_actions: &mut Vec<BufferInitTrackerAction>,
@@ -3585,7 +3639,7 @@ impl Device {
 
     pub fn create_bind_group(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedBindGroupDescriptor,
+        desc: &binding_model::BindGroupDescriptor,
     ) -> (Arc<BindGroup>, Option<CreateBindGroupError>) {
         profiling::scope!("Device::create_bind_group");
         #[cfg(feature = "trace")]
@@ -3619,9 +3673,9 @@ impl Device {
     // (not passing a duplicate) beforehand.
     pub fn create_bind_group_inner(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedBindGroupDescriptor,
+        desc: &binding_model::BindGroupDescriptor,
     ) -> Result<Arc<BindGroup>, CreateBindGroupError> {
-        use crate::binding_model::{CreateBindGroupError as Error, ResolvedBindingResource as Br};
+        use crate::binding_model::{BindingResource as Br, CreateBindGroupError as Error};
 
         self.check_is_valid()?;
 
@@ -4269,7 +4323,7 @@ impl Device {
 
     pub fn create_compute_pipeline(
         self: &Arc<Self>,
-        desc: pipeline::ResolvedComputePipelineDescriptor,
+        desc: pipeline::ComputePipelineDescriptor,
     ) -> (
         Arc<pipeline::ComputePipeline>,
         Option<pipeline::CreateComputePipelineError>,
@@ -4300,7 +4354,7 @@ impl Device {
 
     pub fn create_compute_pipeline_inner(
         self: &Arc<Self>,
-        desc: pipeline::ResolvedComputePipelineDescriptor,
+        desc: pipeline::ComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
         self.check_is_valid()?;
 
@@ -5592,9 +5646,8 @@ impl Device {
                 raw: Snatchable::new(raw),
             }),
             device: self.clone(),
-            label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.query_sets.clone()),
-            desc: desc.map_label(|_| ()),
+            desc: desc.map_label(|l| l.to_string()),
             initialized_slots: Mutex::new(
                 rank::QUERY_SET_INITIALIZED_SLOTS,
                 bit_vec::BitVec::from_elem(desc.count as usize, false),
@@ -5636,17 +5689,24 @@ impl Device {
         // initiate movement into those buckets, and it can do that by calling
         // "destroy" on all the resources we know about.
 
-        // During these iterations, we discard all errors. We don't care!
         let trackers = self.trackers.lock();
-        for buffer in trackers.buffers.used_resources() {
-            if let Some(buffer) = Weak::upgrade(buffer) {
-                buffer.destroy();
-            }
+        let buffers = trackers
+            .buffers
+            .used_resources()
+            .flat_map(Weak::upgrade)
+            .collect::<Vec<_>>();
+        let textures = trackers
+            .textures
+            .used_resources()
+            .flat_map(Weak::upgrade)
+            .collect::<Vec<_>>();
+        drop(trackers);
+
+        for buffer in buffers {
+            buffer.destroy();
         }
-        for texture in trackers.textures.used_resources() {
-            if let Some(texture) = Weak::upgrade(texture) {
-                texture.destroy();
-            }
+        for texture in textures {
+            texture.destroy();
         }
     }
 

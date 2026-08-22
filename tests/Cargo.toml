@@ -47,6 +47,7 @@ test-build-with-profiling = ["profiling/type-check"]
 wgpu = { workspace = true, features = ["noop", "gles", "webgl", "angle"] }
 wgpu-core = { workspace = true, features = ["trace"] }
 wgpu-hal = { workspace = true, features = ["validation_canary"] }
+wgpu-sync.workspace = true
 wgpu-types.workspace = true
 naga = { workspace = true, features = [
     "spv-out",
@@ -66,6 +67,7 @@ futures-lite.workspace = true
 libtest-mimic.workspace = true
 macro_rules_attribute.workspace = true
 log.workspace = true
+parking_lot = { workspace = true, features = ["deadlock_detection"] }
 paste.workspace = true
 png.workspace = true
 pollster.workspace = true
@@ -81,7 +83,6 @@ half = { workspace = true, features = ["bytemuck", "std"] }
 itertools.workspace = true
 image.workspace = true
 nanorand.workspace = true
-parking_lot.workspace = true
 strum = { workspace = true, features = ["derive"] }
 trybuild.workspace = true
 
@@ -90,7 +91,6 @@ trybuild.workspace = true
 # Cargo-metadata doesn't compile on wasm due to old cargo-util-schemas dependency.
 cargo_metadata.workspace = true
 env_logger.workspace = true
-parking_lot = { workspace = true, features = ["deadlock_detection"] }
 ureq.workspace = true
 
 [target.'cfg(not(any(target_arch = "wasm32", miri)))'.dependencies]
@@ -102,7 +102,6 @@ console_log.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 web-sys = { workspace = true }
-parking_lot = { workspace = true, features = ["deadlock_detection"] }
 
 # Webassembly Dev Dependencies
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]

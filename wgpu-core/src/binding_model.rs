@@ -15,12 +15,12 @@ use serde::Deserialize;
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
+use wgpu_sync::OnceCell;
 use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
     api_log,
     device::{bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
-    id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId, TlasId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
@@ -645,11 +645,11 @@ impl BindingTypeMaxCountValidator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BindGroupEntry<
     'a,
-    B = BufferId,
-    S = SamplerId,
-    TV = TextureViewId,
-    TLAS = TlasId,
-    ET = ExternalTextureId,
+    B = Arc<Buffer>,
+    S = Arc<Sampler>,
+    TV = Arc<TextureView>,
+    TLAS = Arc<Tlas>,
+    ET = Arc<ExternalTexture>,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -671,27 +671,18 @@ pub struct BindGroupEntry<
     pub resource: BindingResource<'a, B, S, TV, TLAS, ET>,
 }
 
-/// cbindgen:ignore
-pub type ResolvedBindGroupEntry<'a> = BindGroupEntry<
-    'a,
-    Arc<Buffer>,
-    Arc<Sampler>,
-    Arc<TextureView>,
-    Arc<Tlas>,
-    Arc<ExternalTexture>,
->;
-
 /// Describes a group of bindings and the resources to be bound.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// cbindgen:ignore
 pub struct BindGroupDescriptor<
     'a,
-    BGL = BindGroupLayoutId,
-    B = BufferId,
-    S = SamplerId,
-    TV = TextureViewId,
-    TLAS = TlasId,
-    ET = ExternalTextureId,
+    BGL = Arc<BindGroupLayout>,
+    B = Arc<Buffer>,
+    S = Arc<Sampler>,
+    TV = Arc<TextureView>,
+    TLAS = Arc<Tlas>,
+    ET = Arc<ExternalTexture>,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -720,17 +711,6 @@ pub struct BindGroupDescriptor<
     #[allow(clippy::type_complexity)]
     pub entries: Cow<'a, [BindGroupEntry<'a, B, S, TV, TLAS, ET>]>,
 }
-
-/// cbindgen:ignore
-pub type ResolvedBindGroupDescriptor<'a> = BindGroupDescriptor<
-    'a,
-    Arc<BindGroupLayout>,
-    Arc<Buffer>,
-    Arc<Sampler>,
-    Arc<TextureView>,
-    Arc<Tlas>,
-    Arc<ExternalTexture>,
->;
 
 /// Describes a [`BindGroupLayout`].
 #[derive(Clone, Debug)]
@@ -814,7 +794,7 @@ pub struct BindGroupLayout {
     pub(crate) state: ResourceState<BindGroupLayoutState>,
     pub(crate) device: Arc<Device>,
     pub(crate) entries: bgl::EntryMap,
-    pub(crate) exclusive_pipeline: crate::OnceCellOrLock<ExclusivePipeline>,
+    pub(crate) exclusive_pipeline: OnceCell<ExclusivePipeline>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
 }
@@ -895,7 +875,7 @@ impl BindGroupLayout {
             }),
             device: device.clone(),
             entries: bgl::EntryMap::default(),
-            exclusive_pipeline: crate::OnceCellOrLock::from(exclusive_pipeline),
+            exclusive_pipeline: OnceCell::from(exclusive_pipeline),
             label: String::new(),
         })
     }
@@ -905,7 +885,7 @@ impl BindGroupLayout {
             state: ResourceState::Invalid,
             device: device.clone(),
             entries: bgl::EntryMap::default(),
-            exclusive_pipeline: crate::OnceCellOrLock::from(ExclusivePipeline::None),
+            exclusive_pipeline: OnceCell::from(ExclusivePipeline::None),
             label,
         })
     }
@@ -1127,7 +1107,7 @@ crate::impl_storage_item!(PipelineLayout);
 #[repr(C)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BufferBinding<B = BufferId> {
+pub struct BufferBinding<B = Arc<Buffer>> {
     pub buffer: B,
     pub offset: wgt::BufferAddress,
 
@@ -1141,19 +1121,17 @@ pub struct BufferBinding<B = BufferId> {
     pub size: Option<wgt::BufferAddress>,
 }
 
-pub type ResolvedBufferBinding = BufferBinding<Arc<Buffer>>;
-
 // Note: Duplicated in `wgpu-rs` as `BindingResource`
 // They're different enough that it doesn't make sense to share a common type
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BindingResource<
     'a,
-    B = BufferId,
-    S = SamplerId,
-    TV = TextureViewId,
-    TLAS = TlasId,
-    ET = ExternalTextureId,
+    B = Arc<Buffer>,
+    S = Arc<Sampler>,
+    TV = Arc<TextureView>,
+    TLAS = Arc<Tlas>,
+    ET = Arc<ExternalTexture>,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -1190,15 +1168,6 @@ pub enum BindingResource<
     AccelerationStructureArray(Cow<'a, [TLAS]>),
     ExternalTexture(ET),
 }
-
-pub type ResolvedBindingResource<'a> = BindingResource<
-    'a,
-    Arc<Buffer>,
-    Arc<Sampler>,
-    Arc<TextureView>,
-    Arc<Tlas>,
-    Arc<ExternalTexture>,
->;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
