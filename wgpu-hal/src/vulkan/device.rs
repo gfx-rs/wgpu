@@ -735,10 +735,10 @@ impl super::Device {
                         };
                     }
                     if !runtime_checks.force_loop_bounding {
-                        temp_options.force_loop_bounding = false;
+                        temp_options.common.force_loop_bounding = false;
                     }
                     if !runtime_checks.ray_query_initialization_tracking {
-                        temp_options.ray_query_initialization_tracking = false;
+                        temp_options.common.ray_query_initialization_tracking = false;
                     }
                     if !binding_map.is_empty() {
                         temp_options.binding_map = binding_map.clone();
@@ -756,9 +756,9 @@ impl super::Device {
                             naga::back::spv::ZeroInitializeWorkgroupMemoryMode::None;
                     }
                     if !runtime_checks.task_shader_dispatch_tracking {
-                        temp_options.task_dispatch_limits = None;
+                        temp_options.common.task_dispatch_limits = None;
                     }
-                    temp_options.mesh_shader_primitive_indices_clamp =
+                    temp_options.common.mesh_shader_primitive_indices_clamp =
                         runtime_checks.mesh_shader_primitive_indices_clamp;
                     temp_options.emit_int_div_checks = runtime_checks.int_div_checks;
 

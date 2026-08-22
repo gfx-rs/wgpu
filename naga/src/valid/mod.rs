@@ -268,6 +268,16 @@ impl Default for Capabilities {
     }
 }
 
+#[cfg(feature = "schemars")]
+impl schemars::JsonSchema for Capabilities {
+    fn schema_name() -> alloc::borrow::Cow<'static, str> {
+        "Capabilities".into()
+    }
+    fn json_schema(g: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        u64::json_schema(g)
+    }
+}
+
 bitflags::bitflags! {
     /// Supported subgroup operations
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]

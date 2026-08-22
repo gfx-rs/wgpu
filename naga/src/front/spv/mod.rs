@@ -406,6 +406,10 @@ enum ExtendedClass {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Options {
     /// The IR coordinate space matches all the APIs except SPIR-V,
     /// so by default we flip the Y coordinate of the `BuiltIn::Position`.
@@ -3271,5 +3275,29 @@ mod test {
             0x01, 0x00, 0x00, 0x00,
         ];
         let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
+    }
+}
+
+#[cfg(all(test, feature = "serialize", feature = "deserialize"))]
+mod serde_tests {
+    use super::Options;
+
+    #[test]
+    fn options_round_trip_and_partial() {
+        let opts = Options {
+            adjust_coordinate_space: false,
+            strict_capabilities: true,
+            block_ctx_dump_prefix: Some("dump".into()),
+        };
+        let json = serde_json::to_string(&opts).unwrap();
+        let back: Options = serde_json::from_str(&json).unwrap();
+        assert!(back.strict_capabilities);
+        assert_eq!(back.block_ctx_dump_prefix.as_deref(), Some("dump"));
+
+        // serde(default): empty object deserializes to defaults (adjust_coordinate_space=true, strict_capabilities=true).
+        let def: Options = serde_json::from_str("{}").unwrap();
+        assert!(def.adjust_coordinate_space);
+        assert!(def.strict_capabilities);
+        assert!(def.block_ctx_dump_prefix.is_none());
     }
 }

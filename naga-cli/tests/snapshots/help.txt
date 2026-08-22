@@ -1,0 +1,231 @@
+Translate and validate shaders between WGSL, SPIR-V, GLSL, MSL, HLSL, and DOT.
+
+The input format is inferred from the input file extension (override with --input-kind); the
+output format is inferred from the output file extension. Use `-` as the input and/or output
+path to read from stdin / write to stdout — since `-` has no extension, give the format with
+--input-kind / --output-kind (and --shader-stage for GLSL). With no output file, the shader is
+only validated.
+
+EXAMPLES
+  # Validate a WGSL shader (no output file).
+  naga shader.wgsl
+
+  # Compile a single entry point to SPIR-V, dropping everything unreachable from it
+  # (--compact) and without debug symbols (omit -g).
+  naga shader.wgsl out.spv --entry-point main --compact
+
+  # Translate WGSL to HLSL / MSL (format follows the output extension).
+  naga shader.wgsl out.hlsl
+  naga shader.wgsl out.metal
+
+  # GLSL output picks the stage from the extension (.vert / .frag / .comp); it emits one
+  # entry point (defaults to `main`, else pass --entry-point).
+  naga shader.wgsl out.frag --entry-point fs_main
+
+  # Read from stdin (`-`); --input-kind names the format.
+  cat shader.wgsl | naga - --input-kind wgsl out.spv
+
+  # Write to stdout instead of a file (`-` needs --output-kind for the format).
+  naga shader.wgsl - --output-kind hlsl
+  naga shader.wgsl - --output-kind spv > out.spv
+
+  # Full pipe: stdin to stdout.
+  cat shader.wgsl | naga - --input-kind wgsl - --output-kind spv > out.spv
+
+  # Machine-readable diagnostics + reflection for tooling.
+  naga shader.wgsl --format json
+
+  # Print the JSON Schema for the --config document.
+  naga --print-config-schema
+
+OPTIONS: FLAGS vs CONFIG
+  Options can be set as individual flags OR via a JSON config (--config <file> /
+  --config-json <string>), never both: passing ANY flag alongside --config is an error. In
+  config mode only the positional input/output file paths are accepted on the command line;
+  everything else lives in the JSON. Run `naga --print-config-schema` to see every config key
+  and its type — every flag has a corresponding config key, so config is a complete single
+  source. Reading stdin / writing stdout via `-` works in config mode too: set the format with
+  the `input_kind` / `output_kind` (and `shader_stage`) config keys, since the matching flags
+  are exclusive with --config.
+
+STRUCTURED OUTPUT
+  --format json emits one JSON document on stdout with `diagnostics`
+  (severity/message/location/labels/notes) and `reflection` (entry points, resources,
+  overrides) — intended for editor integrations and CI.
+
+EXTERNAL TOOLS (must be on PATH)
+  --spirv-val and --spirv-opt validate / optimize SPIR-V output; --dxc compiles each HLSL
+  entry point to `<hlsl-stem>.<entry-point>.dxil`.
+
+NOTES
+  * Coordinate-space conversion is controlled by --keep-coordinate-space, not by spv_out.flags.
+  * --task-limits and --validate-mesh-output fan out to all applicable backends; in a config,
+    set the flat per-backend keys `task_dispatch_limits` / `mesh_shader_primitive_indices_clamp`.
+  * --print-config-schema omits `spv_out.capabilities` (its type has no JsonSchema impl), but
+    --config / --config-json still accept it.
+  * In --format json every diagnostic is `error` or `warning`, and SPIR-V parse errors have no
+    source location.
+  * `--zero-initialize-workgroup-memory native` is honored only by the SPIR-V backend; the other
+    backends treat it as `polyfill`.
+
+Usage: naga [OPTIONS] [FILES]...
+
+Arguments:
+  [FILES]...
+          Input file (stdin if omitted), then output files. In bulk mode, all are inputs
+
+Options:
+      --validate <VALIDATE>
+          Bitmask of the ValidationFlags to be used; use 0 to disable validation
+
+      --index-bounds-check-policy <INDEX_BOUNDS_CHECK_POLICY>
+          Policy for index bounds checking of arrays, vectors, and matrices
+          
+          [possible values: restrict, read-zero-skip-write, unchecked]
+
+      --buffer-bounds-check-policy <BUFFER_BOUNDS_CHECK_POLICY>
+          Bounds-check policy for arrays/vectors/matrices in `storage`/`uniform` globals. Defaults to the index bounds check policy
+          
+          [possible values: restrict, read-zero-skip-write, unchecked]
+
+      --image-load-bounds-check-policy <IMAGE_LOAD_BOUNDS_CHECK_POLICY>
+          Bounds-check policy for texture loads. Defaults to the index bounds check policy
+          
+          [possible values: restrict, read-zero-skip-write, unchecked]
+
+      --block-ctx-dir <BLOCK_CTX_DIR>
+          Directory to dump the SPIR-V block context dump to
+
+      --entry-point <ENTRY_POINT>
+          The shader entrypoint. With `--compact`, anything unreachable from it is dropped
+
+      --profile <PROFILE>
+          GLSL profile to target, e.g. `es`, `core`, `es330`
+
+      --shader-model <SHADER_MODEL>
+          HLSL shader model, e.g. `50`, `51`, `60`..`67`
+
+      --spirv-version <SPIRV_VERSION>
+          SPIR-V version, e.g. `1.0`, `1.4`
+
+      --shader-stage <SHADER_STAGE>
+          Shader stage; derived from the file extension if unspecified. Selects the input stage for GLSL
+          
+          [possible values: vert, frag, comp]
+
+      --input-kind <INPUT_KIND>
+          Kind of input: `glsl`, `wgsl`, `spv`, or `bin` (overrides extension detection; required for stdin `-`)
+          
+          [possible values: bin, glsl, spv, wgsl]
+
+      --output-kind <OUTPUT_KIND>
+          Output format when writing to stdout (output path `-`), which has no extension to infer from. Ignored when the output is a regular file
+
+          Possible values:
+          - wgsl
+          - spv
+          - hlsl
+          - metal
+          - dot
+          - txt
+          - bin
+          - vert:  GLSL vertex shader
+          - frag:  GLSL fragment shader
+          - comp:  GLSL compute shader
+
+      --metal-version <METAL_VERSION>
+          Metal language version, e.g. `1.0`, `1.1`, `1.2`
+
+      --keep-coordinate-space
+          Disable coordinate-space conversions where the frontend/backend supports them
+
+      --dot-cfg-only
+          In dot output, include only the control flow graph
+
+  -g, --generate-debug-symbols
+          Generate debug symbols (spv-out only, for now)
+
+      --compact
+          Compact the module's IR and revalidate
+
+      --before-compaction <BEFORE_COMPACTION>
+          Write the module's IR before compaction to the given file. Implies `--compact`
+
+      --bulk-validate
+          Bulk validation mode: all filenames are inputs to read and validate
+
+      --override <OVERRIDES>
+          Pipeline-constant override, of the form "foo=N,bar=M"; repeatable
+
+  -D, --defines <DEFINES>
+          Preprocessor defines for the GLSL frontend, "KEY=VALUE"; repeatable
+
+      --capabilities <CAPABILITIES>
+          Capabilities filter: comma-separated names, a numeric bitflags value, "none", or "all"
+          
+          [default: all]
+
+      --task-limits <TASK_LIMITS>
+          Mesh shader task dispatch limits, as "X,Y"
+
+      --validate-mesh-output <VALIDATE_MESH_OUTPUT>
+          Whether the mesh shader output should be validated
+          
+          [default: true]
+          [possible values: true, false]
+
+      --fake-missing-bindings <FAKE_MISSING_BINDINGS>
+          Bind fake resources for shaders that reference missing bindings
+          
+          [default: true]
+          [possible values: true, false]
+
+      --force-loop-bounding <FORCE_LOOP_BOUNDING>
+          Add a bound to all loops that might not terminate
+          
+          [default: true]
+          [possible values: true, false]
+
+      --ray-query-initialization-tracking <RAY_QUERY_INITIALIZATION_TRACKING>
+          Track ray query initialization
+          
+          [default: true]
+          [possible values: true, false]
+
+      --zero-initialize-workgroup-memory <ZERO_INITIALIZE_WORKGROUP_MEMORY>
+          How to zero-initialize workgroup memory (native | polyfill | none)
+
+          Possible values:
+          - native:   Via `VK_KHR_zero_initialize_workgroup_memory` or Vulkan 1.3
+          - polyfill: Via assignments + barrier
+          - none
+
+      --config <CONFIG>
+          Read all translation options from a JSON config file (mutually exclusive with option flags)
+
+      --config-json <CONFIG_JSON>
+          Read all translation options from an inline JSON string (mutually exclusive with option flags)
+
+      --print-config-schema
+          Print the JSON Schema for the config document and exit
+
+      --spirv-val
+          After writing SPIR-V output, validate it with `spirv-val` (must be on PATH)
+
+      --spirv-opt
+          After writing SPIR-V output, optimize it in place with `spirv-opt -O` (must be on PATH)
+
+      --dxc
+          After writing HLSL output, compile each entry point to DXIL with `dxc` (must be on PATH)
+
+      --format <FORMAT>
+          Output format for diagnostics and reflection: `text` (human, default) or `json`
+          
+          [default: text]
+          [possible values: text, json]
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version

@@ -156,10 +156,7 @@ use core::fmt::Error as FmtError;
 
 use thiserror::Error;
 
-use crate::{
-    back::{self, TaskDispatchLimits},
-    ir, proc, Handle,
-};
+use crate::{back, ir, proc, Handle};
 
 /// Direct3D 12 binding information for a global variable.
 ///
@@ -193,6 +190,7 @@ use crate::{
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct BindTarget {
     pub space: u8,
     /// For regular bindings this is the register number.
@@ -213,6 +211,7 @@ pub struct BindTarget {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 /// BindTarget for dynamic storage buffer offsets
 pub struct OffsetsBindTarget {
     pub space: u8,
@@ -249,6 +248,7 @@ pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindT
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum ShaderModel {
     V5_0,
     V5_1,
@@ -311,6 +311,7 @@ impl crate::ImageDimension {
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct SamplerIndexBufferKey {
     pub group: u32,
 }
@@ -319,6 +320,7 @@ pub struct SamplerIndexBufferKey {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct SamplerHeapBindTargets {
     pub standard_samplers: BindTarget,
     pub comparison_samplers: BindTarget,
@@ -411,6 +413,7 @@ pub type DynamicStorageBufferOffsetsTargets = alloc::collections::BTreeMap<u32, 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct ExternalTextureBindTarget {
     /// HLSL binding information for the individual plane textures.
     ///
@@ -473,6 +476,7 @@ pub enum EntryPointError {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Options {
     /// The hlsl shader model to be used
     pub shader_model: ShaderModel,
@@ -497,8 +501,6 @@ pub struct Options {
     )]
     pub binding_map: BindingMap,
 
-    /// Don't panic on missing bindings, instead generate any HLSL.
-    pub fake_missing_bindings: bool,
     /// Add special constants to `SV_VertexIndex` and `SV_InstanceIndex`,
     /// to make them work like in Vulkan/Metal, with help of the host.
     pub special_constants_binding: Option<BindTarget>,
@@ -542,26 +544,12 @@ pub struct Options {
     pub external_texture_binding_map: ExternalTextureBindingMap,
 
     /// Should workgroup variables be zero initialized (by polyfilling)?
-    pub zero_initialize_workgroup_memory: bool,
+    pub zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode,
     /// Should we restrict indexing of vectors, matrices and arrays?
     pub restrict_indexing: bool,
-    /// If set, loops will have code injected into them, forcing the compiler
-    /// to think the number of iterations is bounded.
-    pub force_loop_bounding: bool,
-
-    /// Limits to the mesh shader dispatch group a task workgroup can dispatch.
-    ///
-    /// Metal for example limits to 1024 workgroups per task shader dispatch. Dispatching more is
-    /// undefined behavior, so this would validate that to dispatch zero workgroups.
-    pub task_dispatch_limits: Option<TaskDispatchLimits>,
-
-    /// If true, naga may generate checks that the primitive indices are valid in the output.
-    ///
-    /// Currently this validation is unimplemented.
-    pub mesh_shader_primitive_indices_clamp: bool,
-    /// if set, ray queries will get a variable to track their state to prevent
-    /// misuse.
-    pub ray_query_initialization_tracking: bool,
+    /// Options shared across spv/msl/hlsl backends.
+    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(flatten))]
+    pub common: back::CommonBackendOptions,
 }
 
 impl Default for Options {
@@ -569,19 +557,15 @@ impl Default for Options {
         Options {
             shader_model: ShaderModel::V5_1,
             binding_map: BindingMap::default(),
-            fake_missing_bindings: true,
             special_constants_binding: None,
             sampler_heap_target: SamplerHeapBindTargets::default(),
             sampler_buffer_binding_map: alloc::collections::BTreeMap::default(),
             immediates_target: None,
             dynamic_storage_buffer_offsets_targets: alloc::collections::BTreeMap::new(),
             external_texture_binding_map: ExternalTextureBindingMap::default(),
-            zero_initialize_workgroup_memory: true,
+            zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
             restrict_indexing: true,
-            force_loop_bounding: true,
-            task_dispatch_limits: None,
-            mesh_shader_primitive_indices_clamp: true,
-            ray_query_initialization_tracking: true,
+            common: back::CommonBackendOptions::default(),
         }
     }
 }
@@ -593,7 +577,7 @@ impl Options {
     ) -> Result<BindTarget, EntryPointError> {
         match self.binding_map.get(res_binding) {
             Some(target) => Ok(*target),
-            None if self.fake_missing_bindings => Ok(BindTarget {
+            None if self.common.fake_missing_bindings => Ok(BindTarget {
                 space: res_binding.group as u8,
                 register: res_binding.binding,
                 binding_array_size: None,
@@ -610,7 +594,7 @@ impl Options {
     ) -> Result<ExternalTextureBindTarget, EntryPointError> {
         match self.external_texture_binding_map.get(res_binding) {
             Some(target) => Ok(*target),
-            None if self.fake_missing_bindings => {
+            None if self.common.fake_missing_bindings => {
                 let fake = BindTarget {
                     space: res_binding.group as u8,
                     register: res_binding.binding,

@@ -2867,19 +2867,21 @@ impl super::Adapter {
                 } else {
                     spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
                 },
-                force_loop_bounding: true,
-                ray_query_initialization_tracking: true,
+                common: naga::back::CommonBackendOptions {
+                    force_loop_bounding: true,
+                    ray_query_initialization_tracking: true,
+                    fake_missing_bindings: false,
+                    task_dispatch_limits: Some(naga::back::TaskDispatchLimits {
+                        max_mesh_workgroups_per_dim: limits.max_mesh_workgroups_per_dimension,
+                        max_mesh_workgroups_total: limits.max_mesh_workgroup_total_count,
+                    }),
+                    mesh_shader_primitive_indices_clamp: true,
+                },
                 use_storage_input_output_16: features.contains(wgt::Features::SHADER_F16)
                     && self.phd_features.supports_storage_input_output_16(),
-                fake_missing_bindings: false,
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
                 debug_info: None,
-                task_dispatch_limits: Some(naga::back::TaskDispatchLimits {
-                    max_mesh_workgroups_per_dim: limits.max_mesh_workgroups_per_dimension,
-                    max_mesh_workgroups_total: limits.max_mesh_workgroup_total_count,
-                }),
-                mesh_shader_primitive_indices_clamp: true,
                 trace_ray_argument_validation: true,
                 emit_int_div_checks: true,
             }

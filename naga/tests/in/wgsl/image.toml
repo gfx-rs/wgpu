@@ -4,7 +4,7 @@ targets = "SPIRV | METAL | HLSL | WGSL | GLSL"
 [glsl]
 version.Desktop = 430
 writer_flags = ""
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"
 
 [spv]
 debug = true

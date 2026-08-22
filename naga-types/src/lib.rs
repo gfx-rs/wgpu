@@ -114,6 +114,7 @@ macro_rules! link_to_wgc_docs {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum ShaderStage {
     /// A vertex shader, in a render pipeline.
     Vertex,
@@ -184,6 +185,7 @@ pub type FastIndexMap<K, V> =
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct ResourceBinding {
     /// The bind group index.
     pub group: u32,
@@ -194,6 +196,7 @@ pub struct ResourceBinding {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct TaskDispatchLimits {
     pub max_mesh_workgroups_per_dim: u32,
     pub max_mesh_workgroups_total: u32,
@@ -209,6 +212,7 @@ pub struct TaskDispatchLimits {
     any(feature = "serialize", feature = "deserialize"),
     serde(rename_all = "lowercase")
 )]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum VertexFormat {
     /// One unsigned byte (u8). `u32` in shaders.
     Uint8 = 0,

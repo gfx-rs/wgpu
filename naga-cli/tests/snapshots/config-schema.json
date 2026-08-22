@@ -1,0 +1,1314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Config",
+  "description": "All translation options that can be set via `--config` / `--config-json`.\n\nEvery field is `Option<…>` so that partial configs (\"just set `spv_out`\")\nwork without specifying everything else. Unknown JSON keys are rejected\n(`deny_unknown_fields`) to catch typos early.",
+  "type": "object",
+  "properties": {
+    "before_compaction": {
+      "description": "Write the module's IR before compaction to this path (implies compaction).",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "bounds_check_policies": {
+      "description": "Bounds-check policies for generated code.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BoundsCheckPolicies"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "bulk_validate": {
+      "description": "Bulk-validation mode: treat all positional files as inputs to validate.",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null
+    },
+    "capabilities": {
+      "description": "Capabilities filter passed to the validator and WGSL frontend.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Capabilities"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "compact": {
+      "description": "Compact the module's IR and revalidate before output.",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null
+    },
+    "defines": {
+      "description": "Preprocessor defines for the GLSL frontend (`KEY → VALUE`).",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": null
+    },
+    "dot": {
+      "description": "Options for the dot backend.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Options6"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "dxc": {
+      "description": "After writing HLSL output, compile each entry point to DXIL with `dxc` (must be on PATH).",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null
+    },
+    "entry_point": {
+      "description": "The shader entry point to target.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "format": {
+      "description": "Output format for diagnostics and reflection: `text` or `json`.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OutputFormat"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "generate_debug_symbols": {
+      "description": "Generate debug symbols (spv-out only, for now).",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null
+    },
+    "glsl_out": {
+      "description": "Options for the GLSL backend.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Options4"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "hlsl": {
+      "description": "Options for the HLSL backend.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Options5"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "input_kind": {
+      "description": "Input format (overrides extension detection; required to read stdin `-`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/InputKind"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "keep_coordinate_space": {
+      "description": "If `true`, suppress coordinate-space conversions in frontends/backends.",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null
+    },
+    "msl": {
+      "description": "Options for the MSL backend.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Options3"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "output_kind": {
+      "description": "Output format when writing to stdout `-` (which has no extension to infer from).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OutputKind"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "overrides": {
+      "description": "Pipeline-constant overrides (`name → value`).",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "type": "number",
+        "format": "double"
+      },
+      "default": null
+    },
+    "shader_stage": {
+      "description": "Shader stage for GLSL input.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ShaderStageArg"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "spirv_opt": {
+      "description": "After writing SPIR-V output, optimize it in place with `spirv-opt` (must be on PATH).",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null
+    },
+    "spirv_val": {
+      "description": "After writing SPIR-V output, validate it with `spirv-val` (must be on PATH).",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null
+    },
+    "spv_in": {
+      "description": "Options for the SPIR-V frontend.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Options"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "spv_out": {
+      "description": "Options for the SPIR-V backend.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Options2"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "validate": {
+      "description": "Bitmask of [`naga::valid::ValidationFlags`]. `0` disables validation.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint8",
+      "default": null,
+      "maximum": 255,
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Address": {
+      "type": "string",
+      "enum": [
+        "Repeat",
+        "MirroredRepeat",
+        "ClampToEdge",
+        "ClampToZero",
+        "ClampToBorder"
+      ]
+    },
+    "BindExternalTextureTarget": {
+      "description": "Binding information for a Naga [`External`] image global variable.\n\nSee the module documentation's section on external textures for details.\n\n[`External`]: crate::ir::ImageClass::External",
+      "type": "object",
+      "properties": {
+        "params": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "planes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          },
+          "maxItems": 3,
+          "minItems": 3
+        }
+      },
+      "required": [
+        "planes",
+        "params"
+      ]
+    },
+    "BindSamplerTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "Resource": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Resource"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "Inline": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Inline"
+          ]
+        }
+      ]
+    },
+    "BindTarget": {
+      "type": "object",
+      "properties": {
+        "buffer": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "default": null,
+          "maximum": 255,
+          "minimum": 0
+        },
+        "external_texture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BindExternalTextureTarget"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mutable": {
+          "type": "boolean",
+          "default": false
+        },
+        "sampler": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BindSamplerTarget"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "texture": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "default": null,
+          "maximum": 255,
+          "minimum": 0
+        }
+      }
+    },
+    "BindTarget2": {
+      "description": "Direct3D 12 binding information for a global variable.\n\nThis type provides the HLSL-specific information Naga needs to declare and\naccess an HLSL global variable that cannot be derived from the `Module`\nitself.\n\nAn HLSL global variable declaration includes details that the Direct3D API\nwill use to refer to it. For example:\n\n   RWByteAddressBuffer s_sasm : register(u0, space2);\n\nThis defines a global `s_sasm` that a Direct3D root signature would refer to\nas register `0` in register space `2` in a `UAV` descriptor range. Naga can\ninfer the register's descriptor range type from the variable's address class\n(writable [`Storage`] variables are implemented by Direct3D Unordered Access\nViews, the `u` register type), but the register number and register space\nmust be supplied by the user.\n\nThe [`back::hlsl::Options`] structure provides `BindTarget`s for various\nsituations in which Naga may need to generate an HLSL global variable, like\n[`binding_map`] for Naga global variables, or [`immediates_target`] for\na module's sole [`Immediate`] variable. See those fields' documentation\nfor details.\n\n[`Storage`]: crate::ir::AddressSpace::Storage\n[`back::hlsl::Options`]: Options\n[`binding_map`]: Options::binding_map\n[`immediates_target`]: Options::immediates_target\n[`Immediate`]: crate::ir::AddressSpace::Immediate",
+      "type": "object",
+      "properties": {
+        "binding_array_size": {
+          "description": "If the binding is an unsized binding array, this overrides the size.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "dynamic_storage_buffer_offsets_index": {
+          "description": "This is the index in the buffer at [`Options::dynamic_storage_buffer_offsets_targets`].",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "register": {
+          "description": "For regular bindings this is the register number.\n\nFor sampler bindings, this is the index to use into the bind group's sampler index buffer.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "restrict_indexing": {
+          "description": "This is a hint that we need to restrict indexing of vectors, matrices and arrays.\n\nIf [`Options::restrict_indexing`] is also `true`, we will restrict indexing.",
+          "type": "boolean",
+          "default": false
+        },
+        "space": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "space",
+        "register"
+      ]
+    },
+    "BindingInfo": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "binding_array_size": {
+          "description": "If the binding is an unsized binding array, this overrides the size.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "descriptor_set": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "descriptor_set",
+        "binding"
+      ]
+    },
+    "BorderColor": {
+      "type": "string",
+      "enum": [
+        "TransparentBlack",
+        "OpaqueBlack",
+        "OpaqueWhite"
+      ]
+    },
+    "BoundsCheckPolicies": {
+      "description": "Policies for injecting bounds checks during code generation.",
+      "type": "object",
+      "properties": {
+        "binding_array": {
+          "description": "How should the generated code handle binding array indexes that are out of bounds.",
+          "$ref": "#/$defs/BoundsCheckPolicy",
+          "default": "Unchecked"
+        },
+        "buffer": {
+          "description": "How should the generated code handle array, vector, or matrix indices\nthat are out of range, when those values live in a [`GlobalVariable`] in\nthe [`Storage`] or [`Uniform`] address spaces?\n\nSome graphics hardware provides \"robust buffer access\", a feature that\nensures that using a pointer cannot access memory outside the 'buffer'\nthat it was derived from. In Naga terms, this means that the hardware\nensures that pointers computed by applying [`Access`] and\n[`AccessIndex`] expressions to a [`GlobalVariable`] whose [`space`] is\n[`Storage`] or [`Uniform`] will never read or write memory outside that\nglobal variable.\n\nWhen hardware offers such a feature, it is probably undesirable to have\nNaga inject bounds checking code for such accesses, since the hardware\ncan probably provide the same protection more efficiently. However,\nbounds checks are still needed on accesses to indexable values that do\nnot live in buffers, like local variables.\n\nSo, this option provides a separate policy that applies only to accesses\nto storage and uniform globals. When depending on hardware bounds\nchecking, this policy can be `Unchecked` to avoid unnecessary overhead.\n\nWhen special hardware support is not available, this should probably be\nthe same as `index_bounds_check_policy`.\n\n[`GlobalVariable`]: crate::GlobalVariable\n[`space`]: crate::GlobalVariable::space\n[`Restrict`]: crate::proc::BoundsCheckPolicy::Restrict\n[`ReadZeroSkipWrite`]: crate::proc::BoundsCheckPolicy::ReadZeroSkipWrite\n[`Access`]: crate::Expression::Access\n[`AccessIndex`]: crate::Expression::AccessIndex\n[`Storage`]: crate::AddressSpace::Storage\n[`Uniform`]: crate::AddressSpace::Uniform",
+          "$ref": "#/$defs/BoundsCheckPolicy",
+          "default": "Unchecked"
+        },
+        "image_load": {
+          "description": "How should the generated code handle image texel loads that are out\nof range?\n\nThis controls the behavior of [`ImageLoad`] expressions when a coordinate,\ntexture array index, level of detail, or multisampled sample number is out of range.\n\nThere is no corresponding policy for [`ImageStore`] statements. All the\nplatforms we support already discard out-of-bounds image stores,\neffectively implementing the \"skip write\" part of [`ReadZeroSkipWrite`].\n\n[`ImageLoad`]: crate::Expression::ImageLoad\n[`ImageStore`]: crate::Statement::ImageStore\n[`ReadZeroSkipWrite`]: BoundsCheckPolicy::ReadZeroSkipWrite",
+          "$ref": "#/$defs/BoundsCheckPolicy",
+          "default": "Unchecked"
+        },
+        "index": {
+          "description": "How should the generated code handle array, vector, or matrix indices\nthat are out of range?",
+          "$ref": "#/$defs/BoundsCheckPolicy",
+          "default": "Unchecked"
+        }
+      }
+    },
+    "BoundsCheckPolicy": {
+      "description": "How should code generated by Naga do bounds checks?\n\nWhen a vector, matrix, or array index is out of bounds—either negative, or\ngreater than or equal to the number of elements in the type—WGSL requires\nthat some other index of the implementation's choice that is in bounds is\nused instead. (There are no types with zero elements.)\n\nSimilarly, when out-of-bounds coordinates, array indices, or sample indices\nare presented to the WGSL `textureLoad` and `textureStore` operations, the\noperation is redirected to do something safe.\n\nDifferent users of Naga will prefer different defaults:\n\n-   When used as part of a WebGPU implementation, the WGSL specification\n    requires the `Restrict` behavior for array, vector, and matrix accesses,\n    and either the `Restrict` or `ReadZeroSkipWrite` behaviors for texture\n    accesses.\n\n-   When used by the `wgpu` crate for native development, `wgpu` selects\n    `ReadZeroSkipWrite` as its default.\n\n-   Naga's own default is `Unchecked`, so that shader translations\n    are as faithful to the original as possible.\n\nSometimes the underlying hardware and drivers can perform bounds checks\nthemselves, in a way that performs better than the checks Naga would inject.\nIf you're using native checks like this, then having Naga inject its own\nchecks as well would be redundant, and the `Unchecked` policy is\nappropriate.",
+      "oneOf": [
+        {
+          "description": "Replace out-of-bounds indexes with some arbitrary in-bounds index.\n\n(This does not necessarily mean clamping. For example, interpreting the\nindex as unsigned and taking the minimum with the largest valid index\nwould also be a valid implementation. That would map negative indices to\nthe last element, not the first.)",
+          "type": "string",
+          "const": "Restrict"
+        },
+        {
+          "description": "Out-of-bounds reads return zero, and writes have no effect.\n\nWhen applied to a chain of accesses, like `a[i][j].b[k]`, all index\nexpressions are evaluated, regardless of whether prior or later index\nexpressions were in bounds. But all the accesses per se are skipped\nif any index is out of bounds.",
+          "type": "string",
+          "const": "ReadZeroSkipWrite"
+        },
+        {
+          "description": "Naga adds no checks to indexing operations. Generate the fastest code\npossible. This is the default for Naga, as a translator, but consumers\nshould consider defaulting to a safer behavior.",
+          "type": "string",
+          "const": "Unchecked"
+        }
+      ]
+    },
+    "Capabilities": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "CompareFunc": {
+      "type": "string",
+      "enum": [
+        "Never",
+        "Less",
+        "LessEqual",
+        "Greater",
+        "GreaterEqual",
+        "Equal",
+        "NotEqual",
+        "Always"
+      ]
+    },
+    "Coord": {
+      "type": "string",
+      "enum": [
+        "Normalized",
+        "Pixel"
+      ]
+    },
+    "EntryPointResources": {
+      "type": "object",
+      "properties": {
+        "immediates_buffer": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "default": null,
+          "maximum": 255,
+          "minimum": 0
+        },
+        "resources": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/BindTarget"
+          },
+          "default": {}
+        },
+        "sizes_buffer": {
+          "description": "The slot of a buffer that contains an array of `u32`,\none for the size of each bound buffer that contains a runtime array,\nin order of [`crate::GlobalVariable`] declarations.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "default": null,
+          "maximum": 255,
+          "minimum": 0
+        }
+      }
+    },
+    "ExternalTextureBindTarget": {
+      "description": "HLSL binding information for a Naga [`External`] image global variable.\n\nSee the module documentation's section on [External textures][mod] for details.\n\n[`External`]: crate::ir::ImageClass::External\n[mod]: #external-textures",
+      "type": "object",
+      "properties": {
+        "params": {
+          "description": "HLSL binding information for a buffer holding the sampling parameters.\n\nThis should refer to a cbuffer of type `NagaExternalTextureParams`, that\nthe code Naga generates for `textureSampleBaseClampToEdge` consults to\ndecide how to combine the data in [`planes`] to get the result required\nby the spec.\n\n[`planes`]: Self::planes",
+          "$ref": "#/$defs/BindTarget2"
+        },
+        "planes": {
+          "description": "HLSL binding information for the individual plane textures.\n\nEach of these should refer to an HLSL `Texture2D<float4>` holding one\nplane of data for the external texture. The exact meaning of each plane\nvaries at runtime depending on where the external texture's data\noriginated.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BindTarget2"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        }
+      },
+      "required": [
+        "planes",
+        "params"
+      ]
+    },
+    "Filter": {
+      "type": "string",
+      "enum": [
+        "Nearest",
+        "Linear"
+      ]
+    },
+    "GlslWriterFlags": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "InlineSampler": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Address"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
+        "border_color": {
+          "$ref": "#/$defs/BorderColor"
+        },
+        "compare_func": {
+          "$ref": "#/$defs/CompareFunc"
+        },
+        "coord": {
+          "$ref": "#/$defs/Coord"
+        },
+        "lod_clamp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Range_of_float"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mag_filter": {
+          "$ref": "#/$defs/Filter"
+        },
+        "max_anisotropy": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 1
+        },
+        "min_filter": {
+          "$ref": "#/$defs/Filter"
+        },
+        "mip_filter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Filter"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "coord",
+        "address",
+        "border_color",
+        "mag_filter",
+        "min_filter",
+        "compare_func"
+      ]
+    },
+    "InputKind": {
+      "type": "string",
+      "enum": [
+        "bin",
+        "glsl",
+        "spv",
+        "wgsl"
+      ]
+    },
+    "OffsetsBindTarget": {
+      "description": "BindTarget for dynamic storage buffer offsets",
+      "type": "object",
+      "properties": {
+        "register": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "size": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "space": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "space",
+        "register",
+        "size"
+      ]
+    },
+    "Options": {
+      "type": "object",
+      "properties": {
+        "adjust_coordinate_space": {
+          "description": "The IR coordinate space matches all the APIs except SPIR-V,\nso by default we flip the Y coordinate of the `BuiltIn::Position`.\nThis flag can be used to avoid this.",
+          "type": "boolean",
+          "default": true
+        },
+        "block_ctx_dump_prefix": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "strict_capabilities": {
+          "description": "Only allow shaders with the known set of capabilities.",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "Options2": {
+      "description": "Backend options shared by the SPIR-V, MSL, and HLSL backends.",
+      "type": "object",
+      "properties": {
+        "binding_map": {
+          "description": "Map of resources to information about the binding.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/BindingInfo"
+          },
+          "default": {}
+        },
+        "bounds_check_policies": {
+          "description": "How should generate code handle array, vector, matrix, or image texel\nindices that are out of range?",
+          "$ref": "#/$defs/BoundsCheckPolicies",
+          "default": {
+            "binding_array": "Unchecked",
+            "buffer": "Unchecked",
+            "image_load": "Unchecked",
+            "index": "Unchecked"
+          }
+        },
+        "emit_int_div_checks": {
+          "description": "If true (the default), integer division and modulo operations emit\nwrapper functions that replace a zero divisor with one, and for signed\nintegers also guard against `INT_MIN / -1` overflow. This matches the\nWGSL spec's requirement that these cases produce defined results.\n\nSet to `false` to emit raw `OpSDiv`/`OpUDiv`/`OpSRem`/`OpUMod`\ninstructions without checks. This is faster but produces\nimplementation-defined results when the divisor is zero. Appropriate\nfor compute shaders where the developer guarantees non-zero divisors.",
+          "type": "boolean",
+          "default": true
+        },
+        "fake_missing_bindings": {
+          "description": "Bind fake resources for shaders that reference missing bindings.",
+          "type": "boolean",
+          "default": true
+        },
+        "flags": {
+          "description": "Configuration flags for the writer.",
+          "$ref": "#/$defs/SpvWriterFlags",
+          "default": "DEBUG | ADJUST_COORDINATE_SPACE | LABEL_VARYINGS | CLAMP_FRAG_DEPTH"
+        },
+        "force_loop_bounding": {
+          "description": "Add a bound to all loops that might not terminate.",
+          "type": "boolean",
+          "default": true
+        },
+        "lang_version": {
+          "description": "(Major, Minor) target version of the SPIR-V.",
+          "type": "array",
+          "default": [
+            1,
+            0
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          ]
+        },
+        "mesh_shader_primitive_indices_clamp": {
+          "description": "Clamp mesh shader primitive indices.\n(Controlled separately by the CLI via --validate-mesh-output.)",
+          "type": "boolean",
+          "default": true
+        },
+        "ray_query_initialization_tracking": {
+          "description": "Track ray query initialization.",
+          "type": "boolean",
+          "default": true
+        },
+        "task_dispatch_limits": {
+          "description": "Limits on mesh-shader task dispatch size.\n(Parsed separately by the CLI via --task-limits.)",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskDispatchLimits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "trace_ray_argument_validation": {
+          "description": "If set, arguments to `traceRays` calls will be validated.",
+          "type": "boolean",
+          "default": true
+        },
+        "use_storage_input_output_16": {
+          "description": "Whether to use the `StorageInputOutput16` capability for `f16` shader I/O.\nWhen false, `f16` I/O is polyfilled using `f32` types with conversions.",
+          "type": "boolean",
+          "default": true
+        },
+        "zero_initialize_workgroup_memory": {
+          "description": "Dictates the way workgroup variables should be zero initialized",
+          "$ref": "#/$defs/ZeroInitializeWorkgroupMemoryMode",
+          "default": "Polyfill"
+        }
+      }
+    },
+    "Options3": {
+      "description": "Backend options shared by the SPIR-V, MSL, and HLSL backends.",
+      "type": "object",
+      "properties": {
+        "bounds_check_policies": {
+          "description": "Bounds checking policies.",
+          "$ref": "#/$defs/BoundsCheckPolicies",
+          "default": {
+            "binding_array": "Unchecked",
+            "buffer": "Unchecked",
+            "image_load": "Unchecked",
+            "index": "Unchecked"
+          }
+        },
+        "emit_int_div_checks": {
+          "description": "If true (the default), integer division and modulo operations use\nwrapper functions that guard against division by zero and signed\noverflow. Set to false to emit raw division for faster compute shaders\nwhere the developer guarantees non-zero divisors.",
+          "type": "boolean",
+          "default": true
+        },
+        "fake_missing_bindings": {
+          "description": "Bind fake resources for shaders that reference missing bindings.",
+          "type": "boolean",
+          "default": true
+        },
+        "force_loop_bounding": {
+          "description": "Add a bound to all loops that might not terminate.",
+          "type": "boolean",
+          "default": true
+        },
+        "inline_samplers": {
+          "description": "Samplers to be inlined into the code.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/InlineSampler"
+          }
+        },
+        "lang_version": {
+          "description": "(Major, Minor) target version of the Metal Shading Language.",
+          "type": "array",
+          "default": [
+            1,
+            0
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          ]
+        },
+        "mesh_shader_primitive_indices_clamp": {
+          "description": "Clamp mesh shader primitive indices.\n(Controlled separately by the CLI via --validate-mesh-output.)",
+          "type": "boolean",
+          "default": true
+        },
+        "per_entry_point_map": {
+          "description": "Map of entry-point resources, indexed by entry point function name, to slots.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/EntryPointResources"
+          },
+          "default": {}
+        },
+        "ray_query_initialization_tracking": {
+          "description": "Track ray query initialization.",
+          "type": "boolean",
+          "default": true
+        },
+        "spirv_cross_compatibility": {
+          "description": "Make it possible to link different stages via SPIRV-Cross.",
+          "type": "boolean",
+          "default": false
+        },
+        "task_dispatch_limits": {
+          "description": "Limits on mesh-shader task dispatch size.\n(Parsed separately by the CLI via --task-limits.)",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskDispatchLimits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "zero_initialize_workgroup_memory": {
+          "description": "Should workgroup variables be zero initialized (by polyfilling)?",
+          "$ref": "#/$defs/ZeroInitializeWorkgroupMemoryMode",
+          "default": "Polyfill"
+        }
+      }
+    },
+    "Options4": {
+      "description": "Configuration used in the [`Writer`].",
+      "type": "object",
+      "properties": {
+        "binding_map": {
+          "description": "Map of resources association to binding locations.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          },
+          "default": {}
+        },
+        "version": {
+          "description": "The GLSL version to be used.",
+          "$ref": "#/$defs/Version",
+          "default": {
+            "Embedded": {
+              "is_webgl": false,
+              "version": 310
+            }
+          }
+        },
+        "writer_flags": {
+          "description": "Configuration flags for the [`Writer`].",
+          "$ref": "#/$defs/GlslWriterFlags",
+          "default": "ADJUST_COORDINATE_SPACE"
+        },
+        "zero_initialize_workgroup_memory": {
+          "description": "Should workgroup variables be zero initialized (by polyfilling)?",
+          "$ref": "#/$defs/ZeroInitializeWorkgroupMemoryMode",
+          "default": "Polyfill"
+        }
+      }
+    },
+    "Options5": {
+      "description": "Configuration used in the [`Writer`].",
+      "type": "object",
+      "properties": {
+        "binding_map": {
+          "description": "HLSL binding information for each Naga global variable.\n\nThis maps Naga [`GlobalVariable`]'s [`ResourceBinding`]s to a\n[`BindTarget`] specifying its register number and space, along with\nother details necessary to generate a full HLSL declaration for it,\nor to access its value.\n\nThis must provide a [`BindTarget`] for every [`GlobalVariable`] in the\n[`Module`] that has a [`binding`].\n\n[`GlobalVariable`]: crate::ir::GlobalVariable\n[`ResourceBinding`]: crate::ir::ResourceBinding\n[`Module`]: crate::ir::Module\n[`binding`]: crate::ir::GlobalVariable::binding",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/BindTarget2"
+          },
+          "default": {}
+        },
+        "dynamic_storage_buffer_offsets_targets": {
+          "description": "Bind target for dynamic storage buffer offsets",
+          "type": "object",
+          "additionalProperties": false,
+          "default": {},
+          "patternProperties": {
+            "^\\d+$": {
+              "$ref": "#/$defs/OffsetsBindTarget"
+            }
+          }
+        },
+        "external_texture_binding_map": {
+          "description": "HLSL binding information for [`External`] image global variables.\n\nSee [`ExternalTextureBindTarget`] for details.\n\n[`External`]: crate::ir::ImageClass::External",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ExternalTextureBindTarget"
+          },
+          "default": {}
+        },
+        "fake_missing_bindings": {
+          "description": "Bind fake resources for shaders that reference missing bindings.",
+          "type": "boolean",
+          "default": true
+        },
+        "force_loop_bounding": {
+          "description": "Add a bound to all loops that might not terminate.",
+          "type": "boolean",
+          "default": true
+        },
+        "immediates_target": {
+          "description": "HLSL binding information for the [`Immediate`] global, if present.\n\nIf a module contains a global in the [`Immediate`] address space, the\n`dx12` backend stores its value directly in the root signature as a\nseries of [`D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS`], whose binding\ninformation is given here.\n\n[`Immediate`]: crate::ir::AddressSpace::Immediate\n[`D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS`]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_root_parameter_type",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BindTarget2"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mesh_shader_primitive_indices_clamp": {
+          "description": "Clamp mesh shader primitive indices.\n(Controlled separately by the CLI via --validate-mesh-output.)",
+          "type": "boolean",
+          "default": true
+        },
+        "ray_query_initialization_tracking": {
+          "description": "Track ray query initialization.",
+          "type": "boolean",
+          "default": true
+        },
+        "restrict_indexing": {
+          "description": "Should we restrict indexing of vectors, matrices and arrays?",
+          "type": "boolean",
+          "default": true
+        },
+        "sampler_buffer_binding_map": {
+          "description": "Mapping of each bind group's sampler index buffer to a bind target.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/BindTarget2"
+          },
+          "default": {}
+        },
+        "sampler_heap_target": {
+          "description": "HLSL binding information for the sampler heap and comparison sampler heap.",
+          "$ref": "#/$defs/SamplerHeapBindTargets",
+          "default": {
+            "comparison_samplers": {
+              "binding_array_size": null,
+              "dynamic_storage_buffer_offsets_index": null,
+              "register": 0,
+              "restrict_indexing": false,
+              "space": 1
+            },
+            "standard_samplers": {
+              "binding_array_size": null,
+              "dynamic_storage_buffer_offsets_index": null,
+              "register": 0,
+              "restrict_indexing": false,
+              "space": 0
+            }
+          }
+        },
+        "shader_model": {
+          "description": "The hlsl shader model to be used",
+          "$ref": "#/$defs/ShaderModel",
+          "default": "V5_1"
+        },
+        "special_constants_binding": {
+          "description": "Add special constants to `SV_VertexIndex` and `SV_InstanceIndex`,\nto make them work like in Vulkan/Metal, with help of the host.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BindTarget2"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "task_dispatch_limits": {
+          "description": "Limits on mesh-shader task dispatch size.\n(Parsed separately by the CLI via --task-limits.)",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskDispatchLimits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "zero_initialize_workgroup_memory": {
+          "description": "Should workgroup variables be zero initialized (by polyfilling)?",
+          "$ref": "#/$defs/ZeroInitializeWorkgroupMemoryMode",
+          "default": "Polyfill"
+        }
+      }
+    },
+    "Options6": {
+      "description": "Configuration options for the dot backend",
+      "type": "object",
+      "properties": {
+        "cfg_only": {
+          "description": "Only emit function bodies",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "OutputFormat": {
+      "type": "string",
+      "enum": [
+        "text",
+        "json"
+      ]
+    },
+    "OutputKind": {
+      "description": "Output format for stdout writes, mapping to the same format keys the output-file\nextension would select.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "wgsl",
+            "spv",
+            "hlsl",
+            "metal",
+            "dot",
+            "txt",
+            "bin"
+          ]
+        },
+        {
+          "description": "GLSL vertex shader.",
+          "type": "string",
+          "const": "vert"
+        },
+        {
+          "description": "GLSL fragment shader.",
+          "type": "string",
+          "const": "frag"
+        },
+        {
+          "description": "GLSL compute shader.",
+          "type": "string",
+          "const": "comp"
+        }
+      ]
+    },
+    "Range_of_float": {
+      "type": "object",
+      "properties": {
+        "end": {
+          "type": "number",
+          "format": "float"
+        },
+        "start": {
+          "type": "number",
+          "format": "float"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ]
+    },
+    "SamplerHeapBindTargets": {
+      "type": "object",
+      "properties": {
+        "comparison_samplers": {
+          "$ref": "#/$defs/BindTarget2",
+          "default": {
+            "binding_array_size": null,
+            "dynamic_storage_buffer_offsets_index": null,
+            "register": 0,
+            "restrict_indexing": false,
+            "space": 1
+          }
+        },
+        "standard_samplers": {
+          "$ref": "#/$defs/BindTarget2",
+          "default": {
+            "binding_array_size": null,
+            "dynamic_storage_buffer_offsets_index": null,
+            "register": 0,
+            "restrict_indexing": false,
+            "space": 0
+          }
+        }
+      }
+    },
+    "ShaderModel": {
+      "description": "A HLSL shader model version.",
+      "type": "string",
+      "enum": [
+        "V5_0",
+        "V5_1",
+        "V6_0",
+        "V6_1",
+        "V6_2",
+        "V6_3",
+        "V6_4",
+        "V6_5",
+        "V6_6",
+        "V6_7",
+        "V6_8",
+        "V6_9"
+      ]
+    },
+    "ShaderStageArg": {
+      "type": "string",
+      "enum": [
+        "vert",
+        "frag",
+        "comp"
+      ]
+    },
+    "SpvWriterFlags": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "TaskDispatchLimits": {
+      "type": "object",
+      "properties": {
+        "max_mesh_workgroups_per_dim": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "max_mesh_workgroups_total": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "max_mesh_workgroups_per_dim",
+        "max_mesh_workgroups_total"
+      ]
+    },
+    "Version": {
+      "description": "A GLSL version.",
+      "oneOf": [
+        {
+          "description": "`core` GLSL.",
+          "type": "object",
+          "properties": {
+            "Desktop": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Desktop"
+          ]
+        },
+        {
+          "description": "`es` GLSL.",
+          "type": "object",
+          "properties": {
+            "Embedded": {
+              "type": "object",
+              "properties": {
+                "is_webgl": {
+                  "type": "boolean"
+                },
+                "version": {
+                  "type": "integer",
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "version",
+                "is_webgl"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Embedded"
+          ]
+        }
+      ]
+    },
+    "ZeroInitializeWorkgroupMemoryMode": {
+      "description": "How to handle zero-initialization of workgroup-address-space variables.\n\nThis is shared across all backends that support workgroup memory initialization.\n\nOnly the SPIR-V backend honors [`Native`]; the MSL, HLSL, and GLSL backends\nhave no native zero-init path and treat [`Native`] identically to [`Polyfill`]\n(they emit zeroing code whenever the mode is not [`None`]).\n\n[`Native`]: ZeroInitializeWorkgroupMemoryMode::Native\n[`Polyfill`]: ZeroInitializeWorkgroupMemoryMode::Polyfill\n[`None`]: ZeroInitializeWorkgroupMemoryMode::None",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "None"
+          ]
+        },
+        {
+          "description": "Via `VK_KHR_zero_initialize_workgroup_memory` or Vulkan 1.3",
+          "type": "string",
+          "const": "Native"
+        },
+        {
+          "description": "Via assignments + barrier",
+          "type": "string",
+          "const": "Polyfill"
+        }
+      ]
+    }
+  }
+}

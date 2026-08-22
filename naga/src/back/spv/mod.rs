@@ -997,6 +997,8 @@ pub struct Writer {
 }
 
 bitflags::bitflags! {
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct WriterFlags: u32 {
         /// Include debug labels for everything.
@@ -1042,16 +1044,23 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ZeroInitializeWorkgroupMemoryMode {
-    /// Via `VK_KHR_zero_initialize_workgroup_memory` or Vulkan 1.3
-    Native,
-    /// Via assignments + barrier
-    Polyfill,
-    None,
+#[cfg(feature = "schemars")]
+impl schemars::JsonSchema for WriterFlags {
+    fn schema_name() -> alloc::borrow::Cow<'static, str> {
+        "SpvWriterFlags".into()
+    }
+    fn json_schema(g: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        u32::json_schema(g)
+    }
 }
 
+pub use crate::back::ZeroInitializeWorkgroupMemoryMode;
+
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default, bound(deserialize = "")))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Options<'a> {
     /// (Major, Minor) target version of the SPIR-V.
     pub lang_version: (u8, u8),
@@ -1059,9 +1068,9 @@ pub struct Options<'a> {
     /// Configuration flags for the writer.
     pub flags: WriterFlags,
 
-    /// Don't panic on missing bindings. Instead use fake values for `Binding`
-    /// and `DescriptorSet` decorations. This may result in invalid SPIR-V.
-    pub fake_missing_bindings: bool,
+    /// Options shared across spv/msl/hlsl backends.
+    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(flatten))]
+    pub common: crate::back::CommonBackendOptions,
 
     /// Map of resources to information about the binding.
     pub binding_map: BindingMap,
@@ -1070,6 +1079,9 @@ pub struct Options<'a> {
     /// requires capabilities beyond these is rejected with an error.
     ///
     /// If this is `None`, all capabilities are permitted.
+    // Skipped for schemars: FastHashSet<spirv::Capability> has no JsonSchema impl
+    // (spirv crate does not enable schemars).
+    #[cfg_attr(feature = "schemars", schemars(skip))]
     pub capabilities: Option<crate::FastHashSet<Capability>>,
 
     /// How should generate code handle array, vector, matrix, or image texel
@@ -1079,14 +1091,6 @@ pub struct Options<'a> {
     /// Dictates the way workgroup variables should be zero initialized
     pub zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode,
 
-    /// If set, loops will have code injected into them, forcing the compiler
-    /// to think the number of iterations is bounded.
-    pub force_loop_bounding: bool,
-
-    /// if set, ray queries will get a variable to track their state to prevent
-    /// misuse.
-    pub ray_query_initialization_tracking: bool,
-
     /// If set, arguments to `traceRays` calls will be validated.
     pub trace_ray_argument_validation: bool,
 
@@ -1094,18 +1098,11 @@ pub struct Options<'a> {
     /// When false, `f16` I/O is polyfilled using `f32` types with conversions.
     pub use_storage_input_output_16: bool,
 
+    // Skipped: lifetime-bearing, runtime-populated from `-g`, never in config.
+    #[cfg_attr(feature = "serialize", serde(skip_serializing))]
+    #[cfg_attr(feature = "deserialize", serde(skip_deserializing))]
+    #[cfg_attr(feature = "schemars", schemars(skip))]
     pub debug_info: Option<DebugInfo<'a>>,
-
-    /// Limits to the mesh shader dispatch group a task workgroup can dispatch.
-    ///
-    /// Metal for example limits to 1024 workgroups per task shader dispatch. Dispatching more is
-    /// undefined behavior, so this would validate that to dispatch zero workgroups.
-    pub task_dispatch_limits: Option<TaskDispatchLimits>,
-
-    /// If true, naga may generate checks that the primitive indices are valid in the output.
-    ///
-    /// Currently this validation is unimplemented.
-    pub mesh_shader_primitive_indices_clamp: bool,
 
     /// If true (the default), integer division and modulo operations emit
     /// wrapper functions that replace a zero divisor with one, and for signed
@@ -1130,18 +1127,14 @@ impl Default for Options<'_> {
         Options {
             lang_version: (1, 0),
             flags,
-            fake_missing_bindings: true,
+            common: crate::back::CommonBackendOptions::default(),
             binding_map: BindingMap::default(),
             capabilities: None,
             bounds_check_policies: BoundsCheckPolicies::default(),
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,
-            force_loop_bounding: true,
-            ray_query_initialization_tracking: true,
             trace_ray_argument_validation: true,
             use_storage_input_output_16: true,
             debug_info: None,
-            task_dispatch_limits: None,
-            mesh_shader_primitive_indices_clamp: true,
             emit_int_div_checks: true,
         }
     }
@@ -1151,6 +1144,7 @@ impl Default for Options<'_> {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct PipelineOptions {
     /// The stage of the entry point.
     pub shader_stage: crate::ShaderStage,
@@ -1227,4 +1221,86 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE
         | Caps::LINEAR_INTERPOLATION
+}
+
+#[cfg(all(test, feature = "serialize", feature = "deserialize"))]
+mod serde_tests {
+    use super::*;
+
+    #[test]
+    fn writer_flags_round_trip() {
+        let flags = WriterFlags::DEBUG | WriterFlags::ADJUST_COORDINATE_SPACE;
+        let json = serde_json::to_string(&flags).unwrap();
+        let back: WriterFlags = serde_json::from_str(&json).unwrap();
+        assert_eq!(flags, back);
+    }
+
+    #[test]
+    fn zero_init_mode_round_trip() {
+        for mode in [
+            ZeroInitializeWorkgroupMemoryMode::Native,
+            ZeroInitializeWorkgroupMemoryMode::Polyfill,
+            ZeroInitializeWorkgroupMemoryMode::None,
+        ] {
+            let json = serde_json::to_string(&mode).unwrap();
+            let back: ZeroInitializeWorkgroupMemoryMode = serde_json::from_str(&json).unwrap();
+            assert_eq!(mode, back);
+        }
+    }
+
+    #[test]
+    fn spv_options_round_trip_skips_debug_info() {
+        let opts = Options {
+            lang_version: (1, 5),
+            common: crate::back::CommonBackendOptions {
+                force_loop_bounding: false,
+                ..crate::back::CommonBackendOptions::default()
+            },
+            ..Options::default()
+        };
+        let json = serde_json::to_string(&opts).unwrap();
+        let back: Options = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.lang_version, (1, 5));
+        assert!(!back.common.force_loop_bounding);
+        assert!(back.debug_info.is_none());
+
+        // partial JSON works via serde(default)
+        let def: Options = serde_json::from_str(r#"{"lang_version":[1,3]}"#).unwrap();
+        assert_eq!(def.lang_version, (1, 3));
+        assert!(def.debug_info.is_none());
+        // capabilities defaults to None when not present in JSON
+        assert!(def.capabilities.is_none());
+    }
+
+    #[test]
+    fn spv_options_capabilities_round_trip() {
+        // capabilities must survive a serialize/deserialize round-trip.
+        let caps: crate::FastHashSet<Capability> = [Capability::Shader].into_iter().collect();
+        let opts = Options {
+            capabilities: Some(caps.clone()),
+            ..Options::default()
+        };
+        let json = serde_json::to_string(&opts).unwrap();
+        let back: Options = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.capabilities, Some(caps));
+        // debug_info is always skipped regardless
+        assert!(back.debug_info.is_none());
+    }
+}
+
+#[cfg(all(test, feature = "schemars"))]
+mod schema_tests {
+    use super::Options;
+
+    #[test]
+    fn spv_options_schema_generates() {
+        let schema = schemars::schema_for!(Options);
+        let json = serde_json::to_string(&schema).unwrap();
+        // debug_info is skipped; lang_version must appear.
+        assert!(json.contains("lang_version"), "schema: {json}");
+        assert!(
+            !json.contains("debug_info"),
+            "debug_info must be skipped: {json}"
+        );
+    }
 }

@@ -2077,7 +2077,7 @@ impl<W: Write> super::Writer<'_, W> {
 
         let bind_target = match self.options.sampler_buffer_binding_map.get(&key) {
             Some(&bind_target) => bind_target,
-            None if self.options.fake_missing_bindings => super::BindTarget {
+            None if self.options.common.fake_missing_bindings => super::BindTarget {
                 space: u8::MAX,
                 register: key.group,
                 binding_array_size: None,

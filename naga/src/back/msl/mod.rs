@@ -75,7 +75,7 @@ use alloc::{
 };
 use core::fmt::{Error as FmtError, Write};
 
-use crate::{arena::Handle, back::TaskDispatchLimits, ir, proc::index, valid::ModuleInfo};
+use crate::{arena::Handle, ir, proc::index, valid::ModuleInfo};
 
 mod keywords;
 mod mesh_shader;
@@ -91,6 +91,7 @@ pub type InlineSamplerIndex = u8;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum BindSamplerTarget {
     Resource(Slot),
     Inline(InlineSamplerIndex),
@@ -104,6 +105,7 @@ pub enum BindSamplerTarget {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct BindExternalTextureTarget {
     pub planes: [Slot; 3],
     pub params: Slot,
@@ -113,6 +115,7 @@ pub struct BindExternalTextureTarget {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct BindTarget {
     pub buffer: Option<Slot>,
     pub texture: Option<Slot>,
@@ -150,6 +153,7 @@ pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindT
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct EntryPointResources {
     #[cfg_attr(
         feature = "deserialize",
@@ -296,6 +300,7 @@ enum LocationMode {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Options {
     /// (Major, Minor) target version of the Metal Shading Language.
     pub lang_version: (u8, u8),
@@ -305,27 +310,18 @@ pub struct Options {
     pub inline_samplers: Vec<sampler::InlineSampler>,
     /// Make it possible to link different stages via SPIRV-Cross.
     pub spirv_cross_compatibility: bool,
-    /// Don't panic on missing bindings, instead generate invalid MSL.
-    pub fake_missing_bindings: bool,
     /// Bounds checking policies.
     pub bounds_check_policies: index::BoundsCheckPolicies,
     /// Should workgroup variables be zero initialized (by polyfilling)?
-    pub zero_initialize_workgroup_memory: bool,
-    /// If set, loops will have code injected into them, forcing the compiler
-    /// to think the number of iterations is bounded.
-    pub force_loop_bounding: bool,
-    /// Whether and how checks in the task shader should verify the dispatched
-    /// mesh grid size.
-    pub task_dispatch_limits: Option<TaskDispatchLimits>,
-    /// Whether to validate the output of a mesh shader workgroup.
-    pub mesh_shader_primitive_indices_clamp: bool,
+    pub zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode,
     /// If true (the default), integer division and modulo operations use
     /// wrapper functions that guard against division by zero and signed
     /// overflow. Set to false to emit raw division for faster compute shaders
     /// where the developer guarantees non-zero divisors.
     pub emit_int_div_checks: bool,
-    /// Whether to validate ray query calls
-    pub ray_query_initialization_tracking: bool,
+    /// Options shared across spv/msl/hlsl backends.
+    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(flatten))]
+    pub common: crate::back::CommonBackendOptions,
 }
 
 impl Default for Options {
@@ -335,14 +331,10 @@ impl Default for Options {
             per_entry_point_map: EntryPointResourceMap::default(),
             inline_samplers: Vec::new(),
             spirv_cross_compatibility: false,
-            fake_missing_bindings: true,
             bounds_check_policies: index::BoundsCheckPolicies::default(),
-            zero_initialize_workgroup_memory: true,
-            force_loop_bounding: true,
-            task_dispatch_limits: None,
-            mesh_shader_primitive_indices_clamp: true,
-            ray_query_initialization_tracking: true,
+            zero_initialize_workgroup_memory: super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
             emit_int_div_checks: true,
+            common: crate::back::CommonBackendOptions::default(),
         }
     }
 }
@@ -351,6 +343,7 @@ impl Default for Options {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum VertexBufferStepMode {
     Constant,
     #[default]
@@ -363,6 +356,7 @@ pub enum VertexBufferStepMode {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct AttributeMapping {
     /// Shader location associated with this attribute
     pub shader_location: u32,
@@ -381,6 +375,7 @@ pub struct AttributeMapping {
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct VertexBufferMapping {
     /// Shader location associated with this buffer
     pub id: u32,
@@ -578,7 +573,7 @@ impl Options {
         let target = self.get_resource_binding_target(ep, res_binding);
         match target {
             Some(target) => Ok(ResolvedBinding::Resource(target.clone())),
-            None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
+            None if self.common.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",
                 index: 0,
                 interpolation: None,
@@ -599,7 +594,7 @@ impl Options {
                 buffer: Some(slot),
                 ..Default::default()
             })),
-            None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
+            None if self.common.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",
                 index: 0,
                 interpolation: None,
@@ -620,7 +615,7 @@ impl Options {
                 buffer: Some(slot),
                 ..Default::default()
             })),
-            None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
+            None if self.common.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",
                 index: 0,
                 interpolation: None,
@@ -881,4 +876,17 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
 #[test]
 fn test_error_size() {
     assert_eq!(size_of::<Error>(), 40);
+}
+
+#[cfg(all(test, feature = "schemars"))]
+mod schema_tests {
+    use super::Options;
+
+    #[test]
+    fn msl_options_schema_generates() {
+        let schema = schemars::schema_for!(Options);
+        let json = serde_json::to_string(&schema).unwrap();
+        // lang_version must appear in the schema.
+        assert!(json.contains("lang_version"), "schema: {json}");
+    }
 }

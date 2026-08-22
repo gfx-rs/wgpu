@@ -1340,6 +1340,7 @@ impl<'a, W: Write> Writer<'a, W> {
         writeln!(self.out, ") {{")?;
 
         if self.options.zero_initialize_workgroup_memory
+            != back::ZeroInitializeWorkgroupMemoryMode::None
             && ctx.ty.is_compute_like_entry_point(self.module)
         {
             self.write_workgroup_variables_initialization(&ctx)?;

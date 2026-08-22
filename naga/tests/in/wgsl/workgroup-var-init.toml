@@ -4,7 +4,7 @@ targets = "WGSL | GLSL | SPIRV | HLSL | METAL"
 fake_missing_bindings = false
 lang_version = [1, 0]
 spirv_cross_compatibility = false
-zero_initialize_workgroup_memory = true
+zero_initialize_workgroup_memory = "Polyfill"
 
 [msl.per_entry_point_map.main]
 resources = [

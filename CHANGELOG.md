@@ -84,6 +84,10 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 - Add ANGLE as an opt-in OpenGL backend on Windows via `cfg(windows_angle)`, while keeping the `angle` feature for ANGLE on macOS/iOS. By @csmoe in [#9422](https://github.com/gfx-rs/wgpu/pull/9422).
 
+#### naga-cli
+
+- Rewrote `naga-cli`: migrated to `clap`, added `--config`/`--config-json` for full option coverage, `--print-config-schema`, `--format json` (structured diagnostics + reflection), and external tool hooks (`--spirv-val`, `--spirv-opt`, `--dxc`). The `.spirv` output extension now writes SPIR-V. By @Inner-Daemons in [#XXXX](https://github.com/gfx-rs/wgpu/pull/XXXX).
+
 ### Changes
 
 #### General

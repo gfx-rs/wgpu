@@ -3,6 +3,7 @@ name = "naga-cli"
 version.workspace = true
 edition.workspace = true
 description = "CLI for the naga shader translator and validator. Part of the wgpu project"
+readme = "README.md"
 repository.workspace = true
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license.workspace = true
@@ -11,16 +12,15 @@ license.workspace = true
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.76"
+rust-version.workspace = true
 
 [[bin]]
 name = "naga"
-path = "src/bin/naga.rs"
+path = "src/main.rs"
 # This _must_ be false, as this conflicts with `naga`'s docs.
 #
 # See https://github.com/gfx-rs/wgpu/issues/4997
 doc = false
-test = false
 
 [dependencies]
 naga = { workspace = true, features = [
@@ -35,9 +35,11 @@ naga = { workspace = true, features = [
     "dot-out",
     "serialize",
     "deserialize",
+    "schemars",
     "termcolor",
     "stderr",
     "fs",
+    "clap",
 ] }
 
 bincode = { workspace = true, features = ["serde"] }
@@ -46,9 +48,13 @@ codespan-reporting = { workspace = true, default-features = false, features = [
     "termcolor",
 ] }
 env_logger.workspace = true
-argh.workspace = true
+clap = { workspace = true }
 anyhow = { workspace = true, features = ["std"] }
 log.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+which = { workspace = true }
 
 [lints]
 workspace = true

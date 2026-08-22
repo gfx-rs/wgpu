@@ -7061,9 +7061,11 @@ template <typename A>
                     module,
                     mod_info,
                     pipeline_options,
-                    force_loop_bounding: options.force_loop_bounding,
+                    force_loop_bounding: options.common.force_loop_bounding,
                     emit_int_div_checks: options.emit_int_div_checks,
-                    ray_query_initialization_tracking: options.ray_query_initialization_tracking,
+                    ray_query_initialization_tracking: options
+                        .common
+                        .ray_query_initialization_tracking,
                 },
                 result_struct: None,
             };
@@ -7159,7 +7161,7 @@ template <typename A>
 
             // skip this entry point if any global bindings are missing,
             // or their types are incompatible.
-            if !options.fake_missing_bindings {
+            if !options.common.fake_missing_bindings {
                 for (var_handle, var) in module.global_variables.iter() {
                     if fun_info[var_handle].is_empty() {
                         continue;
@@ -8285,9 +8287,11 @@ template <typename A>
                     module,
                     mod_info,
                     pipeline_options,
-                    force_loop_bounding: options.force_loop_bounding,
+                    force_loop_bounding: options.common.force_loop_bounding,
                     emit_int_div_checks: options.emit_int_div_checks,
-                    ray_query_initialization_tracking: options.ray_query_initialization_tracking,
+                    ray_query_initialization_tracking: options
+                        .common
+                        .ray_query_initialization_tracking,
                 },
                 result_struct: if ep.stage == crate::ShaderStage::Task {
                     None
@@ -8456,6 +8460,7 @@ mod workgroup_mem_init {
         ) -> bool {
             let is_task = ep.stage == crate::ShaderStage::Task;
             options.zero_initialize_workgroup_memory
+                != back::ZeroInitializeWorkgroupMemoryMode::None
                 && ep.stage.compute_like()
                 && module.global_variables.iter().any(|(handle, var)| {
                     let is_right_address_space = var.space == crate::AddressSpace::WorkGroup

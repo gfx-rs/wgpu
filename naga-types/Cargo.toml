@@ -18,6 +18,7 @@ workspace = true
 serialize = ["dep:serde", "indexmap/serde"]
 deserialize = ["dep:serde", "indexmap/serde"]
 arbitrary = ["dep:arbitrary", "std", "indexmap/arbitrary"]
+schemars = ["dep:schemars"]
 std = []
 
 [dependencies]
@@ -25,5 +26,6 @@ arbitrary = { workspace = true, features = ["derive"], optional = true }
 hashbrown.workspace = true
 indexmap.workspace = true
 rustc-hash.workspace = true
+schemars = { workspace = true, optional = true }
 serde = { workspace = true, features = ["alloc", "derive"], optional = true }
 thiserror.workspace = true
