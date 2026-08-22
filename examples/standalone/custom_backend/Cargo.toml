@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-example-custom-backend"
-edition = "2021"
+edition = "2024"
 rust-version = "1.87"
 publish = false
 
