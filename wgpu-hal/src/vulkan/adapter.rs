@@ -2496,7 +2496,8 @@ impl super::Instance {
             scratch_buffer_alignment: alignments.ray_tracing_scratch_buffer_alignment,
             ray_tracing_pipeline_group_data_size: alignments.ray_tracing_pipeline_group_data_size,
             store_op_none: phd_capabilities.device_api_version >= vk::API_VERSION_1_3
-                || phd_capabilities.supports_extension(khr::dynamic_rendering::NAME)
+                || (phd_capabilities.device_api_version >= vk::API_VERSION_1_2
+                    && phd_capabilities.supports_extension(khr::dynamic_rendering::NAME))
                 || phd_capabilities.supports_extension(khr::load_store_op_none::NAME)
                 || phd_capabilities.supports_extension(ash::qcom::render_pass_store_ops::NAME)
                 || phd_capabilities.supports_extension(ext::load_store_op_none::NAME),
