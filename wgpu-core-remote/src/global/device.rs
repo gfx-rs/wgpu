@@ -1072,8 +1072,6 @@ impl Global {
     }
 
     /// Check `device_id` for freeable resources and completed buffer mappings.
-    ///
-    /// Return `queue_empty` indicating whether there are more queue submissions still in flight.
     pub fn device_poll(
         &self,
         device_id: DeviceId,

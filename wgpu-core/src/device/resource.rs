@@ -871,8 +871,6 @@ impl Device {
     }
 
     /// Check device for freeable resources and completed buffer mappings.
-    ///
-    /// Return `queue_empty` indicating whether there are more queue submissions still in flight.
     pub fn poll(
         &self,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
@@ -916,14 +914,9 @@ impl Device {
     /// This will process _all_ completed submissions, even if the caller only asked
     /// us to poll to a given submission index.
     ///
-    /// Return a pair `(closures, result)`, where:
-    ///
-    /// - `closures` is a list of callbacks that need to be invoked informing the user
-    ///   about various things occurring. These happen and should be handled even if
-    ///   this function returns an error, hence they are outside of the result.
-    ///
-    /// - `results` is a boolean indicating the result of the wait operation, including
-    ///   if there was a timeout or a validation error.
+    /// The returned [`UserClosures`] contains callbacks that need to be invoked informing
+    /// the user about various things occurring. These happen and should be handled even
+    /// if this function returns an error, hence they are outside of the result.
     pub(crate) fn maintain<'this>(
         &'this self,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
