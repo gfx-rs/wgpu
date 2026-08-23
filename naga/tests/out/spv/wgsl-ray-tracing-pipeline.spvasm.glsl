@@ -144,3 +144,35 @@ void main()
 {
 }
 
+
+/////////////////////////////////////////////////
+// Entry point: "closest_hit_instance" (rchit) //
+/////////////////////////////////////////////////
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+struct _4
+{
+    uint _m0;
+    uint _m1;
+};
+
+struct _9
+{
+    uint _m0;
+    uint _m1;
+    float _m2;
+    float _m3;
+    vec3 _m4;
+    vec3 _m5;
+};
+
+layout(location = 0) rayPayloadEXT _4 _11;
+layout(set = 0, binding = 0) uniform accelerationStructureEXT _13;
+layout(location = 1) rayPayloadInEXT _4 _15;
+
+void main()
+{
+    _15._m0 = uint(gl_InstanceID);
+}
+
