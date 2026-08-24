@@ -10,7 +10,7 @@ use core::{
 use arrayvec::ArrayVec;
 use ash::{ext, vk};
 use hashbrown::hash_map::Entry;
-use parking_lot::{Mutex, RwLock};
+use wgpu_sync::{Mutex, RwLock};
 
 use super::{conv, descriptor::DescriptorCounts, RawTlasInstance};
 use crate::TlasInstance;

@@ -25,8 +25,6 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct QuerySet {
     pub(crate) inner: dispatch::DispatchQuerySet,
-    pub(crate) ty: QueryType,
-    pub(crate) count: u32,
 }
 #[cfg(send_sync)]
 #[cfg(send_sync)]
@@ -48,12 +46,12 @@ impl QuerySet {
 
     /// Returns the type of queries stored.
     pub fn ty(&self) -> QueryType {
-        self.ty
+        self.inner.ty()
     }
 
     /// Returns the number of query result slots.
     pub fn count(&self) -> u32 {
-        self.count
+        self.inner.count()
     }
 }
 

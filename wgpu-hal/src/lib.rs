@@ -2767,11 +2767,67 @@ pub struct BufferBarrier<'a, B: DynBuffer + ?Sized> {
     pub usage: StateTransition<wgt::BufferUses>,
 }
 
+/// One side of a [`QueueFamilyOwnershipTransfer`].
+///
+/// The named variants stand for the queue families that Vulkan reserves for
+/// resources shared outside the current device; [`Explicit`] carries an
+/// ordinary queue family index, such as the one returned by
+/// `vulkan::Device::queue_family_index`.
+///
+/// [`Explicit`]: QueueFamily::Explicit
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueFamily {
+    /// A specific queue family, identified by its index.
+    Explicit(u32),
+
+    /// The queue family of an external, non-Vulkan API
+    /// (`VK_QUEUE_FAMILY_EXTERNAL`).
+    External,
+
+    /// The queue family of a foreign consumer of the memory, such as a
+    /// different device or the kernel (`VK_QUEUE_FAMILY_FOREIGN_EXT`).
+    ///
+    /// Requires the `VK_EXT_queue_family_foreign` extension.
+    Foreign,
+}
+
+/// A queue family ownership transfer to perform as part of a [`TextureBarrier`].
+///
+/// This is only honored by the Vulkan backend; every other backend ignores it.
+/// It exists so that textures imported from external memory (for example via
+/// `VK_KHR_external_memory`) can have their backing image transferred between
+/// wgpu's queue family and a queue family outside of wgpu's control when the
+/// image is acquired for use and released afterwards.
+///
+/// `src` becomes `VkImageMemoryBarrier::srcQueueFamilyIndex` and `dst` becomes
+/// `VkImageMemoryBarrier::dstQueueFamilyIndex`. To acquire an externally owned
+/// image, set `src` to [`QueueFamily::External`] or [`QueueFamily::Foreign`]
+/// and `dst` to [`QueueFamily::Explicit`] with wgpu's own family, obtained from
+/// `vulkan::Device::queue_family_index`. To release it again, swap the two.
+///
+/// A queue family ownership transfer requires a matching barrier to be recorded
+/// on *both* queues; wgpu-hal only records the barrier on its own queue, so the
+/// owner of the other queue is responsible for recording the complementary one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QueueFamilyOwnershipTransfer {
+    /// The queue family that currently owns the image (`srcQueueFamilyIndex`).
+    pub src: QueueFamily,
+    /// The queue family that should own the image afterwards (`dstQueueFamilyIndex`).
+    pub dst: QueueFamily,
+}
+
 #[derive(Debug, Clone)]
 pub struct TextureBarrier<'a, T: DynTexture + ?Sized> {
     pub texture: &'a T,
     pub range: wgt::ImageSubresourceRange,
     pub usage: StateTransition<wgt::TextureUses>,
+    /// An optional Vulkan queue family ownership transfer to perform alongside
+    /// the layout/access transition described by `usage`.
+    ///
+    /// This is honored only by the Vulkan backend; all other backends ignore
+    /// it. Leave it as `None` for the common case where no ownership transfer
+    /// is required. See [`QueueFamilyOwnershipTransfer`] for details.
+    pub queue_family_ownership_transfer: Option<QueueFamilyOwnershipTransfer>,
 }
 
 #[derive(Clone, Copy, Debug)]

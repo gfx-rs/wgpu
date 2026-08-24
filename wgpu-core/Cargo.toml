@@ -82,7 +82,7 @@ serde = [
 trace = ["serde", "std", "dep:ron", "naga/serialize", "wgpu-types/trace"]
 
 ## Enable API replaying
-replay = ["serde", "naga/deserialize"]
+replay = ["serde", "naga/deserialize", "std"]
 
 #! ### Shading Language Support
 # --------------------------------------------------------------------
@@ -111,7 +111,7 @@ fragile-send-sync-non-atomic-wasm = [
 
 ## Enable certain items to be `Send` and `Sync` when they would not otherwise be.
 ## Also enables backtraces in some error cases when also under cfg(debug_assertions).
-std = []
+std = ["wgpu-sync/std"]
 
 #! ### External libraries
 # --------------------------------------------------------------------
@@ -186,6 +186,7 @@ naga.workspace = true
 naga-types.workspace = true
 wgpu-naga-bridge.workspace = true
 wgpu-hal.workspace = true
+wgpu-sync = { workspace = true, default-features = false }
 wgpu-types.workspace = true
 
 arrayvec.workspace = true
@@ -198,13 +199,12 @@ hashbrown.workspace = true
 indexmap.workspace = true
 log.workspace = true
 macro_rules_attribute = { workspace = true, optional = true }
-once_cell = { workspace = true, features = ["std"] }
-parking_lot.workspace = true
+num-traits = { workspace = true }
 profiling = { workspace = true, default-features = false }
 raw-window-handle.workspace = true
 ron = { workspace = true, optional = true }
 rustc-hash.workspace = true
-serde = { workspace = true, features = ["default", "derive"], optional = true }
+serde = { workspace = true, features = ["derive"], default-features = false, optional = true }
 smallvec.workspace = true
 thiserror.workspace = true
 

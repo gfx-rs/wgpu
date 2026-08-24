@@ -45,6 +45,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgpu: true,
     },
     ExampleDesc {
+        name: "error_scope",
+        function: wgpu_examples::error_scope::main,
+        webgl: true,
+        webgpu: true,
+    },
+    ExampleDesc {
         name: "hello_synchronization",
         function: wgpu_examples::hello_synchronization::main,
         webgl: false, // No canvas for WebGL
