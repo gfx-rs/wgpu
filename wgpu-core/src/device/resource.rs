@@ -14,6 +14,7 @@ use hal::ShouldBeNonZeroExt;
 
 use arrayvec::ArrayVec;
 use bitflags::Flags;
+use scopeguard::{guard, ScopeGuard};
 use smallvec::SmallVec;
 use wgpu_sync::atomic::{AtomicBool, Ordering};
 use wgpu_sync::OnceCell;
@@ -220,22 +221,6 @@ impl DeferredBufferMapPendingClosures {
     }
 }
 
-/// Resources associated with a device.
-///
-/// This struct exists so that resources can be cleaned up properly on error returns
-/// from [`Device::new`].
-///
-/// [`Device::timestamp_normalizer`] is late-initialized after [`Device::new`], so it is not
-/// included here.
-struct DeviceResources<'a> {
-    raw: &'a dyn hal::DynDevice,
-    zero_buffer: Option<Box<dyn hal::DynBuffer>>,
-    empty_bgl: Option<Box<dyn hal::DynBindGroupLayout>>,
-    default_external_texture_params_buffer: Option<Box<dyn hal::DynBuffer>>,
-    fence: Option<Box<dyn hal::DynFence>>,
-    indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
-}
-
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 pub struct Device {
@@ -338,45 +323,12 @@ impl fmt::Debug for Device {
     }
 }
 
-impl Drop for DeviceResources<'_> {
-    fn drop(&mut self) {
-        if let Some(indirect_validation) = self.indirect_validation.take() {
-            indirect_validation.dispose(self.raw);
-        }
-        unsafe {
-            if let Some(zero_buffer) = self.zero_buffer.take() {
-                self.raw.destroy_buffer(zero_buffer);
-            }
-            if let Some(empty_bgl) = self.empty_bgl.take() {
-                self.raw.destroy_bind_group_layout(empty_bgl);
-            }
-            if let Some(default_external_texture_params_buffer) =
-                self.default_external_texture_params_buffer.take()
-            {
-                self.raw
-                    .destroy_buffer(default_external_texture_params_buffer);
-            }
-            if let Some(fence) = self.fence.take() {
-                self.raw.destroy_fence(fence);
-            }
-        }
-    }
-}
-
 impl Drop for Device {
     #[allow(trivial_casts)]
     fn drop(&mut self) {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
-
-        // The timestamp normalizer is late-initialized, so it is not included in `DeviceResources`.
-        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
-            timestamp_normalizer.dispose(self.raw.as_ref());
-        }
-
-        // Transfer the rest of the resources back to `DeviceResources`, which cleans them
-        // up for us.
 
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this
         // point.
@@ -389,15 +341,19 @@ impl Drop for Device {
             unsafe { ManuallyDrop::take(&mut self.default_external_texture_params_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence) };
-
-        drop(DeviceResources {
-            raw: self.raw.as_ref(),
-            zero_buffer: Some(zero_buffer),
-            empty_bgl: Some(empty_bgl),
-            default_external_texture_params_buffer: Some(default_external_texture_params_buffer),
-            fence: Some(fence),
-            indirect_validation: self.indirect_validation.take(),
-        });
+        if let Some(indirect_validation) = self.indirect_validation.take() {
+            indirect_validation.dispose(self.raw.as_ref());
+        }
+        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
+            timestamp_normalizer.dispose(self.raw.as_ref());
+        }
+        unsafe {
+            self.raw.destroy_buffer(zero_buffer);
+            self.raw.destroy_bind_group_layout(empty_bgl);
+            self.raw
+                .destroy_buffer(default_external_texture_params_buffer);
+            self.raw.destroy_fence(fence);
+        }
     }
 }
 
@@ -533,17 +489,13 @@ impl Device {
         let ordered_buffer_usages = adapter.raw.adapter.get_ordered_buffer_usages();
         let ordered_texture_usages = adapter.raw.adapter.get_ordered_texture_usages();
 
-        let mut resources = DeviceResources {
-            raw: raw_device.as_ref(),
-            zero_buffer: None,
-            empty_bgl: None,
-            default_external_texture_params_buffer: None,
-            fence: None,
-            indirect_validation: None,
-        };
+        // Resources requiring explicit destruction ahead of the device are wrapped in
+        // `ScopeGuard`s, which are defused just before the `Device` takes ownership of the
+        // resources.
+        let raw = raw_device.as_ref();
 
-        resources.fence =
-            Some(unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?);
+        let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
+        let fence = guard(fence, |fence| unsafe { raw.destroy_fence(fence) });
 
         let command_allocator = command::CommandAllocator::new();
 
@@ -557,43 +509,45 @@ impl Device {
         };
 
         // Create zeroed buffer used for texture clears (and raytracing if required).
-        resources.zero_buffer = Some(
-            unsafe {
-                raw_device.create_buffer(&hal::BufferDescriptor {
-                    label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
-                    size: ZERO_BUFFER_SIZE,
-                    usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
-                    memory_flags: hal::MemoryFlags::empty(),
-                })
-            }
-            .map_err(DeviceError::from_hal)?,
-        );
+        let zero_buffer = unsafe {
+            raw_device.create_buffer(&hal::BufferDescriptor {
+                label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
+                size: ZERO_BUFFER_SIZE,
+                usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
+                memory_flags: hal::MemoryFlags::empty(),
+            })
+        }
+        .map_err(DeviceError::from_hal)?;
+        let zero_buffer = guard(zero_buffer, |buffer| unsafe { raw.destroy_buffer(buffer) });
 
-        resources.empty_bgl = Some(
-            unsafe {
-                raw_device.create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
-                    label: None,
-                    flags: hal::BindGroupLayoutFlags::empty(),
-                    entries: &[],
-                })
-            }
-            .map_err(DeviceError::from_hal)?,
-        );
+        let empty_bgl = unsafe {
+            raw_device.create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
+                label: None,
+                flags: hal::BindGroupLayoutFlags::empty(),
+                entries: &[],
+            })
+        }
+        .map_err(DeviceError::from_hal)?;
+        let empty_bgl = guard(empty_bgl, |bgl| unsafe {
+            raw.destroy_bind_group_layout(bgl)
+        });
 
-        resources.default_external_texture_params_buffer = Some(
-            unsafe {
-                raw_device.create_buffer(&hal::BufferDescriptor {
-                    label: hal_label(
-                        Some("(wgpu internal) default external texture params buffer"),
-                        instance_flags,
-                    ),
-                    size: size_of::<ExternalTextureParams>() as _,
-                    usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
-                    memory_flags: hal::MemoryFlags::empty(),
-                })
-            }
-            .map_err(DeviceError::from_hal)?,
-        );
+        let default_external_texture_params_buffer = unsafe {
+            raw_device.create_buffer(&hal::BufferDescriptor {
+                label: hal_label(
+                    Some("(wgpu internal) default external texture params buffer"),
+                    instance_flags,
+                ),
+                size: size_of::<ExternalTextureParams>() as _,
+                usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
+                memory_flags: hal::MemoryFlags::empty(),
+            })
+        }
+        .map_err(DeviceError::from_hal)?;
+        let default_external_texture_params_buffer =
+            guard(default_external_texture_params_buffer, |buffer| unsafe {
+                raw.destroy_buffer(buffer)
+            });
 
         // Cloned as we need them below anyway.
         let alignments = adapter.raw.capabilities.alignments.clone();
@@ -607,29 +561,30 @@ impl Device {
             )
             && limits.max_storage_buffers_per_shader_stage >= 2;
 
-        if enable_indirect_validation {
-            resources.indirect_validation =
-                Some(crate::indirect_validation::IndirectValidation::new(
-                    raw_device.as_ref(),
-                    &desc.required_limits,
-                    &desc.required_features,
-                    instance_flags,
-                    adapter.backend(),
-                )?);
-        }
+        let indirect_validation = if enable_indirect_validation {
+            let indirect_validation = crate::indirect_validation::IndirectValidation::new(
+                raw,
+                &desc.required_limits,
+                &desc.required_features,
+                instance_flags,
+                adapter.backend(),
+            )?;
+            Some(guard(indirect_validation, |indirect_validation| {
+                indirect_validation.dispose(raw)
+            }))
+        } else {
+            None
+        };
 
-        // Error returns after this point could bypass resource cleanup.
+        // Error returns after we start consuming guards could bypass resource cleanup.
         #[deny(clippy::question_mark_used)]
         {
-            let zero_buffer = resources.zero_buffer.take().unwrap();
-            let empty_bgl = resources.empty_bgl.take().unwrap();
-            let default_external_texture_params_buffer = resources
-                .default_external_texture_params_buffer
-                .take()
-                .unwrap();
-            let fence = resources.fence.take().unwrap();
-            let indirect_validation = resources.indirect_validation.take();
-            drop(resources);
+            let zero_buffer = ScopeGuard::into_inner(zero_buffer);
+            let empty_bgl = ScopeGuard::into_inner(empty_bgl);
+            let default_external_texture_params_buffer =
+                ScopeGuard::into_inner(default_external_texture_params_buffer);
+            let fence = ScopeGuard::into_inner(fence);
+            let indirect_validation = indirect_validation.map(ScopeGuard::into_inner);
 
             Ok(Self {
                 raw: raw_device,
