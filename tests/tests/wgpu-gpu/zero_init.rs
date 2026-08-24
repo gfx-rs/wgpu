@@ -6,11 +6,47 @@
 
 use core::num::NonZeroU64;
 
+use wgpu::util::DeviceExt as _;
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, GpuTestInitializer,
+    apply, gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, GpuTestInitializer,
     TestParameters, TestingContext,
 };
+
+/// A way to write data into a texture.
+#[derive(Clone, Copy)]
+#[allow(clippy::enum_variant_names)]
+enum WriteMethod {
+    WriteTexture,
+    CopyBufferToTexture,
+    CopyTextureToTexture,
+}
+
+impl WriteMethod {
+    fn name(self) -> &'static str {
+        match self {
+            WriteMethod::WriteTexture => "write_texture",
+            WriteMethod::CopyBufferToTexture => "copy_buffer_to_texture",
+            WriteMethod::CopyTextureToTexture => "copy_texture_to_texture",
+        }
+    }
+}
+
+/// A way to read data out of a texture.
+#[derive(Clone, Copy)]
+enum ReadMethod {
+    CopyTextureToBuffer,
+    CopyTextureToTexture,
+}
+
+impl ReadMethod {
+    fn name(self) -> &'static str {
+        match self {
+            ReadMethod::CopyTextureToBuffer => "copy_texture_to_buffer",
+            ReadMethod::CopyTextureToTexture => "copy_texture_to_texture",
+        }
+    }
+}
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -27,11 +63,21 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8,
         WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8,
         DYNAMIC_OFFSET_BUFFER_BINDING_INIT,
+        COPY_TEXTURE_TO_BUFFER_3D_SOURCE_ORIGIN_Z_UNINIT,
+        COPY_TEXTURE_TO_TEXTURE_3D_SOURCE_ORIGIN_Z_UNINIT,
+        COPY_BUFFER_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL,
+        COPY_TEXTURE_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL,
+        VERTEX_BUFFER_TAIL_INIT_PLAIN,
+        VERTEX_BUFFER_TAIL_INIT_MAP_WRITE,
+        VERTEX_BUFFER_TAIL_INIT_MAPPED_AT_CREATION,
+        VERTEX_BUFFER_TAIL_INIT_MAP_WRITE_MAPPED_AT_CREATION,
+        COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_ROW_PADDING_INIT,
+        COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_IMAGE_PADDING_INIT,
     ]);
 }
 
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in after submit of the encoder.
-#[gpu_test]
+#[apply(gpu_test!)]
 static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_AFTER_SUBMIT:
     GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
@@ -48,7 +94,7 @@ static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_A
         case.assert_buffers_are_zero().await;
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_IN_SAME_ENCODER:
     GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
@@ -62,7 +108,7 @@ static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_I
         case.assert_buffers_are_zero().await;
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DISCARDING_DEPTH_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_IN_SAME_ENCODER:
     GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -90,7 +136,7 @@ static DISCARDING_DEPTH_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_I
         }
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DISCARDING_EITHER_DEPTH_OR_STENCIL_ASPECT_TEST: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -145,9 +191,12 @@ impl<'ctx> DiscardTestCase<'ctx> {
 
         let texture = ctx.device.create_texture(&TextureDescriptor {
             label: Some("RenderTarget"),
+            // Non-square so a width/height swap in the row-stride math is caught.
+            // `width` is a multiple of `COPY_BYTES_PER_ROW_ALIGNMENT` so
+            // `bytes_per_row` stays aligned for every tested format.
             size: Extent3d {
                 width: COPY_BYTES_PER_ROW_ALIGNMENT,
-                height: COPY_BYTES_PER_ROW_ALIGNMENT,
+                height: COPY_BYTES_PER_ROW_ALIGNMENT / 2,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -352,7 +401,7 @@ impl<'ctx> DiscardTestCase<'ctx> {
 // Tests that a full-extent, single-aspect `write_texture` does not cause
 // *other* aspects of a multi-aspect texture to be considered initialized.
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -375,7 +424,7 @@ static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8: GpuTestC
 // Note: there aren't corresponding `WRITE_TEXTURE_DEPTH_LEAVES_STENCIL_UNINIT_*`
 // cases because the depth aspect of the combined depth/stencil formats cannot
 // be the destination of a `write_texture` call.
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -387,9 +436,10 @@ static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8: GpuTestCo
                 .limits(Limits::downlevel_defaults()),
         )
         .run_async(|ctx| async move {
+            // Non-square so a width/height swap is caught.
             let size = Extent3d {
                 width: 256,
-                height: 256,
+                height: 192,
                 depth_or_array_layers: 1,
             };
 
@@ -445,13 +495,15 @@ static WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8: GpuTestCo
             );
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_NV12)
-                .limits(Limits::downlevel_defaults()),
+                .limits(Limits::downlevel_defaults())
+                // https://github.com/gfx-rs/wgpu/issues/9688
+                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -465,13 +517,15 @@ static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12: GpuTestConfiguration =
             .await;
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_NV12: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_NV12)
-                .limits(Limits::downlevel_defaults()),
+                .limits(Limits::downlevel_defaults())
+                // https://github.com/gfx-rs/wgpu/issues/9688
+                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -485,13 +539,15 @@ static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_NV12: GpuTestConfiguration =
             .await;
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_P010: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_P010 | Features::TEXTURE_FORMAT_16BIT_NORM)
-                .limits(Limits::downlevel_defaults()),
+                .limits(Limits::downlevel_defaults())
+                // https://github.com/gfx-rs/wgpu/issues/9688
+                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -505,13 +561,15 @@ static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_P010: GpuTestConfiguration =
             .await;
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_P010: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_P010 | Features::TEXTURE_FORMAT_16BIT_NORM)
-                .limits(Limits::downlevel_defaults()),
+                .limits(Limits::downlevel_defaults())
+                // https://github.com/gfx-rs/wgpu/issues/9688
+                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -528,7 +586,7 @@ static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_P010: GpuTestConfiguration =
 // The write_texture tests exhaustively cover all the relevant format/aspect combinations.
 // These copy_buffer_to_texture tests only sanity-check one depth/stencil format and one
 // multi-planar format.
-#[gpu_test]
+#[apply(gpu_test!)]
 static COPY_BUFFER_TO_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8:
     GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -548,13 +606,15 @@ static COPY_BUFFER_TO_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8:
         .await;
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static COPY_BUFFER_TO_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_NV12)
-                .limits(Limits::downlevel_defaults()),
+                .limits(Limits::downlevel_defaults())
+                // https://github.com/gfx-rs/wgpu/issues/9688
+                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -574,21 +634,6 @@ struct AspectInfo {
     bpp: u32,
 }
 
-#[derive(Clone, Copy)]
-enum WriteMethod {
-    WriteTexture,
-    CopyBufferToTexture,
-}
-
-impl WriteMethod {
-    fn name(self) -> &'static str {
-        match self {
-            WriteMethod::WriteTexture => "write_texture",
-            WriteMethod::CopyBufferToTexture => "copy_buffer_to_texture",
-        }
-    }
-}
-
 async fn check_depth_stencil_write_leaves_other_uninit(
     ctx: &TestingContext,
     format: TextureFormat,
@@ -596,9 +641,10 @@ async fn check_depth_stencil_write_leaves_other_uninit(
     write_aspect: TextureAspect,
     method: WriteMethod,
 ) {
+    // Non-square so a width/height swap is caught.
     let size = Extent3d {
         width: 256,
-        height: 256,
+        height: 192,
         depth_or_array_layers: 1,
     };
     let (write_bpp, read_aspect, read_bpp) = match write_aspect {
@@ -633,14 +679,15 @@ async fn check_plane_write_leaves_other_plane_uninit(
     method: WriteMethod,
 ) {
     // Plane 1 of NV12/P010 is half resolution in each dimension.
+    // Non-square so a width/height swap is caught.
     let full_size = Extent3d {
         width: 256,
-        height: 256,
+        height: 192,
         depth_or_array_layers: 1,
     };
     let half_size = Extent3d {
         width: 128,
-        height: 128,
+        height: 96,
         depth_or_array_layers: 1,
     };
     let (write_size, write_bpp, read_aspect, read_size, read_bpp) = match write_plane {
@@ -687,9 +734,10 @@ async fn check_write_aspect_leaves_other_uninit(
 ) {
     let texture = ctx.device.create_texture(&TextureDescriptor {
         label: Some("aspect-init test"),
+        // Must match the full-plane / full-aspect size used by the callers.
         size: Extent3d {
             width: 256,
-            height: 256,
+            height: 192,
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
@@ -745,6 +793,9 @@ async fn check_write_aspect_leaves_other_uninit(
                 write.size,
             );
             ctx.queue.submit(Some(encoder.finish()));
+        }
+        WriteMethod::CopyTextureToTexture => {
+            unreachable!("aspect-init tests do not use copy_texture_to_texture")
         }
     }
 
@@ -806,7 +857,7 @@ async fn check_write_aspect_leaves_other_uninit(
 }
 
 // Test that buffer ranges are properly initialized when used with a dynamic offset binding.
-#[gpu_test]
+#[apply(gpu_test!)]
 static DYNAMIC_OFFSET_BUFFER_BINDING_INIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -947,3 +998,717 @@ static DYNAMIC_OFFSET_BUFFER_BINDING_INIT: GpuTestConfiguration = GpuTestConfigu
             data[nonzero.unwrap()],
         );
     });
+
+// Tests of initialization of 3D textures.
+//
+// Init tracking only operates on array layers, not on depth/volume slices
+// of 3D textures. Therefore,
+
+const D3_WIDTH: u32 = 256;
+const D3_HEIGHT: u32 = 2;
+const D3_DEPTH: u32 = 4;
+
+// A read from a fresh 3D texture as a copy *source* at `origin.z >= 1` must
+// trigger initialization of the full texture.
+#[apply(gpu_test!)]
+static COPY_TEXTURE_TO_BUFFER_3D_SOURCE_ORIGIN_Z_UNINIT: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            check_3d_copy_source_init(&ctx, ReadMethod::CopyTextureToBuffer).await;
+        });
+
+#[apply(gpu_test!)]
+static COPY_TEXTURE_TO_TEXTURE_3D_SOURCE_ORIGIN_Z_UNINIT: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            check_3d_copy_source_init(&ctx, ReadMethod::CopyTextureToTexture).await;
+        });
+
+// The first depth slice must be initialized to zero before a partial copy into a fresh 3D
+// texture with destination `origin.z >= 1`.
+#[apply(gpu_test!)]
+static COPY_BUFFER_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            check_3d_copy_dest_init(&ctx, WriteMethod::CopyBufferToTexture).await;
+        });
+
+#[apply(gpu_test!)]
+static COPY_TEXTURE_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            check_3d_copy_dest_init(&ctx, WriteMethod::CopyTextureToTexture).await;
+        });
+
+fn create_3d_texture(ctx: &TestingContext, label: &str, depth: u32) -> Texture {
+    ctx.device.create_texture(&TextureDescriptor {
+        label: Some(label),
+        size: Extent3d {
+            width: D3_WIDTH,
+            height: D3_HEIGHT,
+            depth_or_array_layers: depth,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D3,
+        format: TextureFormat::R8Uint,
+        usage: TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
+        view_formats: &[],
+    })
+}
+
+fn d3_buffer_layout() -> TexelCopyBufferLayout {
+    TexelCopyBufferLayout {
+        offset: 0,
+        bytes_per_row: Some(D3_WIDTH),
+        rows_per_image: Some(D3_HEIGHT),
+    }
+}
+
+async fn map_and_read(ctx: &TestingContext, buffer: &Buffer) -> Vec<u8> {
+    let slice = buffer.slice(..);
+    slice.map_async(MapMode::Read, |_| ());
+    ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+    slice.get_mapped_range().unwrap().to_vec()
+}
+
+async fn check_3d_copy_source_init(ctx: &TestingContext, method: ReadMethod) {
+    const COPY_Z: u32 = 1;
+    let copy_depth = D3_DEPTH - COPY_Z;
+    let copy_size = Extent3d {
+        width: D3_WIDTH,
+        height: D3_HEIGHT,
+        depth_or_array_layers: copy_depth,
+    };
+
+    let src = create_3d_texture(ctx, "3d source init test", D3_DEPTH);
+    let src_info = TexelCopyTextureInfo {
+        texture: &src,
+        mip_level: 0,
+        origin: Origin3d {
+            x: 0,
+            y: 0,
+            z: COPY_Z,
+        },
+        aspect: TextureAspect::All,
+    };
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    match method {
+        ReadMethod::CopyTextureToBuffer => {
+            // The copy source is partial (it starts at origin.z = COPY_Z), so the
+            // readback can't go through `ReadbackBuffers`, which always copies the
+            // full texture from the origin.
+            let readback = ctx.device.create_buffer(&BufferDescriptor {
+                label: Some("3d source readback"),
+                size: (D3_WIDTH * D3_HEIGHT * copy_depth) as u64,
+                usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            encoder.copy_texture_to_buffer(
+                src_info,
+                TexelCopyBufferInfo {
+                    buffer: &readback,
+                    layout: d3_buffer_layout(),
+                },
+                copy_size,
+            );
+            ctx.queue.submit(Some(encoder.finish()));
+
+            let data = map_and_read(ctx, &readback).await;
+            let nonzero = data.iter().position(|&b| b != 0);
+            assert!(
+                nonzero.is_none(),
+                "3D texture used as {} source at origin.z={} read back non-zero from \
+                 never-written memory; first non-zero byte at offset {} = 0x{:02x}",
+                method.name(),
+                COPY_Z,
+                nonzero.unwrap(),
+                data[nonzero.unwrap()],
+            );
+        }
+        ReadMethod::CopyTextureToTexture => {
+            let dst = create_3d_texture(ctx, "3d source init test dst", copy_depth);
+            encoder.copy_texture_to_texture(
+                src_info,
+                TexelCopyTextureInfo {
+                    texture: &dst,
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                copy_size,
+            );
+            // The full `dst` is read back, so route it through `ReadbackBuffers`.
+            let readback_buffers = ReadbackBuffers::new(&ctx.device, &dst);
+            readback_buffers.copy_from(&ctx.device, &mut encoder, &dst);
+            ctx.queue.submit(Some(encoder.finish()));
+
+            assert!(
+                readback_buffers.are_zero(ctx).await,
+                "3D texture used as {} source at origin.z={} read back non-zero from \
+                 never-written memory",
+                method.name(),
+                COPY_Z,
+            );
+        }
+    }
+}
+
+async fn check_3d_copy_dest_init(ctx: &TestingContext, method: WriteMethod) {
+    const DST_Z: u32 = 1;
+    const SENTINEL: u8 = 0xAA;
+    let slice_bytes = (D3_WIDTH * D3_HEIGHT) as usize;
+    let one_slice = Extent3d {
+        width: D3_WIDTH,
+        height: D3_HEIGHT,
+        depth_or_array_layers: 1,
+    };
+
+    let dst = create_3d_texture(ctx, "3d dest init test", D3_DEPTH);
+    let dst_info = TexelCopyTextureInfo {
+        texture: &dst,
+        mip_level: 0,
+        origin: Origin3d {
+            x: 0,
+            y: 0,
+            z: DST_Z,
+        },
+        aspect: TextureAspect::All,
+    };
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    match method {
+        WriteMethod::CopyBufferToTexture => {
+            let src_buffer = ctx.device.create_buffer(&BufferDescriptor {
+                label: Some("3d dest init source"),
+                size: slice_bytes as u64,
+                usage: BufferUsages::COPY_SRC,
+                mapped_at_creation: true,
+            });
+            {
+                let mut view = src_buffer.slice(..).get_mapped_range_mut().unwrap();
+                view.copy_from_slice(&vec![SENTINEL; slice_bytes]);
+            }
+            src_buffer.unmap();
+            encoder.copy_buffer_to_texture(
+                TexelCopyBufferInfo {
+                    buffer: &src_buffer,
+                    layout: d3_buffer_layout(),
+                },
+                dst_info,
+                one_slice,
+            );
+        }
+        WriteMethod::CopyTextureToTexture => {
+            // Initialize the source, then copy a single slice into the destination at z=1.
+            let src_tex = create_3d_texture(ctx, "3d dest init source texture", 1);
+            ctx.queue.write_texture(
+                TexelCopyTextureInfo {
+                    texture: &src_tex,
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                &vec![SENTINEL; slice_bytes],
+                d3_buffer_layout(),
+                one_slice,
+            );
+            ctx.queue.submit(None);
+            encoder.copy_texture_to_texture(
+                TexelCopyTextureInfo {
+                    texture: &src_tex,
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                dst_info,
+                one_slice,
+            );
+        }
+        WriteMethod::WriteTexture => {
+            unreachable!("3D dest-init tests exercise only the encoder copy commands")
+        }
+    }
+    // Submit the partial copy on its own to ensure the init action is applied on its own,
+    // and not in combination with an init action for the readback.
+    ctx.queue.submit(Some(encoder.finish()));
+
+    // The whole texture is read back from the origin, so route it through
+    // `ReadbackBuffers`. The written slice (z = DST_Z) must keep its sentinel data
+    // and every untouched slice must be zero-initialized.
+    let readback_buffers = ReadbackBuffers::new(&ctx.device, &dst);
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    readback_buffers.copy_from(&ctx.device, &mut encoder, &dst);
+    ctx.queue.submit(Some(encoder.finish()));
+
+    let mut expected = vec![0u8; slice_bytes * D3_DEPTH as usize];
+    let written_start = DST_Z as usize * slice_bytes;
+    expected[written_start..written_start + slice_bytes].fill(SENTINEL);
+    readback_buffers
+        .assert_buffer_contents(ctx, &expected)
+        .await;
+}
+
+// Tests that the padding (tail) at the end of a buffer allocation is
+// zero-initialized.
+//
+// The test is effective mainly on Vulkan, where it can exploit the fact that
+// `vkCmdBindVertexBuffers` does not specify the end of the binding, so a vertex
+// shader can fetch a vertex whose bytes lie in the tail. Draw-time bounds
+// checking does not limit the vertex count for indexed draws, so we use an
+// indexed draw whose largest index points at the buffer tail.
+
+const VB_TAIL_VERTEX_STRIDE: u64 = 4;
+const VB_TAIL_VISIBLE_VERTS: u32 = 4;
+
+const VB_TAIL_SHADER: &str = "
+    @group(0) @binding(0) var<storage, read_write> result: array<u32>;
+
+    @vertex
+    fn vs_main(@builtin(vertex_index) ix: u32, @location(0) value: u32) -> @builtin(position) vec4f {
+        result[ix] = value;
+        return vec4f(0.0, 0.0, 0.0, 1.0);
+    }
+
+    @fragment
+    fn fs_main() -> @location(0) vec4f {
+        return vec4f(0.0, 0.0, 0.0, 0.0);
+    }
+";
+
+// `MAP_WRITE` + `VERTEX` requires `MAPPABLE_PRIMARY_BUFFERS`.
+#[apply(gpu_test!)]
+static VERTEX_BUFFER_TAIL_INIT_PLAIN: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::VERTEX_WRITABLE_STORAGE)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        for app_writes in [false, true] {
+            check_vertex_buffer_tail_init(&ctx, false, false, app_writes).await;
+        }
+    });
+
+#[apply(gpu_test!)]
+static VERTEX_BUFFER_TAIL_INIT_MAP_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::VERTEX_WRITABLE_STORAGE | Features::MAPPABLE_PRIMARY_BUFFERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        for app_writes in [false, true] {
+            check_vertex_buffer_tail_init(&ctx, true, false, app_writes).await;
+        }
+    });
+
+#[apply(gpu_test!)]
+static VERTEX_BUFFER_TAIL_INIT_MAPPED_AT_CREATION: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .features(Features::VERTEX_WRITABLE_STORAGE)
+                .limits(Limits::downlevel_defaults()),
+        )
+        .run_async(|ctx| async move {
+            for app_writes in [false, true] {
+                check_vertex_buffer_tail_init(&ctx, false, true, app_writes).await;
+            }
+        });
+
+#[apply(gpu_test!)]
+static VERTEX_BUFFER_TAIL_INIT_MAP_WRITE_MAPPED_AT_CREATION: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .features(Features::VERTEX_WRITABLE_STORAGE | Features::MAPPABLE_PRIMARY_BUFFERS)
+                .limits(Limits::downlevel_defaults()),
+        )
+        .run_async(|ctx| async move {
+            for app_writes in [false, true] {
+                check_vertex_buffer_tail_init(&ctx, true, true, app_writes).await;
+            }
+        });
+
+async fn check_vertex_buffer_tail_init(
+    ctx: &TestingContext,
+    map_write: bool,
+    mapped_at_creation: bool,
+    app_writes: bool,
+) {
+    let case_desc = format!(
+        "map_write={map_write}, mapped_at_creation={mapped_at_creation}, app_writes={app_writes}"
+    );
+
+    let vb_size = VB_TAIL_VISIBLE_VERTS as u64 * VB_TAIL_VERTEX_STRIDE;
+    let vertex_data: Vec<u32> = (0..VB_TAIL_VISIBLE_VERTS)
+        .map(|i| 0xA0A0_0000 + i)
+        .collect();
+    let vertex_data_bytes: &[u8] = bytemuck::cast_slice(&vertex_data);
+
+    // Add `COPY_DST` if the application needs it to write via the queue;
+    // it does not affect which tail-init path is taken.
+    let mut usage = BufferUsages::VERTEX;
+    if map_write {
+        usage |= BufferUsages::MAP_WRITE;
+    } else if app_writes && !mapped_at_creation {
+        usage |= BufferUsages::COPY_DST;
+    }
+
+    let vertex_buffer = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("vertex buffer under test"),
+        size: vb_size,
+        usage,
+        mapped_at_creation,
+    });
+
+    // Fill (or leave zero) the application-visible portion of the buffer.
+    if mapped_at_creation {
+        // The buffer is mapped at creation; write into it if desired, then unmap.
+        if app_writes {
+            let mut view = vertex_buffer.slice(..).get_mapped_range_mut().unwrap();
+            view.copy_from_slice(vertex_data_bytes);
+        }
+        vertex_buffer.unmap();
+    } else if app_writes {
+        if map_write {
+            vertex_buffer.slice(..).map_async(MapMode::Write, |_| ());
+            ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+            {
+                let mut view = vertex_buffer.slice(..).get_mapped_range_mut().unwrap();
+                view.copy_from_slice(vertex_data_bytes);
+            }
+            vertex_buffer.unmap();
+        } else {
+            ctx.queue.write_buffer(&vertex_buffer, 0, vertex_data_bytes);
+        }
+    }
+
+    // Index buffer whose largest index (`VB_TAIL_VISIBLE_VERTS`) points one vertex
+    // past the visible area, into the tail.
+    let indices: Vec<u32> = (0..=VB_TAIL_VISIBLE_VERTS).collect();
+    let index_buffer = ctx.device.create_buffer_init(&util::BufferInitDescriptor {
+        label: Some("index buffer"),
+        contents: bytemuck::cast_slice(&indices),
+        usage: BufferUsages::INDEX,
+    });
+
+    // The vertex shader writes each fetched value into this buffer at `vertex_index`.
+    let result_len = indices.len();
+    let result_buffer = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("result buffer"),
+        size: (result_len * core::mem::size_of::<u32>()) as u64,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+    let readback = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("result readback"),
+        size: result_buffer.size(),
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let output_texture = ctx.device.create_texture(&TextureDescriptor {
+        label: Some("unused render attachment"),
+        size: Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba8UnormSrgb,
+        usage: TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    let output_view = output_texture.create_view(&Default::default());
+
+    let shader = ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("vertex buffer tail shader"),
+        source: ShaderSource::Wgsl(VB_TAIL_SHADER.into()),
+    });
+
+    let bgl = ctx
+        .device
+        .create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+    let pipeline_layout = ctx
+        .device
+        .create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(&bgl)],
+            immediate_size: 0,
+        });
+
+    let pipeline = ctx
+        .device
+        .create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("vertex buffer tail pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Some(VertexBufferLayout {
+                    array_stride: VB_TAIL_VERTEX_STRIDE,
+                    step_mode: VertexStepMode::Vertex,
+                    attributes: &[VertexAttribute {
+                        format: VertexFormat::Uint32,
+                        offset: 0,
+                        shader_location: 0,
+                    }],
+                })],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(output_texture.format().into())],
+                compilation_options: Default::default(),
+            }),
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::PointList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
+    let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+        label: None,
+        layout: &bgl,
+        entries: &[BindGroupEntry {
+            binding: 0,
+            resource: result_buffer.as_entire_binding(),
+        }],
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    {
+        let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("vertex buffer tail pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &output_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(Color::default()),
+                    store: StoreOp::Store,
+                },
+            })],
+            ..Default::default()
+        });
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        pass.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);
+        pass.draw_indexed(0..result_len as u32, 0, 0..1);
+    }
+    encoder.copy_buffer_to_buffer(&result_buffer, 0, &readback, 0, result_buffer.size());
+    ctx.queue.submit([encoder.finish()]);
+
+    let data = map_and_read(ctx, &readback).await;
+    let result: Vec<u32> = bytemuck::cast_slice(&data).to_vec();
+
+    // Visible vertices should match vertex data if the application wrote it, or
+    // be zero if not.
+    for i in 0..VB_TAIL_VISIBLE_VERTS as usize {
+        let got = result[i];
+        if app_writes {
+            assert_eq!(
+                got, vertex_data[i],
+                "did not read expected non-zero data in visible area \
+                 (case: {case_desc}, vertex {i}): expected 0x{:08x}, got 0x{got:08x}",
+                vertex_data[i],
+            );
+        } else {
+            assert_eq!(
+                got, 0,
+                "did not read expected zero (uninitialized) data in visible area \
+                 (case: {case_desc}, vertex {i}): got 0x{got:08x}",
+            );
+        }
+    }
+
+    // Tail vertex: never written by the application, must be zero-initialized.
+    let tail = result[VB_TAIL_VISIBLE_VERTS as usize];
+    assert_eq!(
+        tail, 0,
+        "did not read expected zero data in padding area (case: {case_desc}): got 0x{tail:08x}",
+    );
+}
+
+// Tests that the padding of a `copy_texture_to_buffer()` destination is not filled
+// with the leftovers of previously freed memory.
+//
+// The test is effective mainly on DX12, where a destination offset that is not a
+// multiple of `D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT` (512) forces the copy to go
+// through a backend-private intermediate buffer. The texture copy only writes the
+// texel bytes of each row of that buffer, but the whole buffer is then copied into
+// the destination, so the padding of the intermediate buffer has to be zeroed first.
+
+// A single pixel wide texture, so that each row of the copy is 4 bytes of texel data
+// followed by 252 bytes of padding.
+#[apply(gpu_test!)]
+static COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_ROW_PADDING_INIT: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            test_copy_texture_to_buffer_padding_init(
+                &ctx,
+                TextureFormat::Rgba8Unorm,
+                Extent3d {
+                    width: 1,
+                    height: 512,
+                    depth_or_array_layers: 1,
+                },
+                256,
+                512,
+            )
+            .await;
+        });
+
+// Padding that neither starts nor ends at a four byte boundary, plus padding
+// between the array layers.
+#[apply(gpu_test!)]
+static COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_IMAGE_PADDING_INIT: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            test_copy_texture_to_buffer_padding_init(
+                &ctx,
+                TextureFormat::R8Unorm,
+                Extent3d {
+                    width: 3,
+                    height: 8,
+                    depth_or_array_layers: 3,
+                },
+                256,
+                12,
+            )
+            .await;
+        });
+
+async fn test_copy_texture_to_buffer_padding_init(
+    ctx: &TestingContext,
+    format: TextureFormat,
+    size: Extent3d,
+    bytes_per_row: u32,
+    rows_per_image: u32,
+) {
+    /// A legal `copy_texture_to_buffer()` destination offset that is not a multiple of
+    /// D3D12's 512 byte texture data placement alignment.
+    const T2B_PAD_OFFSET: u64 = 4;
+    /// How many copies to perform, to give the allocator several chances to hand out
+    /// the memory of the freed seed buffers.
+    const T2B_PAD_COPIES: u64 = 8;
+
+    let texel_bytes = format.block_copy_size(None).unwrap();
+    let row_bytes = size.width * texel_bytes;
+    let image_stride = u64::from(bytes_per_row) * u64::from(rows_per_image);
+    let image_bytes = u64::from(bytes_per_row) * u64::from(size.height - 1) + u64::from(row_bytes);
+    // The copy footprint does not include the padding after its very last row.
+    let footprint = u64::from(size.depth_or_array_layers - 1) * image_stride + image_bytes;
+    // Round up so that every copy's destination offset is congruent to
+    // `T2B_PAD_OFFSET` modulo 512, and thus unaligned for DX12.
+    let stride = footprint.next_multiple_of(512);
+
+    // Dirty some device memory with a recognizable pattern and release it again, so
+    // that the buffers the backend allocates for the copies below are likely to be
+    // suballocated on top of it.
+    let markers: Vec<u32> = (0..footprint.next_multiple_of(4) as usize / 4)
+        .map(|word_index| 0xA73C_0001 + word_index as u32)
+        .collect();
+    let seed_buffers: Vec<Buffer> = (0..T2B_PAD_COPIES)
+        .map(|i| {
+            ctx.device.create_buffer_init(&util::BufferInitDescriptor {
+                label: Some(&format!("copy padding seed {i}")),
+                contents: bytemuck::cast_slice(&markers),
+                usage: BufferUsages::COPY_SRC,
+            })
+        })
+        .collect();
+    ctx.queue.submit(None);
+    ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+    for seed_buffer in &seed_buffers {
+        seed_buffer.destroy();
+    }
+    drop(seed_buffers);
+    ctx.queue.submit(None);
+    ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+
+    let texture = ctx.device.create_texture(&TextureDescriptor {
+        label: Some("copy padding source"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format,
+        usage: TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+
+    let readback = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("copy padding readback"),
+        size: T2B_PAD_OFFSET + stride * T2B_PAD_COPIES,
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+    for i in 0..T2B_PAD_COPIES {
+        encoder.copy_texture_to_buffer(
+            texture.as_image_copy(),
+            TexelCopyBufferInfo {
+                buffer: &readback,
+                layout: TexelCopyBufferLayout {
+                    offset: T2B_PAD_OFFSET + stride * i,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: Some(rows_per_image),
+                },
+            },
+            size,
+        );
+    }
+    ctx.queue.submit([encoder.finish()]);
+
+    // Neither the source texture nor the destination buffer was ever written by the
+    // application, so the whole buffer must read back as zero. The interesting part is
+    // the footprint of each copy, texel data and padding alike: the copies mark it
+    // initialized, so mapping the buffer will not zero it for us.
+    let data = map_and_read(ctx, &readback).await;
+    assert!(
+        data.iter().all(|&byte| byte == 0),
+        "the destination buffer of copies from a never-written texture is not all zero",
+    );
+}

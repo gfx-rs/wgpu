@@ -18,6 +18,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     /// Except for the function's entry block, `block_id` should be the label of
     /// a block we've seen mentioned before, with an entry in
     /// `block_ctx.body_for_label` to tell us which `Body` it contributes to.
+    #[allow(clippy::large_stack_frames)] // TODO(https://github.com/gfx-rs/wgpu/issues/9456)
     pub(in crate::front::spv) fn next_block(
         &mut self,
         block_id: spirv::Word,
@@ -2532,7 +2533,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 }
                 Op::GroupNonUniformBallot => {
                     inst.expect(5)?;
-                    block.extend(emitter.finish(ctx.expressions));
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let exec_scope_id = self.next()?;
@@ -2563,6 +2563,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         Some(predicate_handle)
                     };
 
+                    block.extend(emitter.finish(ctx.expressions));
                     let result_handle = ctx
                         .expressions
                         .append(crate::Expression::SubgroupBallotResult, span);
@@ -2602,7 +2603,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | Op::GroupNonUniformLogicalAnd
                 | Op::GroupNonUniformLogicalOr
                 | Op::GroupNonUniformLogicalXor => {
-                    block.extend(emitter.finish(ctx.expressions));
                     inst.expect(
                         if matches!(inst.op, Op::GroupNonUniformAll | Op::GroupNonUniformAny) {
                             5
@@ -2637,6 +2637,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     let argument_lookup = self.lookup_expression.lookup(argument_id)?;
                     let argument_handle = get_expr_handle!(argument_id, argument_lookup);
+
+                    block.extend(emitter.finish(ctx.expressions));
 
                     let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
                     let _exec_scope = resolve_constant(ctx.gctx(), &exec_scope_const.inner)
@@ -2710,7 +2712,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     } else {
                         6
                     })?;
-                    block.extend(emitter.finish(ctx.expressions));
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let exec_scope_id = self.next()?;
@@ -2751,6 +2752,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         }
                     };
 
+                    block.extend(emitter.finish(ctx.expressions));
                     let result_type = self.lookup_type.lookup(result_type_id)?;
 
                     let result_handle = ctx.expressions.append(
@@ -2780,7 +2782,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 }
                 Op::GroupNonUniformQuadSwap => {
                     inst.expect(6)?;
-                    block.extend(emitter.finish(ctx.expressions));
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let exec_scope_id = self.next()?;
@@ -2789,6 +2790,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     let argument_lookup = self.lookup_expression.lookup(argument_id)?;
                     let argument_handle = get_expr_handle!(argument_id, argument_lookup);
+
+                    block.extend(emitter.finish(ctx.expressions));
 
                     let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
                     let _exec_scope = resolve_constant(ctx.gctx(), &exec_scope_const.inner)

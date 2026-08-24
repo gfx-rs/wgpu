@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 452" width="460" height="452" font-family="sans-serif"><title>CIE 1931 chromaticity diagram with sRGB, Display-P3 and BT.2020 gamut triangles</title><desc>The red, green and blue primaries of sRGB/BT.709, Display-P3 and BT.2020 plotted as nested triangles inside the CIE 1931 spectral locus, sharing the D65 white point. A wider triangle can express more colors.</desc>
+<style>.ax{stroke:#888;stroke-width:1;fill:none}.lbl{fill:#888;font-size:13px}.tick{fill:#888;font-size:10px}.gname{font-size:13px;font-weight:bold}</style>
+<line class="ax" x1="58.0" y1="410.0" x2="440.0" y2="410.0"/><line class="ax" x1="58.0" y1="410.0" x2="58.0" y2="30.0"/>
+<line class="ax" x1="58.0" y1="410.0" x2="58.0" y2="414.0"/><text class="tick" x="58.0" y="425.0" text-anchor="middle">0</text><line class="ax" x1="159.9" y1="410.0" x2="159.9" y2="414.0"/><text class="tick" x="159.9" y="425.0" text-anchor="middle">0.2</text><line class="ax" x1="261.7" y1="410.0" x2="261.7" y2="414.0"/><text class="tick" x="261.7" y="425.0" text-anchor="middle">0.4</text><line class="ax" x1="363.6" y1="410.0" x2="363.6" y2="414.0"/><text class="tick" x="363.6" y="425.0" text-anchor="middle">0.6</text><line class="ax" x1="54.0" y1="410.0" x2="58.0" y2="410.0"/><text class="tick" x="51.0" y="413.0" text-anchor="end">0</text><line class="ax" x1="54.0" y1="320.6" x2="58.0" y2="320.6"/><text class="tick" x="51.0" y="323.6" text-anchor="end">0.2</text><line class="ax" x1="54.0" y1="231.2" x2="58.0" y2="231.2"/><text class="tick" x="51.0" y="234.2" text-anchor="end">0.4</text><line class="ax" x1="54.0" y1="141.8" x2="58.0" y2="141.8"/><text class="tick" x="51.0" y="144.8" text-anchor="end">0.6</text><line class="ax" x1="54.0" y1="52.4" x2="58.0" y2="52.4"/><text class="tick" x="51.0" y="55.4" text-anchor="end">0.8</text>
+<text class="lbl" x="249" y="440.0" text-anchor="middle">CIE x</text>
+<text class="lbl" x="20" y="220" text-anchor="middle" transform="rotate(-90 20 220)">CIE y</text>
+<polygon points="146.7,407.8 146.5,407.8 146.3,407.9 145.9,407.9 145.3,407.7 144.0,406.9 141.7,405.1 137.8,402.1 131.3,396.7 121.2,384.2 104.5,350.7 81.1,278.1 62.2,169.3 65.1,74.6 95.8,37.2 136.8,49.7 174.9,72.8 211.6,100.5 248.0,130.8 284.2,162.0 319.0,192.5 351.0,220.4 377.4,243.5 397.1,260.7 410.2,272.2 418.6,279.5 424.2,284.4 427.8,287.5 429.8,289.3 430.8,290.2 431.5,290.8 432.2,291.4" fill="#9999991f" stroke="#9a9a9a" stroke-width="1"/>
+<polygon points="418.6,279.5 144.6,53.7 124.7,389.4" fill="#5b7bff14" stroke="#6f8cff" stroke-width="1.6" stroke-dasharray="5 3"/>
+<polygon points="404.3,266.9 193.0,101.5 134.4,383.2" fill="#23a86620" stroke="#23a866" stroke-width="1.6" stroke-dasharray="2 2"/>
+<polygon points="384.0,262.5 210.8,141.8 134.4,383.2" fill="#ff444418" stroke="#ee5555" stroke-width="1.8"/>
+<circle cx="217.3" cy="262.9" r="3.2" fill="#888"/>
+<text class="tick" x="224.3" y="265.9" fill="#aaa">D65</text>
+<text class="gname" x="225" y="230" fill="#ee5555">sRGB / BT.709</text>
+<text class="gname" x="210.8" y="88.1" fill="#23a866">Display-P3</text>
+<text class="gname" x="147.1" y="45.6" fill="#6f8cff">BT.2020</text>
+</svg>

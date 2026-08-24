@@ -908,6 +908,7 @@ impl BlockContext<'_> {
 /// type `type_id`, and the result of any `Load` will be immediately converted
 /// to the base type. This is used for matrices with 2 rows, as well as any
 /// arrays or structs containing such matrices.
+#[derive(Debug)]
 pub struct Std140CompatTypeInfo {
     /// ID of the std140 compatible type declaration.
     type_id: Word,
@@ -916,6 +917,7 @@ pub struct Std140CompatTypeInfo {
     member_indices: Vec<u32>,
 }
 
+#[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,
@@ -1224,4 +1226,5 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::DRAW_INDEX
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE
+        | Caps::LINEAR_INTERPOLATION
 }

@@ -167,8 +167,28 @@ impl FailureCase {
     }
 
     /// Tests running on either Vulkan driver on macOS.
-    pub fn mac_vulkan(f: impl Fn(FailureCase) -> FailureCase) -> Vec<Self> {
-        vec![f(FailureCase::molten_vk()), f(FailureCase::kosmic_krisp())]
+    pub fn mac_vulkan() -> Vec<Self> {
+        vec![FailureCase::molten_vk(), FailureCase::kosmic_krisp()]
+    }
+
+    /// Tests running on macOS (both Vulkan and Metal).
+    pub fn mac() -> Vec<Self> {
+        let mut cases = Self::mac_vulkan();
+        cases.push(FailureCase::backend(wgpu::Backends::METAL));
+        cases
+    }
+
+    pub fn lvp_poison_memory(message: &'static str) -> Self {
+        if let Ok("true") = std::env::var("LVP_POISON_MEMORY").as_deref() {
+            FailureCase {
+                backends: Some(wgpu::Backends::VULKAN),
+                driver: Some("llvmpipe"),
+                reasons: vec![FailureReason::panic().with_message(message)],
+                ..FailureCase::default()
+            }
+        } else {
+            FailureCase::never()
+        }
     }
 
     /// Return the reasons why this case should fail.

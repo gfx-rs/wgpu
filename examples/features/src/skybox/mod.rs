@@ -80,7 +80,8 @@ impl Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             label: None,
             view_formats: &[],
         });
@@ -469,7 +470,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox",
     image_path: "/examples/features/src/skybox/screenshot.png",
@@ -484,7 +485,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
 };
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-bc7",
     image_path: "/examples/features/src/skybox/screenshot_bc7.png",
@@ -497,7 +498,7 @@ pub static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::Exa
 };
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-etc2",
     image_path: "/examples/features/src/skybox/screenshot_etc2.png",
@@ -510,7 +511,7 @@ pub static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::Ex
 };
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST_ASTC: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-astc",
     image_path: "/examples/features/src/skybox/screenshot_astc.png",

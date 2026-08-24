@@ -312,6 +312,57 @@ impl super::CommandEncoder {
         }
     }
 
+    /// Zero the padding of `buffer`, which holds the linear footprint of `region`
+    /// starting at offset zero.
+    unsafe fn clear_buf_tex_padding(
+        &mut self,
+        buffer: &super::Buffer,
+        region: &crate::BufferTextureCopy,
+        tex_fmt: wgt::TextureFormat,
+    ) {
+        let info = region
+            .buffer_layout
+            .get_buffer_texture_copy_info(
+                tex_fmt,
+                region.texture_base.aspect.map(),
+                &region.size.into(),
+            )
+            .unwrap();
+
+        let has_row_padding = info.row_stride_bytes > info.row_bytes_dense;
+        for image in 0..info.depth_or_array_layers {
+            let image_base = info.offset + image * info.image_stride_bytes;
+
+            if has_row_padding {
+                for row in 0..info.image_rows_dense - 1 {
+                    let row_base = image_base + row * info.row_stride_bytes;
+                    let start = row_base + info.row_bytes_dense;
+                    let end = row_base + info.row_stride_bytes;
+                    unsafe { self.clear_buffer(buffer, start..end) };
+                }
+            }
+
+            // Everything between the end of the last row of the image and the start
+            // of the next image is padding.
+            if image < info.depth_or_array_layers - 1 {
+                let start = image_base + info.image_bytes_dense;
+                let end = image_base + info.image_stride_bytes;
+                unsafe { self.clear_buffer(buffer, start..end) };
+            }
+        }
+    }
+
+    /// Allocate a scratch buffer holding the linear footprint of `region` at offset
+    /// zero, and run `copy_op` with it while it is in the [`BufferUses::COPY_DST`]
+    /// state. On return, the buffer has been transitioned to [`BufferUses::COPY_SRC`].
+    ///
+    /// The contents of the buffer are *not* initialized, so `copy_op` must write
+    /// every byte that is subsequently read out of it. In particular, if the whole
+    /// footprint is copied somewhere the application can observe, `copy_op` has to
+    /// call [`Self::clear_buf_tex_padding`].
+    ///
+    /// [`BufferUses::COPY_DST`]: wgt::BufferUses::COPY_DST
+    /// [`BufferUses::COPY_SRC`]: wgt::BufferUses::COPY_SRC
     unsafe fn buf_tex_intermediate<T>(
         &mut self,
         region: crate::BufferTextureCopy,
@@ -419,9 +470,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
             list.set_name(label)?;
         }
 
-        self.list = Some(list);
+        // Ensure clean state even if the last encoding did not complete normally.
         self.temp.clear();
         self.pass.clear();
+        self.end_of_pass_timer_query = None;
+
+        self.list = Some(list);
         Ok(())
     }
     unsafe fn discard_encoding(&mut self) {
@@ -793,6 +847,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         r,
                         src.format,
                         |this, buf, size, intermediate_region| {
+                            this.clear_buf_tex_padding(buf, &intermediate_region, src.format);
                             copy_aligned(this, src, buf, intermediate_region);
                             crate::BufferCopy {
                                 src_offset: 0,
@@ -1836,5 +1891,30 @@ impl crate::CommandEncoder for super::CommandEncoder {
         _command_buffers: &[&super::CommandBuffer],
         _dependencies: &[&super::AccelerationStructure],
     ) {
+    }
+
+    unsafe fn begin_ray_tracing_pass(&mut self, _desc: &crate::RayTracingPassDescriptor) {
+        unreachable!("Ray tracing pipelines not supported")
+    }
+
+    unsafe fn end_ray_tracing_pass(&mut self) {
+        unreachable!("Ray tracing pipelines not supported")
+    }
+
+    unsafe fn set_ray_tracing_pipeline(
+        &mut self,
+        _pipeline: &<Self::A as crate::Api>::RayTracingPipeline,
+    ) {
+        unreachable!("Ray tracing pipelines not supported")
+    }
+
+    unsafe fn trace_rays(
+        &mut self,
+        _count: [u32; 3],
+        _ray_generation_group_data: crate::PipelineGroupData<super::Buffer>,
+        _miss_group_data: crate::PipelineGroupData<super::Buffer>,
+        _intersection_group_data: crate::PipelineGroupData<super::Buffer>,
+    ) {
+        unreachable!("Ray tracing pipelines not supported")
     }
 }

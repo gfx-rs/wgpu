@@ -247,6 +247,6 @@ impl super::Instance {
         let surface = unsafe { display_instance.create_display_plane_surface(&create_info, None) }
             .expect("Failed to create DRM surface");
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
 }

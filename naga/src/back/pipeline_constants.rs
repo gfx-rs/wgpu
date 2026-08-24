@@ -1,5 +1,6 @@
 use alloc::{
     borrow::Cow,
+    boxed::Box,
     string::{String, ToString},
     vec::Vec,
 };
@@ -40,7 +41,7 @@ pub enum PipelineConstantError {
     #[error(transparent)]
     ConstantEvaluatorError(#[from] ConstantEvaluatorError),
     #[error(transparent)]
-    ValidationError(#[from] WithSpan<ValidationError>),
+    ValidationError(#[from] Box<WithSpan<ValidationError>>),
     #[error("workgroup_size override isn't strictly positive")]
     NegativeWorkgroupSize,
     #[error("max vertices or max primitives is negative")]
@@ -52,6 +53,10 @@ pub enum PipelineConstantError {
 /// `module` must be valid. Both compaction and constant evaluation may produce
 /// invalid results (e.g. replace an invalid expression with a constant) for
 /// invalid modules.
+///
+/// If `entry_point` is specified, remove all other entry points from the
+/// returned module. Without this, re-validation will fail if any entry point
+/// uses an override whose value wasn't provided.
 ///
 /// If no changes are needed, this just returns `Cow::Borrowed` references to
 /// `module` and `module_info`. Otherwise, it clones `module`, retains only the

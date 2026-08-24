@@ -222,8 +222,6 @@ use crate::*;
 pub struct Buffer {
     pub(crate) inner: dispatch::DispatchBuffer,
     pub(crate) map_context: Arc<Mutex<MapContext>>,
-    pub(crate) size: wgt::BufferAddress,
-    pub(crate) usage: BufferUsages,
     // Todo: missing map_state https://www.w3.org/TR/webgpu/#dom-gpubuffer-mapstate
 }
 #[cfg(send_sync)]
@@ -273,7 +271,9 @@ impl Buffer {
     ///
     /// This method will return None if:
     /// - The buffer is not from the backend specified by `A`.
-    /// - The buffer is from the `webgpu` or `custom` backend.
+    /// - The buffer is from [`Backend::BrowserWebGpu`].
+    ///   (Use `Buffer::as_webgpu()` instead.)
+    /// - The buffer is from a custom backend.
     /// - The buffer has had [`Self::destroy()`] called on it.
     ///
     /// # Safety
@@ -310,8 +310,8 @@ impl Buffer {
     /// - If `bounds` is outside of the bounds of `self`.
     #[track_caller]
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {
-        let (offset, size) = range_to_offset_size(bounds, self.size);
-        check_buffer_bounds(self.size, offset, size);
+        let (offset, size) = range_to_offset_size(bounds, self.size());
+        check_buffer_bounds(self.size(), offset, size);
         BufferSlice {
             buffer: self,
             offset,
@@ -337,14 +337,14 @@ impl Buffer {
     ///
     /// This is always equal to the `size` that was specified when creating the buffer.
     pub fn size(&self) -> BufferAddress {
-        self.size
+        self.inner.size()
     }
 
     /// Returns the allowed usages for this `Buffer`.
     ///
     /// This is always equal to the `usage` that was specified when creating the buffer.
     pub fn usage(&self) -> BufferUsages {
-        self.usage
+        self.inner.usage()
     }
 
     /// Map the buffer to host (CPU) memory, making it available for reading or writing via
@@ -454,6 +454,13 @@ impl Buffer {
     /// Returns custom implementation of Buffer (if custom backend and is internally T)
     pub fn as_custom<T: custom::BufferInterface>(&self) -> Option<&T> {
         self.inner.as_custom()
+    }
+
+    /// Returns the underlying [`webgpu::GpuBuffer`] handle if this `Buffer`
+    /// is on the WebGPU backend, otherwise `None`.
+    #[cfg(webgpu)]
+    pub fn as_webgpu(&self) -> Option<&webgpu::GpuBuffer> {
+        self.inner.as_webgpu_opt().map(|wb| &wb.inner)
     }
 }
 

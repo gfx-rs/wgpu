@@ -68,7 +68,6 @@ fn main() {
     #[cfg(feature = "winit")]
     let instance_desc =
         instance_desc.with_display_handle(Box::new(event_loop.owned_display_handle()));
-    let instance_flags = instance_desc.flags;
     let instance = wgc::instance::Instance::new("player", instance_desc, None);
 
     let (backends, device_desc) =
@@ -96,9 +95,7 @@ fn main() {
     let info = adapter.get_info();
     log::info!("Using '{}'", info.name);
 
-    let (device, queue) = adapter
-        .create_device_and_queue(&device_desc, instance_flags)
-        .unwrap();
+    let (device, queue) = adapter.request_device(&device_desc).unwrap();
 
     let mut player = Player::default();
 
@@ -118,7 +115,7 @@ fn main() {
     {
         struct App<'a> {
             window: Option<Arc<Window>>,
-            surface: Option<wgc::instance::Surface>,
+            surface: Option<Arc<wgc::instance::Surface>>,
             configured_surface_id: Option<wgc::id::PointerId<wgc::id::markers::Surface>>,
             instance: &'a wgc::instance::Instance,
             device: &'a Arc<wgc::device::Device>,
@@ -186,7 +183,7 @@ fn main() {
                                     self.resize_config = Some(config);
                                     break;
                                 } else {
-                                    let error = self.device.configure_surface(surface, &config);
+                                    let error = surface.configure(self.device, &config);
                                     self.configured_surface_id = Some(surface_id);
                                     if let Some(e) = error {
                                         panic!("{e:?}");
@@ -231,7 +228,7 @@ fn main() {
                     },
                     WindowEvent::Resized(_) => {
                         if let Some(config) = self.resize_config.take() {
-                            let error = self.device.configure_surface(surface, &config);
+                            let error = surface.configure(self.device, &config);
                             if let Some(e) = error {
                                 panic!("{e:?}");
                             }

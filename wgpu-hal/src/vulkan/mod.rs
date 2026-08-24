@@ -38,13 +38,20 @@ mod swapchain;
 pub use adapter::PhysicalDeviceFeatures;
 
 use alloc::{boxed::Box, ffi::CString, sync::Arc, vec::Vec};
-use core::{borrow::Borrow, ffi::CStr, fmt, marker::PhantomData, mem, num::NonZeroU32};
+use core::{
+    borrow::Borrow,
+    ffi::{c_void, CStr},
+    fmt,
+    marker::PhantomData,
+    mem,
+    num::NonZeroU32,
+};
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
 use bytemuck::{Pod, Zeroable};
 use hashbrown::HashSet;
-use parking_lot::{Mutex, RwLock};
+use wgpu_sync::{Mutex, RwLock};
 
 use naga::FastHashMap;
 use wgt::InternalCounter;
@@ -86,6 +93,7 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type RayTracingPipeline = RayTracingPipeline;
 }
 
 crate::impl_dyn_resource!(
@@ -105,6 +113,7 @@ crate::impl_dyn_resource!(
     QuerySet,
     Queue,
     RenderPipeline,
+    RayTracingPipeline,
     Sampler,
     ShaderModule,
     Surface,
@@ -126,6 +135,7 @@ struct DebugUtils {
     callback_data: Box<DebugUtilsMessengerUserData>,
 }
 
+#[derive(Debug)]
 pub struct DebugUtilsCreateInfo {
     severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
@@ -180,10 +190,38 @@ pub struct InstanceShared {
     drop_guard: Option<crate::DropGuard>,
 }
 
+impl fmt::Debug for InstanceShared {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {
+            raw: _,
+            extensions,
+            flags,
+            memory_budget_thresholds,
+            debug_utils: _,
+            get_physical_device_properties: _,
+            entry: _,
+            has_nv_optimus,
+            android_sdk_version,
+            instance_api_version,
+            drop_guard: _,
+        } = self;
+        f.debug_struct("InstanceShared")
+            .field("extensions", extensions)
+            .field("flags", flags)
+            .field("memory_budget_thresholds", memory_budget_thresholds)
+            .field("has_nv_optimus", has_nv_optimus)
+            .field("android_sdk_version", android_sdk_version)
+            .field("instance_api_version", instance_api_version)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug)]
 pub struct Instance {
     shared: Arc<InstanceShared>,
 }
 
+#[expect(missing_debug_implementations, reason = "TODO?")]
 pub struct Surface {
     swapchain: RwLock<Option<Box<dyn swapchain::Swapchain>>>,
     inner: Box<dyn swapchain::Surface>,
@@ -244,6 +282,44 @@ impl Surface {
             .expect("Surface should have a native Vulkan swapchain")
             .set_next_present_time(present_timing);
     }
+
+    /// Set a `pNext` chain of extension structs to be attached to the [`vk::PresentInfoKHR`]
+    /// of the next [presentation](crate::Queue::present()) of this surface.
+    ///
+    /// This supports presentation extensions that `wgpu-hal` has no dedicated support
+    /// for, such as [VK_NV_present_metering]. The corresponding device extension must be
+    /// enabled at device creation, e.g. with
+    /// [`Adapter::open_with_callback()`](super::vulkan::Adapter::open_with_callback).
+    ///
+    /// The chain is consumed by the next presentation: it replaces any chain set by a
+    /// previous call that hasn't been presented yet, and is discarded unread if the
+    /// surface is reconfigured first.
+    ///
+    /// # Safety
+    ///
+    /// - `chain` must point to a valid `pNext` chain of structs that can extend
+    ///   [`vk::PresentInfoKHR`], whose extensions are enabled on the device.
+    /// - The chain must stay valid, and must not be read or written, until the next
+    ///   presentation of this surface completes or the surface is reconfigured. Fields
+    ///   the driver wrote during presentation may be read afterwards.
+    ///
+    /// # Panics
+    ///
+    /// - If the surface hasn't been configured.
+    /// - If the surface has been configured for a DXGI swapchain.
+    ///
+    /// [VK_NV_present_metering]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_present_metering.html
+    #[track_caller]
+    pub unsafe fn set_next_present_chain(&self, chain: *mut c_void) {
+        let mut swapchain = self.swapchain.write();
+        let swapchain = swapchain
+            .as_mut()
+            .expect("Surface should have been configured")
+            .as_any_mut()
+            .downcast_mut::<swapchain::NativeSwapchain>()
+            .expect("Surface should have a native Vulkan swapchain");
+        unsafe { swapchain.set_next_present_chain(chain) };
+    }
 }
 
 #[derive(Debug)]
@@ -267,6 +343,7 @@ impl Borrow<dyn crate::DynTexture> for SurfaceTexture {
     }
 }
 
+#[derive(Debug)]
 pub struct Adapter {
     raw: vk::PhysicalDevice,
     instance: Arc<InstanceShared>,
@@ -292,6 +369,7 @@ struct DeviceExtensionFunctions {
     draw_indirect_count: Option<khr::draw_indirect_count::Device>,
     timeline_semaphore: Option<ExtensionFn<khr::timeline_semaphore::Device>>,
     ray_tracing: Option<RayTracingDeviceExtensionFunctions>,
+    ray_tracing_pipelines: Option<khr::ray_tracing_pipeline::Device>,
     mesh_shading: Option<ext::mesh_shader::Device>,
     #[cfg_attr(not(unix), allow(dead_code))]
     external_memory_fd: Option<khr::external_memory_fd::Device>,
@@ -390,6 +468,11 @@ struct PrivateCapabilities {
     /// these usages do not have as high of an alignment requirement using the buffer as
     ///  a scratch buffer when building acceleration structures.
     scratch_buffer_alignment: u32,
+
+    /// `get_raytracing_pipeline_group_data` requires both a group count and a data size.
+    /// The data size parameter is just this * the group count, so we store this to not
+    /// require an unnecessary parameter.
+    ray_tracing_pipeline_group_data_size: u32,
 }
 
 bitflags::bitflags!(
@@ -467,6 +550,7 @@ struct RenderPassKey {
 struct DeviceShared {
     raw: ash::Device,
     family_index: u32,
+    queue_flags: vk::QueueFlags,
     queue_index: u32,
     raw_queue: vk::Queue,
     instance: Arc<InstanceShared>,
@@ -513,6 +597,10 @@ impl Drop for DeviceShared {
     }
 }
 
+#[expect(
+    missing_debug_implementations,
+    reason = "needs work to not be disastrously verbose"
+)]
 pub struct Device {
     mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
     desc_allocator: Mutex<descriptor::DescriptorAllocator>,
@@ -612,6 +700,22 @@ pub struct Queue {
     relay_semaphores: Mutex<RelaySemaphores>,
     signal_semaphores: Mutex<SemaphoreList>,
     wait_semaphores: Mutex<SemaphoreList>,
+}
+
+impl fmt::Debug for Queue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {
+            raw: _,
+            device: _,
+            family_index,
+            relay_semaphores: _,
+            signal_semaphores: _,
+            wait_semaphores: _,
+        } = self;
+        f.debug_struct("Queue")
+            .field("family_index", family_index)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Queue {
@@ -984,6 +1088,8 @@ struct TempTextureViewKey {
     depth_slice: u32,
 }
 
+// Any state in this struct that may be dirty after an abandoned encoding must
+// be reset for reused encoders in `begin_encoding`.
 pub struct CommandEncoder {
     raw: vk::CommandPool,
     device: Arc<DeviceShared>,
@@ -1108,6 +1214,13 @@ pub struct ComputePipeline {
 }
 
 impl crate::DynComputePipeline for ComputePipeline {}
+
+#[derive(Debug)]
+pub struct RayTracingPipeline {
+    raw: vk::Pipeline,
+}
+
+impl crate::DynRayTracingPipeline for RayTracingPipeline {}
 
 #[derive(Debug)]
 pub struct PipelineCache {
@@ -1314,8 +1427,12 @@ impl crate::Queue for Queue {
         let mut wait_semaphores = SemaphoreList::new(SemaphoreListMode::Wait);
         let mut signal_semaphores = SemaphoreList::new(SemaphoreListMode::Signal);
 
-        // Double check that the same swapchain image isn't being given to us multiple times,
-        // as that will deadlock when we try to lock them all.
+        // Assert that we will not deadlock as we try to lock each `SurfaceTexture`'s
+        // metadata.
+        //
+        // The documentation for [`wgpu_hal::Queue::submit`] requires that
+        // `surface_textures` must not contain duplicates, so simply iterating over
+        // the slice and locking each one should be fine.
         debug_assert!(
             {
                 let mut check = HashSet::with_capacity(surface_textures.len());
@@ -1632,6 +1749,7 @@ struct RawTlasInstance {
 }
 
 /// Arguments to the [`CreateDeviceCallback`].
+#[derive(Debug)]
 pub struct CreateDeviceCallbackArgs<'arg, 'pnext, 'this>
 where
     'this: 'pnext,
@@ -1641,7 +1759,10 @@ where
     pub extensions: &'arg mut Vec<&'static CStr>,
     /// The physical device features to enable. You may enable features, but must not disable any.
     pub device_features: &'arg mut PhysicalDeviceFeatures,
-    /// The queue create infos for the device. You may add or modify queue create infos as needed.
+    /// The queue create infos for the device. You may substitute a different queue, but:
+    /// 1. Any queue you provide must be compatible with `wgpu`'s usage,
+    /// 2. You must not leave the vector empty,
+    /// 3. `wgpu` currently only uses the first entry.
     pub queue_create_infos: &'arg mut Vec<vk::DeviceQueueCreateInfo<'pnext>>,
     /// The create info for the device. You may add or modify things in the pnext chain, but
     /// do not turn features off. Additionally, do not add things to the list of extensions,
@@ -1664,6 +1785,7 @@ pub type CreateDeviceCallback<'this> =
     dyn for<'arg, 'pnext> FnOnce(CreateDeviceCallbackArgs<'arg, 'pnext, 'this>) + 'this;
 
 /// Arguments to the [`CreateInstanceCallback`].
+#[expect(missing_debug_implementations, reason = "TODO?")]
 pub struct CreateInstanceCallbackArgs<'arg, 'pnext, 'this>
 where
     'this: 'pnext,

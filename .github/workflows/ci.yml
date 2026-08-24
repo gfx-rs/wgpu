@@ -3,9 +3,6 @@ name: CI
 on:
   push:
     branches-ignore: [
-        # Renovate branches are always PRs, so they will be covered
-        # by the pull_request event.
-        "renovate/**",
         # Branches with the `gh-readonly-queue` prefix are used by the
         # merge queue, so they are already covered by the `merge_group` event.
         "gh-readonly-queue/**",
@@ -15,6 +12,10 @@ on:
 
 env:
   #
+  # Keep in sync with cts.yml
+  #
+
+  #
   # Dependency versioning
   #
 
@@ -22,17 +23,16 @@ env:
   REPO_MSRV: "1.93"
   # This is the MSRV used by `wgpu` itself.
   WGPU_MSRV: "1.87"
-  # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
+  # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, `wgpu-sync`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
   CORE_MSRV: "1.87"
 
   #
-  # Environment variables
+  # Build and test configuration
   #
 
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
-  WGPU_DX12_COMPILER: dxc
   RUST_LOG: debug,wasm_bindgen_wasm_interpreter=warn,wasm_bindgen_cli_support=warn,walrus=warn,naga=info
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
@@ -41,6 +41,13 @@ env:
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: e # cache busting
   WGPU_CI: true
+
+  #
+  # Runtime configuration
+  #
+
+  LVP_POISON_MEMORY: true # to test memory init; see docs/testing.md
+  WGPU_DX12_COMPILER: dxc
 
 # Every time a PR is pushed to, cancel any previous jobs. This
 # makes us behave nicer to github and get faster turnaround times
@@ -178,6 +185,13 @@ jobs:
             tier: 2
             kind: web
 
+          - name: WebAssembly 64-bit
+            os: ubuntu-24.04
+            target: wasm64-unknown-unknown
+            kind: wgpu-only
+            tier: 3
+            extra-flags: -Zbuild-std=std,panic_abort
+
           - name: Emscripten
             os: ubuntu-24.04
             target: wasm32-unknown-emscripten
@@ -203,7 +217,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install toolchain (repo MSRV - tier 1 or 2)
         if: matrix.tier == 1 || matrix.tier == 2
@@ -309,15 +323,21 @@ jobs:
 
           # check with no features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga-types --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-sync --no-default-features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-core --no-default-features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features
 
           # Check with all compatible features
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
-          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features dot-out,spv-in,spv-out
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga-types --no-default-features --features serialize,deserialize
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-sync --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features dot-out,spv-in,spv-out,glsl-out,msl-out,serialize,deserialize,wgsl-in,wgsl-out,hlsl-out
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features fragile-send-sync-non-atomic-wasm
-          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features --features serde
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-core --no-default-features --features api_log_info,resource_log_info,strict_asserts,serde,wgsl,spirv,counters,noop
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features --features webgpu,drm,wgsl,strict_asserts,serde,counters
 
       # Building for native platforms with standard tests.
       - name: Check native
@@ -396,7 +416,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install core MSRV toolchain
         run: |
@@ -470,7 +490,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install core MSRV toolchain
         run: |
@@ -528,7 +548,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install toolchain
         run: |
@@ -569,7 +589,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install repo MSRV toolchain
         run: |
@@ -577,16 +597,25 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      - name: Install `wasm-pack`
+      - name: Get `wasm-bindgen` version
+        run: |
+          WASM_BINDGEN_VERSION=$(cargo metadata --format-version 1 --all-features | jq '.packages[] | select(.name == "wasm-bindgen") | .version' | tr -d '"')
+
+          echo $WASM_BINDGEN_VERSION
+
+          echo "WASM_BINDGEN_VERSION=$WASM_BINDGEN_VERSION" >> "$GITHUB_ENV"
+
+      - name: Install `wasm-bindgen`
+        run: cargo +stable install wasm-bindgen-cli --version=$WASM_BINDGEN_VERSION
+
+      - name: Install `cargo-nextest`
         uses: taiki-e/install-action@v2
         with:
-          tool: wasm-pack
+          tool: cargo-nextest
 
       - name: Execute tests
         run: |
-          cd wgpu
-
-          wasm-pack test --headless --chrome --no-default-features --features wgsl,webgl,web --workspace
+          cargo xtask test-wasm
 
   gpu-test:
     # runtime is normally 5-15 minutes
@@ -613,7 +642,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install repo MSRV toolchain
         run: |
@@ -727,7 +756,7 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
@@ -742,7 +771,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install repo MSRV toolchain
         run: |
@@ -773,7 +802,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Miri is *only* available on nightly.
       - name: Install nightly toolchain
@@ -808,7 +837,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install repo MSRV toolchain
         run: |
@@ -819,23 +848,19 @@ jobs:
       # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
       # files, even ones this step doesn't modify.
       - name: "Format `**/*.{md,js,html,yml}` files"
-        uses: creyD/prettier_action@v4.6
-        with:
-          prettier_version: 3.8.1
-          prettier_options: --check --write .
-          dry: true
+        run: "npx --yes prettier@3.8.1 --check --write . && git diff --exit-code"
 
       - name: Run `cargo fmt`
         run: |
           cargo --locked fmt -- --check
 
-      - name: Install Taplo
-        uses: uncenter/setup-taplo@v2
+      - name: Install Tombi
+        uses: tombi-toml/setup-tombi@v1.2.0
         with:
-          version: "0.9.3"
+          version: "1.1.3"
 
-      - name: Run `taplo fmt`
-        run: taplo format --check --diff
+      - name: Format TOML files
+        run: tombi format --check --diff
 
       - name: Check for typos
         uses: crate-ci/typos@v1.47.2
@@ -848,7 +873,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install MSRV toolchain
         run: |
@@ -888,7 +913,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v2
@@ -906,7 +931,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v2

@@ -7,9 +7,9 @@ use core::ops::Range;
 use hashbrown::hash_map::Entry;
 
 use crate::{
-    device::Device,
+    device::{Device, DeviceError},
     init_tracker::*,
-    resource::{DestroyedResourceError, ParentDevice, RawResourceAccess, Texture, Trackable},
+    resource::{ParentDevice, RawResourceAccess, Texture, Trackable},
     snatch::SnatchGuard,
     track::{DeviceTracker, TextureTracker},
     FastHashMap,
@@ -156,13 +156,22 @@ pub(crate) fn fixup_discarded_surfaces<InitIter: Iterator<Item = TextureSurfaceD
 }
 
 impl BakedCommands {
-    // inserts all buffer initializations that are going to be needed for
-    // executing the commands and updates resource init states accordingly
+    /// Initialize buffers.
+    ///
+    /// Inserts all buffer initializations that are going to be needed for
+    /// executing the commands, and updates resource init states accordingly.
+    ///
+    /// The caller is responsible for checking that any buffer this may touch has not been
+    /// destroyed, and must have done that check under the same snatch guard that is passed
+    /// to this function.
+    ///
+    /// # Panics
+    /// If a destroyed buffer is encountered.
     pub(crate) fn initialize_buffer_memory(
         &mut self,
         device_tracker: &mut DeviceTracker,
         snatch_guard: &SnatchGuard<'_>,
-    ) -> Result<(), DestroyedResourceError> {
+    ) {
         profiling::scope!("initialize_buffer_memory");
 
         // Gather init ranges for each buffer so we can collapse them.
@@ -220,7 +229,9 @@ impl BakedCommands {
                 .buffers
                 .set_single(&buffer, wgt::BufferUses::COPY_DST);
 
-            let raw_buf = buffer.try_raw(snatch_guard)?;
+            let raw_buf = buffer
+                .try_raw(snatch_guard)
+                .expect("attempt to initialize a destroyed buffer");
 
             unsafe {
                 self.encoder.raw.transition_buffers(
@@ -251,45 +262,58 @@ impl BakedCommands {
                 }
             }
         }
-        Ok(())
     }
 
-    // inserts all texture initializations that are going to be needed for
-    // executing the commands and updates resource init states accordingly any
-    // textures that are left discarded by this command buffer will be marked as
-    // uninitialized
+    /// Initialize textures.
+    ///
+    /// Inserts all texture initializations that are going to be needed for
+    /// executing the commands, and updates resource init states accordingly. Any
+    /// textures that are left discarded by this command buffer will be marked as
+    /// uninitialized.
+    ///
+    /// The caller is responsible for checking that any texture this may touch has not been
+    /// destroyed, and must have done that check under the same snatch guard that is passed
+    /// to this function.
+    ///
+    /// Note that any error returned from this function will become device loss in
+    /// [`crate::device::queue::Queue::submit`].
+    ///
+    /// # Panics
+    /// If a destroyed texture is encountered.
     pub(crate) fn initialize_texture_memory(
         &mut self,
         device_tracker: &mut DeviceTracker,
         device: &Device,
         snatch_guard: &SnatchGuard<'_>,
-    ) -> Result<(), DestroyedResourceError> {
+    ) -> Result<(), ClearError> {
         profiling::scope!("initialize_texture_memory");
 
         let mut ranges: Vec<TextureInitRange> = Vec::new();
         for texture_use in self.texture_memory_actions.drain_init_actions() {
-            let mut initialization_status = texture_use.texture.initialization_status.write();
-            let use_range = texture_use.range;
-            let affected_mip_trackers = initialization_status
-                .mips
-                .iter_mut()
-                .enumerate()
-                .skip(use_range.mip_range.start as usize)
-                .take((use_range.mip_range.end - use_range.mip_range.start) as usize);
+            {
+                let mut initialization_status = texture_use.texture.initialization_status.write();
+                let use_range = texture_use.range;
+                let affected_mip_trackers = initialization_status
+                    .mips
+                    .iter_mut()
+                    .enumerate()
+                    .skip(use_range.mip_range.start as usize)
+                    .take((use_range.mip_range.end - use_range.mip_range.start) as usize);
 
-            match texture_use.kind {
-                MemoryInitKind::ImplicitlyInitialized => {
-                    for (_, mip_tracker) in affected_mip_trackers {
-                        mip_tracker.drain(use_range.layer_range.clone());
+                match texture_use.kind {
+                    MemoryInitKind::ImplicitlyInitialized => {
+                        for (_, mip_tracker) in affected_mip_trackers {
+                            mip_tracker.drain(use_range.layer_range.clone());
+                        }
                     }
-                }
-                MemoryInitKind::NeedsInitializedMemory => {
-                    for (mip_level, mip_tracker) in affected_mip_trackers {
-                        for layer_range in mip_tracker.drain(use_range.layer_range.clone()) {
-                            ranges.push(TextureInitRange {
-                                mip_range: (mip_level as u32)..(mip_level as u32 + 1),
-                                layer_range,
-                            });
+                    MemoryInitKind::NeedsInitializedMemory => {
+                        for (mip_level, mip_tracker) in affected_mip_trackers {
+                            for layer_range in mip_tracker.drain(use_range.layer_range.clone()) {
+                                ranges.push(TextureInitRange {
+                                    mip_range: (mip_level as u32)..(mip_level as u32 + 1),
+                                    layer_range,
+                                });
+                            }
                         }
                     }
                 }
@@ -308,16 +332,14 @@ impl BakedCommands {
                     device.instance_flags,
                 );
 
-                // A Texture can be destroyed between the command recording
-                // and now, this is out of our control so we have to handle
-                // it gracefully.
-                if let Err(ClearError::DestroyedResource(e)) = clear_result {
-                    return Err(e);
-                }
-
-                // Other errors are unexpected.
-                if let Err(error) = clear_result {
-                    panic!("{error}");
+                // We panic on destroyed textures for symmetry with buffer
+                // initialization. It should not happen, but supposing it did,
+                // it would also be fine to return the error and lose the
+                // device in queue submit.
+                if matches!(clear_result, Err(ClearError::DestroyedResource(_))) {
+                    panic!("attempt to initialize a destroyed texture");
+                } else {
+                    clear_result?;
                 }
             }
         }
@@ -331,6 +353,76 @@ impl BakedCommands {
                 .initialization_status
                 .write()
                 .discard(surface_discard.mip_level, surface_discard.layer);
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn process_deferred_query_set_resolves(
+        &mut self,
+        device: &Device,
+        snatch_guard: &SnatchGuard<'_>,
+    ) -> Result<(), DeviceError> {
+        profiling::scope!("process_deferred_query_set_resolves");
+
+        for mut resolve in self.deferred_query_set_resolves.drain(..).rev() {
+            let raw_dst = resolve.dst_buffer.try_raw(snatch_guard).unwrap();
+            let raw_query_set = resolve.query_set.try_raw(snatch_guard).unwrap();
+
+            let raw_encoder = self.encoder.open_pass(crate::hal_label(
+                Some("(wgpu internal) Deferred query set resolve"),
+                device.instance_flags,
+            ))?;
+
+            let initialized_slots_guard = resolve.query_set.initialized_slots.lock();
+            let initialized_slots =
+                if let Some(query_set_writes) = resolve.query_set_writes.as_mut() {
+                    query_set_writes.or(&initialized_slots_guard);
+                    &*query_set_writes
+                } else {
+                    &*initialized_slots_guard
+                };
+
+            let mut start = resolve.start_query;
+            while start < resolve.end_query {
+                let is_initialized = initialized_slots[start as usize];
+                let end = (start + 1..resolve.end_query)
+                    .find(|&i| initialized_slots[i as usize] != is_initialized)
+                    .unwrap_or(resolve.end_query);
+
+                let byte_offset = resolve.destination_offset
+                    + (start - resolve.start_query) as u64 * resolve.stride;
+                let byte_len = (end - start) as u64 * resolve.stride;
+
+                if is_initialized {
+                    unsafe {
+                        raw_encoder.copy_query_results(
+                            raw_query_set,
+                            start..end,
+                            raw_dst,
+                            byte_offset,
+                            wgt::BufferSize::new_unchecked(resolve.stride),
+                        );
+                    }
+                } else {
+                    unsafe {
+                        raw_encoder.clear_buffer(raw_dst, byte_offset..byte_offset + byte_len);
+                    }
+                }
+
+                start = end;
+            }
+            drop(initialized_slots_guard);
+
+            self.encoder.close_and_insert_at(resolve.insertion_point)?;
+        }
+
+        // Update query set initialization state.
+        for query_set in self.trackers.query_sets.used_resources() {
+            if let Some(slots) = self.query_set_writes.get(&query_set.tracker_index()) {
+                let mut initialized = query_set.initialized_slots.lock();
+                initialized.or(slots);
+            }
         }
 
         Ok(())

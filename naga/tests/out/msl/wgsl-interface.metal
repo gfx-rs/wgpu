@@ -62,8 +62,8 @@ fragment fragment_Output fragment_(
     const VertexOutput in = { position, varyings_1._varying };
     uint mask = sample_mask & (1u << sample_index);
     float color_1 = front_facing ? 1.0 : 0.0;
-    const auto _tmp = FragmentOutput {in._varying, mask, color_1};
-    return fragment_Output { _tmp.depth, _tmp.sample_mask, _tmp.color };
+    const auto _tmp_1 = FragmentOutput {in._varying, mask, color_1};
+    return fragment_Output { _tmp_1.depth, _tmp_1.sample_mask, _tmp_1.color };
 }
 
 

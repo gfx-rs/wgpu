@@ -40,8 +40,8 @@ pub struct ShaderRuntimeChecks {
     ///   `getCandidateHitVertexPositions` or `rayQueryGetCandidateIntersection` is called
     /// - `rayQueryProceed` must have been called and have returned false before `rayQueryGetCommittedIntersection`
     ///   or `getCommittedHitVertexPositions` are called
-    ///
-    /// It is the aim that these cases will not cause UB if this is set to true, but currently this will still happen on DX12 and Metal.
+    /// - when calling `rayQueryInitialize`, the ray desc argument must not contain NaNs in any floating point
+    ///   values and must not contain Infs in any component of `dir`, `origin`, `tmin`
     pub ray_query_initialization_tracking: bool,
 
     /// If false, task shaders will not validate that the mesh shader grid they dispatch is within legal limits.

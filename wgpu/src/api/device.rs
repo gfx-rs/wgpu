@@ -7,6 +7,7 @@ use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
 use crate::util::Mutex;
 use crate::*;
+pub use wgt::error::*;
 
 /// Open connection to a graphics and/or compute device.
 ///
@@ -33,6 +34,15 @@ crate::cmp::impl_eq_ord_hash_proxy!(Device => .inner);
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpudevicedescriptor).
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(DeviceDescriptor<'_>: Send, Sync);
+
+/// Describes a [`Queue`].
+///
+/// For use within a [`DeviceDescriptor`].
+///
+/// Corresponds to [WebGPU `GPUQueueDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuqueuedescriptor).
+pub type QueueDescriptor<'a> = wgt::QueueDescriptor<Label<'a>>;
+static_assertions::assert_impl_all!(QueueDescriptor<'_>: Send, Sync);
 
 impl Device {
     #[cfg(custom)]
@@ -282,8 +292,6 @@ impl Device {
         Buffer {
             inner: buffer,
             map_context: Arc::new(Mutex::new(map_context)),
-            size: desc.size,
-            usage: desc.usage,
         }
     }
 
@@ -294,14 +302,7 @@ impl Device {
     pub fn create_texture(&self, desc: &TextureDescriptor<'_>) -> Texture {
         let texture = self.inner.create_texture(desc);
 
-        Texture {
-            inner: texture,
-            descriptor: TextureDescriptor {
-                label: None,
-                view_formats: &[],
-                ..desc.clone()
-            },
-        }
+        Texture { inner: texture }
     }
 
     /// Creates a [`Texture`] from a wgpu-hal Texture.
@@ -314,6 +315,8 @@ impl Device {
     #[doc = crate::macros::hal_type_metal!("Texture")]
     #[doc = crate::macros::hal_type_dx12!("Texture")]
     #[doc = crate::macros::hal_type_gles!("Texture")]
+    ///
+    /// On [`Backend::BrowserWebGpu`], use `Device::create_texture_from_webgpu_handle()` instead.
     ///
     /// # `initial_state`
     ///
@@ -353,12 +356,64 @@ impl Device {
         };
         Texture {
             inner: texture.into(),
-            descriptor: TextureDescriptor {
-                label: None,
-                view_formats: &[],
-                ..desc.clone()
-            },
         }
+    }
+
+    /// Wraps a foreign [`webgpu::GpuTexture`] (e.g. a canvas `getCurrentTexture()` result)
+    /// as a [`Texture`] without any copy.
+    ///
+    /// The wrapped texture is *external*: dropping the returned `Texture` (or
+    /// calling [`Texture::destroy`] on it) does **not** call `GpuTexture.destroy()`
+    /// on the underlying handle - its lifetime is the caller's responsibility.
+    ///
+    /// If `drop_callback` is `Some`, it fires when wgpu releases its last
+    /// reference to the wrapped handle. wgpu never calls `GpuTexture.destroy()`
+    /// itself on a wrapped texture; to hand the handle's lifetime to wgpu,
+    /// supply a callback that calls `GpuTexture.destroy()`. The callback can
+    /// also be used to free a pool slot or notify dependent code that wgpu is
+    /// done with the handle. Pass `None` if the caller manages the handle's
+    /// lifetime entirely on their own.
+    ///
+    /// This is the WebGPU counterpart of [`Self::create_texture_from_hal`].
+    /// A `Some` `drop_callback` plays the same role as `wgpu_hal::DropCallback`
+    /// does on the Vulkan backend. The `None` case differs: here the texture is
+    /// always external and wgpu never destroys it, whereas on Vulkan a `None`
+    /// callback means wgpu takes ownership of the image and destroys it.
+    ///
+    /// The caller must guarantee:
+    ///
+    /// 1. `texture` was produced by the same underlying `GpuDevice` that this `Device` wraps.
+    /// 2. `desc.format`, `desc.size`, `desc.usage`, `desc.dimension`,
+    ///    `desc.mip_level_count`, and `desc.sample_count` match the actual
+    ///    `GPUTexture`'s reflected values. wgpu stores these verbatim and
+    ///    returns them from [`Texture::size`], [`Texture::format`], etc.
+    ///    without re-checking the handle; a mismatch yields silently incorrect
+    ///    metadata and, downstream, `GPUValidationError`s rather than memory
+    ///    unsafety (the browser bounds every access).
+    /// 3. The underlying `GpuTexture` must remain alive for as long as wgpu
+    ///    may use it (e.g. until any submitted command buffer that references
+    ///    it has finished executing). If `drop_callback` is `Some`, it is
+    ///    sufficient to keep the handle alive until the callback fires.
+    #[cfg(webgpu)]
+    #[must_use]
+    pub fn create_texture_from_webgpu_handle(
+        &self,
+        texture: webgpu::GpuTexture,
+        desc: &TextureDescriptor<'_>,
+        drop_callback: Option<webgpu::DropCallback>,
+    ) -> Texture {
+        let inner = self
+            .inner
+            .as_webgpu()
+            .wrap_external_texture(texture, desc, drop_callback);
+        Texture { inner }
+    }
+
+    /// Returns the underlying [`webgpu::GpuDevice`] handle if this `Device`
+    /// is on the WebGPU backend, otherwise `None`.
+    #[cfg(webgpu)]
+    pub fn as_webgpu(&self) -> Option<&webgpu::GpuDevice> {
+        self.inner.as_webgpu_opt().map(|wd| &wd.inner)
     }
 
     /// Creates a new [`ExternalTexture`].
@@ -411,8 +466,6 @@ impl Device {
         Buffer {
             inner: buffer.into(),
             map_context: Arc::new(Mutex::new(map_context)),
-            size: desc.size,
-            usage: desc.usage,
         }
     }
 
@@ -429,11 +482,7 @@ impl Device {
     #[must_use]
     pub fn create_query_set(&self, desc: &QuerySetDescriptor<'_>) -> QuerySet {
         let query_set = self.inner.create_query_set(desc);
-        QuerySet {
-            inner: query_set,
-            ty: desc.ty,
-            count: desc.count,
-        }
+        QuerySet { inner: query_set }
     }
 
     /// Set a callback which will be called for all errors that are not handled in error scopes.
@@ -587,6 +636,8 @@ impl Device {
     /// This method will return None if:
     /// - The device is not from the backend specified by `A`.
     /// - The device is from the `webgpu` or `custom` backend.
+    ///
+    /// On the `webgpu` backend, use `as_webgpu` instead.
     ///
     /// # Safety
     ///
@@ -794,89 +845,6 @@ impl From<wgc::instance::RequestDeviceError> for RequestDeviceError {
     }
 }
 
-/// The callback of [`Device::on_uncaptured_error()`].
-///
-/// It must be a function with this signature.
-pub trait UncapturedErrorHandler: Fn(Error) + Send + Sync + 'static {}
-impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + Sync + 'static {}
-
-/// Kinds of [`Error`]s a [`Device::push_error_scope()`] may be configured to catch.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
-pub enum ErrorFilter {
-    /// Catch only out-of-memory errors.
-    OutOfMemory,
-    /// Catch only validation errors.
-    Validation,
-    /// Catch only internal errors.
-    Internal,
-}
-static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
-
-/// Lower level source of the error.
-///
-/// `Send + Sync` varies depending on configuration.
-#[cfg(send_sync)]
-#[cfg_attr(docsrs, doc(cfg(all())))]
-pub type ErrorSource = Box<dyn error::Error + Send + Sync + 'static>;
-/// Lower level source of the error.
-///
-/// `Send + Sync` varies depending on configuration.
-#[cfg(not(send_sync))]
-#[cfg_attr(docsrs, doc(cfg(all())))]
-pub type ErrorSource = Box<dyn error::Error + 'static>;
-
-/// Errors resulting from usage of GPU APIs.
-///
-/// By default, errors translate into panics. Depending on the backend and circumstances,
-/// errors may occur synchronously or asynchronously. When errors need to be handled, use
-/// [`Device::push_error_scope()`] or [`Device::on_uncaptured_error()`].
-#[derive(Debug)]
-pub enum Error {
-    /// Out of memory.
-    OutOfMemory {
-        /// Lower level source of the error.
-        source: ErrorSource,
-    },
-    /// Validation error, signifying a bug in code or data provided to `wgpu`.
-    Validation {
-        /// Lower level source of the error.
-        source: ErrorSource,
-        /// Description of the validation error.
-        description: String,
-    },
-    /// Internal error. Used for signalling any failures not explicitly expected by WebGPU.
-    ///
-    /// These could be due to internal implementation or system limits being reached.
-    Internal {
-        /// Lower level source of the error.
-        source: ErrorSource,
-        /// Description of the internal GPU error.
-        description: String,
-    },
-}
-#[cfg(send_sync)]
-static_assertions::assert_impl_all!(Error: Send, Sync);
-
-impl error::Error for Error {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            Error::OutOfMemory { source } => Some(source.as_ref()),
-            Error::Validation { source, .. } => Some(source.as_ref()),
-            Error::Internal { source, .. } => Some(source.as_ref()),
-        }
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::OutOfMemory { .. } => f.write_str("Out of Memory"),
-            Error::Validation { description, .. } => f.write_str(description),
-            Error::Internal { description, .. } => f.write_str(description),
-        }
-    }
-}
-
 /// Guard for an error scope pushed with [`Device::push_error_scope()`].
 ///
 /// Call [`pop()`] to pop the scope and get a future for the result. If
@@ -914,5 +882,21 @@ impl Drop for ErrorScopeGuard {
         if !self.popped {
             drop(self.device.pop_error_scope(self.index));
         }
+    }
+}
+
+impl fmt::Debug for ErrorScopeGuard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ErrorScopeGuard {
+            device,
+            index,
+            popped,
+            _phantom: _,
+        } = self;
+        f.debug_struct("ErrorScopeGuard")
+            .field("device", device)
+            .field("index", index)
+            .field("popped", popped)
+            .finish()
     }
 }

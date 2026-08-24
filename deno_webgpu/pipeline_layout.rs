@@ -6,20 +6,13 @@ use deno_core::webidl::Nullable;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
+use std::sync::Arc;
 
 use crate::error::GPUGenericError;
-use crate::Instance;
 
 pub struct GPUPipelineLayout {
-  pub instance: Instance,
-  pub id: wgpu_core::id::PipelineLayoutId,
+  pub wgpu_pipeline_layout: Arc<wgpu_core::binding_model::PipelineLayout>,
   pub label: String,
-}
-
-impl Drop for GPUPipelineLayout {
-  fn drop(&mut self) {
-    self.instance.pipeline_layout_drop(self.id);
-  }
 }
 
 impl WebIdlInterfaceConverter for GPUPipelineLayout {
@@ -60,4 +53,6 @@ pub(crate) struct GPUPipelineLayoutDescriptor {
 
   pub bind_group_layouts:
     Vec<Nullable<Ptr<super::bind_group_layout::GPUBindGroupLayout>>>,
+  #[webidl(default = 0)]
+  pub immediate_size: u32,
 }

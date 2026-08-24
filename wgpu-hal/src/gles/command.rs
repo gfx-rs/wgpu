@@ -659,7 +659,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         wgt::TextureSampleType::Float { .. } => C::ClearColorF {
                             draw_buffer: i as u32,
                             color: [c.r as f32, c.g as f32, c.b as f32, c.a as f32],
-                            is_srgb: cat.target.view.format.is_srgb(),
+                            is_srgb: cat.target.view.format.has_srgb_suffix(),
                         },
                         wgt::TextureSampleType::Uint => C::ClearColorU(
                             i as u32,
@@ -1314,6 +1314,31 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_acceleration_structure_dependencies(
         _command_buffers: &[&super::CommandBuffer],
         _dependencies: &[&super::AccelerationStructure],
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn begin_ray_tracing_pass(&mut self, _desc: &crate::RayTracingPassDescriptor) {
+        unimplemented!()
+    }
+
+    unsafe fn end_ray_tracing_pass(&mut self) {
+        unimplemented!()
+    }
+
+    unsafe fn set_ray_tracing_pipeline(
+        &mut self,
+        _pipeline: &<Self::A as crate::Api>::RayTracingPipeline,
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn trace_rays(
+        &mut self,
+        _count: [u32; 3],
+        _ray_generation_group_data: crate::PipelineGroupData<super::Buffer>,
+        _miss_group_data: crate::PipelineGroupData<super::Buffer>,
+        _intersection_group_data: crate::PipelineGroupData<super::Buffer>,
     ) {
         unimplemented!()
     }

@@ -12,8 +12,9 @@ use core::{cmp::max, convert::TryInto, num::NonZeroU32, ptr, sync::atomic::Order
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use naga::FastHashMap;
+use wgpu_sync::Mutex;
 
-use super::{conv, lock, MaybeMutex, PrivateCapabilities};
+use super::{conv, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
 use crate::TlasInstance;
 
@@ -233,7 +234,7 @@ impl super::Device {
             target,
             size: desc.size,
             map_flags,
-            map_state: Arc::new(MaybeMutex::new(super::BufferMapState {
+            map_state: Arc::new(Mutex::new(super::BufferMapState {
                 mapped: false,
                 data: None,
                 offset_of_current_mapping: 0,
@@ -246,7 +247,7 @@ impl super::Device {
         gl: &glow::Context,
         shader: &str,
         naga_stage: naga::ShaderStage,
-        #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
+        #[cfg_attr(target_family = "wasm", allow(unused))] label: Option<&str>,
     ) -> Result<glow::Shader, crate::PipelineError> {
         let target = match naga_stage {
             naga::ShaderStage::Vertex => glow::VERTEX_SHADER,
@@ -400,7 +401,7 @@ impl super::Device {
         gl: &glow::Context,
         shaders: ArrayVec<ShaderStage<'a>, { crate::MAX_CONCURRENT_SHADER_STAGES }>,
         layout: &super::PipelineLayout,
-        #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
+        #[cfg_attr(target_family = "wasm", allow(unused))] label: Option<&str>,
         multiview_mask: Option<NonZeroU32>,
     ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
         let mut program_stages = ArrayVec::new();
@@ -462,7 +463,7 @@ impl super::Device {
         gl: &glow::Context,
         shaders: ArrayVec<ShaderStage<'a>, { crate::MAX_CONCURRENT_SHADER_STAGES }>,
         layout: &super::PipelineLayout,
-        #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
+        #[cfg_attr(target_family = "wasm", allow(unused))] label: Option<&str>,
         multiview_mask: Option<NonZeroU32>,
         glsl_version: naga::back::glsl::Version,
         private_caps: PrivateCapabilities,
@@ -637,7 +638,7 @@ impl crate::Device for super::Device {
                 target,
                 size: desc.size,
                 map_flags: 0,
-                map_state: Arc::new(MaybeMutex::new(super::BufferMapState {
+                map_state: Arc::new(Mutex::new(super::BufferMapState {
                     mapped: false,
                     data: Some(vec![0; desc.size as usize]),
                     offset_of_current_mapping: 0,
@@ -741,7 +742,7 @@ impl crate::Device for super::Device {
             target,
             size: desc.size,
             map_flags,
-            map_state: Arc::new(MaybeMutex::new(super::BufferMapState {
+            map_state: Arc::new(Mutex::new(super::BufferMapState {
                 mapped: false,
                 data,
                 offset_of_current_mapping: 0,
@@ -777,7 +778,7 @@ impl crate::Device for super::Device {
         let is_coherent = buffer.map_flags & glow::MAP_COHERENT_BIT != 0;
         let ptr = match buffer.raw {
             None => {
-                let mut map_state = lock(&buffer.map_state);
+                let mut map_state = buffer.map_state.lock();
                 let vec = map_state.data.as_mut().unwrap();
                 let slice = &mut vec.as_mut_slice()[range.start as usize..range.end as usize];
                 slice.as_mut_ptr()
@@ -785,7 +786,7 @@ impl crate::Device for super::Device {
             Some(raw) => {
                 let gl = &self.shared.context.lock();
                 unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
-                let mut map_state = lock(&buffer.map_state);
+                let mut map_state = buffer.map_state.lock();
                 let ptr = if let Some(map_read_allocation) = map_state.data.as_mut() {
                     let slice = map_read_allocation.as_mut_slice();
                     unsafe { self.shared.get_buffer_sub_data(gl, buffer.target, 0, slice) };
@@ -827,7 +828,7 @@ impl crate::Device for super::Device {
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
         let gl = &self.shared.context.lock();
-        let mut map_state = lock(&buffer.map_state);
+        let mut map_state = buffer.map_state.lock();
         if core::mem::replace(&mut map_state.mapped, false) {
             if let Some(raw) = buffer.raw {
                 if map_state.data.is_none() {
@@ -844,7 +845,7 @@ impl crate::Device for super::Device {
         I: Iterator<Item = crate::MemoryRange>,
     {
         let gl = &self.shared.context.lock();
-        let map_state = lock(&buffer.map_state);
+        let map_state = buffer.map_state.lock();
         if map_state.mapped {
             if let Some(raw) = buffer.raw {
                 if map_state.data.is_none() {
@@ -1647,6 +1648,29 @@ impl crate::Device for super::Device {
         self.counters.compute_pipelines.sub(1);
     }
 
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &crate::RayTracingPipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
+    ) -> Result<super::RayTracingPipeline, crate::PipelineError> {
+        unimplemented!("Ray tracing is unsupported on GL")
+    }
+
+    unsafe fn destroy_ray_tracing_pipeline(&self, _pipeline: super::RayTracingPipeline) {
+        unimplemented!("Ray tracing is unsupported on GL")
+    }
+
+    unsafe fn get_raytracing_pipeline_group_data(
+        &self,
+        _pipeline: &super::RayTracingPipeline,
+        _groups: core::ops::Range<u32>,
+    ) -> Result<Vec<u8>, crate::DeviceError> {
+        unimplemented!("Ray tracing is unsupported on GL")
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         _: &crate::PipelineCacheDescriptor<'_>,
@@ -1657,7 +1681,7 @@ impl crate::Device for super::Device {
     }
     unsafe fn destroy_pipeline_cache(&self, _: super::PipelineCache) {}
 
-    #[cfg_attr(target_arch = "wasm32", allow(unused))]
+    #[cfg_attr(target_family = "wasm", allow(unused))]
     unsafe fn create_query_set(
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
@@ -1713,7 +1737,7 @@ impl crate::Device for super::Device {
         &self,
         fence: &super::Fence,
     ) -> Result<crate::FenceValue, crate::DeviceError> {
-        #[cfg_attr(target_arch = "wasm32", allow(clippy::needless_borrow))]
+        #[cfg_attr(target_family = "wasm", allow(clippy::needless_borrow))]
         Ok(fence.get_latest(&self.shared.context.lock()))
     }
     unsafe fn wait(

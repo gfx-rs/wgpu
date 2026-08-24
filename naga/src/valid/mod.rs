@@ -31,7 +31,7 @@ pub use compose::ComposeError;
 pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
-pub use immediates::ImmediateSlots;
+pub use immediates::{ImmediateSlots, ImmediateSlotsOverflowError, ImmediateUsage};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
 pub use r#type::{Disalignment, ImmediateError, TypeError, TypeFlags, WidthError};
 
@@ -218,6 +218,12 @@ bitflags::bitflags! {
         const MEMORY_DECORATION_VOLATILE = 1 << 42;
         /// Support for 16-bit integer types.
         const SHADER_INT16 = 1 << 43;
+        /// Support for [`Interpolation::Linear`] (`@interpolate(linear)` in WGSL).
+        ///
+        /// This is core WebGPU, but GLSL ES (and thus WebGL) has no `noperspective` qualifier (unless enabled by extensions).
+        ///
+        /// [`Interpolation::Linear`]: crate::Interpolation::Linear
+        const LINEAR_INTERPOLATION = 1 << 44;
     }
 }
 
@@ -733,7 +739,7 @@ impl Validator {
     pub fn validate(
         &mut self,
         module: &crate::Module,
-    ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
+    ) -> Result<ModuleInfo, Box<WithSpan<ValidationError>>> {
         self.overrides_resolved = false;
         self.validate_impl(module)
     }
@@ -748,7 +754,7 @@ impl Validator {
     pub fn validate_resolved_overrides(
         &mut self,
         module: &crate::Module,
-    ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
+    ) -> Result<ModuleInfo, Box<WithSpan<ValidationError>>> {
         self.overrides_resolved = true;
         self.validate_impl(module)
     }
@@ -756,11 +762,11 @@ impl Validator {
     fn validate_impl(
         &mut self,
         module: &crate::Module,
-    ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
+    ) -> Result<ModuleInfo, Box<WithSpan<ValidationError>>> {
         self.reset();
         self.reset_types(module.types.len());
 
-        Self::validate_module_handles(module).map_err(|e| e.with_span())?;
+        Self::validate_module_handles(module).map_err(|e| Box::new((*e).with_span()))?;
 
         self.layouter.update(module.to_ctx()).map_err(|e| {
             let handle = e.ty;
@@ -870,14 +876,14 @@ impl Validator {
             match self.validate_function(fun, module, &mod_info, false) {
                 Ok(info) => mod_info.functions.push(info),
                 Err(error) => {
-                    return Err(error.and_then(|source| {
+                    return Err(Box::new(error.and_then(|source| {
                         ValidationError::Function {
                             handle,
                             name: fun.name.clone().unwrap_or_default(),
                             source,
                         }
                         .with_span_handle(handle, &module.functions)
-                    }))
+                    })))
                 }
             }
         }
@@ -885,25 +891,29 @@ impl Validator {
         let mut ep_map = FastHashSet::default();
         for ep in module.entry_points.iter() {
             if !ep_map.insert((ep.stage, &ep.name)) {
-                return Err(ValidationError::EntryPoint {
-                    stage: ep.stage,
-                    name: ep.name.clone(),
-                    source: EntryPointError::Conflict,
-                }
-                .with_span()); // TODO: keep some EP span information?
+                return Err(Box::new(
+                    ValidationError::EntryPoint {
+                        stage: ep.stage,
+                        name: ep.name.clone(),
+                        source: EntryPointError::Conflict,
+                    }
+                    .with_span(),
+                )); // TODO: keep some EP span information?
             }
 
             match self.validate_entry_point(ep, module, &mod_info) {
-                Ok(info) => mod_info.entry_points.push(info),
+                Ok(info) => {
+                    mod_info.entry_points.push(info);
+                }
                 Err(error) => {
-                    return Err(error.and_then(|source| {
+                    return Err(Box::new(error.and_then(|source| {
                         ValidationError::EntryPoint {
                             stage: ep.stage,
                             name: ep.name.clone(),
                             source,
                         }
                         .with_span()
-                    }));
+                    })));
                 }
             }
         }

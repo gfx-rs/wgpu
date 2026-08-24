@@ -9,7 +9,7 @@ use crate::{
         DeviceError,
     },
     ray_tracing::BlasCompactReadyPendingClosure,
-    resource::{Blas, Buffer, Texture, Trackable},
+    resource::{Blas, Buffer, QuerySet, Texture, Trackable},
     snatch::SnatchGuard,
     SubmissionIndex,
 };
@@ -121,6 +121,16 @@ impl ActiveSubmission {
 
         false
     }
+
+    pub fn contains_query_set(&self, query_set: &QuerySet) -> bool {
+        for encoder in &self.encoders {
+            if encoder.trackers.query_sets.contains(query_set) {
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -167,7 +177,7 @@ impl WaitIdleError {
 ///     2)  `handle_mapping` drains `self.ready_to_map` and actually maps the
 ///         buffers, collecting a list of notification closures to call.
 ///
-/// Only calling `Global::buffer_map_async` clones a new `Arc` for the
+/// Only calling [`Buffer::map_async`] clones a new `Arc` for the
 /// buffer. This new `Arc` is only dropped by `handle_mapping`.
 pub(crate) struct LifetimeTracker {
     /// Resources used by queue submissions still in flight. One entry per
@@ -276,6 +286,23 @@ impl LifetimeTracker {
         // as we find a hit.
         self.active.iter().rev().find_map(|submission| {
             if submission.contains_texture(texture) {
+                Some(submission.index)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Returns the submission index of the most recent submission that uses the
+    /// given query set.
+    pub fn get_query_set_latest_submission_index(
+        &self,
+        query_set: &QuerySet,
+    ) -> Option<SubmissionIndex> {
+        // We iterate in reverse order, so that we can bail out early as soon
+        // as we find a hit.
+        self.active.iter().rev().find_map(|submission| {
+            if submission.contains_query_set(query_set) {
                 Some(submission.index)
             } else {
                 None

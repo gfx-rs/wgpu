@@ -7,6 +7,11 @@
 //
 // The `cts_runner` integration test `lst_files_are_sorted` verifies that test selectors
 // appear in this file in order -- including ones in comments.
+//
+// Test selector behavior is subtle. If a single test file contains `test`,
+// `test,foo`, and `test,bar`, the selector `test,*` will match all of those,
+// i.e., it is not necessary to list both `test:*` and `test,*`.  The selector
+// `test:*` will only match that single test, however.
 
 unittests:*
 
@@ -32,6 +37,8 @@ webgpu:api,operation,command_buffer,image_copy:undefined_params:initMethod="Writ
 webgpu:api,operation,command_buffer,image_copy:undefined_params:initMethod="WriteTexture";checkMethod="PartialCopyT2B";dimension="1d"
 fails-if(dx12) webgpu:api,operation,command_buffer,image_copy:undefined_params:initMethod="WriteTexture";checkMethod="PartialCopyT2B";dimension="2d"
 webgpu:api,operation,command_buffer,image_copy:undefined_params:initMethod="WriteTexture";checkMethod="PartialCopyT2B";dimension="3d"
+// https://github.com/gfx-rs/wgpu/issues/8556
+fails-if(dx12) webgpu:api,operation,command_buffer,programmable,immediate:*
 webgpu:api,operation,compute_pipeline,overrides:*
 //FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
 webgpu:api,operation,compute,basic:memcpy:*
@@ -56,6 +63,7 @@ webgpu:api,operation,rendering,color_target_state:blending,formats:*
 webgpu:api,operation,rendering,color_target_state:blending,GPUBlendComponent:*
 webgpu:api,operation,rendering,depth:*
 webgpu:api,operation,rendering,draw:*
+fails-if(dx12,vulkan) webgpu:api,operation,sampling,*
 webgpu:api,operation,shader_module,compilation_info:*
 webgpu:api,operation,uncapturederror:iff_uncaptured:*
 //FAIL: webgpu:api,operation,uncapturederror:onuncapturederror_order_wrt_addEventListener
@@ -79,9 +87,7 @@ webgpu:api,validation,capability_checks,limits,maxComputeWorkgroupSizeZ:validate
 webgpu:api,validation,capability_checks,limits,maxComputeWorkgroupsPerDimension:validate,*
 //FAIL: other `maxInterStageShaderVariables` cases w/ limitTest ∈ [underDefault, overMaximum]
 // https://github.com/gfx-rs/wgpu/issues/8945
-webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";*
-webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atMaximum";*
-webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="betweenDefaultAndMaximum";*
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:*
 webgpu:api,validation,capability_checks,limits,maxStorageBufferBindingSize:validate,*
 webgpu:api,validation,capability_checks,limits,maxUniformBufferBindingSize:validate,*
 webgpu:api,validation,capability_checks,limits,maxVertexBufferArrayStride:validate,*
@@ -128,15 +134,17 @@ webgpu:api,validation,createBindGroupLayout:multisampled_validation:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,formats:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,layout_dimension:*
 webgpu:api,validation,createBindGroupLayout:visibility,*
-webgpu:api,validation,createBindGroupLayout:visibility:*
 webgpu:api,validation,createPipelineLayout:*
 webgpu:api,validation,createSampler:*
+webgpu:api,validation,createTexture:depthOrArrayLayers_and_mipLevelCount_for_transient_attachments:*
 webgpu:api,validation,createTexture:dimension_type_and_format_compatibility:*
 webgpu:api,validation,createTexture:mipLevelCount,*
 webgpu:api,validation,createTexture:sample_count,*
 webgpu:api,validation,createTexture:sampleCount,*
 webgpu:api,validation,createTexture:texture_size,*
 webgpu:api,validation,createTexture:texture_usage,*
+webgpu:api,validation,createTexture:transient_viewFormats:*
+webgpu:api,validation,createTexture:usage:*
 webgpu:api,validation,createTexture:viewFormats:*
 webgpu:api,validation,createTexture:zero_size_and_usage:*
 webgpu:api,validation,createView:array_layers:*
@@ -145,6 +153,7 @@ webgpu:api,validation,createView:cube_faces_square:*
 webgpu:api,validation,createView:dimension:*
 webgpu:api,validation,createView:format:*
 webgpu:api,validation,createView:mip_levels:*
+webgpu:api,validation,createView:texture_view_usage_of_multiple_usages:*
 webgpu:api,validation,createView:texture_view_usage_with_view_format:*
 webgpu:api,validation,createView:texture_view_usage:*
 webgpu:api,validation,debugMarker:*
@@ -163,13 +172,13 @@ webgpu:api,validation,encoding,cmds,debug:debug_group:*
 webgpu:api,validation,encoding,cmds,debug:debug_marker:*
 webgpu:api,validation,encoding,cmds,index_access:*
 webgpu:api,validation,encoding,cmds,render,draw:buffer_binding_overlap:*
+webgpu:api,validation,encoding,cmds,render,draw:index_buffer_format_dirtying:*
+webgpu:api,validation,encoding,cmds,render,draw:index_buffer_format:*
 webgpu:api,validation,encoding,cmds,render,draw:index_buffer_OOB:*
 webgpu:api,validation,encoding,cmds,render,draw:unused_buffer_bound:*
 webgpu:api,validation,encoding,cmds,render,draw:vertex_buffer_OOB:*
 webgpu:api,validation,encoding,cmds,render,dynamic_state:*
-webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_buffer_state:*
-webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_buffer_usage:*
-webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_buffer,device_mismatch:*
+webgpu:api,validation,encoding,cmds,render,indirect_draw:*
 webgpu:api,validation,encoding,cmds,render,setIndexBuffer:*
 webgpu:api,validation,encoding,cmds,render,setPipeline:*
 webgpu:api,validation,encoding,cmds,render,setVertexBuffer:*
@@ -184,14 +193,14 @@ webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoder
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20bundle";state="valid";*
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20pass";state="invalid";*
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20pass";state="valid";*
+webgpu:api,validation,encoding,cmds,setImmediates:*
 webgpu:api,validation,encoding,createRenderBundleEncoder:*
-webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:*
-webgpu:api,validation,encoding,encoder_open_state:non_pass_commands:*
-//FAIL: webgpu:api,validation,encoding,encoder_open_state:render_bundle_commands:*
-// https://github.com/gfx-rs/wgpu/issues/7857
-webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:*
+webgpu:api,validation,encoding,encoder_open_state:*
 webgpu:api,validation,encoding,encoder_state:*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:*
+// On dx12, Error: Unexpected internal error occurred: undefined
+// https://github.com/gfx-rs/wgpu/issues/8556
+fails-if(dx12) webgpu:api,validation,encoding,programmable,pipeline_immediate:*
 webgpu:api,validation,encoding,queries,begin_end:nesting:*
 webgpu:api,validation,encoding,queries,begin_end:occlusion_query,*
 webgpu:api,validation,encoding,queries,general:occlusion_query,*
@@ -232,6 +241,7 @@ webgpu:api,validation,image_copy,layout_related:required_bytes_in_copy:*
 webgpu:api,validation,image_copy,layout_related:rows_per_image_alignment:*
 webgpu:api,validation,image_copy,texture_related:*
 fails-if(dx12) webgpu:api,validation,layout_shader_compat:pipeline_layout_shader_exact_match:*
+webgpu:api,validation,pipeline,immediates:*
 webgpu:api,validation,query_set,destroy:*
 webgpu:api,validation,queue,buffer_mapped:*
 webgpu:api,validation,queue,destroyed,query_set:*
@@ -260,6 +270,7 @@ webgpu:api,validation,render_pipeline,float32_blendable:*
 webgpu:api,validation,render_pipeline,fragment_state:color_target_exists:*
 webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,*
 webgpu:api,validation,render_pipeline,fragment_state:limits,*
+webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets,*
 webgpu:api,validation,render_pipeline,fragment_state:targets_blend:*
 webgpu:api,validation,render_pipeline,fragment_state:targets_format_filterable:*
 webgpu:api,validation,render_pipeline,fragment_state:targets_format_is_color_format:*
@@ -268,6 +279,7 @@ webgpu:api,validation,render_pipeline,fragment_state:targets_write_mask:*
 webgpu:api,validation,render_pipeline,inter_stage:location,*
 webgpu:api,validation,render_pipeline,inter_stage:max_shader_variable_location:*
 fails-if(dx12) webgpu:api,validation,render_pipeline,inter_stage:max_variables_count,*
+webgpu:api,validation,render_pipeline,inter_stage:type:*
 webgpu:api,validation,render_pipeline,misc:basic:*
 fails-if(vulkan) webgpu:api,validation,render_pipeline,misc:external_texture:*
 webgpu:api,validation,render_pipeline,misc:no_attachment:*
@@ -312,31 +324,7 @@ webgpu:api,validation,texture,destroy:invalid_texture:*
 webgpu:api,validation,texture,destroy:twice:*
 webgpu:api,validation,texture,float32_filterable:create_bind_group:*
 webgpu:api,validation,texture,rg11b10ufloat_renderable:*
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=false;numAttribsToReserve=0;isAsync=false
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=false;numAttribsToReserve=0;isAsync=true
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=false;numAttribsToReserve=1;isAsync=false
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=false;numAttribsToReserve=1;isAsync=true
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=false;numAttribsToReserve=2;isAsync=false
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=false;numAttribsToReserve=2;isAsync=true
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=true;numAttribsToReserve=0;isAsync=false
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=true;numAttribsToReserve=0;isAsync=true
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=true;numAttribsToReserve=1;isAsync=false
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=true;numAttribsToReserve=1;isAsync=true
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=true;numAttribsToReserve=2;isAsync=false
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=false;useInstanceIndex=true;numAttribsToReserve=2;isAsync=true
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=false;numAttribsToReserve=0;isAsync=false
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=false;numAttribsToReserve=0;isAsync=true
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=false;numAttribsToReserve=1;isAsync=false
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=false;numAttribsToReserve=1;isAsync=true
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=false;numAttribsToReserve=2;isAsync=false
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=false;numAttribsToReserve=2;isAsync=true
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=true;numAttribsToReserve=0;isAsync=false
-// https://github.com/gfx-rs/wgpu/issues/9456
-fails-if(dx12) webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=true;numAttribsToReserve=0;isAsync=true
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=true;numAttribsToReserve=1;isAsync=false
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=true;numAttribsToReserve=1;isAsync=true
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=true;numAttribsToReserve=2;isAsync=false
-webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:useVertexIndex=true;useInstanceIndex=true;numAttribsToReserve=2;isAsync=true
+webgpu:compat,api,validation,render_pipeline,vertex_state:maxVertexAttributesVertexIndexInstanceIndex:*
 
 fails-if(dx12) webgpu:shader,execution,expression,call,builtin,atan2:f16:*
 webgpu:shader,execution,expression,call,builtin,atan2:f32:*
@@ -375,9 +363,8 @@ webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type=
 webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="vec4u";*
 webgpu:shader,execution,expression,unary,bool_conversion:*
 webgpu:shader,execution,flow_control,return:*
-// Many other vertex_buffer_access subtests also passing, but there are too many to enumerate.
-// Fails on Metal in CI only, not when running locally.
-fails-if(metal) webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:indexed=true;indirect=false;drawCallTestParameter="baseVertex";type="float32x4";additionalBuffers=4;partialLastNumber=false;offsetVertexBuffer=true
+// Fails on Metal in CI only, not when running locally. https://github.com/gfx-rs/wgpu/issues/8023
+fails-if(metal) webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:*
 webgpu:shader,execution,shader_io,fragment_builtins:inputs,front_facing:*
 webgpu:shader,execution,shader_io,fragment_builtins:inputs,interStage,centroid:*
 fails-if(vulkan) webgpu:shader,execution,shader_io,fragment_builtins:inputs,interStage:*
@@ -394,6 +381,14 @@ webgpu:shader,validation,decl,assignment_statement:*
 webgpu:shader,validation,decl,compound_statement:*
 webgpu:shader,validation,decl,const:*
 webgpu:shader,validation,decl,context_dependent_resolution:*
+webgpu:shader,validation,decl,immediate:access_mode:*
+webgpu:shader,validation,decl,immediate:binding_attributes:*
+webgpu:shader,validation,decl,immediate:entry_point_interface:*
+webgpu:shader,validation,decl,immediate:pointers:*
+webgpu:shader,validation,decl,immediate:scope:*
+//FAIL: Fixed array should be disallowed in immediates
+// webgpu:shader,validation,decl,immediate:store_type,invalid:*
+webgpu:shader,validation,decl,immediate:store_type,valid:*
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_neg"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_one"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_zero_signed"
@@ -501,12 +496,7 @@ fails-if(vulkan) webgpu:shader,validation,shader_io,group_and_binding:*
 webgpu:shader,validation,shader_io,group:*
 webgpu:shader,validation,shader_io,interpolate:*
 webgpu:shader,validation,shader_io,invariant:*
-webgpu:shader,validation,shader_io,locations:duplicates:*
-webgpu:shader,validation,shader_io,locations:location_fp16:*
-webgpu:shader,validation,shader_io,locations:nesting:*
-webgpu:shader,validation,shader_io,locations:out_of_order:*
-webgpu:shader,validation,shader_io,locations:type:*
-webgpu:shader,validation,shader_io,locations:validation:*
+webgpu:shader,validation,shader_io,locations:*
 webgpu:shader,validation,shader_io,size:*
 webgpu:shader,validation,statement,break_if:*
 webgpu:shader,validation,statement,break:*

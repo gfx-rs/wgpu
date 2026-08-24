@@ -20,7 +20,9 @@ layout(r32ui) writeonly uniform uimage1D _group_0_binding_2_cs;
 void main() {
     uvec3 local_id = gl_LocalInvocationID;
     uvec2 dim = uvec2(imageSize(_group_0_binding_1_cs).xy);
-    ivec2 itc = (ivec2((dim * local_id.xy)) % ivec2(10, 20));
+    ivec2 _e5 = ivec2((dim * local_id.xy));
+    ivec2 _e8 = ivec2(10, 20);
+    ivec2 itc = (_e5 - _e8 * (_e5 / _e8));
     uvec4 value1_ = texelFetch(_group_0_binding_0_cs, itc, int(local_id.z));
     uvec4 value1_2_ = texelFetch(_group_0_binding_0_cs, itc, int(uint(local_id.z)));
     uvec4 value2_ = texelFetch(_group_0_binding_3_cs, itc, int(local_id.z));

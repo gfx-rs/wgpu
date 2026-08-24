@@ -1,6 +1,6 @@
 use std::num::NonZeroU64;
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(SUBGROUP_OPERATIONS);
@@ -9,35 +9,30 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 const THREAD_COUNT: u64 = 128;
 const TEST_COUNT: u32 = 37;
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(wgpu::Features::SUBGROUP)
-            .limits(wgpu::Limits::downlevel_defaults())
-            // Expect metal to fail on tests involving operations in divergent control flow
-            //
-            // Newlines are included in the panic message to ensure that _additional_ failures
-            // are not matched against.
-            .expect_fail(
-                wgpu_test::FailureCase::molten_vk()
+    .parameters(TestParameters {
+        required_features: wgpu::Features::SUBGROUP,
+        required_limits: wgpu::Limits::downlevel_defaults(),
+        // Expect metal to fail on tests involving operations in divergent control flow
+        // <https://github.com/gfx-rs/wgpu/issues/10019>
+        //
+        // Newlines are included in the panic message to ensure that _additional_ failures
+        // are not matched against.
+        failures: wgpu_test::FailureCase::mac()
+            .into_iter()
+            .map(|case| {
+                case
                     // 26.0 fails only test 28, and not on thread 0
                     .panic("thread 1 failed tests: 28,\n")
                     // 14.3 fails 27 and 28
                     .panic("thread 0 failed tests: 27,\nthread 1 failed tests: 27, 28,\n")
                     // Prior versions fail 27, 28, and 29
-                    .panic("thread 0 failed tests: 27, 29,\nthread 1 failed tests: 27, 28, 29,\n"),
-            )
-            .expect_fail(
-                wgpu_test::FailureCase::backend(wgpu::Backends::METAL)
-                    // 26.0 fails only test 28, and not on thread 0
-                    .panic("thread 1 failed tests: 28,\n")
-                    // 14.3 fails 27 and 28
-                    .panic("thread 0 failed tests: 27,\nthread 1 failed tests: 27, 28,\n")
-                    // Prior versions fail 27, 28, and 29
-                    .panic("thread 0 failed tests: 27, 29,\nthread 1 failed tests: 27, 28, 29,\n"),
-            ),
-    )
+                    .panic("thread 0 failed tests: 27, 29,\nthread 1 failed tests: 27, 28, 29,\n")
+            })
+            .collect(),
+        ..Default::default()
+    })
     .run_sync(|ctx| {
         let device = &ctx.device;
 

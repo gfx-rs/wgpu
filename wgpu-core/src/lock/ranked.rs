@@ -63,23 +63,24 @@ pub use LockState as RankData;
 
 /// A `Mutex` instrumented for deadlock prevention.
 ///
-/// This is just a wrapper around a [`parking_lot::Mutex`], along with
+/// This is just a wrapper around a [`wgpu_sync::Mutex`], along with
 /// its rank in the `wgpu_core` lock ordering.
 ///
 /// For details, see [the module documentation][self].
 pub struct Mutex<T> {
-    inner: parking_lot::Mutex<T>,
+    inner: wgpu_sync::Mutex<T>,
     rank: LockRank,
 }
 
 /// A guard produced by locking [`Mutex`].
 ///
-/// This is just a wrapper around a [`parking_lot::MutexGuard`], along
+/// This is just a wrapper around a [`wgpu_sync::MutexGuard`], along
 /// with the state needed to track lock acquisition.
 ///
 /// For details, see [the module documentation][self].
 pub struct MutexGuard<'a, T> {
-    inner: parking_lot::MutexGuard<'a, T>,
+    inner: wgpu_sync::MutexGuard<'a, T>,
+    #[cfg_attr(not(miri), expect(unused))] // but `Drop` has important side effects
     saved: LockStateGuard,
 }
 
@@ -163,23 +164,59 @@ fn acquire(new_rank: LockRank, location: &'static Location<'static>) -> LockStat
 /// Check that locks are being acquired in stacking order, and update the
 /// per-thread state accordingly.
 fn release(saved: LockState) {
+    let saved_info = saved.last_acquired;
+
     let prior = LOCK_STATE.replace(saved);
+
+    let (prior_rank, prior_location) = prior
+        .last_acquired
+        .expect("Releasing a lock, but no acquisition recorded");
 
     // Although Rust allows mutex guards to be dropped in any
     // order, this analysis requires that locks be acquired and
     // released in stack order: the next lock to be released must be
     // the most recently acquired lock still held.
-    assert_eq!(
-        prior.depth,
-        saved.depth + 1,
-        "Lock not released in stacking order"
-    );
+
+    match (saved.depth, saved_info) {
+        (saved_depth @ 0, None) => {
+            assert_eq!(
+                prior.depth,
+                saved_depth + 1,
+                "Lock not released in stacking order\n\
+                released {:<35} locked at {:?}\n\
+                when not expecting any locks to be held\n",
+                prior_rank.bit.member_name(),
+                prior_location,
+            );
+        }
+        (0, Some(_)) => {
+            panic!("Found previous lock acquisition information, but saved.depth = 0");
+        }
+        (saved_depth, Some((saved_rank, saved_location))) => {
+            assert_eq!(
+                prior.depth,
+                saved_depth + 1,
+                "Lock not released in stacking order\n\
+                expecting release of {:<35} locked at {:?}\n\
+                but instead released {:<35} locked at {:?}\n",
+                saved_rank.bit.member_name(),
+                saved_location,
+                prior_rank.bit.member_name(),
+                prior_location,
+            );
+        }
+        (saved_depth, None) => {
+            panic!(
+                "Found saved.depth = {saved_depth}, but no previous lock acquisition information"
+            );
+        }
+    }
 }
 
 impl<T> Mutex<T> {
     pub fn new(rank: LockRank, value: T) -> Mutex<T> {
         Mutex {
-            inner: parking_lot::Mutex::new(value),
+            inner: wgpu_sync::Mutex::new(value),
             rank,
         }
     }
@@ -191,6 +228,10 @@ impl<T> Mutex<T> {
             inner: self.inner.lock(),
             saved: LockStateGuard(saved),
         }
+    }
+
+    pub fn get_mut(&mut self) -> &mut T {
+        self.inner.get_mut()
     }
 
     pub fn into_inner(self) -> T {
@@ -220,41 +261,41 @@ impl<T: fmt::Debug> fmt::Debug for Mutex<T> {
 
 /// An `RwLock` instrumented for deadlock prevention.
 ///
-/// This is just a wrapper around a [`parking_lot::RwLock`], along with
+/// This is just a wrapper around a [`wgpu_sync::RwLock`], along with
 /// its rank in the `wgpu_core` lock ordering.
 ///
 /// For details, see [the module documentation][self].
 pub struct RwLock<T> {
-    inner: parking_lot::RwLock<T>,
+    inner: wgpu_sync::RwLock<T>,
     rank: LockRank,
 }
 
 /// A read guard produced by locking [`RwLock`] for reading.
 ///
-/// This is just a wrapper around a [`parking_lot::RwLockReadGuard`], along with
+/// This is just a wrapper around a [`wgpu_sync::RwLockReadGuard`], along with
 /// the state needed to track lock acquisition.
 ///
 /// For details, see [the module documentation][self].
 pub struct RwLockReadGuard<'a, T> {
-    inner: parking_lot::RwLockReadGuard<'a, T>,
+    inner: wgpu_sync::RwLockReadGuard<'a, T>,
     saved: LockStateGuard,
 }
 
 /// A write guard produced by locking [`RwLock`] for writing.
 ///
-/// This is just a wrapper around a [`parking_lot::RwLockWriteGuard`], along
+/// This is just a wrapper around a [`wgpu_sync::RwLockWriteGuard`], along
 /// with the state needed to track lock acquisition.
 ///
 /// For details, see [the module documentation][self].
 pub struct RwLockWriteGuard<'a, T> {
-    inner: parking_lot::RwLockWriteGuard<'a, T>,
+    inner: wgpu_sync::RwLockWriteGuard<'a, T>,
     saved: LockStateGuard,
 }
 
 impl<T> RwLock<T> {
     pub fn new(rank: LockRank, value: T) -> RwLock<T> {
         RwLock {
-            inner: parking_lot::RwLock::new(value),
+            inner: wgpu_sync::RwLock::new(value),
             rank,
         }
     }

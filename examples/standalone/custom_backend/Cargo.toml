@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-example-custom-backend"
-edition = "2021"
+edition = "2024"
 rust-version = "1.87"
 publish = false
 
@@ -9,8 +9,8 @@ default = ["web"]
 web = ["wgpu/web"]
 
 [dependencies]
-wgpu = { version = "29.0.0", features = [
+wgpu = { version = "30.0.0", features = [
     "custom",
     "wgsl",
 ], default-features = false }
-pollster = { version = "0.4", features = ["macro"] }
+pollster = { version = "1.0", features = ["macro"] }

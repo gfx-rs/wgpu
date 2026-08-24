@@ -3,7 +3,8 @@ use wgpu::{
     QUERY_RESOLVE_BUFFER_ALIGNMENT,
 };
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -22,7 +23,7 @@ const ITERATIONS: u32 = 10;
 const QUERIES_PER_ITERATION: u32 = 2;
 const TOTAL_QUERIES: u32 = QUERIES_PER_ITERATION * ITERATIONS;
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static TIMESTAMP_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

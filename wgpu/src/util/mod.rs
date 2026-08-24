@@ -10,7 +10,7 @@ mod belt;
 mod device;
 mod encoder;
 mod init;
-mod mutex;
+#[cfg(webgpu)]
 mod panicking;
 mod spirv;
 mod texture_blitter;
@@ -29,50 +29,65 @@ pub use wgt::{
     math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs, TextureDataOrder,
 };
 
-pub(crate) use mutex::Mutex;
+#[cfg(webgpu)]
 pub(crate) use panicking::is_panicking;
+pub(crate) use wgpu_sync::Mutex;
 
-use crate::dispatch;
+use crate::BufferUsages;
 
-/// CPU accessible buffer used to download data back from the GPU.
+/// CPU-accessible buffer used to retrieve data from buffers that cannot or must not be mapped.
+///
+/// This utility is a convenience wrapper around creating and mapping a temporary
+/// [`Buffer`][crate::Buffer].
+#[derive(Debug)]
 pub struct DownloadBuffer {
-    _gpu_buffer: super::Buffer,
-    mapped_range: dispatch::DispatchBufferMappedRange,
+    view: crate::BufferView,
 }
 
 impl DownloadBuffer {
-    /// Asynchronously read the contents of a buffer.
+    /// Asynchronously read the contents of a buffer by copying it to a staging buffer.
+    ///
+    /// `buffer_slice`’s buffer must have been created with [`BufferUsages::COPY_SRC`].
+    /// The slice’s size must be a multiple of 4.
+    ///
+    /// `callback` will be called when the data is available.
+    /// If you are not submitting further work, you must call
+    /// [`Device::poll()`][crate::Device::poll] repeatedly until the callback completes.
     pub fn read_buffer(
         device: &super::Device,
         queue: &super::Queue,
-        buffer: &super::BufferSlice<'_>,
+        buffer_slice: &super::BufferSlice<'_>,
         callback: impl FnOnce(Result<Self, super::BufferAsyncError>) + Send + 'static,
     ) {
-        let size = buffer.size;
+        let size = buffer_slice.size;
 
-        let download = device.create_buffer(&super::BufferDescriptor {
+        let temporary_buffer = device.create_buffer(&super::BufferDescriptor {
             size,
-            usage: super::BufferUsages::COPY_DST | super::BufferUsages::MAP_READ,
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
             mapped_at_creation: false,
             label: None,
         });
 
         let mut encoder =
             device.create_command_encoder(&super::CommandEncoderDescriptor { label: None });
-        encoder.copy_buffer_to_buffer(buffer.buffer, buffer.offset, &download, 0, size);
-        let command_buffer: super::CommandBuffer = encoder.finish();
-        queue.submit(Some(command_buffer));
+        encoder.copy_buffer_to_buffer(
+            buffer_slice.buffer,
+            buffer_slice.offset,
+            &temporary_buffer,
+            0,
+            size,
+        );
+        queue.submit([encoder.finish()]);
 
-        download
+        temporary_buffer
             .clone()
-            .slice(..)
-            .map_async(super::MapMode::Read, move |result| {
+            .map_async(super::MapMode::Read, .., move |result| {
                 if let Err(e) = result {
                     callback(Err(e));
                     return;
                 }
 
-                let mapped_range = match download.inner.get_mapped_range(0..size) {
+                let view = match temporary_buffer.get_mapped_range(0..size) {
                     Ok(range) => range,
                     Err(e) => {
                         callback(Err(super::BufferAsyncError));
@@ -80,10 +95,7 @@ impl DownloadBuffer {
                         return;
                     }
                 };
-                callback(Ok(Self {
-                    _gpu_buffer: download,
-                    mapped_range,
-                }));
+                callback(Ok(Self { view }));
             });
     }
 }
@@ -91,8 +103,7 @@ impl DownloadBuffer {
 impl core::ops::Deref for DownloadBuffer {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
-        // SAFETY: `self.mapped_range` is always a read mapping
-        unsafe { self.mapped_range.read_slice() }
+        &self.view
     }
 }
 
