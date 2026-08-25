@@ -1,17 +1,17 @@
 use wgpu_core::device::DeviceDescriptor;
 use wgpu_core::instance::RequestDeviceError;
+use wgpu_core_remote_types::RequestAdapterOptions;
 use wgt::Backends;
 
 use crate::global::Global;
 use crate::hub::Hub;
 use crate::id::{AdapterId, DeviceId, QueueId};
 
-pub type RequestAdapterOptions = wgt::RequestAdapterOptions<()>;
-
 impl Global {
     pub fn request_adapter(
         &self,
         desc: &RequestAdapterOptions,
+        apply_limit_buckets: bool,
         backends: Backends,
         id_in: AdapterId,
     ) -> Result<AdapterId, wgt::RequestAdapterError> {
@@ -20,7 +20,7 @@ impl Global {
             power_preference: desc.power_preference,
             force_fallback_adapter: desc.force_fallback_adapter,
             compatible_surface: None,
-            apply_limit_buckets: desc.apply_limit_buckets,
+            apply_limit_buckets,
         };
         let adapter = self.instance.request_adapter(&desc, backends)?;
         let id = hub.adapters.assign(id_in, adapter);
