@@ -15,7 +15,6 @@ use crate::id::{
     DeviceId, PipelineLayoutId, QuerySetId, QueueId, RenderPipelineId, TextureId,
 };
 
-mod as_hal;
 mod bundle;
 mod command_encoder;
 mod compute_pass;
