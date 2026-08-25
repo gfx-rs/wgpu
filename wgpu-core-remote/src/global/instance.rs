@@ -1,5 +1,5 @@
-use wgpu_core::device::DeviceDescriptor;
 use wgpu_core::instance::RequestDeviceError;
+use wgpu_core_remote_types::DeviceDescriptor;
 use wgpu_core_remote_types::RequestAdapterOptions;
 use wgt::Backends;
 
