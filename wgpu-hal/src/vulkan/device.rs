@@ -1254,7 +1254,15 @@ impl crate::Device for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
-        let subresource_range = conv::map_subresource_range(&desc.range, texture.format);
+        let mut subresource_range = conv::map_subresource_range(&desc.range, texture.format);
+        // A view that spans an entire multi-planar image must use the COLOR
+        // aspect: Vulkan only permits a single multi-planar aspect bit in a
+        // view's `subresourceRange`, so the `PLANE_0 | PLANE_1` mask produced
+        // for `TextureAspect::All` is invalid. Per-plane views (which request a
+        // specific plane aspect) keep their single `PLANE_n` bit.
+        if texture.format.planes().is_some() && desc.range.aspect == wgt::TextureAspect::All {
+            subresource_range.aspect_mask = vk::ImageAspectFlags::COLOR;
+        }
         let raw_format = self.shared.private_caps.map_texture_format(desc.format);
         let mut vk_info = vk::ImageViewCreateInfo::default()
             .flags(vk::ImageViewCreateFlags::empty())

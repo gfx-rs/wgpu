@@ -782,12 +782,33 @@ impl PhysicalDeviceFeatures {
         }
 
         if let Some(ref shader_image_atomic_int64) = self.shader_image_atomic_int64 {
+            // Some drivers (e.g. lavapipe) advertise shaderImageInt64Atomics
+            // while vkCreateImage rejects an R64_UINT image with
+            // VK_ERROR_FORMAT_NOT_SUPPORTED. `guaranteed_format_features`
+            // reports R64Uint as usable for sampling, storage and copies once
+            // TEXTURE_INT64_ATOMIC is enabled, so the feature must only be
+            // exposed when an image with that full usage set is creatable.
+            let r64_storage_creatable = unsafe {
+                instance.get_physical_device_image_format_properties(
+                    phd,
+                    vk::Format::R64_UINT,
+                    vk::ImageType::TYPE_2D,
+                    vk::ImageTiling::OPTIMAL,
+                    vk::ImageUsageFlags::SAMPLED
+                        | vk::ImageUsageFlags::STORAGE
+                        | vk::ImageUsageFlags::TRANSFER_SRC
+                        | vk::ImageUsageFlags::TRANSFER_DST,
+                    vk::ImageCreateFlags::empty(),
+                )
+            }
+            .is_ok();
             features.set(
                 F::TEXTURE_INT64_ATOMIC,
                 shader_image_atomic_int64
                     .shader_image_int64_atomics(true)
                     .shader_image_int64_atomics
-                    != 0,
+                    != 0
+                    && r64_storage_creatable,
             );
         }
 
@@ -3102,6 +3123,26 @@ impl crate::Adapter for super::Adapter {
         };
         let features = properties.optimal_tiling_features;
 
+        // A format can advertise `STORAGE_IMAGE` in its format features yet
+        // still fail image creation with that usage (e.g. `R64_UINT` on many
+        // drivers, where `vkGetPhysicalDeviceImageFormatProperties2` returns
+        // `VK_ERROR_FORMAT_NOT_SUPPORTED`). Confirm a storage image is actually
+        // creatable before reporting any storage capability.
+        let storage_image_creatable = features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE)
+            && unsafe {
+                self.instance
+                    .raw
+                    .get_physical_device_image_format_properties(
+                        self.raw,
+                        vk_format,
+                        vk::ImageType::TYPE_2D,
+                        vk::ImageTiling::OPTIMAL,
+                        vk::ImageUsageFlags::STORAGE,
+                        vk::ImageCreateFlags::empty(),
+                    )
+            }
+            .is_ok();
+
         let mut flags = Tfc::empty();
         flags.set(
             Tfc::SAMPLED,
@@ -3116,15 +3157,13 @@ impl crate::Adapter for super::Adapter {
         //     features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX),
         // );
         flags.set(
-            Tfc::STORAGE_READ_WRITE
-                | Tfc::STORAGE_WRITE_ONLY
-                | Tfc::STORAGE_READ_ONLY
-                | Tfc::STORAGE_ATOMIC,
-            features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE),
+            Tfc::STORAGE_READ_WRITE | Tfc::STORAGE_WRITE_ONLY | Tfc::STORAGE_READ_ONLY,
+            storage_image_creatable,
         );
         flags.set(
             Tfc::STORAGE_ATOMIC,
-            features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
+            storage_image_creatable
+                && features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
         );
         flags.set(
             Tfc::COLOR_ATTACHMENT,
@@ -3146,63 +3185,69 @@ impl crate::Adapter for super::Adapter {
             Tfc::COPY_DST,
             features.intersects(vk::FormatFeatureFlags::TRANSFER_DST),
         );
+        // Only set MSAA flags if the format can be used as a render attachment.
+        // A format that supports sampling but not render attachment cannot be
+        // meaningfully multisampled (you can't resolve without render attachment).
+        let supports_attachment =
+            flags.intersects(Tfc::COLOR_ATTACHMENT | Tfc::DEPTH_STENCIL_ATTACHMENT);
+
         flags.set(
-            Tfc::STORAGE_ATOMIC,
-            features.intersects(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
+            Tfc::MULTISAMPLE_RESOLVE,
+            !format.is_compressed() && supports_attachment,
         );
-        // Vulkan is very permissive about MSAA
-        flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());
 
-        // get the supported sample counts
-        let format_aspect = crate::FormatAspects::from(format);
-        let limits = self.phd_capabilities.properties.limits;
+        if supports_attachment {
+            // get the supported sample counts
+            let format_aspect = crate::FormatAspects::from(format);
+            let limits = self.phd_capabilities.properties.limits;
 
-        let sample_flags = if format_aspect.contains(crate::FormatAspects::DEPTH) {
-            limits
-                .framebuffer_depth_sample_counts
-                .min(limits.sampled_image_depth_sample_counts)
-        } else if format_aspect.contains(crate::FormatAspects::STENCIL) {
-            limits
-                .framebuffer_stencil_sample_counts
-                .min(limits.sampled_image_stencil_sample_counts)
-        } else {
-            let first_aspect = format_aspect
-                .iter()
-                .next()
-                .expect("All texture should at least one aspect")
-                .map();
+            let sample_flags = if format_aspect.contains(crate::FormatAspects::DEPTH) {
+                limits
+                    .framebuffer_depth_sample_counts
+                    .min(limits.sampled_image_depth_sample_counts)
+            } else if format_aspect.contains(crate::FormatAspects::STENCIL) {
+                limits
+                    .framebuffer_stencil_sample_counts
+                    .min(limits.sampled_image_stencil_sample_counts)
+            } else {
+                let first_aspect = format_aspect
+                    .iter()
+                    .next()
+                    .expect("All texture should at least one aspect")
+                    .map();
 
-            // We should never get depth or stencil out of this, due to the above.
-            assert_ne!(first_aspect, wgt::TextureAspect::DepthOnly);
-            assert_ne!(first_aspect, wgt::TextureAspect::StencilOnly);
+                // We should never get depth or stencil out of this, due to the above.
+                assert_ne!(first_aspect, wgt::TextureAspect::DepthOnly);
+                assert_ne!(first_aspect, wgt::TextureAspect::StencilOnly);
 
-            match format.sample_type(Some(first_aspect), None).unwrap() {
-                wgt::TextureSampleType::Float { .. } => limits
-                    .framebuffer_color_sample_counts
-                    .min(limits.sampled_image_color_sample_counts),
-                wgt::TextureSampleType::Sint | wgt::TextureSampleType::Uint => {
-                    limits.sampled_image_integer_sample_counts
+                match format.sample_type(Some(first_aspect), None).unwrap() {
+                    wgt::TextureSampleType::Float { .. } => limits
+                        .framebuffer_color_sample_counts
+                        .min(limits.sampled_image_color_sample_counts),
+                    wgt::TextureSampleType::Sint | wgt::TextureSampleType::Uint => {
+                        limits.sampled_image_integer_sample_counts
+                    }
+                    _ => unreachable!(),
                 }
-                _ => unreachable!(),
-            }
-        };
+            };
 
-        flags.set(
-            Tfc::MULTISAMPLE_X2,
-            sample_flags.contains(vk::SampleCountFlags::TYPE_2),
-        );
-        flags.set(
-            Tfc::MULTISAMPLE_X4,
-            sample_flags.contains(vk::SampleCountFlags::TYPE_4),
-        );
-        flags.set(
-            Tfc::MULTISAMPLE_X8,
-            sample_flags.contains(vk::SampleCountFlags::TYPE_8),
-        );
-        flags.set(
-            Tfc::MULTISAMPLE_X16,
-            sample_flags.contains(vk::SampleCountFlags::TYPE_16),
-        );
+            flags.set(
+                Tfc::MULTISAMPLE_X2,
+                sample_flags.contains(vk::SampleCountFlags::TYPE_2),
+            );
+            flags.set(
+                Tfc::MULTISAMPLE_X4,
+                sample_flags.contains(vk::SampleCountFlags::TYPE_4),
+            );
+            flags.set(
+                Tfc::MULTISAMPLE_X8,
+                sample_flags.contains(vk::SampleCountFlags::TYPE_8),
+            );
+            flags.set(
+                Tfc::MULTISAMPLE_X16,
+                sample_flags.contains(vk::SampleCountFlags::TYPE_16),
+            );
+        }
 
         flags
     }

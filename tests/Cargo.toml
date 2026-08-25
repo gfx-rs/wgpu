@@ -48,7 +48,7 @@ wgpu = { workspace = true, features = ["noop", "gles", "webgl", "angle"] }
 wgpu-core = { workspace = true, features = ["trace"] }
 wgpu-hal = { workspace = true, features = ["validation_canary"] }
 wgpu-sync.workspace = true
-wgpu-types.workspace = true
+wgpu-types = { workspace = true, features = ["exhaust"] }
 naga = { workspace = true, features = [
     "spv-out",
     "wgsl-out",

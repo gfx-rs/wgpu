@@ -285,7 +285,11 @@ pub enum TextureFormat {
     ///
     /// Width and height must be even.
     ///
-    /// [`Features::TEXTURE_FORMAT_P010`] must be enabled to use this texture format.
+    /// Both [`Features::TEXTURE_FORMAT_P010`] and
+    /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this
+    /// texture format. The latter is required because the plane view formats
+    /// ([`TextureFormat::R16Unorm`] and [`TextureFormat::Rg16Unorm`]) are
+    /// themselves gated behind [`Features::TEXTURE_FORMAT_16BIT_NORM`].
     P010,
 
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature. `TEXTURE_COMPRESSION_SLICED_3D` is required to use with 3D textures.
@@ -865,7 +869,9 @@ impl TextureFormat {
             Self::Depth32FloatStencil8 => Features::DEPTH32FLOAT_STENCIL8,
 
             Self::NV12 => Features::TEXTURE_FORMAT_NV12,
-            Self::P010 => Features::TEXTURE_FORMAT_P010,
+            // P010's plane view formats (R16Unorm/Rg16Unorm) require
+            // TEXTURE_FORMAT_16BIT_NORM, so using P010 at all requires it too.
+            Self::P010 => Features::TEXTURE_FORMAT_P010 | Features::TEXTURE_FORMAT_16BIT_NORM,
 
             Self::R16Unorm
             | Self::R16Snorm
@@ -1005,12 +1011,12 @@ impl TextureFormat {
             Self::NV12 =>                 (        none,    binding),
             Self::P010 =>                 (        none,    binding),
 
-            Self::R16Unorm =>             (        msaa | s_ro_wo,    storage),
-            Self::R16Snorm =>             (        msaa | s_ro_wo,    storage),
-            Self::Rg16Unorm =>            (        msaa | s_ro_wo,    storage),
-            Self::Rg16Snorm =>            (        msaa | s_ro_wo,    storage),
-            Self::Rgba16Unorm =>          (        msaa | s_ro_wo,    storage),
-            Self::Rgba16Snorm =>          (        msaa | s_ro_wo,    storage),
+            Self::R16Unorm =>             (             s_ro_wo,    storage),
+            Self::R16Snorm =>             (             s_ro_wo,    storage),
+            Self::Rg16Unorm =>            (             s_ro_wo,    storage),
+            Self::Rg16Snorm =>            (             s_ro_wo,    storage),
+            Self::Rgba16Unorm =>          (             s_ro_wo,    storage),
+            Self::Rgba16Snorm =>          (             s_ro_wo,    storage),
 
             Self::Rgb9e5Ufloat =>         (        none,      basic),
 
@@ -1349,7 +1355,11 @@ impl TextureFormat {
             | Self::Rg32Float
             | Self::Rgb10a2Uint
             | Self::Rgb10a2Unorm
-            | Self::Rg11b10Ufloat => Some(8),
+            | Self::Rg11b10Ufloat
+            // Not renderable in baseline WebGPU, but some adapters expose it as a
+            // color target under `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`; treat
+            // it like its packed-32-bit float sibling `Rg11b10Ufloat`.
+            | Self::Rgb9e5Ufloat => Some(8),
             Self::Rgba32Uint | Self::Rgba32Sint | Self::Rgba32Float => Some(16),
             // ⚠️ If you add formats with larger sizes, make sure you change `MAX_TARGET_PIXEL_BYTE_COST`` ⚠️
             Self::Stencil8
@@ -1360,7 +1370,6 @@ impl TextureFormat {
             | Self::Depth32FloatStencil8
             | Self::NV12
             | Self::P010
-            | Self::Rgb9e5Ufloat
             | Self::Bc1RgbaUnorm
             | Self::Bc1RgbaUnormSrgb
             | Self::Bc2RgbaUnorm
@@ -1435,7 +1444,9 @@ impl TextureFormat {
             | Self::Rgba32Float
             | Self::Rgb10a2Uint
             | Self::Rgb10a2Unorm
-            | Self::Rg11b10Ufloat => Some(4),
+            | Self::Rg11b10Ufloat
+            // See the note in `target_pixel_byte_cost`.
+            | Self::Rgb9e5Ufloat => Some(4),
             Self::Stencil8
             | Self::Depth16Unorm
             | Self::Depth24Plus
@@ -1444,7 +1455,6 @@ impl TextureFormat {
             | Self::Depth32FloatStencil8
             | Self::NV12
             | Self::P010
-            | Self::Rgb9e5Ufloat
             | Self::Bc1RgbaUnorm
             | Self::Bc1RgbaUnormSrgb
             | Self::Bc2RgbaUnorm

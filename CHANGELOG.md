@@ -123,6 +123,8 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 - Fix a spurious assertion failure in `Device::maintain` when multiple threads race polling the same device. By @AdrianEddy in [#9958](https://github.com/gfx-rs/wgpu/pull/9958).
 - Fix `PendingSubmission` releasing its lock guards out of stacking order, which tripped `--cfg wgpu_validate_locks` on any submission. By @AdrianEddy in [#9960](https://github.com/gfx-rs/wgpu/pull/9960).
 - Fixed some cases where initialization tracking was not correct. By @andyleiserson in [#10002](https://github.com/gfx-rs/wgpu/pull/10002).
+- `TextureFormat::P010` now reports `TEXTURE_FORMAT_16BIT_NORM` in addition to `TEXTURE_FORMAT_P010` from `required_features()`, reflecting that its `R16Unorm`/`Rg16Unorm` plane views require that feature. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
+- Fixed a panic when validating a color attachment whose format is renderable only via `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` (e.g. `Rgb9e5Ufloat` on Apple GPUs); `TextureFormat::target_pixel_byte_cost`/`target_component_alignment` now return values for `Rgb9e5Ufloat`. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
 
 #### naga
 
@@ -153,6 +155,8 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 #### Vulkan
 
 - Add OpenHarmony surface support via `VK_OHOS_surface`. Previously the Vulkan backend could not create a surface on OpenHarmony, leaving GLES as the only usable backend. By @ozongzi in [#9908](https://github.com/gfx-rs/wgpu/pull/9908).
+- Stopped reporting storage capabilities for formats whose `STORAGE_IMAGE` feature flag is set but for which a storage image can't actually be created (e.g. `R64Uint` on many drivers). By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
+- Fixed an invalid `aspectMask` (`PLANE_0 | PLANE_1`) when creating a view over an entire multi-planar image such as `NV12`; such views now use the `COLOR` aspect. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
 
 #### Metal
 
@@ -166,6 +170,7 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 - `@interpolate(linear)` is now rejected by `Device::create_shader_module` on adapters that lack `DownlevelFlags::LINEAR_INTERPOLATION` (GLES/WebGL2), with a shader label and a source span. Previously such a shader validated fine and then failed at pipeline creation with `The selected version doesn't support Features(NOPERSPECTIVE_QUALIFIER)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - Fixed signed integer `%` (and `%=`) returning the wrong result for negative operands in the GLSL (OpenGL/GLES) backend, e.g. `-1 % 768` yielding `255` instead of `-1`. GLSL's `%` is undefined when either operand is negative, so signed remainder is now lowered as `a - b * (a / b)`, matching the SPIR-V, HLSL, and Metal backends. By @mstampfli in [#9687](https://github.com/gfx-rs/wgpu/pull/9687).
 - Fix negative argument for `atomicSub` yielding incorrect GLSL. By @ErichDonGubler in [#9924](https://github.com/gfx-rs/wgpu/pull/9924).
+- Fixed several texture-format issues uncovered by new conformance tests: stop advertising `TEXTURE_COMPRESSION_BC_SLICED_3D` (BC formats are 2D-only in GL), use the `GL_TEXTURE_2D_MULTISAMPLE` target for multisampled textures, and copy textures with `glCopyImageSubData` when available (falling back to `glBlitFramebuffer` for depth/stencil) so compressed, multisampled, and depth/stencil copies no longer fail with framebuffer-incomplete errors. By @inner-daemons in [#8653](https://github.com/gfx-rs/wgpu/pull/8653).
 
 #### WebGPU
 

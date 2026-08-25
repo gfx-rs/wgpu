@@ -566,10 +566,13 @@ impl super::Adapter {
             wgt::Features::TEXTURE_COMPRESSION_BC,
             bcn_exts.iter().all(|&ext| extensions.contains(ext)),
         );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
-            bcn_exts.iter().all(|&ext| extensions.contains(ext)), // BC guaranteed Sliced 3D
-        );
+        // BC (S3TC/RGTC/BPTC) compressed formats are 2D-only in OpenGL (ES):
+        // none of these extensions permit `GL_TEXTURE_3D` targets, and there is
+        // no equivalent of `GL_KHR_texture_compression_astc_sliced_3d` for them.
+        // Advertising sliced-3D support leads to `glTexStorage3D` being called
+        // with a `GL_TEXTURE_3D` target and a compressed internal format, which
+        // raises `GL_INVALID_OPERATION`.
+        features.set(wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D, false);
         let has_etc = if cfg!(any(webgl, Emscripten)) {
             extensions.contains("WEBGL_compressed_texture_etc")
         } else {
@@ -690,6 +693,13 @@ impl super::Adapter {
         private_caps.set(
             super::PrivateCapabilities::TEXTURE_STORAGE,
             supported((3, 0), (4, 2)),
+        );
+        private_caps.set(
+            super::PrivateCapabilities::COPY_IMAGE,
+            supported((3, 2), (4, 3))
+                || extensions.contains("GL_ARB_copy_image")
+                || extensions.contains("GL_OES_copy_image")
+                || extensions.contains("GL_EXT_copy_image"),
         );
         let is_mali = renderer.to_lowercase().contains("mali");
         let debug_fns_enabled = match backend_options.debug_fns {

@@ -36,7 +36,7 @@ fn get_2d_target(target: u32, array_layer: u32) -> u32 {
     ];
 
     match target {
-        glow::TEXTURE_2D => target,
+        glow::TEXTURE_2D | glow::TEXTURE_2D_MULTISAMPLE => target,
         glow::TEXTURE_CUBE_MAP => CUBEMAP_FACES[array_layer as usize],
         _ => unreachable!(),
     }
@@ -694,8 +694,141 @@ impl super::Queue {
                 src_target,
                 dst,
                 dst_target,
+                format,
                 ref copy,
             } => {
+                let aspects = crate::FormatAspects::from(format);
+                if self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::COPY_IMAGE)
+                {
+                    // Direct texture-to-texture copy. Works uniformly for color,
+                    // compressed, multisampled, depth/stencil, array, 3D and
+                    // cube textures, none of which the framebuffer-based path
+                    // below can handle in general.
+                    let src_z = if src_target == glow::TEXTURE_3D {
+                        copy.src_base.origin.z
+                    } else {
+                        copy.src_base.array_layer
+                    };
+                    let dst_z = if dst_target == glow::TEXTURE_3D {
+                        copy.dst_base.origin.z
+                    } else {
+                        copy.dst_base.array_layer
+                    };
+                    unsafe {
+                        gl.copy_image_sub_data(
+                            src,
+                            src_target,
+                            copy.src_base.mip_level as i32,
+                            copy.src_base.origin.x as i32,
+                            copy.src_base.origin.y as i32,
+                            src_z as i32,
+                            dst,
+                            dst_target,
+                            copy.dst_base.mip_level as i32,
+                            copy.dst_base.origin.x as i32,
+                            copy.dst_base.origin.y as i32,
+                            dst_z as i32,
+                            copy.size.width as i32,
+                            copy.size.height as i32,
+                            copy.size.depth as i32,
+                        )
+                    };
+                    return;
+                }
+                if aspects.intersects(crate::FormatAspects::DEPTH | crate::FormatAspects::STENCIL) {
+                    // Depth/stencil data can't be moved with `glCopyTexSubImage`,
+                    // which reads from the color read buffer. Blit between
+                    // framebuffers using the matching depth/stencil attachment
+                    // instead.
+                    let attachment = if aspects
+                        .contains(crate::FormatAspects::DEPTH | crate::FormatAspects::STENCIL)
+                    {
+                        glow::DEPTH_STENCIL_ATTACHMENT
+                    } else if aspects.contains(crate::FormatAspects::DEPTH) {
+                        glow::DEPTH_ATTACHMENT
+                    } else {
+                        glow::STENCIL_ATTACHMENT
+                    };
+                    let mut blit_mask = 0;
+                    if aspects.contains(crate::FormatAspects::DEPTH) {
+                        blit_mask |= glow::DEPTH_BUFFER_BIT;
+                    }
+                    if aspects.contains(crate::FormatAspects::STENCIL) {
+                        blit_mask |= glow::STENCIL_BUFFER_BIT;
+                    }
+
+                    let attach =
+                        |fbo_target: u32, tex, tex_target, base: &crate::TextureCopyBase| unsafe {
+                            if is_layered_target(tex_target) {
+                                gl.framebuffer_texture_layer(
+                                    fbo_target,
+                                    attachment,
+                                    Some(tex),
+                                    base.mip_level as i32,
+                                    base.array_layer as i32,
+                                )
+                            } else {
+                                gl.framebuffer_texture_2d(
+                                    fbo_target,
+                                    attachment,
+                                    get_2d_target(tex_target, base.array_layer),
+                                    Some(tex),
+                                    base.mip_level as i32,
+                                )
+                            }
+                        };
+
+                    unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
+                    unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo)) };
+                    attach(glow::READ_FRAMEBUFFER, src, src_target, &copy.src_base);
+                    attach(glow::DRAW_FRAMEBUFFER, dst, dst_target, &copy.dst_base);
+
+                    let src_x0 = copy.src_base.origin.x as i32;
+                    let src_y0 = copy.src_base.origin.y as i32;
+                    let dst_x0 = copy.dst_base.origin.x as i32;
+                    let dst_y0 = copy.dst_base.origin.y as i32;
+                    unsafe {
+                        gl.blit_framebuffer(
+                            src_x0,
+                            src_y0,
+                            src_x0 + copy.size.width as i32,
+                            src_y0 + copy.size.height as i32,
+                            dst_x0,
+                            dst_y0,
+                            dst_x0 + copy.size.width as i32,
+                            dst_y0 + copy.size.height as i32,
+                            blit_mask,
+                            glow::NEAREST,
+                        )
+                    };
+
+                    // Detach so the borrowed FBOs don't leak attachments into
+                    // later render passes / copies.
+                    unsafe {
+                        gl.framebuffer_texture_2d(
+                            glow::READ_FRAMEBUFFER,
+                            attachment,
+                            glow::TEXTURE_2D,
+                            None,
+                            0,
+                        )
+                    };
+                    unsafe {
+                        gl.framebuffer_texture_2d(
+                            glow::DRAW_FRAMEBUFFER,
+                            attachment,
+                            glow::TEXTURE_2D,
+                            None,
+                            0,
+                        )
+                    };
+                    unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None) };
+                    unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo)) };
+                    return;
+                }
                 //TODO: handle 3D copies
                 unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
                 if is_layered_target(src_target) {

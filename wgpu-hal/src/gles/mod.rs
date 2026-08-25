@@ -245,6 +245,11 @@ bitflags::bitflags! {
         /// `GL_ARB_shader_image_load_store`; GLES needs `GL_NV_image_formats`
         /// (which itself depends on `GL_EXT_texture_norm16`).
         const TEXTURE_FORMAT_NORM16_STORAGE = 1 << 20;
+        /// Supports `glCopyImageSubData` for direct texture-to-texture copies.
+        /// Desktop GL >= 4.3 / GLES >= 3.2, or the `copy_image` extensions.
+        /// Unlike the framebuffer-based copy path this also works for
+        /// compressed, multisampled, and depth/stencil formats.
+        const COPY_IMAGE = 1 << 21;
     }
 }
 
@@ -515,6 +520,11 @@ impl Texture {
             wgt::TextureDimension::D2 => {
                 // HACK: detect a cube map; forces cube compatible textures to be cube textures
                 match (desc.is_cube_compatible(), desc.size.depth_or_array_layers) {
+                    // A multisampled, non-array texture must use the dedicated
+                    // multisample target, otherwise `glTexStorage2DMultisample`
+                    // raises `GL_INVALID_ENUM`. (Multisampled arrays/cubes are
+                    // not exposed on this backend.)
+                    (false, 1) if desc.sample_count > 1 => glow::TEXTURE_2D_MULTISAMPLE,
                     (false, 1) => glow::TEXTURE_2D,
                     (false, _) => glow::TEXTURE_2D_ARRAY,
                     (true, 6) => glow::TEXTURE_CUBE_MAP,
@@ -958,6 +968,7 @@ enum Command {
         src_target: BindTarget,
         dst: glow::Texture,
         dst_target: BindTarget,
+        format: wgt::TextureFormat,
         copy: crate::TextureCopy,
     },
     CopyBufferToTexture {

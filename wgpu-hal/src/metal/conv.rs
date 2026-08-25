@@ -13,7 +13,11 @@ use objc2_metal::{
     MTLTextureUsage, MTLVertexFormat, MTLVertexStepFunction, MTLWinding,
 };
 
-pub fn map_texture_usage(format: wgt::TextureFormat, usage: wgt::TextureUses) -> MTLTextureUsage {
+pub fn map_texture_usage(
+    format: wgt::TextureFormat,
+    usage: wgt::TextureUses,
+    has_view_formats: bool,
+) -> MTLTextureUsage {
     use wgt::TextureUses as Tu;
 
     let mut mtl_usage = MTLTextureUsage::Unknown;
@@ -32,11 +36,12 @@ pub fn map_texture_usage(format: wgt::TextureFormat, usage: wgt::TextureUses) ->
         MTLTextureUsage::ShaderWrite,
         usage.intersects(Tu::STORAGE_WRITE_ONLY | Tu::STORAGE_READ_WRITE),
     );
-    // needed for combined depth/stencil formats since we might
-    // create a stencil-only view from them
+    // Needed for combined depth/stencil formats (stencil-only view) and for
+    // any texture that may be viewed with a different pixel format (e.g. an
+    // ETC2/sRGB reinterpretation pair), both of which require PixelFormatView.
     mtl_usage.set(
         MTLTextureUsage::PixelFormatView,
-        format.is_combined_depth_stencil_format(),
+        format.is_combined_depth_stencil_format() || has_view_formats,
     );
 
     mtl_usage.set(
