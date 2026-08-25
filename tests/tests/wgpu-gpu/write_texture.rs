@@ -1,7 +1,7 @@
 //! Tests for texture copy
 
 use wgpu::*;
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -12,7 +12,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
         // Deliberately non-square so a width/height swap is caught. `width` is
@@ -112,7 +112,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
         }
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
         // Deliberately non-square (and a depth distinct from both) so any
@@ -212,7 +212,7 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
         }
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -260,7 +260,7 @@ static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration = GpuTestConfiguration::new()
 // Test a writeTexture operation that will use the staging buffer.
 // If run with the address sanitizer, this serves as a regression
 // test for https://github.com/gfx-rs/wgpu/pull/7893.
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_VIA_STAGING_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         let width = 89;

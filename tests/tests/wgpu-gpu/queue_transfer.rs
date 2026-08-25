@@ -1,7 +1,7 @@
 //! Tests for buffer copy validation.
 
 use wgpu::PollType;
-use wgpu_test::{fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -11,7 +11,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static QUEUE_WRITE_TEXTURE_THEN_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
@@ -62,7 +62,7 @@ static QUEUE_WRITE_TEXTURE_THEN_DESTROY: GpuTestConfiguration = GpuTestConfigura
         ctx.device.poll(PollType::wait_indefinitely()).unwrap();
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
@@ -112,7 +112,7 @@ static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration = GpuTestConfiguration
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static QUEUE_WRITE_TEXTURE_BUFFER_OOB: GpuTestConfiguration =
     GpuTestConfiguration::new().run_sync(|ctx| {
         // Test that transfers overrunning the end of the source buffer, or

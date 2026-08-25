@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use parking_lot::Mutex;
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_sync::Mutex;
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 use wgpu::*;
 
@@ -16,7 +16,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 ///
 /// We previously immediately invoked on_submitted_work_done callbacks if there was no active submission
 /// to add them to. This is incorrect, as we do not immediately invoke map_async callbacks.
-#[gpu_test]
+#[apply(gpu_test!)]
 static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {

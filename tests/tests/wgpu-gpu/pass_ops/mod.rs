@@ -1,5 +1,5 @@
 use wgpu_test::{
-    fail, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    apply, fail, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
     TestParameters, TestingContext,
 };
 
@@ -12,7 +12,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DONT_CARE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_async(dont_care);
@@ -116,7 +116,7 @@ async fn dont_care(ctx: TestingContext) {
         .await;
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DONT_CARE_COLOR_STRICT_WEBGPU_COMPLIANCE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -162,7 +162,7 @@ static DONT_CARE_COLOR_STRICT_WEBGPU_COMPLIANCE: GpuTestConfiguration = GpuTestC
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DONT_CARE_DEPTH_STRICT_WEBGPU_COMPLIANCE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -207,7 +207,7 @@ static DONT_CARE_DEPTH_STRICT_WEBGPU_COMPLIANCE: GpuTestConfiguration = GpuTestC
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DONT_CARE_STENCIL_STRICT_WEBGPU_COMPLIANCE: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(

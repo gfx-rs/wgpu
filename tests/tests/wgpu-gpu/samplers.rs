@@ -3,7 +3,7 @@
 //! Do some tests to ensure things are working correctly and nothing gets mad.
 
 use wgpu_test::{
-    did_oom, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    apply, did_oom, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters,
     TestingContext,
 };
 
@@ -20,7 +20,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 // on some devices.
 const PROBABLY_PROBLEMATIC_SAMPLER_COUNT: u32 = 8 * 1024;
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SAMPLER_DEDUPLICATION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(sampler_deduplication);
@@ -71,7 +71,7 @@ fn sampler_deduplication(ctx: TestingContext) {
     drop(samplers);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SAMPLER_CREATION_FAILURE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(sampler_creation_failure);
@@ -178,7 +178,7 @@ enum GroupType {
     Multi,
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SAMPLER_SINGLE_BIND_GROUP: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -188,7 +188,7 @@ static SAMPLER_SINGLE_BIND_GROUP: GpuTestConfiguration = GpuTestConfiguration::n
     )
     .run_sync(|ctx| sampler_bind_group(ctx, GroupType::Single));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SAMPLER_MULTI_BIND_GROUP: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

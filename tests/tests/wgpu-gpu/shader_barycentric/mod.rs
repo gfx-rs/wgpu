@@ -1,5 +1,5 @@
 use wgpu::util::DeviceExt;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.push(BARYCENTRIC);
@@ -30,7 +30,7 @@ pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
 //     return vec4<f32>(bary * 1.1 - 0.05, 1.0);
 //
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BARYCENTRIC: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -39,7 +39,7 @@ static BARYCENTRIC: GpuTestConfiguration = GpuTestConfiguration::new()
     )
     .run_async(|ctx| barycentric(ctx, false));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BARYCENTRIC_NO_PERSPECTIVE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

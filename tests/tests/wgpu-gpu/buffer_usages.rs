@@ -3,7 +3,8 @@
 use wgpu::BufferAddress;
 use wgpu::{BufferUsages as Bu, MapMode as Ma};
 use wgpu_test::{
-    fail_if, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, fail_if, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -58,7 +59,7 @@ fn try_create(ctx: TestingContext, usages: &[(bool, &[wgpu::BufferUsages])]) {
     }
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BUFFER_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
@@ -72,7 +73,7 @@ static BUFFER_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BUFFER_USAGE_MAPPABLE_PRIMARY_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -175,7 +176,7 @@ async fn map_test(
     }
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BUFFER_MAP_ASYNC_MAP_STATE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

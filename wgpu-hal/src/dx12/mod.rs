@@ -97,8 +97,8 @@ use core::{ffi, fmt, mem, ops::Deref, sync::atomic::AtomicU64};
 
 use arrayvec::ArrayVec;
 use hashbrown::HashMap;
-use parking_lot::{Mutex, RwLock};
 use suballocation::Allocator;
+use wgpu_sync::{Mutex, RwLock};
 use windows::{
     core::{Free as _, Interface},
     Win32::{

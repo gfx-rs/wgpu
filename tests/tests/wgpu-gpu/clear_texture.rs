@@ -1,5 +1,5 @@
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, GpuTestInitializer,
+    apply, gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, GpuTestInitializer,
     TestParameters, TestingContext,
 };
 
@@ -338,7 +338,7 @@ async fn clear_texture_tests(ctx: TestingContext, formats: &'static [wgpu::Textu
     }
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static CLEAR_TEXTURE_UNCOMPRESSED_GLES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -347,7 +347,7 @@ static CLEAR_TEXTURE_UNCOMPRESSED_GLES: GpuTestConfiguration = GpuTestConfigurat
     )
     .run_async(|ctx| clear_texture_tests(ctx, TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static CLEAR_TEXTURE_UNCOMPRESSED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -362,7 +362,7 @@ static CLEAR_TEXTURE_UNCOMPRESSED: GpuTestConfiguration = GpuTestConfiguration::
     )
     .run_async(|ctx| clear_texture_tests(ctx, TEXTURE_FORMATS_UNCOMPRESSED));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static CLEAR_TEXTURE_DEPTH: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -378,7 +378,7 @@ static CLEAR_TEXTURE_DEPTH: GpuTestConfiguration = GpuTestConfiguration::new()
     )
     .run_async(|ctx| clear_texture_tests(ctx, TEXTURE_FORMATS_DEPTH));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static CLEAR_TEXTURE_DEPTH32_STENCIL8: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -389,7 +389,7 @@ static CLEAR_TEXTURE_DEPTH32_STENCIL8: GpuTestConfiguration = GpuTestConfigurati
     )
     .run_async(|ctx| clear_texture_tests(ctx, &[wgpu::TextureFormat::Depth32FloatStencil8]));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static CLEAR_TEXTURE_COMPRESSED_BCN: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -409,7 +409,7 @@ static CLEAR_TEXTURE_COMPRESSED_BCN: GpuTestConfiguration = GpuTestConfiguration
     )
     .run_async(|ctx| clear_texture_tests(ctx, TEXTURE_FORMATS_BC));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static CLEAR_TEXTURE_COMPRESSED_ASTC: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -430,7 +430,7 @@ static CLEAR_TEXTURE_COMPRESSED_ASTC: GpuTestConfiguration = GpuTestConfiguratio
     )
     .run_async(|ctx| clear_texture_tests(ctx, TEXTURE_FORMATS_ASTC));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static CLEAR_TEXTURE_COMPRESSED_ETC2: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

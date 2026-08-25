@@ -1,4 +1,4 @@
-use wgpu_test::{gpu_test, image, GpuTestConfiguration, GpuTestInitializer, TestingContext};
+use wgpu_test::{apply, gpu_test, image, GpuTestConfiguration, GpuTestInitializer, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -118,7 +118,7 @@ async fn scissor_test_impl(
         .await;
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SCISSOR_TEST_FULL_RECT: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
         scissor_test_impl(
@@ -134,7 +134,7 @@ static SCISSOR_TEST_FULL_RECT: GpuTestConfiguration =
         .await
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SCISSOR_TEST_EMPTY_RECT: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
         scissor_test_impl(
@@ -150,7 +150,7 @@ static SCISSOR_TEST_EMPTY_RECT: GpuTestConfiguration =
         .await;
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SCISSOR_TEST_EMPTY_RECT_WITH_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         scissor_test_impl(
@@ -166,7 +166,7 @@ static SCISSOR_TEST_EMPTY_RECT_WITH_OFFSET: GpuTestConfiguration = GpuTestConfig
         .await
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SCISSOR_TEST_CUSTOM_RECT: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
         let mut expected_result = [0; BUFFER_SIZE];

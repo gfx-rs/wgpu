@@ -2,8 +2,8 @@ use std::num::NonZeroU32;
 
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer, TestParameters,
-    TestingContext,
+    apply, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters, TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
@@ -13,7 +13,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -31,7 +31,7 @@ static BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
     )
     .run_async(|ctx| async move { binding_array_storage_textures(ctx, false).await });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PARTIAL_BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

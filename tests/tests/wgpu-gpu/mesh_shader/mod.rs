@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
@@ -270,7 +270,7 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
     )
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static MESH_PIPELINE_BASIC_MESH: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
         mesh_pipeline_build(
@@ -283,7 +283,7 @@ pub static MESH_PIPELINE_BASIC_MESH: GpuTestConfiguration =
             },
         );
     });
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static MESH_PIPELINE_BASIC_TASK_MESH: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
         mesh_pipeline_build(
@@ -296,7 +296,7 @@ pub static MESH_PIPELINE_BASIC_TASK_MESH: GpuTestConfiguration =
             },
         );
     });
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static MESH_PIPELINE_BASIC_MESH_FRAG: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
         mesh_pipeline_build(
@@ -309,7 +309,7 @@ pub static MESH_PIPELINE_BASIC_MESH_FRAG: GpuTestConfiguration =
             },
         );
     });
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
         mesh_pipeline_build(
@@ -322,7 +322,7 @@ pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG: GpuTestConfiguration =
             },
         );
     });
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static MESH_PIPELINE_BASIC_MESH_NO_DRAW: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
         mesh_pipeline_build(
@@ -335,7 +335,7 @@ pub static MESH_PIPELINE_BASIC_MESH_NO_DRAW: GpuTestConfiguration =
             },
         );
     });
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
         mesh_pipeline_build(
@@ -350,7 +350,7 @@ pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW: GpuTestConfiguration =
     });
 
 // Mesh draw
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static MESH_DRAW: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
         mesh_draw(
@@ -364,7 +364,7 @@ pub static MESH_DRAW: GpuTestConfiguration =
             },
         );
     });
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static MESH_DRAW_NO_TASK: GpuTestConfiguration = default_gpu_test_config(DrawType::Standard)
     .run_sync(|ctx| {
         mesh_draw(
@@ -378,7 +378,7 @@ pub static MESH_DRAW_NO_TASK: GpuTestConfiguration = default_gpu_test_config(Dra
             },
         );
     });
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static MESH_DRAW_DIVERGENT: GpuTestConfiguration = default_gpu_test_config(DrawType::Standard)
     .run_sync(|ctx| {
         mesh_draw(
@@ -392,7 +392,7 @@ pub static MESH_DRAW_DIVERGENT: GpuTestConfiguration = default_gpu_test_config(D
             },
         );
     });
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static MESH_DRAW_INDIRECT: GpuTestConfiguration = default_gpu_test_config(DrawType::Indirect)
     .run_sync(|ctx| {
         mesh_draw(
@@ -406,7 +406,7 @@ pub static MESH_DRAW_INDIRECT: GpuTestConfiguration = default_gpu_test_config(Dr
             },
         );
     });
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static MESH_MULTI_DRAW_INDIRECT: GpuTestConfiguration =
     default_gpu_test_config(DrawType::MultiIndirect).run_sync(|ctx| {
         mesh_draw(
@@ -420,7 +420,7 @@ pub static MESH_MULTI_DRAW_INDIRECT: GpuTestConfiguration =
             },
         );
     });
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static MESH_MULTI_DRAW_INDIRECT_COUNT: GpuTestConfiguration =
     default_gpu_test_config(DrawType::MultiIndirectCount).run_sync(|ctx| {
         mesh_draw(

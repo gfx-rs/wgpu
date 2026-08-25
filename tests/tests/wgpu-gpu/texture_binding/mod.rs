@@ -6,14 +6,15 @@ use wgpu::{
     PollType, TexelCopyBufferInfo, TexelCopyBufferLayout, TexelCopyTextureInfo, TextureAspect,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
 };
-use wgpu_macros::gpu_test;
-use wgpu_test::{GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext};
+use wgpu_test::{
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([TEXTURE_BINDING, SINGLE_SCALAR_LOAD]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static TEXTURE_BINDING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -71,7 +72,7 @@ fn texture_binding(ctx: TestingContext) {
     ctx.queue.submit([encoder.finish()]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SINGLE_SCALAR_LOAD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

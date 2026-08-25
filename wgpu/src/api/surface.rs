@@ -146,7 +146,25 @@ impl Surface<'_> {
     /// See the documentation of [`CurrentSurfaceTexture`] for how each possible result
     /// should be handled.
     pub fn get_current_texture(&self) -> CurrentSurfaceTexture {
-        let (texture, status, detail) = self.inner.get_current_texture();
+        let desc = {
+            let guard = self.config.lock();
+            guard.as_ref().map(|config| TextureDescriptor {
+                label: None,
+                size: Extent3d {
+                    width: config.width,
+                    height: config.height,
+                    depth_or_array_layers: 1,
+                },
+                format: config.format,
+                usage: config.usage,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                view_formats: &[],
+                mapped_at_creation: false,
+            })
+        };
+        let (texture, status, detail) = self.inner.get_current_texture(desc);
 
         let suboptimal = match status {
             SurfaceStatus::Good => false,
@@ -158,34 +176,10 @@ impl Surface<'_> {
             SurfaceStatus::Validation => return CurrentSurfaceTexture::Validation,
         };
 
-        let guard = self.config.lock();
-        let config = guard
-            .as_ref()
-            .expect("This surface has not been configured yet.");
-
-        let descriptor = TextureDescriptor {
-            label: None,
-            size: Extent3d {
-                width: config.width,
-                height: config.height,
-                depth_or_array_layers: 1,
-            },
-            format: config.format,
-            usage: config.usage,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            view_formats: &[],
-            mapped_at_creation: false,
-        };
-
         match texture {
             Some(texture) => {
                 let surface_texture = SurfaceTexture {
-                    texture: Texture {
-                        inner: texture,
-                        descriptor,
-                    },
+                    texture: Texture { inner: texture },
                     presented: false,
                     detail,
                 };

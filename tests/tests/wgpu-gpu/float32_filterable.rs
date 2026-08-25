@@ -1,6 +1,6 @@
 //! Tests for FLOAT32_FILTERABLE feature.
 
-use wgpu_test::{fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -52,7 +52,7 @@ fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, fi
     });
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static FLOAT32_FILTERABLE_WITHOUT_FEATURE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
@@ -79,7 +79,7 @@ static FLOAT32_FILTERABLE_WITHOUT_FEATURE: GpuTestConfiguration = GpuTestConfigu
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static FLOAT32_FILTERABLE_WITH_FEATURE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

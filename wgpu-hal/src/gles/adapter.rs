@@ -2,7 +2,7 @@ use alloc::{borrow::ToOwned as _, format, string::String, sync::Arc, vec, vec::V
 use core::sync::atomic::AtomicU8;
 
 use glow::HasContext;
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 use wgt::AstcChannel;
 
 use crate::auxil::db;
@@ -438,6 +438,13 @@ impl super::Adapter {
         downlevel_flags.set(
             wgt::DownlevelFlags::MULTISAMPLED_SHADING,
             supported((3, 2), (4, 0)) || extensions.contains("OES_sample_variables"),
+        );
+        // GLSL ES has no `noperspective` qualifier, so `@interpolate(linear)` is only
+        // expressible on desktop GLSL (where we require at least 330, well past the 130
+        // that introduced `noperspective`).
+        downlevel_flags.set(
+            wgt::DownlevelFlags::LINEAR_INTERPOLATION,
+            !shading_language_version.is_es(),
         );
         let query_buffers = extensions.contains("GL_ARB_query_buffer_object")
             || extensions.contains("GL_AMD_query_buffer_object");

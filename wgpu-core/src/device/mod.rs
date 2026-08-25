@@ -21,7 +21,6 @@ use wgt::{
 };
 
 pub(crate) mod bgl;
-pub mod global;
 mod life;
 pub mod queue;
 pub mod ray_tracing;
@@ -39,6 +38,7 @@ pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 pub(crate) const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Invalid";
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
+pub type QueueDescriptor<'a> = wgt::QueueDescriptor<Label<'a>>;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

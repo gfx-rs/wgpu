@@ -1,11 +1,12 @@
 //! Types for configuring render passes and render pipelines (except for vertex attributes).
 
 use bytemuck::{Pod, Zeroable};
+use macro_rules_attribute::derive;
 
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
 
-use crate::{link_to_wgpu_docs, LoadOpDontCare};
+use crate::{link_to_wgpu_docs, ConstDefault, LoadOpDontCare};
 
 #[cfg(doc)]
 use crate::{Features, TextureFormat};
@@ -65,10 +66,23 @@ impl BlendFactor {
     ///
     /// Note that the usage of those blend factors require [`Features::DUAL_SOURCE_BLENDING`].
     #[must_use]
-    pub fn ref_second_blend_source(&self) -> bool {
+    pub fn uses_second_blend_source(&self) -> bool {
         match self {
             BlendFactor::Src1
             | BlendFactor::OneMinusSrc1
+            | BlendFactor::Src1Alpha
+            | BlendFactor::OneMinusSrc1Alpha => true,
+            _ => false,
+        }
+    }
+
+    /// Returns `true` if the blend factor references the source alpha.
+    #[must_use]
+    pub fn uses_source_alpha(&self) -> bool {
+        match self {
+            BlendFactor::SrcAlpha
+            | BlendFactor::OneMinusSrcAlpha
+            | BlendFactor::SrcAlphaSaturated
             | BlendFactor::Src1Alpha
             | BlendFactor::OneMinusSrc1Alpha => true,
             _ => false,
@@ -84,12 +98,12 @@ impl BlendFactor {
 /// For further details on how the blend operations are applied, see
 /// the analogous functionality in OpenGL: <https://www.khronos.org/opengl/wiki/Blending#Blend_Equations>.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum BlendOperation {
     /// Src + Dst
-    #[default]
+    #[custom(default)]
     Add = 0,
     /// Src - Dst
     Subtract = 1,
@@ -252,6 +266,8 @@ pub struct ColorWrites(u32);
 
 bitflags::bitflags! {
     impl ColorWrites: u32 {
+        /// Do not write any channels
+        const NONE = 0;
         /// Enable red channel writes
         const RED = 1 << 0;
         /// Enable green channel writes
@@ -278,7 +294,7 @@ impl Default for ColorWrites {
 /// Corresponds to [WebGPU `GPUPrimitiveTopology`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuprimitivetopology).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum PrimitiveTopology {
@@ -295,7 +311,7 @@ pub enum PrimitiveTopology {
     /// Vertex data is a list of triangles. Each set of 3 vertices composes a new triangle.
     ///
     /// Vertices `0 1 2 3 4 5` create two triangles `0 1 2` and `3 4 5`
-    #[default]
+    #[custom(default)]
     TriangleList = 3,
     /// Vertex data is a triangle strip. Each set of three adjacent vertices form a triangle.
     ///
@@ -328,14 +344,14 @@ impl PrimitiveTopology {
 /// Corresponds to [WebGPU `GPUFrontFace`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpufrontface).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, ConstDefault!, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum FrontFace {
     /// Triangles with vertices in counter clockwise order are considered the front face.
     ///
     /// This is the default with right handed coordinate spaces.
-    #[default]
+    #[custom(default)]
     Ccw = 0,
     /// Triangles with vertices in clockwise order are considered the front face.
     ///
@@ -361,12 +377,12 @@ pub enum Face {
 
 /// Type of drawing mode for polygons
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, ConstDefault!, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum PolygonMode {
     /// Polygons are filled
-    #[default]
+    #[custom(default)]
     Fill = 0,
     /// Polygons are drawn as line segments
     Line = 1,
@@ -379,7 +395,7 @@ pub enum PolygonMode {
 /// Corresponds to [WebGPU `GPUPrimitiveState`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuprimitivestate).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, ConstDefault!, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct PrimitiveState {
@@ -442,8 +458,9 @@ pub struct MultisampleState {
     pub alpha_to_coverage_enabled: bool,
 }
 
-impl Default for MultisampleState {
-    fn default() -> Self {
+impl MultisampleState {
+    /// This function is identical to [`Default::default()`] except that it is a `const fn`.
+    pub const fn default() -> Self {
         MultisampleState {
             count: 1,
             mask: !0,
@@ -452,19 +469,25 @@ impl Default for MultisampleState {
     }
 }
 
+impl Default for MultisampleState {
+    fn default() -> Self {
+        Self::default() // call inherent function
+    }
+}
+
 /// Format of indices used with pipeline.
 ///
 /// Corresponds to [WebGPU `GPUIndexFormat`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuindexformat).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum IndexFormat {
     /// Indices are 16 bit unsigned integers.
     Uint16 = 0,
     /// Indices are 32 bit unsigned integers.
-    #[default]
+    #[custom(default)]
     Uint32 = 1,
 }
 
@@ -483,12 +506,12 @@ impl IndexFormat {
 /// Corresponds to [WebGPU `GPUStencilOperation`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpustenciloperation).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum StencilOperation {
     /// Keep stencil value unchanged.
-    #[default]
+    #[custom(default)]
     Keep = 0,
     /// Set stencil value to zero.
     Zero = 1,
@@ -557,7 +580,11 @@ impl StencilFaceState {
     }
 }
 
+impl crate::macros::ConstDefaultHelper for StencilFaceState {
+    const DEFAULT: Self = Self::IGNORE;
+}
 impl Default for StencilFaceState {
+    /// Returns [`StencilFaceState::IGNORE`] as the default.
     fn default() -> Self {
         Self::IGNORE
     }
@@ -568,7 +595,7 @@ impl Default for StencilFaceState {
 /// Corresponds to [WebGPU `GPUCompareFunction`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpucomparefunction).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum CompareFunction {
@@ -591,7 +618,7 @@ pub enum CompareFunction {
     /// Function passes if new value is greater than or equal to existing value
     GreaterEqual = 7,
     /// Function always passes
-    #[default]
+    #[custom(default)]
     Always = 8,
 }
 
@@ -613,7 +640,7 @@ impl CompareFunction {
 /// Corresponds to a portion of [WebGPU `GPUDepthStencilState`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpudepthstencilstate).
 #[repr(C)]
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, ConstDefault!, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct StencilState {
     /// Front face mode.
@@ -663,7 +690,7 @@ impl StencilState {
 /// Corresponds to a portion of [WebGPU `GPUDepthStencilState`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpudepthstencilstate).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, ConstDefault!)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthBiasState {
     /// Constant depth biasing factor, in basic units of the depth format.
@@ -765,12 +792,12 @@ impl<V: Default> Default for LoadOp<V> {
 ///
 /// Corresponds to [WebGPU `GPUStoreOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpustoreop).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Default)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, ConstDefault!)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum StoreOp {
     /// Stores the resulting value of the render pass for this attachment.
-    #[default]
+    #[custom(default)]
     Store = 0,
     /// Discards the resulting value of the render pass for this attachment.
     ///
@@ -944,7 +971,7 @@ impl<T> Default for RenderBundleDescriptor<Option<T>> {
 
 /// Argument buffer layout for `draw_indirect` commands.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Pod, Zeroable)]
 pub struct DrawIndirectArgs {
     /// The number of vertices to draw.
     pub vertex_count: u32,
@@ -968,7 +995,7 @@ impl DrawIndirectArgs {
 
 /// Argument buffer layout for `draw_indexed_indirect` commands.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Pod, Zeroable)]
 pub struct DrawIndexedIndirectArgs {
     /// The number of indices to draw.
     pub index_count: u32,
@@ -994,7 +1021,7 @@ impl DrawIndexedIndirectArgs {
 
 /// Argument buffer layout for `dispatch_workgroups_indirect` commands.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Pod, Zeroable)]
 pub struct DispatchIndirectArgs {
     /// The number of work groups in X dimension.
     pub x: u32,

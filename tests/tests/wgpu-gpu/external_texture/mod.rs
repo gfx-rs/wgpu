@@ -1,6 +1,6 @@
 use approx::assert_abs_diff_eq;
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -413,7 +413,7 @@ fn get_samples(
 
 /// Tests that `textureDimensions()` returns the correct value for both external textures
 /// and texture views bound to an external texture binding.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_DIMENSIONS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -464,7 +464,7 @@ static EXTERNAL_TEXTURE_DIMENSIONS: GpuTestConfiguration = GpuTestConfiguration:
 
 /// Tests that `textureLoad()` returns the correct values for both RGBA format external
 /// textures and texture views bound to an external texture binding.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_LOAD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -515,7 +515,7 @@ static EXTERNAL_TEXTURE_LOAD: GpuTestConfiguration = GpuTestConfiguration::new()
 
 /// Tests that `textureLoad()` returns the correct values for YUV format external
 /// textures.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_LOAD_YUV: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -586,7 +586,7 @@ static EXTERNAL_TEXTURE_LOAD_YUV: GpuTestConfiguration = GpuTestConfiguration::n
 
 /// Tests that `textureLoad()` returns the correct values for external textures with
 /// various load transforms.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_LOAD_TRANSFORM: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -762,7 +762,7 @@ static EXTERNAL_TEXTURE_LOAD_TRANSFORM: GpuTestConfiguration = GpuTestConfigurat
     });
 
 /// Tests that `textureLoad()` for an invalid address returns an allowed value.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_LOAD_INVALID_ADDRESS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -820,7 +820,7 @@ static EXTERNAL_TEXTURE_LOAD_INVALID_ADDRESS: GpuTestConfiguration = GpuTestConf
 
 /// Tests that `textureSampleBaseClampToEdge()` returns the correct values for both RGBA
 /// format external textures and texture views bound to an external texture binding.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_SAMPLE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -871,7 +871,7 @@ static EXTERNAL_TEXTURE_SAMPLE: GpuTestConfiguration = GpuTestConfiguration::new
 
 /// Tests that `textureSampleBaseClampToEdge()` returns the correct values for YUV
 /// format external textures.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_SAMPLE_YUV: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -947,7 +947,7 @@ static EXTERNAL_TEXTURE_SAMPLE_YUV: GpuTestConfiguration = GpuTestConfiguration:
 
 /// Tests that `textureSampleBaseClampToEdge()` returns the correct values for external
 /// textures with various sample transforms.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_SAMPLE_TRANSFORM: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

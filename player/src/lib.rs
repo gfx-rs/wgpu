@@ -213,7 +213,7 @@ impl Player {
                     .map(|bgl_id| bgl_id.map(|bgl_id| self.resolve_bind_group_layout_id(bgl_id)))
                     .collect();
 
-                let resolved_desc = wgc::binding_model::ResolvedPipelineLayoutDescriptor {
+                let resolved_desc = wgc::binding_model::PipelineLayoutDescriptor {
                     label: desc.label.clone(),
                     bind_group_layouts: Cow::from(&bind_group_layouts),
                     immediate_size: desc.immediate_size,
@@ -378,9 +378,7 @@ impl Player {
                 let buffer = self.resolve_buffer_id(id);
                 let bin = loader.load(&data);
                 if queued {
-                    queue
-                        .write_buffer(buffer, offset, &bin[..size.try_into().unwrap()])
-                        .expect("Queue::write_buffer error");
+                    queue.write_buffer(buffer, offset, &bin[..size.try_into().unwrap()]);
                 } else {
                     device
                         .set_buffer_data(&buffer, offset, &bin[..size.try_into().unwrap()])
@@ -395,12 +393,10 @@ impl Player {
             } => {
                 let to = self.resolve_texel_copy_texture_info(to);
                 let bin = loader.load(&data);
-                queue
-                    .write_texture(to, &bin, &layout, &size)
-                    .expect("Queue::write_texture error");
+                queue.write_texture(to, &bin, &layout, &size);
             }
             Action::Submit(_index, ref commands) if commands.is_empty() => {
-                queue.submit(&[]).unwrap();
+                queue.submit(&[]);
             }
             Action::Submit(_index, commands) => {
                 let resolved_commands: Vec<_> = commands
@@ -408,7 +404,7 @@ impl Player {
                     .map(|cmd| self.resolve_command(cmd))
                     .collect();
                 let buffer = wgc::command::CommandBuffer::from_trace(device, resolved_commands);
-                queue.submit(&[buffer]).unwrap();
+                queue.submit(&[buffer]);
             }
             Action::FailedCommands {
                 commands,
@@ -616,11 +612,11 @@ impl Player {
     fn resolve_compute_pipeline_descriptor<'a>(
         &self,
         desc: wgc::device::trace::TraceComputePipelineDescriptor<'a>,
-    ) -> wgc::pipeline::ResolvedComputePipelineDescriptor<'a> {
-        wgc::pipeline::ResolvedComputePipelineDescriptor {
+    ) -> wgc::pipeline::ComputePipelineDescriptor<'a> {
+        wgc::pipeline::ComputePipelineDescriptor {
             label: desc.label,
             layout: desc.layout.map(|id| self.resolve_pipeline_layout_id(id)),
-            stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+            stage: wgc::pipeline::ProgrammableStageDescriptor {
                 module: self.resolve_shader_module_id(desc.stage.module),
                 entry_point: desc.stage.entry_point,
                 constants: desc.stage.constants,
@@ -638,23 +634,21 @@ impl Player {
 
         let vertex = match desc.vertex {
             wgc::pipeline::RenderPipelineVertexProcessor::Vertex(vertex_state) => {
-                wgc::pipeline::RenderPipelineVertexProcessor::Vertex(
-                    wgc::pipeline::ResolvedVertexState {
-                        stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
-                            module: self.resolve_shader_module_id(vertex_state.stage.module),
-                            entry_point: vertex_state.stage.entry_point,
-                            constants: vertex_state.stage.constants,
-                            zero_initialize_workgroup_memory: vertex_state
-                                .stage
-                                .zero_initialize_workgroup_memory,
-                        },
-                        buffers: vertex_state.buffers,
+                wgc::pipeline::RenderPipelineVertexProcessor::Vertex(wgc::pipeline::VertexState {
+                    stage: wgc::pipeline::ProgrammableStageDescriptor {
+                        module: self.resolve_shader_module_id(vertex_state.stage.module),
+                        entry_point: vertex_state.stage.entry_point,
+                        constants: vertex_state.stage.constants,
+                        zero_initialize_workgroup_memory: vertex_state
+                            .stage
+                            .zero_initialize_workgroup_memory,
                     },
-                )
+                    buffers: vertex_state.buffers,
+                })
             }
             wgc::pipeline::RenderPipelineVertexProcessor::Mesh(task_state, mesh_state) => {
-                let resolved_task = task_state.map(|task| wgc::pipeline::ResolvedTaskState {
-                    stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+                let resolved_task = task_state.map(|task| wgc::pipeline::TaskState {
+                    stage: wgc::pipeline::ProgrammableStageDescriptor {
                         module: self.resolve_shader_module_id(task.stage.module),
                         entry_point: task.stage.entry_point,
                         constants: task.stage.constants,
@@ -663,8 +657,8 @@ impl Player {
                             .zero_initialize_workgroup_memory,
                     },
                 });
-                let resolved_mesh = wgc::pipeline::ResolvedMeshState {
-                    stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+                let resolved_mesh = wgc::pipeline::MeshState {
+                    stage: wgc::pipeline::ProgrammableStageDescriptor {
                         module: self.resolve_shader_module_id(mesh_state.stage.module),
                         entry_point: mesh_state.stage.entry_point,
                         constants: mesh_state.stage.constants,
@@ -679,8 +673,8 @@ impl Player {
 
         let fragment = desc
             .fragment
-            .map(|fragment_state| wgc::pipeline::ResolvedFragmentState {
-                stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+            .map(|fragment_state| wgc::pipeline::FragmentState {
+                stage: wgc::pipeline::ProgrammableStageDescriptor {
                     module: self.resolve_shader_module_id(fragment_state.stage.module),
                     entry_point: fragment_state.stage.entry_point,
                     constants: fragment_state.stage.constants,
@@ -707,10 +701,10 @@ impl Player {
     fn resolve_bind_group_descriptor<'a>(
         &self,
         desc: wgc::device::trace::TraceBindGroupDescriptor<'a>,
-    ) -> wgc::binding_model::ResolvedBindGroupDescriptor<'a> {
+    ) -> wgc::binding_model::BindGroupDescriptor<'a> {
         let layout = self.resolve_bind_group_layout_id(desc.layout);
 
-        let entries: Vec<wgc::binding_model::ResolvedBindGroupEntry> = desc
+        let entries: Vec<wgc::binding_model::BindGroupEntry> = desc
             .entries
             .to_vec()
             .into_iter()
@@ -718,8 +712,8 @@ impl Player {
                 let resource = match entry.resource {
                     BindingResource::Buffer(buffer_binding) => {
                         let buffer = self.resolve_buffer_id(buffer_binding.buffer);
-                        wgc::binding_model::ResolvedBindingResource::Buffer(
-                            wgc::binding_model::ResolvedBufferBinding {
+                        wgc::binding_model::BindingResource::Buffer(
+                            wgc::binding_model::BufferBinding {
                                 buffer,
                                 offset: buffer_binding.offset,
                                 size: buffer_binding.size,
@@ -732,20 +726,20 @@ impl Player {
                             .into_iter()
                             .map(|bb| {
                                 let buffer = self.resolve_buffer_id(bb.buffer);
-                                wgc::binding_model::ResolvedBufferBinding {
+                                wgc::binding_model::BufferBinding {
                                     buffer,
                                     offset: bb.offset,
                                     size: bb.size,
                                 }
                             })
                             .collect();
-                        wgc::binding_model::ResolvedBindingResource::BufferArray(Cow::Owned(
+                        wgc::binding_model::BindingResource::BufferArray(Cow::Owned(
                             resolved_buffers,
                         ))
                     }
                     BindingResource::Sampler(sampler_id) => {
                         let sampler = self.resolve_sampler_id(sampler_id);
-                        wgc::binding_model::ResolvedBindingResource::Sampler(sampler)
+                        wgc::binding_model::BindingResource::Sampler(sampler)
                     }
                     BindingResource::SamplerArray(sampler_ids) => {
                         let resolved_samplers: Vec<_> = sampler_ids
@@ -753,13 +747,13 @@ impl Player {
                             .into_iter()
                             .map(|id| self.resolve_sampler_id(id))
                             .collect();
-                        wgc::binding_model::ResolvedBindingResource::SamplerArray(Cow::Owned(
+                        wgc::binding_model::BindingResource::SamplerArray(Cow::Owned(
                             resolved_samplers,
                         ))
                     }
                     BindingResource::TextureView(texture_view_id) => {
                         let texture_view = self.resolve_texture_view_id(texture_view_id);
-                        wgc::binding_model::ResolvedBindingResource::TextureView(texture_view)
+                        wgc::binding_model::BindingResource::TextureView(texture_view)
                     }
                     BindingResource::TextureViewArray(texture_view_ids) => {
                         let resolved_views: Vec<_> = texture_view_ids
@@ -767,13 +761,13 @@ impl Player {
                             .into_iter()
                             .map(|id| self.resolve_texture_view_id(id))
                             .collect();
-                        wgc::binding_model::ResolvedBindingResource::TextureViewArray(Cow::Owned(
+                        wgc::binding_model::BindingResource::TextureViewArray(Cow::Owned(
                             resolved_views,
                         ))
                     }
                     BindingResource::AccelerationStructure(tlas_id) => {
                         let tlas = self.resolve_tlas_id(tlas_id);
-                        wgc::binding_model::ResolvedBindingResource::AccelerationStructure(tlas)
+                        wgc::binding_model::BindingResource::AccelerationStructure(tlas)
                     }
                     BindingResource::AccelerationStructureArray(tlas_ids) => {
                         let resolved_tlas: Vec<_> = tlas_ids
@@ -781,27 +775,25 @@ impl Player {
                             .into_iter()
                             .map(|id| self.resolve_tlas_id(id))
                             .collect();
-                        wgc::binding_model::ResolvedBindingResource::AccelerationStructureArray(
-                            Cow::Owned(resolved_tlas),
-                        )
+                        wgc::binding_model::BindingResource::AccelerationStructureArray(Cow::Owned(
+                            resolved_tlas,
+                        ))
                     }
                     BindingResource::ExternalTexture(external_texture_id) => {
                         let external_texture =
                             self.resolve_external_texture_id(external_texture_id);
-                        wgc::binding_model::ResolvedBindingResource::ExternalTexture(
-                            external_texture,
-                        )
+                        wgc::binding_model::BindingResource::ExternalTexture(external_texture)
                     }
                 };
 
-                wgc::binding_model::ResolvedBindGroupEntry {
+                wgc::binding_model::BindGroupEntry {
                     binding: entry.binding,
                     resource,
                 }
             })
             .collect();
 
-        wgc::binding_model::ResolvedBindGroupDescriptor {
+        wgc::binding_model::BindGroupDescriptor {
             label: desc.label.clone(),
             layout,
             entries: entries.into(),

@@ -65,10 +65,11 @@ pub struct WriteOnly<'a, T: ?Sized> {
 // `WriteOnly<T>` is like `&mut T` in that
 // * It provides only exclusive access to the memory it points to, so `T: Sync` is not required.
 // * Sending it creates the opportunity to send a `T`, so `T: Send` is required.
-unsafe impl<T: Send> Send for WriteOnly<'_, T> {}
+unsafe impl<T: ?Sized + Send> Send for WriteOnly<'_, T> {}
 
 // SAFETY:
-// `WriteOnly<T>` does not ever expose any `&T`, and therefore may unconditionally implement `Sync`.
+// `WriteOnly<T>` does not offer interior mutability itself, and does not ever expose any `&T`,
+// so there is no possibility of unsynchronized access for `!Sync` to protect against.
 unsafe impl<T: ?Sized> Sync for WriteOnly<'_, T> {}
 
 impl<'a, T: ?Sized> WriteOnly<'a, T> {
@@ -855,6 +856,10 @@ mod tests {
         }
     }
 
+    // Check trait impls, particularly for a `!Sized` pointee type.
+    static_assertions::assert_not_impl_any!(WriteOnly<'static, [u8]>: Clone, Copy);
+    static_assertions::assert_impl_all!(WriteOnly<'static, [u8]>: Send, Sync);
+
     #[test]
     fn debug() {
         let mut arr = [1u8, 2, 3];
@@ -869,6 +874,13 @@ mod tests {
         assert_eq!(
             format!("{:#?}", WriteOnly::from_mut(&mut arr[0])),
             "WriteOnly(u8)"
+        );
+
+        struct NotImplDebug;
+        let mut not = NotImplDebug;
+        assert_eq!(
+            format!("{:#?}", WriteOnly::from_mut(&mut not)),
+            "WriteOnly(wgpu_types::write_only::tests::debug::NotImplDebug)"
         );
     }
 

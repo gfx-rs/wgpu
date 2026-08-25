@@ -2,7 +2,7 @@
 
 use wgpu::ShaderModuleDescriptor;
 use wgpu_test::{
-    fail, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    apply, fail, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
     TestParameters, TestingContext,
 };
 
@@ -15,7 +15,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static IMAGE_64_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -43,7 +43,7 @@ static IMAGE_64_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
         .await;
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static IMAGE_32_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -171,7 +171,7 @@ async fn test_format(
     readback_buffers.assert_buffer_contents(&ctx, &data).await;
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static IMAGE_ATOMICS_NOT_ENABLED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
@@ -200,7 +200,7 @@ static IMAGE_ATOMICS_NOT_ENABLED: GpuTestConfiguration = GpuTestConfiguration::n
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static IMAGE_ATOMICS_NOT_SUPPORTED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_ATOMIC).enable_noop())
     .run_sync(|ctx| {

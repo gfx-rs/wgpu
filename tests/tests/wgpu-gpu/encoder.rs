@@ -1,7 +1,7 @@
 use wgpu::util::DeviceExt;
 use wgpu::CommandEncoder;
 use wgpu_test::{
-    fail, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    apply, fail, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
     TestingContext,
 };
 
@@ -14,7 +14,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DROP_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
@@ -24,7 +24,7 @@ static DROP_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new()
         drop(encoder);
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DROP_QUEUE_BEFORE_CREATING_COMMAND_ENCODER: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -42,7 +42,7 @@ static DROP_QUEUE_BEFORE_CREATING_COMMAND_ENCODER: GpuTestConfiguration =
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
@@ -88,7 +88,7 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(&ctx.device, || encoder.finish(), Some("less than zero"));
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ENCODER_OPERATIONS_FAIL_WHILE_PASS_ALIVE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

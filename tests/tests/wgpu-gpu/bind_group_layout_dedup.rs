@@ -1,7 +1,7 @@
 use std::num::NonZeroU64;
 
 use wgpu_test::{
-    fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -38,7 +38,7 @@ const ENTRY: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
     count: None,
 };
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -121,7 +121,7 @@ async fn bgl_dedupe(ctx: TestingContext) {
     ctx.queue.submit(Some(encoder.finish()));
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BIND_GROUP_LAYOUT_DEDUPLICATION_WITH_DROPPED_USER_HANDLE: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -209,7 +209,7 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
     ctx.queue.submit(Some(encoder.finish()));
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static GET_DERIVED_BGL: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -286,7 +286,7 @@ fn get_derived_bgl(ctx: TestingContext) {
     ctx.queue.submit(Some(encoder.finish()));
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SEPARATE_PIPELINES_HAVE_INCOMPATIBLE_DERIVED_BGLS: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -354,7 +354,7 @@ fn separate_pipelines_have_incompatible_derived_bgls(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DERIVED_BGLS_INCOMPATIBLE_WITH_REGULAR_BGLS: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -430,7 +430,7 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BIND_GROUP_LAYOUT_DEDUPLICATION_DERIVED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

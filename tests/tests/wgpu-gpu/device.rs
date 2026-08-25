@@ -1,7 +1,8 @@
 use std::sync::atomic::AtomicBool;
 
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -17,11 +18,11 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
     #[cfg(not(wasm_test))]
     {
-        vec.extend([DEVICE_LIFETIME_CHECK, MULTIPLE_DEVICES]);
+        vec.push(MULTIPLE_DEVICES);
     }
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -52,34 +53,7 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
     });
 
 #[cfg(not(wasm_test))]
-#[gpu_test]
-static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().enable_noop())
-    .run_sync(|ctx| {
-        ctx.instance.poll_all(false);
-
-        let pre_report = ctx.instance.generate_report().unwrap();
-
-        let TestingContext {
-            instance,
-            device,
-            queue,
-            ..
-        } = ctx;
-
-        drop(queue);
-        drop(device);
-
-        let post_report = instance.generate_report().unwrap();
-
-        assert_ne!(
-            pre_report, post_report,
-            "Queue and Device has not been dropped as expected"
-        );
-    });
-
-#[cfg(not(wasm_test))]
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
@@ -102,7 +76,7 @@ static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
             .expect("failed to create device");
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters({
         let default = TestParameters::default();
@@ -167,7 +141,7 @@ async fn request_device_error_message() {
 
 // This is a test of device behavior after `device.destroy()`. Specifically, all operations
 // should turn into no-ops, per spec.
-#[gpu_test]
+#[apply(gpu_test!)]
 static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -488,7 +462,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         buffer_for_unmap.unmap();
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -523,7 +497,7 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
@@ -651,7 +625,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
         });
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
@@ -691,7 +665,7 @@ static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfigu
         ctx.instance.poll_all(true);
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DEVICE_AND_QUEUE_HAVE_DIFFERENT_IDS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {

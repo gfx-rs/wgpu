@@ -6,10 +6,9 @@ use wgt::error::{ErrorType, WebGpuError};
 use crate::{
     command::{encoder::EncodingState, CommandEncoder, EncoderStateError, EncodingApi},
     device::{DeviceError, MissingFeatures, TextureMapClosure, TextureMapPendingClosure},
-    global::Global,
-    id::{CommandEncoderId, TextureId},
     resource::{
-        DestroyedResourceError, InvalidResourceError, ParentDevice as _, Texture, TextureMapState,
+        DestroyedResourceError, InvalidResourceError, Labeled as _, ParentDevice as _, Texture,
+        TextureMapState,
     },
     track::ResourceUsageCompatibilityError,
 };
@@ -33,23 +32,18 @@ pub(crate) fn cancel_texture_maps(
     closures
 }
 
-impl Global {
-    pub fn command_encoder_map_texture_on_completion(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        texture_id: TextureId,
+impl CommandEncoder {
+    fn map_texture_on_completion_inner(
+        self: &Arc<Self>,
+        texture: Arc<Texture>,
         callback: Option<TextureMapClosure>,
     ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::map_texture_on_completion");
 
-        let hub = &self.hub;
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
+        let mut cmd_buf_data = self.data.lock();
         cmd_buf_data.with_buffer(
             EncodingApi::Wgpu,
             |buf| -> Result<(), MapTextureOnCompletionError> {
-                let texture = self.resolve_texture_id(texture_id);
-                texture.check_valid()?;
                 texture
                     .device
                     .require_features(wgt::Features::HOST_IMAGE_COPY)?;
@@ -77,6 +71,20 @@ impl Global {
                 Ok(())
             },
         )
+    }
+
+    pub fn map_texture_on_completion(
+        self: &Arc<Self>,
+        texture: Arc<Texture>,
+        callback: Option<TextureMapClosure>,
+    ) {
+        if let Err(err) = self.map_texture_on_completion_inner(texture, callback) {
+            self.device.handle_error(
+                err,
+                Some(self.label()),
+                "CommandEncoder::map_texture_on_completion",
+            );
+        }
     }
 }
 

@@ -241,7 +241,7 @@ pub trait QueueInterface: CommonTraits {
         &self,
         buffer: &DispatchBuffer,
         offset: crate::BufferAddress,
-        staging_buffer: &DispatchQueueWriteBuffer,
+        staging_buffer: DispatchQueueWriteBuffer,
     );
 
     fn write_texture(
@@ -292,11 +292,27 @@ pub trait BufferInterface: CommonTraits {
     fn unmap(&self);
 
     fn destroy(&self);
+
+    fn size(&self) -> crate::BufferAddress;
+
+    fn usage(&self) -> crate::BufferUsages;
 }
 pub trait TextureInterface: CommonTraits {
     fn create_view(&self, desc: &crate::TextureViewDescriptor<'_>) -> DispatchTextureView;
 
     fn destroy(&self);
+
+    fn size(&self) -> wgt::Extent3d;
+
+    fn mip_level_count(&self) -> u32;
+
+    fn sample_count(&self) -> u32;
+
+    fn dimension(&self) -> wgt::TextureDimension;
+
+    fn format(&self) -> wgt::TextureFormat;
+
+    fn usage(&self) -> wgt::TextureUsages;
 
     fn get_map_token(&self) -> Option<alloc::sync::Arc<()>>;
 
@@ -328,6 +344,10 @@ pub trait BlasInterface: CommonTraits {
 pub trait TlasInterface: CommonTraits {}
 pub trait QuerySetInterface: CommonTraits {
     fn destroy(&self);
+
+    fn ty(&self) -> crate::QueryType;
+
+    fn count(&self) -> u32;
 }
 pub trait PipelineLayoutInterface: CommonTraits {}
 pub trait RenderPipelineInterface: CommonTraits {
@@ -640,6 +660,7 @@ pub trait SurfaceInterface: CommonTraits {
     fn configure(&self, device: &DispatchDevice, config: &crate::SurfaceConfiguration);
     fn get_current_texture(
         &self,
+        desc: Option<crate::TextureDescriptor<'static>>,
     ) -> (
         Option<DispatchTexture>,
         crate::SurfaceStatus,

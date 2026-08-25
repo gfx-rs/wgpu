@@ -5,7 +5,8 @@
 
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -29,7 +30,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static UNWRITTEN_OCCLUSION_RESOLVES_TO_ZERO: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_async(|ctx| async move {
@@ -52,7 +53,7 @@ static UNWRITTEN_OCCLUSION_RESOLVES_TO_ZERO: GpuTestConfiguration = GpuTestConfi
 
 /// A query that was properly begun and ended (but with no actual draws, so the
 /// result is 0) should also resolve to zero.
-#[gpu_test]
+#[apply(gpu_test!)]
 static USED_EMPTY_OCCLUSION_RESOLVES_TO_ZERO: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_async(|ctx| async move {
@@ -114,7 +115,7 @@ static USED_EMPTY_OCCLUSION_RESOLVES_TO_ZERO: GpuTestConfiguration = GpuTestConf
 /// Slots 0 and 3 are written before the resolve.
 /// Slot 1 is written after the resolve.
 /// Slot 2 is never written.
-#[gpu_test]
+#[apply(gpu_test!)]
 static SAME_ENCODER_RESOLVES_CORRECTLY: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -151,7 +152,7 @@ static SAME_ENCODER_RESOLVES_CORRECTLY: GpuTestConfiguration = GpuTestConfigurat
     });
 
 /// Write queries in submit 1, resolve them in submit 2.
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITTEN_IN_PRIOR_SUBMIT_RESOLVES_CORRECTLY: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -191,7 +192,7 @@ static WRITTEN_IN_PRIOR_SUBMIT_RESOLVES_CORRECTLY: GpuTestConfiguration =
 /// Slot 0 written in submit 1.
 /// Slot 1 written in submit 2 before the resolve.
 /// Slot 2 is never written.
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITTEN_IN_PRIOR_SUBMIT_AND_SAME_ENCODER_RESOLVES_CORRECTLY: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -232,7 +233,7 @@ static WRITTEN_IN_PRIOR_SUBMIT_AND_SAME_ENCODER_RESOLVES_CORRECTLY: GpuTestConfi
             assert_eq!(result[2], 0, "slot 2 (unwritten) must be zero");
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static UNWRITTEN_TIMESTAMP_RESOLVES_TO_ZERO: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(Features::TIMESTAMP_QUERY))
     .run_async(|ctx| async move {
@@ -252,7 +253,7 @@ static UNWRITTEN_TIMESTAMP_RESOLVES_TO_ZERO: GpuTestConfiguration = GpuTestConfi
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITTEN_TIMESTAMP_RESOLVES_TO_NONZERO: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -304,7 +305,7 @@ static WRITTEN_TIMESTAMP_RESOLVES_TO_NONZERO: GpuTestConfiguration = GpuTestConf
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static INSIDE_PASS_WRITTEN_TIMESTAMP_RESOLVES_TO_NONZERO: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -354,7 +355,7 @@ static INSIDE_PASS_WRITTEN_TIMESTAMP_RESOLVES_TO_NONZERO: GpuTestConfiguration =
             assert_eq!(result[1], 0, "slot 1 (unwritten) must be zero");
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ENCODER_WRITTEN_TIMESTAMP_RESOLVES_TO_NONZERO: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -378,7 +379,7 @@ static ENCODER_WRITTEN_TIMESTAMP_RESOLVES_TO_NONZERO: GpuTestConfiguration =
             assert_eq!(result[1], 0, "slot 1 (unwritten) must be zero");
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static UNWRITTEN_PIPELINE_STATISTICS_RESOLVES_TO_ZERO: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -407,7 +408,7 @@ static UNWRITTEN_PIPELINE_STATISTICS_RESOLVES_TO_ZERO: GpuTestConfiguration =
             );
         });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITTEN_PIPELINE_STATISTICS_RESOLVES_TO_NONZERO: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(

@@ -814,6 +814,7 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::TextureUses::UNINITIALIZED,
                     to: wgpu_types::TextureUses::STORAGE_READ_WRITE,
                 },
+                queue_family_ownership_transfer: None,
             };
 
             cmd_encoder.transition_textures(iter::once(texture_barrier));
@@ -887,6 +888,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::UNINITIALIZED,
                 to: wgpu_types::TextureUses::COPY_DST,
             },
+            queue_family_ownership_transfer: None,
         };
 
         let instances_buffer_size =
@@ -996,6 +998,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::COPY_DST,
                 to: wgpu_types::TextureUses::PRESENT,
             },
+            queue_family_ownership_transfer: None,
         };
         let target_barrier2 = hal::TextureBarrier {
             texture: &self.texture,
@@ -1004,6 +1007,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::STORAGE_READ_WRITE,
                 to: wgpu_types::TextureUses::COPY_SRC,
             },
+            queue_family_ownership_transfer: None,
         };
         let target_barrier3 = hal::TextureBarrier {
             texture: &self.texture,
@@ -1012,6 +1016,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::COPY_SRC,
                 to: wgpu_types::TextureUses::STORAGE_READ_WRITE,
             },
+            queue_family_ownership_transfer: None,
         };
         unsafe {
             ctx.encoder.end_compute_pass();

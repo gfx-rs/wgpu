@@ -1,5 +1,5 @@
 use wgpu_test::{
-    fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -223,14 +223,14 @@ async fn host_image_upload(ctx: TestingContext, start_mapped: bool) {
     }
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_UPLOAD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
         host_image_upload(ctx, false).await;
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_UPLOAD_MAPPED_AT_CREATION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
@@ -342,7 +342,7 @@ async fn host_image_download(ctx: TestingContext) {
     assert_eq!(cpu_readback, pixel_data, "host image download mismatch");
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_DOWNLOAD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
@@ -407,7 +407,7 @@ async fn host_image_read_uninitialized(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_READ_UNINITIALIZED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
@@ -516,7 +516,7 @@ async fn host_image_partial_write(ctx: TestingContext) {
     }
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_PARTIAL_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
@@ -607,7 +607,7 @@ async fn host_image_depth_roundtrip(ctx: TestingContext) {
     texture.unmap();
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_DEPTH_ROUNDTRIP: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
@@ -713,7 +713,7 @@ async fn host_image_planar_roundtrip(ctx: TestingContext) {
     texture.unmap();
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_PLANAR_ROUNDTRIP: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -810,7 +810,7 @@ async fn host_image_gpu_zero_init_unwritten(ctx: TestingContext) {
     }
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_GPU_ZERO_INIT_UNWRITTEN: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
@@ -915,7 +915,7 @@ async fn host_image_depth_gpu_zero_init_unwritten(ctx: TestingContext) {
     }
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_DEPTH_GPU_ZERO_INIT_UNWRITTEN: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
@@ -951,7 +951,7 @@ async fn host_image_map_callback_ok(ctx: TestingContext) {
     texture.unmap();
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_MAP_CALLBACK_OK: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
@@ -982,7 +982,7 @@ async fn host_image_map_cancel_on_encoder_drop(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_MAP_CANCEL_ON_ENCODER_DROP: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
@@ -1014,7 +1014,7 @@ async fn host_image_map_cancel_on_command_buffer_drop(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_MAP_CANCEL_ON_COMMAND_BUFFER_DROP: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
@@ -1078,7 +1078,7 @@ async fn host_image_map_cancel_on_submit_failure(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_MAP_CANCEL_ON_SUBMIT_FAILURE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
@@ -1144,7 +1144,7 @@ async fn host_image_submit_while_mapped(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_SUBMIT_WHILE_MAPPED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {
@@ -1188,7 +1188,7 @@ async fn host_image_write_texture_while_mapped(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HOST_IMAGE_WRITE_TEXTURE_WHILE_MAPPED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::HOST_IMAGE_COPY))
     .run_async(|ctx| async move {

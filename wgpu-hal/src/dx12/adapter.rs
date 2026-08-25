@@ -2,7 +2,7 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 use core::{ptr, sync::atomic::AtomicU64};
 use std::thread;
 
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 use windows::{
     core::Interface as _,
     Win32::{
