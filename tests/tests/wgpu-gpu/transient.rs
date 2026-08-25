@@ -1,10 +1,10 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(RESOLVE_WITH_TRANSIENT);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static RESOLVE_WITH_TRANSIENT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_async(|ctx| async move {

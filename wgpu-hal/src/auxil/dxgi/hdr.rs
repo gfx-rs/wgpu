@@ -4,7 +4,7 @@
 //! both query through a [`DxgiHdrSource`], so the same monitor reports identical
 //! numbers under either backend.
 
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 use windows::{
     core::Interface as _,
     Win32::{

@@ -144,6 +144,7 @@ impl ApplicationHandler<TriangleAction> for App {
                     // so we can support images the size of the swapchain.
                     required_limits: wgpu::Limits::downlevel_webgl2_defaults()
                         .using_resolution(adapter.limits()),
+                    default_queue: wgpu::QueueDescriptor { label: None },
                     experimental_features: wgpu::ExperimentalFeatures::disabled(),
                     memory_hints: wgpu::MemoryHints::MemoryUsage,
                     trace: wgpu::Trace::Off,

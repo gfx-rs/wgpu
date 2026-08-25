@@ -610,8 +610,8 @@ impl crate::framework::Example for Example {
 
         // A render bundle to draw the terrain.
         let terrain_bundle = {
-            let mut encoder =
-                device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+            let mut encoder = device
+                .create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                     label: None,
                     color_formats: &[Some(config.view_formats[0])],
                     depth_stencil: Some(wgpu::RenderBundleDepthStencil {
@@ -621,7 +621,8 @@ impl crate::framework::Example for Example {
                     }),
                     sample_count: 1,
                     multiview: None,
-                });
+                })
+                .unwrap();
             encoder.set_pipeline(&terrain_pipeline);
             encoder.set_bind_group(0, &terrain_flipped_bind_group, &[]);
             encoder.set_vertex_buffer(0, terrain_vertex_buf.slice(..));
@@ -824,7 +825,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "water",
     image_path: "/examples/features/src/water/screenshot.png",

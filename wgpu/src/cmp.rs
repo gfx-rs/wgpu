@@ -105,5 +105,50 @@ macro_rules! impl_eq_ord_hash_arc_address {
     };
 }
 
+/// Implements `PartialEq`, `Eq`, `PartialOrd`, `Ord`, and `Hash` for a type by comparing the addresses of the `Arc`s.
+///
+/// ```ignore
+/// impl_eq_ord_hash_arc_address!(MyType => .field);
+/// ```
+#[cfg_attr(not(any(wgpu_core, custom)), expect(unused_macros))]
+macro_rules! impl_eq_ord_hash_box_address {
+    ($type:ty => $($access:tt)*) => {
+        impl PartialEq for $type {
+            fn eq(&self, other: &Self) -> bool {
+                let address_left: *const _ = &self $($access)*;
+                let address_right: *const _ = &other $($access)*;
+
+                address_left == address_right
+            }
+        }
+
+        impl Eq for $type {}
+
+        impl PartialOrd for $type {
+            fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        impl Ord for $type {
+            fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+                let address_left: *const _ = &self $($access)*;
+                let address_right: *const _ = &other $($access)*;
+
+                address_left.cmp(&address_right)
+            }
+        }
+
+        impl core::hash::Hash for $type {
+            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+                let address: *const _ = &self $($access)*;
+                address.hash(state)
+            }
+        }
+    };
+}
+
 #[cfg_attr(not(any(wgpu_core, custom)), expect(unused_imports))]
-pub(crate) use {impl_eq_ord_hash_arc_address, impl_eq_ord_hash_proxy};
+pub(crate) use {
+    impl_eq_ord_hash_arc_address, impl_eq_ord_hash_box_address, impl_eq_ord_hash_proxy,
+};

@@ -155,6 +155,9 @@ async fn run() {
                 label: Some("Cooperative Matrix Device"),
                 required_features,
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                default_queue: wgpu::QueueDescriptor {
+                    label: Some("Cooperative Matrix Queue"),
+                },
                 experimental_features: wgpu::ExperimentalFeatures::enabled(),
                 memory_hints: wgpu::MemoryHints::Performance,
                 trace: wgpu::Trace::Off,

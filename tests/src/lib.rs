@@ -22,9 +22,9 @@ pub use self::image::ComparisonType;
 pub use config::{GpuTestConfiguration, GpuTestInitializer};
 pub use expectations::{FailureApplicationReasons, FailureBehavior, FailureCase, FailureReason};
 pub use init::{initialize_adapter, initialize_device, initialize_instance};
+pub use macro_rules_attribute::apply;
 pub use params::TestParameters;
 pub use run::{execute_test, TestingContext};
-pub use wgpu_macros::gpu_test;
 
 /// Run some code in an error scope and assert that validation fails.
 ///
@@ -143,4 +143,33 @@ macro_rules! gpu_test_main {
             }
         }
     };
+}
+
+/// Creates a test that will run on all gpus on a given system.
+///
+/// Use this macro as [`#[apply(gpu_test)]`][apply] on a static variable with a type that
+/// can be converted to a [`GpuTestConfiguration`].
+#[macro_export]
+macro_rules! gpu_test {
+    (
+        $( #[ $meta:meta ] )*
+        $vis:vis static $static_name:ident: $static_type:ty = $init_expr:expr;
+    ) => {
+        $crate::macro_support::paste! {
+            $( #[ $meta ] )*
+            #[allow(non_snake_case)]
+            $vis fn $static_name() -> $crate::GpuTestConfiguration {
+                struct S;
+
+                // Allow any type that can be converted to a GpuTestConfiguration
+                $crate::GpuTestConfiguration::from($init_expr)
+                    .name_from_init_function_typename::<S>(stringify!([< $static_name:lower >]))
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+pub mod macro_support {
+    pub use paste::paste;
 }

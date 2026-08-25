@@ -12,7 +12,7 @@ use wgpu::{
 };
 use wgpu::{BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor};
 use wgpu_test::{
-    fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 #[repr(C)]
@@ -41,7 +41,7 @@ fn aabb_size_desc(primitive_count: u32) -> BlasAABBGeometrySizeDescriptor {
     }
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static AABB_BLAS_BUILD_AND_TRACE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -158,7 +158,7 @@ fn aabb_blas_build_and_trace(ctx: TestingContext) {
     ctx.queue.submit([encoder.finish()]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static AABB_UNALIGNED_PRIMITIVE_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -207,7 +207,7 @@ fn aabb_unaligned_primitive_offset(ctx: TestingContext) {
     fail(&ctx.device, || encoder.finish(), None);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static AABB_INVALID_STRIDE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -258,7 +258,7 @@ fn aabb_invalid_stride(ctx: TestingContext) {
     fail(&ctx.device, || encoder.finish(), None);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static AABB_GEOMETRY_KIND_MISMATCH: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -358,7 +358,7 @@ fn aabb_geometry_kind_mismatch(ctx: TestingContext) {
     fail(&ctx.device, || encoder.finish(), None);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static AABB_INSUFFICIENT_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -407,7 +407,7 @@ fn aabb_insufficient_buffer(ctx: TestingContext) {
     fail(&ctx.device, || encoder.finish(), None);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static AABB_PRIMITIVE_COUNT_EXCEEDS_CREATION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -467,7 +467,7 @@ fn aabb_primitive_count_exceeds_creation(ctx: TestingContext) {
     fail(&ctx.device, || encoder.finish(), None);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static AABB_FLAGS_MISMATCH: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

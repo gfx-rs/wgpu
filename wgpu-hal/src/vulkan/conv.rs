@@ -259,6 +259,14 @@ pub fn derive_image_layout(usage: wgt::TextureUses, format: wgt::TextureFormat) 
     }
 }
 
+pub fn map_queue_family(family: crate::QueueFamily) -> u32 {
+    match family {
+        crate::QueueFamily::Explicit(index) => index,
+        crate::QueueFamily::External => vk::QUEUE_FAMILY_EXTERNAL,
+        crate::QueueFamily::Foreign => vk::QUEUE_FAMILY_FOREIGN_EXT,
+    }
+}
+
 pub fn map_texture_usage(usage: wgt::TextureUses) -> vk::ImageUsageFlags {
     let mut flags = vk::ImageUsageFlags::empty();
     if usage.contains(wgt::TextureUses::COPY_SRC) {

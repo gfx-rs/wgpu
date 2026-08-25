@@ -3,9 +3,6 @@ name: Shaders
 on:
   push:
     branches-ignore: [
-        # Renovate branches are always PRs, so they will be covered
-        # by the pull_request event.
-        "renovate/**",
         # Branches with the `gh-readonly-queue` prefix are used by the
         # merge queue, so they are already covered by the `merge_group` event.
         "gh-readonly-queue/**",
@@ -25,7 +22,7 @@ jobs:
     name: "Validate: HLSL"
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Debug symbols to `line-tables-only`
         shell: bash
@@ -72,7 +69,7 @@ jobs:
     name: "Validate: MSL"
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Debug symbols to line-tables-only
         shell: bash
@@ -102,7 +99,7 @@ jobs:
     name: "Validate: SPIR-V/GLSL/DOT/WGSL"
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Vulkan SDK
         uses: ./.github/actions/install-vulkan-sdk

@@ -7,7 +7,8 @@
 /// On all other backends the limit is `u32::MAX`, so these tests are skipped there to avoid
 /// hitting other, lower per-type limits while trying to reach the combined limit.
 use wgpu_test::{
-    fail, gpu_test, valid, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    apply, fail, gpu_test, valid, FailureCase, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -81,7 +82,7 @@ fn uniform_entries(
 
 /// 14 storage + 14 uniform = 28 combined in a BGL.
 /// Pipeline layout creation must succeed since 28 < 29.
-#[gpu_test]
+#[apply(gpu_test!)]
 static BUFFERS_AND_ACCEL_STRUCTS_VALID_WITHIN_LIMIT: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -112,7 +113,7 @@ static BUFFERS_AND_ACCEL_STRUCTS_VALID_WITHIN_LIMIT: GpuTestConfiguration =
 
 /// 20 storage buffers + 9 vertex buffers = 29 combined.
 /// Render pipeline creation must succeed since 29 == limit.
-#[gpu_test]
+#[apply(gpu_test!)]
 static BUFFERS_AND_ACCEL_STRUCTS_VALID_VERTEX_STAGE_AT_LIMIT: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -188,7 +189,7 @@ static BUFFERS_AND_ACCEL_STRUCTS_VALID_VERTEX_STAGE_AT_LIMIT: GpuTestConfigurati
 
 /// 15 storage + 15 uniform = 30 combined in a single BGL.
 /// Must fail at BGL creation since the combined limit is 29.
-#[gpu_test]
+#[apply(gpu_test!)]
 static BUFFERS_AND_ACCEL_STRUCTS_EXCEEDS_SINGLE_BGL: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -218,7 +219,7 @@ static BUFFERS_AND_ACCEL_STRUCTS_EXCEEDS_SINGLE_BGL: GpuTestConfiguration =
 /// buffers. Each individual BGL is within the combined limit, and neither
 /// per-type limit is exceeded across both BGLs. However their combined use
 /// in a pipeline layout adds up to 30 total buffer slots, exceeding the limit.
-#[gpu_test]
+#[apply(gpu_test!)]
 static BUFFERS_AND_ACCEL_STRUCTS_EXCEEDS_ACROSS_BGLS: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -260,7 +261,7 @@ static BUFFERS_AND_ACCEL_STRUCTS_EXCEEDS_ACROSS_BGLS: GpuTestConfiguration =
 
 /// 20 storage buffers + 10 vertex buffers = 30 combined in the vertex stage,
 /// which exceeds the limit of 29. Render pipeline creation must fail.
-#[gpu_test]
+#[apply(gpu_test!)]
 static BUFFERS_AND_ACCEL_STRUCTS_VERTEX_STAGE_EXCEEDS_WITH_VERTEX_BUFFERS: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(

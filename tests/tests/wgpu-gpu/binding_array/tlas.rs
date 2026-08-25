@@ -3,14 +3,14 @@ use std::{borrow::Cow, num::NonZeroU32};
 use wgpu::util::DeviceExt;
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.push(BINDING_ARRAY_TLAS);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BINDING_ARRAY_TLAS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

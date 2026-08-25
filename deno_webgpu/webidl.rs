@@ -1,6 +1,7 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use deno_core::cppgc::Ptr;
 use deno_core::v8;
@@ -327,12 +328,12 @@ pub(crate) enum GPUPipelineLayoutOrGPUAutoLayoutMode {
 }
 
 impl From<GPUPipelineLayoutOrGPUAutoLayoutMode>
-  for Option<wgpu_core::id::PipelineLayoutId>
+  for Option<Arc<wgpu_core::binding_model::PipelineLayout>>
 {
   fn from(value: GPUPipelineLayoutOrGPUAutoLayoutMode) -> Self {
     match value {
       GPUPipelineLayoutOrGPUAutoLayoutMode::PipelineLayout(layout) => {
-        Some(layout.id)
+        Some(layout.wgpu_pipeline_layout.clone())
       }
       GPUPipelineLayoutOrGPUAutoLayoutMode::AutoLayoutMode(
         GPUAutoLayoutMode::Auto,

@@ -10,8 +10,7 @@ use wgpu::{
     ComputePassDescriptor, ComputePipelineDescriptor, CreateBlasDescriptor, CreateTlasDescriptor,
     PollType, TlasInstance, VertexFormat,
 };
-use wgpu_macros::gpu_test;
-use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     tests.push(ACCELERATION_STRUCTURE_USE_AFTER_FREE);
@@ -144,7 +143,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
     ctx.queue.submit(Some(encoder.finish()));
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ACCELERATION_STRUCTURE_USE_AFTER_FREE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

@@ -162,7 +162,9 @@ fn pick_mode(caps: &wgpu::SurfaceCapabilities, forced: Option<&str>) -> ModeChoi
         Some("extended-display-p3") => cs == Cs::ExtendedDisplayP3,
         Some("srgb") => false,
         Some(other) => {
-            panic!("unknown mode {other:?} (use hdr10|hlg|scrgb|extended-srgb|extended-display-p3|srgb)")
+            panic!(
+                "unknown mode {other:?} (use hdr10|hlg|scrgb|extended-srgb|extended-display-p3|srgb)"
+            )
         }
     };
 

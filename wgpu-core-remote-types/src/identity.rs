@@ -1,18 +1,9 @@
 use alloc::vec::Vec;
+use core::cell::RefCell;
 use core::{fmt::Debug, marker::PhantomData};
 
-use crate::{
-    id::{Id, Marker},
-    lock::{rank, Mutex},
-    Epoch, Index,
-};
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum IdSource {
-    External,
-    Allocated,
-    None,
-}
+use crate::{id::markers, id::Id, id::Marker};
+use crate::{Epoch, Index};
 
 /// A simple structure to allocate [`Id`] identifiers.
 ///
@@ -36,40 +27,19 @@ enum IdSource {
 ///   index in an `Id`. Index values are reused, but only with a different
 ///   epoch.
 ///
-/// `IdentityValues` can also be used to track the count of IDs allocated by
-/// some external allocator. Combining internal and external allocation is not
-/// allowed; calling both `alloc` and `mark_as_used` on the same
-/// `IdentityValues` will result in a panic. The external mode is used when
-/// [playing back a trace of wgpu operations][player].
-///
 /// [`Id`]: crate::id::Id
 /// [`alloc`]: IdentityValues::alloc
 /// [`release`]: IdentityValues::release
-/// [player]: https://github.com/gfx-rs/wgpu/tree/trunk/player/
 #[derive(Debug)]
 pub(super) struct IdentityValues {
     free: Vec<(Index, Epoch)>,
     next_index: Index,
     count: usize,
-    // Sanity check: The allocation logic works under the assumption that we don't
-    // do a mix of allocating ids from here and providing ids manually for the same
-    // storage container.
-    id_source: IdSource,
 }
 
 impl IdentityValues {
     /// Allocate a fresh, never-before-seen ID.
-    ///
-    /// # Panics
-    ///
-    /// If `mark_as_used` has previously been called on this `IdentityValues`.
     pub fn alloc<T: Marker>(&mut self) -> Id<T> {
-        assert!(
-            self.id_source != IdSource::External,
-            "Mix of internally allocated and externally provided IDs"
-        );
-        self.id_source = IdSource::Allocated;
-
         self.count += 1;
         match self.free.pop() {
             Some((index, epoch)) => Id::zip(index, epoch + 1),
@@ -82,77 +52,90 @@ impl IdentityValues {
         }
     }
 
-    /// Increment the count of used IDs.
-    ///
-    /// # Panics
-    ///
-    /// If `alloc` has previously been called on this `IdentityValues`.
-    pub fn mark_as_used<T: Marker>(&mut self, id: Id<T>) -> Id<T> {
-        assert!(
-            self.id_source != IdSource::Allocated,
-            "Mix of internally allocated and externally provided IDs"
-        );
-        self.id_source = IdSource::External;
-
-        self.count += 1;
-        id
-    }
-
     /// Free `id` and/or decrement the count of used IDs.
     ///
     /// Freed IDs will never be returned from `alloc` again.
     pub fn release<T: Marker>(&mut self, id: Id<T>) {
-        if let IdSource::Allocated = self.id_source {
-            let (index, epoch) = id.unzip();
-            self.free.push((index, epoch));
-        }
+        let (index, epoch) = id.unzip();
+        self.free.push((index, epoch));
         self.count -= 1;
-    }
-
-    pub fn count(&self) -> usize {
-        self.count
     }
 }
 
 #[derive(Debug)]
 pub struct IdentityManager<T: Marker> {
-    pub(super) values: Mutex<IdentityValues>,
+    pub(super) values: RefCell<IdentityValues>,
     _phantom: PhantomData<T>,
 }
 
 impl<T: Marker> IdentityManager<T> {
     pub fn process(&self) -> Id<T> {
-        self.values.lock().alloc()
+        self.values.borrow_mut().alloc()
     }
-    pub fn mark_as_used(&self, id: Id<T>) -> Id<T> {
-        self.values.lock().mark_as_used(id)
-    }
+
     pub fn free(&self, id: Id<T>) {
-        self.values.lock().release(id)
+        self.values.borrow_mut().release(id)
     }
 }
 
 impl<T: Marker> IdentityManager<T> {
     pub fn new() -> Self {
         Self {
-            values: Mutex::new(
-                rank::IDENTITY_MANAGER_VALUES,
-                IdentityValues {
-                    free: Vec::new(),
-                    next_index: 0,
-                    count: 0,
-                    id_source: IdSource::None,
-                },
-            ),
+            values: RefCell::new(IdentityValues {
+                free: Vec::new(),
+                next_index: 0,
+                count: 0,
+            }),
             _phantom: PhantomData,
         }
     }
 }
 
+impl<T: Marker> Default for IdentityManager<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A collection of identity managers for all resource types.
+///
+/// This is to be used in content process for ID generation.
+/// IDs are then sent to the GPU process for resource creation in `Hub`.
+#[derive(Debug, Default)]
+pub struct IdentityHub {
+    pub adapters: IdentityManager<markers::Adapter>,
+    pub devices: IdentityManager<markers::Device>,
+    pub queues: IdentityManager<markers::Queue>,
+    pub pipeline_layouts: IdentityManager<markers::PipelineLayout>,
+    pub shader_modules: IdentityManager<markers::ShaderModule>,
+    pub bind_group_layouts: IdentityManager<markers::BindGroupLayout>,
+    pub bind_groups: IdentityManager<markers::BindGroup>,
+    pub command_encoders: IdentityManager<markers::CommandEncoder>,
+    pub command_buffers: IdentityManager<markers::CommandBuffer>,
+    pub render_bundles: IdentityManager<markers::RenderBundle>,
+    pub render_pipelines: IdentityManager<markers::RenderPipeline>,
+    pub compute_pipelines: IdentityManager<markers::ComputePipeline>,
+    pub pipeline_caches: IdentityManager<markers::PipelineCache>,
+    pub query_sets: IdentityManager<markers::QuerySet>,
+    pub buffers: IdentityManager<markers::Buffer>,
+    pub textures: IdentityManager<markers::Texture>,
+    pub texture_views: IdentityManager<markers::TextureView>,
+    pub external_textures: IdentityManager<markers::ExternalTexture>,
+    pub samplers: IdentityManager<markers::Sampler>,
+    pub render_passes: IdentityManager<markers::RenderPassEncoder>,
+    pub compute_passes: IdentityManager<markers::ComputePassEncoder>,
+    pub render_bundle_encoders: IdentityManager<markers::RenderBundleEncoder>,
+}
+
+impl IdentityHub {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 #[test]
 fn test_epoch_end_of_life() {
-    use crate::id;
-    let man = IdentityManager::<id::markers::Buffer>::new();
+    let man = IdentityManager::<markers::Buffer>::new();
     let id1 = man.process();
     assert_eq!(id1.unzip(), (0, 1));
     man.free(id1);

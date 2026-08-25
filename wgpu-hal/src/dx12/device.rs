@@ -10,7 +10,7 @@ use core::{ffi, num::NonZeroU32, ptr, time::Duration};
 use std::time::Instant;
 
 use bytemuck::TransparentWrapper;
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 use windows::{
     core::Interface as _,
     Win32::{

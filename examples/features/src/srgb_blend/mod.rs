@@ -222,7 +222,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST_SRGB: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "srgb-blend-srg",
     // Generated on WARP/Windows
@@ -236,7 +236,7 @@ pub static TEST_SRGB: crate::framework::ExampleTestParams = crate::framework::Ex
 };
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST_LINEAR: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "srgb-blend-linear",
     // Generated on WARP/Windows

@@ -132,6 +132,8 @@ macro_rules! with_limits {
 ///
 /// [`downlevel_defaults()`]: Limits::downlevel_defaults
 #[repr(C)]
+// Even though this type is simple, it is not copy because it is large.
+// https://rust-lang.github.io/rust-clippy/master/#large_types_passed_by_value
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase", default))]
@@ -1234,6 +1236,13 @@ bitflags::bitflags! {
         ///
         /// See <https://www.w3.org/TR/webgpu/#adapter-capability-guarantees>.
         const TEXTURE_COMPRESSION = 1 << 25;
+
+        /// Supports `@interpolate(linear)` (a.k.a. `noperspective`) on shader inter-stage
+        /// variables.
+        ///
+        /// GLSL ES has no `noperspective` qualifier, so the GLES backend only supports this
+        /// on desktop OpenGL, not on GLES/WebGL2.
+        const LINEAR_INTERPOLATION = 1 << 26;
     }
 }
 

@@ -5,10 +5,7 @@ use crate::{
     api_log,
     command::{encoder::EncodingState, ArcCommand, EncoderStateError},
     device::{DeviceError, MissingFeatures},
-    get_lowest_common_denom,
-    global::Global,
-    hal_label,
-    id::{BufferId, CommandEncoderId, TextureId},
+    get_lowest_common_denom, hal_label,
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{
         Buffer, DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError,
@@ -111,7 +108,7 @@ impl WebGpuError for ClearError {
 }
 
 impl super::CommandEncoder {
-    pub fn clear_buffer(
+    fn clear_buffer_inner(
         self: &Arc<Self>,
         dst: Arc<Buffer>,
         offset: BufferAddress,
@@ -128,7 +125,19 @@ impl super::CommandEncoder {
         })
     }
 
-    pub fn clear_texture(
+    pub fn clear_buffer(
+        self: &Arc<Self>,
+        dst: Arc<Buffer>,
+        offset: BufferAddress,
+        size: Option<BufferAddress>,
+    ) {
+        if let Err(err) = self.clear_buffer_inner(dst, offset, size) {
+            self.device
+                .handle_error(err, Some(self.label()), "CommandEncoder::clear_buffer");
+        }
+    }
+
+    fn clear_texture_inner(
         self: &Arc<Self>,
         dst: Arc<Texture>,
         subresource_range: &ImageSubresourceRange,
@@ -146,33 +155,16 @@ impl super::CommandEncoder {
             })
         })
     }
-}
 
-impl Global {
-    pub fn command_encoder_clear_buffer(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        dst: BufferId,
-        offset: BufferAddress,
-        size: Option<BufferAddress>,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        cmd_enc.clear_buffer(hub.buffers.get(dst), offset, size)
-    }
-
-    pub fn command_encoder_clear_texture(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        dst: TextureId,
+    pub fn clear_texture(
+        self: &Arc<Self>,
+        dst: Arc<Texture>,
         subresource_range: &ImageSubresourceRange,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-
-        cmd_enc.clear_texture(hub.textures.get(dst), subresource_range)
+    ) {
+        if let Err(err) = self.clear_texture_inner(dst, subresource_range) {
+            self.device
+                .handle_error(err, Some(self.label()), "CommandEncoder::clear_texture");
+        }
     }
 }
 

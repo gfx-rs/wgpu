@@ -1,5 +1,5 @@
 use wgpu::util::DeviceExt;
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(ZERO_WORKGROUP_COUNT);
@@ -11,7 +11,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 /// Since this is a public  API that may be given untrusted values in a browser, this must be protected again.
 ///
 /// The following test should successfully do nothing on all platforms.
-#[gpu_test]
+#[apply(gpu_test!)]
 static ZERO_WORKGROUP_COUNT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

@@ -1,7 +1,7 @@
 use wgpu::util::DeviceExt;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer, TestParameters,
-    TestingContext,
+    apply, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -27,7 +27,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 /// bottom right: Fragment Shader / Immediate data
 ///
 /// We then validate the data is correct from every position.
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_STAGE_DATA_BINDING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

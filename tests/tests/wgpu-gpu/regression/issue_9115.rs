@@ -1,7 +1,7 @@
 use wgpu::util::DeviceExt;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer, TestParameters,
-    TestingContext,
+    apply, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -13,7 +13,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 /// The backend incorrectly encountered the uniform's struct type when processing immediates.
 ///
 /// See <https://github.com/gfx-rs/wgpu/issues/9115>.
-#[gpu_test]
+#[apply(gpu_test!)]
 static IMMEDIATES_WITH_UNIFORM_IN_SINGLE_MODULE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

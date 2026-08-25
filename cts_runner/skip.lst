@@ -4,10 +4,15 @@
 // appear in this file in order -- including ones in comments.
 
 webgpu:api,validation,dispatch:* // linear indexing, https://github.com/gfx-rs/wgpu/issues/9296
+webgpu:api,validation,encoding,cmds,render,draw:last_buffer_setting_take_account:* // unimplemented in CTS
+webgpu:api,validation,encoding,cmds,render,indirect_multi_draw:* // no 'chromium-experimental-multi-draw-indirect' feature
+webgpu:api,validation,encoding,cmds,render,state_tracking:all_needed_index_buffer_should_be_bound:* // unimplemented in CTS
+webgpu:api,validation,encoding,cmds,render,state_tracking:all_needed_vertex_buffer_should_be_bound:* // unimplemented in CTS
 webgpu:api,validation,gpu_external_texture_expiration:* // external texture
 webgpu:api,validation,queue,copyToTexture,CopyExternalImageToTexture:* // external texture
 
 webgpu:shader,validation,decl,immediate:* // WGSL language extension 'immediate_address_space' isn't added, https://github.com/gfx-rs/wgpu/issues/8556
+webgpu:shader,validation,expression,call,builtin,atomicStoreMinMax:* // device feature 'atomic-vec2u-min-max' isn't implemented
 webgpu:shader,validation,expression,call,builtin,quadBroadcast:* // subgroups, https://github.com/gfx-rs/wgpu/issues/8722
 webgpu:shader,validation,expression,call,builtin,quadSwap:* // ibid.
 webgpu:shader,validation,expression,call,builtin,subgroupAdd:* // ibid.
@@ -20,4 +25,5 @@ webgpu:shader,validation,expression,call,builtin,subgroupElect:* // ibid.
 webgpu:shader,validation,expression,call,builtin,subgroupMinMax:* // ibid.
 webgpu:shader,validation,expression,call,builtin,subgroupMul:* // ibid.
 webgpu:shader,validation,expression,call,builtin,subgroupShuffle:* // ibid.
+webgpu:shader,validation,extension,subgroup_size_control:* // device feature 'subgroup-size-control' isn't implemented
 webgpu:shader,validation,statement,swizzle_assignment:* // swizzle assignment, https://github.com/gfx-rs/wgpu/issues/9159

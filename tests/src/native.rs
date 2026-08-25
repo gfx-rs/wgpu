@@ -5,7 +5,7 @@
 
 use std::{future::Future, pin::Pin};
 
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 
 use crate::{
     config::GpuTestConfiguration, params::TestInfo, report::AdapterReport, run::execute_test,
@@ -87,7 +87,8 @@ impl NativeTest {
 }
 
 #[doc(hidden)]
-pub static TEST_LIST: Mutex<Vec<crate::GpuTestConfiguration>> = Mutex::new(Vec::new());
+pub static TEST_LIST: Mutex<Vec<crate::GpuTestConfiguration>> =
+    Mutex::const_new(wgpu_sync::RawMutex::new(), Vec::new());
 
 /// Return value for the main function.
 pub type MainResult = anyhow::Result<()>;

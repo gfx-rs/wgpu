@@ -5,8 +5,7 @@ use wgpu::{
     BlasTriangleGeometrySizeDescriptor, CreateBlasDescriptor,
 };
 use wgpu::{IndexFormat, VertexFormat};
-use wgpu_macros::gpu_test;
-use wgpu_test::{fail, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, fail, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     tests.extend([
@@ -16,7 +15,7 @@ pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BLAS_INVALID_VERTEX_FORMAT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -58,7 +57,7 @@ fn invalid_vertex_format_blas_create(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BLAS_MISMATCHED_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -129,7 +128,7 @@ fn mismatched_index_blas_create(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static UNSUPPORTED_ACCELERATION_STRUCTURE_RESOURCES: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().test_features_limits())

@@ -1,10 +1,12 @@
-use wgpu_test::{fail, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{
+    apply, fail, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([BAD_BUFFER_MAP, BAD_TEXTURE_CREATE_VIEW, BAD_TEXTURE_WRITE]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BAD_BUFFER_MAP: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
@@ -37,7 +39,7 @@ static BAD_BUFFER_MAP: GpuTestConfiguration = GpuTestConfiguration::new()
         valid(&ctx.device, || buffer.destroy());
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BAD_TEXTURE_CREATE_VIEW: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
@@ -73,7 +75,7 @@ static BAD_TEXTURE_CREATE_VIEW: GpuTestConfiguration = GpuTestConfiguration::new
         valid(&ctx.device, || texture.destroy());
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BAD_TEXTURE_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {

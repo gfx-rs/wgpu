@@ -6,7 +6,7 @@ use wgpu::{
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, VertexFormat,
 };
 use wgpu_test::GpuTestInitializer;
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{apply, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -35,7 +35,7 @@ const QUERY_SET_OOM_DETECTION_IMPL: Backends = Backends::DX12;
 /// Nr of resources tests will try to create before failing.
 const LOOP_BOUND: u32 = 1_000_000;
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static TEXTURE_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -74,7 +74,7 @@ static TEXTURE_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
         panic!("Failed to OOM after {LOOP_BOUND} iterations.");
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -105,7 +105,7 @@ static BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
         panic!("Failed to OOM after {LOOP_BOUND} iterations.");
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MAPPING_BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -136,7 +136,7 @@ static MAPPING_BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new
         panic!("Failed to OOM after {LOOP_BOUND} iterations.");
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static QUERY_SET_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -167,7 +167,7 @@ static QUERY_SET_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
         panic!("Failed to OOM after {LOOP_BOUND} iterations.");
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -209,7 +209,7 @@ static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
         panic!("Failed to OOM after {LOOP_BOUND} iterations.");
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static TLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

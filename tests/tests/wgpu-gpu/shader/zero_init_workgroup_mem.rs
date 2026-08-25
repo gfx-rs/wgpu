@@ -8,13 +8,13 @@ use wgpu::{
     ShaderStages,
 };
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(ZERO_INIT_WORKGROUP_MEMORY);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

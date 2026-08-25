@@ -4,7 +4,7 @@ use crate::ray_tracing::{acceleration_structure_limits, AsBuildContext};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
 use wgpu_test::{
-    fail, fail_if, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    apply, fail, fail_if, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters,
     TestingContext,
 };
 
@@ -28,7 +28,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static UNBUILT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -61,7 +61,7 @@ fn unbuilt_blas(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static UNBUILT_BLAS_COMPACTION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -89,7 +89,7 @@ fn unbuilt_blas_compaction(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BLAS_COMPACTION_WITHOUT_FLAGS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -124,7 +124,7 @@ fn blas_compaction_without_flags(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static UNPREPARED_BLAS_COMPACTION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -153,7 +153,7 @@ fn unprepared_blas_compaction(ctx: TestingContext) {
     fail(&ctx.device, || ctx.queue.compact_blas(&as_ctx.blas), None);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BLAS_COMPACTION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -210,7 +210,7 @@ fn blas_compaction(ctx: TestingContext) {
     fail(&ctx.device, || fail_encoder.finish(), None);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static OUT_OF_ORDER_AS_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -292,7 +292,7 @@ fn out_of_order_as_build(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static OUT_OF_ORDER_AS_BUILD_USE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -475,7 +475,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static EMPTY_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -497,7 +497,7 @@ fn empty_build(ctx: TestingContext) {
     ctx.queue.submit([encoder_safe.finish()]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BUILD_WITH_TRANSFORM: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -583,7 +583,7 @@ fn build_with_transform(ctx: TestingContext) {
     ctx.queue.submit([encoder_build.finish()]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ONLY_BLAS_VERTEX_RETURN: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -707,7 +707,7 @@ fn only_blas_vertex_return(ctx: TestingContext) {
     }
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ONLY_TLAS_VERTEX_RETURN: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -747,7 +747,7 @@ fn only_tlas_vertex_return(ctx: TestingContext) {
     fail(&ctx.device, || encoder_tlas.finish(), None);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTRA_FORMAT_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -761,7 +761,7 @@ static EXTRA_FORMAT_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
     )
     .run_sync(|ctx| test_as_build_format_stride(ctx, VertexFormat::Snorm16x4, 6, false));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MISALIGNED_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -773,7 +773,7 @@ static MISALIGNED_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
     // Larger than the minimum size, but not aligned as required
     .run_sync(|ctx| test_as_build_format_stride(ctx, VertexFormat::Float32x3, 13, true));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static TOO_SMALL_STRIDE_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -849,7 +849,7 @@ fn test_as_build_format_stride(
     }
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BLAS_FIRST_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

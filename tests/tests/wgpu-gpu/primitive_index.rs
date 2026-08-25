@@ -3,7 +3,8 @@ use wgpu::{
     MeshState, RenderPipelineDescriptor, ShaderModuleDescriptor, TextureFormat, VertexState,
 };
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
@@ -58,7 +59,7 @@ fn fragment(@builtin(primitive_index) index: u32) -> @location(0) vec4<f32> {
         });
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PRIMITIVE_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(Features::PRIMITIVE_INDEX))
     .run_async(primitive_index);
@@ -155,17 +156,17 @@ fn mesh_params() -> TestParameters {
         ))
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PRIMITIVE_INDEX_MESH_FRAGMENT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(mesh_params())
     .run_async(async |ctx| mesh_primitive_index(ctx, true, true).await);
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PRIMITIVE_INDEX_MESH_NOT_FRAGMENT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(mesh_params().expect_fail(FailureCase::always()))
     .run_async(async |ctx| mesh_primitive_index(ctx, true, false).await);
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PRIMITIVE_INDEX_FRAGMENT_NOT_MESH: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(mesh_params().expect_fail(FailureCase::always()))
     .run_async(async |ctx| mesh_primitive_index(ctx, false, true).await);

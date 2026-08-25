@@ -1,7 +1,7 @@
 //! Tests for nv12 texture creation and sampling.
 
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
@@ -222,7 +222,7 @@ fn test_planar_texture_rendering(
 
 /// Ensures that creation and sampling of an NV12 format texture works as
 /// expected.
-#[gpu_test]
+#[apply(gpu_test!)]
 static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -263,7 +263,7 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
 
 /// Ensures that creation and sampling of a P010 format texture works as
 /// expected.
-#[gpu_test]
+#[apply(gpu_test!)]
 static P010_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -305,7 +305,7 @@ static P010_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
     });
 
 /// Ensures that rendering on to NV12 format texture works as expected.
-#[gpu_test]
+#[apply(gpu_test!)]
 static NV12_TEXTURE_RENDERING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -349,7 +349,7 @@ static NV12_TEXTURE_RENDERING: GpuTestConfiguration = GpuTestConfiguration::new(
     });
 
 /// Ensures that copying NV12 texture to NV12 texture works as expected
-#[gpu_test]
+#[apply(gpu_test!)]
 static NV12_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -400,7 +400,7 @@ static NV12_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
 /// single-plane destination (Plane0 → R8Unorm, Plane1 → Rg8Unorm) round-trips
 /// byte-for-byte. Exercises the planar→single-plane copy-compatibility
 /// extension in `copy_texture_to_texture`.
-#[gpu_test]
+#[apply(gpu_test!)]
 static NV12_PLANE_TO_SINGLE_PLANE_COPY: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
     .run_async(|ctx| async move {
@@ -605,7 +605,7 @@ static NV12_PLANE_TO_SINGLE_PLANE_COPY: GpuTestConfiguration = GpuTestConfigurat
     });
 
 /// Ensures that copying P010 texture to P010 texture works as expected
-#[gpu_test]
+#[apply(gpu_test!)]
 static P010_TEXTURE_COPYING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

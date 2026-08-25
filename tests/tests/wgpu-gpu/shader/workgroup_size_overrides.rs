@@ -1,7 +1,7 @@
 use std::mem::size_of_val;
 use wgpu::util::DeviceExt;
 use wgpu::{BufferDescriptor, BufferUsages, MapMode, PollType};
-use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, fail_if, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.push(WORKGROUP_SIZE_OVERRIDES);
@@ -19,7 +19,7 @@ const SHADER: &str = r#"
     }
 "#;
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WORKGROUP_SIZE_OVERRIDES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().limits(wgpu::Limits::default()))
     .run_async(move |ctx| async move {

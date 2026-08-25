@@ -2,7 +2,9 @@
 
 use wgpu::BufferAddress;
 
-use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{
+    apply, fail_if, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(COPY_ALIGNMENT);
@@ -25,7 +27,7 @@ fn try_copy(
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static COPY_ALIGNMENT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {

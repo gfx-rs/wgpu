@@ -4239,7 +4239,17 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                 if let Some(offset) = offset {
                     write!(self.out, ", ")?;
-                    write!(self.out, "int2(")?; // work around https://github.com/microsoft/DirectXShaderCompiler/issues/5082#issuecomment-1540147807
+                    // Work around https://github.com/microsoft/DirectXShaderCompiler/issues/5082#issuecomment-1540147807
+                    let (size, scalar) = func_ctx
+                        .resolve_type(offset, &module.types)
+                        .vector_size_and_scalar()
+                        .unwrap();
+                    assert_eq!(scalar.kind, ScalarKind::Sint);
+                    write!(self.out, "{}", scalar.to_hlsl_str()?)?;
+                    if let Some(size) = size {
+                        write!(self.out, "{}", common::vector_size_str(size))?;
+                    }
+                    write!(self.out, "(")?;
                     self.write_const_expression(module, offset, func_ctx.expressions)?;
                     write!(self.out, ")")?;
                 }

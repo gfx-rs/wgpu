@@ -389,7 +389,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "ray_aabb_compute",
     image_path: "/examples/features/src/ray_aabb_compute/screenshot.png",
