@@ -284,52 +284,6 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    /// Returns `true` if a `debugPrintf` is found anywhere within this statement, `false` otherwise.
-    ///
-    /// Does not traverse into function calls.
-    fn find_debug_printf(stmt: &crate::Statement) -> bool {
-        match *stmt {
-            crate::Statement::DebugPrintf { .. } => true,
-            crate::Statement::Block(ref b) => b.iter().any(Self::find_debug_printf),
-            crate::Statement::If {
-                ref accept,
-                ref reject,
-                ..
-            } => {
-                accept.iter().any(Self::find_debug_printf)
-                    || reject.iter().any(Self::find_debug_printf)
-            }
-            crate::Statement::Loop {
-                ref body,
-                ref continuing,
-                ..
-            } => {
-                body.iter().any(Self::find_debug_printf)
-                    || continuing.iter().any(Self::find_debug_printf)
-            }
-            crate::Statement::Switch { ref cases, .. } => cases
-                .iter()
-                .any(|c| c.body.iter().any(Self::find_debug_printf)),
-            // Note: does not match on function `Call`s to look inside function bodies recursively.
-            // This is fine because this is called on all functions and entrypoints in a module to check for `debugPrintf` usage.
-            _ => false,
-        }
-    }
-
-    /// Returns `true` if any function or entry point in the module uses `debugPrintf`.
-    fn module_uses_debug_printf(module: &Module) -> bool {
-        let functions = module.functions.iter().map(|(_, f)| f);
-        let entry_points = module.entry_points.iter().map(|ep| &ep.function);
-        for func in functions.chain(entry_points) {
-            for stmt in func.body.iter() {
-                if Self::find_debug_printf(stmt) {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
     /// Helper method which writes all the `enable` declarations
     /// needed for a module.
     fn write_enable_declarations(&mut self, module: &Module) -> BackendResult {
@@ -477,8 +431,7 @@ impl<W: Write> Writer<W> {
             needed.ray_tracing_pipeline = true;
         }
 
-        // search for debugPrintf statements in all functions and entry points
-        needed.debug_printf = Self::module_uses_debug_printf(module);
+        needed.debug_printf = module.uses_debug_printf();
 
         // Write required declarations
         let mut any_written = false;

@@ -1774,6 +1774,9 @@ impl super::Validator {
                     }
                 },
 
+                // TODO: the format string itself is not validated, so a mismatch between the
+                // specifiers and the arguments is only caught by the backend's
+                // shader logging implementation.
                 S::DebugPrintf {
                     format: _,
                     ref arguments,

@@ -73,7 +73,7 @@ fn create_debug_printf_log_state(
          message: NonNull<NSString>| {
             // SAFETY: message is NonNull<NSString>.
             let message = unsafe { message.as_ref() }.to_string();
-            log::info!("[debugPrintf] {message}");
+            log::info!("[shader debugPrintf] {message}");
         },
     );
 

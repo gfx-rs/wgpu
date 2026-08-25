@@ -31,6 +31,48 @@ pub use typifier::{compare_types, ResolveContext, ResolveError, TypeResolution};
 
 use crate::non_max_u32::NonMaxU32;
 
+/// Returns `true` if `predicate` returns `true` for any statement in `block`,
+/// including statements nested inside `Block`, `If`, `Loop` and `Switch`
+/// statements.
+///
+/// Does not traverse into the bodies of the functions called by `block`, so
+/// callers that care about a whole module must visit every function and entry
+/// point themselves.
+pub fn any_statement(
+    block: &crate::Block,
+    predicate: &mut impl FnMut(&crate::Statement) -> bool,
+) -> bool {
+    use crate::Statement as S;
+
+    for stmt in block.iter() {
+        if predicate(stmt) {
+            return true;
+        }
+        let nested = match *stmt {
+            S::Block(ref body) => any_statement(body, predicate),
+            S::If {
+                ref accept,
+                ref reject,
+                ..
+            } => any_statement(accept, predicate) || any_statement(reject, predicate),
+            S::Loop {
+                ref body,
+                ref continuing,
+                ..
+            } => any_statement(body, predicate) || any_statement(continuing, predicate),
+            S::Switch { ref cases, .. } => cases
+                .iter()
+                .any(|case| any_statement(&case.body, predicate)),
+            _ => false,
+        };
+        if nested {
+            return true;
+        }
+    }
+
+    false
+}
+
 impl From<super::StorageFormat> for super::Scalar {
     fn from(format: super::StorageFormat) -> Self {
         use super::{ScalarKind as Sk, StorageFormat as Sf};
@@ -938,6 +980,20 @@ impl crate::Module {
             return true;
         }
         false
+    }
+
+    /// Returns `true` if any function or entry point in the module uses
+    /// [`Statement::DebugPrintf`].
+    ///
+    /// [`Statement::DebugPrintf`]: crate::Statement::DebugPrintf
+    pub fn uses_debug_printf(&self) -> bool {
+        let functions = self.functions.iter().map(|(_, f)| f);
+        let entry_points = self.entry_points.iter().map(|ep| &ep.function);
+        functions.chain(entry_points).any(|func| {
+            any_statement(&func.body, &mut |stmt| {
+                matches!(*stmt, crate::Statement::DebugPrintf { .. })
+            })
+        })
     }
 
     pub fn uses_ray_tracing(&self, ep_index: Option<usize>) -> RayTracingUses {

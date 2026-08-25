@@ -13,12 +13,11 @@ This is a debugging extension and is not part of core WebGPU.
 
 On Metal, `wgpu` attaches an `MTLLogState` to the device's command queue and forwards the shader log messages to `log::info`.
 
-On Vulkan, `debugPrintf` output is produced through the validation layer debug-printf path. It is not enabled when GPU-assisted validation is enabled, because the two validation features are mutually exclusive.
+On Vulkan, `debugPrintf` output is produced through the validation layer debug-printf path.
 To receive Vulkan `debugPrintf` output:
 
 - Install the Vulkan SDK.
-- Request `InstanceFlags::VALIDATION`.
-- Do not request `InstanceFlags::GPU_ASSISTED_VALIDATION`.
+- Request `InstanceFlags::VALIDATION` and `InstanceFlags::DEBUG_PRINTF`.
 - Listen for log messages at the `Info` level.
 
 ## WGSL Syntax

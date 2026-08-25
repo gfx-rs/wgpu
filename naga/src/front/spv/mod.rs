@@ -1665,6 +1665,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 }
                 S::WorkGroupUniformLoad { .. } => unreachable!(),
                 S::CooperativeStore { .. } => unreachable!(),
+                // TODO: the SPIR-V frontend does not read `NonSemantic.DebugPrintf` extended
+                // instructions yet, so this statement is never produced here.
                 S::DebugPrintf { .. } => unreachable!(),
             }
             i += 1;
