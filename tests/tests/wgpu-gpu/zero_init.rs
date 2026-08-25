@@ -63,6 +63,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH24PLUS_STENCIL8,
         WRITE_TEXTURE_STENCIL_LEAVES_DEPTH_UNINIT_DEPTH32FLOAT_STENCIL8,
         DYNAMIC_OFFSET_BUFFER_BINDING_INIT,
+        ZERO_INIT_MULTIPLANAR_TEXTURE,
         COPY_TEXTURE_TO_BUFFER_3D_SOURCE_ORIGIN_Z_UNINIT,
         COPY_TEXTURE_TO_TEXTURE_3D_SOURCE_ORIGIN_Z_UNINIT,
         COPY_BUFFER_TO_TEXTURE_3D_DEST_ORIGIN_Z_PARTIAL,
@@ -501,9 +502,7 @@ static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_NV12)
-                .limits(Limits::downlevel_defaults())
-                // https://github.com/gfx-rs/wgpu/issues/9688
-                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
+                .limits(Limits::downlevel_defaults()),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -523,9 +522,7 @@ static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_NV12: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_NV12)
-                .limits(Limits::downlevel_defaults())
-                // https://github.com/gfx-rs/wgpu/issues/9688
-                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
+                .limits(Limits::downlevel_defaults()),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -545,9 +542,7 @@ static WRITE_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_P010: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_P010 | Features::TEXTURE_FORMAT_16BIT_NORM)
-                .limits(Limits::downlevel_defaults())
-                // https://github.com/gfx-rs/wgpu/issues/9688
-                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
+                .limits(Limits::downlevel_defaults()),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -567,9 +562,7 @@ static WRITE_TEXTURE_PLANE1_LEAVES_PLANE0_UNINIT_P010: GpuTestConfiguration =
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_P010 | Features::TEXTURE_FORMAT_16BIT_NORM)
-                .limits(Limits::downlevel_defaults())
-                // https://github.com/gfx-rs/wgpu/issues/9688
-                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
+                .limits(Limits::downlevel_defaults()),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -612,9 +605,7 @@ static COPY_BUFFER_TO_TEXTURE_PLANE0_LEAVES_PLANE1_UNINIT_NV12: GpuTestConfigura
         .parameters(
             TestParameters::default()
                 .features(Features::TEXTURE_FORMAT_NV12)
-                .limits(Limits::downlevel_defaults())
-                // https://github.com/gfx-rs/wgpu/issues/9688
-                .expect_fail(FailureCase::lvp_poison_memory("read back non-zero")),
+                .limits(Limits::downlevel_defaults()),
         )
         .run_async(|ctx| async move {
             check_plane_write_leaves_other_plane_uninit(
@@ -999,6 +990,63 @@ static DYNAMIC_OFFSET_BUFFER_BINDING_INIT: GpuTestConfiguration = GpuTestConfigu
         );
     });
 
+#[gpu_test]
+static ZERO_INIT_MULTIPLANAR_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgt::Features::TEXTURE_FORMAT_NV12))
+    .run_sync(|ctx| {
+        // This high for alignment in copies
+        const WIDTH: u32 = 256;
+        let texture = ctx.device.create_texture(&wgt::TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: WIDTH,
+                height: WIDTH,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: wgt::TextureFormat::NV12,
+            usage: wgt::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let buffer = ctx.device.create_buffer(&wgt::BufferDescriptor {
+            label: None,
+            size: (2 * WIDTH * WIDTH) as u64,
+            usage: wgt::BufferUsages::COPY_DST | wgt::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = ctx.device.create_command_encoder(&Default::default());
+        encoder.copy_texture_to_buffer(
+            TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: Default::default(),
+                aspect: wgt::TextureAspect::Plane1,
+            },
+            TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: TexelCopyBufferLayout {
+                    offset: 0,
+                    // Plane1 is half-res Rg8: (WIDTH/2) texels * 2 bytes = WIDTH bytes/row.
+                    bytes_per_row: Some(WIDTH),
+                    rows_per_image: Some(WIDTH / 2),
+                },
+            },
+            // Plane1 (chroma) of NV12 is half resolution in each dimension.
+            Extent3d {
+                width: WIDTH / 2,
+                height: WIDTH / 2,
+                depth_or_array_layers: 1,
+            },
+        );
+        ctx.queue.submit([encoder.finish()]);
+        buffer.map_async(MapMode::Read, .., |_| ());
+        ctx.device
+            .poll(wgpu_types::PollType::wait_indefinitely())
+            .unwrap();
+        assert!(buffer.get_mapped_range(..).unwrap().iter().all(|e| *e == 0));
+    });
 // Tests of initialization of 3D textures.
 //
 // Init tracking only operates on array layers, not on depth/volume slices

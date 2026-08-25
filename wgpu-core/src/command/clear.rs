@@ -399,82 +399,94 @@ fn clear_texture_via_buffer_copies(
 ) {
     assert!(!texture_desc.format.is_depth_stencil_format());
 
-    if texture_desc.format == wgt::TextureFormat::NV12
-        || texture_desc.format == wgt::TextureFormat::P010
-    {
-        // TODO: Currently COPY_DST for NV12 and P010 textures is unsupported.
-        return;
-    }
+    let aspects = if texture_desc.format.is_multi_planar_format() {
+        [
+            (hal::FormatAspects::PLANE_0, TextureAspect::Plane0),
+            (hal::FormatAspects::PLANE_1, TextureAspect::Plane1),
+            (hal::FormatAspects::PLANE_2, TextureAspect::Plane2),
+        ]
+        .as_slice()
+    } else {
+        &[(hal::FormatAspects::COLOR, TextureAspect::All)]
+    };
 
-    // Gather list of zero_buffer copies and issue a single command then to perform them
     let mut zero_buffer_copy_regions = Vec::new();
-    let buffer_copy_pitch = alignments.buffer_copy_pitch.get() as u32;
-    let (block_width, block_height) = texture_desc.format.block_dimensions();
-    let block_size = texture_desc.format.block_copy_size(None).unwrap();
+    for &(hal_aspect, aspect) in aspects {
+        let Some(aspect_format) = texture_desc.format.aspect_specific_format(aspect) else {
+            break;
+        };
+        // Gather list of zero_buffer copies and issue a single command then to perform them
+        let buffer_copy_pitch = alignments.buffer_copy_pitch.get() as u32;
+        let (block_width, block_height) = aspect_format.block_dimensions();
+        let block_size = aspect_format.block_copy_size(None).unwrap();
 
-    let bytes_per_row_alignment = get_lowest_common_denom(buffer_copy_pitch, block_size);
+        let bytes_per_row_alignment = get_lowest_common_denom(buffer_copy_pitch, block_size);
 
-    for mip_level in range.mip_range {
-        let mut mip_size = texture_desc.mip_level_size(mip_level).unwrap();
-        // Round to multiple of block size
-        mip_size.width = align_to(mip_size.width, block_width);
-        mip_size.height = align_to(mip_size.height, block_height);
+        for mip_level in range.mip_range.clone() {
+            let mut mip_size = texture_desc.mip_level_size(mip_level).unwrap();
+            // Subsample for multi-planar formats (e.g. NV12/P010 chroma plane is half-res).
+            let (w_sub, h_sub) = texture_desc.format.subsampling_factors(aspect.to_plane());
+            (mip_size.width, mip_size.height) = (mip_size.width / w_sub, mip_size.height / h_sub);
+            // Round to multiple of block size
+            mip_size.width = align_to(mip_size.width, block_width);
+            mip_size.height = align_to(mip_size.height, block_height);
 
-        let bytes_per_row = align_to(
-            mip_size.width / block_width * block_size,
-            bytes_per_row_alignment,
-        );
+            let bytes_per_row = align_to(
+                mip_size.width / block_width * block_size,
+                bytes_per_row_alignment,
+            );
 
-        let max_rows_per_copy = crate::device::ZERO_BUFFER_SIZE as u32 / bytes_per_row;
-        // round down to a multiple of rows needed by the texture format
-        let max_rows_per_copy = max_rows_per_copy / block_height * block_height;
-        assert!(
-            max_rows_per_copy > 0,
-            "Zero buffer size is too small to fill a single row \
+            let max_rows_per_copy = crate::device::ZERO_BUFFER_SIZE as u32 / bytes_per_row;
+            // round down to a multiple of rows needed by the texture format
+            let max_rows_per_copy = max_rows_per_copy / block_height * block_height;
+            assert!(
+                max_rows_per_copy > 0,
+                "Zero buffer size is too small to fill a single row \
             of a texture with format {:?} and desc {:?}",
-            texture_desc.format,
-            texture_desc.size
-        );
+                texture_desc.format,
+                texture_desc.size
+            );
 
-        let z_range = 0..(if texture_desc.dimension == wgt::TextureDimension::D3 {
-            mip_size.depth_or_array_layers
-        } else {
-            1
-        });
+            let z_range = 0..(if texture_desc.dimension == wgt::TextureDimension::D3 {
+                mip_size.depth_or_array_layers
+            } else {
+                1
+            });
 
-        for array_layer in range.layer_range.clone() {
-            // TODO: Only doing one layer at a time for volume textures right now.
-            for z in z_range.clone() {
-                // May need multiple copies for each subresource! However, we
-                // assume that we never need to split a row.
-                let mut num_rows_left = mip_size.height;
-                while num_rows_left > 0 {
-                    let num_rows = num_rows_left.min(max_rows_per_copy);
+            for array_layer in range.layer_range.clone() {
+                // TODO: Only doing one layer at a time for volume textures right now.
+                for z in z_range.clone() {
+                    // May need multiple copies for each subresource! However, we
+                    // assume that we never need to split a row.
+                    let mut num_rows_left = mip_size.height;
+                    while num_rows_left > 0 {
+                        let num_rows = num_rows_left.min(max_rows_per_copy);
 
-                    zero_buffer_copy_regions.push(hal::BufferTextureCopy {
-                        buffer_layout: wgt::TexelCopyBufferLayout {
-                            offset: 0,
-                            bytes_per_row: Some(bytes_per_row),
-                            rows_per_image: None,
-                        },
-                        texture_base: hal::TextureCopyBase {
-                            mip_level,
-                            array_layer,
-                            origin: wgt::Origin3d {
-                                x: 0, // Always full rows
-                                y: mip_size.height - num_rows_left,
-                                z,
+                        zero_buffer_copy_regions.push(hal::BufferTextureCopy {
+                            buffer_layout: wgt::TexelCopyBufferLayout {
+                                offset: 0,
+                                bytes_per_row: Some(bytes_per_row),
+                                rows_per_image: None,
                             },
-                            aspect: hal::FormatAspects::COLOR,
-                        },
-                        size: hal::CopyExtent {
-                            width: mip_size.width, // full row
-                            height: num_rows,
-                            depth: 1, // Only single slice of volume texture at a time right now
-                        },
-                    });
+                            texture_base: hal::TextureCopyBase {
+                                mip_level,
+                                array_layer,
+                                origin: wgt::Origin3d {
+                                    x: 0, // Always full rows
+                                    y: mip_size.height - num_rows_left,
+                                    z,
+                                },
+                                aspect: hal_aspect,
+                            },
+                            size: hal::CopyExtent {
+                                width: mip_size.width, // full row
+                                height: num_rows,
+                                depth: 1, // Only single slice of volume texture at a time right now
+                            },
+                        });
 
-                    num_rows_left -= num_rows;
+                        num_rows_left -= num_rows;
+                    }
                 }
             }
         }
