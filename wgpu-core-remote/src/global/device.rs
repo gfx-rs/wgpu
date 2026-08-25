@@ -212,10 +212,10 @@ impl Global {
         buffer.destroy();
     }
 
-    pub fn buffer_drop(&self, buffer_id: id::BufferId) {
+    pub fn buffer_remove(&self, buffer_id: id::BufferId) -> Arc<resource::Buffer> {
         let mut hub = self.hub.borrow_mut();
 
-        let _buffer = hub.buffers.remove(buffer_id);
+        hub.buffers.remove(buffer_id)
     }
 
     pub fn device_create_texture(
@@ -315,10 +315,10 @@ impl Global {
         texture.destroy();
     }
 
-    pub fn texture_drop(&self, texture_id: id::TextureId) {
+    pub fn texture_remove(&self, texture_id: id::TextureId) -> Arc<resource::Texture> {
         let mut hub = self.hub.borrow_mut();
 
-        hub.textures.remove(texture_id);
+        hub.textures.remove(texture_id)
     }
 
     pub fn texture_create_view(
@@ -351,10 +351,13 @@ impl Global {
         (id, error)
     }
 
-    pub fn texture_view_drop(&self, texture_view_id: id::TextureViewId) {
+    pub fn texture_view_remove(
+        &self,
+        texture_view_id: id::TextureViewId,
+    ) -> Arc<resource::TextureView> {
         let mut hub = self.hub.borrow_mut();
 
-        let _view = hub.texture_views.remove(texture_view_id);
+        hub.texture_views.remove(texture_view_id)
     }
 
     pub fn device_create_external_texture(
@@ -392,10 +395,13 @@ impl Global {
         external_texture.destroy();
     }
 
-    pub fn external_texture_drop(&self, external_texture_id: id::ExternalTextureId) {
+    pub fn external_texture_remove(
+        &self,
+        external_texture_id: id::ExternalTextureId,
+    ) -> Arc<resource::ExternalTexture> {
         let mut hub = self.hub.borrow_mut();
 
-        let _external_texture = hub.external_textures.remove(external_texture_id);
+        hub.external_textures.remove(external_texture_id)
     }
 
     pub fn device_create_sampler(
@@ -429,10 +435,10 @@ impl Global {
         samplers.assign(id_in, sampler);
     }
 
-    pub fn sampler_drop(&self, sampler_id: id::SamplerId) {
+    pub fn sampler_remove(&self, sampler_id: id::SamplerId) -> Arc<resource::Sampler> {
         let mut hub = self.hub.borrow_mut();
 
-        let _sampler = hub.samplers.remove(sampler_id);
+        hub.samplers.remove(sampler_id)
     }
 
     pub fn device_create_bind_group_layout(
@@ -465,10 +471,13 @@ impl Global {
         (id, error)
     }
 
-    pub fn bind_group_layout_drop(&self, bind_group_layout_id: id::BindGroupLayoutId) {
+    pub fn bind_group_layout_remove(
+        &self,
+        bind_group_layout_id: id::BindGroupLayoutId,
+    ) -> Arc<binding_model::BindGroupLayout> {
         let mut hub = self.hub.borrow_mut();
 
-        let _layout = hub.bind_group_layouts.remove(bind_group_layout_id);
+        hub.bind_group_layouts.remove(bind_group_layout_id)
     }
 
     pub fn device_create_pipeline_layout(
@@ -503,10 +512,13 @@ impl Global {
         pipeline_layouts.assign(id_in, layout);
     }
 
-    pub fn pipeline_layout_drop(&self, pipeline_layout_id: id::PipelineLayoutId) {
+    pub fn pipeline_layout_remove(
+        &self,
+        pipeline_layout_id: id::PipelineLayoutId,
+    ) -> Arc<binding_model::PipelineLayout> {
         let mut hub = self.hub.borrow_mut();
 
-        let _layout = hub.pipeline_layouts.remove(pipeline_layout_id);
+        hub.pipeline_layouts.remove(pipeline_layout_id)
     }
 
     pub fn device_create_bind_group(
@@ -587,10 +599,13 @@ impl Global {
         bind_groups.assign(id_in, bind_group);
     }
 
-    pub fn bind_group_drop(&self, bind_group_id: id::BindGroupId) {
+    pub fn bind_group_remove(
+        &self,
+        bind_group_id: id::BindGroupId,
+    ) -> Arc<binding_model::BindGroup> {
         let mut hub = self.hub.borrow_mut();
 
-        let _bind_group = hub.bind_groups.remove(bind_group_id);
+        hub.bind_groups.remove(bind_group_id)
     }
 
     /// Create a shader module with the given `source`.
@@ -639,10 +654,13 @@ impl Global {
         (id, error)
     }
 
-    pub fn shader_module_drop(&self, shader_module_id: id::ShaderModuleId) {
+    pub fn shader_module_remove(
+        &self,
+        shader_module_id: id::ShaderModuleId,
+    ) -> Arc<pipeline::ShaderModule> {
         let mut hub = self.hub.borrow_mut();
 
-        let _shader_module = hub.shader_modules.remove(shader_module_id);
+        hub.shader_modules.remove(shader_module_id)
     }
 
     pub fn device_create_command_encoder(
@@ -665,14 +683,20 @@ impl Global {
         command_encoders.assign(id_in, cmd_enc);
     }
 
-    pub fn command_encoder_drop(&self, command_encoder_id: id::CommandEncoderId) {
+    pub fn command_encoder_remove(
+        &self,
+        command_encoder_id: id::CommandEncoderId,
+    ) -> Arc<command::CommandEncoder> {
         let mut hub = self.hub.borrow_mut();
-        let _cmd_enc = hub.command_encoders.remove(command_encoder_id);
+        hub.command_encoders.remove(command_encoder_id)
     }
 
-    pub fn command_buffer_drop(&self, command_buffer_id: id::CommandBufferId) {
+    pub fn command_buffer_remove(
+        &self,
+        command_buffer_id: id::CommandBufferId,
+    ) -> Arc<command::CommandBuffer> {
         let mut hub = self.hub.borrow_mut();
-        let _cmd_buf = hub.command_buffers.remove(command_buffer_id);
+        hub.command_buffers.remove(command_buffer_id)
     }
 
     pub fn device_create_render_bundle_encoder(
@@ -727,14 +751,20 @@ impl Global {
         render_bundles.assign(id_in, render_bundle);
     }
 
-    pub fn render_bundle_encoder_drop(&self, render_bundle_encoder_id: id::RenderBundleEncoderId) {
+    pub fn render_bundle_encoder_remove(
+        &self,
+        render_bundle_encoder_id: id::RenderBundleEncoderId,
+    ) -> command::RenderBundleEncoder {
         let mut hub = self.hub.borrow_mut();
-        let _bundle_encoder = hub.render_bundle_encoders.remove(render_bundle_encoder_id);
+        hub.render_bundle_encoders.remove(render_bundle_encoder_id)
     }
 
-    pub fn render_bundle_drop(&self, render_bundle_id: id::RenderBundleId) {
+    pub fn render_bundle_remove(
+        &self,
+        render_bundle_id: id::RenderBundleId,
+    ) -> Arc<command::RenderBundle> {
         let mut hub = self.hub.borrow_mut();
-        let _bundle = hub.render_bundles.remove(render_bundle_id);
+        hub.render_bundles.remove(render_bundle_id)
     }
 
     pub fn device_create_query_set(
@@ -767,10 +797,10 @@ impl Global {
         query_set.destroy();
     }
 
-    pub fn query_set_drop(&self, query_set_id: id::QuerySetId) {
+    pub fn query_set_remove(&self, query_set_id: id::QuerySetId) -> Arc<resource::QuerySet> {
         let mut hub = self.hub.borrow_mut();
 
-        let _query_set = hub.query_sets.remove(query_set_id);
+        hub.query_sets.remove(query_set_id)
     }
 
     pub fn device_create_render_pipeline(
@@ -878,10 +908,13 @@ impl Global {
         bind_group_layouts.assign(id_in, bgl);
     }
 
-    pub fn render_pipeline_drop(&self, render_pipeline_id: id::RenderPipelineId) {
+    pub fn render_pipeline_remove(
+        &self,
+        render_pipeline_id: id::RenderPipelineId,
+    ) -> Arc<pipeline::RenderPipeline> {
         let mut hub = self.hub.borrow_mut();
 
-        let _pipeline = hub.render_pipelines.remove(render_pipeline_id);
+        hub.render_pipelines.remove(render_pipeline_id)
     }
 
     pub fn device_create_compute_pipeline(
@@ -995,9 +1028,12 @@ impl Global {
         bind_group_layouts.assign(id_in, bgl);
     }
 
-    pub fn compute_pipeline_drop(&self, compute_pipeline_id: id::ComputePipelineId) {
+    pub fn compute_pipeline_remove(
+        &self,
+        compute_pipeline_id: id::ComputePipelineId,
+    ) -> Arc<pipeline::ComputePipeline> {
         let mut hub = self.hub.borrow_mut();
-        let _pipeline = hub.compute_pipelines.remove(compute_pipeline_id);
+        hub.compute_pipelines.remove(compute_pipeline_id)
     }
 
     /// Check `device_id` for freeable resources and completed buffer mappings.
@@ -1048,9 +1084,9 @@ impl Global {
         }
     }
 
-    pub fn device_drop(&self, device_id: DeviceId) {
+    pub fn device_remove(&self, device_id: DeviceId) -> Arc<wgpu_core::device::Device> {
         let mut hub = self.hub.borrow_mut();
-        hub.devices.remove(device_id);
+        hub.devices.remove(device_id)
     }
 
     /// `device_lost_closure` might never be called.
@@ -1089,9 +1125,9 @@ impl Global {
         device.generate_allocator_report()
     }
 
-    pub fn queue_drop(&self, queue_id: QueueId) {
+    pub fn queue_remove(&self, queue_id: QueueId) -> Arc<wgpu_core::device::queue::Queue> {
         let mut hub = self.hub.borrow_mut();
-        hub.queues.remove(queue_id);
+        hub.queues.remove(queue_id)
     }
 
     /// `op.callback` is always called, even in case of errors.

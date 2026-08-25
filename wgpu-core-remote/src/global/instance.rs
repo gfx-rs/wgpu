@@ -1,3 +1,5 @@
+use alloc::sync::Arc;
+
 use wgpu_core::instance::RequestDeviceError;
 use wgpu_core_remote_types::DeviceDescriptor;
 use wgpu_core_remote_types::RequestAdapterOptions;
@@ -106,9 +108,9 @@ impl Global {
         adapter.cooperative_matrix_properties()
     }
 
-    pub fn adapter_drop(&self, adapter_id: AdapterId) {
+    pub fn adapter_remove(&self, adapter_id: AdapterId) -> Arc<wgpu_core::instance::Adapter> {
         let mut hub = self.hub.borrow_mut();
-        hub.adapters.remove(adapter_id);
+        hub.adapters.remove(adapter_id)
     }
 }
 
