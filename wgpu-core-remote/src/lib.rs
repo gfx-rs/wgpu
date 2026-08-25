@@ -31,12 +31,6 @@ extern crate alloc;
 extern crate wgpu_hal as hal;
 extern crate wgpu_types as wgt;
 
-pub type TexelCopyBufferInfo = wgt::TexelCopyBufferInfo<id::BufferId>;
-pub type TexelCopyTextureInfo = wgt::TexelCopyTextureInfo<id::TextureId>;
-pub type CopyExternalImageDestInfo = wgt::CopyExternalImageDestInfo<id::TextureId>;
-
-pub type Command = wgpu_core::command::Command<id::IdReferences>;
-
 pub mod global;
 pub mod hub;
 pub mod id;
