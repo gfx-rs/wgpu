@@ -1,5 +1,4 @@
 enable wgpu_ray_tracing_pipeline;
-enable primitive_index;
 
 struct HitCounters {
     hit_num: u32,

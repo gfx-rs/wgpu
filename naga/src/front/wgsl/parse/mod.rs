@@ -177,6 +177,7 @@ impl<'a> BindingParser<'a> {
         name: &'a str,
         name_span: Span,
         ctx: &mut ExpressionContext<'a, '_, '_>,
+        stage: Option<ShaderStage>,
     ) -> Result<'a, ()> {
         match name {
             "location" => {
@@ -190,7 +191,7 @@ impl<'a> BindingParser<'a> {
                 lexer.expect(Token::Paren('('))?;
                 let (raw, span) = lexer.next_ident_with_span()?;
                 self.built_in.set(
-                    conv::map_built_in(&lexer.enable_extensions, raw, span)?,
+                    conv::map_built_in(&lexer.enable_extensions, raw, span, stage)?,
                     name_span,
                 )?;
                 lexer.next_if(Token::Separator(','));
@@ -944,7 +945,10 @@ impl Parser {
                         lexer.expect(Token::Paren(')'))?;
                         align.set(expr, name_span)?;
                     }
-                    (word, word_span) => bind_parser.parse(self, lexer, word, word_span, ctx)?,
+                    (word, word_span) => {
+                        // Struct members aren't tied to a particular shader stage.
+                        bind_parser.parse(self, lexer, word, word_span, ctx, None)?
+                    }
                 }
             }
 
@@ -1692,13 +1696,14 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
+        stage: Option<ShaderStage>,
     ) -> Result<'a, Option<ast::Binding<'a>>> {
         let mut bind_parser = BindingParser::default();
         self.push_rule_span(Rule::Attribute, lexer);
 
         while lexer.next_if(Token::Attribute) {
             let (word, span) = lexer.next_ident_with_span()?;
-            bind_parser.parse(self, lexer, word, span, ctx)?;
+            bind_parser.parse(self, lexer, word, span, ctx, stage)?;
         }
 
         let span = self.pop_rule_span(lexer);
@@ -1712,6 +1717,7 @@ impl Parser {
         must_use: Option<Span>,
         out: &mut ast::TranslationUnit<'a>,
         dependencies: &mut FastIndexSet<ast::Dependency<'a>>,
+        stage: Option<ShaderStage>,
     ) -> Result<'a, ast::Function<'a>> {
         self.push_rule_span(Rule::FunctionDecl, lexer);
         // read function name
@@ -1743,7 +1749,7 @@ impl Parser {
                     ExpectedToken::Token(Token::Separator(',')),
                 )));
             }
-            let binding = self.varying_binding(lexer, &mut ctx)?;
+            let binding = self.varying_binding(lexer, &mut ctx, stage)?;
 
             let param_name = lexer.next_ident()?;
 
@@ -1761,7 +1767,7 @@ impl Parser {
         }
         // read return type
         let result = if lexer.next_if(Token::Arrow) {
-            let binding = self.varying_binding(lexer, &mut ctx)?;
+            let binding = self.varying_binding(lexer, &mut ctx, stage)?;
             let ty = self.type_specifier(lexer, &mut ctx)?;
             let must_use = must_use.is_some();
             Some(ast::FunctionResult {
@@ -2150,6 +2156,7 @@ impl Parser {
                     must_use.value,
                     out,
                     &mut dependencies,
+                    stage.value,
                 )?;
                 Some(ast::GlobalDeclKind::Fn(ast::Function {
                     entry_point: if let Some(stage) = stage.value {

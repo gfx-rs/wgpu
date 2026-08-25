@@ -5510,6 +5510,28 @@ fn check_ray_tracing_pipeline_incoming_payload_required() {
 }
 
 #[test]
+fn primitive_index_enable_extension() {
+    // Ray tracing hit shaders always have a primitive index available, so they
+    // don't need the `primitive_index` enable-extension.
+    for stage in ["any_hit", "closest_hit"] {
+        check_success(&format!(
+            "enable wgpu_ray_tracing_pipeline;
+            var<incoming_ray_payload> incoming: u32;
+
+            @{stage} @incoming_payload(incoming)
+            fn main(@builtin(primitive_index) index: u32) {{ incoming = index; }}"
+        ));
+    }
+
+    // Every other stage still needs it.
+    check_error_matches(
+        "@fragment
+        fn main(@builtin(primitive_index) index: u32) -> @location(0) u32 { return index; }",
+        "the `primitive_index` enable extension is not enabled",
+    );
+}
+
+#[test]
 fn check_ray_tracing_pipeline_payload_disallowed() {
     for (stage, output, stmt) in [
         (

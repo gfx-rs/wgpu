@@ -92,6 +92,7 @@ pub fn map_built_in(
     enable_extensions: &EnableExtensions,
     word: &str,
     span: Span,
+    stage: Option<crate::ShaderStage>,
 ) -> Result<'static, crate::BuiltIn> {
     let built_in = match word {
         "position" => crate::BuiltIn::Position { invariant: false },
@@ -151,7 +152,14 @@ pub fn map_built_in(
         crate::BuiltIn::ClipDistances => {
             enable_extensions.require(ImplementedEnableExtension::ClipDistances, span)?
         }
-        crate::BuiltIn::PrimitiveIndex => {
+        // Ray tracing hit shaders always have a primitive index available, so
+        // they don't need the `primitive_index` enable-extension.
+        crate::BuiltIn::PrimitiveIndex
+            if !matches!(
+                stage,
+                Some(crate::ShaderStage::AnyHit | crate::ShaderStage::ClosestHit)
+            ) =>
+        {
             enable_extensions.require(ImplementedEnableExtension::PrimitiveIndex, span)?
         }
         crate::BuiltIn::DrawIndex => {

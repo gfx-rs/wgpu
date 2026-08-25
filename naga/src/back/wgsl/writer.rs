@@ -306,7 +306,9 @@ impl<W: Write> Writer<W> {
             ..Default::default()
         };
 
-        let check_binding = |binding: &crate::Binding, needed: &mut RequiredEnabled| match *binding
+        let check_binding = |binding: &crate::Binding,
+                             needed: &mut RequiredEnabled,
+                             stage: Option<ShaderStage>| match *binding
         {
             crate::Binding::Location {
                 blend_src: Some(_), ..
@@ -317,7 +319,11 @@ impl<W: Write> Writer<W> {
                 needed.clip_distances = true;
             }
             crate::Binding::BuiltIn(crate::BuiltIn::PrimitiveIndex) => {
-                needed.primitive_index = true;
+                // Ray tracing hit shaders always have a primitive index available,
+                // so they don't need the `primitive_index` enable-extension.
+                if !matches!(stage, Some(ShaderStage::AnyHit | ShaderStage::ClosestHit)) {
+                    needed.primitive_index = true;
+                }
             }
             crate::Binding::Location {
                 per_primitive: true,
@@ -362,7 +368,7 @@ impl<W: Write> Writer<W> {
                 }
                 TypeInner::Struct { ref members, .. } => {
                     for binding in members.iter().filter_map(|m| m.binding.as_ref()) {
-                        check_binding(binding, &mut needed);
+                        check_binding(binding, &mut needed, None);
                     }
                 }
                 TypeInner::CooperativeMatrix { .. } => {
@@ -380,7 +386,7 @@ impl<W: Write> Writer<W> {
 
         for ep in &module.entry_points {
             if let Some(res) = ep.function.result.as_ref().and_then(|a| a.binding.as_ref()) {
-                check_binding(res, &mut needed);
+                check_binding(res, &mut needed, Some(ep.stage));
             }
             for arg in ep
                 .function
@@ -388,7 +394,7 @@ impl<W: Write> Writer<W> {
                 .iter()
                 .filter_map(|a| a.binding.as_ref())
             {
-                check_binding(arg, &mut needed);
+                check_binding(arg, &mut needed, Some(ep.stage));
             }
         }
 
