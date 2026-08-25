@@ -1,6 +1,6 @@
-use wgpu_core::Label;
 use wgpu_core_remote_types::encoders::{
-    CommandEncoderCommand, DebugCommand, TexelCopyBufferInfo, TexelCopyTextureInfo,
+    CommandBufferDescriptor, CommandEncoderCommand, DebugCommand, TexelCopyBufferInfo,
+    TexelCopyTextureInfo,
 };
 use wgt::{BufferAddress, Extent3d, ImageSubresourceRange};
 
@@ -20,7 +20,7 @@ impl Global {
     pub fn command_encoder_finish(
         &self,
         encoder_id: CommandEncoderId,
-        desc: &wgt::CommandBufferDescriptor<Label>,
+        desc: &CommandBufferDescriptor,
         id_in: id::CommandBufferId,
     ) {
         let mut hub = self.hub.borrow_mut();
