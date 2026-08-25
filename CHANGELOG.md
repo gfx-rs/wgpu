@@ -126,6 +126,7 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 
 #### naga
 
+- Fix Naga failing to compile with `glsl-in` as its only enabled feature. By @andrewtdiz in [#10166](https://github.com/gfx-rs/wgpu/pull/10166).
 - Fix panics when shader `var<immediate>` size is larger than 256 bytes. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
 - Fix a panic in the SPIR-V frontend when a subgroup collective operation (e.g. `OpGroupNonUniformUMin`) or `OpGroupNonUniformBallot` used an argument whose value needed to be spilled to a temporary variable, such as when the argument was computed inside a loop. By @nazar-pc in [#9957](https://github.com/gfx-rs/wgpu/issues/9957).
 
