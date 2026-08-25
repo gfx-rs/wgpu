@@ -4,7 +4,7 @@ use std::num::NonZeroU64;
 use wgpu::util::RenderEncoder;
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -18,7 +18,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 ///
 /// If the update code is working correctly, the values not written to by the second update
 /// will remain unchanged.
-#[gpu_test]
+#[apply(gpu_test!)]
 static PARTIAL_UPDATE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -159,7 +159,7 @@ async fn partial_update_test(ctx: TestingContext) {
     // second 4 floats the first update
     assert_eq!(floats, [1.0, 2.0, 3.0, 4.0, 1.0, 5.0, 3.0, 4.0]);
 }
-#[gpu_test]
+#[apply(gpu_test!)]
 static RENDER_PASS_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -344,13 +344,14 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
         let mut render_pass = command_encoder.begin_render_pass(&render_pass_desc);
         if use_render_bundle {
             // Execute the commands in a render_bundle_encoder.
-            let mut render_bundle_encoder =
-                ctx.device
-                    .create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
-                        color_formats: &[Some(output_texture.format())],
-                        sample_count: 1,
-                        ..RenderBundleEncoderDescriptor::default()
-                    });
+            let mut render_bundle_encoder = ctx
+                .device
+                .create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
+                    color_formats: &[Some(output_texture.format())],
+                    sample_count: 1,
+                    ..RenderBundleEncoderDescriptor::default()
+                })
+                .unwrap();
             do_encoding(&mut render_bundle_encoder, &pipeline, &bind_group, &data);
             let render_bundle = render_bundle_encoder.finish(&RenderBundleDescriptor::default());
             render_pass.execute_bundles([&render_bundle]);

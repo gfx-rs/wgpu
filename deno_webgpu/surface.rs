@@ -1,6 +1,7 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
 use std::cell::RefCell;
+use std::sync::Arc;
 
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
@@ -39,7 +40,7 @@ pub struct Configuration {
 }
 
 pub struct GPUCanvasContext {
-  pub surface_id: wgpu_core::id::SurfaceId,
+  pub wgpu_surface: Arc<wgpu_core::instance::Surface>,
   pub width: RefCell<u32>,
   pub height: RefCell<u32>,
 
@@ -105,10 +106,7 @@ impl GPUCanvasContext {
 
     let device = configuration.device;
 
-    let err =
-      device
-        .instance
-        .surface_configure(self.surface_id, device.id, &conf);
+    let err = self.wgpu_surface.configure(&device.wgpu_device, &conf);
 
     device.error_handler.push_error(err);
 
@@ -144,20 +142,14 @@ impl GPUCanvasContext {
       }
     }
 
-    let output = config
-      .device
-      .instance
-      .surface_get_current_texture(self.surface_id, None)?;
+    let output = self.wgpu_surface.get_current_texture()?;
 
     match output.status {
       SurfaceStatus::Good | SurfaceStatus::Suboptimal => {
-        let id = output.texture.unwrap();
-
         let texture = GPUTexture {
-          instance: config.device.instance.clone(),
           error_handler: config.device.error_handler.clone(),
-          id,
-          default_view_id: Default::default(),
+          wgpu_texture: output.texture.unwrap(),
+          default_view: Default::default(),
           label: "".to_string(),
           size: wgpu_types::Extent3d {
             width: *self.width.borrow(),
@@ -184,11 +176,11 @@ impl GPUCanvasContext {
 impl GPUCanvasContext {
   pub fn present(&self) -> Result<(), SurfaceError> {
     let config = self.config.borrow();
-    let Some(config) = config.as_ref() else {
+    if config.is_none() {
       return Err(SurfaceError::UnconfiguredContext);
     };
 
-    config.device.instance.surface_present(self.surface_id)?;
+    self.wgpu_surface.present()?;
 
     // next `get_current_texture` call would get a new texture
     *self.texture.borrow_mut() = None;
@@ -208,11 +200,9 @@ impl GPUCanvasContext {
     config.surface_config.width = width;
     config.surface_config.height = height;
 
-    let err = config.device.instance.surface_configure(
-      self.surface_id,
-      config.device.id,
-      &config.surface_config,
-    );
+    let err = self
+      .wgpu_surface
+      .configure(&config.device.wgpu_device, &config.surface_config);
 
     config.device.error_handler.push_error(err);
   }

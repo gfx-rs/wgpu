@@ -11,8 +11,7 @@ use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
 use core::sync::atomic;
-use parking_lot::Mutex;
-use std::sync::OnceLock;
+use wgpu_sync::{Mutex, OnceCell};
 
 use crate::metal::QueueShared;
 
@@ -117,7 +116,7 @@ impl crate::Adapter for super::Adapter {
                         command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
                         pending_waits: Mutex::new(Vec::new()),
                         pending_signals: Mutex::new(Vec::new()),
-                        relay: OnceLock::new(),
+                        relay: OnceCell::new(),
                     }),
                     timestamp_period,
                 },
@@ -471,7 +470,7 @@ impl crate::Adapter for super::Adapter {
             },
             composite_alpha_modes: vec![
                 wgt::CompositeAlphaMode::Opaque,
-                wgt::CompositeAlphaMode::PostMultiplied,
+                wgt::CompositeAlphaMode::PreMultiplied,
             ],
 
             current_extent: Some(surface.dimensions()),
@@ -1134,7 +1133,7 @@ impl super::CapabilitiesQuery {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             mesh_shaders,
             max_task_workgroup_count: if mesh_shaders
-                && (metal4 || device.supportsFamily(MTLGPUFamily::Apple2))
+                && (metal4 || device.supportsFamily(MTLGPUFamily::Apple7))
             {
                 u32::MAX
             } else if mesh_shaders {

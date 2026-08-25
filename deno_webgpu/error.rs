@@ -2,14 +2,11 @@
 
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::sync::Mutex;
-use std::sync::OnceLock;
+use std::sync::Arc;
 
-use deno_core::cppgc::make_cppgc_object;
 use deno_core::v8;
 
 use deno_core::JsRuntime;
-use deno_core::V8TaskSpawner;
 use wgpu_core::binding_model::CreateBindGroupError;
 use wgpu_core::binding_model::CreateBindGroupLayoutError;
 use wgpu_core::binding_model::CreatePipelineLayoutError;
@@ -25,6 +22,7 @@ use wgpu_core::command::RenderBundleError;
 use wgpu_core::command::RenderPassError;
 use wgpu_core::device::queue::QueueSubmitError;
 use wgpu_core::device::queue::QueueWriteError;
+use wgpu_core::device::Device;
 use wgpu_core::device::DeviceError;
 use wgpu_core::pipeline::CreateComputePipelineError;
 use wgpu_core::pipeline::CreateRenderPipelineError;
@@ -36,41 +34,18 @@ use wgpu_core::resource::CreateQuerySetError;
 use wgpu_core::resource::CreateSamplerError;
 use wgpu_core::resource::CreateTextureError;
 use wgpu_core::resource::CreateTextureViewError;
+use wgpu_types::error::ErrorFilter;
 use wgpu_types::error::{ErrorType, WebGpuError};
-
-use crate::device::GPUDeviceLostInfo;
-use crate::device::GPUDeviceLostReason;
 
 pub type ErrorHandler = std::rc::Rc<DeviceErrorHandler>;
 
 pub struct DeviceErrorHandler {
-  pub is_lost: OnceLock<()>,
-  pub scopes: Mutex<Vec<(GPUErrorFilter, Option<GPUError>)>>,
-  lost_resolver: Mutex<Option<v8::Global<v8::PromiseResolver>>>,
-  spawner: V8TaskSpawner,
-
-  // The error handler is constructed before the device. A weak
-  // reference to the device is placed here with `set_device`
-  // after the device is constructed.
-  device: OnceLock<v8::Weak<v8::Object>>,
+  device: Arc<Device>,
 }
 
 impl DeviceErrorHandler {
-  pub fn new(
-    lost_resolver: v8::Global<v8::PromiseResolver>,
-    spawner: V8TaskSpawner,
-  ) -> Self {
-    Self {
-      is_lost: Default::default(),
-      scopes: Mutex::new(vec![]),
-      lost_resolver: Mutex::new(Some(lost_resolver)),
-      device: OnceLock::new(),
-      spawner,
-    }
-  }
-
-  pub fn set_device(&self, device: v8::Weak<v8::Object>) {
-    self.device.set(device).unwrap()
+  pub fn new(device: Arc<Device>) -> Self {
+    Self { device }
   }
 
   pub fn push_error<E: Into<GPUError>>(&self, err: Option<E>) {
@@ -78,84 +53,9 @@ impl DeviceErrorHandler {
       return;
     };
 
-    if self.is_lost.get().is_some() {
-      return;
-    }
-
     let err = err.into();
 
-    if let GPUError::Lost(reason) = err {
-      let _ = self.is_lost.set(());
-      if let Some(resolver) = self.lost_resolver.lock().unwrap().take() {
-        self.spawner.spawn(move |scope| {
-          let resolver = v8::Local::new(scope, resolver);
-          let info = make_cppgc_object(scope, GPUDeviceLostInfo { reason });
-          let info = v8::Local::new(scope, info);
-          resolver.resolve(scope, info.into());
-        });
-      }
-
-      return;
-    }
-
-    let error_filter = match err {
-      GPUError::Lost(_) => unreachable!(),
-      GPUError::Validation(_) => GPUErrorFilter::Validation,
-      GPUError::OutOfMemory => GPUErrorFilter::OutOfMemory,
-      GPUError::Internal => GPUErrorFilter::Internal,
-    };
-
-    let mut scopes = self.scopes.lock().unwrap();
-    let scope = scopes
-      .iter_mut()
-      .rfind(|(filter, _)| filter == &error_filter);
-
-    if let Some(scope) = scope {
-      // Only saving the first error in the scope as it's likely the culprit.
-      if scope.1.is_none() {
-        scope.1 = Some(err);
-      }
-    } else {
-      let device = self
-        .device
-        .get()
-        .expect("set_device was not called")
-        .clone();
-      self.spawner.spawn(move |scope| {
-        let state = JsRuntime::op_state_from(&*scope);
-        let Some(device) = device.to_local(scope) else {
-          // The device has already gone away, so we don't have
-          // anywhere to report the error.
-          return;
-        };
-        let key = v8::String::new(scope, "dispatchEvent").unwrap();
-        let val = device.get(scope, key.into()).unwrap();
-        let func =
-          v8::Global::new(scope, val.try_cast::<v8::Function>().unwrap());
-        let device = v8::Global::new(scope, device.cast::<v8::Value>());
-        let error_event_class =
-          state.borrow().borrow::<crate::ErrorEventClass>().0.clone();
-
-        let error = deno_core::error::to_v8_error(scope, &err);
-
-        let error_event_class =
-          v8::Local::new(scope, error_event_class.clone());
-        let constructor =
-          v8::Local::<v8::Function>::try_from(error_event_class).unwrap();
-        let kind = v8::String::new(scope, "uncapturederror").unwrap();
-
-        let obj = v8::Object::new(scope);
-        let key = v8::String::new(scope, "error").unwrap();
-        obj.set(scope, key.into(), error);
-
-        let event = constructor
-          .new_instance(scope, &[kind.into(), obj.into()])
-          .unwrap();
-
-        let recv = v8::Local::new(scope, device);
-        func.open(scope).call(scope, recv, &[event.into()]);
-      });
-    }
+    self.device.handle_error_nolabel(err, "");
   }
 }
 
@@ -167,11 +67,21 @@ pub enum GPUErrorFilter {
   Internal,
 }
 
+impl From<GPUErrorFilter> for ErrorFilter {
+  fn from(filter: GPUErrorFilter) -> Self {
+    match filter {
+      GPUErrorFilter::Validation => ErrorFilter::Validation,
+      GPUErrorFilter::OutOfMemory => ErrorFilter::OutOfMemory,
+      GPUErrorFilter::Internal => ErrorFilter::Internal,
+    }
+  }
+}
+
 #[derive(Debug, deno_error::JsError)]
 pub enum GPUError {
   // TODO(@crowlKats): consider adding an unreachable value that uses unreachable!()
   #[class("UNREACHABLE")]
-  Lost(GPUDeviceLostReason),
+  Lost,
   #[class("GPUValidationError")]
   Validation(String),
   #[class("GPUOutOfMemoryError")]
@@ -183,7 +93,7 @@ pub enum GPUError {
 impl Display for GPUError {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
-      GPUError::Lost(_) => Ok(()),
+      GPUError::Lost => Ok(()),
       GPUError::Validation(s) => f.write_str(s),
       GPUError::OutOfMemory => f.write_str("not enough memory left"),
       GPUError::Internal => Ok(()),
@@ -194,12 +104,42 @@ impl Display for GPUError {
 impl std::error::Error for GPUError {}
 
 impl GPUError {
-  fn from_webgpu(e: impl WebGpuError) -> Self {
+  pub(crate) fn from_webgpu(e: impl WebGpuError) -> Self {
     match e.webgpu_error_type() {
       ErrorType::Internal => GPUError::Internal,
-      ErrorType::DeviceLost => GPUError::Lost(GPUDeviceLostReason::Unknown), // TODO: this variant should be ignored, register the lost callback instead.
+      ErrorType::DeviceLost => GPUError::Lost, // this will be ignored by handle_error in wgpu-core
       ErrorType::OutOfMemory => GPUError::OutOfMemory,
       ErrorType::Validation => GPUError::Validation(fmt_err(&e)),
+    }
+  }
+}
+
+impl From<wgpu_types::error::Error> for GPUError {
+  fn from(err: wgpu_types::error::Error) -> Self {
+    match err {
+      wgpu_types::error::Error::Validation {
+        description,
+        source,
+      } => {
+        if let Some(e) = source.source() {
+          GPUError::Validation(fmt_err(e))
+        } else {
+          GPUError::Validation(description)
+        }
+      }
+      wgpu_types::error::Error::OutOfMemory { .. } => GPUError::OutOfMemory,
+      wgpu_types::error::Error::Internal { .. } => GPUError::Internal,
+    }
+  }
+}
+
+impl WebGpuError for GPUError {
+  fn webgpu_error_type(&self) -> ErrorType {
+    match self {
+      GPUError::Lost => ErrorType::DeviceLost,
+      GPUError::Validation(_) => ErrorType::Validation,
+      GPUError::OutOfMemory => ErrorType::OutOfMemory,
+      GPUError::Internal => ErrorType::Internal,
     }
   }
 }

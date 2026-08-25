@@ -9,7 +9,7 @@ use itertools::Itertools;
 use strum::IntoEnumIterator;
 use wgpu::util::{BufferInitDescriptor, DeviceExt, RenderEncoder};
 use wgpu::RenderBundleDescriptor;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.push(VERTEX_INDICES);
@@ -375,15 +375,17 @@ async fn vertex_index_common(ctx: TestingContext) {
             // (it is dropped via `take` + `finish` earlier, but compiler does not take this into account)
             let mut render_bundle_encoder = match test.encoder_kind {
                 EncoderKind::RenderPass => None,
-                EncoderKind::RenderBundle => Some(ctx.device.create_render_bundle_encoder(
-                    &wgpu::RenderBundleEncoderDescriptor {
-                        label: Some("test renderbundle encoder"),
-                        color_formats: &[Some(wgpu::TextureFormat::Rgba8Unorm)],
-                        depth_stencil: None,
-                        sample_count: 1,
-                        multiview: None,
-                    },
-                )),
+                EncoderKind::RenderBundle => Some(
+                    ctx.device
+                        .create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+                            label: Some("test renderbundle encoder"),
+                            color_formats: &[Some(wgpu::TextureFormat::Rgba8Unorm)],
+                            depth_stencil: None,
+                            sample_count: 1,
+                            multiview: None,
+                        })
+                        .unwrap(),
+                ),
             };
 
             let render_encoder: &mut dyn RenderEncoder = render_bundle_encoder
@@ -467,7 +469,7 @@ async fn vertex_index_common(ctx: TestingContext) {
     assert!(!failed);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static VERTEX_INDICES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

@@ -1,5 +1,3 @@
-use std::sync::LazyLock;
-
 use alloc::borrow::ToOwned as _;
 
 use objc2::{
@@ -13,7 +11,7 @@ use objc2_core_graphics::CGColorSpace;
 use objc2_foundation::NSObjectProtocol;
 use objc2_metal::MTLTextureType;
 use objc2_quartz_core::{CAMetalDrawable, CAMetalLayer};
-use parking_lot::{Mutex, RwLock};
+use wgpu_sync::{Lazy, Mutex, RwLock};
 
 use super::OsFeatures;
 
@@ -79,15 +77,15 @@ impl super::Surface {
                 // environmental), so leave a breadcrumb instead of failing
                 // silently. Warn once per process so a caller that polls this
                 // per frame is not spammed.
-                static WARN_ONCE: std::sync::Once = std::sync::Once::new();
-                WARN_ONCE.call_once(|| {
+                static WARN_ONCE: wgpu_sync::OnceCell<()> = wgpu_sync::OnceCell::new();
+                if WARN_ONCE.set(()).is_ok() {
                     log::warn!(
                         "Surface::display_hdr_info() was called from thread {:?} \
                          and will return None. On the Metal backend, it must be \
                          called from the main thread to succeed.",
                         std::thread::current().id()
                     );
-                });
+                }
                 return None;
             }
 
@@ -216,7 +214,7 @@ struct ColorSpaces {
     itur_bt2100_hlg: &'static CFString,
 }
 
-static COLOR_SPACES: LazyLock<Result<ColorSpaces, crate::SurfaceError>> = LazyLock::new(|| {
+static COLOR_SPACES: Lazy<Result<ColorSpaces, crate::SurfaceError>> = Lazy::new(|| {
     // Stable Rust doesn't support weak linkage, so objc2 doesn't
     // offer it. To avoid link errors on old OS versions, resolve
     // these dynamically.
@@ -268,8 +266,8 @@ impl crate::Surface for super::Surface {
 
         match config.composite_alpha_mode {
             wgt::CompositeAlphaMode::Opaque => render_layer.setOpaque(true),
-            wgt::CompositeAlphaMode::PostMultiplied => render_layer.setOpaque(false),
-            _ => (),
+            wgt::CompositeAlphaMode::PreMultiplied => render_layer.setOpaque(false),
+            m => unreachable!("Unsupported alpha mode: {m:?}"),
         }
 
         let device_raw = &device.shared.device;

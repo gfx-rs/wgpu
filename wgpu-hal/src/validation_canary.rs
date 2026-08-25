@@ -1,6 +1,6 @@
 use alloc::{string::String, vec::Vec};
 
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 
 /// Stores the text of any validation errors that have occurred since
 /// the last call to `get_and_reset`.
@@ -17,7 +17,8 @@ use parking_lot::Mutex;
 /// This prevents the issue of one validation error terminating the
 /// entire process.
 pub static VALIDATION_CANARY: ValidationCanary = ValidationCanary {
-    inner: Mutex::new(Vec::new()),
+    // Mutex::new is not const for the minimum version of lock_api used.
+    inner: Mutex::const_new(wgpu_sync::RawMutex::new(), Vec::new()),
 };
 
 /// Flag for internal testing.

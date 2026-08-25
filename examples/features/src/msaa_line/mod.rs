@@ -80,14 +80,15 @@ impl Example {
             multiview_mask: None,
             cache: None,
         });
-        let mut encoder =
-            device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+        let mut encoder = device
+            .create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                 label: None,
                 color_formats: &[Some(config.view_formats[0])],
                 depth_stencil: None,
                 sample_count,
                 multiview: None,
-            });
+            })
+            .unwrap();
         encoder.set_pipeline(&pipeline);
         encoder.set_vertex_buffer(0, vertex_buffer.slice(..));
         encoder.draw(0..vertex_count, 0..1);
@@ -322,7 +323,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "msaa-line",
     image_path: "/examples/features/src/msaa_line/screenshot.png",
