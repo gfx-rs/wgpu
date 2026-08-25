@@ -154,25 +154,33 @@ impl ShaderModule {
                 interface.finalize_entry_point_name(stage, entry_point)
             }
             ShaderMetaData::Passthrough(ref interface) => {
-                if let Some(ep) = entry_point {
-                    if interface.entry_point_names.contains(ep) {
-                        Ok(ep.to_owned())
-                    } else {
-                        Err(validation::StageError::MissingEntryPoint(ep.to_owned()))
-                    }
-                } else {
-                    if interface.entry_point_names.len() != 1 {
-                        return Err(validation::StageError::MultipleEntryPointsFound);
-                    }
-                    Ok(interface
-                        .entry_point_names
-                        .iter()
-                        .next()
-                        .unwrap()
-                        .to_owned())
-                }
+                finalize_passthrough_entry_point_name(interface, entry_point)
             }
         }
+    }
+}
+
+fn finalize_passthrough_entry_point_name(
+    interface: &validation::PassthroughInterface,
+    entry_point: Option<&str>,
+) -> Result<String, validation::StageError> {
+    if let Some(ep) = entry_point {
+        return if interface.entry_point_names.contains(ep) {
+            Ok(ep.to_owned())
+        } else {
+            Err(validation::StageError::MissingEntryPoint(ep.to_owned()))
+        };
+    }
+
+    match interface.entry_point_names.len() {
+        0 => Err(validation::StageError::NoEntryPointFound),
+        1 => Ok(interface
+            .entry_point_names
+            .iter()
+            .next()
+            .unwrap()
+            .to_owned()),
+        _ => Err(validation::StageError::MultipleEntryPointsFound),
     }
 }
 
@@ -1148,5 +1156,53 @@ impl RenderPipeline {
             });
         };
         (bgl, error)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn passthrough_interface(entry_point_names: &[&str]) -> validation::PassthroughInterface {
+        validation::PassthroughInterface {
+            entry_point_names: entry_point_names
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn select_implicit_passthrough_entry_point() {
+        let empty = passthrough_interface(&[]);
+        assert!(matches!(
+            finalize_passthrough_entry_point_name(&empty, None),
+            Err(validation::StageError::NoEntryPointFound)
+        ));
+
+        let single = passthrough_interface(&["main"]);
+        assert_eq!(
+            finalize_passthrough_entry_point_name(&single, None).unwrap(),
+            "main"
+        );
+
+        let multiple = passthrough_interface(&["vertex", "fragment"]);
+        assert!(matches!(
+            finalize_passthrough_entry_point_name(&multiple, None),
+            Err(validation::StageError::MultipleEntryPointsFound)
+        ));
+    }
+
+    #[test]
+    fn select_explicit_passthrough_entry_point() {
+        let interface = passthrough_interface(&["main"]);
+        assert_eq!(
+            finalize_passthrough_entry_point_name(&interface, Some("main")).unwrap(),
+            "main"
+        );
+        assert!(matches!(
+            finalize_passthrough_entry_point_name(&interface, Some("missing")),
+            Err(validation::StageError::MissingEntryPoint(name)) if name == "missing"
+        ));
     }
 }
