@@ -196,6 +196,7 @@ impl Example {
                 | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             label: None,
             view_formats: &[],
+            mapped_at_creation: false,
         });
 
         depth_texture.create_view(&wgpu::TextureViewDescriptor::default())
@@ -381,6 +382,7 @@ impl crate::framework::Example for Example {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             label: None,
             view_formats: &[],
+            mapped_at_creation: false,
         });
         let shadow_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
 

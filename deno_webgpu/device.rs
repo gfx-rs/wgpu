@@ -221,6 +221,7 @@ impl GPUDevice {
         .into_iter()
         .map(Into::into)
         .collect(),
+      mapped_at_creation: false,
     };
 
     let (wgpu_texture, err) = self.wgpu_device.create_texture(&wgpu_descriptor);

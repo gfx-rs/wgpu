@@ -1871,6 +1871,52 @@ impl dispatch::TextureInterface for CoreTexture {
         self.wgpu_texture.destroy();
     }
 
+    fn get_map_token(&self) -> Option<alloc::sync::Arc<()>> {
+        self.wgpu_texture.get_map_token()
+    }
+
+    fn unmap(&self) {
+        if let Err(cause) = self.wgpu_texture.unmap() {
+            self.wgpu_texture
+                .device()
+                .handle_error_nolabel(cause, "Texture::unmap");
+        }
+    }
+
+    fn copy_texture_to_memory(
+        &self,
+        source: &wgt::TexelCopyTextureInfo<()>,
+        destination: &mut [u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    ) {
+        if let Err(cause) = self
+            .wgpu_texture
+            .copy_to_memory(source, destination, layout, size)
+        {
+            self.wgpu_texture
+                .device()
+                .handle_error_nolabel(cause, "Texture::copy_texture_to_memory");
+        }
+    }
+
+    fn copy_memory_to_texture(
+        &self,
+        destination: &wgt::TexelCopyTextureInfo<()>,
+        source: &[u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    ) {
+        if let Err(cause) = self
+            .wgpu_texture
+            .copy_from_memory(destination, source, layout, size)
+        {
+            self.wgpu_texture
+                .device()
+                .handle_error_nolabel(cause, "Texture::copy_memory_to_texture");
+        }
+    }
+
     fn size(&self) -> wgt::Extent3d {
         self.wgpu_texture.descriptor().size
     }
@@ -2293,6 +2339,17 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 state: t.state,
             }),
         );
+    }
+
+    fn map_texture_on_completion(
+        &mut self,
+        texture: &dispatch::DispatchTexture,
+        callback: dispatch::TextureMapCallback,
+    ) {
+        let core_callback: wgpu_core::device::TextureMapClosure =
+            Box::new(move |status| callback(status.map_err(|_| crate::TextureAsyncError)));
+        self.wgpu_command_encoder
+            .map_texture_on_completion(texture.as_core().wgpu_texture.clone(), Some(core_callback));
     }
 }
 

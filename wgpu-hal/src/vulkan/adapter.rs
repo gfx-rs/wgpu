@@ -146,6 +146,8 @@ pub struct PhysicalDeviceFeatures {
     vulkan_memory_model: Option<vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR<'static>>,
 
     shader_draw_parameters: Option<vk::PhysicalDeviceShaderDrawParametersFeatures<'static>>,
+
+    host_image_copy: Option<vk::PhysicalDeviceHostImageCopyFeaturesEXT<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
@@ -235,6 +237,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.shader_draw_parameters {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.host_image_copy {
             info = info.push_next(feature);
         }
         info
@@ -645,6 +650,14 @@ impl PhysicalDeviceFeatures {
                     vk::PhysicalDeviceShaderDrawParametersFeatures::default()
                         .shader_draw_parameters(needed),
                 )
+            } else {
+                None
+            },
+            host_image_copy: if device_api_version >= vk::make_api_version(0, 1, 4, 0)
+                || enabled_extensions.contains(&ext::host_image_copy::NAME)
+            {
+                let needed = requested_features.contains(wgt::Features::HOST_IMAGE_COPY);
+                Some(vk::PhysicalDeviceHostImageCopyFeaturesEXT::default().host_image_copy(needed))
             } else {
                 None
             },
@@ -1107,6 +1120,11 @@ impl PhysicalDeviceFeatures {
                 || caps.supports_extension(c"VK_KHR_shader_draw_parameters"),
         );
 
+        features.set(
+            F::HOST_IMAGE_COPY,
+            self.host_image_copy.is_some_and(|a| a.host_image_copy != 0),
+        );
+
         (features, dl_flags)
     }
 }
@@ -1325,6 +1343,10 @@ impl PhysicalDeviceProperties {
             if self.supports_extension(khr::shader_integer_dot_product::NAME) {
                 extensions.push(khr::shader_integer_dot_product::NAME);
             }
+        }
+
+        if requested_features.intersects(wgt::Features::HOST_IMAGE_COPY) {
+            extensions.push(ext::host_image_copy::NAME);
         }
 
         // Optional `VK_KHR_swapchain_mutable_format`
@@ -2206,6 +2228,13 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
+            if capabilities.supports_extension(ext::host_image_copy::NAME) {
+                let next = features
+                    .host_image_copy
+                    .insert(vk::PhysicalDeviceHostImageCopyFeaturesEXT::default());
+                features2 = features2.push_next(next);
+            }
+
             unsafe { get_device_properties.get_physical_device_features2(phd, &mut features2) };
             features2.features
         } else {
@@ -2673,6 +2702,34 @@ impl super::Adapter {
         } else {
             None
         };
+        let host_image_copy_fns = if enabled_extensions.contains(&ext::host_image_copy::NAME)
+            || self.phd_capabilities.device_api_version >= vk::make_api_version(0, 1, 4, 0)
+        {
+            // Some drivers report the extension but fail to provide the function pointers
+            // (e.g. software renderers). Verify the primary entry point is reachable first.
+            let probe = unsafe {
+                self.instance
+                    .raw
+                    .get_device_proc_addr(raw_device.handle(), c"vkCopyMemoryToImageEXT".as_ptr())
+            };
+            if probe.is_some() {
+                Some(ext::host_image_copy::Device::new(
+                    &self.instance.raw,
+                    &raw_device,
+                ))
+            } else {
+                log::warn!("VK_EXT_host_image_copy enabled but vkCopyMemoryToImageEXT unavailable — disabling");
+                None
+            }
+        } else {
+            None
+        };
+
+        // Fail device creation rather than silently poisoning the device later
+        // when HOST_IMAGE_COPY operations return DeviceError::Lost.
+        if host_image_copy_fns.is_none() && features.contains(wgt::Features::HOST_IMAGE_COPY) {
+            return Err(crate::DeviceError::Unexpected);
+        }
 
         let naga_options = {
             use naga::back::spv;
@@ -2929,6 +2986,7 @@ impl super::Adapter {
                 ray_tracing_pipelines: ray_tracing_pipeline_fns,
                 mesh_shading: mesh_shading_fns,
                 external_memory_fd: external_memory_fd_fn,
+                host_image_copy: host_image_copy_fns,
             },
             pipeline_cache_validation_key,
             vendor_id: self.phd_capabilities.properties.vendor_id,
@@ -3152,6 +3210,26 @@ impl crate::Adapter for super::Adapter {
         );
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());
+
+        // Per-format host-copy support (`HOST_IMAGE_TRANSFER`) is only in
+        // `VkFormatProperties3` (Vulkan 1.3); depth/stencil formats often lack it.
+        if self.phd_capabilities.device_api_version >= vk::API_VERSION_1_3 {
+            let mut properties3 = vk::FormatProperties3::default();
+            let mut properties2 = vk::FormatProperties2::default().push_next(&mut properties3);
+            unsafe {
+                self.instance.raw.get_physical_device_format_properties2(
+                    self.raw,
+                    vk_format,
+                    &mut properties2,
+                );
+            }
+            flags.set(
+                Tfc::HOST_COPY,
+                properties3
+                    .optimal_tiling_features
+                    .contains(vk::FormatFeatureFlags2::HOST_IMAGE_TRANSFER_EXT),
+            );
+        }
 
         // get the supported sample counts
         let format_aspect = crate::FormatAspects::from(format);

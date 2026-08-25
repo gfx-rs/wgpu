@@ -59,6 +59,7 @@ static BAD_TEXTURE_CREATE_VIEW: GpuTestConfiguration = GpuTestConfiguration::new
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
                     usage: wgpu::TextureUsages::all(),
                     view_formats: &[],
+                    mapped_at_creation: false,
                 })
             },
             Some("dimension x is zero"),
@@ -95,6 +96,7 @@ static BAD_TEXTURE_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
                     format: wgpu::TextureFormat::Rgba8Unorm,
                     usage: wgpu::TextureUsages::COPY_DST,
                     view_formats: &[],
+                    mapped_at_creation: false,
                 })
             },
             Some("mip level count"),

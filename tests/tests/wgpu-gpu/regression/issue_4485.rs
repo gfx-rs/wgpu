@@ -38,6 +38,7 @@ async fn test_impl(ctx: &TestingContext) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        mapped_at_creation: false,
     });
     let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 

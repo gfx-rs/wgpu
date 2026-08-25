@@ -247,6 +247,7 @@ pub fn derive_image_layout(usage: wgt::TextureUses, format: wgt::TextureFormat) 
         wgt::TextureUses::RESOURCE if is_color => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
         wgt::TextureUses::COLOR_TARGET => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
         wgt::TextureUses::DEPTH_STENCIL_WRITE => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        wgt::TextureUses::HOST_COPY => vk::ImageLayout::GENERAL,
         _ => {
             if usage == wgt::TextureUses::PRESENT {
                 vk::ImageLayout::PRESENT_SRC_KHR
@@ -296,6 +297,9 @@ pub fn map_texture_usage(usage: wgt::TextureUses) -> vk::ImageUsageFlags {
     }
     if usage.contains(wgt::TextureUses::TRANSIENT) {
         flags |= vk::ImageUsageFlags::TRANSIENT_ATTACHMENT;
+    }
+    if usage.contains(wgt::TextureUses::HOST_COPY) {
+        flags |= vk::ImageUsageFlags::HOST_TRANSFER_EXT;
     }
     flags
 }
@@ -350,6 +354,11 @@ pub fn map_texture_usage_to_barrier(
     ) {
         stages |= shader_stages;
         access |= vk::AccessFlags::SHADER_WRITE;
+    }
+
+    if usage.contains(wgt::TextureUses::HOST_COPY) {
+        stages |= vk::PipelineStageFlags::HOST;
+        access |= vk::AccessFlags::HOST_READ | vk::AccessFlags::HOST_WRITE;
     }
 
     if usage == wgt::TextureUses::UNINITIALIZED || usage == wgt::TextureUses::PRESENT {

@@ -114,6 +114,7 @@ static TEXTURE_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
             format: wgpu::TextureFormat::Rgba8Snorm,
             usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            mapped_at_creation: false,
         });
 
         texture.destroy();
@@ -213,6 +214,7 @@ fn create_render_target(device: &wgpu::Device) -> (wgpu::Texture, wgpu::TextureV
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        mapped_at_creation: false,
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     (texture, view)
@@ -513,6 +515,7 @@ fn test_texture_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
             format: wgpu::TextureFormat::Rgba8Snorm,
             usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            mapped_at_creation: false,
         };
 
         let texture_1 = ctx.device.create_texture(&descriptor);
@@ -568,6 +571,7 @@ fn test_texture_destroy_before_submit(ctx: &TestingContext, usage: UsageKind) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        mapped_at_creation: false,
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -621,6 +625,7 @@ fn test_texture_destroy_after_submit(ctx: &TestingContext, usage: UsageKind) {
             format: wgpu::TextureFormat::Rgba8Snorm,
             usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            mapped_at_creation: false,
         };
 
         let texture_1 = ctx.device.create_texture(&descriptor);
@@ -672,6 +677,7 @@ fn test_texture_destroy_after_submit(ctx: &TestingContext, usage: UsageKind) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        mapped_at_creation: false,
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -722,6 +728,7 @@ fn test_external_texture_destroy_before_submit(ctx: &TestingContext, usage: Usag
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        mapped_at_creation: false,
     });
 
     let external_texture = ctx.device.create_external_texture(

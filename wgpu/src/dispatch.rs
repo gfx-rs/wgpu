@@ -68,6 +68,11 @@ pub type BoxSubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static>;
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + 'static>;
+#[cfg(send_sync)]
+pub type TextureMapCallback =
+    Box<dyn FnOnce(Result<(), crate::TextureAsyncError>) + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type TextureMapCallback = Box<dyn FnOnce(Result<(), crate::TextureAsyncError>) + 'static>;
 
 #[cfg(send_sync)]
 pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + Send + 'static>;
@@ -308,6 +313,26 @@ pub trait TextureInterface: CommonTraits {
     fn format(&self) -> wgt::TextureFormat;
 
     fn usage(&self) -> wgt::TextureUsages;
+
+    fn get_map_token(&self) -> Option<alloc::sync::Arc<()>>;
+
+    fn unmap(&self);
+
+    fn copy_texture_to_memory(
+        &self,
+        source: &wgt::TexelCopyTextureInfo<()>,
+        destination: &mut [u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    );
+
+    fn copy_memory_to_texture(
+        &self,
+        destination: &wgt::TexelCopyTextureInfo<()>,
+        source: &[u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    );
 }
 pub trait ExternalTextureInterface: CommonTraits {
     fn destroy(&self);
@@ -407,6 +432,12 @@ pub trait CommandEncoderInterface: CommonTraits {
         &mut self,
         buffer_transitions: &mut dyn Iterator<Item = wgt::BufferTransition<&'a DispatchBuffer>>,
         texture_transitions: &mut dyn Iterator<Item = wgt::TextureTransition<&'a DispatchTexture>>,
+    );
+
+    fn map_texture_on_completion(
+        &mut self,
+        texture: &DispatchTexture,
+        callback: TextureMapCallback,
     );
 }
 pub trait ComputePassInterface: CommonTraits + Drop {

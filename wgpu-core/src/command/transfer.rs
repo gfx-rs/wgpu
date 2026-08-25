@@ -179,6 +179,8 @@ pub enum TransferError {
     InvalidMipLevel { requested: u32, count: u32 },
     #[error("Buffer is expected to be unmapped, but was not")]
     BufferNotAvailable,
+    #[error("Texture is expected to be unmapped, but was not")]
+    TextureNotAvailable,
 }
 
 impl WebGpuError for TransferError {
@@ -222,7 +224,8 @@ impl WebGpuError for TransferError {
             | Self::SampleCountNotEqual { .. }
             | Self::InvalidMipLevel { .. }
             | Self::SameSourceDestinationBuffer
-            | Self::BufferNotAvailable => ErrorType::Validation,
+            | Self::BufferNotAvailable
+            | Self::TextureNotAvailable => ErrorType::Validation,
         }
     }
 }

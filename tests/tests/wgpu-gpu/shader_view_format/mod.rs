@@ -81,6 +81,7 @@ async fn reinterpret(
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[reinterpret_to],
+            mapped_at_creation: false,
         },
         wgpu::util::TextureDataOrder::LayerMajor,
         bytemuck::cast_slice(src_data),
@@ -134,6 +135,7 @@ async fn reinterpret(
         format: src_format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        mapped_at_creation: false,
     });
     let target_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default());
 

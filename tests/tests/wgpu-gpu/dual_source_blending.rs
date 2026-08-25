@@ -100,7 +100,7 @@ async fn dual_source_blending_disabled(ctx: TestingContext) {
                     cache: None,
                 });
         },
-        Some("Features Features { features_wgpu: FeaturesWGPU(0x0), features_webgpu: FeaturesWebGPU(DUAL_SOURCE_BLENDING) } are required but not enabled on the device"),
+        Some("Features Features { features_wgpu: FeaturesWGPU(0x0), features_webgpu: FeaturesWebGPU(DUAL_SOURCE_BLENDING), features_wgpu2: FeaturesWGPU2(0x0) } are required but not enabled on the device"),
     );
 
     // Can't create a shader using dual source blending.

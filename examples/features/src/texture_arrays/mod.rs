@@ -170,6 +170,7 @@ impl crate::framework::Example for Example {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             label: None,
             view_formats: &[],
+            mapped_at_creation: false,
         };
         let red_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("red"),

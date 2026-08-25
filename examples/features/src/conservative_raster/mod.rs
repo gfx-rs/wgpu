@@ -32,6 +32,7 @@ impl Example {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                mapped_at_creation: false,
             })
             .create_view(&Default::default());
 

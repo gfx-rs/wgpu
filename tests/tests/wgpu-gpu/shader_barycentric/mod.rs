@@ -129,6 +129,7 @@ async fn barycentric(ctx: TestingContext, no_perspective: bool) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        mapped_at_creation: false,
     });
     let color_view = color_texture.create_view(&wgpu::TextureViewDescriptor::default());
 

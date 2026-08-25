@@ -208,6 +208,18 @@ bitflags::bitflags! {
         //
         /// Allows a texture to be used with image atomics. Requires [`Features::TEXTURE_ATOMIC`].
         const STORAGE_ATOMIC = 1 << 16;
+        /// Allows a texture to be read/written directly by the host (CPU) via
+        /// host image copies, without a staging buffer or the GPU timeline.
+        ///
+        /// Map it with `CommandEncoder::map_texture_on_completion` or
+        /// `mapped_at_creation`, access it through `wgpu::MappedTexture`, and
+        /// unmap before using it on the GPU again.
+        ///
+        /// Requires the [`Features::HOST_IMAGE_COPY`] feature (generally UMA-only)
+        /// and is per-format: host-copy support is reported in `allowed_usages`
+        /// and is commonly absent for depth/stencil formats. Multisampled
+        /// textures and [`TextureUsages::TRANSIENT_ATTACHMENT`] are not supported.
+        const HOST_VISIBLE = 1 << 18;
     }
 }
 
@@ -254,13 +266,16 @@ bitflags::bitflags! {
         const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits() | Self::STORAGE_READ_ONLY.bits();
         /// The combination of states that a texture must exclusively be in.
         /// cbindgen:ignore
-        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
+        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits() | Self::HOST_COPY.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
         const COMPLEX = 1 << 13;
         /// Flag used by the wgpu-core texture tracker to say that the tracker does not know the state of the sub-resource.
         /// This is different from UNINITIALIZED as that says the tracker does know, but the texture has not been initialized.
         const UNKNOWN = 1 << 14;
+        /// The texture is being prepared for CPU readback. Maps to GENERAL on Vulkan and COMMON on D3D12.
+        /// cbindgen:ignore
+        const HOST_COPY = 1 << 15;
     }
 }
 
@@ -528,6 +543,8 @@ pub struct TextureDescriptor<L, V> {
     ///
     /// Note: currently, only the srgb-ness is allowed to change. (ex: `Rgba8Unorm` texture + `Rgba8UnormSrgb` view)
     pub view_formats: V,
+    /// Whether the texture will start in a mapped state. If true, it must be explicitly unmapped before it can be used on the GPU.
+    pub mapped_at_creation: bool,
 }
 
 impl<L, V> TextureDescriptor<L, V> {
@@ -546,6 +563,7 @@ impl<L, V> TextureDescriptor<L, V> {
             format: self.format,
             usage: self.usage,
             view_formats: self.view_formats.clone(),
+            mapped_at_creation: self.mapped_at_creation,
         }
     }
 
@@ -565,6 +583,7 @@ impl<L, V> TextureDescriptor<L, V> {
             format: self.format,
             usage: self.usage,
             view_formats: v_fun(&self.view_formats),
+            mapped_at_creation: self.mapped_at_creation,
         }
     }
 
@@ -587,6 +606,7 @@ impl<L, V> TextureDescriptor<L, V> {
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
     ///   view_formats: &[],
+    ///   mapped_at_creation: false,
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));

@@ -328,6 +328,7 @@ impl<A: hal::Api> Example<A> {
             usage: wgpu_types::TextureUses::COPY_DST | wgpu_types::TextureUses::RESOURCE,
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: vec![],
+            mapped_at_creation: false,
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 

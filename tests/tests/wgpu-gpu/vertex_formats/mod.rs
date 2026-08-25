@@ -274,6 +274,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
                 format: wgpu::TextureFormat::Rgba8Unorm,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
+                mapped_at_creation: false,
             },
             wgpu::util::TextureDataOrder::LayerMajor,
             &[0, 0, 0, 1],

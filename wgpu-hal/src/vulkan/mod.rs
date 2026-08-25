@@ -373,6 +373,7 @@ struct DeviceExtensionFunctions {
     mesh_shading: Option<ext::mesh_shader::Device>,
     #[cfg_attr(not(unix), allow(dead_code))]
     external_memory_fd: Option<khr::external_memory_fd::Device>,
+    host_image_copy: Option<ext::host_image_copy::Device>,
 }
 
 struct RayTracingDeviceExtensionFunctions {

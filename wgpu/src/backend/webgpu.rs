@@ -3093,6 +3093,34 @@ impl dispatch::TextureInterface for WebTexture {
     fn usage(&self) -> wgt::TextureUsages {
         self.desc.usage
     }
+
+    fn get_map_token(&self) -> Option<alloc::sync::Arc<()>> {
+        None
+    }
+
+    fn unmap(&self) {
+        unimplemented!("texture unmap not supported on WebGPU");
+    }
+
+    fn copy_texture_to_memory(
+        &self,
+        _source: &wgt::TexelCopyTextureInfo<()>,
+        _destination: &mut [u8],
+        _layout: wgt::TexelCopyBufferLayout,
+        _size: &wgt::Extent3d,
+    ) {
+        unimplemented!("copy_texture_to_memory not supported on WebGPU");
+    }
+
+    fn copy_memory_to_texture(
+        &self,
+        _destination: &wgt::TexelCopyTextureInfo<()>,
+        _source: &[u8],
+        _layout: wgt::TexelCopyBufferLayout,
+        _size: &wgt::Extent3d,
+    ) {
+        unimplemented!("copy_memory_to_texture not supported on WebGPU");
+    }
 }
 impl Drop for WebTexture {
     fn drop(&mut self) {
@@ -3530,6 +3558,14 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         >,
     ) {
         // no-op
+    }
+
+    fn map_texture_on_completion(
+        &mut self,
+        _texture: &dispatch::DispatchTexture,
+        _callback: dispatch::TextureMapCallback,
+    ) {
+        unimplemented!("map_texture_on_completion not supported on WebGPU");
     }
 }
 impl Drop for WebCommandEncoder {

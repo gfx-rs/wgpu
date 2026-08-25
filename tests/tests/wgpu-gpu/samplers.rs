@@ -351,6 +351,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        mapped_at_creation: false,
     });
 
     let input_image_view = input_image.create_view(&wgpu::TextureViewDescriptor::default());

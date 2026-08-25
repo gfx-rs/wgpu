@@ -1018,6 +1018,26 @@ pub trait Device: WasmNotSendSync {
     /// A hook for when a wgpu-core texture is created from a raw wgpu-hal texture.
     unsafe fn add_raw_texture(&self, texture: &<Self::A as Api>::Texture);
 
+    /// Host copy texture->memory
+    unsafe fn copy_texture_to_memory<T>(
+        &self,
+        src: &<Self::A as Api>::Texture,
+        dst: &mut [u8],
+        regions: T,
+    ) -> Result<(), DeviceError>
+    where
+        T: Iterator<Item = HostTextureCopy>;
+
+    /// Host copy memory->texture
+    unsafe fn copy_memory_to_texture<T>(
+        &self,
+        src: &[u8],
+        dst: &<Self::A as Api>::Texture,
+        regions: T,
+    ) -> Result<(), DeviceError>
+    where
+        T: Iterator<Item = HostTextureCopy>;
+
     unsafe fn create_texture_view(
         &self,
         texture: &<Self::A as Api>::Texture,
@@ -1942,6 +1962,12 @@ bitflags!(
         const COPY_SRC = 1 << 15;
         /// Format can be copied to.
         const COPY_DST = 1 << 16;
+        /// Format supports host-side image copies (`TextureUsages::HOST_VISIBLE`).
+        ///
+        /// On Vulkan this is per-format (`VK_FORMAT_FEATURE_2_HOST_IMAGE_TRANSFER_BIT`),
+        /// so depth/stencil formats commonly lack it even when the device exposes
+        /// the host-image-copy feature.
+        const HOST_COPY = 1 << 17;
     }
 );
 
@@ -2209,6 +2235,8 @@ pub struct TextureDescriptor<'a> {
     /// Allows views of this texture to have a different format
     /// than the texture does.
     pub view_formats: Vec<wgt::TextureFormat>,
+    #[cfg_attr(not(any(vulkan, dx12)), allow(dead_code))]
+    pub mapped_at_creation: bool,
 }
 
 impl TextureDescriptor<'_> {
@@ -2894,6 +2922,13 @@ pub struct TextureCopy {
 #[derive(Clone, Debug)]
 pub struct BufferTextureCopy {
     pub buffer_layout: wgt::TexelCopyBufferLayout,
+    pub texture_base: TextureCopyBase,
+    pub size: CopyExtent,
+}
+
+#[derive(Clone, Debug)]
+pub struct HostTextureCopy {
+    pub host_layout: wgt::TexelCopyBufferLayout,
     pub texture_base: TextureCopyBase,
     pub size: CopyExtent,
 }

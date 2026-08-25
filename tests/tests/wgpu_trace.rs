@@ -197,6 +197,7 @@ fn trace_texture_test() {
         format: wgt::TextureFormat::Rgba8Unorm,
         usage: wgt::TextureUsages::COPY_DST | wgt::TextureUsages::TEXTURE_BINDING,
         view_formats: Vec::new(),
+        mapped_at_creation: false,
     };
 
     let (texture, error) = device.create_texture(&desc);

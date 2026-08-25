@@ -481,6 +481,7 @@ impl super::Device {
                 suballocation::AllocationType::Texture,
                 format.theoretical_memory_footprint(size),
             ),
+            host_visible: false,
             plane_slice_override: None,
         }
     }
@@ -593,6 +594,14 @@ impl crate::Device for super::Device {
         let (resource, allocation) =
             suballocation::DeviceAllocationContext::from(self).create_texture(desc, raw_desc)?;
 
+        let host_visible = desc.usage.contains(wgt::TextureUses::HOST_COPY);
+        if host_visible {
+            // Pin the texture into the CPU-visible CUSTOM heap so
+            // Write/ReadFromSubresource work. The null pointer means we don't
+            // need the CPU address (those calls operate on the resource directly).
+            unsafe { resource.Map(0, None, None) }.into_device_result("Map texture")?;
+        }
+
         self.counters.textures.add(1);
 
         Ok(super::Texture {
@@ -603,11 +612,15 @@ impl crate::Device for super::Device {
             mip_level_count: desc.mip_level_count,
             sample_count: desc.sample_count,
             allocation,
+            host_visible,
             plane_slice_override: None,
         })
     }
 
     unsafe fn destroy_texture(&self, texture: super::Texture) {
+        if texture.host_visible {
+            unsafe { texture.raw_resource().Unmap(0, None) };
+        }
         suballocation::DeviceAllocationContext::from(self)
             .free_resource(texture.resource, texture.allocation);
 
@@ -616,6 +629,92 @@ impl crate::Device for super::Device {
 
     unsafe fn add_raw_texture(&self, _texture: &super::Texture) {
         self.counters.textures.add(1);
+    }
+
+    unsafe fn copy_memory_to_texture<T>(
+        &self,
+        src: &[u8],
+        dst: &<Self::A as crate::Api>::Texture,
+        regions: T,
+    ) -> Result<(), crate::DeviceError>
+    where
+        T: Iterator<Item = crate::HostTextureCopy>,
+    {
+        for region in regions {
+            let subresource = dst.calc_subresource_for_copy(&region.texture_base);
+            let dst_box = Direct3D12::D3D12_BOX {
+                left: region.texture_base.origin.x,
+                top: region.texture_base.origin.y,
+                front: region.texture_base.origin.z,
+                right: region.texture_base.origin.x + region.size.width,
+                bottom: region.texture_base.origin.y + region.size.height,
+                back: region.texture_base.origin.z + region.size.depth,
+            };
+            let row_pitch = region.host_layout.bytes_per_row.unwrap_or(0);
+            let depth_pitch = region
+                .host_layout
+                .rows_per_image
+                .map_or(0, |rpi| row_pitch * rpi);
+            unsafe {
+                let src_ptr = src
+                    .as_ptr()
+                    .add(region.host_layout.offset as usize)
+                    .cast::<ffi::c_void>();
+                dst.raw_resource()
+                    .WriteToSubresource(
+                        subresource,
+                        Some(&dst_box),
+                        src_ptr,
+                        row_pitch,
+                        depth_pitch,
+                    )
+                    .into_device_result("WriteToSubresource")?;
+            }
+        }
+        Ok(())
+    }
+
+    unsafe fn copy_texture_to_memory<T>(
+        &self,
+        src: &<Self::A as crate::Api>::Texture,
+        dst: &mut [u8],
+        regions: T,
+    ) -> Result<(), crate::DeviceError>
+    where
+        T: Iterator<Item = crate::HostTextureCopy>,
+    {
+        for region in regions {
+            let subresource = src.calc_subresource_for_copy(&region.texture_base);
+            let src_box = Direct3D12::D3D12_BOX {
+                left: region.texture_base.origin.x,
+                top: region.texture_base.origin.y,
+                front: region.texture_base.origin.z,
+                right: region.texture_base.origin.x + region.size.width,
+                bottom: region.texture_base.origin.y + region.size.height,
+                back: region.texture_base.origin.z + region.size.depth,
+            };
+            let row_pitch = region.host_layout.bytes_per_row.unwrap_or(0);
+            let depth_pitch = region
+                .host_layout
+                .rows_per_image
+                .map_or(0, |rpi| row_pitch * rpi);
+            unsafe {
+                let dst_ptr = dst
+                    .as_mut_ptr()
+                    .add(region.host_layout.offset as usize)
+                    .cast::<ffi::c_void>();
+                src.raw_resource()
+                    .ReadFromSubresource(
+                        dst_ptr,
+                        row_pitch,
+                        depth_pitch,
+                        subresource,
+                        Some(&src_box),
+                    )
+                    .into_device_result("ReadFromSubresource")?;
+            }
+        }
+        Ok(())
     }
 
     unsafe fn create_texture_view(

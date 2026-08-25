@@ -16,8 +16,8 @@ use objc2_metal::{
     MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLLibrary,
     MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
     MTLPipelineBufferDescriptorArray, MTLPipelineOption, MTLPixelFormat, MTLPrimitiveTopologyClass,
-    MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
-    MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
+    MTLRegion, MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor,
+    MTLResource, MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
     MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor, MTLStorageMode,
     MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode, MTLVertexDescriptor,
     MTLVertexStepFunction,
@@ -562,7 +562,7 @@ impl crate::Device for super::Device {
                 && self.shared.private_caps.supports_memoryless_storage
             {
                 MTLStorageMode::Memoryless
-            } else if IS_WATCHOS_ILP32 {
+            } else if desc.usage.contains(wgt::TextureUses::HOST_COPY) || IS_WATCHOS_ILP32 {
                 // The AGXMetalS4 driver (A13/S6 GPU) crashes in
                 // copyFromTexture:toBuffer: on Private textures — null deref at
                 // offset 0x50 in the driver's internal texture state. Use Shared
@@ -611,6 +611,118 @@ impl crate::Device for super::Device {
 
     unsafe fn add_raw_texture(&self, _texture: &super::Texture) {
         self.counters.textures.add(1);
+    }
+
+    unsafe fn copy_memory_to_texture<T>(
+        &self,
+        src: &[u8],
+        dst: &<Self::A as crate::Api>::Texture,
+        regions: T,
+    ) -> Result<(), crate::DeviceError>
+    where
+        T: Iterator<Item = crate::HostTextureCopy>,
+    {
+        // `replaceRegion` has no aspect parameter (unlike the GPU blit path's
+        // `MTLBlitOption`), so it can't target depth vs. stencil separately.
+        if dst.format.is_combined_depth_stencil_format() {
+            log::error!(
+                "Metal host image copy does not support combined depth-stencil format {:?}",
+                dst.format
+            );
+            return Err(crate::DeviceError::Unexpected);
+        }
+        for copy in regions {
+            let dst_origin = conv::map_origin(&copy.texture_base.origin);
+            // Metal expects buffer-texture copies in virtual sizes
+            let extent = copy
+                .texture_base
+                .max_copy_size(&dst.copy_size)
+                .min(&copy.size);
+            let bytes_per_row = copy.host_layout.bytes_per_row.unwrap_or(0) as u64;
+            let image_byte_stride = if extent.depth > 1 {
+                copy.host_layout
+                    .rows_per_image
+                    .map_or(0, |v| v as u64 * bytes_per_row)
+            } else {
+                // Don't pass a stride when updating a single layer, otherwise metal validation
+                // fails when updating a subset of the image due to the stride being larger than
+                // the amount of data to copy.
+                0
+            };
+            unsafe {
+                dst.raw
+                    .replaceRegion_mipmapLevel_slice_withBytes_bytesPerRow_bytesPerImage(
+                        MTLRegion {
+                            origin: dst_origin,
+                            size: conv::map_copy_extent(&extent),
+                        },
+                        copy.texture_base.mip_level as usize,
+                        copy.texture_base.array_layer as usize,
+                        NonNull::new(src.as_ptr() as *mut _)
+                            .unwrap()
+                            .byte_add(copy.host_layout.offset as usize),
+                        bytes_per_row as usize,
+                        image_byte_stride as usize,
+                    );
+            }
+        }
+        Ok(())
+    }
+
+    unsafe fn copy_texture_to_memory<T>(
+        &self,
+        src: &<Self::A as crate::Api>::Texture,
+        dst: &mut [u8],
+        regions: T,
+    ) -> Result<(), crate::DeviceError>
+    where
+        T: Iterator<Item = crate::HostTextureCopy>,
+    {
+        // See `copy_memory_to_texture`: combined depth-stencil aspects aren't
+        // separately addressable through `getBytes` on the host timeline.
+        if src.format.is_combined_depth_stencil_format() {
+            log::error!(
+                "Metal host image copy does not support combined depth-stencil format {:?}",
+                src.format
+            );
+            return Err(crate::DeviceError::Unexpected);
+        }
+        for copy in regions {
+            let src_origin = conv::map_origin(&copy.texture_base.origin);
+            // Metal expects buffer-texture copies in virtual sizes
+            let extent = copy
+                .texture_base
+                .max_copy_size(&src.copy_size)
+                .min(&copy.size);
+            let bytes_per_row = copy.host_layout.bytes_per_row.unwrap_or(0) as u64;
+            let image_byte_stride = if extent.depth > 1 {
+                copy.host_layout
+                    .rows_per_image
+                    .map_or(0, |v| v as u64 * bytes_per_row)
+            } else {
+                // Don't pass a stride when updating a single layer, otherwise metal validation
+                // fails when updating a subset of the image due to the stride being larger than
+                // the amount of data to copy.
+                0
+            };
+            unsafe {
+                src.raw
+                    .getBytes_bytesPerRow_bytesPerImage_fromRegion_mipmapLevel_slice(
+                        NonNull::new(dst.as_mut_ptr().cast())
+                            .unwrap()
+                            .byte_add(copy.host_layout.offset as usize),
+                        bytes_per_row as usize,
+                        image_byte_stride as usize,
+                        MTLRegion {
+                            origin: src_origin,
+                            size: conv::map_copy_extent(&extent),
+                        },
+                        copy.texture_base.mip_level as usize,
+                        copy.texture_base.array_layer as usize,
+                    );
+            }
+        }
+        Ok(())
     }
 
     unsafe fn create_texture_view(

@@ -21,7 +21,7 @@ use crate::{
     binding_model::{BindGroup, BindingError},
     device::{
         queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError,
-        DeviceMismatch, HostMap, MissingDownlevelFlags, MissingFeatures,
+        DeviceMismatch, HostMap, HostTextureCopyError, MissingDownlevelFlags, MissingFeatures,
     },
     hal_label,
     init_tracker::{BufferInitTracker, TextureInitTracker},
@@ -1467,6 +1467,29 @@ impl TextureInner {
     }
 }
 
+/// Tracks host-mapping state for a texture. Using one enum under one mutex
+/// prevents TOCTOU races between mapped-state checks and token creation.
+pub(crate) enum TextureMapState {
+    Unmapped,
+    /// A `map_texture_on_completion` command has been recorded into an encoder
+    /// but the GPU submission has not yet completed. Holds the user callback
+    /// to fire when the submission finishes.
+    MappingQueued(Option<crate::device::TextureMapClosure>),
+    /// Fully host-mapped. Each live `MappedTexture` handle holds a clone of
+    /// the `Arc`; the unmap check uses `Arc::strong_count`.
+    Mapped(Arc<()>),
+}
+
+impl fmt::Debug for TextureMapState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unmapped => write!(f, "Unmapped"),
+            Self::MappingQueued(_) => write!(f, "MappingQueued"),
+            Self::Mapped(_) => write!(f, "Mapped"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum TextureClearMode {
     BufferCopy,
@@ -1502,6 +1525,12 @@ pub struct Texture {
     pub(crate) views: Mutex<WeakVec<TextureView>>,
     // Bind groups that reference this texture. May contain duplicates.
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
+    /// Host-mapping state for this texture. See [`TextureMapState`].
+    pub(crate) map_state: Mutex<TextureMapState>,
+    /// Serializes host image copies (`copy_to_memory`/`copy_from_memory`) on
+    /// this texture: reads take it shared, writes exclusive, so a write can't
+    /// run concurrently with a read or another write.
+    pub(crate) host_copy_lock: RwLock<()>,
 }
 
 impl Texture {
@@ -1538,6 +1567,8 @@ impl Texture {
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
+            map_state: Mutex::new(rank::TEXTURE_MAP_STATE, TextureMapState::Unmapped),
+            host_copy_lock: RwLock::new(rank::TEXTURE_HOST_COPY, ()),
         }
     }
 
@@ -1563,6 +1594,8 @@ impl Texture {
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, TextureClearMode::None),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
+            map_state: Mutex::new(rank::TEXTURE_MAP_STATE, TextureMapState::Unmapped),
+            host_copy_lock: RwLock::new(rank::TEXTURE_HOST_COPY, ()),
         })
     }
 
@@ -2187,6 +2220,353 @@ impl Texture {
     pub fn descriptor(&self) -> &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>> {
         &self.desc
     }
+
+    /// Read texture contents directly into host memory. Requires the texture to
+    /// be host-mapped (see [`TextureMapState`]) and the [`HOST_IMAGE_COPY`]
+    /// feature.
+    ///
+    /// [`HOST_IMAGE_COPY`]: wgt::Features::HOST_IMAGE_COPY
+    pub fn copy_to_memory(
+        &self,
+        source: &wgt::TexelCopyTextureInfo<()>,
+        destination: &mut [u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    ) -> Result<(), HostTextureCopyError> {
+        profiling::scope!("Texture::copy_to_memory");
+        use crate::command::{
+            extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
+            CopySide,
+        };
+
+        let texture = self;
+
+        texture
+            .device
+            .require_features(wgt::Features::HOST_IMAGE_COPY)?;
+
+        // Shared host-access lock: concurrent reads are allowed, but a host
+        // write (`copy_from_memory`, exclusive) cannot start until every read
+        // holding this guard has finished. Held across the whole read.
+        //
+        // Acquired *before* the `Mapped` check so the check is atomic with
+        // respect to `unmap` (which takes this lock exclusively): once we hold
+        // it shared the texture cannot be unmapped — and thus cannot be handed
+        // back to the GPU — until this copy completes, closing the
+        // check-then-copy race.
+        let _host_access = texture.host_copy_lock.read();
+
+        if !matches!(*texture.map_state.lock(), TextureMapState::Mapped(_)) {
+            return Err(HostTextureCopyError::NotMapped);
+        }
+
+        let (hal_copy_size, array_layer_count) =
+            validate_texture_copy_range(source, &texture.desc, CopySide::Source, size)?;
+
+        let (_, texture_base) = extract_texture_selector(source, size, texture)?;
+
+        let (_, bytes_per_array_layer, _) = validate_linear_texture_data(
+            &layout,
+            texture.desc.format,
+            source.aspect,
+            destination.len() as wgt::BufferAddress,
+            CopySide::Destination,
+            size,
+        )?;
+
+        let snatch_guard = texture.device.snatchable_lock.read();
+        let raw_texture = texture.try_raw(&snatch_guard)?;
+        let raw_device = texture.device.raw();
+
+        // Zero uninitialized layers so the host read can't observe garbage.
+        host_zero_init_layers(
+            texture,
+            raw_texture,
+            raw_device,
+            texture_base.mip_level,
+            texture_base.array_layer..texture_base.array_layer + array_layer_count,
+        )?;
+
+        let regions: Vec<hal::HostTextureCopy> = (0..array_layer_count)
+            .map(|rel| {
+                let mut base = texture_base.clone();
+                base.array_layer += rel;
+                let mut host_layout = layout;
+                host_layout.offset += rel as u64 * bytes_per_array_layer;
+                hal::HostTextureCopy {
+                    host_layout,
+                    texture_base: base,
+                    size: hal_copy_size,
+                }
+            })
+            .collect();
+
+        unsafe {
+            raw_device
+                .copy_texture_to_memory(raw_texture, destination, &regions)
+                .map_err(|e| texture.device.handle_hal_error(e))?;
+        }
+
+        Ok(())
+    }
+
+    /// Write host memory directly into the texture. Requires the texture to be
+    /// host-mapped (see [`TextureMapState`]) and the [`HOST_IMAGE_COPY`]
+    /// feature.
+    ///
+    /// [`HOST_IMAGE_COPY`]: wgt::Features::HOST_IMAGE_COPY
+    pub fn copy_from_memory(
+        &self,
+        destination: &wgt::TexelCopyTextureInfo<()>,
+        source: &[u8],
+        layout: wgt::TexelCopyBufferLayout,
+        size: &wgt::Extent3d,
+    ) -> Result<(), HostTextureCopyError> {
+        profiling::scope!("Texture::copy_from_memory");
+        use crate::command::{
+            extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
+            CopySide,
+        };
+
+        let texture = self;
+
+        texture
+            .device
+            .require_features(wgt::Features::HOST_IMAGE_COPY)?;
+
+        // Exclusive host-access lock: blocks all other host copies on this
+        // texture — other writes, and reads (which hold it shared) — for the
+        // whole write. See `copy_to_memory` for the unmap-race reasoning.
+        let _host_access = texture.host_copy_lock.write();
+
+        if !matches!(*texture.map_state.lock(), TextureMapState::Mapped(_)) {
+            return Err(HostTextureCopyError::NotMapped);
+        }
+
+        let (hal_copy_size, array_layer_count) =
+            validate_texture_copy_range(destination, &texture.desc, CopySide::Destination, size)?;
+
+        let (_, texture_base) = extract_texture_selector(destination, size, texture)?;
+
+        let (_, bytes_per_array_layer, _) = validate_linear_texture_data(
+            &layout,
+            texture.desc.format,
+            destination.aspect,
+            source.len() as wgt::BufferAddress,
+            CopySide::Source,
+            size,
+        )?;
+
+        let snatch_guard = texture.device.snatchable_lock.read();
+        let raw_texture = texture.try_raw(&snatch_guard)?;
+        let raw_device = texture.device.raw();
+
+        // Init tracking is per-layer, so a write that doesn't fully cover the
+        // layer must zero the uncovered part first (mirrors `Queue::write_texture`).
+        if crate::init_tracker::has_copy_partial_init_tracker_coverage(
+            size,
+            destination,
+            &texture.desc,
+        ) {
+            host_zero_init_layers(
+                texture,
+                raw_texture,
+                raw_device,
+                texture_base.mip_level,
+                texture_base.array_layer..texture_base.array_layer + array_layer_count,
+            )?;
+        }
+
+        let regions: Vec<hal::HostTextureCopy> = (0..array_layer_count)
+            .map(|rel| {
+                let mut base = texture_base.clone();
+                base.array_layer += rel;
+                let mut host_layout = layout;
+                host_layout.offset += rel as u64 * bytes_per_array_layer;
+                hal::HostTextureCopy {
+                    host_layout,
+                    texture_base: base,
+                    size: hal_copy_size,
+                }
+            })
+            .collect();
+
+        unsafe {
+            raw_device
+                .copy_memory_to_texture(source, raw_texture, &regions)
+                .map_err(|e| texture.device.handle_hal_error(e))?;
+        }
+
+        // Mark written layers initialized so the GPU read path won't re-clear them.
+        let mip_level = texture_base.mip_level as usize;
+        let layer_start = texture_base.array_layer;
+        let layer_end = layer_start + array_layer_count;
+        let mut init_status = texture.initialization_status.write();
+        if let Some(mip_tracker) = init_status.mips.get_mut(mip_level) {
+            mip_tracker.drain(layer_start..layer_end);
+        }
+        drop(init_status);
+
+        Ok(())
+    }
+
+    /// Unmap a host-mapped texture, handing it back to the GPU.
+    pub fn unmap(&self) -> Result<(), HostTextureCopyError> {
+        profiling::scope!("Texture::unmap");
+
+        let texture = self;
+
+        // Exclusive host-access lock: blocks until every in-flight host copy
+        // (read = shared, write = exclusive) has finished, and prevents any new
+        // copy from starting. Combined with the copy paths checking `Mapped`
+        // under this lock, unmapping can never race a copy.
+        let _host_access = texture.host_copy_lock.write();
+
+        let mut map_state = texture.map_state.lock();
+
+        let TextureMapState::Mapped(ref arc) = *map_state else {
+            return Err(HostTextureCopyError::NotMapped);
+        };
+        if Arc::strong_count(arc) > 1 {
+            return Err(HostTextureCopyError::MappedHandlesExist);
+        }
+
+        *map_state = TextureMapState::Unmapped;
+        Ok(())
+    }
+
+    /// Returns the shared map token if the texture is currently mapped. The
+    /// check and clone happen under one lock, so there's no TOCTOU window.
+    pub fn get_map_token(&self) -> Option<Arc<()>> {
+        let map_state = self.map_state.lock();
+        let TextureMapState::Mapped(ref arc) = *map_state else {
+            return None;
+        };
+        Some(arc.clone())
+    }
+
+    /// Returns whether the texture is currently host-mapped.
+    pub fn is_mapped(&self) -> bool {
+        matches!(*self.map_state.lock(), TextureMapState::Mapped(_))
+    }
+}
+
+/// Zero any uninitialized layers of `texture` in `layer_range` at `mip_level`,
+/// so a host read can't observe garbage.
+///
+/// Locks `initialization_status` internally to serialize the zeroing between
+/// concurrent readers (which only hold `host_copy_lock` shared): the first to
+/// reach a given layer zeroes and marks it, the rest then see it initialized.
+/// Mutual exclusion against host *writes* is provided by the caller's
+/// `host_copy_lock`. See [`Texture::copy_to_memory`].
+fn host_zero_init_layers(
+    texture: &Texture,
+    raw_texture: &dyn hal::DynTexture,
+    raw_device: &dyn hal::DynDevice,
+    mip_level: u32,
+    layer_range: Range<u32>,
+) -> Result<(), HostTextureCopyError> {
+    let mut init_status = texture.initialization_status.write();
+
+    // Don't mark initialized yet — only after the zeroing copy succeeds.
+    let uninit: Vec<Range<u32>> = {
+        let Some(mip_tracker) = init_status.mips.get_mut(mip_level as usize) else {
+            return Ok(());
+        };
+        mip_tracker.uninitialized(layer_range.clone()).collect()
+    };
+    if uninit.is_empty() {
+        return Ok(());
+    }
+
+    let format = texture.desc.format;
+    let mip_size = texture.desc.mip_level_size(mip_level).unwrap();
+    let is_3d = texture.desc.dimension == wgt::TextureDimension::D3;
+
+    // One zero region per (aspect, layer): depth/stencil and each plane are
+    // addressed and sized independently. `create_texture` guarantees every
+    // aspect here has a host-copyable `block_copy_size`.
+    let aspects: Vec<hal::FormatAspects> = hal::FormatAspects::from(format).iter().collect();
+
+    // Returns the region plus its source byte length, so we can size one shared
+    // zero buffer to the largest aspect.
+    let make_region = |aspect: hal::FormatAspects, array_layer: u32, depth: u32| {
+        let texture_aspect = aspect.map();
+        let plane = match aspect {
+            hal::FormatAspects::PLANE_0 => Some(0),
+            hal::FormatAspects::PLANE_1 => Some(1),
+            hal::FormatAspects::PLANE_2 => Some(2),
+            _ => None,
+        };
+        let (width_subsampling, height_subsampling) = format.subsampling_factors(plane);
+        let (block_width, block_height) = format.block_dimensions();
+        let block_size = format
+            .block_copy_size(Some(texture_aspect))
+            .expect("host-copyable aspect is guaranteed by create_texture validation");
+
+        let width = wgt::math::align_to(mip_size.width / width_subsampling, block_width);
+        let height = wgt::math::align_to(mip_size.height / height_subsampling, block_height);
+        let bytes_per_row = width / block_width * block_size;
+        let rows = height / block_height;
+        let len = bytes_per_row as u64 * rows as u64 * depth as u64;
+
+        let region = hal::HostTextureCopy {
+            host_layout: wgt::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(bytes_per_row),
+                rows_per_image: Some(rows),
+            },
+            texture_base: hal::TextureCopyBase {
+                mip_level,
+                array_layer,
+                origin: wgt::Origin3d::ZERO,
+                aspect,
+            },
+            size: hal::CopyExtent {
+                width,
+                height,
+                depth,
+            },
+        };
+        (region, len)
+    };
+
+    let mut regions = Vec::new();
+    let mut zero_len = 0u64;
+    if is_3d {
+        // A 3D texture is one init-tracker layer covering the whole volume.
+        for &aspect in &aspects {
+            let (region, len) = make_region(aspect, 0, mip_size.depth_or_array_layers);
+            zero_len = zero_len.max(len);
+            regions.push(region);
+        }
+    } else {
+        for range in &uninit {
+            for array_layer in range.clone() {
+                for &aspect in &aspects {
+                    let (region, len) = make_region(aspect, array_layer, 1);
+                    zero_len = zero_len.max(len);
+                    regions.push(region);
+                }
+            }
+        }
+    }
+
+    // All regions read from offset 0, so one buffer sized to the largest fits.
+    let zero = alloc::vec![0u8; zero_len as usize];
+
+    unsafe {
+        raw_device
+            .copy_memory_to_texture(&zero, raw_texture, &regions)
+            .map_err(|e| texture.device.handle_hal_error(e))?;
+    }
+
+    // Mark initialized (only reached if the copy above succeeded).
+    if let Some(mip_tracker) = init_status.mips.get_mut(mip_level as usize) {
+        mip_tracker.drain(layer_range);
+    }
+
+    Ok(())
 }
 
 /// A texture that has been marked as destroyed and is staged for actual deletion soon.
@@ -2305,6 +2685,8 @@ pub enum CreateTextureError {
     CreateTextureView(#[from] CreateTextureViewError),
     #[error("Invalid usage flags {0:?}")]
     InvalidUsage(wgt::TextureUsages),
+    #[error("Texture usage {0:?} is not compatible with texture usage {1:?}")]
+    IncompatibleUsage(wgt::TextureUsages, wgt::TextureUsages),
     #[error(transparent)]
     InvalidDimension(#[from] TextureDimensionError),
     #[error("Depth texture ({1:?}) can't be created as {0:?}")]
@@ -2344,6 +2726,16 @@ pub enum CreateTextureError {
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error("mapped_at_creation requires TextureUsages::HOST_VISIBLE")]
+    MappedAtCreationRequiresHostVisible,
+    #[error("HOST_VISIBLE textures must have sample_count = 1, got {0}")]
+    HostVisibleMultisampled(u32),
+    #[error(
+        "HOST_VISIBLE textures cannot use format {0:?}: either it has an aspect with no \
+         host-copyable memory layout (e.g. an implementation-defined depth format), or this \
+         adapter/backend does not support host image copies for it"
+    )]
+    HostVisibleUnsupportedFormat(wgt::TextureFormat),
 }
 
 crate::impl_resource_type!(Texture);
@@ -2372,20 +2764,24 @@ impl WebGpuError for CreateTextureError {
             Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
 
             Self::InvalidUsage(_)
+            | Self::IncompatibleUsage(_, _)
             | Self::InvalidDepthDimension(_, _)
             | Self::InvalidCompressedDimension(_, _)
             | Self::InvalidMipLevelCount { .. }
             | Self::InvalidFormatUsages(_, _, _)
             | Self::InvalidViewFormat(_, _)
+            | Self::InvalidTransientTextureUsage(_)
             | Self::InvalidDimensionUsages(_, _)
             | Self::InvalidMultisampledStorageBinding
             | Self::InvalidMultisampledFormat(_)
             | Self::InvalidSampleCount(..)
-            | Self::InvalidTransientTextureUsage(_)
+            | Self::InvalidTransientTextureViewFormats
+            | Self::MultisampledNotRenderAttachment
             | Self::InvalidTransientTextureMipLevelCount(_)
             | Self::InvalidTransientTextureLayerCount(_)
-            | Self::InvalidTransientTextureViewFormats
-            | Self::MultisampledNotRenderAttachment => ErrorType::Validation,
+            | Self::MappedAtCreationRequiresHostVisible
+            | Self::HostVisibleMultisampled(_)
+            | Self::HostVisibleUnsupportedFormat(_) => ErrorType::Validation,
         }
     }
 }

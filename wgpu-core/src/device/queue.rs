@@ -36,7 +36,7 @@ use crate::{
         BufferMapState, DestroyedBuffer, DestroyedQuerySet, DestroyedResourceError,
         DestroyedTexture, FlushedStagingBuffer, InvalidOrDestroyedResourceError,
         InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent, ResourceState,
-        StagingBuffer, Texture, TextureInner, Trackable, TrackingData,
+        StagingBuffer, Texture, TextureInner, TextureMapState, Trackable, TrackingData,
     },
     resource_log,
     scratch::ScratchBuffer,
@@ -225,7 +225,7 @@ impl Queue {
         //   encoded above.
         pending_writes.insert_texture(texture);
 
-        submission.submit(pending_writes)?;
+        submission.submit(pending_writes, &mut Vec::new())?;
 
         Ok(())
     }
@@ -241,17 +241,13 @@ impl Queue {
         &self,
         submission_index: u64,
         snatch_guard: &SnatchGuard,
-    ) -> (
-        SmallVec<[SubmittedWorkDoneClosure; 1]>,
-        Vec<super::BufferMapPendingClosure>,
-        Vec<BlasCompactReadyPendingClosure>,
-        bool,
-    ) {
+    ) -> MaintainResult {
         let mut life_tracker = self.lock_life();
         let submission_closures = life_tracker.triage_submissions(submission_index);
 
         let mapping_closures = life_tracker.handle_mapping(snatch_guard);
         let blas_closures = life_tracker.handle_compact_read_back();
+        let texture_map_closures = life_tracker.handle_texture_mapping();
 
         let queue_empty = life_tracker.queue_empty();
 
@@ -259,6 +255,7 @@ impl Queue {
             submission_closures,
             mapping_closures,
             blas_closures,
+            texture_map_closures,
             queue_empty,
         )
     }
@@ -294,15 +291,27 @@ impl Drop for Queue {
             .load(Ordering::Acquire);
 
         let snatch_guard = self.device.snatchable_lock.read();
-        let (submission_closures, mapping_closures, blas_compact_ready_closures, queue_empty) =
-            self.maintain(last_successful_submission_index, &snatch_guard);
+        let (
+            submission_closures,
+            mapping_closures,
+            blas_compact_ready_closures,
+            mut texture_map_closures,
+            queue_empty,
+        ) = self.maintain(last_successful_submission_index, &snatch_guard);
         drop(snatch_guard);
 
-        assert!(queue_empty);
+        if self.device.is_valid() {
+            assert!(queue_empty);
+        } else {
+            // Device lost: in-flight submissions won't complete, so cancel any
+            // queued maps and fire their callbacks with `Err`.
+            texture_map_closures.extend(self.lock_life().drain_pending_texture_maps());
+        }
 
         let closures = crate::device::UserClosures {
             mappings: mapping_closures,
             blas_compact_ready: blas_compact_ready_closures,
+            texture_map_closures,
             submissions: submission_closures,
             device_lost_invocations: SmallVec::new(),
         };
@@ -315,6 +324,14 @@ impl Drop for Queue {
 pub type SubmittedWorkDoneClosure = Box<dyn FnOnce() + Send + 'static>;
 #[cfg(not(send_sync))]
 pub type SubmittedWorkDoneClosure = Box<dyn FnOnce() + 'static>;
+
+pub(crate) type MaintainResult = (
+    SmallVec<[SubmittedWorkDoneClosure; 1]>,
+    Vec<super::BufferMapPendingClosure>,
+    Vec<BlasCompactReadyPendingClosure>,
+    Vec<super::TextureMapPendingClosure>,
+    bool,
+);
 
 /// A texture or buffer to be freed soon.
 ///
@@ -595,6 +612,8 @@ pub enum QueueSubmitError {
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("{0} is still mapped")]
     BufferStillMapped(ResourceErrorIdent),
+    #[error("{0} is still mapped on the CPU")]
+    TextureStillMapped(ResourceErrorIdent),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
@@ -619,7 +638,9 @@ impl WebGpuError for QueueSubmitError {
             Self::CommandEncoder(e) => e.webgpu_error_type(),
             Self::ValidateAsActionsError(e) => e.webgpu_error_type(),
             Self::InvalidResource(e) => e.webgpu_error_type(),
-            Self::DestroyedResource(_) | Self::BufferStillMapped(_) => ErrorType::Validation,
+            Self::DestroyedResource(_)
+            | Self::BufferStillMapped(_)
+            | Self::TextureStillMapped(_) => ErrorType::Validation,
         }
     }
 }
@@ -711,8 +732,10 @@ impl<'a> PendingSubmission<'a> {
     fn submit(
         self,
         pending_writes: MutexGuard<'a, PendingWrites>,
+        textures_to_map: &mut Vec<Arc<Texture>>,
     ) -> Result<SubmissionResult<'a>, DeviceError> {
-        self.queue.submit_pending_submission(pending_writes, self)
+        self.queue
+            .submit_pending_submission(pending_writes, self, textures_to_map)
     }
 }
 
@@ -1000,6 +1023,11 @@ impl Queue {
 
         dst.check_usage(wgt::TextureUsages::COPY_DST)
             .map_err(TransferError::MissingTextureUsage)?;
+        if matches!(*dst.map_state.lock(), TextureMapState::Mapped(_)) {
+            return Err(QueueWriteError::Transfer(
+                TransferError::TextureNotAvailable,
+            ));
+        }
 
         // Note: Doing the copy range validation early is important because ensures that the
         // dimensions are not going to cause overflow in other parts of the validation.
@@ -1455,7 +1483,7 @@ impl Queue {
             return Ok(());
         }
 
-        submission.submit(pending_writes)?;
+        submission.submit(pending_writes, &mut Vec::new())?;
 
         Ok(())
     }
@@ -1468,7 +1496,7 @@ impl Queue {
         let submit_index = submission.index;
         let pending_writes = self.pending_writes.lock();
         if pending_writes.is_recording {
-            submission.submit(pending_writes)?;
+            submission.submit(pending_writes, &mut Vec::new())?;
             Ok(Some(submit_index))
         } else {
             Ok(None)
@@ -1509,18 +1537,28 @@ impl Queue {
         profiling::scope!("Queue::submit");
         api_log!("Queue::submit");
 
-        let snatch_guard = self.device.snatchable_lock.read();
-        let mut submission = self
-            .allocate_submission(snatch_guard)
-            .map_err(|(index, e)| (index, e.into()))?;
-        let submit_index = submission.index;
+        // Host-maps queued by the submitted command buffers. On success these are
+        // registered with the life tracker; on any failure path the survivors are
+        // cancelled at the end so their callbacks fire instead of hanging.
+        let mut texture_maps: Vec<Arc<Texture>> = Vec::new();
+        let submit_index;
 
+        // `submission` (and the queue guards it holds) lives inside this block so
+        // it is dropped before we fire any cancellation callbacks below.
+        //
         // If we encounter an error after we have started updating global state and before
         // successful submission, we must lose the device to avoid continuing with
         // potentially inaccurate resource state.
         let mut lose_device_on_error = false;
 
         let res = 'error: {
+            let snatch_guard = self.device.snatchable_lock.read();
+            let mut submission = match self.allocate_submission(snatch_guard) {
+                Ok(submission) => submission,
+                Err((index, e)) => return Err((index, e.into())),
+            };
+            submit_index = submission.index;
+
             let mut used_surface_textures = track::TextureUsageScope::default();
             let mut baked_command_buffers = Vec::with_capacity(command_buffers.len());
 
@@ -1542,10 +1580,14 @@ impl Queue {
                     // Anything other than our own submission work in the remainder of this
                     // function that attempts to use the WebGPU command buffer after this
                     // point, will find it vacant (invalid), and produce an error.
-                    #[cfg_attr(not(feature = "trace"), expect(unused_mut))]
                     let mut cmd_buf_data = command_buffer.take_finished();
 
                     if first_error.is_some() {
+                        // This batch is already failing, so this buffer won't be
+                        // submitted. Collect its queued host-maps for cancellation.
+                        if let Ok(data) = &mut cmd_buf_data {
+                            texture_maps.append(&mut data.encoded_texture_maps);
+                        }
                         continue;
                     }
 
@@ -1556,7 +1598,7 @@ impl Queue {
                         .and_then(|data| mem::take(&mut data.trace_commands));
 
                     let mut baked = match cmd_buf_data {
-                        Ok(cmd_buf_data) => {
+                        Ok(mut cmd_buf_data) => {
                             let res = validate_command_buffer(
                                 command_buffer,
                                 self,
@@ -1567,6 +1609,9 @@ impl Queue {
                                 &mut submission.command_index_guard,
                             );
                             if let Err(err) = res {
+                                // This buffer won't be submitted; collect its
+                                // queued host-maps for cancellation.
+                                texture_maps.append(&mut cmd_buf_data.encoded_texture_maps);
                                 #[cfg(feature = "trace")]
                                 self.trace_failed_submission(
                                     submit_index,
@@ -1597,6 +1642,12 @@ impl Queue {
                             continue;
                         }
                     };
+
+                    // Collect this buffer's queued host-maps now, before the
+                    // fallible steps below: if any `break 'error`, the maps are
+                    // already in `texture_maps` for cancellation rather than
+                    // dropped with `baked`.
+                    texture_maps.append(&mut baked.encoded_texture_maps);
 
                     if let Err(e) = baked
                         .process_deferred_query_set_resolves(&self.device, &submission.snatch_guard)
@@ -1706,10 +1757,11 @@ impl Queue {
 
             let pending_writes = self.pending_writes.lock();
 
-            let SubmissionResult { snatch_guard } = match submission.submit(pending_writes) {
-                Ok(result) => result,
-                Err(e) => break 'error Err(e.into()),
-            };
+            let SubmissionResult { snatch_guard } =
+                match submission.submit(pending_writes, &mut texture_maps) {
+                    Ok(result) => result,
+                    Err(e) => break 'error Err(e.into()),
+                };
 
             profiling::scope!("cleanup");
 
@@ -1742,6 +1794,14 @@ impl Queue {
         let callbacks = match res {
             Ok(ok) => ok,
             Err(e) => {
+                // The submission failed, so any host-maps queued by these command
+                // buffers will never be registered or completed. `submission` (and
+                // the queue guards it held) is dropped now, so cancel them and fire
+                // their callbacks with `Err` — otherwise awaiting callers hang and
+                // the textures stay pinned in `MappingQueued` forever.
+                for (callback, result) in crate::command::cancel_texture_maps(texture_maps) {
+                    callback(result);
+                }
                 if lose_device_on_error {
                     self.device.lose("submission failed");
                 }
@@ -1835,6 +1895,7 @@ impl Queue {
         &self,
         mut pending_writes: MutexGuard<'_, PendingWrites>,
         prepared: PendingSubmission<'a>,
+        textures_to_map: &mut Vec<Arc<Texture>>,
     ) -> Result<SubmissionResult<'a>, DeviceError> {
         let PendingSubmission {
             queue: _,
@@ -1927,9 +1988,10 @@ impl Queue {
                 .last_successful_submission_index
                 .fetch_max(submit_index, Ordering::SeqCst);
         }
-
         // this will register the new submission to the life time tracker
-        self.lock_life().track_submission(submit_index, executions);
+        let mut life = self.lock_life();
+        life.track_submission(submit_index, executions);
+        life.register_texture_maps(mem::take(textures_to_map));
 
         // `device.maintain` relies on being able to prevent new submissions by
         // using `command_index_guard` while also checking whether there are
@@ -2125,6 +2187,25 @@ fn validate_command_buffer(
         {
             profiling::scope!("textures");
             for texture in cmd_buf_data.trackers.textures.used_resources() {
+                match &*texture.map_state.lock() {
+                    TextureMapState::Mapped(_) => {
+                        return Err(QueueSubmitError::TextureStillMapped(texture.error_ident()));
+                    }
+                    TextureMapState::MappingQueued(_) => {
+                        // Allow only if this command buffer is the one that queued
+                        // the mapping (its encoded_texture_maps contains this texture).
+                        let is_own_map = cmd_buf_data
+                            .encoded_texture_maps
+                            .iter()
+                            .any(|t| Arc::ptr_eq(t, texture));
+                        if !is_own_map {
+                            return Err(QueueSubmitError::TextureStillMapped(
+                                texture.error_ident(),
+                            ));
+                        }
+                    }
+                    TextureMapState::Unmapped => {}
+                }
                 let should_extend = match texture.try_inner(snatch_guard)? {
                     TextureInner::Native { .. } => false,
                     TextureInner::Surface { .. } => {

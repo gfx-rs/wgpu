@@ -98,6 +98,7 @@ async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bo
             format: TextureFormat::Rgba8Unorm,
             usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
+            mapped_at_creation: false,
         });
 
         ctx.queue.write_texture(
@@ -136,6 +137,7 @@ async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bo
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::STORAGE_BINDING | TextureUsages::COPY_SRC,
         view_formats: &[],
+        mapped_at_creation: false,
     });
 
     let output_view = output_texture.create_view(&TextureViewDescriptor::default());

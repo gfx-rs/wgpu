@@ -957,6 +957,7 @@ pub struct Texture {
     mip_level_count: u32,
     sample_count: u32,
     allocation: suballocation::Allocation,
+    host_visible: bool,
     /// Pins `PlaneSlice` for every view and copy derived from this texture,
     /// overriding the default aspect-based derivation. Used by cross-API
     /// importers wrapping one plane of a multi-plane DXGI resource as a
@@ -1642,6 +1643,7 @@ impl crate::Surface for Surface {
                 suballocation::AllocationType::Texture,
                 sc.format.theoretical_memory_footprint(sc.size),
             ),
+            host_visible: false,
             plane_slice_override: None,
         };
         Ok(crate::AcquiredSurfaceTexture {

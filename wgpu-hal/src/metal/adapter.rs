@@ -391,7 +391,18 @@ impl crate::Adapter for super::Adapter {
             }
         };
 
-        Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | Tfc::STORAGE_READ_ONLY | extra
+        // Host copy works on UMA for single-aspect formats. Combined
+        // depth-stencil is excluded (see `Device::copy_*`); NV12/P010 already
+        // returned `Tfc::empty()` above.
+        let host_copy_if = if self.shared.private_caps.has_unified_memory == Some(true)
+            && !format.is_combined_depth_stencil_format()
+        {
+            Tfc::HOST_COPY
+        } else {
+            Tfc::empty()
+        };
+
+        Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | Tfc::STORAGE_READ_ONLY | extra | host_copy_if
     }
 
     unsafe fn surface_capabilities(
@@ -1329,6 +1340,8 @@ impl super::CapabilitiesQuery {
         features.set(F::EXPERIMENTAL_RAY_QUERY, self.supports_raytracing);
 
         features.set(F::MULTISAMPLE_ARRAY, self.supports_multisample_array);
+
+        features.set(F::HOST_IMAGE_COPY, self.has_unified_memory == Some(true));
 
         features
     }

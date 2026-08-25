@@ -72,6 +72,7 @@ static USED_EMPTY_OCCLUSION_RESOLVES_TO_ZERO: GpuTestConfiguration = GpuTestConf
                 format: TextureFormat::Rgba8Unorm,
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                mapped_at_creation: false,
             })
             .create_view(&TextureViewDescriptor::default());
 
@@ -477,6 +478,7 @@ fn create_occlusion_render_resources(ctx: &TestingContext) -> (TextureView, Rend
             format: TextureFormat::Rgba8Unorm,
             usage: TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            mapped_at_creation: false,
         })
         .create_view(&TextureViewDescriptor::default());
     let shader = ctx.device.create_shader_module(ShaderModuleDescriptor {

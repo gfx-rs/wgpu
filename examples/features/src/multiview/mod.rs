@@ -74,6 +74,7 @@ impl crate::framework::Example for Example {
                 | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            mapped_at_creation: false,
         });
         let entire_texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: None,

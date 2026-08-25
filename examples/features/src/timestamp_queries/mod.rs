@@ -376,6 +376,7 @@ fn render_pass(
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[format],
+        mapped_at_creation: false,
     });
     let render_target_view = render_target.create_view(&wgpu::TextureViewDescriptor::default());
 

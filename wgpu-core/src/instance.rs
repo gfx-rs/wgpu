@@ -1097,6 +1097,10 @@ impl Adapter {
         allowed_usages.set(wgt::TextureUsages::COPY_SRC, caps.contains(Tfc::COPY_SRC));
         allowed_usages.set(wgt::TextureUsages::COPY_DST, caps.contains(Tfc::COPY_DST));
         allowed_usages.set(
+            wgt::TextureUsages::HOST_VISIBLE,
+            caps.contains(Tfc::HOST_COPY),
+        );
+        allowed_usages.set(
             wgt::TextureUsages::TEXTURE_BINDING,
             caps.contains(Tfc::SAMPLED),
         );

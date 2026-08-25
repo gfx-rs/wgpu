@@ -1088,6 +1088,7 @@ impl Device {
                 user_closures.submissions,
                 user_closures.mappings,
                 user_closures.blas_compact_ready,
+                user_closures.texture_map_closures,
                 queue_empty,
             ) = queue_result;
             // DEADLOCK PREVENTION: We must drop `snatch_guard` before `queue` goes out of scope.
@@ -1904,6 +1905,46 @@ impl Device {
             }
         }
 
+        if desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
+            let incompatible = wgt::TextureUsages::TRANSIENT_ATTACHMENT;
+            let bad = desc.usage & incompatible;
+            if !bad.is_empty() {
+                return Err(CreateTextureError::IncompatibleUsage(
+                    wgt::TextureUsages::HOST_VISIBLE,
+                    bad,
+                ));
+            }
+            if desc.sample_count > 1 {
+                return Err(CreateTextureError::HostVisibleMultisampled(
+                    desc.sample_count,
+                ));
+            }
+            // Every aspect needs a host-copyable block size, else zero-init can't
+            // represent it. Rejects `Depth24Plus`/`Depth24PlusStencil8` (no
+            // defined depth layout).
+            for aspect in hal::FormatAspects::from(desc.format).iter() {
+                if desc.format.block_copy_size(Some(aspect.map())).is_none() {
+                    return Err(CreateTextureError::HostVisibleUnsupportedFormat(
+                        desc.format,
+                    ));
+                }
+            }
+            // Host-copy support is per-format on some backends (e.g. Vulkan),
+            // so reject unsupported formats here instead of failing in the backend.
+            if !self
+                .adapter
+                .get_texture_format_features(desc.format)
+                .allowed_usages
+                .contains(wgt::TextureUsages::HOST_VISIBLE)
+            {
+                return Err(CreateTextureError::HostVisibleUnsupportedFormat(
+                    desc.format,
+                ));
+            }
+            self.require_features(wgt::Features::HOST_IMAGE_COPY)
+                .map_err(|e| CreateTextureError::MissingFeatures(desc.format, e))?;
+        }
+
         let format_features = self
             .describe_format_features(desc.format)
             .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
@@ -1967,6 +2008,10 @@ impl Device {
             };
         }
 
+        // HOST_VISIBLE is validated separately above (requires HOST_IMAGE_COPY feature).
+        // Exclude it here so format-level allowed_usages checks don't reject it.
+        let usage_to_check = desc.usage - wgt::TextureUsages::HOST_VISIBLE;
+
         let missing_allowed_usages = match desc.format.planes() {
             Some(planes) => {
                 let mut planes_usages = wgt::TextureUsages::all();
@@ -1980,9 +2025,9 @@ impl Device {
                     planes_usages &= format_features.allowed_usages;
                 }
 
-                desc.usage - planes_usages
+                usage_to_check - planes_usages
             }
-            None => desc.usage - format_features.allowed_usages,
+            None => usage_to_check - format_features.allowed_usages,
         };
 
         if !missing_allowed_usages.is_empty() {
@@ -1997,6 +2042,10 @@ impl Device {
                 desc.format,
                 wgpu_missing_usages.is_empty(),
             ));
+        }
+
+        if desc.mapped_at_creation && !desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
+            return Err(CreateTextureError::MappedAtCreationRequiresHostVisible);
         }
 
         let mut hal_view_formats = Vec::new();
@@ -2034,6 +2083,7 @@ impl Device {
             usage: hal_usage,
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: hal_view_formats,
+            mapped_at_creation: desc.mapped_at_creation,
         };
 
         let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
@@ -2112,10 +2162,17 @@ impl Device {
 
         let texture = Arc::new(texture);
 
-        self.trackers
-            .lock()
-            .textures
-            .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
+        if desc.mapped_at_creation {
+            *texture.map_state.lock() = resource::TextureMapState::Mapped(Arc::new(()));
+        }
+
+        let state = if desc.mapped_at_creation {
+            wgt::TextureUses::HOST_COPY
+        } else {
+            wgt::TextureUses::UNINITIALIZED
+        };
+
+        self.trackers.lock().textures.insert_single(&texture, state);
 
         Ok(texture)
     }

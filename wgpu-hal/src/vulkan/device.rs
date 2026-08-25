@@ -393,6 +393,14 @@ impl super::Device {
                 vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
         }
 
+        // Don't request HOST_TRANSFER_EXT if the extension functions are missing
+        // (e.g. a driver that advertises the extension but can't load them).
+        let effective_usage = if self.shared.extension_fns.host_image_copy.is_none() {
+            desc.usage - wgt::TextureUses::HOST_COPY
+        } else {
+            desc.usage
+        };
+
         let mut vk_info = vk::ImageCreateInfo::default()
             .flags(raw_flags)
             .image_type(conv::map_texture_dimension(desc.dimension))
@@ -402,7 +410,7 @@ impl super::Device {
             .array_layers(desc.array_layer_count())
             .samples(vk::SampleCountFlags::from_raw(desc.sample_count))
             .tiling(tiling)
-            .usage(conv::map_texture_usage(desc.usage))
+            .usage(conv::map_texture_usage(effective_usage))
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .initial_layout(vk::ImageLayout::UNDEFINED);
 
@@ -1213,6 +1221,31 @@ impl crate::Device for super::Device {
             unsafe { self.shared.raw.destroy_image(image.raw, None) };
         })?;
 
+        if desc.mapped_at_creation {
+            let range = vk::ImageSubresourceRange::default()
+                .aspect_mask(conv::map_aspects(crate::FormatAspects::from(desc.format)))
+                .base_mip_level(0)
+                .level_count(desc.mip_level_count)
+                .base_array_layer(0)
+                .layer_count(desc.array_layer_count());
+            unsafe {
+                self.shared
+                    .extension_fns
+                    .host_image_copy
+                    .as_ref()
+                    .unwrap()
+                    .transition_image_layout(&[vk::HostImageLayoutTransitionInfoEXT::default()
+                        .image(image.raw)
+                        .subresource_range(range)
+                        .old_layout(vk::ImageLayout::UNDEFINED)
+                        .new_layout(vk::ImageLayout::GENERAL)])
+                    .map_err(super::map_host_device_oom_err)
+                    .inspect_err(|_| {
+                        self.shared.raw.destroy_image(image.raw, None);
+                    })?;
+            }
+        }
+
         Ok(unsafe {
             self.texture_from_raw(
                 image.raw,
@@ -1247,6 +1280,124 @@ impl crate::Device for super::Device {
 
     unsafe fn add_raw_texture(&self, _texture: &super::Texture) {
         self.counters.textures.add(1);
+    }
+
+    unsafe fn copy_memory_to_texture<T>(
+        &self,
+        src: &[u8],
+        dst: &<Self::A as crate::Api>::Texture,
+        regions: T,
+    ) -> Result<(), crate::DeviceError>
+    where
+        T: Iterator<Item = crate::HostTextureCopy>,
+    {
+        let mut vk_regions = smallvec::SmallVec::<[vk::MemoryToImageCopyEXT; 32]>::new();
+        let (block_width, block_height) = dst.format.block_dimensions();
+        for copy in regions {
+            let (image_subresource, image_offset) =
+                conv::map_subresource_layers(&copy.texture_base);
+            let region = vk::MemoryToImageCopyEXT::default()
+                .host_pointer(unsafe {
+                    src.as_ptr()
+                        .byte_add(copy.host_layout.offset as usize)
+                        .cast()
+                })
+                .image_extent(conv::map_copy_extent(&copy.size))
+                .image_offset(image_offset)
+                .image_subresource(image_subresource)
+                .memory_image_height(
+                    copy.host_layout
+                        .rows_per_image
+                        .map_or(0, |rpi| rpi * block_height),
+                )
+                .memory_row_length(copy.host_layout.bytes_per_row.map_or(0, |bpr| {
+                    let block_size = dst
+                        .format
+                        .block_copy_size(Some(copy.texture_base.aspect.map()))
+                        .unwrap();
+                    debug_assert_eq!(
+                        bpr % block_size,
+                        0,
+                        "bytes_per_row must be a multiple of block size"
+                    );
+                    block_width * (bpr / block_size)
+                }));
+            vk_regions.push(region);
+        }
+
+        let info = vk::CopyMemoryToImageInfoEXT::default()
+            .dst_image(dst.raw)
+            .dst_image_layout(vk::ImageLayout::GENERAL)
+            .regions(&vk_regions);
+        let fns = self
+            .shared
+            .extension_fns
+            .host_image_copy
+            .as_ref()
+            .ok_or(crate::DeviceError::Lost)?;
+        unsafe {
+            fns.copy_memory_to_image(&info)
+                .map_err(super::map_host_device_oom_err)
+        }
+    }
+
+    unsafe fn copy_texture_to_memory<T>(
+        &self,
+        src: &<Self::A as crate::Api>::Texture,
+        dst: &mut [u8],
+        regions: T,
+    ) -> Result<(), crate::DeviceError>
+    where
+        T: Iterator<Item = crate::HostTextureCopy>,
+    {
+        let mut vk_regions = smallvec::SmallVec::<[vk::ImageToMemoryCopyEXT; 32]>::new();
+        let (block_width, block_height) = src.format.block_dimensions();
+        for copy in regions {
+            let (image_subresource, image_offset) =
+                conv::map_subresource_layers(&copy.texture_base);
+            let region = vk::ImageToMemoryCopyEXT::default()
+                .host_pointer(unsafe {
+                    dst.as_mut_ptr()
+                        .byte_add(copy.host_layout.offset as usize)
+                        .cast()
+                })
+                .image_extent(conv::map_copy_extent(&copy.size))
+                .image_offset(image_offset)
+                .image_subresource(image_subresource)
+                .memory_image_height(
+                    copy.host_layout
+                        .rows_per_image
+                        .map_or(0, |rpi| rpi * block_height),
+                )
+                .memory_row_length(copy.host_layout.bytes_per_row.map_or(0, |bpr| {
+                    let block_size = src
+                        .format
+                        .block_copy_size(Some(copy.texture_base.aspect.map()))
+                        .unwrap();
+                    debug_assert_eq!(
+                        bpr % block_size,
+                        0,
+                        "bytes_per_row must be a multiple of block size"
+                    );
+                    block_width * (bpr / block_size)
+                }));
+            vk_regions.push(region);
+        }
+
+        let info = vk::CopyImageToMemoryInfoEXT::default()
+            .src_image(src.raw)
+            .src_image_layout(vk::ImageLayout::GENERAL)
+            .regions(&vk_regions);
+        let fns = self
+            .shared
+            .extension_fns
+            .host_image_copy
+            .as_ref()
+            .ok_or(crate::DeviceError::Lost)?;
+        unsafe {
+            fns.copy_image_to_memory(&info)
+                .map_err(super::map_host_device_oom_err)
+        }
     }
 
     unsafe fn create_texture_view(

@@ -497,6 +497,11 @@ impl super::Adapter {
         }
 
         features.set(
+            wgt::Features::HOST_IMAGE_COPY,
+            features_architecture.UMA.into(),
+        );
+
+        features.set(
             wgt::Features::CONSERVATIVE_RASTERIZATION,
             options.ConservativeRasterizationTier
                 != Direct3D12::D3D12_CONSERVATIVE_RASTERIZATION_TIER_NOT_SUPPORTED,
@@ -1280,6 +1285,16 @@ impl crate::Adapter for super::Adapter {
         set_sample_count(4, Tfc::MULTISAMPLE_X4);
         set_sample_count(8, Tfc::MULTISAMPLE_X8);
         set_sample_count(16, Tfc::MULTISAMPLE_X16);
+
+        // Host copy (`Write`/`ReadFromSubresource`) needs unified memory. Color
+        // only: depth/stencil via these APIs is unreliable and left for later.
+        caps.set(
+            Tfc::HOST_COPY,
+            matches!(
+                self.private_caps.memory_architecture,
+                super::MemoryArchitecture::Unified { .. }
+            ) && !format.is_depth_stencil_format(),
+        );
 
         caps
     }

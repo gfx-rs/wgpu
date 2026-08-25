@@ -203,7 +203,12 @@ impl<'a> DeviceAllocationContext<'a> {
         desc: &crate::TextureDescriptor,
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
-        let location = MemoryLocation::GpuOnly;
+        let location = if desc.usage.contains(wgt::TextureUses::HOST_COPY) {
+            // Corresponds to writeback memory.
+            MemoryLocation::GpuToCpu
+        } else {
+            MemoryLocation::GpuOnly
+        };
         let allocation_info =
             self.error_if_would_oom_on_resource_allocation(&raw_desc, location)?;
 
@@ -460,7 +465,13 @@ impl<'a> DeviceAllocationContext<'a> {
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
         let heap_properties = Direct3D12::D3D12_HEAP_PROPERTIES {
             Type: Direct3D12::D3D12_HEAP_TYPE_CUSTOM,
-            CPUPageProperty: Direct3D12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+            CPUPageProperty: if desc.usage.contains(wgt::TextureUses::HOST_COPY) {
+                // WRITE_BACK gives coherent CPU read+write access required by ReadFromSubresource.
+                // WRITE_COMBINE would be faster for pure uploads but prevents CPU readback.
+                Direct3D12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK
+            } else {
+                Direct3D12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE
+            },
             MemoryPoolPreference: match self.shared.private_caps.memory_architecture {
                 crate::dx12::MemoryArchitecture::NonUnified => Direct3D12::D3D12_MEMORY_POOL_L1,
                 crate::dx12::MemoryArchitecture::Unified { .. } => Direct3D12::D3D12_MEMORY_POOL_L0,

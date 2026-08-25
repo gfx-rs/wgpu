@@ -589,6 +589,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
     where
         T: Iterator<Item = crate::TextureBarrier<'a, super::Texture>>,
     {
+        // HOST_COPY textures are `Shared` storage (coherent on UMA), so no sync
+        // is needed; `synchronizeResource` is `Managed`-only and would abort.
     }
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {

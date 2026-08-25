@@ -585,7 +585,7 @@ bitflags_array! {
     /// https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename).
     #[repr(C)]
     #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct Features: [u64; 2];
+    pub struct Features: [u64; 3];
 
     /// Features that are not guaranteed to be supported.
     ///
@@ -1486,7 +1486,7 @@ bitflags_array! {
         #[name("wgpu-ray-tracing-pipelines")]
         const EXPERIMENTAL_RAY_TRACING_PIPELINES = 1 << 24;
 
-        // Adding a new feature? All bits in the first u64 are used. Use the second u64 (bits 64+).
+        // Adding a new feature? All bits in the first u64 are used. Use `FeaturesWGPU2` (third u64).
     }
 
     /// Features that are not guaranteed to be supported.
@@ -1828,6 +1828,34 @@ bitflags_array! {
         #[name("primitive-index", "shader-primitive-index")]
         const PRIMITIVE_INDEX = WEBGPU_FEATURE_PRIMITIVE_INDEX;
     }
+
+    /// Native-only wgpu extension features that overflow the first u64.
+    ///
+    /// For all features see [`Features`].
+    ///
+    /// If you want to use a feature, you need to first verify that the adapter supports
+    /// the feature. If the adapter does not support the feature, requesting a device with it enabled
+    /// will panic.
+    #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
+    #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    pub struct FeaturesWGPU2 features_wgpu2 {
+        /// Enables creating textures with `TextureUsages::HOST_VISIBLE`.
+        ///
+        /// This is generally only available on UMA systems.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - Metal
+        /// - DX12
+        ///
+        /// This is a native only feature.
+        #[name("wgpu-host-image-copy")]
+        const HOST_IMAGE_COPY = 1 << 0;
+
+        // Adding a new feature? Add it here with the next available bit.
+    }
 }
 
 impl Features {
@@ -1837,6 +1865,7 @@ impl Features {
         Self::from_bits_truncate(FeatureBits([
             FeaturesWGPU::empty().bits(),
             FeaturesWebGPU::all().bits(),
+            FeaturesWGPU2::empty().bits(),
         ]))
     }
 
@@ -1846,6 +1875,7 @@ impl Features {
         Self::from_bits_truncate(FeatureBits([
             FeaturesWGPU::all().bits(),
             FeaturesWebGPU::empty().bits(),
+            FeaturesWGPU2::all().bits(),
         ]))
     }
 
@@ -1861,6 +1891,7 @@ impl Features {
                 | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits(),
             FeaturesWebGPU::empty().bits(),
+            FeaturesWGPU2::empty().bits(),
         ]))
     }
 
@@ -1885,7 +1916,7 @@ impl Features {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Features, FeaturesWGPU, FeaturesWebGPU};
+    use crate::{Features, FeaturesWGPU, FeaturesWGPU2, FeaturesWebGPU};
     use bitflags::{Flag, Flags};
 
     #[cfg(feature = "serde")]
@@ -2059,7 +2090,8 @@ mod tests {
             features,
             Features::from_internal_flags(
                 FeaturesWGPU::TEXTURE_ATOMIC,
-                FeaturesWebGPU::TIMESTAMP_QUERY
+                FeaturesWebGPU::TIMESTAMP_QUERY,
+                FeaturesWGPU2::empty(),
             )
         );
     }

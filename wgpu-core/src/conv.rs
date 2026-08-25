@@ -133,6 +133,10 @@ pub fn map_texture_usage(
         wgt::TextureUses::TRANSIENT,
         usage.contains(wgt::TextureUsages::TRANSIENT_ATTACHMENT),
     );
+    u.set(
+        wgt::TextureUses::HOST_COPY,
+        usage.contains(wgt::TextureUsages::HOST_VISIBLE),
+    );
     u
 }
 
@@ -147,13 +151,17 @@ pub fn map_texture_usage_for_texture(
             wgt::TextureUses::DEPTH_STENCIL_WRITE
         } else if desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             wgt::TextureUses::COPY_DST // (set already)
+        } else if desc.usage.contains(wgt::TextureUsages::HOST_VISIBLE) {
+            // COPY_DST so GPU zero-init (`clear_texture`) can clear layers that
+            // were never written from the host; HOST_COPY isn't a clear target.
+            wgt::TextureUses::COPY_DST
         } else {
-            // Use COPY_DST only if we can't use COLOR_TARGET
+            // Use COLOR_TARGET for initialization if available, else COPY_DST.
             if format_features
                 .allowed_usages
                 .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+                // Render targets dimension must be 2d
                 && desc.dimension == wgt::TextureDimension::D2
-            // Render targets dimension must be 2d
             {
                 wgt::TextureUses::COLOR_TARGET
             } else {

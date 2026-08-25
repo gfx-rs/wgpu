@@ -17,6 +17,7 @@ mod compute_command;
 mod draw;
 mod encoder;
 mod encoder_command;
+mod map_texture;
 mod memory_init;
 mod pass;
 mod query;
@@ -54,6 +55,7 @@ pub use self::{
     compute_command::ArcComputeCommand,
     draw::{DrawError, Rect, RenderCommandError},
     encoder_command::{ArcCommand, ArcReferences, Command, ReferenceType},
+    map_texture::MapTextureOnCompletionError,
     query::{QueryError, QueryUseError, ResolveError, SimplifiedQueryType},
     render::{
         AttachmentError, AttachmentErrorLocation, ColorAttachmentError, ColorAttachments, LoadOp,
@@ -69,6 +71,7 @@ pub use self::{
 pub(crate) use self::{
     clear::clear_texture,
     encoder::EncodingState,
+    map_texture::cancel_texture_maps,
     memory_init::CommandBufferTextureMemoryActions,
     render::{get_dst_stride_of_indirect_args, get_src_stride_of_indirect_args, VertexState},
     transfer::{
@@ -427,6 +430,18 @@ impl CommandEncoderStatus {
         });
         err
     }
+
+    /// Drain the textures this encoder queued for host-mapping, to cancel them
+    /// if the encoder/command buffer is dropped before the map is registered.
+    fn take_pending_texture_maps(&mut self) -> Vec<Arc<crate::resource::Texture>> {
+        let cmd_buf_data = match self {
+            Self::Recording(d) | Self::Locked(d) | Self::Finished(d) => d,
+            Self::Consumed | Self::Error(_) | Self::Transitioning => return Vec::new(),
+        };
+        let mut textures = mem::take(&mut cmd_buf_data.pending_texture_maps);
+        textures.append(&mut cmd_buf_data.encoded_texture_maps);
+        textures
+    }
 }
 
 /// A guard to enforce error reporting, for a [`CommandBuffer`] in the [`Recording`] state.
@@ -527,6 +542,11 @@ impl Drop for CommandEncoder {
         profiling::scope!("CommandEncoder::drop");
         api_log!("CommandEncoder::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
+        // Cancel host-maps queued into this never-submitted encoder.
+        let textures = self.data.lock().take_pending_texture_maps();
+        for (callback, result) in cancel_texture_maps(textures) {
+            callback(result);
+        }
     }
 }
 
@@ -819,6 +839,9 @@ pub(crate) struct BakedCommands {
     pub(crate) trackers: Tracker,
     pub(crate) temp_resources: Vec<TempResource>,
     pub(crate) indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
+    /// Textures that had `map_texture_on_completion` encoded; moved here from
+    /// `CommandBufferMutable` so queue submit can register them with the life tracker.
+    pub(crate) encoded_texture_maps: Vec<Arc<crate::resource::Texture>>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
     pub(crate) query_set_writes: query::QuerySetWrites,
@@ -852,6 +875,13 @@ pub struct CommandBufferMutable {
 
     pub(crate) commands: Vec<Command<ArcReferences>>,
 
+    /// Textures queued by `map_texture_on_completion`, encoded to `HOST_COPY`
+    /// at the end of recording.
+    pub(crate) pending_texture_maps: Vec<Arc<crate::resource::Texture>>,
+    /// Those already encoded (moved here by `finish`). Queue submit uses this to
+    /// allow their `MappingQueued` state only for this command buffer.
+    pub(crate) encoded_texture_maps: Vec<Arc<crate::resource::Texture>>,
+
     /// If tracing, `command_encoder_finish` replaces the `Arc`s in `commands`
     /// with integer pointers, and moves them into `trace_commands`.
     #[cfg(feature = "trace")]
@@ -870,6 +900,7 @@ impl CommandBufferMutable {
             trackers: self.trackers,
             temp_resources: self.temp_resources,
             indirect_draw_validation_resources: self.indirect_draw_validation_resources,
+            encoded_texture_maps: self.encoded_texture_maps,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
             texture_memory_actions: self.texture_memory_actions,
             query_set_writes: self.query_set_writes,
@@ -898,6 +929,11 @@ impl Drop for CommandBuffer {
         profiling::scope!("CommandBuffer::drop");
         api_log!("CommandBuffer::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
+        // Cancel host-maps left queued by a finished-but-never-submitted buffer.
+        let textures = self.data.lock().take_pending_texture_maps();
+        for (callback, result) in cancel_texture_maps(textures) {
+            callback(result);
+        }
     }
 }
 
@@ -932,6 +968,8 @@ impl CommandEncoder {
                     indirect_draw_validation_resources:
                         crate::indirect_validation::DrawResources::new(device.clone()),
                     commands: Vec::new(),
+                    pending_texture_maps: Vec::new(),
+                    encoded_texture_maps: Vec::new(),
                     query_set_writes: Default::default(),
                     deferred_query_set_resolves: Default::default(),
                     #[cfg(feature = "trace")]
@@ -1300,6 +1338,33 @@ impl CommandEncoder {
             ))?;
         }
 
+        // Encode map-on-completion after all other commands. Iterate over clones
+        // so a mid-loop failure leaves every texture in `pending_texture_maps`
+        // for the caller / `Drop` to cancel, rather than dropping them here.
+        for texture in cmd_buf_data.pending_texture_maps.clone() {
+            let raw_encoder = cmd_buf_data.encoder.open_if_closed()?;
+            let mut state = EncodingState {
+                device,
+                raw_encoder,
+                tracker: &mut cmd_buf_data.trackers,
+                buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
+                texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
+                as_actions: &mut cmd_buf_data.as_actions,
+                temp_resources: &mut cmd_buf_data.temp_resources,
+                indirect_draw_validation_resources: &mut cmd_buf_data
+                    .indirect_draw_validation_resources,
+                snatch_guard: &snatch_guard,
+                debug_scope_depth: &mut debug_scope_depth,
+                query_set_writes: &mut cmd_buf_data.query_set_writes,
+                deferred_query_set_resolves: &mut cmd_buf_data.deferred_query_set_resolves,
+            };
+            map_texture::encode_map_texture_on_completion(&mut state, texture)?;
+        }
+        // All encoded; move them to the "belongs to this command buffer" list.
+        cmd_buf_data
+            .encoded_texture_maps
+            .append(&mut cmd_buf_data.pending_texture_maps);
+
         // Close the encoder, unless it was closed already by a render or compute pass.
         cmd_buf_data.encoder.close_if_open()?;
 
@@ -1317,17 +1382,23 @@ impl CommandEncoder {
     ) -> (Arc<CommandBuffer>, Option<CommandEncoderError>) {
         profiling::scope!("CommandEncoder::finish");
 
-        let status = self.data.lock().finish();
+        // Queued host-maps to cancel (after releasing the lock) if recording fails.
+        let mut cancelled_texture_maps = Vec::new();
 
-        let res = match status {
+        let mut cmd_enc_status = self.data.lock();
+        let res = match cmd_enc_status.finish() {
             CommandEncoderStatus::Finished(mut cmd_buf_data) => {
                 match Self::encode_commands(&self.device, &mut cmd_buf_data) {
                     Ok(()) => Ok(cmd_buf_data),
-                    Err(error) => Err(EncoderErrorState {
-                        error,
-                        #[cfg(feature = "trace")]
-                        trace_commands: mem::take(&mut cmd_buf_data.trace_commands),
-                    }),
+                    Err(error) => {
+                        cancelled_texture_maps = mem::take(&mut cmd_buf_data.pending_texture_maps);
+                        cancelled_texture_maps.append(&mut cmd_buf_data.encoded_texture_maps);
+                        Err(EncoderErrorState {
+                            error,
+                            #[cfg(feature = "trace")]
+                            trace_commands: mem::take(&mut cmd_buf_data.trace_commands),
+                        })
+                    }
                 }
             }
             CommandEncoderStatus::Error(error_state) => Err(error_state),
@@ -1371,6 +1442,12 @@ impl CommandEncoder {
             label: desc.label.to_string(),
             data: Mutex::new(rank::COMMAND_BUFFER_DATA, data),
         });
+
+        // Fire cancelled host-map callbacks outside the encoder lock.
+        drop(cmd_enc_status);
+        for (callback, result) in cancel_texture_maps(cancelled_texture_maps) {
+            callback(result);
+        }
 
         (cmd_buf, error)
     }
@@ -1656,6 +1733,8 @@ pub enum CommandEncoderError {
     #[error(transparent)]
     TransitionResources(#[from] TransitionResourcesError),
     #[error(transparent)]
+    MapTextureOnCompletion(#[from] MapTextureOnCompletionError),
+    #[error(transparent)]
     ComputePass(#[from] ComputePassError),
     #[error(transparent)]
     RenderPass(#[from] RenderPassError),
@@ -1710,6 +1789,7 @@ impl WebGpuError for CommandEncoderError {
             Self::Query(e) => e.webgpu_error_type(),
             Self::BuildAccelerationStructure(e) => e.webgpu_error_type(),
             Self::TransitionResources(e) => e.webgpu_error_type(),
+            Self::MapTextureOnCompletion(e) => e.webgpu_error_type(),
             Self::ResourceUsage(e) => e.webgpu_error_type(),
             Self::ComputePass(e) => e.webgpu_error_type(),
             Self::RenderPass(e) => e.webgpu_error_type(),

@@ -173,10 +173,21 @@ impl RenderPassContext {
 
 pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
 
+#[cfg(send_sync)]
+pub type TextureMapClosure = Box<dyn FnOnce(Result<(), DeviceError>) + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type TextureMapClosure = Box<dyn FnOnce(Result<(), DeviceError>) + 'static>;
+
+/// A texture-map callback paired with the result to fire it with. Like
+/// [`BufferMapPendingClosure`], it is always invoked once the map resolves
+/// (`Ok` on completion, `Err` on device loss) so callers never hang.
+pub type TextureMapPendingClosure = (TextureMapClosure, Result<(), DeviceError>);
+
 #[derive(Default)]
 pub struct UserClosures {
     pub mappings: Vec<BufferMapPendingClosure>,
     pub blas_compact_ready: Vec<BlasCompactReadyPendingClosure>,
+    pub texture_map_closures: Vec<TextureMapPendingClosure>,
     pub submissions: SmallVec<[queue::SubmittedWorkDoneClosure; 1]>,
     pub device_lost_invocations: SmallVec<[DeviceLostInvocation; 1]>,
 }
@@ -185,6 +196,7 @@ impl UserClosures {
     pub(crate) fn extend(&mut self, other: Self) {
         self.mappings.extend(other.mappings);
         self.blas_compact_ready.extend(other.blas_compact_ready);
+        self.texture_map_closures.extend(other.texture_map_closures);
         self.submissions.extend(other.submissions);
         self.device_lost_invocations
             .extend(other.device_lost_invocations);
@@ -205,6 +217,9 @@ impl UserClosures {
             if let Some(callback) = operation.take() {
                 callback(status);
             }
+        }
+        for (closure, status) in self.texture_map_closures {
+            closure(status);
         }
         for closure in self.submissions {
             closure();
@@ -369,6 +384,38 @@ impl DeviceError {
             hal::DeviceError::Lost => Self::Lost,
             hal::DeviceError::OutOfMemory => Self::OutOfMemory,
             hal::DeviceError::Unexpected => Self::Lost,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum HostTextureCopyError {
+    #[error(transparent)]
+    InvalidResource(#[from] crate::resource::InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(#[from] crate::resource::DestroyedResourceError),
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
+    #[error(transparent)]
+    Transfer(#[from] crate::command::TransferError),
+    #[error("Texture is not mapped")]
+    NotMapped,
+    #[error("Cannot unmap texture while MappedTexture handles still exist")]
+    MappedHandlesExist,
+}
+
+impl WebGpuError for HostTextureCopyError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::Transfer(e) => e.webgpu_error_type(),
+            Self::NotMapped | Self::MappedHandlesExist => ErrorType::Validation,
         }
     }
 }
