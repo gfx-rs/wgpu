@@ -1,11 +1,13 @@
 use wgpu_core::Label;
-use wgpu_core_remote_types::encoders::{CommandEncoderCommand, DebugCommand};
+use wgpu_core_remote_types::encoders::{
+    CommandEncoderCommand, DebugCommand, TexelCopyBufferInfo, TexelCopyTextureInfo,
+};
 use wgt::{BufferAddress, Extent3d, ImageSubresourceRange};
 
 use crate::global::Global;
 use crate::hub::Hub;
+use crate::id;
 use crate::id::{BufferId, CommandEncoderId, TextureId};
-use crate::{id, TexelCopyBufferInfo};
 
 impl Global {
     /// Finishes a command encoder, creating a command buffer and returning errors that were
@@ -141,7 +143,7 @@ impl Global {
         &self,
         command_encoder_id: CommandEncoderId,
         source: &TexelCopyBufferInfo,
-        destination: &wgt::TexelCopyTextureInfo<TextureId>,
+        destination: &TexelCopyTextureInfo,
         copy_size: &Extent3d,
     ) {
         let hub = self.hub.borrow();
@@ -162,7 +164,7 @@ impl Global {
     pub fn command_encoder_copy_texture_to_buffer(
         &self,
         command_encoder_id: CommandEncoderId,
-        source: &wgt::TexelCopyTextureInfo<TextureId>,
+        source: &TexelCopyTextureInfo,
         destination: &TexelCopyBufferInfo,
         copy_size: &Extent3d,
     ) {
@@ -185,8 +187,8 @@ impl Global {
     pub fn command_encoder_copy_texture_to_texture(
         &self,
         command_encoder_id: CommandEncoderId,
-        source: &wgt::TexelCopyTextureInfo<TextureId>,
-        destination: &wgt::TexelCopyTextureInfo<TextureId>,
+        source: &TexelCopyTextureInfo,
+        destination: &TexelCopyTextureInfo,
         copy_size: &Extent3d,
     ) {
         let hub = self.hub.borrow();

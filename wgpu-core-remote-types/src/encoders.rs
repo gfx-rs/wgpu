@@ -3,6 +3,8 @@ use alloc::borrow::Cow;
 use crate::ffi::FfiOption;
 use crate::{assert_ffi_safe, id, Label};
 
+pub type TexelCopyBufferInfo = wgt::TexelCopyBufferInfo<id::BufferId>;
+pub type TexelCopyTextureInfo = wgt::TexelCopyTextureInfo<id::TextureId>;
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 pub type CommandBufferDescriptor<'a> = wgt::CommandBufferDescriptor<Label<'a>>;
 
