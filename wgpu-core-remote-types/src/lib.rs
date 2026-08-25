@@ -30,3 +30,19 @@ pub mod encoders;
 pub mod ffi;
 
 pub type Label<'a> = Option<Cow<'a, str>>;
+
+/// Options for requesting adapter.
+///
+/// Corresponds to [WebGPU `GPURequestAdapterOptions`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions).
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct RequestAdapterOptions {
+    /// Power preference for the adapter.
+    pub power_preference: wgt::PowerPreference,
+    /// Indicates that only a fallback adapter can be returned. This is generally a "software"
+    /// implementation on the system.
+    pub force_fallback_adapter: bool,
+}
+
+assert_ffi_safe!(RequestAdapterOptions);
