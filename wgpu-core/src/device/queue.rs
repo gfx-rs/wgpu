@@ -2045,6 +2045,7 @@ impl Queue {
         let mut size_info = blas.size_info;
         size_info.acceleration_structure_size = size;
 
+        let mut command_indices_lock = device.command_indices.write();
         let mut pending_writes = self.pending_writes.lock();
         let cmd_buf_raw = pending_writes.activate();
 
@@ -2076,9 +2077,6 @@ impl Queue {
                 .get_acceleration_structure_device_address(raw.as_ref())
         };
 
-        drop(snatch_guard);
-
-        let mut command_indices_lock = device.command_indices.write();
         command_indices_lock.next_acceleration_structure_build_command_index += 1;
         let built_index =
             NonZeroU64::new(command_indices_lock.next_acceleration_structure_build_command_index)
