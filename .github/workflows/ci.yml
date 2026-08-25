@@ -356,6 +356,9 @@ jobs:
           # If we don't check this then errors inside `profiling::scope!()` will not be caught.
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features --features test-build-with-profiling
 
+          # Check Naga's GLSL frontend in isolation to catch missing feature/dependency activations.
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features glsl-in
+
           # Check wgpu-hal with main backends in isolation to catch missing feature/dependencies activations which may be overlooked when they are dragged in via other features.
           # (best effort: in theory we'd need to test all combinations)
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features vulkan
