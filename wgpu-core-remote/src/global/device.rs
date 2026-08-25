@@ -1,7 +1,8 @@
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::ptr::NonNull;
 use wgpu_core_remote_types::{
-    encoders::RenderBundleDescriptor, pipelines::ComputePipelineDescriptor,
+    encoders::RenderBundleDescriptor,
+    pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
 };
 
 use wgpu_core::{
@@ -29,13 +30,6 @@ use crate::{
 use wgt::{error::WebGpuError, BufferAddress};
 
 pub use wgpu_core_remote_types::binding_model::*;
-
-pub type RenderPipelineDescriptor<'a> = pipeline::RenderPipelineDescriptor<
-    'a,
-    id::PipelineLayoutId,
-    id::ShaderModuleId,
-    id::PipelineCacheId,
->;
 
 impl Global {
     pub fn device_features(&self, device_id: DeviceId) -> wgt::Features {
@@ -779,7 +773,6 @@ impl Global {
             devices,
             shader_modules,
             pipeline_layouts,
-            pipeline_caches,
             ..
         } = &mut *hub;
 
@@ -787,22 +780,28 @@ impl Global {
 
         let layout = desc.layout.map(|layout| pipeline_layouts.get(layout));
 
-        let cache = desc.cache.map(|cache| pipeline_caches.get(cache));
-
         let vertex = {
             let module = shader_modules.get(desc.vertex.stage.module);
             let stage = ProgrammableStageDescriptor {
                 module,
                 entry_point: desc.vertex.stage.entry_point.clone(),
                 constants: desc.vertex.stage.constants.clone(),
-                zero_initialize_workgroup_memory: desc
-                    .vertex
-                    .stage
-                    .zero_initialize_workgroup_memory,
+                zero_initialize_workgroup_memory: true,
             };
             RenderPipelineVertexProcessor::Vertex(pipeline::VertexState {
                 stage,
-                buffers: desc.vertex.buffers.clone(),
+                buffers: desc
+                    .vertex
+                    .buffers
+                    .iter()
+                    .map(|v| {
+                        v.as_ref().map(|v| pipeline::VertexBufferLayout {
+                            array_stride: v.array_stride,
+                            step_mode: v.step_mode,
+                            attributes: v.attributes.clone(),
+                        })
+                    })
+                    .collect(),
             })
         };
 
@@ -813,7 +812,7 @@ impl Global {
                 module,
                 entry_point: state.stage.entry_point.clone(),
                 constants: state.stage.constants.clone(),
-                zero_initialize_workgroup_memory: state.stage.zero_initialize_workgroup_memory,
+                zero_initialize_workgroup_memory: true,
             };
             Some(pipeline::FragmentState {
                 stage,
@@ -831,8 +830,8 @@ impl Global {
             depth_stencil: desc.depth_stencil.clone(),
             multisample: desc.multisample,
             fragment,
-            multiview_mask: desc.multiview_mask,
-            cache,
+            multiview_mask: None,
+            cache: None,
         };
 
         let (pipeline, error) = device.create_render_pipeline(desc);
