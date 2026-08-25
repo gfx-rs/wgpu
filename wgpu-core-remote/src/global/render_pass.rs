@@ -4,7 +4,7 @@ use wgpu_core_remote_types::encoders::{
 };
 
 use wgpu_core::command::{
-    PassTimestampWrites, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
+    PassTimestampWrites, RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
     ResolvedRenderPassDescriptor,
 };
 use wgpu_core_remote_types::ffi::FfiOption;
@@ -108,9 +108,9 @@ impl Global {
         pass.end()
     }
 
-    pub fn render_pass_drop(&self, pass: id::RenderPassEncoderId) {
+    pub fn render_pass_remove(&self, pass: id::RenderPassEncoderId) -> RenderPass {
         let mut hub = self.hub.borrow_mut();
-        hub.render_passes.remove(pass);
+        hub.render_passes.remove(pass)
     }
 }
 
