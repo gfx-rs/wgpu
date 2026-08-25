@@ -27,3 +27,4 @@ targets = [
 [dependencies]
 wgpu-types = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
+hashbrown = { workspace = true }
