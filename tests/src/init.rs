@@ -202,6 +202,7 @@ pub async fn initialize_device(
             label: None,
             required_features: features,
             required_limits: limits,
+            default_queue: wgpu::QueueDescriptor { label: None },
             experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
@@ -259,17 +260,11 @@ impl SurfaceGuard {
 
 /// [`raw_window_handle::HasDisplayHandle`] implementation for Web that's [`Send`]+[`Sync`]
 /// because it doesn't own any pointers
-#[cfg(all(
-    target_arch = "wasm32",
-    any(target_os = "emscripten", feature = "webgl")
-))]
+#[cfg(target_arch = "wasm32")]
 #[derive(Debug)]
-struct WebDisplayHandle;
+pub struct WebDisplayHandle;
 
-#[cfg(all(
-    target_arch = "wasm32",
-    any(target_os = "emscripten", feature = "webgl")
-))]
+#[cfg(target_arch = "wasm32")]
 impl raw_window_handle::HasDisplayHandle for WebDisplayHandle {
     fn display_handle(
         &self,

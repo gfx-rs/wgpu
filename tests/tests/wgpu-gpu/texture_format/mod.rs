@@ -1,5 +1,5 @@
 use exhaust::Exhaust;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     tests.push(TEXTURE_FORMAT_CAPABILITIES_CHECK_compat_atomic);
@@ -158,7 +158,7 @@ fn texture_format_capabilities_check(
                     }
                 }
                 UsageType::Transient => {
-                    caps.allowed_usages &= TU::TRANSIENT | TU::RENDER_ATTACHMENT;
+                    caps.allowed_usages &= TU::TRANSIENT_ATTACHMENT | TU::RENDER_ATTACHMENT;
                     if caps.allowed_usages.is_empty() {
                         continue;
                     }
@@ -182,10 +182,10 @@ fn texture_format_capabilities_check(
                 caps.flags.remove(all_multisample_flags);
             }
             if usage_type != UsageType::Transient {
-                caps.allowed_usages.remove(TU::TRANSIENT);
+                caps.allowed_usages.remove(TU::TRANSIENT_ATTACHMENT);
             }
 
-            //let supports_transient = caps.allowed_usages.contains(wgpu::TextureUsages::TRANSIENT);
+            //let supports_transient = caps.allowed_usages.contains(wgpu::TextureUsages::TRANSIENT_ATTACHMENT);
 
             let sample_count = if caps.flags.contains(FF::MULTISAMPLE_X16) {
                 16
@@ -554,7 +554,10 @@ fn smoke_render_clear(
         ..Default::default()
     });
     // TRANSIENT (memoryless) attachments can't be stored, only discarded.
-    let store = if texture.usage().contains(wgpu::TextureUsages::TRANSIENT) {
+    let store = if texture
+        .usage()
+        .contains(wgpu::TextureUsages::TRANSIENT_ATTACHMENT)
+    {
         wgpu::StoreOp::Discard
     } else {
         wgpu::StoreOp::Store
@@ -630,7 +633,10 @@ fn smoke_multisample_resolve(
     let resolve_view = resolve.create_view(&Default::default());
     // The resolve target always receives the resolved output; a memoryless
     // (TRANSIENT) multisample source can only discard its own contents.
-    let store = if msaa.usage().contains(wgpu::TextureUsages::TRANSIENT) {
+    let store = if msaa
+        .usage()
+        .contains(wgpu::TextureUsages::TRANSIENT_ATTACHMENT)
+    {
         wgpu::StoreOp::Discard
     } else {
         wgpu::StoreOp::Store
@@ -723,7 +729,7 @@ macro_rules! make_format_feature_functions_internal {
     ) => {
         $(
             paste::paste! {
-                #[gpu_test]
+                #[apply(gpu_test!)]
                 static [<TEXTURE_FORMAT_CAPABILITIES_CHECK_ $fmt_name _ $feat_name>]: GpuTestConfiguration = GpuTestConfiguration::new()
                     .parameters(
                         TestParameters::default()

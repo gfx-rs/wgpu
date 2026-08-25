@@ -192,7 +192,8 @@ impl Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
             label: None,
             view_formats: &[],
         });
@@ -840,7 +841,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "shadow",
     image_path: "/examples/features/src/shadow/screenshot.png",

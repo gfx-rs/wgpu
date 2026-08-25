@@ -100,7 +100,7 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "SPV_KHR_fragment_shader_barycentric",
 ];
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Instruction {
     op: spirv::Op,
     wc: u16,
@@ -608,6 +608,7 @@ enum SignAnchor {
     Operand,
 }
 
+#[expect(missing_debug_implementations, reason = "would be way too verbose?")]
 pub struct Frontend<I> {
     data: I,
     data_offset: usize,

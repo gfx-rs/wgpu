@@ -1,6 +1,6 @@
 use std::{fmt::Write, num::NonZeroU64};
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.push(PIPELINE_CACHE);
@@ -11,7 +11,7 @@ pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
 /// It would be nice if we could also assert that reusing a pipeline cache would make compilation
 /// be faster however, some drivers use a fallback pipeline cache, which makes this inconsistent
 /// (both intra- and inter-run).
-#[gpu_test]
+#[apply(gpu_test!)]
 static PIPELINE_CACHE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

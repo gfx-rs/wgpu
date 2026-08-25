@@ -1,8 +1,10 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 #![cfg(not(target_arch = "wasm32"))]
 #![warn(unsafe_op_in_unsafe_fn)]
+#![allow(clippy::disallowed_types)]
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -46,6 +48,7 @@ mod webidl;
 pub const UNSTABLE_FEATURE_NAME: &str = "webgpu";
 
 pub const DX12_COMPILER_ENV_VAR: &str = "DENO_WEBGPU_DX12_COMPILER";
+pub const STRICT_COMPLIANCE_ENV_VAR: &str = "DENO_WEBGPU_STRICT_COMPLIANCE";
 
 #[allow(clippy::print_stdout)]
 pub fn print_linker_flags(name: &str) {
@@ -66,7 +69,7 @@ pub fn print_linker_flags(name: &str) {
   }
 }
 
-pub type Instance = Arc<wgpu_core::global::Global>;
+pub type Instance = Arc<wgpu_core::instance::Instance>;
 
 deno_core::extension!(
   deno_webgpu,
@@ -113,6 +116,10 @@ deno_core::extension!(
   lazy_loaded_esm = ["01_webgpu.js"],
 );
 
+pub(crate) type WeakDeviceHM = HashMap<usize, v8::Weak<v8::Object>>;
+pub(crate) type LostPromiseResolverHM =
+  HashMap<usize, v8::Global<v8::PromiseResolver>>;
+
 #[op2]
 #[cppgc]
 pub fn op_create_gpu(
@@ -123,6 +130,8 @@ pub fn op_create_gpu(
   uncaptured_error_event_class: v8::Local<v8::Value>,
   pipeline_error_class: v8::Local<v8::Value>,
 ) -> GPU {
+  state.put(WeakDeviceHM::new());
+  state.put(LostPromiseResolverHM::new());
   state.put(EventTargetSetup {
     brand: v8::Global::new(scope, webidl_brand),
     set_event_target_data: v8::Global::new(scope, set_event_target_data),
@@ -184,11 +193,19 @@ impl GPU {
     let instance = if let Some(instance) = state.try_borrow::<Instance>() {
       instance
     } else {
-      state.put(Arc::new(wgpu_core::global::Global::new(
+      let mut flags = wgpu_types::InstanceFlags::from_build_config();
+      let strict_compliance = std::env::var(STRICT_COMPLIANCE_ENV_VAR)
+        .is_ok_and(|value| {
+          !matches!(value.to_ascii_lowercase().as_str(), "false" | "no" | "0")
+        });
+      if strict_compliance {
+        flags |= wgpu_types::InstanceFlags::STRICT_WEBGPU_COMPLIANCE;
+      }
+      state.put(wgpu_core::instance::Instance::new(
         "webgpu",
         wgpu_types::InstanceDescriptor {
           backends,
-          flags: wgpu_types::InstanceFlags::from_build_config(),
+          flags,
           memory_budget_thresholds: wgpu_types::MemoryBudgetThresholds {
             for_resource_creation: Some(97),
             for_device_loss: Some(99),
@@ -205,7 +222,7 @@ impl GPU {
           display: None,
         },
         None,
-      )));
+      ));
       state.borrow::<Instance>()
     };
 
@@ -219,7 +236,7 @@ impl GPU {
     ))
     .ok()?;
 
-    let descriptor = wgpu_core::instance::RequestAdapterOptions {
+    let descriptor = wgpu_types::RequestAdapterOptions {
       power_preference: options
         .power_preference
         .map(|pp| match pp {
@@ -233,14 +250,13 @@ impl GPU {
       compatible_surface: None, // windowless
       apply_limit_buckets: false,
     };
-    let id = instance.request_adapter(&descriptor, backends, None).ok()?;
+    let wgpu_adapter = instance.request_adapter(&descriptor, backends).ok()?;
 
     Some(adapter::GPUAdapter {
-      instance: instance.clone(),
       features: SameObject::new(),
       limits: SameObject::new(),
       info: Rc::new(SameObject::new()),
-      id,
+      wgpu_adapter,
     })
   }
 

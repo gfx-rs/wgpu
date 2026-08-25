@@ -1,10 +1,10 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(STRICT_WEBGPU_COMPLIANCE_ADAPTER);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static STRICT_WEBGPU_COMPLIANCE_ADAPTER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -16,5 +16,7 @@ static STRICT_WEBGPU_COMPLIANCE_ADAPTER: GpuTestConfiguration = GpuTestConfigura
             .adapter
             .get_downlevel_capabilities()
             .is_webgpu_compliant());
-        assert!(wgpu::Limits::defaults().check_limits(&ctx.adapter.limits()));
+        let mut limits = wgpu::Limits::defaults();
+        limits.zero_native_only();
+        assert!(limits.check_limits(&ctx.adapter.limits()));
     });

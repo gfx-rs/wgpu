@@ -3,9 +3,6 @@ name: CTS
 on:
   push:
     branches-ignore: [
-        # Renovate branches are always PRs, so they will be covered
-        # by the pull_request event.
-        "renovate/**",
         # Branches with the `gh-readonly-queue` prefix are used by the
         # merge queue, so they are already covered by the `merge_group` event.
         "gh-readonly-queue/**",
@@ -14,12 +11,23 @@ on:
   merge_group:
 
 env:
+  #
+  # Keep in sync with ci.yml
+  #
+
   REPO_MSRV: "1.93"
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
   RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
+
+  #
+  # Runtime configuration
+  #
+
+  LVP_POISON_MEMORY: true # to test memory init; see docs/testing.md
+  # cts_runner uses dxc by default
 
 # Every time a PR is pushed to, cancel any previous jobs. This
 # makes us behave nicer to github and get faster turnaround times
@@ -81,7 +89,7 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install Repo MSRV toolchain
         run: |
@@ -172,7 +180,7 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info

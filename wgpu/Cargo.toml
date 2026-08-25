@@ -1,7 +1,6 @@
 [package]
 name = "wgpu"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Cross-platform, safe, pure-rust graphics API"
 homepage.workspace = true
@@ -36,7 +35,6 @@ ignored = ["cfg_aliases"]
 [features]
 default = [
     "std",
-    "parking_lot",
     "dx12",
     "metal",
     "gles",
@@ -67,6 +65,7 @@ webgpu = [
     "dep:wasm-bindgen-futures",
     "web-sys/Document",
     "web-sys/Event",
+    "web-sys/MediaQueryList",
     "web-sys/Navigator",
     "web-sys/NodeList",
     "web-sys/Window",
@@ -179,6 +178,7 @@ web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web"]
 ## support.
 std = [
     "raw-window-handle/std",
+    "wgpu-sync/std",
     "wgpu-types/std",
     "wgpu-core?/std",
     "js-sys?/std",
@@ -186,14 +186,6 @@ std = [
     "wasm-bindgen?/std",
     "wasm-bindgen-futures?/std",
 ]
-
-## Uses `parking_lot` as the implementation for locking primitives.
-##
-## This is a recommended feature for most users and should only be disabled when
-## required, e.g., for `no_std` support.
-## If disabled, either `std::sync::Mutex` or `core::cell::RefCell` will be used,
-## based on whether `std` is enabled or not.
-parking_lot = ["dep:parking_lot"]
 
 ## Enables `exhaust` method for `TextureFormat` of `wgpu-types`.
 ##
@@ -207,6 +199,7 @@ exhaust = ["wgpu-types/exhaust"]
 [dependencies]
 naga = { workspace = true, optional = true, features = ["termcolor"] }
 wgpu-core = { workspace = true, optional = true }
+wgpu-sync = { workspace = true, default-features = false }
 wgpu-types.workspace = true
 
 # Needed for both wgpu-core and webgpu
@@ -217,7 +210,6 @@ cfg-if.workspace = true
 document-features.workspace = true
 log.workspace = true
 hashbrown.workspace = true
-parking_lot = { workspace = true, optional = true }
 profiling.workspace = true
 raw-window-handle = { workspace = true, features = ["alloc"] }
 static_assertions.workspace = true
@@ -229,11 +221,11 @@ static_assertions.workspace = true
 ###################
 # Not Webassembly #
 ###################
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
 # Needed for only wgpu-core backend. Not optional as only wgpu-core backend exists on native platforms.
 wgpu-core = { workspace = true, features = [
     "renderdoc",
-    "wgsl",            # needed for indirect draw/dispatch validation
+    "wgsl", # needed for indirect draw/dispatch validation
     "portable-atomic",
 ] }
 wgpu-hal.workspace = true
@@ -243,7 +235,7 @@ smallvec.workspace = true
 ###############
 # Webassembly #
 ###############
-[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
+[target.'cfg(all(target_family = "wasm", not(target_os = "emscripten")))'.dependencies]
 # Needed for all backends
 js-sys = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
@@ -279,3 +271,6 @@ bytemuck.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
+
+[lints]
+workspace = true

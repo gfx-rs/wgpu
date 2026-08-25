@@ -91,6 +91,15 @@ Naga's rules for when `Expression`s are evaluated are as follows:
     [`RayQuery`] statement whose [`Proceed::result`] points to it is
     executed.
 
+-   A [`SubgroupBallotResult`] expression is evaluated when the
+    [`SubgroupBallot`] statement whose [`result`][Statement::SubgroupBallot::result]
+    field points to it is executed.
+
+-   A [`SubgroupOperationResult`] expression is evaluated when the
+    [`SubgroupCollectiveOperation`] statement whose
+    [`result`][Statement::SubgroupCollectiveOperation::result]
+    field points to it is executed.
+
 -   All other expressions are evaluated when the (unique) [`Statement::Emit`]
     statement that covers them is executed.
 
@@ -179,6 +188,8 @@ An override expression can be evaluated at pipeline creation time.
 
 [`AtomicResult`]: Expression::AtomicResult
 [`RayQueryProceedResult`]: Expression::RayQueryProceedResult
+[`SubgroupBallotResult`]: Expression::SubgroupBallotResult
+[`SubgroupOperationResult`]: Expression::SubgroupOperationResult
 [`CallResult`]: Expression::CallResult
 [`Constant`]: Expression::Constant
 [`ZeroValue`]: Expression::ZeroValue
@@ -196,6 +207,8 @@ An override expression can be evaluated at pipeline creation time.
 [`Emit`]: Statement::Emit
 [`Store`]: Statement::Store
 [`RayQuery`]: Statement::RayQuery
+[`SubgroupBallot`]: Statement::SubgroupBallot
+[`SubgroupCollectiveOperation`]: Statement::SubgroupCollectiveOperation
 
 [`Proceed::result`]: RayQueryFunction::Proceed::result
 
@@ -2398,6 +2411,12 @@ pub struct FunctionResult {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct Function {
     /// Name of the function, if any.
+    ///
+    /// Unlike WGSL, Naga IR allows a module to have multiple functions with the
+    /// same name. Since functions are generally identified by handle, the name
+    /// is mostly needed for diagnostics and as a hint to [`Namer`].
+    ///
+    /// [`Namer`]: crate::proc::Namer
     pub name: Option<String>,
     /// Information about function argument.
     pub arguments: Vec<FunctionArgument>,
@@ -2489,7 +2508,9 @@ pub struct Function {
 pub struct EntryPoint {
     /// Name of this entry point, visible externally.
     ///
-    /// Entry point names for a given `stage` must be distinct within a module.
+    /// Unlike WGSL, Naga IR allows a module to have multiple entry points with
+    /// the same name, as long as they are for different shader stages. That is,
+    /// `(name, stage)` pairs must be distinct within a module.
     pub name: String,
     /// Shader stage.
     pub stage: ShaderStage,

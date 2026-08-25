@@ -247,7 +247,8 @@ impl DeviceInterface for CustomDevice {
     fn create_render_bundle_encoder(
         &self,
         _desc: &wgpu::RenderBundleEncoderDescriptor<'_>,
-    ) -> wgpu::custom::DispatchRenderBundleEncoder {
+    ) -> Result<wgpu::custom::DispatchRenderBundleEncoder, wgpu::CreateRenderBundleEncoderError>
+    {
         unimplemented!()
     }
 
@@ -337,7 +338,7 @@ impl QueueInterface for CustomQueue {
         &self,
         _buffer: &wgpu::custom::DispatchBuffer,
         _offset: wgpu::BufferAddress,
-        _staging_buffer: &wgpu::custom::DispatchQueueWriteBuffer,
+        _staging_buffer: wgpu::custom::DispatchQueueWriteBuffer,
     ) {
         unimplemented!()
     }

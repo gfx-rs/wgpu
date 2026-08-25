@@ -1,19 +1,20 @@
 use std::sync::Arc;
 
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.extend([TEST_SINGLE_WRITE, TEST_SCATTER]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static TEST_SINGLE_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_async(|ctx| async move { run_test(ctx, false).await });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static TEST_SCATTER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -33,10 +34,12 @@ async fn run_test(ctx: TestingContext, use_many_writes: bool) {
     let device = ctx.device;
     let queue = ctx.queue;
 
+    // Deliberately distinct in every dimension so that an axis swap (width vs.
+    // height vs. depth) in the copy or the readback would be caught.
     let size = wgpu::Extent3d {
         width: 4,
-        height: 4,
-        depth_or_array_layers: 4,
+        height: 5,
+        depth_or_array_layers: 6,
     };
     let texture = {
         device.create_texture(&wgpu::TextureDescriptor {

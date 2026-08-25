@@ -72,6 +72,10 @@ pub fn run_cts(
     let llvm_cov = args.contains("--llvm-cov");
     let release = args.contains("--release");
 
+    // This is used in the Vulkan hal to waive pre-existing validation
+    // errors in the CTS, until they can be fixed.
+    shell.set_var("WGPU_CTS_XTASK", "1");
+
     let output_filter = args
         .opt_value_from_str::<_, String>("--print-output-when")?
         .map(|f| {
@@ -146,13 +150,18 @@ pub fn run_cts(
 
     #[cfg(windows)]
     if running_on_backend.as_ref().is_none_or(|b| b == "dx12") {
+        const DENO_WEBGPU_DX12_COMPILER: &str = "DENO_WEBGPU_DX12_COMPILER";
         const DEFAULT_DX12_COMPILER: &str = "dynamicdxc";
 
-        match shell.var("DENO_WEBGPU_DX12_COMPILER") {
-            Ok(value) => log::info!("Using DENO_WEBGPU_DX12_COMPILER = {value} from environment"),
+        match shell.var(DENO_WEBGPU_DX12_COMPILER) {
+            Ok(value) => {
+                log::info!("Using `{DENO_WEBGPU_DX12_COMPILER}` = {value:?} from environment")
+            }
             Err(_) => {
-                shell.set_var("DENO_WEBGPU_DX12_COMPILER", DEFAULT_DX12_COMPILER);
-                log::info!("Using default DENO_WEBGPU_DX12_COMPILER = {DEFAULT_DX12_COMPILER}");
+                shell.set_var(DENO_WEBGPU_DX12_COMPILER, DEFAULT_DX12_COMPILER);
+                log::info!(
+                    "Using default `{DENO_WEBGPU_DX12_COMPILER}` = {DEFAULT_DX12_COMPILER:?}"
+                );
             }
         }
     }

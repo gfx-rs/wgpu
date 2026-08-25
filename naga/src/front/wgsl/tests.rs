@@ -783,6 +783,86 @@ mod diagnostic_filter {
     use crate::front::wgsl::assert_parse_err;
 
     #[test]
+    fn invalid_unary_operand_negative_unsigned_integer() {
+        let shader = "
+fn myfunc() {
+    _ = -(2u);
+}
+";
+        assert_parse_err(
+            shader,
+            "\
+error: unary operator `-` is not defined for operand type `u32`
+  ┌─ wgsl:3:9
+  │
+3 │     _ = -(2u);
+  │         ^^^^^ invalid operand type for this operator
+
+",
+        );
+    }
+
+    #[test]
+    fn invalid_unary_operand_negative_neither_scalar_nor_vector() {
+        let shader = "
+fn myfunc() {
+    _ = -mat2x2f();
+}
+";
+        assert_parse_err(
+            shader,
+            "\
+error: unary operator `-` is not defined for operand type `mat2x2<f32>`
+  ┌─ wgsl:3:9
+  │
+3 │     _ = -mat2x2f();
+  │         ^^^^^^^^^^ invalid operand type for this operator
+
+",
+        );
+    }
+
+    #[test]
+    fn invalid_unary_operand_logical_not() {
+        let shader = "
+fn myfunc() {
+    _ = !1;
+}
+";
+        assert_parse_err(
+            shader,
+            "\
+error: unary operator `!` is not defined for operand type `{AbstractInt}`
+  ┌─ wgsl:3:9
+  │
+3 │     _ = !1;
+  │         ^^ invalid operand type for this operator
+
+",
+        );
+    }
+
+    #[test]
+    fn invalid_unary_operand_bitwise_not() {
+        let shader = "
+fn myfunc() {
+    _ = ~(1.0f);
+}
+";
+        assert_parse_err(
+            shader,
+            "\
+error: unary operator `~` is not defined for operand type `f32`
+  ┌─ wgsl:3:9
+  │
+3 │     _ = ~(1.0f);
+  │         ^^^^^^^ invalid operand type for this operator
+
+",
+        );
+    }
+
+    #[test]
     fn intended_global_directive() {
         let shader = "@diagnostic(off, my.lint);";
         assert_parse_err(

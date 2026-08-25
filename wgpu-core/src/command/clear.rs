@@ -1,18 +1,16 @@
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use core::ops::Range;
 
 use crate::{
     api_log,
     command::{encoder::EncodingState, ArcCommand, EncoderStateError},
     device::{DeviceError, MissingFeatures},
-    get_lowest_common_denom,
-    global::Global,
-    hal_label,
-    id::{BufferId, CommandEncoderId, TextureId},
+    get_lowest_common_denom, hal_label,
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{
-        Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
-        ParentDevice, RawResourceAccess, ResourceErrorIdent, Texture, TextureClearMode,
+        Buffer, DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError,
+        Labeled, MissingBufferUsageError, ParentDevice, RawResourceAccess, ResourceErrorIdent,
+        Texture, TextureClearMode,
     },
     snatch::SnatchGuard,
     track::TextureTrackerSetSingle,
@@ -79,6 +77,15 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
     InvalidResource(#[from] InvalidResourceError),
 }
 
+impl From<InvalidOrDestroyedResourceError> for ClearError {
+    fn from(value: InvalidOrDestroyedResourceError) -> Self {
+        match value {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
+}
+
 impl WebGpuError for ClearError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
@@ -100,51 +107,64 @@ impl WebGpuError for ClearError {
     }
 }
 
-impl Global {
-    pub fn command_encoder_clear_buffer(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        dst: BufferId,
+impl super::CommandEncoder {
+    fn clear_buffer_inner(
+        self: &Arc<Self>,
+        dst: Arc<Buffer>,
         offset: BufferAddress,
         size: Option<BufferAddress>,
     ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::clear_buffer");
-        api_log!("CommandEncoder::clear_buffer {dst:?}");
+        api_log!("CommandEncoder::clear_buffer {:?}", Arc::as_ptr(&dst));
 
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
+        let mut cmd_buf_data = self.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, ClearError> {
-            Ok(ArcCommand::ClearBuffer {
-                dst: self.resolve_buffer_id(dst)?,
-                offset,
-                size,
+            dst.check_is_valid()?;
+            Ok(ArcCommand::ClearBuffer { dst, offset, size })
+        })
+    }
+
+    pub fn clear_buffer(
+        self: &Arc<Self>,
+        dst: Arc<Buffer>,
+        offset: BufferAddress,
+        size: Option<BufferAddress>,
+    ) {
+        if let Err(err) = self.clear_buffer_inner(dst, offset, size) {
+            self.device
+                .handle_error(err, Some(self.label()), "CommandEncoder::clear_buffer");
+        }
+    }
+
+    fn clear_texture_inner(
+        self: &Arc<Self>,
+        dst: Arc<Texture>,
+        subresource_range: &ImageSubresourceRange,
+    ) -> Result<(), EncoderStateError> {
+        profiling::scope!("CommandEncoder::clear_texture");
+        api_log!("CommandEncoder::clear_texture {:?}", Arc::as_ptr(&dst));
+
+        let mut cmd_buf_data = self.data.lock();
+
+        cmd_buf_data.push_with(|| -> Result<_, ClearError> {
+            dst.check_valid()?;
+            Ok(ArcCommand::ClearTexture {
+                dst,
+                subresource_range: *subresource_range,
             })
         })
     }
 
-    pub fn command_encoder_clear_texture(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        dst: TextureId,
+    pub fn clear_texture(
+        self: &Arc<Self>,
+        dst: Arc<Texture>,
         subresource_range: &ImageSubresourceRange,
-    ) -> Result<(), EncoderStateError> {
-        profiling::scope!("CommandEncoder::clear_texture");
-        api_log!("CommandEncoder::clear_texture {dst:?}");
-
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
-
-        cmd_buf_data.push_with(|| -> Result<_, ClearError> {
-            Ok(ArcCommand::ClearTexture {
-                dst: self.resolve_texture_id(dst)?,
-                subresource_range: *subresource_range,
-            })
-        })
+    ) {
+        if let Err(err) = self.clear_texture_inner(dst, subresource_range) {
+            self.device
+                .handle_error(err, Some(self.label()), "CommandEncoder::clear_texture");
+        }
     }
 }
 
@@ -297,7 +317,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
     snatch_guard: &SnatchGuard<'_>,
     instance_flags: wgt::InstanceFlags,
 ) -> Result<(), ClearError> {
-    let dst_raw = dst_texture.try_raw(snatch_guard)?;
+    let dst_raw = dst_texture.try_inner(snatch_guard)?.raw();
 
     // Issue the right barrier.
     let clear_usage = match *dst_texture.clear_mode.read() {
@@ -370,7 +390,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
 }
 
 fn clear_texture_via_buffer_copies(
-    texture_desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+    texture_desc: &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
     alignments: &hal::Alignments,
     zero_buffer: &dyn hal::DynBuffer, // Buffer of size device::ZERO_BUFFER_SIZE
     range: TextureInitRange,

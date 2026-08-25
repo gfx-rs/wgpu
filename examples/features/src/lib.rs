@@ -10,6 +10,7 @@ pub mod bunnymark;
 pub mod conservative_raster;
 pub mod cooperative_matrix;
 pub mod cube;
+pub mod error_scope;
 pub mod hello_synchronization;
 pub mod hello_triangle;
 pub mod hello_windows;
@@ -42,7 +43,7 @@ pub mod water;
 #[cfg(test)]
 fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     #[cfg_attr(
-        target_arch = "wasm32",
+        wasm_test,
         expect(unused_mut, reason = "non-wasm32 needs this mutable")
     )]
     let mut test_list = vec![
@@ -81,10 +82,11 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
         water::TEST,
     ];
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(wasm_test))]
     {
         test_list.push(big_compute_buffers::tests::TWO_BUFFERS);
-        test_list.push(cooperative_matrix::tests::COOPERATIVE_MATRIX);
+        test_list.push(cooperative_matrix::tests::COOPERATIVE_MATRIX_F32);
+        test_list.push(cooperative_matrix::tests::COOPERATIVE_MATRIX_F16);
     }
 
     test_list

@@ -158,29 +158,55 @@ impl super::PrivateCapabilities {
     }
 }
 
-pub fn map_vk_surface_formats(sf: vk::SurfaceFormatKHR) -> Option<wgt::TextureFormat> {
+pub fn map_vk_surface_formats(
+    sf: vk::SurfaceFormatKHR,
+) -> Option<(wgt::TextureFormat, wgt::SurfaceColorSpace)> {
     use ash::vk::Format as F;
     use wgt::TextureFormat as Tf;
-    // List we care about pulled from https://vulkan.gpuinfo.org/listsurfaceformats.php.
-    // Device::create_swapchain() hardcodes linear scRGB for fp16, non-linear sRGB otherwise.
-    Some(match sf.color_space {
-        vk::ColorSpaceKHR::SRGB_NONLINEAR => match sf.format {
-            F::B8G8R8A8_UNORM => Tf::Bgra8Unorm,
-            F::B8G8R8A8_SRGB => Tf::Bgra8UnormSrgb,
-            F::R8G8B8A8_SNORM => Tf::Rgba8Snorm,
-            F::R8G8B8A8_UNORM => Tf::Rgba8Unorm,
-            F::R8G8B8A8_SRGB => Tf::Rgba8UnormSrgb,
-            F::R16G16B16A16_SNORM => Tf::Rgba16Snorm,
-            F::R16G16B16A16_UNORM => Tf::Rgba16Unorm,
-            F::A2B10G10R10_UNORM_PACK32 => Tf::Rgb10a2Unorm,
-            _ => return None,
-        },
-        vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT => match sf.format {
-            F::R16G16B16A16_SFLOAT => Tf::Rgba16Float,
-            _ => return None,
-        },
+    // Format list we care about pulled from https://vulkan.gpuinfo.org/listsurfaceformats.php.
+    let format = match sf.format {
+        F::B8G8R8A8_UNORM => Tf::Bgra8Unorm,
+        F::B8G8R8A8_SRGB => Tf::Bgra8UnormSrgb,
+        F::R8G8B8A8_SNORM => Tf::Rgba8Snorm,
+        F::R8G8B8A8_UNORM => Tf::Rgba8Unorm,
+        F::R8G8B8A8_SRGB => Tf::Rgba8UnormSrgb,
+        F::R16G16B16A16_SNORM => Tf::Rgba16Snorm,
+        F::R16G16B16A16_UNORM => Tf::Rgba16Unorm,
+        F::R16G16B16A16_SFLOAT => Tf::Rgba16Float,
+        F::A2B10G10R10_UNORM_PACK32 => Tf::Rgb10a2Unorm,
+        _ => return None,
+    };
+    let color_space = map_vk_color_space(sf.color_space)?;
+    Some((format, color_space))
+}
+
+pub fn map_vk_color_space(color_space: vk::ColorSpaceKHR) -> Option<wgt::SurfaceColorSpace> {
+    use wgt::SurfaceColorSpace as Scs;
+    Some(match color_space {
+        vk::ColorSpaceKHR::SRGB_NONLINEAR => Scs::Srgb,
+        vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT => Scs::ExtendedSrgbLinear,
+        vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT => Scs::ExtendedSrgb,
+        vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT => Scs::DisplayP3,
+        vk::ColorSpaceKHR::HDR10_ST2084_EXT => Scs::Bt2100Pq,
+        vk::ColorSpaceKHR::HDR10_HLG_EXT => Scs::Bt2100Hlg,
         _ => return None,
     })
+}
+
+pub fn map_surface_color_space(color_space: wgt::SurfaceColorSpace) -> vk::ColorSpaceKHR {
+    use wgt::SurfaceColorSpace as Scs;
+    match color_space {
+        Scs::Auto => unreachable!("wgpu-core resolves `Auto` before configuring the surface"),
+        Scs::Srgb => vk::ColorSpaceKHR::SRGB_NONLINEAR,
+        Scs::ExtendedSrgbLinear => vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT,
+        Scs::ExtendedSrgb => vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT,
+        Scs::DisplayP3 => vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT,
+        Scs::Bt2100Pq => vk::ColorSpaceKHR::HDR10_ST2084_EXT,
+        Scs::Bt2100Hlg => vk::ColorSpaceKHR::HDR10_HLG_EXT,
+        Scs::ExtendedDisplayP3 => {
+            unreachable!("`ExtendedDisplayP3` is never reported in the Vulkan surface capabilities")
+        }
+    }
 }
 
 impl crate::Attachment<'_, super::TextureView> {
@@ -233,6 +259,14 @@ pub fn derive_image_layout(usage: wgt::TextureUses, format: wgt::TextureFormat) 
     }
 }
 
+pub fn map_queue_family(family: crate::QueueFamily) -> u32 {
+    match family {
+        crate::QueueFamily::Explicit(index) => index,
+        crate::QueueFamily::External => vk::QUEUE_FAMILY_EXTERNAL,
+        crate::QueueFamily::Foreign => vk::QUEUE_FAMILY_FOREIGN_EXT,
+    }
+}
+
 pub fn map_texture_usage(usage: wgt::TextureUses) -> vk::ImageUsageFlags {
     let mut flags = vk::ImageUsageFlags::empty();
     if usage.contains(wgt::TextureUses::COPY_SRC) {
@@ -268,12 +302,11 @@ pub fn map_texture_usage(usage: wgt::TextureUses) -> vk::ImageUsageFlags {
 
 pub fn map_texture_usage_to_barrier(
     usage: wgt::TextureUses,
+    queue_flags: vk::QueueFlags,
 ) -> (vk::PipelineStageFlags, vk::AccessFlags) {
     let mut stages = vk::PipelineStageFlags::empty();
     let mut access = vk::AccessFlags::empty();
-    let shader_stages = vk::PipelineStageFlags::VERTEX_SHADER
-        | vk::PipelineStageFlags::FRAGMENT_SHADER
-        | vk::PipelineStageFlags::COMPUTE_SHADER;
+    let shader_stages = shader_stages(queue_flags);
 
     if usage.contains(wgt::TextureUses::COPY_SRC) {
         stages |= vk::PipelineStageFlags::TRANSFER;
@@ -567,17 +600,20 @@ pub fn map_buffer_usage(usage: wgt::BufferUses) -> vk::BufferUsageFlags {
     if usage.intersects(wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY) {
         flags |= vk::BufferUsageFlags::TRANSFER_DST;
     }
+    if usage.intersects(wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA) {
+        flags |= vk::BufferUsageFlags::SHADER_BINDING_TABLE_KHR
+            | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+    }
     flags
 }
 
 pub fn map_buffer_usage_to_barrier(
     usage: wgt::BufferUses,
+    queue_flags: vk::QueueFlags,
 ) -> (vk::PipelineStageFlags, vk::AccessFlags) {
     let mut stages = vk::PipelineStageFlags::empty();
     let mut access = vk::AccessFlags::empty();
-    let shader_stages = vk::PipelineStageFlags::VERTEX_SHADER
-        | vk::PipelineStageFlags::FRAGMENT_SHADER
-        | vk::PipelineStageFlags::COMPUTE_SHADER;
+    let shader_stages = shader_stages(queue_flags);
 
     if usage.contains(wgt::BufferUses::MAP_READ) {
         stages |= vk::PipelineStageFlags::HOST;
@@ -635,6 +671,19 @@ pub fn map_buffer_usage_to_barrier(
     }
 
     (stages, access)
+}
+
+fn shader_stages(queue_flags: vk::QueueFlags) -> vk::PipelineStageFlags {
+    let mut stages = vk::PipelineStageFlags::empty();
+
+    if queue_flags.contains(vk::QueueFlags::GRAPHICS) {
+        stages |= vk::PipelineStageFlags::VERTEX_SHADER | vk::PipelineStageFlags::FRAGMENT_SHADER;
+    }
+    if queue_flags.contains(vk::QueueFlags::COMPUTE) {
+        stages |= vk::PipelineStageFlags::COMPUTE_SHADER;
+    }
+
+    stages
 }
 
 pub fn map_view_dimension(dim: wgt::TextureViewDimension) -> vk::ImageViewType {
@@ -766,6 +815,18 @@ pub fn map_shader_stage(stage: wgt::ShaderStages) -> vk::ShaderStageFlags {
     }
     if stage.contains(wgt::ShaderStages::MESH) {
         flags |= vk::ShaderStageFlags::MESH_EXT;
+    }
+    if stage.contains(wgt::ShaderStages::RAY_GENERATION) {
+        flags |= vk::ShaderStageFlags::RAYGEN_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::MISS) {
+        flags |= vk::ShaderStageFlags::MISS_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::ANY_HIT) {
+        flags |= vk::ShaderStageFlags::ANY_HIT_KHR;
+    }
+    if stage.contains(wgt::ShaderStages::CLOSEST_HIT) {
+        flags |= vk::ShaderStageFlags::CLOSEST_HIT_KHR;
     }
     flags
 }
@@ -1000,6 +1061,7 @@ pub fn map_acceleration_structure_geometry_flags(
 pub fn map_acceleration_structure_usage_to_barrier(
     usage: crate::AccelerationStructureUses,
     features: wgt::Features,
+    queue_flags: vk::QueueFlags,
 ) -> (vk::PipelineStageFlags, vk::AccessFlags) {
     let mut stages = vk::PipelineStageFlags::empty();
     let mut access = vk::AccessFlags::empty();
@@ -1019,9 +1081,13 @@ pub fn map_acceleration_structure_usage_to_barrier(
     if usage.contains(crate::AccelerationStructureUses::SHADER_INPUT)
         && features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY)
     {
-        stages |= vk::PipelineStageFlags::VERTEX_SHADER
-            | vk::PipelineStageFlags::FRAGMENT_SHADER
-            | vk::PipelineStageFlags::COMPUTE_SHADER;
+        stages |= shader_stages(queue_flags);
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
+    }
+    if usage.contains(crate::AccelerationStructureUses::SHADER_INPUT)
+        && features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+    {
+        stages |= vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR;
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
     }
     if usage.contains(crate::AccelerationStructureUses::COPY_SRC) {
@@ -1034,4 +1100,195 @@ pub fn map_acceleration_structure_usage_to_barrier(
     }
 
     (stages, access)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `map_vk_color_space` and `map_surface_color_space` must stay mutually
+    /// inverse so that a color space reported in the surface capabilities is
+    /// exactly what the swapchain is created with.
+    #[test]
+    fn color_space_round_trip() {
+        for vk_color_space in [
+            vk::ColorSpaceKHR::SRGB_NONLINEAR,
+            vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT,
+            vk::ColorSpaceKHR::EXTENDED_SRGB_NONLINEAR_EXT,
+            vk::ColorSpaceKHR::DISPLAY_P3_NONLINEAR_EXT,
+            vk::ColorSpaceKHR::HDR10_ST2084_EXT,
+            vk::ColorSpaceKHR::HDR10_HLG_EXT,
+        ] {
+            let mapped = map_vk_color_space(vk_color_space).unwrap();
+            assert_eq!(map_surface_color_space(mapped), vk_color_space);
+        }
+    }
+
+    #[test]
+    fn unknown_color_spaces_are_dropped() {
+        for vk_color_space in [
+            vk::ColorSpaceKHR::BT2020_LINEAR_EXT,
+            vk::ColorSpaceKHR::DOLBYVISION_EXT,
+            vk::ColorSpaceKHR::PASS_THROUGH_EXT,
+            vk::ColorSpaceKHR::ADOBERGB_NONLINEAR_EXT,
+        ] {
+            assert!(map_vk_color_space(vk_color_space).is_none());
+            assert!(map_vk_surface_formats(vk::SurfaceFormatKHR {
+                format: vk::Format::B8G8R8A8_UNORM,
+                color_space: vk_color_space,
+            })
+            .is_none());
+        }
+    }
+
+    #[test]
+    fn hdr10_surface_format_maps() {
+        let (format, color_space) = map_vk_surface_formats(vk::SurfaceFormatKHR {
+            format: vk::Format::A2B10G10R10_UNORM_PACK32,
+            color_space: vk::ColorSpaceKHR::HDR10_ST2084_EXT,
+        })
+        .unwrap();
+        assert_eq!(format, wgt::TextureFormat::Rgb10a2Unorm);
+        assert_eq!(color_space, wgt::SurfaceColorSpace::Bt2100Pq);
+    }
+
+    #[test]
+    fn buffer_shader_stages_follow_queue_flags() {
+        let usage = wgt::BufferUses::UNIFORM;
+
+        let (stages, access) = map_buffer_usage_to_barrier(usage, vk::QueueFlags::GRAPHICS);
+        assert_eq!(
+            stages,
+            vk::PipelineStageFlags::VERTEX_SHADER | vk::PipelineStageFlags::FRAGMENT_SHADER
+        );
+        assert_eq!(access, vk::AccessFlags::UNIFORM_READ);
+
+        let (stages, access) = map_buffer_usage_to_barrier(usage, vk::QueueFlags::COMPUTE);
+        assert_eq!(stages, vk::PipelineStageFlags::COMPUTE_SHADER);
+        assert_eq!(access, vk::AccessFlags::UNIFORM_READ);
+
+        let (stages, access) =
+            map_buffer_usage_to_barrier(usage, vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE);
+        assert_eq!(
+            stages,
+            vk::PipelineStageFlags::VERTEX_SHADER
+                | vk::PipelineStageFlags::FRAGMENT_SHADER
+                | vk::PipelineStageFlags::COMPUTE_SHADER
+        );
+        assert_eq!(access, vk::AccessFlags::UNIFORM_READ);
+    }
+
+    #[test]
+    fn non_shader_buffer_usage_is_unchanged() {
+        let (stages, access) = map_buffer_usage_to_barrier(
+            wgt::BufferUses::COPY_SRC | wgt::BufferUses::VERTEX,
+            vk::QueueFlags::empty(),
+        );
+
+        assert_eq!(
+            stages,
+            vk::PipelineStageFlags::TRANSFER | vk::PipelineStageFlags::VERTEX_INPUT
+        );
+        assert_eq!(
+            access,
+            vk::AccessFlags::TRANSFER_READ | vk::AccessFlags::VERTEX_ATTRIBUTE_READ
+        );
+    }
+
+    #[test]
+    fn texture_shader_stages_follow_queue_flags() {
+        let usage = wgt::TextureUses::RESOURCE;
+
+        let (stages, access) = map_texture_usage_to_barrier(usage, vk::QueueFlags::GRAPHICS);
+        assert_eq!(
+            stages,
+            vk::PipelineStageFlags::VERTEX_SHADER | vk::PipelineStageFlags::FRAGMENT_SHADER
+        );
+        assert_eq!(access, vk::AccessFlags::SHADER_READ);
+
+        let (stages, access) = map_texture_usage_to_barrier(usage, vk::QueueFlags::COMPUTE);
+        assert_eq!(stages, vk::PipelineStageFlags::COMPUTE_SHADER);
+        assert_eq!(access, vk::AccessFlags::SHADER_READ);
+
+        let (stages, access) =
+            map_texture_usage_to_barrier(usage, vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE);
+        assert_eq!(
+            stages,
+            vk::PipelineStageFlags::VERTEX_SHADER
+                | vk::PipelineStageFlags::FRAGMENT_SHADER
+                | vk::PipelineStageFlags::COMPUTE_SHADER
+        );
+        assert_eq!(access, vk::AccessFlags::SHADER_READ);
+    }
+
+    #[test]
+    fn non_shader_texture_usage_is_unchanged() {
+        let (stages, access) = map_texture_usage_to_barrier(
+            wgt::TextureUses::COPY_SRC | wgt::TextureUses::COLOR_TARGET,
+            vk::QueueFlags::empty(),
+        );
+
+        assert_eq!(
+            stages,
+            vk::PipelineStageFlags::TRANSFER | vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+        );
+        assert_eq!(
+            access,
+            vk::AccessFlags::TRANSFER_READ
+                | vk::AccessFlags::COLOR_ATTACHMENT_READ
+                | vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+        );
+    }
+
+    #[test]
+    fn acceleration_structure_shader_stages_follow_queue_flags() {
+        let usage = crate::AccelerationStructureUses::SHADER_INPUT;
+        let features = wgt::Features::EXPERIMENTAL_RAY_QUERY;
+
+        let (stages, access) =
+            map_acceleration_structure_usage_to_barrier(usage, features, vk::QueueFlags::GRAPHICS);
+        assert_eq!(
+            stages,
+            vk::PipelineStageFlags::VERTEX_SHADER | vk::PipelineStageFlags::FRAGMENT_SHADER
+        );
+        assert_eq!(access, vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR);
+
+        let (stages, access) =
+            map_acceleration_structure_usage_to_barrier(usage, features, vk::QueueFlags::COMPUTE);
+        assert_eq!(stages, vk::PipelineStageFlags::COMPUTE_SHADER);
+        assert_eq!(access, vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR);
+
+        let (stages, access) = map_acceleration_structure_usage_to_barrier(
+            usage,
+            features,
+            vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE,
+        );
+        assert_eq!(
+            stages,
+            vk::PipelineStageFlags::VERTEX_SHADER
+                | vk::PipelineStageFlags::FRAGMENT_SHADER
+                | vk::PipelineStageFlags::COMPUTE_SHADER
+        );
+        assert_eq!(access, vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR);
+    }
+
+    #[test]
+    fn non_shader_acceleration_structure_usage_is_unchanged() {
+        let (stages, access) = map_acceleration_structure_usage_to_barrier(
+            crate::AccelerationStructureUses::BUILD_INPUT
+                | crate::AccelerationStructureUses::BUILD_OUTPUT,
+            wgt::Features::empty(),
+            vk::QueueFlags::empty(),
+        );
+
+        assert_eq!(
+            stages,
+            vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR
+        );
+        assert_eq!(
+            access,
+            vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR
+                | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR
+        );
+    }
 }

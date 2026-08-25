@@ -1,4 +1,4 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 use wgpu::*;
 
@@ -18,7 +18,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 ///
 /// We use non-consecutive vertex attribute locations (0 and 5) in order to also test
 /// that we unset the correct locations (see PR #3706).
-#[gpu_test]
+#[apply(gpu_test!)]
 static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {

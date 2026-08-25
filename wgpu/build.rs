@@ -1,8 +1,8 @@
 fn main() {
     cfg_aliases::cfg_aliases! {
-        native: { not(target_arch = "wasm32") },
-        Emscripten: { all(target_arch = "wasm32", target_os = "emscripten") },
-        web: { all(target_arch = "wasm32", not(Emscripten), feature = "web") },
+        native: { not(target_family = "wasm") },
+        Emscripten: { all(target_family = "wasm", target_os = "emscripten") },
+        web: { all(target_family = "wasm", not(Emscripten), feature = "web") },
 
         send_sync: { any(
             native,
@@ -30,7 +30,7 @@ fn main() {
             // (Note that WebGL is also not included here!)
             all(any(windows, target_os = "linux", target_os = "android", target_os = "freebsd", Emscripten), feature = "gles"),
             // On Apple platforms, however, we require the `angle` feature to explicitly opt-in to OpenGL
-            // since its meant to be used with ANGLE.
+            // since it's meant to be used with ANGLE.
             all(target_vendor = "apple", feature = "angle")
         ) },
         noop: { feature = "noop" },

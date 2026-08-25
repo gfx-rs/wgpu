@@ -24,6 +24,7 @@ mod bind_groups;
 mod binding_array;
 mod buffer;
 mod buffer_copy;
+mod buffer_resource_limits;
 mod buffer_usages;
 mod clear_texture;
 mod clip_distances;
@@ -44,7 +45,6 @@ mod image_atomics;
 mod immediates;
 mod instance;
 mod life_cycle;
-mod mem_leaks;
 mod mesh_shader;
 mod multiview;
 mod naga_capabilities;
@@ -95,6 +95,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
 
     adapter::all_tests(&mut tests);
     bgra8unorm_storage::all_tests(&mut tests);
+    buffer_resource_limits::all_tests(&mut tests);
     bind_group_layout_dedup::all_tests(&mut tests);
     bind_groups::all_tests(&mut tests);
     binding_array::all_tests(&mut tests);
@@ -105,6 +106,10 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     clip_distances::all_tests(&mut tests);
     cloneable_types::all_tests(&mut tests);
     compute_pass_ownership::all_tests(&mut tests);
+
+    #[cfg(wasm_test)]
+    create_surface_error::all_tests(&mut tests);
+
     device::all_tests(&mut tests);
     dispatch_workgroups_indirect::all_tests(&mut tests);
     draw_index::all_tests(&mut tests);
@@ -116,7 +121,6 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     image_atomics::all_tests(&mut tests);
     instance::all_tests(&mut tests);
     life_cycle::all_tests(&mut tests);
-    mem_leaks::all_tests(&mut tests);
     mesh_shader::all_tests(&mut tests);
     multiview::all_tests(&mut tests);
     occlusion_query::all_tests(&mut tests);

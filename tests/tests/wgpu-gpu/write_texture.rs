@@ -1,7 +1,7 @@
 //! Tests for texture copy
 
 use wgpu::*;
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -12,17 +12,21 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
-        let size = 256;
+        // Deliberately non-square so a width/height swap is caught. `width` is
+        // a multiple of `COPY_BYTES_PER_ROW_ALIGNMENT` so `bytes_per_row` (one
+        // byte per R8Uint texel) stays aligned for `copy_texture_to_buffer`.
+        let width = 256;
+        let height = 192;
 
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             dimension: wgpu::TextureDimension::D2,
             size: wgpu::Extent3d {
-                width: size,
-                height: size,
+                width,
+                height,
                 depth_or_array_layers: 1,
             },
             format: wgpu::TextureFormat::R8Uint,
@@ -33,7 +37,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
             sample_count: 1,
             view_formats: &[],
         });
-        let data = vec![1u8; size as usize * 2];
+        let data = vec![1u8; width as usize * 2];
         // Write the first two rows
         ctx.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
@@ -45,11 +49,11 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
             &data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(size),
-                rows_per_image: Some(size),
+                bytes_per_row: Some(width),
+                rows_per_image: Some(height),
             },
             wgpu::Extent3d {
-                width: size,
+                width,
                 height: 2,
                 depth_or_array_layers: 1,
             },
@@ -59,7 +63,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
 
         let read_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: (size * size) as u64,
+            size: (width * height) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -79,13 +83,13 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
                 buffer: &read_buffer,
                 layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
-                    bytes_per_row: Some(size),
-                    rows_per_image: Some(size),
+                    bytes_per_row: Some(width),
+                    rows_per_image: Some(height),
                 },
             },
             wgpu::Extent3d {
-                width: size,
-                height: size,
+                width,
+                height,
                 depth_or_array_layers: 1,
             },
         );
@@ -99,25 +103,29 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
             .unwrap();
         let data: Vec<u8> = slice.get_mapped_range().unwrap().to_vec();
 
-        for byte in &data[..(size as usize * 2)] {
+        for byte in &data[..(width as usize * 2)] {
             assert_eq!(*byte, 1);
         }
-        for byte in &data[(size as usize * 2)..] {
+        for byte in &data[(width as usize * 2)..] {
             assert_eq!(*byte, 0);
         }
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
-        let size = 256;
+        // Deliberately non-square (and a depth distinct from both) so any
+        // width/height/depth swap is caught. `width` is a multiple of
+        // `COPY_BYTES_PER_ROW_ALIGNMENT` so `bytes_per_row` stays aligned.
+        let width = 256;
+        let height = 192;
         let depth = 4;
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             dimension: wgpu::TextureDimension::D3,
             size: wgpu::Extent3d {
-                width: size,
-                height: size,
+                width,
+                height,
                 depth_or_array_layers: depth,
             },
             format: wgpu::TextureFormat::R8Uint,
@@ -128,7 +136,7 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
             sample_count: 1,
             view_formats: &[],
         });
-        let data = vec![1u8; (size * size) as usize * 2];
+        let data = vec![1u8; (width * height) as usize * 2];
         // Write the first two slices
         ctx.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
@@ -140,12 +148,12 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
             &data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(size),
-                rows_per_image: Some(size),
+                bytes_per_row: Some(width),
+                rows_per_image: Some(height),
             },
             wgpu::Extent3d {
-                width: size,
-                height: size,
+                width,
+                height,
                 depth_or_array_layers: 2,
             },
         );
@@ -154,7 +162,7 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
 
         let read_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: (size * size * depth) as u64,
+            size: (width * height * depth) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -174,13 +182,13 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
                 buffer: &read_buffer,
                 layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
-                    bytes_per_row: Some(size),
-                    rows_per_image: Some(size),
+                    bytes_per_row: Some(width),
+                    rows_per_image: Some(height),
                 },
             },
             wgpu::Extent3d {
-                width: size,
-                height: size,
+                width,
+                height,
                 depth_or_array_layers: depth,
             },
         );
@@ -194,26 +202,28 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
             .unwrap();
         let data: Vec<u8> = slice.get_mapped_range().unwrap().to_vec();
 
-        for byte in &data[..((size * size) as usize * 2)] {
+        for byte in &data[..((width * height) as usize * 2)] {
             assert_eq!(*byte, 1);
         }
-        for byte in &data[((size * size) as usize * 2)..] {
+        for byte in &data[((width * height) as usize * 2)..] {
             assert_eq!(*byte, 0);
         }
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
-        let size = 256;
+        // Non-square so a width/height swap is caught.
+        let width = 256;
+        let height = 192;
 
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             dimension: wgpu::TextureDimension::D2,
             size: wgpu::Extent3d {
-                width: size,
-                height: size,
+                width,
+                height,
                 depth_or_array_layers: 1,
             },
             format: wgpu::TextureFormat::R8Uint,
@@ -222,7 +232,7 @@ static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration = GpuTestConfiguration::new()
             sample_count: 1,
             view_formats: &[],
         });
-        let data = vec![1u8; size as usize * 2 + 100]; // check that we don't attempt to copy OOB internally by adding 100 bytes here
+        let data = vec![1u8; width as usize * 2 + 100]; // check that we don't attempt to copy OOB internally by adding 100 bytes here
         ctx.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &tex,
@@ -233,11 +243,11 @@ static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration = GpuTestConfiguration::new()
             &data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(size),
-                rows_per_image: Some(size),
+                bytes_per_row: Some(width),
+                rows_per_image: Some(height),
             },
             wgpu::Extent3d {
-                width: size,
+                width,
                 height: 2,
                 depth_or_array_layers: 1,
             },
@@ -247,7 +257,7 @@ static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration = GpuTestConfiguration::new()
 // Test a writeTexture operation that will use the staging buffer.
 // If run with the address sanitizer, this serves as a regression
 // test for https://github.com/gfx-rs/wgpu/pull/7893.
-#[gpu_test]
+#[apply(gpu_test!)]
 static WRITE_TEXTURE_VIA_STAGING_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         let width = 89;

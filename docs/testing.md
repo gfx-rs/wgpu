@@ -69,7 +69,7 @@ To run the benchmarks for benchmarking purposes, use `cargo bench`.
 
 - Located in: `examples/features`
 - Run with `cargo xtask test --bin wgpu-examples`
-- Uses a custom `#[gpu_test]` harness.
+- Uses a custom `#[apply(gpu_test!)]` harness.
 - `wgpu` integration tests, with access to `wgpu_test` helpers.
 
 These tests validate that the examples are functioning correctly
@@ -188,7 +188,7 @@ This provides a way to ensure that our `toml` files are correct.
 
 - Located in: `tests/tests/wgpu-gpu`
 - Run with `cargo xtask test --test wgpu-gpu`
-- Uses a custom `#[gpu_test]` harness.
+- Uses a custom `#[apply(gpu_test!)]` harness.
 - `wgpu` integration tests, with access to `wgpu_test` helpers.
 
 These tests use a custom harness to run each test on all GPUs
@@ -272,3 +272,13 @@ To find the full list of tests, go to the
 
 The version of the CTS used by `cargo xtask cts` is specified in
 [`cts_runner/revision.txt`](../cts_runner/revision.txt).
+
+## Memory Initialization Testing
+
+Simple tests can fail to detect when necessary memory initialization is omitted because
+allocations that happen to be satisfied by fresh kernel-provided pages are zero, even though
+the actual allocator being invoked does not guarantee that.
+
+To improve our coverage of memory initialization, we set `LVP_POISON_MEMORY=true` in Linux
+(Vulkan) CI. This instructs llvmpipe to fill all newly initialized memory with a non-zero
+value, so tests will reliably fail if the memory is not properly initialized.

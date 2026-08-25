@@ -12,6 +12,8 @@ mod params;
 mod poll;
 mod report;
 mod run;
+pub mod wasm;
+pub mod wasm_manager;
 
 #[cfg(target_arch = "wasm32")]
 pub use init::initialize_html_canvas;
@@ -20,9 +22,9 @@ pub use self::image::ComparisonType;
 pub use config::{GpuTestConfiguration, GpuTestInitializer};
 pub use expectations::{FailureApplicationReasons, FailureBehavior, FailureCase, FailureReason};
 pub use init::{initialize_adapter, initialize_device, initialize_instance};
+pub use macro_rules_attribute::apply;
 pub use params::TestParameters;
 pub use run::{execute_test, TestingContext};
-pub use wgpu_macros::gpu_test;
 
 /// Run some code in an error scope and assert that validation fails.
 ///
@@ -117,8 +119,15 @@ pub fn did_oom<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool,
 #[macro_export]
 macro_rules! gpu_test_main {
     ($tests: expr) => {
-        #[cfg(target_arch = "wasm32")]
-        wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+        #[cfg(all(
+            target_arch = "wasm32",
+            any(target_os = "emscripten", feature = "webgl")
+        ))]
+        #[wasm_bindgen::prelude::wasm_bindgen]
+        pub fn run_test(test_name: String) {
+            $crate::wasm::main($tests, test_name);
+        }
+
         #[cfg(target_arch = "wasm32")]
         fn main() {
             // Ensure that value is used so that warnings don't happen.
@@ -127,7 +136,40 @@ macro_rules! gpu_test_main {
 
         #[cfg(not(target_arch = "wasm32"))]
         fn main() -> $crate::native::MainResult {
-            $crate::native::main($tests)
+            if cfg!(wasm_test) {
+                $crate::wasm_manager::run_wasm_browser_tests($tests)
+            } else {
+                $crate::native::main($tests)
+            }
         }
     };
+}
+
+/// Creates a test that will run on all gpus on a given system.
+///
+/// Use this macro as [`#[apply(gpu_test)]`][apply] on a static variable with a type that
+/// can be converted to a [`GpuTestConfiguration`].
+#[macro_export]
+macro_rules! gpu_test {
+    (
+        $( #[ $meta:meta ] )*
+        $vis:vis static $static_name:ident: $static_type:ty = $init_expr:expr;
+    ) => {
+        $crate::macro_support::paste! {
+            $( #[ $meta ] )*
+            #[allow(non_snake_case)]
+            $vis fn $static_name() -> $crate::GpuTestConfiguration {
+                struct S;
+
+                // Allow any type that can be converted to a GpuTestConfiguration
+                $crate::GpuTestConfiguration::from($init_expr)
+                    .name_from_init_function_typename::<S>(stringify!([< $static_name:lower >]))
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+pub mod macro_support {
+    pub use paste::paste;
 }

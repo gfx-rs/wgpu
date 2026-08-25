@@ -1,12 +1,11 @@
 use wgpu::{DownlevelFlags, Limits};
-use wgpu_macros::gpu_test;
-use wgpu_test::{fail, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{apply, fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(NON_FATAL_ERRORS_IN_QUEUE_SUBMIT);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static NON_FATAL_ERRORS_IN_QUEUE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

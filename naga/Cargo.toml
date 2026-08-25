@@ -1,7 +1,6 @@
 [package]
 name = "naga"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "Shader translator and validator. Part of the wgpu project"
 repository.workspace = true
@@ -128,6 +127,9 @@ spirv.workspace = true
 serde = { workspace = true, features = ["default", "derive"] }
 strum = { workspace = true }
 walkdir.workspace = true
+
+[lints.rust]
+missing_debug_implementations = "warn"
 
 [lints.clippy]
 std_instead_of_alloc = "warn"

@@ -150,6 +150,7 @@ impl<A: hal::Api> Example<A> {
             present_mode: wgpu_types::PresentMode::Fifo,
             composite_alpha_mode: wgpu_types::CompositeAlphaMode::Opaque,
             format: wgpu_types::TextureFormat::Bgra8UnormSrgb,
+            color_space: wgpu_types::SurfaceColorSpace::Srgb,
             extent: wgpu_types::Extent3d {
                 width: window_size.0,
                 height: window_size.1,
@@ -351,6 +352,7 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::TextureUses::UNINITIALIZED,
                     to: wgpu_types::TextureUses::COPY_DST,
                 },
+                queue_family_ownership_transfer: None,
             };
             let texture_barrier2 = hal::TextureBarrier {
                 texture: &texture,
@@ -359,6 +361,7 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::TextureUses::COPY_DST,
                     to: wgpu_types::TextureUses::RESOURCE,
                 },
+                queue_family_ownership_transfer: None,
             };
             let copy = hal::BufferTextureCopy {
                 buffer_layout: wgpu_types::TexelCopyBufferLayout {
@@ -690,6 +693,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::UNINITIALIZED,
                 to: wgpu_types::TextureUses::COLOR_TARGET,
             },
+            queue_family_ownership_transfer: None,
         };
         unsafe {
             ctx.encoder.begin_encoding(Some("frame")).unwrap();
@@ -762,6 +766,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::COLOR_TARGET,
                 to: wgpu_types::TextureUses::PRESENT,
             },
+            queue_family_ownership_transfer: None,
         };
         unsafe {
             ctx.encoder.end_render_pass();
@@ -884,7 +889,7 @@ impl ApplicationHandler for App {
                     self.accum_time += self.last_frame_inst.elapsed().as_secs_f32();
                     self.last_frame_inst = Instant::now();
                     self.frame_count += 1;
-                    if self.frame_count == 100 && !ex.is_empty() {
+                    if self.frame_count >= 100 && !ex.is_empty() {
                         println!(
                             "Avg frame time {}ms",
                             self.accum_time * 1000.0 / self.frame_count as f32

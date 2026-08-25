@@ -1,4 +1,6 @@
 use alloc::boxed::Box;
+use core::fmt;
+use core::mem::ManuallyDrop;
 use core::ops::RangeBounds;
 
 use crate::{api::DeferredCommandBufferActions, *};
@@ -33,6 +35,15 @@ impl Queue {
             inner: dispatch::DispatchQueue::custom(queue),
         }
     }
+
+    /// Returns the underlying [`webgpu::GpuQueue`] handle if this `Queue`
+    /// is on the WebGPU backend, otherwise `None`.
+    ///
+    /// [`webgpu::GpuQueue`]: crate::webgpu::GpuQueue
+    #[cfg(webgpu)]
+    pub fn as_webgpu(&self) -> Option<&webgpu::GpuQueue> {
+        self.inner.as_webgpu_opt().map(|wq| &wq.inner)
+    }
 }
 
 /// Identifier for a particular call to [`Queue::submit`]. Can be used
@@ -60,7 +71,7 @@ pub struct QueueWriteBufferView {
     queue: Queue,
     buffer: Buffer,
     offset: BufferAddress,
-    inner: dispatch::DispatchQueueWriteBuffer,
+    inner: ManuallyDrop<dispatch::DispatchQueueWriteBuffer>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
@@ -73,11 +84,23 @@ impl QueueWriteBufferView {
     }
 }
 
+impl fmt::Debug for QueueWriteBufferView {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("QueueWriteBufferView")
+            .field("buffer", &self.buffer)
+            .field("offset", &self.offset)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Drop for QueueWriteBufferView {
     fn drop(&mut self) {
         self.queue
             .inner
-            .write_staging_buffer(&self.buffer.inner, self.offset, &self.inner);
+            .write_staging_buffer(&self.buffer.inner, self.offset, unsafe {
+                // SAFETY: We are in drop
+                ManuallyDrop::take(&mut self.inner)
+            });
     }
 }
 
@@ -206,7 +229,7 @@ impl Queue {
             queue: self.clone(),
             buffer: buffer.clone(),
             offset,
-            inner: staging_buffer,
+            inner: ManuallyDrop::new(staging_buffer),
         })
     }
 
@@ -326,6 +349,8 @@ impl Queue {
     /// This method will return None if:
     /// - The queue is not from the backend specified by `A`.
     /// - The queue is from the `webgpu` or `custom` backend.
+    ///
+    /// On the `webgpu` backend, use `as_webgpu` instead.
     ///
     /// # Safety
     ///

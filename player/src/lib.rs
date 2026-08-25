@@ -14,9 +14,10 @@ use wgc::{
     binding_model::BindingResource,
     command::{ArcCommand, ArcReferences, BasePass, Command, PointerReferences},
     device::trace::{self, DataKind, DataLoader},
-    id::{Marker, PointerId},
+    id::PointerId,
 };
 
+#[derive(Debug)]
 pub struct Player {
     pipeline_layouts: HashMap<
         wgc::id::PointerId<wgc::id::markers::PipelineLayout>,
@@ -88,28 +89,6 @@ impl Default for Player {
     }
 }
 
-fn process_result<T: Marker, U>(
-    op: &str,
-    map: &mut HashMap<PointerId<T>, U>,
-    id: Option<PointerId<T>>,
-    value: Result<U, impl std::error::Error>,
-) {
-    match (id, value) {
-        (Some(id), Ok(value)) => {
-            map.insert(id, value);
-        }
-        (Some(_), Err(err)) => {
-            panic!("{op} succeeded when recording, but failed on playback: {err}");
-        }
-        (None, Ok(_)) => {
-            panic!("{op} failed when recording, but succeeded on playback");
-        }
-        (None, Err(err)) => {
-            panic!("{op} failed when recording, and failed on playback: {err}");
-        }
-    }
-}
-
 impl Player {
     pub fn process(
         &mut self,
@@ -126,11 +105,12 @@ impl Player {
             }
             Action::ConfigureSurface { .. }
             | Action::Present(_)
-            | Action::DiscardSurfaceTexture(_) => {
+            | Action::DiscardSurfaceTexture(_)
+            | Action::ReleaseSurfaceTexture(_) => {
                 panic!("Unexpected Surface action: winit feature is not enabled")
             }
             Action::CreateBuffer(id, desc) => {
-                let buffer = device.create_buffer(&desc).expect("create_buffer error");
+                let (buffer, _error) = device.create_buffer(&desc);
                 self.buffers.insert(id, buffer);
             }
             Action::DestroyBuffer(id) => {
@@ -142,7 +122,13 @@ impl Player {
                 let _ = buffer.unmap();
             }
             Action::CreateTexture(id, desc) => {
-                let texture = device.create_texture(&desc).expect("create_texture error");
+                let (texture, _) = device.create_texture(&desc);
+
+                self.textures.insert(id, texture);
+            }
+            Action::CreateTextureError(id, desc) => {
+                let texture = device.create_texture_error(&desc);
+
                 self.textures.insert(id, texture);
             }
             Action::DestroyTexture(id) => {
@@ -154,9 +140,7 @@ impl Player {
             }
             Action::CreateTextureView { id, parent, desc } => {
                 let parent_texture = self.resolve_texture_id(parent);
-                let texture_view = device
-                    .create_texture_view(&parent_texture, &desc)
-                    .expect("create_texture_view error");
+                let (texture_view, _error) = parent_texture.create_view(&desc);
                 self.texture_views.insert(id, texture_view);
             }
             Action::DropTextureView(id) => {
@@ -169,9 +153,7 @@ impl Player {
                     .iter()
                     .map(|&id| self.resolve_texture_view_id(id))
                     .collect::<Vec<_>>();
-                let external_texture = device
-                    .create_external_texture(&desc, &planes)
-                    .expect("create_external_texture error");
+                let external_texture = device.create_external_texture(&desc, &planes);
                 self.external_textures.insert(id, external_texture);
             }
             Action::DestroyExternalTexture(id) => {
@@ -187,7 +169,7 @@ impl Player {
                     .expect("invalid external texture");
             }
             Action::CreateSampler(id, desc) => {
-                let sampler = device.create_sampler(&desc).expect("create_sampler error");
+                let sampler = device.create_sampler(&desc);
                 self.samplers.insert(id, sampler);
             }
             Action::DropSampler(id) => {
@@ -197,9 +179,7 @@ impl Player {
                 unimplemented!()
             }
             Action::CreateBindGroupLayout(id, desc) => {
-                let bind_group_layout = device
-                    .create_bind_group_layout(&desc)
-                    .expect("create_bind_group_layout error");
+                let (bind_group_layout, _error) = device.create_bind_group_layout(&desc);
                 self.bind_group_layouts.insert(id, bind_group_layout);
             }
             Action::GetRenderPipelineBindGroupLayout {
@@ -208,9 +188,7 @@ impl Player {
                 index,
             } => {
                 let pipeline = self.resolve_render_pipeline_id(pipeline);
-                let bgl = pipeline
-                    .get_bind_group_layout(index)
-                    .expect("invalid render pipeline");
+                let bgl = pipeline.get_bind_group_layout(index);
                 self.bind_group_layouts.insert(id, bgl);
             }
             Action::GetComputePipelineBindGroupLayout {
@@ -219,9 +197,7 @@ impl Player {
                 index,
             } => {
                 let pipeline = self.resolve_compute_pipeline_id(pipeline);
-                let bgl = pipeline
-                    .get_bind_group_layout(index)
-                    .expect("invalid compute pipeline");
+                let bgl = pipeline.get_bind_group_layout(index);
                 self.bind_group_layouts.insert(id, bgl);
             }
             Action::DropBindGroupLayout(id) => {
@@ -237,15 +213,13 @@ impl Player {
                     .map(|bgl_id| bgl_id.map(|bgl_id| self.resolve_bind_group_layout_id(bgl_id)))
                     .collect();
 
-                let resolved_desc = wgc::binding_model::ResolvedPipelineLayoutDescriptor {
+                let resolved_desc = wgc::binding_model::PipelineLayoutDescriptor {
                     label: desc.label.clone(),
                     bind_group_layouts: Cow::from(&bind_group_layouts),
                     immediate_size: desc.immediate_size,
                 };
 
-                let pipeline_layout = device
-                    .create_pipeline_layout(&resolved_desc)
-                    .expect("create_pipeline_layout error");
+                let pipeline_layout = device.create_pipeline_layout(&resolved_desc);
                 self.pipeline_layouts.insert(id, pipeline_layout);
             }
             Action::DropPipelineLayout(id) => {
@@ -255,9 +229,7 @@ impl Player {
             }
             Action::CreateBindGroup(id, desc) => {
                 let resolved_desc = self.resolve_bind_group_descriptor(desc);
-                let bind_group = device
-                    .create_bind_group(resolved_desc)
-                    .expect("create_bind_group error");
+                let bind_group = device.create_bind_group(&resolved_desc);
                 self.bind_groups.insert(id, bind_group);
             }
             Action::DropBindGroup(id) => {
@@ -276,10 +248,11 @@ impl Player {
                         data.kind()
                     );
                 };
-                match device.create_shader_module(&desc, source) {
-                    Ok(module) => self.shader_modules.insert(id, module),
-                    Err(e) => panic!("shader compilation error:\n---{code}\n---\n{e}"),
-                };
+                let (shader, error) = device.create_shader_module(&desc, source);
+                if let Some(e) = error {
+                    panic!("shader compilation error:\n---{code}\n---\n{e}");
+                }
+                self.shader_modules.insert(id, shader);
             }
             Action::CreateShaderModulePassthrough {
                 id,
@@ -333,10 +306,11 @@ impl Player {
                     glsl,
                     wgsl,
                 };
-                match unsafe { device.create_shader_module_passthrough(&desc) } {
-                    Ok(module) => self.shader_modules.insert(id, module),
-                    Err(e) => panic!("shader compilation error:\n{e}"),
-                };
+                let (shader, error) = unsafe { device.create_shader_module_passthrough(&desc) };
+                if let Some(e) = error {
+                    panic!("shader compilation error:\n{e}");
+                }
+                self.shader_modules.insert(id, shader);
             }
             Action::DropShaderModule(id) => {
                 self.shader_modules
@@ -346,12 +320,7 @@ impl Player {
             Action::CreateComputePipeline { id, desc } => {
                 let resolved_desc = self.resolve_compute_pipeline_descriptor(desc);
                 let pipeline = device.create_compute_pipeline(resolved_desc);
-                process_result(
-                    "create_compute_pipeline",
-                    &mut self.compute_pipelines,
-                    id,
-                    pipeline,
-                );
+                self.compute_pipelines.insert(id, pipeline);
             }
             Action::DropComputePipeline(id) => {
                 self.compute_pipelines
@@ -363,13 +332,8 @@ impl Player {
                 // pipeline descriptor that can represent either a conventional
                 // pipeline or a mesh shading pipeline.
                 let resolved_desc = self.resolve_render_pipeline_descriptor(desc);
-                let pipeline = device.create_render_pipeline(resolved_desc);
-                process_result(
-                    "create_render_pipeline",
-                    &mut self.render_pipelines,
-                    id,
-                    pipeline,
-                );
+                let (pipeline, _error) = device.create_render_pipeline(resolved_desc);
+                self.render_pipelines.insert(id, pipeline);
             }
             Action::DropRenderPipeline(id) => {
                 self.render_pipelines
@@ -377,7 +341,7 @@ impl Player {
                     .expect("invalid render pipeline");
             }
             Action::CreatePipelineCache { id, desc } => {
-                let cache = unsafe { device.create_pipeline_cache(&desc) }.unwrap();
+                let (cache, _error) = unsafe { device.create_pipeline_cache(&desc) };
                 self.pipeline_caches.insert(id, cache);
             }
             Action::DropPipelineCache(id) => {
@@ -394,9 +358,7 @@ impl Player {
                     .expect("invalid render bundle");
             }
             Action::CreateQuerySet { id, desc } => {
-                let query_set = device
-                    .create_query_set(&desc)
-                    .expect("create_query_set error");
+                let (query_set, _error) = device.create_query_set(&desc);
                 self.query_sets.insert(id, query_set);
             }
             Action::DestroyQuerySet(id) => {
@@ -416,9 +378,7 @@ impl Player {
                 let buffer = self.resolve_buffer_id(id);
                 let bin = loader.load(&data);
                 if queued {
-                    queue
-                        .write_buffer(buffer, offset, &bin[..size.try_into().unwrap()])
-                        .expect("Queue::write_buffer error");
+                    queue.write_buffer(buffer, offset, &bin[..size.try_into().unwrap()]);
                 } else {
                     device
                         .set_buffer_data(&buffer, offset, &bin[..size.try_into().unwrap()])
@@ -433,12 +393,10 @@ impl Player {
             } => {
                 let to = self.resolve_texel_copy_texture_info(to);
                 let bin = loader.load(&data);
-                queue
-                    .write_texture(to, &bin, &layout, &size)
-                    .expect("Queue::write_texture error");
+                queue.write_texture(to, &bin, &layout, &size);
             }
             Action::Submit(_index, ref commands) if commands.is_empty() => {
-                queue.submit(&[]).unwrap();
+                queue.submit(&[]);
             }
             Action::Submit(_index, commands) => {
                 let resolved_commands: Vec<_> = commands
@@ -446,7 +404,7 @@ impl Player {
                     .map(|cmd| self.resolve_command(cmd))
                     .collect();
                 let buffer = wgc::command::CommandBuffer::from_trace(device, resolved_commands);
-                queue.submit(&[buffer]).unwrap();
+                queue.submit(&[buffer]);
             }
             Action::FailedCommands {
                 commands,
@@ -466,14 +424,14 @@ impl Player {
                 panic!("Error recorded in trace: {error}");
             }
             Action::CreateBlas { id, desc, sizes } => {
-                let blas = device.create_blas(&desc, sizes).expect("create_blas error");
+                let (blas, _error) = device.create_blas(&desc, sizes);
                 self.blas_s.insert(id, blas);
             }
             Action::DropBlas(id) => {
                 self.blas_s.remove(&id).expect("invalid blas");
             }
             Action::CreateTlas { id, desc } => {
-                let tlas = device.create_tlas(&desc).expect("create_tlas error");
+                let (tlas, _error) = device.create_tlas(&desc);
                 self.tlas_s.insert(id, tlas);
             }
             Action::DropTlas(id) => {
@@ -488,7 +446,7 @@ impl Player {
     pub fn get_surface_texture(
         &mut self,
         id: wgc::id::PointerId<wgc::id::markers::Texture>,
-        surface: &wgc::instance::Surface,
+        surface: &Arc<wgc::instance::Surface>,
     ) {
         let frame = surface
             .get_current_texture()
@@ -654,11 +612,11 @@ impl Player {
     fn resolve_compute_pipeline_descriptor<'a>(
         &self,
         desc: wgc::device::trace::TraceComputePipelineDescriptor<'a>,
-    ) -> wgc::pipeline::ResolvedComputePipelineDescriptor<'a> {
-        wgc::pipeline::ResolvedComputePipelineDescriptor {
+    ) -> wgc::pipeline::ComputePipelineDescriptor<'a> {
+        wgc::pipeline::ComputePipelineDescriptor {
             label: desc.label,
             layout: desc.layout.map(|id| self.resolve_pipeline_layout_id(id)),
-            stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+            stage: wgc::pipeline::ProgrammableStageDescriptor {
                 module: self.resolve_shader_module_id(desc.stage.module),
                 entry_point: desc.stage.entry_point,
                 constants: desc.stage.constants,
@@ -676,23 +634,21 @@ impl Player {
 
         let vertex = match desc.vertex {
             wgc::pipeline::RenderPipelineVertexProcessor::Vertex(vertex_state) => {
-                wgc::pipeline::RenderPipelineVertexProcessor::Vertex(
-                    wgc::pipeline::ResolvedVertexState {
-                        stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
-                            module: self.resolve_shader_module_id(vertex_state.stage.module),
-                            entry_point: vertex_state.stage.entry_point,
-                            constants: vertex_state.stage.constants,
-                            zero_initialize_workgroup_memory: vertex_state
-                                .stage
-                                .zero_initialize_workgroup_memory,
-                        },
-                        buffers: vertex_state.buffers,
+                wgc::pipeline::RenderPipelineVertexProcessor::Vertex(wgc::pipeline::VertexState {
+                    stage: wgc::pipeline::ProgrammableStageDescriptor {
+                        module: self.resolve_shader_module_id(vertex_state.stage.module),
+                        entry_point: vertex_state.stage.entry_point,
+                        constants: vertex_state.stage.constants,
+                        zero_initialize_workgroup_memory: vertex_state
+                            .stage
+                            .zero_initialize_workgroup_memory,
                     },
-                )
+                    buffers: vertex_state.buffers,
+                })
             }
             wgc::pipeline::RenderPipelineVertexProcessor::Mesh(task_state, mesh_state) => {
-                let resolved_task = task_state.map(|task| wgc::pipeline::ResolvedTaskState {
-                    stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+                let resolved_task = task_state.map(|task| wgc::pipeline::TaskState {
+                    stage: wgc::pipeline::ProgrammableStageDescriptor {
                         module: self.resolve_shader_module_id(task.stage.module),
                         entry_point: task.stage.entry_point,
                         constants: task.stage.constants,
@@ -701,8 +657,8 @@ impl Player {
                             .zero_initialize_workgroup_memory,
                     },
                 });
-                let resolved_mesh = wgc::pipeline::ResolvedMeshState {
-                    stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+                let resolved_mesh = wgc::pipeline::MeshState {
+                    stage: wgc::pipeline::ProgrammableStageDescriptor {
                         module: self.resolve_shader_module_id(mesh_state.stage.module),
                         entry_point: mesh_state.stage.entry_point,
                         constants: mesh_state.stage.constants,
@@ -717,8 +673,8 @@ impl Player {
 
         let fragment = desc
             .fragment
-            .map(|fragment_state| wgc::pipeline::ResolvedFragmentState {
-                stage: wgc::pipeline::ResolvedProgrammableStageDescriptor {
+            .map(|fragment_state| wgc::pipeline::FragmentState {
+                stage: wgc::pipeline::ProgrammableStageDescriptor {
                     module: self.resolve_shader_module_id(fragment_state.stage.module),
                     entry_point: fragment_state.stage.entry_point,
                     constants: fragment_state.stage.constants,
@@ -745,10 +701,10 @@ impl Player {
     fn resolve_bind_group_descriptor<'a>(
         &self,
         desc: wgc::device::trace::TraceBindGroupDescriptor<'a>,
-    ) -> wgc::binding_model::ResolvedBindGroupDescriptor<'a> {
+    ) -> wgc::binding_model::BindGroupDescriptor<'a> {
         let layout = self.resolve_bind_group_layout_id(desc.layout);
 
-        let entries: Vec<wgc::binding_model::ResolvedBindGroupEntry> = desc
+        let entries: Vec<wgc::binding_model::BindGroupEntry> = desc
             .entries
             .to_vec()
             .into_iter()
@@ -756,8 +712,8 @@ impl Player {
                 let resource = match entry.resource {
                     BindingResource::Buffer(buffer_binding) => {
                         let buffer = self.resolve_buffer_id(buffer_binding.buffer);
-                        wgc::binding_model::ResolvedBindingResource::Buffer(
-                            wgc::binding_model::ResolvedBufferBinding {
+                        wgc::binding_model::BindingResource::Buffer(
+                            wgc::binding_model::BufferBinding {
                                 buffer,
                                 offset: buffer_binding.offset,
                                 size: buffer_binding.size,
@@ -770,20 +726,20 @@ impl Player {
                             .into_iter()
                             .map(|bb| {
                                 let buffer = self.resolve_buffer_id(bb.buffer);
-                                wgc::binding_model::ResolvedBufferBinding {
+                                wgc::binding_model::BufferBinding {
                                     buffer,
                                     offset: bb.offset,
                                     size: bb.size,
                                 }
                             })
                             .collect();
-                        wgc::binding_model::ResolvedBindingResource::BufferArray(Cow::Owned(
+                        wgc::binding_model::BindingResource::BufferArray(Cow::Owned(
                             resolved_buffers,
                         ))
                     }
                     BindingResource::Sampler(sampler_id) => {
                         let sampler = self.resolve_sampler_id(sampler_id);
-                        wgc::binding_model::ResolvedBindingResource::Sampler(sampler)
+                        wgc::binding_model::BindingResource::Sampler(sampler)
                     }
                     BindingResource::SamplerArray(sampler_ids) => {
                         let resolved_samplers: Vec<_> = sampler_ids
@@ -791,13 +747,13 @@ impl Player {
                             .into_iter()
                             .map(|id| self.resolve_sampler_id(id))
                             .collect();
-                        wgc::binding_model::ResolvedBindingResource::SamplerArray(Cow::Owned(
+                        wgc::binding_model::BindingResource::SamplerArray(Cow::Owned(
                             resolved_samplers,
                         ))
                     }
                     BindingResource::TextureView(texture_view_id) => {
                         let texture_view = self.resolve_texture_view_id(texture_view_id);
-                        wgc::binding_model::ResolvedBindingResource::TextureView(texture_view)
+                        wgc::binding_model::BindingResource::TextureView(texture_view)
                     }
                     BindingResource::TextureViewArray(texture_view_ids) => {
                         let resolved_views: Vec<_> = texture_view_ids
@@ -805,13 +761,13 @@ impl Player {
                             .into_iter()
                             .map(|id| self.resolve_texture_view_id(id))
                             .collect();
-                        wgc::binding_model::ResolvedBindingResource::TextureViewArray(Cow::Owned(
+                        wgc::binding_model::BindingResource::TextureViewArray(Cow::Owned(
                             resolved_views,
                         ))
                     }
                     BindingResource::AccelerationStructure(tlas_id) => {
                         let tlas = self.resolve_tlas_id(tlas_id);
-                        wgc::binding_model::ResolvedBindingResource::AccelerationStructure(tlas)
+                        wgc::binding_model::BindingResource::AccelerationStructure(tlas)
                     }
                     BindingResource::AccelerationStructureArray(tlas_ids) => {
                         let resolved_tlas: Vec<_> = tlas_ids
@@ -819,27 +775,25 @@ impl Player {
                             .into_iter()
                             .map(|id| self.resolve_tlas_id(id))
                             .collect();
-                        wgc::binding_model::ResolvedBindingResource::AccelerationStructureArray(
-                            Cow::Owned(resolved_tlas),
-                        )
+                        wgc::binding_model::BindingResource::AccelerationStructureArray(Cow::Owned(
+                            resolved_tlas,
+                        ))
                     }
                     BindingResource::ExternalTexture(external_texture_id) => {
                         let external_texture =
                             self.resolve_external_texture_id(external_texture_id);
-                        wgc::binding_model::ResolvedBindingResource::ExternalTexture(
-                            external_texture,
-                        )
+                        wgc::binding_model::BindingResource::ExternalTexture(external_texture)
                     }
                 };
 
-                wgc::binding_model::ResolvedBindGroupEntry {
+                wgc::binding_model::BindGroupEntry {
                     binding: entry.binding,
                     resource,
                 }
             })
             .collect();
 
-        wgc::binding_model::ResolvedBindGroupDescriptor {
+        wgc::binding_model::BindGroupDescriptor {
             label: desc.label.clone(),
             layout,
             entries: entries.into(),
@@ -986,7 +940,6 @@ impl Player {
             error,
             commands,
             dynamic_offsets,
-            immediates_data,
             string_data,
         } = pass;
 
@@ -998,7 +951,6 @@ impl Player {
                 .map(|cmd| self.resolve_compute_command(cmd))
                 .collect(),
             dynamic_offsets,
-            immediates_data,
             string_data,
         }
     }
@@ -1012,7 +964,6 @@ impl Player {
             error,
             commands,
             dynamic_offsets,
-            immediates_data,
             string_data,
         } = pass;
 
@@ -1024,7 +975,6 @@ impl Player {
                 .map(|cmd| self.resolve_render_command(cmd))
                 .collect(),
             dynamic_offsets,
-            immediates_data,
             string_data,
         }
     }
@@ -1045,15 +995,7 @@ impl Player {
                 bind_group: bind_group.map(|bg| self.resolve_bind_group_id(bg)),
             },
             C::SetPipeline(id) => C::SetPipeline(self.resolve_compute_pipeline_id(id)),
-            C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            },
+            C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::DispatchWorkgroups(groups) => C::DispatchWorkgroups(groups),
             C::DispatchWorkgroupsIndirect { buffer, offset } => C::DispatchWorkgroupsIndirect {
                 buffer: self.resolve_buffer_id(buffer),
@@ -1150,15 +1092,7 @@ impl Player {
                 depth_max,
             },
             C::SetScissor(rect) => C::SetScissor(rect),
-            C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            },
+            C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::Draw {
                 vertex_count,
                 instance_count,

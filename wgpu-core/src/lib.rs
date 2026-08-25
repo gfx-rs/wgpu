@@ -12,7 +12,7 @@
 // When we have no backends, we end up with a lot of dead or otherwise unreachable code.
 #![cfg_attr(
     all(
-        not(all(feature = "vulkan", not(target_arch = "wasm32"))),
+        not(all(feature = "vulkan", not(target_family = "wasm"))),
         not(all(feature = "metal", any(target_vendor = "apple"))),
         not(all(feature = "dx12", windows)),
         not(feature = "gles"),
@@ -40,6 +40,7 @@
     // `wgpu-core` isn't entirely user-facing, so it's useful to document internal items.
     rustdoc::private_intra_doc_links,
 )]
+#![expect(missing_debug_implementations, reason = "TODO")]
 #![warn(
     clippy::alloc_instead_of_core,
     clippy::ptr_as_ptr,
@@ -63,7 +64,7 @@
 
 extern crate alloc;
 extern crate naga_types as nt;
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 extern crate std;
 extern crate wgpu_hal as hal;
 extern crate wgpu_types as wgt;
@@ -74,10 +75,7 @@ pub mod command;
 mod conv;
 pub mod device;
 pub mod error;
-pub mod global;
-pub mod hub;
 pub mod id;
-pub mod identity;
 mod indirect_validation;
 mod init_tracker;
 pub mod instance;
@@ -88,7 +86,6 @@ mod pipeline_cache;
 mod pool;
 pub mod present;
 pub mod ray_tracing;
-pub mod registry;
 pub mod resource;
 mod snatch;
 pub mod storage;
@@ -119,13 +116,10 @@ pub(crate) use nt::{FastHashMap, FastHashSet, FastIndexMap};
 /// These are the values stored in `Device::fence`.
 pub type SubmissionIndex = hal::FenceValue;
 
-type Index = u32;
-type Epoch = u32;
-
 pub type RawString = *const core::ffi::c_char;
 pub type Label<'a> = Option<Cow<'a, str>>;
 
-trait LabelHelpers<'a> {
+pub trait LabelHelpers<'a> {
     fn to_hal(&'a self, flags: wgt::InstanceFlags) -> Option<&'a str>;
     fn to_string(&self) -> String;
 }
@@ -225,11 +219,6 @@ pub(crate) fn get_greatest_common_divisor(mut a: u32, mut b: u32) -> u32 {
         }
     }
 }
-
-#[cfg(not(feature = "std"))]
-use core::cell::OnceCell as OnceCellOrLock;
-#[cfg(feature = "std")]
-use std::sync::OnceLock as OnceCellOrLock;
 
 #[cfg(test)]
 mod tests {

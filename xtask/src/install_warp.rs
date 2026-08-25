@@ -3,7 +3,7 @@ use pico_args::Arguments;
 use xshell::Shell;
 
 /// Keep this in sync with .github/actions/install-warp/action.yml
-const WARP_VERSION: &str = "1.0.16.1";
+const WARP_VERSION: &str = "1.0.20";
 
 /// Run the install-warp subcommand
 pub fn run_install_warp(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {

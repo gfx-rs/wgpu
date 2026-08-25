@@ -1,5 +1,5 @@
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -14,9 +14,14 @@ pub fn validate_capabilities(ctx: TestingContext) {
     );
     let max_caps = match ctx.adapter.get_info().backend {
         wgpu::Backend::Vulkan => naga::back::spv::supported_capabilities(),
-        // TODO: when mesh shaders land, change this
-        wgpu::Backend::Dx12 => naga::back::hlsl::supported_capabilities() | Caps::MESH_SHADER,
-        wgpu::Backend::Metal => naga::back::msl::supported_capabilities() | Caps::MESH_SHADER,
+        wgpu::Backend::Dx12 => naga::back::hlsl::supported_capabilities(),
+        wgpu::Backend::Metal => {
+            naga::back::msl::supported_capabilities()
+                // TODO(https://github.com/gfx-rs/wgpu/issues/9849): mask off
+                // BUFFER_BINDING_ARRAY because it is not currently reported by
+                // naga's MSL backend.
+                | Caps::BUFFER_BINDING_ARRAY
+        }
         wgpu::Backend::Gl => naga::back::glsl::supported_capabilities(),
         wgpu::Backend::BrowserWebGpu => naga::back::wgsl::supported_capabilities(),
         wgpu::Backend::Noop => Caps::all(),
@@ -25,7 +30,7 @@ pub fn validate_capabilities(ctx: TestingContext) {
     assert_eq!(diff, Caps::empty());
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static VALIDATE_CAPABILITIES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

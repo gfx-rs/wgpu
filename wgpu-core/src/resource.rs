@@ -17,6 +17,7 @@ use wgt::{
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
+    api_log,
     binding_model::{BindGroup, BindingError},
     device::{
         queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError,
@@ -89,6 +90,36 @@ impl fmt::Display for ResourceErrorIdent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{} with '{}' label", self.r#type, self.label)
     }
+}
+
+#[derive(Debug)]
+pub enum ResourceState<T> {
+    Valid(T),
+    Invalid,
+}
+
+impl<T> ResourceState<T> {
+    pub fn as_ref(&self) -> ResourceState<&T> {
+        match self {
+            ResourceState::Valid(v) => ResourceState::Valid(v),
+            ResourceState::Invalid => ResourceState::Invalid,
+        }
+    }
+
+    pub fn valid(self) -> Option<T> {
+        match self {
+            ResourceState::Valid(v) => Some(v),
+            ResourceState::Invalid => None,
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum InvalidOrDestroyedResourceError {
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
 }
 
 pub trait ParentDevice: Labeled {
@@ -398,40 +429,6 @@ impl WebGpuError for InvalidResourceError {
     }
 }
 
-pub enum Fallible<T: ParentDevice> {
-    Valid(Arc<T>),
-    Invalid(Arc<String>),
-}
-
-impl<T: ParentDevice> Fallible<T> {
-    pub fn get(self) -> Result<Arc<T>, InvalidResourceError> {
-        match self {
-            Fallible::Valid(v) => Ok(v),
-            Fallible::Invalid(label) => Err(InvalidResourceError(ResourceErrorIdent {
-                r#type: Cow::Borrowed(T::TYPE),
-                label: (*label).clone(),
-            })),
-        }
-    }
-}
-
-impl<T: ParentDevice> Clone for Fallible<T> {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Valid(v) => Self::Valid(v.clone()),
-            Self::Invalid(l) => Self::Invalid(l.clone()),
-        }
-    }
-}
-
-impl<T: ParentDevice> ResourceType for Fallible<T> {
-    const TYPE: &'static str = T::TYPE;
-}
-
-impl<T: ParentDevice + crate::storage::StorageItem> crate::storage::StorageItem for Fallible<T> {
-    type Marker = T::Marker;
-}
-
 pub type BufferAccessResult = Result<(), BufferAccessError>;
 
 #[derive(Debug)]
@@ -445,8 +442,13 @@ pub(crate) struct BufferPendingMapping {
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
 #[derive(Debug)]
-pub struct Buffer {
+pub(crate) struct BufferState {
     pub(crate) raw: Snatchable<Box<dyn hal::DynBuffer>>,
+}
+
+#[derive(Debug)]
+pub struct Buffer {
+    pub(crate) state: ResourceState<BufferState>,
     pub(crate) device: Arc<Device>,
     pub(crate) usage: wgt::BufferUsages,
     pub(crate) size: wgt::BufferAddress,
@@ -462,7 +464,15 @@ pub struct Buffer {
 }
 
 impl Drop for Buffer {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("Buffer::drop");
+        api_log!("Buffer::drop {:?}", self as *const _);
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DropBuffer(unsafe { trace::to_trace(self) }));
+        }
+
         if let Some(raw) = self.timestamp_normalization_bind_group.take() {
             raw.dispose(self.device.raw());
         }
@@ -471,7 +481,35 @@ impl Drop for Buffer {
             raw.dispose(self.device.raw());
         }
 
-        if let Some(raw) = self.raw.take() {
+        let map_state = mem::replace(self.map_state.get_mut(), BufferMapState::Idle);
+        let active_map = match map_state {
+            BufferMapState::Init { staging_buffer } => {
+                staging_buffer.dispose();
+                false
+            }
+            BufferMapState::Waiting(buffer_pending_mapping) => {
+                if buffer_pending_mapping.op.callback.is_some() {
+                    let result = Err(BufferAccessError::DestroyedResource(
+                        DestroyedResourceError(self.error_ident()),
+                    ));
+                    self.device
+                        .deferred_buffer_map_pending_closures
+                        .push((buffer_pending_mapping.op, result));
+                }
+                false
+            }
+            BufferMapState::Active { .. } => true,
+            BufferMapState::Idle => false,
+        };
+
+        let ResourceState::Valid(state) = &mut self.state else {
+            return;
+        };
+
+        if let Some(raw) = state.raw.take() {
+            if active_map {
+                unsafe { self.device.raw().unmap_buffer(raw.as_ref()) }
+            }
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
                 self.device.raw().destroy_buffer(raw);
@@ -484,7 +522,9 @@ impl RawResourceAccess for Buffer {
     type DynResource = dyn hal::DynBuffer;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.raw.get(guard).map(|b| b.as_ref())
+        self.state()
+            .ok()
+            .and_then(|state| state.raw.get(guard).map(|b| b.as_ref()))
     }
 }
 
@@ -493,7 +533,11 @@ impl Buffer {
         &self,
         guard: &SnatchGuard,
     ) -> Result<(), DestroyedResourceError> {
-        self.raw
+        let ResourceState::Valid(state) = &self.state else {
+            return Ok(());
+        };
+        state
+            .raw
             .get(guard)
             .map(|_| ())
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
@@ -514,6 +558,36 @@ impl Buffer {
                 expected,
             })
         }
+    }
+
+    pub(crate) fn state(&self) -> Result<&BufferState, InvalidResourceError> {
+        match &self.state {
+            ResourceState::Valid(state) => Ok(state),
+            ResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
+        self.state().map(|_| ())
+    }
+
+    pub fn invalid(device: Arc<Device>, desc: &BufferDescriptor) -> Arc<Self> {
+        Arc::new(Buffer {
+            state: ResourceState::Invalid,
+            usage: desc.usage,
+            size: desc.size,
+            initialization_status: RwLock::new(
+                rank::BUFFER_INITIALIZATION_STATUS,
+                BufferInitTracker::new(0),
+            ),
+            map_state: Mutex::new(rank::BUFFER_MAP_STATE, BufferMapState::Idle),
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(device.tracker_indices.buffers.clone()),
+            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
+            timestamp_normalization_bind_group: Snatchable::empty(),
+            indirect_validation_bind_groups: Snatchable::empty(),
+            device,
+        })
     }
 
     /// Resolve the size of a binding for buffer with `offset` and `size`.
@@ -601,6 +675,12 @@ impl Buffer {
         size: Option<wgt::BufferAddress>,
         op: BufferMapOperation,
     ) -> Result<SubmissionIndex, BufferAccessError> {
+        profiling::scope!("Buffer::map_async");
+        api_log!(
+            "Buffer::map_async {:?} offset {offset:?} size {size:?} op: {op:?}",
+            Arc::as_ptr(self)
+        );
+
         self.try_map_async(offset, size, op)
             .map_err(|(mut operation, err)| {
                 if let Some(callback) = operation.callback.take() {
@@ -643,6 +723,10 @@ impl Buffer {
         } else {
             self.size.saturating_sub(offset)
         };
+
+        if let Err(e) = self.check_is_valid() {
+            return Err((op, e.into()));
+        }
 
         if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
             return Err((op, BufferAccessError::UnalignedOffset { offset }));
@@ -773,6 +857,13 @@ impl Buffer {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
     ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
+        profiling::scope!("Buffer::get_mapped_range");
+        api_log!(
+            "Buffer::get_mapped_range {:?} offset {offset:?} size {size:?}",
+            Arc::as_ptr(self)
+        );
+
+        self.check_is_valid()?;
         {
             let snatch_guard = self.device.snatchable_lock.read();
             self.check_destroyed(&snatch_guard)?;
@@ -904,6 +995,8 @@ impl Buffer {
 
     // Note: This must not be called while holding a lock.
     pub fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
+        profiling::scope!("unmap", "Buffer");
+        api_log!("Buffer::unmap {:?}", Arc::as_ptr(self));
         if let Some((mut operation, status)) = self.unmap_inner()? {
             if let Some(callback) = operation.callback.take() {
                 callback(status);
@@ -915,7 +1008,10 @@ impl Buffer {
 
     fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
         let device = &self.device;
+        self.check_is_valid()?;
+        self.device.check_is_valid()?;
         let snatch_guard = device.snatchable_lock.read();
+        self.check_destroyed(&snatch_guard)?;
         let raw_buf = self.try_raw(&snatch_guard)?;
         let map_state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
         match map_state {
@@ -938,10 +1034,12 @@ impl Buffer {
                 let staging_buffer = staging_buffer.flush();
 
                 if let Some(queue) = device.get_queue() {
-                    let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
+                    // Copy the entire staging buffer, including any
+                    // zero-initialized padding.
+                    let region = Some(hal::BufferCopy {
                         src_offset: 0,
                         dst_offset: 0,
-                        size,
+                        size: staging_buffer.size,
                     });
                     let transition_src = hal::BufferBarrier {
                         buffer: staging_buffer.raw(),
@@ -961,13 +1059,13 @@ impl Buffer {
                     let encoder = pending_writes.activate();
                     unsafe {
                         encoder.transition_buffers(&[transition_src, transition_dst]);
-                        if self.size > 0 {
-                            encoder.copy_buffer_to_buffer(
-                                staging_buffer.raw(),
-                                raw_buf,
-                                region.as_slice(),
-                            );
-                        }
+                        // Buffers allocate at least `COPY_BUFFER_ALIGNMENT` bytes, so
+                        // there's always something to copy here.
+                        encoder.copy_buffer_to_buffer(
+                            staging_buffer.raw(),
+                            raw_buf,
+                            region.as_slice(),
+                        );
                     }
                     pending_writes.consume(staging_buffer);
                     pending_writes.insert_buffer(self);
@@ -1012,12 +1110,27 @@ impl Buffer {
     }
 
     pub fn destroy(self: &Arc<Self>) {
+        profiling::scope!("Buffer::destroy");
+        api_log!("Buffer::destroy {:?}", Arc::as_ptr(self));
+
         let device = &self.device;
+
+        #[cfg(feature = "trace")]
+        if let Some(trace) = device.trace.lock().as_mut() {
+            use crate::device::trace::IntoTrace;
+            trace.add(trace::Action::DestroyBuffer(self.to_trace()));
+        }
+
+        let ResourceState::Valid(state) = &self.state else {
+            return;
+        };
+
+        let _ = self.unmap();
 
         let temp = {
             let mut snatch_guard = device.snatchable_lock.write();
 
-            let raw = match self.raw.snatch(&mut snatch_guard) {
+            let raw = match state.raw.snatch(&mut snatch_guard) {
                 Some(raw) => raw,
                 None => {
                     // Per spec, it is valid to call `destroy` multiple times.
@@ -1068,6 +1181,14 @@ impl Buffer {
             life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
     }
+
+    pub fn size(&self) -> wgt::BufferAddress {
+        self.size
+    }
+
+    pub fn usage(&self) -> wgt::BufferUsages {
+        self.usage
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -1091,6 +1212,8 @@ pub enum CreateBufferError {
     MissingFeatures(#[from] MissingFeatures),
     #[error("Failed to create bind group for indirect buffer validation: {0}")]
     IndirectValidationBindGroup(DeviceError),
+    #[error("Error initializing buffer: {0}")]
+    QueueWrite(#[from] queue::QueueWriteError),
 }
 
 crate::impl_resource_type!(Buffer);
@@ -1107,6 +1230,7 @@ impl WebGpuError for CreateBufferError {
             Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
             Self::IndirectValidationBindGroup(e) => e.webgpu_error_type(),
             Self::MissingFeatures(e) => e.webgpu_error_type(),
+            Self::QueueWrite(e) => e.webgpu_error_type(),
 
             Self::UnalignedSize
             | Self::InvalidUsage(_)
@@ -1169,18 +1293,18 @@ unsafe impl Sync for StagingBuffer {}
 /// is always created mapped, and the command that uses it destroys the buffer
 /// when it is done.
 ///
-/// [`StagingBuffer`]s can be created with [`queue_create_staging_buffer`] and
-/// used with [`queue_write_staging_buffer`]. They are also used internally by
-/// operations like [`queue_write_texture`] that need to upload data to the GPU,
+/// [`StagingBuffer`]s can be created with [`Queue::create_staging_buffer`] and
+/// used with [`Queue::write_staging_buffer`]. They are also used internally by
+/// operations like [`Queue::write_texture`] that need to upload data to the GPU,
 /// but that don't belong to any particular wgpu command buffer.
 ///
 /// Used `StagingBuffer`s are accumulated in [`Device::pending_writes`], to be
 /// freed once their associated operation's queue submission has finished
 /// execution.
 ///
-/// [`queue_create_staging_buffer`]: crate::global::Global::queue_create_staging_buffer
-/// [`queue_write_staging_buffer`]: crate::global::Global::queue_write_staging_buffer
-/// [`queue_write_texture`]: crate::global::Global::queue_write_texture
+/// [`Queue::create_staging_buffer`]: crate::device::queue::Queue::create_staging_buffer
+/// [`Queue::write_staging_buffer`]: crate::device::queue::Queue::write_staging_buffer
+/// [`Queue::write_texture`]: crate::device::queue::Queue::write_texture
 /// [`Device::pending_writes`]: crate::device::Device
 #[derive(Debug)]
 pub struct StagingBuffer {
@@ -1289,6 +1413,12 @@ impl StagingBuffer {
             size,
         }
     }
+
+    pub(crate) fn dispose(self) {
+        let device = self.device.raw();
+        unsafe { device.unmap_buffer(self.raw.as_ref()) };
+        unsafe { device.destroy_buffer(self.raw) };
+    }
 }
 
 crate::impl_resource_type!(StagingBuffer);
@@ -1354,16 +1484,19 @@ pub enum TextureClearMode {
 }
 
 #[derive(Debug)]
-pub struct Texture {
+pub struct TextureState {
     pub(crate) inner: Snatchable<TextureInner>,
+}
+
+#[derive(Debug)]
+pub struct Texture {
+    pub(crate) state: ResourceState<TextureState>,
     pub(crate) device: Arc<Device>,
-    pub(crate) desc: wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+    pub(crate) desc: wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
     pub(crate) _hal_usage: wgt::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) initialization_status: RwLock<TextureInitTracker>,
     pub(crate) full_range: TextureSelector,
-    /// The `label` from the descriptor used to create the resource.
-    pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) clear_mode: RwLock<TextureClearMode>,
     pub(crate) views: Mutex<WeakVec<TextureView>>,
@@ -1382,9 +1515,11 @@ impl Texture {
         init: bool,
     ) -> Self {
         Texture {
-            inner: Snatchable::new(inner),
+            state: ResourceState::Valid(TextureState {
+                inner: Snatchable::new(inner),
+            }),
             device: device.clone(),
-            desc: desc.map_label(|_| ()),
+            desc: desc.map_label(|label| label.to_string()),
             _hal_usage: hal_usage,
             format_features,
             initialization_status: RwLock::new(
@@ -1399,12 +1534,36 @@ impl Texture {
                 mips: 0..desc.mip_level_count,
                 layers: 0..desc.array_layer_count(),
             },
-            label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
         }
+    }
+
+    pub fn invalid(device: &Arc<Device>, desc: &TextureDescriptor) -> Arc<Self> {
+        Arc::new(Texture {
+            state: ResourceState::Invalid,
+            device: device.clone(),
+            desc: desc.map_label(|label| label.to_string()),
+            _hal_usage: wgt::TextureUses::empty(),
+            format_features: wgt::TextureFormatFeatures {
+                allowed_usages: wgt::TextureUsages::empty(),
+                flags: wgt::TextureFormatFeatureFlags::empty(),
+            },
+            initialization_status: RwLock::new(
+                rank::TEXTURE_INITIALIZATION_STATUS,
+                TextureInitTracker::new(0, 0),
+            ),
+            full_range: TextureSelector {
+                mips: 0..desc.mip_level_count,
+                layers: 0..desc.array_layer_count(),
+            },
+            tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
+            clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, TextureClearMode::None),
+            views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
+            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
+        })
     }
 
     /// Checks that the given texture usage contains the required texture usage,
@@ -1426,7 +1585,21 @@ impl Texture {
 }
 
 impl Drop for Texture {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("Texture::drop");
+        api_log!("Texture::drop {:?}", self as *const _);
+
+        #[cfg(feature = "trace")]
+        {
+            let mut t = self.device.trace.lock();
+            if let Some(t) = t.as_mut() {
+                use crate::device::trace::to_trace;
+
+                // SAFETY: All textures are constructed in Arc => are heap allocated
+                t.add(trace::Action::DropTexture(unsafe { to_trace(self) }));
+            }
+        }
         match *self.clear_mode.write() {
             TextureClearMode::Surface {
                 ref mut clear_view, ..
@@ -1452,7 +1625,10 @@ impl Drop for Texture {
             _ => {}
         };
 
-        if let Some(TextureInner::Native { raw }) = self.inner.take() {
+        let ResourceState::Valid(state) = &mut self.state else {
+            return;
+        };
+        if let Some(TextureInner::Native { raw }) = state.inner.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
                 self.device.raw().destroy_texture(raw);
@@ -1465,33 +1641,52 @@ impl RawResourceAccess for Texture {
     type DynResource = dyn hal::DynTexture;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.inner.get(guard).map(|t| t.raw())
+        self.state
+            .as_ref()
+            .valid()
+            .and_then(|t| t.inner.get(guard).map(|t| t.raw()))
     }
 }
 
 impl Texture {
-    pub(crate) fn try_inner<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
-    ) -> Result<&'a TextureInner, DestroyedResourceError> {
-        self.inner
-            .get(guard)
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    pub(crate) fn state(&self) -> Result<&TextureState, InvalidResourceError> {
+        match &self.state {
+            ResourceState::Valid(state) => Ok(state),
+            ResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
     }
 
     pub(crate) fn check_destroyed(
         &self,
         guard: &SnatchGuard,
     ) -> Result<(), DestroyedResourceError> {
-        self.inner
+        let Ok(state) = self.state() else {
+            return Ok(());
+        };
+        state
+            .inner
             .get(guard)
             .map(|_| ())
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
+    pub(crate) fn check_valid(&self) -> Result<(), InvalidResourceError> {
+        self.state().map(|_| ())
+    }
+
+    pub(crate) fn try_inner<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&'a TextureInner, InvalidOrDestroyedResourceError> {
+        self.state()?
+            .inner
+            .get(guard)
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()).into())
+    }
+
     pub(crate) fn get_clear_view<'a>(
         clear_mode: &'a TextureClearMode,
-        desc: &'a wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+        desc: &'a wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
         mip_level: u32,
         depth_or_layer: u32,
     ) -> &'a dyn hal::DynTextureView {
@@ -1519,10 +1714,24 @@ impl Texture {
     }
 
     pub fn destroy(self: &Arc<Self>) {
+        profiling::scope!("Texture::destroy");
+        api_log!("Texture::destroy {:?}", Arc::as_ptr(self));
+
+        #[cfg(feature = "trace")]
+        if let Some(trace) = self.device.trace.lock().as_mut() {
+            use crate::device::trace::IntoTrace as _;
+
+            trace.add(trace::Action::DestroyTexture(self.to_trace()));
+        }
+
         let device = &self.device;
 
+        let ResourceState::Valid(state) = &self.state else {
+            return;
+        };
+
         let temp = {
-            let raw = match self.inner.snatch(&mut device.snatchable_lock.write()) {
+            let raw = match state.inner.snatch(&mut device.snatchable_lock.write()) {
                 Some(TextureInner::Native { raw }) => raw,
                 Some(TextureInner::Surface { .. }) => {
                     return;
@@ -1570,6 +1779,413 @@ impl Texture {
         if let Some(last_submit_index) = last_submit_index {
             life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
+    }
+
+    fn create_view_inner(
+        self: &Arc<Self>,
+        desc: &TextureViewDescriptor,
+    ) -> Result<Arc<TextureView>, CreateTextureViewError> {
+        let device = &self.device;
+        device.check_is_valid()?;
+
+        let snatch_guard = device.snatchable_lock.read();
+
+        let texture_raw = self.try_inner(&snatch_guard)?.raw();
+
+        // resolve TextureViewDescriptor defaults
+        // https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureviewdescriptor-defaults
+        let resolved_format = desc.format.unwrap_or_else(|| {
+            self.desc
+                .format
+                .aspect_specific_format(desc.range.aspect)
+                .unwrap_or(self.desc.format)
+        });
+
+        let resolved_dimension = desc.dimension.unwrap_or_else(|| match self.desc.dimension {
+            wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
+            wgt::TextureDimension::D2 => {
+                if self.desc.array_layer_count() == 1 {
+                    wgt::TextureViewDimension::D2
+                } else {
+                    wgt::TextureViewDimension::D2Array
+                }
+            }
+            wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
+        });
+
+        let resolved_mip_level_count = desc.range.mip_level_count.unwrap_or_else(|| {
+            self.desc
+                .mip_level_count
+                .saturating_sub(desc.range.base_mip_level)
+        });
+
+        let resolved_array_layer_count =
+            desc.range
+                .array_layer_count
+                .unwrap_or_else(|| match resolved_dimension {
+                    wgt::TextureViewDimension::D1
+                    | wgt::TextureViewDimension::D2
+                    | wgt::TextureViewDimension::D3 => 1,
+                    wgt::TextureViewDimension::Cube => 6,
+                    wgt::TextureViewDimension::D2Array | wgt::TextureViewDimension::CubeArray => {
+                        self.desc
+                            .array_layer_count()
+                            .saturating_sub(desc.range.base_array_layer)
+                    }
+                });
+
+        let resolved_usage = {
+            let usage = desc.usage.unwrap_or(wgt::TextureUsages::empty());
+            if usage.is_empty() {
+                self.desc.usage
+            } else if self.desc.usage.contains(usage) {
+                // Transient texture usage subsetting is disallowed
+                if self
+                    .desc
+                    .usage
+                    .contains(wgt::TextureUsages::TRANSIENT_ATTACHMENT)
+                    && self.desc.usage != usage
+                {
+                    return Err(CreateTextureViewError::InvalidTransientTextureViewUsage {
+                        texture: self.desc.usage,
+                        view: usage,
+                    });
+                }
+
+                usage
+            } else {
+                return Err(CreateTextureViewError::InvalidTextureViewUsage {
+                    view: usage,
+                    texture: self.desc.usage,
+                });
+            }
+        };
+
+        let format_features = device.describe_format_features(resolved_format)?;
+        let allowed_format_usages = format_features.allowed_usages;
+        if resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+            && !allowed_format_usages.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+        {
+            return Err(CreateTextureViewError::TextureViewFormatNotRenderable(
+                resolved_format,
+            ));
+        }
+
+        if resolved_usage.contains(wgt::TextureUsages::STORAGE_BINDING)
+            && !allowed_format_usages.contains(wgt::TextureUsages::STORAGE_BINDING)
+        {
+            return Err(CreateTextureViewError::TextureViewFormatNotStorage(
+                resolved_format,
+            ));
+        }
+
+        // validate TextureViewDescriptor
+
+        let aspects = hal::FormatAspects::new(self.desc.format, desc.range.aspect);
+        if aspects.is_empty() {
+            return Err(CreateTextureViewError::InvalidAspect {
+                texture_format: self.desc.format,
+                requested_aspect: desc.range.aspect,
+            });
+        }
+
+        if desc.range.aspect == wgt::TextureAspect::All && resolved_format.is_multi_planar_format()
+        {
+            return Err(CreateTextureViewError::MultiplanarFullTexture(
+                resolved_format,
+            ));
+        }
+
+        if desc.range.aspect == wgt::TextureAspect::All {
+            if resolved_format != self.desc.format
+                && !self.desc.view_formats.contains(&resolved_format)
+            {
+                return Err(CreateTextureViewError::FormatReinterpretation {
+                    texture: self.desc.format,
+                    view: resolved_format,
+                });
+            }
+        } else {
+            let aspect_format = self.desc.format.aspect_specific_format(desc.range.aspect);
+            match aspect_format {
+                Some(aspect_format) if aspect_format == resolved_format => (),
+                Some(aspect_format) => {
+                    return Err(CreateTextureViewError::WrongAspectReinterpretation {
+                        texture: self.desc.format,
+                        aspect: desc.range.aspect,
+                        aspect_format,
+                        requested_format: resolved_format,
+                    })
+                }
+                None => {
+                    // User requested a sub-aspect (not TextureAspect::All) that is not on the texture.
+                    // This should've already returned with the InvalidAspect check above.
+                    unreachable!()
+                }
+            }
+        }
+
+        // check if multisampled texture is seen as anything but 2D
+        if self.desc.sample_count > 1 && resolved_dimension != wgt::TextureViewDimension::D2 {
+            // Multisample is allowed on 2D arrays, only if explicitly supported
+            let multisample_array_exception = resolved_dimension
+                == wgt::TextureViewDimension::D2Array
+                && device.features.contains(wgt::Features::MULTISAMPLE_ARRAY);
+
+            if !multisample_array_exception {
+                return Err(
+                    CreateTextureViewError::InvalidMultisampledTextureViewDimension(
+                        resolved_dimension,
+                    ),
+                );
+            }
+        }
+
+        // check if the dimension is compatible with the texture
+        if self.desc.dimension != resolved_dimension.compatible_texture_dimension() {
+            return Err(CreateTextureViewError::InvalidTextureViewDimension {
+                view: resolved_dimension,
+                texture: self.desc.dimension,
+            });
+        }
+
+        match resolved_dimension {
+            wgt::TextureViewDimension::D1
+            | wgt::TextureViewDimension::D2
+            | wgt::TextureViewDimension::D3 => {
+                if resolved_array_layer_count != 1 {
+                    return Err(CreateTextureViewError::InvalidArrayLayerCount {
+                        requested: resolved_array_layer_count,
+                        dim: resolved_dimension,
+                    });
+                }
+            }
+            wgt::TextureViewDimension::Cube => {
+                if resolved_array_layer_count != 6 {
+                    return Err(CreateTextureViewError::InvalidCubemapTextureDepth {
+                        depth: resolved_array_layer_count,
+                    });
+                }
+            }
+            wgt::TextureViewDimension::CubeArray => {
+                if !resolved_array_layer_count.is_multiple_of(6) {
+                    return Err(CreateTextureViewError::InvalidCubemapArrayTextureDepth {
+                        depth: resolved_array_layer_count,
+                    });
+                }
+            }
+            _ => {}
+        }
+
+        match resolved_dimension {
+            wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
+                if self.desc.size.width != self.desc.size.height {
+                    return Err(CreateTextureViewError::InvalidCubeTextureViewSize);
+                }
+            }
+            _ => {}
+        }
+
+        if resolved_mip_level_count == 0 {
+            return Err(CreateTextureViewError::ZeroMipLevelCount);
+        }
+
+        let mip_level_end = desc
+            .range
+            .base_mip_level
+            .saturating_add(resolved_mip_level_count);
+
+        let level_end = self.desc.mip_level_count;
+        if mip_level_end > level_end {
+            return Err(CreateTextureViewError::TooManyMipLevels {
+                base_mip_level: desc.range.base_mip_level,
+                mip_level_count: resolved_mip_level_count,
+                total: level_end,
+            });
+        }
+
+        if resolved_array_layer_count == 0 {
+            return Err(CreateTextureViewError::ZeroArrayLayerCount);
+        }
+
+        let array_layer_end = desc
+            .range
+            .base_array_layer
+            .saturating_add(resolved_array_layer_count);
+
+        let layer_end = self.desc.array_layer_count();
+        if array_layer_end > layer_end {
+            return Err(CreateTextureViewError::TooManyArrayLayers {
+                base_array_layer: desc.range.base_array_layer,
+                array_layer_count: resolved_array_layer_count,
+                total: layer_end,
+            });
+        };
+
+        // https://gpuweb.github.io/gpuweb/#abstract-opdef-renderable-texture-view
+        let render_extent = 'error: {
+            if !resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                break 'error Err(TextureViewNotRenderableReason::Usage(resolved_usage));
+            }
+
+            let allowed_view_dimensions = [
+                wgt::TextureViewDimension::D2,
+                wgt::TextureViewDimension::D2Array,
+                wgt::TextureViewDimension::D3,
+            ];
+            if !allowed_view_dimensions.contains(&resolved_dimension) {
+                break 'error Err(TextureViewNotRenderableReason::Dimension(
+                    resolved_dimension,
+                ));
+            }
+
+            if resolved_mip_level_count != 1 {
+                break 'error Err(TextureViewNotRenderableReason::MipLevelCount(
+                    resolved_mip_level_count,
+                ));
+            }
+
+            if resolved_array_layer_count != 1
+                && !(device.features.contains(wgt::Features::MULTIVIEW))
+            {
+                break 'error Err(TextureViewNotRenderableReason::ArrayLayerCount(
+                    resolved_array_layer_count,
+                ));
+            }
+
+            if !self.desc.format.is_multi_planar_format()
+                && aspects != hal::FormatAspects::from(self.desc.format)
+            {
+                break 'error Err(TextureViewNotRenderableReason::Aspects(aspects));
+            }
+
+            Ok(self
+                .desc
+                .compute_render_extent(desc.range.base_mip_level, desc.range.aspect.to_plane()))
+        };
+
+        // filter the usages based on the other criteria
+        let usage = {
+            let resolved_hal_usage = crate::conv::map_texture_usage(
+                resolved_usage,
+                resolved_format.into(),
+                format_features.flags,
+            );
+            let mask_copy = !(wgt::TextureUses::COPY_SRC | wgt::TextureUses::COPY_DST);
+            let mask_dimension = match resolved_dimension {
+                wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
+                    wgt::TextureUses::RESOURCE
+                }
+                wgt::TextureViewDimension::D3 => {
+                    wgt::TextureUses::RESOURCE
+                        | wgt::TextureUses::STORAGE_READ_ONLY
+                        | wgt::TextureUses::STORAGE_WRITE_ONLY
+                        | wgt::TextureUses::STORAGE_READ_WRITE
+                }
+                _ => wgt::TextureUses::all(),
+            };
+            let mask_mip_level = if resolved_mip_level_count == 1 {
+                wgt::TextureUses::all()
+            } else {
+                wgt::TextureUses::RESOURCE
+            };
+            resolved_hal_usage & mask_copy & mask_dimension & mask_mip_level
+        };
+
+        // use the combined depth-stencil format for the view
+        let format = if resolved_format.is_depth_stencil_component(self.desc.format) {
+            self.desc.format
+        } else {
+            resolved_format
+        };
+
+        let resolved_range = wgt::ImageSubresourceRange {
+            aspect: desc.range.aspect,
+            base_mip_level: desc.range.base_mip_level,
+            mip_level_count: Some(resolved_mip_level_count),
+            base_array_layer: desc.range.base_array_layer,
+            array_layer_count: Some(resolved_array_layer_count),
+        };
+
+        let hal_desc = hal::TextureViewDescriptor {
+            label: desc.label.to_hal(device.instance_flags),
+            format,
+            dimension: resolved_dimension,
+            usage,
+            range: resolved_range,
+        };
+
+        let raw = unsafe { device.raw().create_texture_view(texture_raw, &hal_desc) }
+            .map_err(|e| device.handle_hal_error(e))?;
+
+        let selector = TextureSelector {
+            mips: desc.range.base_mip_level..mip_level_end,
+            layers: desc.range.base_array_layer..array_layer_end,
+        };
+
+        let view = TextureView {
+            state: ResourceState::Valid(TextureViewState {
+                raw: Snatchable::new(raw),
+                render_extent,
+            }),
+            parent: self.clone(),
+            device: device.clone(),
+            desc: HalTextureViewDescriptor {
+                texture_format: self.desc.format,
+                format: resolved_format,
+                dimension: resolved_dimension,
+                usage: resolved_usage,
+                range: resolved_range,
+            },
+            format_features: self.format_features,
+            samples: self.desc.sample_count,
+            selector,
+            label: desc.label.to_string(),
+        };
+
+        let view = Arc::new(view);
+
+        {
+            let mut views = self.views.lock();
+            views.push(Arc::downgrade(&view));
+        }
+
+        Ok(view)
+    }
+
+    pub fn create_view(
+        self: &Arc<Self>,
+        desc: &TextureViewDescriptor,
+    ) -> (Arc<TextureView>, Option<CreateTextureViewError>) {
+        profiling::scope!("Texture::create_view");
+
+        let (view, error) = match self.create_view_inner(desc) {
+            Ok(view) => (view, None),
+            Err(e) => (TextureView::invalid(&self.device, self, desc), Some(e)),
+        };
+
+        api_log!(
+            "Texture::create_view({:?}) -> {:?}",
+            Arc::as_ptr(self),
+            Arc::as_ptr(&view)
+        );
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.device.trace.lock() {
+            use crate::device::trace;
+            use trace::IntoTrace as _;
+            trace.add(trace::Action::CreateTextureView {
+                id: view.to_trace(),
+                parent: self.to_trace(),
+                desc: desc.clone(),
+            });
+        }
+
+        (view, error)
+    }
+
+    pub fn descriptor(&self) -> &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>> {
+        &self.desc
     }
 }
 
@@ -1689,8 +2305,6 @@ pub enum CreateTextureError {
     CreateTextureView(#[from] CreateTextureViewError),
     #[error("Invalid usage flags {0:?}")]
     InvalidUsage(wgt::TextureUsages),
-    #[error("Texture usage {0:?} is not compatible with texture usage {1:?}")]
-    IncompatibleUsage(wgt::TextureUsages, wgt::TextureUsages),
     #[error(transparent)]
     InvalidDimension(#[from] TextureDimensionError),
     #[error("Depth texture ({1:?}) can't be created as {0:?}")]
@@ -1708,6 +2322,10 @@ pub enum CreateTextureError {
     InvalidFormatUsages(wgt::TextureUsages, wgt::TextureFormat, bool),
     #[error("The view format {0:?} is not compatible with texture format {1:?}, only changing srgb-ness is allowed.")]
     InvalidViewFormat(wgt::TextureFormat, wgt::TextureFormat),
+    #[error("Transient texture usage must be equal to `TRANSIENT_ATTACHMENT | RENDER_ATTACHMENT`, but got `{0:?}`")]
+    InvalidTransientTextureUsage(wgt::TextureUsages),
+    #[error("Transient texture view formats must be empty")]
+    InvalidTransientTextureViewFormats,
     #[error("Texture usages {0:?} are not allowed on a texture of dimensions {1:?}")]
     InvalidDimensionUsages(wgt::TextureUsages, wgt::TextureDimension),
     #[error("Texture usage STORAGE_BINDING is not allowed for multisampled textures")]
@@ -1718,6 +2336,10 @@ pub enum CreateTextureError {
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
     #[error("Multisampled textures must have RENDER_ATTACHMENT usage")]
     MultisampledNotRenderAttachment,
+    #[error("Transient texture mip level count ({0}) must be 1")]
+    InvalidTransientTextureMipLevelCount(u32),
+    #[error("Transient texture layer count ({0}) must be 1")]
+    InvalidTransientTextureLayerCount(u32),
     #[error("Texture format {0:?} can't be used due to missing features")]
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
     #[error(transparent)]
@@ -1725,7 +2347,11 @@ pub enum CreateTextureError {
 }
 
 crate::impl_resource_type!(Texture);
-crate::impl_labeled!(Texture);
+impl Labeled for Texture {
+    fn label(&self) -> &str {
+        &self.desc.label
+    }
+}
 crate::impl_parent_device!(Texture);
 crate::impl_storage_item!(Texture);
 crate::impl_trackable!(Texture);
@@ -1746,7 +2372,6 @@ impl WebGpuError for CreateTextureError {
             Self::MissingDownlevelFlags(e) => e.webgpu_error_type(),
 
             Self::InvalidUsage(_)
-            | Self::IncompatibleUsage(_, _)
             | Self::InvalidDepthDimension(_, _)
             | Self::InvalidCompressedDimension(_, _)
             | Self::InvalidMipLevelCount { .. }
@@ -1756,6 +2381,10 @@ impl WebGpuError for CreateTextureError {
             | Self::InvalidMultisampledStorageBinding
             | Self::InvalidMultisampledFormat(_)
             | Self::InvalidSampleCount(..)
+            | Self::InvalidTransientTextureUsage(_)
+            | Self::InvalidTransientTextureMipLevelCount(_)
+            | Self::InvalidTransientTextureLayerCount(_)
+            | Self::InvalidTransientTextureViewFormats
             | Self::MultisampledNotRenderAttachment => ErrorType::Validation,
         }
     }
@@ -1820,15 +2449,20 @@ pub enum TextureViewNotRenderableReason {
 }
 
 #[derive(Debug)]
-pub struct TextureView {
+pub struct TextureViewState {
     pub(crate) raw: Snatchable<Box<dyn hal::DynTextureView>>,
+    /// This is `Err` only if the texture view is not renderable
+    pub(crate) render_extent: Result<wgt::Extent3d, TextureViewNotRenderableReason>,
+}
+
+#[derive(Debug)]
+pub struct TextureView {
+    pub(crate) state: ResourceState<TextureViewState>,
     // if it's a surface texture - it's none
     pub(crate) parent: Arc<Texture>,
     pub(crate) device: Arc<Device>,
     pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,
-    /// This is `Err` only if the texture view is not renderable
-    pub(crate) render_extent: Result<wgt::Extent3d, TextureViewNotRenderableReason>,
     pub(crate) samples: u32,
     pub(crate) selector: TextureSelector,
     /// The `label` from the descriptor used to create the resource.
@@ -1836,8 +2470,21 @@ pub struct TextureView {
 }
 
 impl Drop for TextureView {
+    #[expect(trivial_casts)]
     fn drop(&mut self) {
-        if let Some(raw) = self.raw.take() {
+        profiling::scope!("TextureView::drop");
+        api_log!("TextureView::drop {:?}", self as *const _);
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DropTextureView(unsafe {
+                trace::to_trace(self)
+            }));
+        }
+        let ResourceState::Valid(state) = &mut self.state else {
+            return;
+        };
+
+        if let Some(raw) = state.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
                 self.device.raw().destroy_texture_view(raw);
@@ -1850,7 +2497,9 @@ impl RawResourceAccess for TextureView {
     type DynResource = dyn hal::DynTextureView;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.raw.get(guard).map(|it| it.as_ref())
+        self.state()
+            .ok()
+            .and_then(|state| state.raw.get(guard).map(|it| it.as_ref()))
     }
 
     fn try_raw<'a>(
@@ -1880,6 +2529,48 @@ impl TextureView {
                 expected,
             })
         }
+    }
+
+    pub(crate) fn state(&self) -> Result<&TextureViewState, InvalidResourceError> {
+        match &self.state {
+            ResourceState::Valid(state) => Ok(state),
+            ResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_valid(&self) -> Result<(), InvalidResourceError> {
+        self.state().map(|_| ())
+    }
+
+    pub(crate) fn invalid(
+        device: &Arc<Device>,
+        texture: &Arc<Texture>,
+        desc: &TextureViewDescriptor,
+    ) -> Arc<Self> {
+        // we do best effort to fill the descriptor with sensible values
+        Arc::new(TextureView {
+            state: ResourceState::Invalid,
+            parent: texture.clone(),
+            device: device.clone(),
+            desc: HalTextureViewDescriptor {
+                texture_format: texture.desc.format,
+                format: desc.format.unwrap_or(texture.desc.format),
+                usage: desc.usage.unwrap_or(texture.desc.usage),
+                dimension: desc.dimension.unwrap_or(match texture.desc.dimension {
+                    wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
+                    wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
+                    wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
+                }),
+                range: desc.range,
+            },
+            format_features: texture.format_features,
+            samples: texture.desc.sample_count,
+            selector: TextureSelector {
+                mips: desc.range.mip_range(texture.desc.mip_level_count),
+                layers: desc.range.layer_range(texture.desc.array_layer_count()),
+            },
+            label: desc.label.to_string(),
+        })
     }
 }
 
@@ -1956,10 +2647,39 @@ pub enum CreateTextureViewError {
         texture: wgt::TextureFormat,
         view: wgt::TextureFormat,
     },
+    #[error(
+        "The texture view (`{view:?}`) from transient texture (`{texture:?}`) must have the same usage"
+    )]
+    InvalidTransientTextureViewUsage {
+        texture: wgt::TextureUsages,
+        view: wgt::TextureUsages,
+    },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+
+    #[error(
+        "Trying to create a view of format {requested_format:?} on aspect {aspect:?} of format {texture:?}, \
+         but the actual format of this aspect is {aspect_format:?}"
+    )]
+    WrongAspectReinterpretation {
+        texture: wgt::TextureFormat,
+        aspect: wgt::TextureAspect,
+        aspect_format: wgt::TextureFormat,
+        requested_format: wgt::TextureFormat,
+    },
+    #[error("TextureAspect::All cannot be used in texture views on multi-planar formats")]
+    MultiplanarFullTexture(wgt::TextureFormat),
+}
+
+impl From<InvalidOrDestroyedResourceError> for CreateTextureViewError {
+    fn from(value: InvalidOrDestroyedResourceError) -> Self {
+        match value {
+            InvalidOrDestroyedResourceError::InvalidResource(e) => Self::InvalidResource(e),
+            InvalidOrDestroyedResourceError::DestroyedResource(e) => Self::DestroyedResource(e),
+        }
+    }
 }
 
 impl WebGpuError for CreateTextureViewError {
@@ -1984,7 +2704,10 @@ impl WebGpuError for CreateTextureViewError {
             | Self::TextureViewFormatNotRenderable(_)
             | Self::TextureViewFormatNotStorage(_)
             | Self::InvalidTextureViewUsage { .. }
-            | Self::MissingFeatures(_) => ErrorType::Validation,
+            | Self::InvalidTransientTextureViewUsage { .. }
+            | Self::MissingFeatures(_)
+            | Self::WrongAspectReinterpretation { .. }
+            | Self::MultiplanarFullTexture(_) => ErrorType::Validation,
         }
     }
 }
@@ -1997,27 +2720,70 @@ crate::impl_storage_item!(TextureView);
 pub type ExternalTextureDescriptor<'a> = wgt::ExternalTextureDescriptor<Label<'a>>;
 
 #[derive(Debug)]
-pub struct ExternalTexture {
-    pub(crate) device: Arc<Device>,
-    /// Between 1 and 3 (inclusive) planes of texture data.
-    pub(crate) planes: arrayvec::ArrayVec<Arc<TextureView>, 3>,
+pub(crate) struct ExternalTextureState {
     /// Buffer containing a [`crate::device::resource::ExternalTextureParams`]
     /// describing the external texture.
     pub(crate) params: Arc<Buffer>,
+}
+
+#[derive(Debug)]
+pub struct ExternalTexture {
+    pub(crate) state: ResourceState<ExternalTextureState>,
+    pub(crate) device: Arc<Device>,
+    /// Between 1 and 3 (inclusive) planes of texture data.
+    pub(crate) planes: arrayvec::ArrayVec<Arc<TextureView>, 3>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
 }
 
 impl Drop for ExternalTexture {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("ExternalTexture::drop");
+        api_log!("ExternalTexture::drop {:?}", self as *const _);
+
         resource_log!("Destroy raw {}", self.error_ident());
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DropExternalTexture(unsafe {
+                trace::to_trace(self)
+            }));
+        }
     }
 }
 
 impl ExternalTexture {
+    pub(crate) fn state(&self) -> Result<&ExternalTextureState, InvalidResourceError> {
+        match &self.state {
+            ResourceState::Valid(state) => Ok(state),
+            ResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
+    }
+
     pub fn destroy(self: &Arc<Self>) {
-        self.params.destroy();
+        profiling::scope!("ExternalTexture::destroy");
+        api_log!("ExternalTexture::destroy {:?}", Arc::as_ptr(self));
+
+        #[cfg(feature = "trace")]
+        if let Some(trace) = self.device.trace.lock().as_mut() {
+            use crate::device::trace::IntoTrace as _;
+
+            trace.add(trace::Action::DestroyExternalTexture(self.to_trace()));
+        }
+        if let Ok(state) = self.state() {
+            state.params.destroy();
+        }
+    }
+
+    pub fn invalid(device: Arc<Device>, desc: &ExternalTextureDescriptor) -> Arc<Self> {
+        Arc::new(ExternalTexture {
+            state: ResourceState::Invalid,
+            planes: arrayvec::ArrayVec::new(),
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(device.tracker_indices.external_textures.clone()),
+            device,
+        })
     }
 }
 
@@ -2116,7 +2882,7 @@ pub struct SamplerDescriptor<'a> {
 
 #[derive(Debug)]
 pub struct Sampler {
-    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynSampler>>,
+    pub(crate) raw: ResourceState<Box<dyn hal::DynSampler>>,
     pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -2128,19 +2894,43 @@ pub struct Sampler {
 }
 
 impl Drop for Sampler {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("Sampler::drop");
+        api_log!("Sampler::drop {:?}", self as *const _);
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            t.add(trace::Action::DropSampler(unsafe { trace::to_trace(self) }));
+        }
         resource_log!("Destroy raw {}", self.error_ident());
-        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-        unsafe {
-            self.device.raw().destroy_sampler(raw);
+        if let ResourceState::Valid(raw) = mem::replace(&mut self.raw, ResourceState::Invalid) {
+            unsafe {
+                self.device.raw().destroy_sampler(raw);
+            }
         }
     }
 }
 
 impl Sampler {
-    pub(crate) fn raw(&self) -> &dyn hal::DynSampler {
-        self.raw.as_ref()
+    pub(crate) fn raw(&self) -> Result<&dyn hal::DynSampler, InvalidResourceError> {
+        self.raw
+            .as_ref()
+            .valid()
+            .map(|raw| raw.as_ref())
+            .ok_or_else(|| InvalidResourceError(self.error_ident()))
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, desc: &SamplerDescriptor) -> Arc<Self> {
+        Arc::new(Sampler {
+            raw: ResourceState::Invalid,
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(device.tracker_indices.samplers.clone()),
+            device,
+            comparison: desc.compare.is_some(),
+            filtering: desc.mag_filter == wgt::FilterMode::Linear
+                || desc.min_filter == wgt::FilterMode::Linear
+                || desc.mipmap_filter == wgt::MipmapFilterMode::Linear,
+        })
     }
 }
 
@@ -2239,13 +3029,16 @@ impl WebGpuError for CreateQuerySetError {
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 
 #[derive(Debug)]
-pub struct QuerySet {
+pub(crate) struct QuerySetState {
     pub(crate) raw: Snatchable<Box<dyn hal::DynQuerySet>>,
+}
+
+#[derive(Debug)]
+pub struct QuerySet {
+    pub(crate) state: ResourceState<QuerySetState>,
     pub(crate) device: Arc<Device>,
-    /// The `label` from the descriptor used to create the resource.
-    pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
-    pub(crate) desc: wgt::QuerySetDescriptor<()>,
+    pub(crate) desc: wgt::QuerySetDescriptor<String>,
     pub(crate) initialized_slots: Mutex<bit_vec::BitVec>,
 }
 
@@ -2253,18 +3046,56 @@ impl RawResourceAccess for QuerySet {
     type DynResource = dyn hal::DynQuerySet;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.raw.get(guard).map(|b| b.as_ref())
+        self.state().ok()?.raw.get(guard).map(|b| b.as_ref())
     }
 }
 
 impl QuerySet {
+    pub(crate) fn state(&self) -> Result<&QuerySetState, InvalidResourceError> {
+        match &self.state {
+            ResourceState::Valid(state) => Ok(state),
+            ResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
+        self.state().map(|_| ())
+    }
+
+    pub fn invalid(device: Arc<Device>, desc: &QuerySetDescriptor) -> Arc<Self> {
+        Arc::new(QuerySet {
+            state: ResourceState::Invalid,
+            tracking_data: TrackingData::new(device.tracker_indices.query_sets.clone()),
+            desc: desc.map_label(|l| l.to_string()),
+            initialized_slots: Mutex::new(
+                rank::QUERY_SET_INITIALIZED_SLOTS,
+                bit_vec::BitVec::new(),
+            ),
+            device,
+        })
+    }
+
     pub fn destroy(self: &Arc<Self>) {
         let device = &self.device;
+
+        profiling::scope!("QuerySet::destroy");
+        api_log!("QuerySet::destroy {:?}", Arc::as_ptr(self));
+
+        #[cfg(feature = "trace")]
+        if let Some(trace) = device.trace.lock().as_mut() {
+            use crate::device::trace::IntoTrace as _;
+
+            trace.add(trace::Action::DestroyQuerySet(self.to_trace()));
+        };
+
+        let ResourceState::Valid(state) = &self.state else {
+            return;
+        };
 
         let temp = {
             let mut snatch_guard = self.device.snatchable_lock.write();
 
-            let raw = match self.raw.snatch(&mut snatch_guard) {
+            let raw = match state.raw.snatch(&mut snatch_guard) {
                 Some(raw) => raw,
                 None => {
                     // Per spec, it is valid to call `destroy` multiple times.
@@ -2291,12 +3122,28 @@ impl QuerySet {
             life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
     }
+
+    pub fn descriptor(&self) -> &wgt::QuerySetDescriptor<String> {
+        &self.desc
+    }
 }
 
 impl Drop for QuerySet {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("QuerySet::drop");
+        api_log!("QuerySet::drop {:?}", self as *const _);
         resource_log!("Destroy raw {}", self.error_ident());
-        if let Some(raw) = self.raw.take() {
+        #[cfg(feature = "trace")]
+        if let Some(trace) = self.device.trace.lock().as_mut() {
+            use crate::device::trace::to_trace;
+
+            trace.add(trace::Action::DropQuerySet(unsafe { to_trace(self) }));
+        }
+        let ResourceState::Valid(state) = &mut self.state else {
+            return;
+        };
+        if let Some(raw) = state.raw.take() {
             // SAFETY: We are in the Drop impl and we don't use raw anymore after this point.
             unsafe {
                 self.device.raw().destroy_query_set(raw);
@@ -2306,7 +3153,11 @@ impl Drop for QuerySet {
 }
 
 crate::impl_resource_type!(QuerySet);
-crate::impl_labeled!(QuerySet);
+impl Labeled for QuerySet {
+    fn label(&self) -> &str {
+        &self.desc.label
+    }
+}
 crate::impl_parent_device!(QuerySet);
 crate::impl_storage_item!(QuerySet);
 crate::impl_trackable!(QuerySet);
@@ -2379,8 +3230,13 @@ unsafe impl Send for BlasCompactState {}
 unsafe impl Sync for BlasCompactState {}
 
 #[derive(Debug)]
-pub struct Blas {
+pub(crate) struct BlasState {
     pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>,
+}
+
+#[derive(Debug)]
+pub struct Blas {
+    pub(crate) state: ResourceState<BlasState>,
     pub(crate) device: Arc<Device>,
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
@@ -2396,12 +3252,22 @@ pub struct Blas {
 }
 
 impl Drop for Blas {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("Blas::drop");
+        api_log!("Blas::drop {:?}", self as *const _);
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            use crate::device::trace::{to_trace, Action};
+            t.add(Action::DropBlas(unsafe { to_trace(self) }));
+        }
         resource_log!("Destroy raw {}", self.error_ident());
         // SAFETY: We are in the Drop impl, and we don't use self.raw or self.compaction_buffer anymore after this point.
-        if let Some(raw) = self.raw.take() {
-            unsafe {
-                self.device.raw().destroy_acceleration_structure(raw);
+        if let ResourceState::Valid(state) = &mut self.state {
+            if let Some(raw) = state.raw.take() {
+                unsafe {
+                    self.device.raw().destroy_acceleration_structure(raw);
+                }
             }
         }
         if let Some(mut raw) = self.compaction_buffer.take() {
@@ -2418,17 +3284,88 @@ impl RawResourceAccess for Blas {
     type DynResource = dyn hal::DynAccelerationStructure;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.raw.get(guard).map(|it| it.as_ref())
+        self.state().ok()?.raw.get(guard).map(|it| it.as_ref())
     }
 }
 
 impl Blas {
-    pub(crate) fn prepare_compact_async(
+    pub(crate) fn state(&self) -> Result<&BlasState, InvalidResourceError> {
+        match &self.state {
+            ResourceState::Valid(state) => Ok(state),
+            ResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
+        self.state().map(|_| ())
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, desc: &BlasDescriptor) -> Arc<Self> {
+        Arc::new(Blas {
+            state: ResourceState::Invalid,
+            size_info: hal::AccelerationStructureBuildSizes {
+                acceleration_structure_size: 0,
+                update_scratch_size: 0,
+                build_scratch_size: 0,
+            },
+            sizes: wgt::BlasGeometrySizeDescriptors::Triangles {
+                descriptors: Vec::new(),
+            },
+            flags: desc.flags,
+            update_mode: desc.update_mode,
+            built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
+            handle: 0,
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(device.tracker_indices.blas_s.clone()),
+            device,
+            compaction_buffer: None,
+            compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Idle),
+        })
+    }
+
+    pub fn handle(&self) -> Option<u64> {
+        Some(self.handle)
+    }
+
+    pub fn ready_for_compaction(self: &Arc<Self>) -> Result<bool, InvalidResourceError> {
+        profiling::scope!("Blas::prepare_compact_async");
+        api_log!("Blas::prepare_compact_async {:?}", Arc::as_ptr(self));
+
+        self.check_is_valid()?;
+        let state = self.compacted_state.lock();
+        Ok(matches!(*state, BlasCompactState::Ready { .. }))
+    }
+
+    pub fn prepare_compact_async(
+        self: &Arc<Self>,
+        callback: Option<BlasCompactCallback>,
+    ) -> Result<SubmissionIndex, BlasPrepareCompactError> {
+        profiling::scope!("Blas::prepare_compact_async");
+        api_log!("Blas::prepare_compact_async {:?}", Arc::as_ptr(self));
+
+        let compact_result = self.prepare_compact_async_inner(callback);
+
+        match compact_result {
+            Ok(submission_index) => Ok(submission_index),
+            Err((mut callback, err)) => {
+                if let Some(callback) = callback.take() {
+                    callback(Err(err.clone()));
+                }
+                Err(err)
+            }
+        }
+    }
+
+    fn prepare_compact_async_inner(
         self: &Arc<Self>,
         op: Option<BlasCompactCallback>,
     ) -> Result<SubmissionIndex, (Option<BlasCompactCallback>, BlasPrepareCompactError)> {
         let device = &self.device;
         if let Err(e) = device.check_is_valid() {
+            return Err((op, e.into()));
+        }
+
+        if let Err(e) = self.check_is_valid() {
             return Err((op, e.into()));
         }
 
@@ -2528,8 +3465,14 @@ crate::impl_storage_item!(Blas);
 crate::impl_trackable!(Blas);
 
 #[derive(Debug)]
-pub struct Tlas {
+pub(crate) struct TlasState {
     pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>,
+    pub(crate) instance_buffer: Box<dyn hal::DynBuffer>,
+}
+
+#[derive(Debug)]
+pub struct Tlas {
+    pub(crate) state: ResourceState<TlasState>,
     pub(crate) device: Arc<Device>,
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) max_instance_count: u32,
@@ -2537,22 +3480,64 @@ pub struct Tlas {
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
     pub(crate) built_index: RwLock<Option<NonZeroU64>>,
     pub(crate) dependencies: RwLock<Vec<Arc<Blas>>>,
-    pub(crate) instance_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
 }
 
 impl Drop for Tlas {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
-        unsafe {
-            resource_log!("Destroy raw {}", self.error_ident());
-            if let Some(structure) = self.raw.take() {
-                self.device.raw().destroy_acceleration_structure(structure);
-            }
-            let buffer = ManuallyDrop::take(&mut self.instance_buffer);
-            self.device.raw().destroy_buffer(buffer);
+        profiling::scope!("Tlas::drop");
+        api_log!("Tlas::drop {:?}", self as *const _);
+
+        #[cfg(feature = "trace")]
+        if let Some(t) = self.device.trace.lock().as_mut() {
+            use crate::device::trace::{to_trace, Action};
+            t.add(Action::DropTlas(unsafe { to_trace(self) }));
         }
+
+        resource_log!("Destroy raw {}", self.error_ident());
+        let ResourceState::Valid(mut state) = mem::replace(&mut self.state, ResourceState::Invalid)
+        else {
+            return;
+        };
+        if let Some(structure) = state.raw.take() {
+            unsafe { self.device.raw().destroy_acceleration_structure(structure) };
+        }
+        unsafe { self.device.raw().destroy_buffer(state.instance_buffer) };
+    }
+}
+
+impl Tlas {
+    pub(crate) fn state(&self) -> Result<&TlasState, InvalidResourceError> {
+        match &self.state {
+            ResourceState::Valid(state) => Ok(state),
+            ResourceState::Invalid => Err(InvalidResourceError(self.error_ident())),
+        }
+    }
+
+    pub(crate) fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
+        self.state().map(|_| ())
+    }
+
+    pub(crate) fn invalid(device: Arc<Device>, desc: &TlasDescriptor) -> Arc<Self> {
+        Arc::new(Self {
+            state: ResourceState::Invalid,
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(device.tracker_indices.tlas_s.clone()),
+            size_info: hal::AccelerationStructureBuildSizes {
+                acceleration_structure_size: 0,
+                update_scratch_size: 0,
+                build_scratch_size: 0,
+            },
+            max_instance_count: desc.max_instances,
+            flags: desc.flags,
+            update_mode: desc.update_mode,
+            built_index: RwLock::new(rank::TLAS_BUILT_INDEX, None),
+            dependencies: RwLock::new(rank::TLAS_DEPENDENCIES, Vec::new()),
+            device,
+        })
     }
 }
 
@@ -2560,7 +3545,7 @@ impl RawResourceAccess for Tlas {
     type DynResource = dyn hal::DynAccelerationStructure;
 
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
-        self.raw.get(guard).map(|raw| raw.as_ref())
+        self.state().ok()?.raw.get(guard).map(|raw| raw.as_ref())
     }
 }
 
