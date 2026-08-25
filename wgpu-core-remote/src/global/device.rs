@@ -1,6 +1,8 @@
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::ptr::NonNull;
-use wgpu_core_remote_types::encoders::RenderBundleDescriptor;
+use wgpu_core_remote_types::{
+    encoders::RenderBundleDescriptor, pipelines::ComputePipelineDescriptor,
+};
 
 use wgpu_core::{
     binding_model::{self},
@@ -27,13 +29,6 @@ use crate::{
 use wgt::{error::WebGpuError, BufferAddress};
 
 pub use wgpu_core_remote_types::binding_model::*;
-
-pub type ComputePipelineDescriptor<'a> = pipeline::ComputePipelineDescriptor<
-    'a,
-    id::PipelineLayoutId,
-    id::ShaderModuleId,
-    id::PipelineCacheId,
->;
 
 pub type RenderPipelineDescriptor<'a> = pipeline::RenderPipelineDescriptor<
     'a,
@@ -887,7 +882,6 @@ impl Global {
             devices,
             shader_modules,
             pipeline_layouts,
-            pipeline_caches,
             ..
         } = &mut *hub;
 
@@ -895,22 +889,20 @@ impl Global {
 
         let layout = desc.layout.map(|layout| pipeline_layouts.get(layout));
 
-        let cache = desc.cache.map(|cache| pipeline_caches.get(cache));
-
         let module = shader_modules.get(desc.stage.module);
 
         let stage = ProgrammableStageDescriptor {
             module,
             entry_point: desc.stage.entry_point.clone(),
             constants: desc.stage.constants.clone(),
-            zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
+            zero_initialize_workgroup_memory: true,
         };
 
         let desc = pipeline::ComputePipelineDescriptor {
             label: desc.label.clone(),
             layout,
             stage,
-            cache,
+            cache: None,
         };
 
         let pipeline = device.create_compute_pipeline(desc);
@@ -935,7 +927,6 @@ impl Global {
             devices,
             shader_modules,
             pipeline_layouts,
-            pipeline_caches,
             ..
         } = &mut *hub;
 
@@ -943,22 +934,20 @@ impl Global {
 
         let layout = desc.layout.map(|layout| pipeline_layouts.get(layout));
 
-        let cache = desc.cache.map(|cache| pipeline_caches.get(cache));
-
         let module = shader_modules.get(desc.stage.module);
 
         let stage = ProgrammableStageDescriptor {
             module,
             entry_point: desc.stage.entry_point.clone(),
             constants: desc.stage.constants.clone(),
-            zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
+            zero_initialize_workgroup_memory: true,
         };
 
         let desc = pipeline::ComputePipelineDescriptor {
             label: desc.label.clone(),
             layout,
             stage,
-            cache,
+            cache: None,
         };
 
         match device.create_compute_pipeline_or_error(desc) {
