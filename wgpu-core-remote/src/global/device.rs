@@ -5,7 +5,7 @@ use wgpu_core_remote_types::{
     encoders::RenderBundleDescriptor,
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
     BufferDescriptor, ExternalTextureDescriptor, PipelineLayoutDescriptor, SamplerDescriptor,
-    TextureDescriptor, TextureViewDescriptor,
+    ShaderModuleDescriptor, TextureDescriptor, TextureViewDescriptor,
 };
 
 use wgpu_core::{
@@ -610,8 +610,7 @@ impl Global {
     pub fn device_create_shader_module(
         &self,
         device_id: DeviceId,
-        desc: &pipeline::ShaderModuleDescriptor,
-        source: pipeline::ShaderModuleSource,
+        desc: &ShaderModuleDescriptor,
         id_in: id::ShaderModuleId,
     ) -> (
         id::ShaderModuleId,
@@ -626,7 +625,14 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (shader, error) = device.create_shader_module(desc, source);
+        let code = pipeline::ShaderModuleSource::Wgsl(Cow::Borrowed(&desc.code));
+
+        let desc = pipeline::ShaderModuleDescriptor {
+            label: desc.label.as_ref().map(|l| Cow::Borrowed(l.as_ref())),
+            runtime_checks: wgt::ShaderRuntimeChecks::checked(),
+        };
+
+        let (shader, error) = device.create_shader_module(&desc, code);
 
         let id = shader_modules.assign(id_in, shader);
 

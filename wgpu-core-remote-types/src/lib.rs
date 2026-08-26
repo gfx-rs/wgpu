@@ -129,3 +129,10 @@ pub struct PipelineLayoutDescriptor<'a> {
     /// If this value is non-zero, [`wgt::Features::IMMEDIATES`] must be enabled.
     pub immediate_size: u32,
 }
+
+/// Corresponds to [WebGPU `GPUShaderModuleDescriptor`](https://gpuweb.github.io/gpuweb/#dictdef-gpushadermoduledescriptor).
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ShaderModuleDescriptor<'a> {
+    pub label: Label<'a>,
+    pub code: Cow<'a, str>,
+}
