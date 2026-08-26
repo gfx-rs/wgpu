@@ -137,10 +137,7 @@ impl ContextWgpuCore {
                 .wgpu_device
                 .handle_error(cause, desc.label, "Device::create_texture_from_hal");
         }
-        CoreTexture {
-            context: self.clone(),
-            wgpu_texture,
-        }
+        CoreTexture { wgpu_texture }
     }
 
     /// # Safety
@@ -183,23 +180,6 @@ impl ContextWgpuCore {
         surface: &CoreSurface,
     ) -> Option<impl Deref<Target = A::Surface>> {
         unsafe { surface.wgpu_surface.clone().as_hal::<A>() }
-    }
-
-    pub unsafe fn texture_as_hal<A: hal::Api>(
-        &self,
-        texture: &CoreTexture,
-    ) -> Option<impl Deref<Target = A::Texture>> {
-        unsafe { texture.wgpu_texture.clone().as_hal::<A>() }
-    }
-
-    /// Returns `true` if `texture` was created on `device`.
-    #[cfg(webgl)]
-    pub fn texture_belongs_to_device(&self, texture: &CoreTexture, device: &CoreDevice) -> bool {
-        use wgc::resource::ParentDevice as _;
-        texture
-            .wgpu_texture
-            .same_device(&device.wgpu_device)
-            .is_ok()
     }
 
     /// This method will start the wgpu_core level command recording.
@@ -341,6 +321,15 @@ pub struct CoreDevice {
     pub(crate) wgpu_device: Arc<wgc::device::Device>,
 }
 
+impl CoreDevice {
+    /// Returns `true` if `texture` was created on `device`.
+    #[cfg(webgl)]
+    pub fn texture_belongs_to_device(&self, texture: &CoreTexture) -> bool {
+        use wgc::resource::ParentDevice as _;
+        texture.wgpu_texture.same_device(&self.wgpu_device).is_ok()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CoreBuffer {
     pub(crate) context: ContextWgpuCore,
@@ -365,8 +354,13 @@ pub struct CoreBindGroup {
 
 #[derive(Debug, Clone)]
 pub struct CoreTexture {
-    pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_texture: Arc<wgc::resource::Texture>,
+}
+
+impl CoreTexture {
+    pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::Texture>> {
+        unsafe { self.wgpu_texture.clone().as_hal::<A>() }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1396,11 +1390,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 .handle_error(cause, desc.label, "Device::create_texture");
         }
 
-        CoreTexture {
-            context: self.context.clone(),
-            wgpu_texture,
-        }
-        .into()
+        CoreTexture { wgpu_texture }.into()
     }
 
     fn create_external_texture(
@@ -2899,10 +2889,7 @@ impl dispatch::SurfaceInterface for CoreSurface {
                 texture: texture_id,
             }) => {
                 let data = texture_id
-                    .map(|wgpu_texture| CoreTexture {
-                        context: self.context.clone(),
-                        wgpu_texture,
-                    })
+                    .map(|wgpu_texture| CoreTexture { wgpu_texture })
                     .map(Into::into);
 
                 (data, status, output_detail)
