@@ -109,8 +109,10 @@ mod global_send_sync {
     /// This function will fail to compile if any field is not `Send + Sync`, or if a new field is
     /// added to `Global`.
     ///
-    /// This technique is modeled after the macro library <https://crates.io/crates/non_structural_derive>;
-    /// however, we only need it once, so it’s cheaper to write out the same code the macro would generate.
+    /// This technique is modeled after the macro library `non_structural_derive`, with permission
+    /// (see
+    /// <https://github.com/fee1-dead/non_structural_derive/issues/1#issuecomment-5250905440>).
+    /// We only need it once, so it’s cheaper to write out the same code the macro would generate.
     fn _global_fields_are_send_sync(global: &Global) {
         fn _check_bound<T: Send + Sync>(_: &T) {}
 
