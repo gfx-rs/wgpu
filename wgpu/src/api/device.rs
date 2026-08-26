@@ -519,10 +519,7 @@ impl Device {
         // not created on this device.
         let core_device = self.inner.as_core_opt()?;
         let core_texture = texture.inner.as_core_opt()?;
-        if !core_device
-            .context
-            .texture_belongs_to_device(core_texture, core_device)
-        {
+        if !core_device.texture_belongs_to_device(core_texture) {
             return None;
         }
 
