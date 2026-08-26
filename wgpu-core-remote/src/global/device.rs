@@ -654,6 +654,15 @@ impl Global {
         (id, error)
     }
 
+    pub fn shader_module_compilation_info(
+        &self,
+        shader_module_id: id::ShaderModuleId,
+    ) -> wgt::CompilationInfo {
+        let hub = self.hub.borrow();
+        let shader_module = hub.shader_modules.get(shader_module_id);
+        shader_module.compilation_info().clone()
+    }
+
     pub fn shader_module_remove(
         &self,
         shader_module_id: id::ShaderModuleId,

@@ -1972,6 +1972,67 @@ impl WebDevice {
     }
 }
 
+#[cfg(feature = "glsl")]
+pub(crate) fn glsl_to_compilation_info(
+    value: naga::error::ShaderError<naga::front::glsl::ParseErrors>,
+) -> wgt::CompilationInfo {
+    use alloc::string::ToString;
+    let messages = value
+        .inner
+        .errors
+        .into_iter()
+        .map(|err| wgt::CompilationMessage {
+            message: err.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: err.location(&value.source).map(naga_to_source_location),
+        })
+        .collect();
+    wgt::CompilationInfo { messages }
+}
+
+#[cfg(feature = "spirv")]
+pub(crate) fn spirv_to_compilation_info(
+    value: naga::error::ShaderError<naga::front::spv::Error>,
+) -> wgt::CompilationInfo {
+    use alloc::{string::ToString, vec};
+    wgt::CompilationInfo {
+        messages: vec![wgt::CompilationMessage {
+            message: value.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: None,
+        }],
+    }
+}
+
+#[cfg(naga)]
+pub(crate) fn naga_to_compilation_info(
+    value: crate::naga::error::ShaderError<
+        crate::naga::WithSpan<crate::naga::valid::ValidationError>,
+    >,
+) -> wgt::CompilationInfo {
+    use alloc::{string::ToString, vec};
+    wgt::CompilationInfo {
+        messages: vec![wgt::CompilationMessage {
+            message: value.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: value
+                .inner
+                .location(&value.source)
+                .map(naga_to_source_location),
+        }],
+    }
+}
+
+#[cfg(naga)]
+fn naga_to_source_location(value: crate::naga::SourceLocation) -> wgt::SourceLocation {
+    wgt::SourceLocation {
+        length: value.length,
+        offset: value.offset,
+        line_number: value.line_number,
+        line_position: value.line_position,
+    }
+}
+
 impl dispatch::DeviceInterface for WebDevice {
     fn features(&self) -> crate::Features {
         map_wgt_features(self.inner.features())
@@ -2004,7 +2065,7 @@ impl dispatch::DeviceInterface for WebDevice {
                 spv_parser
                     .parse()
                     .map_err(|inner| {
-                        crate::spirv_to_compilation_info(naga::error::ShaderError {
+                        spirv_to_compilation_info(naga::error::ShaderError {
                             source: String::new(),
                             label: desc.label.map(|s| s.to_string()),
                             inner: Box::new(inner),
@@ -2041,7 +2102,7 @@ impl dispatch::DeviceInterface for WebDevice {
                 parser
                     .parse(&options, shader)
                     .map_err(|inner| {
-                        crate::glsl_to_compilation_info(naga::error::ShaderError {
+                        glsl_to_compilation_info(naga::error::ShaderError {
                             source: shader.to_string(),
                             label: desc.label.map(|s| s.to_string()),
                             inner: Box::new(inner),
@@ -2094,7 +2155,7 @@ impl dispatch::DeviceInterface for WebDevice {
             let mut validator =
                 valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all());
             let module_info = validator.validate(module).map_err(|err| {
-                crate::naga_to_compilation_info(naga::error::ShaderError {
+                naga_to_compilation_info(naga::error::ShaderError {
                     source: source.to_string(),
                     label: desc.label.map(|s| s.to_string()),
                     inner: err,

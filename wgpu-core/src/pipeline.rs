@@ -1,3 +1,4 @@
+use alloc::string::ToString as _;
 use alloc::{
     borrow::{Cow, ToOwned},
     boxed::Box,
@@ -78,6 +79,7 @@ pub struct ShaderModule {
     pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
+    pub(crate) compilation_info: wgt::CompilationInfo,
 }
 
 impl Drop for ShaderModule {
@@ -116,12 +118,21 @@ impl ShaderModule {
         Ok(state)
     }
 
-    pub(crate) fn invalid(device: Arc<Device>, label: String) -> Arc<Self> {
+    pub(crate) fn invalid(
+        device: Arc<Device>,
+        label: String,
+        compilation_info: wgt::CompilationInfo,
+    ) -> Arc<Self> {
         Arc::new(Self {
             state: ResourceState::Invalid,
             device,
             label,
+            compilation_info,
         })
+    }
+
+    pub fn compilation_info(&self) -> &wgt::CompilationInfo {
+        &self.compilation_info
     }
 
     /// Select an entry point name, given an optional name and a shader stage.
@@ -240,6 +251,113 @@ impl WebGpuError for CreateShaderModuleError {
             #[cfg(feature = "spirv")]
             Self::ParsingSpirV(..) => ErrorType::Validation,
         }
+    }
+}
+
+#[cfg(feature = "wgsl")]
+pub(crate) fn wgsl_to_compilation_info(
+    value: &ShaderError<naga::front::wgsl::ParseError>,
+) -> wgt::CompilationInfo {
+    use alloc::{string::ToString, vec};
+    wgt::CompilationInfo {
+        messages: vec![wgt::CompilationMessage {
+            message: value.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: value
+                .inner
+                .location(&value.source)
+                .as_ref()
+                .map(naga_to_source_location),
+        }],
+    }
+}
+#[cfg(feature = "glsl")]
+pub(crate) fn glsl_to_compilation_info(
+    value: &ShaderError<naga::front::glsl::ParseErrors>,
+) -> wgt::CompilationInfo {
+    use alloc::string::ToString;
+    let messages = value
+        .inner
+        .errors
+        .iter()
+        .map(|err| wgt::CompilationMessage {
+            message: err.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: err
+                .location(&value.source)
+                .as_ref()
+                .map(naga_to_source_location),
+        })
+        .collect();
+    wgt::CompilationInfo { messages }
+}
+
+#[cfg(feature = "spirv")]
+pub(crate) fn spirv_to_compilation_info(
+    value: &ShaderError<naga::front::spv::Error>,
+) -> wgt::CompilationInfo {
+    use alloc::{string::ToString, vec};
+    wgt::CompilationInfo {
+        messages: vec![wgt::CompilationMessage {
+            message: value.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: None,
+        }],
+    }
+}
+
+pub(crate) fn naga_to_compilation_info(
+    value: &ShaderError<naga::WithSpan<naga::valid::ValidationError>>,
+) -> wgt::CompilationInfo {
+    use alloc::{string::ToString, vec};
+    wgt::CompilationInfo {
+        messages: vec![wgt::CompilationMessage {
+            message: value.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: value
+                .inner
+                .location(&value.source)
+                .as_ref()
+                .map(naga_to_source_location),
+        }],
+    }
+}
+
+fn naga_to_source_location(value: &naga::SourceLocation) -> wgt::SourceLocation {
+    wgt::SourceLocation {
+        length: value.length,
+        offset: value.offset,
+        line_number: value.line_number,
+        line_position: value.line_position,
+    }
+}
+
+pub(crate) fn shader_module_error_into_compilation_info(
+    value: &CreateShaderModuleError,
+) -> wgt::CompilationInfo {
+    match value {
+        #[cfg(feature = "wgsl")]
+        CreateShaderModuleError::Parsing(v) => wgsl_to_compilation_info(v),
+        #[cfg(feature = "glsl")]
+        CreateShaderModuleError::ParsingGlsl(v) => glsl_to_compilation_info(v),
+        #[cfg(feature = "spirv")]
+        CreateShaderModuleError::ParsingSpirV(v) => spirv_to_compilation_info(v),
+        CreateShaderModuleError::Validation(v) => naga_to_compilation_info(v),
+        // Device errors are reported through the error sink, and are not compilation errors.
+        // Same goes for native shader module generation errors.
+        CreateShaderModuleError::Device(_) | CreateShaderModuleError::Generation => {
+            wgt::CompilationInfo {
+                messages: Vec::new(),
+            }
+        }
+        // Everything else is an error message without location information.
+        _ => wgt::CompilationInfo {
+            messages: alloc::vec![wgt::CompilationMessage {
+                message: value.to_string(),
+                message_type: wgt::CompilationMessageType::Error,
+                location: None,
+            }],
+        },
     }
 }
 

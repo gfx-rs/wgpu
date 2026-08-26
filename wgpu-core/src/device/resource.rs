@@ -46,7 +46,7 @@ use crate::{
     },
     instance::{Adapter, RequestDeviceError},
     lock::{rank, Mutex, RwLock},
-    pipeline::{self, ColorStateError},
+    pipeline::{self, shader_module_error_into_compilation_info, ColorStateError},
     pool::ResourcePool,
     resource::{
         self, Buffer, BufferState, ExternalTexture, ExternalTextureState, Labeled, ParentDevice,
@@ -2446,8 +2446,11 @@ impl Device {
         let (shader, error) = match self.create_shader_module_inner(desc, source) {
             Ok(shader) => (shader, None),
             Err(e) => {
-                let shader =
-                    pipeline::ShaderModule::invalid(Arc::clone(self), desc.label.to_string());
+                let shader = pipeline::ShaderModule::invalid(
+                    Arc::clone(self),
+                    desc.label.to_string(),
+                    shader_module_error_into_compilation_info(&e),
+                );
                 (shader, Some(e))
             }
         };
@@ -2601,6 +2604,7 @@ impl Device {
             }),
             device: self.clone(),
             label: desc.label.to_string(),
+            compilation_info: wgt::CompilationInfo::default(),
         };
 
         let module = Arc::new(module);
@@ -2624,8 +2628,11 @@ impl Device {
         let (shader, error) = match unsafe { self.create_shader_module_passthrough_inner(desc) } {
             Ok(shader) => (shader, None),
             Err(e) => {
-                let shader =
-                    pipeline::ShaderModule::invalid(Arc::clone(self), desc.label.to_string());
+                let shader = pipeline::ShaderModule::invalid(
+                    Arc::clone(self),
+                    desc.label.to_string(),
+                    shader_module_error_into_compilation_info(&e),
+                );
                 (shader, Some(e))
             }
         };
@@ -2762,6 +2769,7 @@ impl Device {
             }),
             device: self.clone(),
             label: descriptor.label.to_string(),
+            compilation_info: wgt::CompilationInfo::default(),
         };
 
         Ok(Arc::new(module))
