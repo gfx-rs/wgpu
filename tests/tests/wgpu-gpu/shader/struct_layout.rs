@@ -72,8 +72,7 @@ static IMMEDIATES_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest> {
-    // Immediates don't support array types
-    let no_array_types = storage_type == InputStorageType::Immediate;
+    let array_types_supported = storage_type != InputStorageType::Immediate;
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
 
     let mut tests = Vec::new();
@@ -273,7 +272,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     }
 
     // Array of matrix tests
-    if !no_array_types {
+    if array_types_supported {
         for columns in [2, 4] {
             for rows in [2, 3, 4] {
                 let array_size = 2;
@@ -511,7 +510,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     // Test for https://github.com/gfx-rs/wgpu/issues/5262.
     //
     // The struct is supposed to have a size of 32 and alignment of 16.
-    if !no_array_types {
+    if array_types_supported {
         for ty in ["f32", "u32", "i32"] {
             let header = format!("struct Inner {{ vec: vec3<{ty}>, scalar1: u32, scalar2: u32 }}");
             let members = String::from("arr: array<Inner, 2>");
@@ -565,7 +564,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     {
         let header = format!(
             "struct Inner {{ scalar: f32, {}scalar2: f32 }}",
-            if !no_array_types {
+            if array_types_supported {
                 "member: array<vec3<f32>, 2>, "
             } else {
                 ""
@@ -583,7 +582,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
             output[11] = bitcast<u32>(input.vector.z);
             output[12] = bitcast<u32>(input.scalar4);
         ",
-            if !no_array_types {
+            if array_types_supported {
                 "\
             output[1] = bitcast<u32>(input.inner.member[0].x);
             output[2] = bitcast<u32>(input.inner.member[0].y);
@@ -603,7 +602,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                 members,
                 direct,
                 &input_values,
-                if !no_array_types {
+                if array_types_supported {
                     &[
                         0, // inner.scalar
                         4, 5, 6, // inner.member[0]
@@ -644,7 +643,7 @@ static UNIFORM_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(
             ctx,
             InputStorageType::Storage,
-            create_64bit_struct_layout_tests(false),
+            create_64bit_struct_layout_tests(true),
         )
     });
 
@@ -660,7 +659,7 @@ static STORAGE_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(
             ctx,
             InputStorageType::Storage,
-            create_64bit_struct_layout_tests(false),
+            create_64bit_struct_layout_tests(true),
         )
     });
 
@@ -680,11 +679,11 @@ static IMMEDIATES_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new(
             ctx,
             InputStorageType::Immediate,
             // Immediates don't support array types
-            create_64bit_struct_layout_tests(true),
+            create_64bit_struct_layout_tests(false),
         )
     });
 
-fn create_64bit_struct_layout_tests(no_array_types: bool) -> Vec<ShaderTest> {
+fn create_64bit_struct_layout_tests(array_types_supported: bool) -> Vec<ShaderTest> {
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
 
     let mut tests = Vec::new();
@@ -716,7 +715,7 @@ fn create_64bit_struct_layout_tests(no_array_types: bool) -> Vec<ShaderTest> {
     {
         let header = format!(
             "struct Inner {{ scalar: u64, scalar32: u32{} }}",
-            if !no_array_types {
+            if array_types_supported {
                 ", member: array<vec3<u64>, 2>"
             } else {
                 ""
@@ -730,7 +729,7 @@ fn create_64bit_struct_layout_tests(no_array_types: bool) -> Vec<ShaderTest> {
                 output[2] = bitcast<u32>(input.inner.scalar32);
                 {}
             ",
-            if !no_array_types {
+            if array_types_supported {
                 "\
                     for (var index = 0u; index < 2u; index += 1u) {
                         for (var component = 0u; component < 3u; component += 1u) {
@@ -750,7 +749,7 @@ fn create_64bit_struct_layout_tests(no_array_types: bool) -> Vec<ShaderTest> {
                 members,
                 direct,
                 &input_values,
-                if !no_array_types {
+                if array_types_supported {
                     &[
                         0, 1, // inner.scalar
                         2, // inner.scalar32
