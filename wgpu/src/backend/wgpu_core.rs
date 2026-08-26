@@ -233,13 +233,6 @@ impl ContextWgpuCore {
         unsafe { blas.wgpu_blas.clone().as_hal::<A>() }
     }
 
-    pub unsafe fn tlas_as_hal<A: hal::Api>(
-        &self,
-        tlas: &CoreTlas,
-    ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
-        unsafe { tlas.wgpu_tlas.clone().as_hal::<A>() }
-    }
-
     #[track_caller]
     #[cold]
     fn handle_error_fatal(
@@ -505,8 +498,15 @@ pub struct CoreBlas {
 
 #[derive(Debug, Clone)]
 pub struct CoreTlas {
-    pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_tlas: Arc<wgc::resource::Tlas>,
+}
+
+impl CoreTlas {
+    pub unsafe fn as_hal<A: hal::Api>(
+        &self,
+    ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
+        unsafe { self.wgpu_tlas.clone().as_hal::<A>() }
+    }
 }
 
 #[derive(Clone)]
@@ -1453,11 +1453,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             self.wgpu_device
                 .handle_error(cause, desc.label, "Device::create_tlas");
         }
-        CoreTlas {
-            context: self.context.clone(),
-            wgpu_tlas,
-        }
-        .into()
+        CoreTlas { wgpu_tlas }.into()
     }
 
     fn create_sampler(&self, desc: &crate::SamplerDescriptor<'_>) -> dispatch::DispatchSampler {
