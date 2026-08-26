@@ -3,7 +3,7 @@ use core::ptr::NonNull;
 use wgpu_core_remote_types::{
     encoders::RenderBundleDescriptor,
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
-    BufferDescriptor,
+    BufferDescriptor, TextureDescriptor,
 };
 
 use wgpu_core::{
@@ -145,7 +145,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         id_in: id::TextureId,
-        desc: &resource::TextureDescriptor,
+        desc: &TextureDescriptor,
     ) -> id::TextureId {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -219,7 +219,7 @@ impl Global {
     pub fn device_create_texture(
         &self,
         device_id: DeviceId,
-        desc: &resource::TextureDescriptor,
+        desc: &TextureDescriptor,
         id_in: id::TextureId,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
         let mut hub = self.hub.borrow_mut();
@@ -240,7 +240,7 @@ impl Global {
     pub fn device_validate_texture_descriptor(
         &self,
         device_id: DeviceId,
-        desc: &resource::TextureDescriptor,
+        desc: &TextureDescriptor,
     ) -> Option<resource::CreateTextureError> {
         let hub = self.hub.borrow();
         hub.devices
@@ -260,7 +260,7 @@ impl Global {
         &self,
         hal_texture: Box<dyn hal::DynTexture>,
         device_id: DeviceId,
-        desc: &resource::TextureDescriptor,
+        desc: &TextureDescriptor,
         initial_state: wgt::TextureUses,
         id_in: id::TextureId,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
