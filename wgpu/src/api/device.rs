@@ -363,13 +363,7 @@ impl Device {
     ) -> Texture {
         let texture = unsafe {
             let core_device = self.inner.as_core();
-            core_device.context.create_texture_from_hal::<A>(
-                hal_texture,
-                core_device,
-                desc,
-                initial_state,
-                cleared,
-            )
+            core_device.create_texture_from_hal::<A>(hal_texture, desc, initial_state, cleared)
         };
         Texture {
             inner: texture.into(),
@@ -622,9 +616,7 @@ impl Device {
 
         let buffer = unsafe {
             let core_device = self.inner.as_core();
-            core_device
-                .context
-                .create_buffer_from_hal::<A>(hal_buffer, core_device, desc)
+            core_device.create_buffer_from_hal::<A>(hal_buffer, desc)
         };
 
         Buffer {
@@ -816,7 +808,7 @@ impl Device {
         &self,
     ) -> Option<impl Deref<Target = A::Device> + WasmNotSendSync> {
         let device = self.inner.as_core_opt()?;
-        unsafe { device.context.device_as_hal::<A>(device) }
+        unsafe { device.as_hal::<A>() }
     }
 
     /// Destroy this device.
