@@ -85,13 +85,6 @@ impl ContextWgpuCore {
         unsafe { adapter.wgpu_adapter.clone().as_hal::<A>() }
     }
 
-    pub unsafe fn buffer_as_hal<A: hal::Api>(
-        &self,
-        buffer: &CoreBuffer,
-    ) -> Option<impl Deref<Target = A::Buffer>> {
-        unsafe { buffer.wgpu_buffer.clone().as_hal::<A>() }
-    }
-
     pub unsafe fn create_device_from_hal<A: hal::Api>(
         &self,
         adapter: &CoreAdapter,
@@ -162,10 +155,7 @@ impl ContextWgpuCore {
                 .wgpu_device
                 .handle_error(cause, desc.label, "Device::create_buffer_from_hal");
         }
-        CoreBuffer {
-            context: self.clone(),
-            wgpu_buffer,
-        }
+        CoreBuffer { wgpu_buffer }
     }
 
     pub unsafe fn device_as_hal<A: hal::Api>(
@@ -332,8 +322,13 @@ impl CoreDevice {
 
 #[derive(Debug, Clone)]
 pub struct CoreBuffer {
-    pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_buffer: Arc<wgc::resource::Buffer>,
+}
+
+impl CoreBuffer {
+    pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::Buffer>> {
+        unsafe { self.wgpu_buffer.clone().as_hal::<A>() }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1375,11 +1370,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 .handle_error(cause, desc.label, "Device::create_buffer");
         }
 
-        CoreBuffer {
-            context: self.context.clone(),
-            wgpu_buffer,
-        }
-        .into()
+        CoreBuffer { wgpu_buffer }.into()
     }
 
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> dispatch::DispatchTexture {
