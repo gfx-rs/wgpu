@@ -108,3 +108,24 @@ pub struct SamplerDescriptor<'a> {
     /// Must be at least 1. If this is not 1, all filter modes must be linear.
     pub anisotropy_clamp: u16,
 }
+
+/// Describes a pipeline layout.
+///
+/// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+/// cbindgen:ignore
+pub struct PipelineLayoutDescriptor<'a> {
+    /// Debug label of the pipeline layout.
+    ///
+    /// This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+    /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
+    /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
+    pub bind_group_layouts: Cow<'a, [Option<id::BindGroupLayoutId>]>,
+    /// The number of bytes of immediate data that are allocated for use
+    /// in the shader. The `var<immediate>`s in the shader attached to
+    /// this pipeline must be equal or smaller than this size.
+    ///
+    /// If this value is non-zero, [`wgt::Features::IMMEDIATES`] must be enabled.
+    pub immediate_size: u32,
+}
