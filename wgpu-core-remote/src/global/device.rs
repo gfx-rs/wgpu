@@ -4,7 +4,8 @@ use core::ptr::NonNull;
 use wgpu_core_remote_types::{
     encoders::RenderBundleDescriptor,
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
-    BufferDescriptor, ExternalTextureDescriptor, TextureDescriptor, TextureViewDescriptor,
+    BufferDescriptor, ExternalTextureDescriptor, SamplerDescriptor, TextureDescriptor,
+    TextureViewDescriptor,
 };
 
 use wgpu_core::{
@@ -400,7 +401,7 @@ impl Global {
     pub fn device_create_sampler(
         &self,
         device_id: DeviceId,
-        desc: &resource::SamplerDescriptor,
+        desc: &SamplerDescriptor,
         id_in: id::SamplerId,
     ) {
         let mut hub = self.hub.borrow_mut();
@@ -410,7 +411,20 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let sampler = device.create_sampler(desc);
+        let desc = resource::SamplerDescriptor {
+            label: desc.label.as_ref().map(|l| Cow::Borrowed(l.as_ref())),
+            address_modes: desc.address_modes,
+            mag_filter: desc.mag_filter,
+            min_filter: desc.min_filter,
+            mipmap_filter: desc.mipmap_filter,
+            lod_min_clamp: desc.lod_min_clamp,
+            lod_max_clamp: desc.lod_max_clamp,
+            compare: desc.compare,
+            anisotropy_clamp: desc.anisotropy_clamp,
+            border_color: None,
+        };
+
+        let sampler = device.create_sampler(&desc);
 
         samplers.assign(id_in, sampler);
     }
