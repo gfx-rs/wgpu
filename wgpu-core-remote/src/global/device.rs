@@ -2,7 +2,7 @@ use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::ops::Deref;
 use core::ptr::NonNull;
 use wgpu_core_remote_types::{
-    encoders::RenderBundleDescriptor,
+    encoders::{RenderBundleDescriptor, RenderBundleEncoderDescriptor},
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
     BufferDescriptor, ExternalTextureDescriptor, PipelineLayoutDescriptor, SamplerDescriptor,
     ShaderModuleDescriptor, TextureDescriptor, TextureViewDescriptor,
@@ -678,7 +678,7 @@ impl Global {
     pub fn device_create_render_bundle_encoder(
         &self,
         device_id: DeviceId,
-        desc: &command::RenderBundleEncoderDescriptor,
+        desc: &RenderBundleEncoderDescriptor,
         id_in: id::RenderBundleEncoderId,
     ) -> Result<(), MissingFeatures> {
         let mut hub = self.hub.borrow_mut();
@@ -689,7 +689,16 @@ impl Global {
         } = &mut *hub;
 
         let device = devices.get(device_id);
-        let render_bundle_encoder = device.create_render_bundle_encoder(desc)?;
+
+        let desc = command::RenderBundleEncoderDescriptor {
+            label: desc.label.as_ref().map(|l| Cow::Borrowed(l.as_ref())),
+            color_formats: Cow::Borrowed(&desc.color_formats),
+            depth_stencil: desc.depth_stencil,
+            sample_count: desc.sample_count,
+            multiview: None,
+        };
+
+        let render_bundle_encoder = device.create_render_bundle_encoder(&desc)?;
 
         render_bundle_encoders.assign(id_in, *render_bundle_encoder);
 
