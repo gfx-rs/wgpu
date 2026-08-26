@@ -490,7 +490,6 @@ impl CoreTlas {
 
 #[derive(Clone)]
 pub struct CoreSurfaceOutputDetail {
-    pub(crate) context: ContextWgpuCore,
     wgpu_surface: Arc<wgc::instance::Surface>,
     error_sink: ErrorSink,
 }
@@ -498,7 +497,6 @@ pub struct CoreSurfaceOutputDetail {
 impl fmt::Debug for CoreSurfaceOutputDetail {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CoreSurfaceOutputDetail")
-            .field("context", &self.context)
             .field("wgpu_surface", &Arc::as_ptr(&self.wgpu_surface))
             .finish()
     }
@@ -2844,7 +2842,6 @@ impl dispatch::SurfaceInterface for CoreSurface {
         };
 
         let output_detail = CoreSurfaceOutputDetail {
-            context: self.context.clone(),
             wgpu_surface: self.wgpu_surface.clone(),
             error_sink,
         }
