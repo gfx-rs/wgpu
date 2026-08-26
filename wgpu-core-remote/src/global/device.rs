@@ -126,7 +126,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         id_in: id::RenderBundleId,
-        desc: &command::RenderBundleDescriptor,
+        desc: &RenderBundleDescriptor,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
