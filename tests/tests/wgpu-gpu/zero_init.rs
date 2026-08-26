@@ -652,6 +652,7 @@ impl<'ctx> RenderTargetInitCase<'ctx> {
             mip_level_count: Some(1),
             base_array_layer,
             array_layer_count: Some(1),
+            swizzle: Default::default(),
         });
         encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Render target under test"),
@@ -696,6 +697,7 @@ impl<'ctx> RenderTargetInitCase<'ctx> {
                     mip_level_count: Some(1),
                     base_array_layer: 0,
                     array_layer_count: Some(1),
+                    swizzle: Default::default(),
                 })
             })
             .collect();
