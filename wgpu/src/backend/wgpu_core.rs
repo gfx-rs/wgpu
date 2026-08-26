@@ -171,13 +171,6 @@ impl ContextWgpuCore {
         unsafe { device.wgpu_device.clone().as_hal::<A>() }
     }
 
-    pub unsafe fn surface_as_hal<A: hal::Api>(
-        &self,
-        surface: &CoreSurface,
-    ) -> Option<impl Deref<Target = A::Surface>> {
-        unsafe { surface.wgpu_surface.clone().as_hal::<A>() }
-    }
-
     pub unsafe fn queue_as_hal<A: hal::Api>(
         &self,
         queue: &CoreQueue,
@@ -245,7 +238,6 @@ fn map_pass_channel<V: Copy>(ops: Option<&Operations<V>>) -> wgc::command::PassC
 
 #[derive(Clone)]
 pub struct CoreSurface {
-    pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_surface: Arc<wgc::instance::Surface>,
     /// Configured device is needed to know which backend
     /// code to execute when acquiring a new frame.
@@ -255,10 +247,15 @@ pub struct CoreSurface {
 impl fmt::Debug for CoreSurface {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CoreSurface")
-            .field("context", &self.context)
             .field("wgpu_surface", &Arc::as_ptr(&self.wgpu_surface))
             .field("configured_device", &self.configured_device)
             .finish()
+    }
+}
+
+impl CoreSurface {
+    pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::Surface>> {
+        unsafe { self.wgpu_surface.clone().as_hal::<A>() }
     }
 }
 
@@ -640,7 +637,6 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
         }?;
 
         Ok(CoreSurface {
-            context: self.clone(),
             wgpu_surface,
             configured_device: Arc::new(Mutex::default()),
         }
