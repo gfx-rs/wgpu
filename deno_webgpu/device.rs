@@ -481,8 +481,11 @@ impl GPUDevice {
       )),
     );
 
-    let compilation_info =
-      GPUCompilationInfo::new(scope, err.iter(), &descriptor.code);
+    let compilation_info = GPUCompilationInfo::new(
+      scope,
+      wgpu_shader_module.compilation_info(),
+      &descriptor.code,
+    );
     let compilation_info = make_cppgc_object(scope, compilation_info);
     let compilation_info = v8::Global::new(scope, compilation_info);
     self.error_handler.push_error(err);
