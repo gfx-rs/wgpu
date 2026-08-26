@@ -189,13 +189,6 @@ impl ContextWgpuCore {
         }
     }
 
-    pub unsafe fn blas_as_hal<A: hal::Api>(
-        &self,
-        blas: &CoreBlas,
-    ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
-        unsafe { blas.wgpu_blas.clone().as_hal::<A>() }
-    }
-
     #[track_caller]
     #[cold]
     fn handle_error_fatal(
@@ -479,8 +472,15 @@ impl fmt::Debug for CoreCommandEncoder {
 
 #[derive(Debug, Clone)]
 pub struct CoreBlas {
-    pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_blas: Arc<wgc::resource::Blas>,
+}
+
+impl CoreBlas {
+    pub unsafe fn as_hal<A: hal::Api>(
+        &self,
+    ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
+        unsafe { self.wgpu_blas.clone().as_hal::<A>() }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1414,14 +1414,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             self.wgpu_device
                 .handle_error(cause, desc.label, "Device::create_blas");
         }
-        (
-            wgpu_blas.handle(),
-            CoreBlas {
-                context: self.context.clone(),
-                wgpu_blas,
-            }
-            .into(),
-        )
+        (wgpu_blas.handle(), CoreBlas { wgpu_blas }.into())
     }
 
     fn create_tlas(&self, desc: &crate::CreateTlasDescriptor<'_>) -> dispatch::DispatchTlas {
@@ -1717,14 +1710,7 @@ impl dispatch::QueueInterface for CoreQueue {
                 .device()
                 .handle_error_nolabel(cause, "Queue::compact_blas");
         }
-        (
-            wgpu_blas.handle(),
-            CoreBlas {
-                context: self.context.clone(),
-                wgpu_blas,
-            }
-            .into(),
-        )
+        (wgpu_blas.handle(), CoreBlas { wgpu_blas }.into())
     }
 
     fn present(&self, detail: &dispatch::DispatchSurfaceOutputDetail) {
