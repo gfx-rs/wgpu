@@ -1,9 +1,10 @@
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
+use core::ops::Deref;
 use core::ptr::NonNull;
 use wgpu_core_remote_types::{
     encoders::RenderBundleDescriptor,
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
-    BufferDescriptor, ExternalTextureDescriptor, TextureDescriptor,
+    BufferDescriptor, ExternalTextureDescriptor, TextureDescriptor, TextureViewDescriptor,
 };
 
 use wgpu_core::{
@@ -322,7 +323,7 @@ impl Global {
     pub fn texture_create_view(
         &self,
         texture_id: id::TextureId,
-        desc: &resource::TextureViewDescriptor,
+        desc: &TextureViewDescriptor,
         id_in: id::TextureViewId,
     ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
         let mut hub = self.hub.borrow_mut();
@@ -334,7 +335,15 @@ impl Global {
 
         let texture = textures.get(texture_id);
 
-        let (view, error) = texture.create_view(desc);
+        let desc = resource::TextureViewDescriptor {
+            label: desc.label.as_ref().map(|s| Cow::Borrowed(s.deref())),
+            format: desc.format,
+            dimension: desc.dimension,
+            usage: desc.usage,
+            range: desc.range,
+        };
+
+        let (view, error) = texture.create_view(&desc);
 
         let id = texture_views.assign(id_in, view);
 

@@ -53,3 +53,31 @@ pub type QueueDescriptor<'a> = wgt::QueueDescriptor<Label<'a>>;
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
 pub type ExternalTextureDescriptor<'a> = wgt::ExternalTextureDescriptor<Label<'a>>;
+
+/// Describes a `TextureView`.
+///
+/// Corresponds to [WebGPU `GPUTextureViewDescriptor`](https://gpuweb.github.io/gpuweb/#dictdef-gputextureviewdescriptor).
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct TextureViewDescriptor<'a> {
+    /// Debug label of the texture view.
+    ///
+    /// This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+    /// Format of the texture view, or `None` for the same format as the texture
+    /// itself.
+    ///
+    /// At this time, it must be the same the underlying format of the texture.
+    pub format: Option<wgt::TextureFormat>,
+    /// The dimension of the texture view.
+    ///
+    /// - For 1D textures, this must be `D1`.
+    /// - For 2D textures it must be one of `D2`, `D2Array`, `Cube`, or `CubeArray`.
+    /// - For 3D textures it must be `D3`.
+    pub dimension: Option<wgt::TextureViewDimension>,
+    /// The allowed usage(s) for the texture view. Must be a subset of the usage flags of the texture.
+    /// If not provided, defaults to the full set of usage flags of the texture.
+    pub usage: Option<wgt::TextureUsages>,
+    /// Range within the texture that is accessible via this view.
+    pub range: wgt::ImageSubresourceRange,
+}
