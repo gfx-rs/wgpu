@@ -1000,40 +1000,6 @@ impl Global {
         let _pipeline = hub.compute_pipelines.remove(compute_pipeline_id);
     }
 
-    /// # Safety
-    /// The `data` argument of `desc` must have been returned by
-    /// [Self::pipeline_cache_get_data] for the same adapter
-    pub unsafe fn device_create_pipeline_cache(
-        &self,
-        device_id: DeviceId,
-        desc: &pipeline::PipelineCacheDescriptor<'_>,
-        id_in: id::PipelineCacheId,
-    ) -> (
-        id::PipelineCacheId,
-        Option<pipeline::CreatePipelineCacheError>,
-    ) {
-        let mut hub = self.hub.borrow_mut();
-        let Hub {
-            pipeline_caches,
-            devices,
-            ..
-        } = &mut *hub;
-
-        let device = devices.get(device_id);
-
-        let (cache, error) = unsafe { device.create_pipeline_cache(desc) };
-
-        let id = pipeline_caches.assign(id_in, cache);
-
-        (id, error)
-    }
-
-    pub fn pipeline_cache_drop(&self, pipeline_cache_id: id::PipelineCacheId) {
-        let mut hub = self.hub.borrow_mut();
-
-        let _cache = hub.pipeline_caches.remove(pipeline_cache_id);
-    }
-
     /// Check `device_id` for freeable resources and completed buffer mappings.
     ///
     /// Return `queue_empty` indicating whether there are more queue submissions still in flight.
@@ -1080,12 +1046,6 @@ impl Global {
         unsafe {
             hub.devices.get(device_id).stop_graphics_debugger_capture();
         }
-    }
-
-    pub fn pipeline_cache_get_data(&self, id: id::PipelineCacheId) -> Option<Vec<u8>> {
-        let hub = self.hub.borrow();
-
-        hub.pipeline_caches.get(id).get_data()
     }
 
     pub fn device_drop(&self, device_id: DeviceId) {

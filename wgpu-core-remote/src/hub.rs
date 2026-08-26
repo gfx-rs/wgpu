@@ -93,7 +93,7 @@ use wgpu_core::{
     },
     device::{queue::Queue, Device},
     instance::Adapter,
-    pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
+    pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     resource::{Buffer, ExternalTexture, QuerySet, Sampler, Texture, TextureView},
 };
 
@@ -129,7 +129,6 @@ pub struct Hub {
     pub(crate) render_bundles: Registry<Arc<RenderBundle>>,
     pub(crate) render_pipelines: Registry<Arc<RenderPipeline>>,
     pub(crate) compute_pipelines: Registry<Arc<ComputePipeline>>,
-    pub(crate) pipeline_caches: Registry<Arc<PipelineCache>>,
     pub(crate) query_sets: Registry<Arc<QuerySet>>,
     pub(crate) buffers: Registry<Arc<Buffer>>,
     pub(crate) textures: Registry<Arc<Texture>>,
@@ -156,7 +155,6 @@ impl Hub {
             render_bundles: Registry::new(),
             render_pipelines: Registry::new(),
             compute_pipelines: Registry::new(),
-            pipeline_caches: Registry::new(),
             query_sets: Registry::new(),
             buffers: Registry::new(),
             textures: Registry::new(),
