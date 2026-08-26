@@ -172,23 +172,6 @@ impl ContextWgpuCore {
         unsafe { surface.wgpu_surface.clone().as_hal::<A>() }
     }
 
-    /// This method will start the wgpu_core level command recording.
-    pub unsafe fn command_encoder_as_hal_mut<
-        A: hal::Api,
-        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
-        R,
-    >(
-        &self,
-        command_encoder: &CoreCommandEncoder,
-        hal_command_encoder_callback: F,
-    ) -> R {
-        unsafe {
-            command_encoder
-                .wgpu_command_encoder
-                .as_hal_mut::<A, F, R>(hal_command_encoder_callback)
-        }
-    }
-
     #[track_caller]
     #[cold]
     fn handle_error_fatal(
@@ -452,19 +435,30 @@ pub struct CoreRenderPass {
 }
 
 pub struct CoreCommandEncoder {
-    pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_command_encoder: Arc<wgc::command::CommandEncoder>,
 }
 
 impl fmt::Debug for CoreCommandEncoder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CoreCommandEncoder")
-            .field("context", &self.context)
             .field(
                 "wgpu_command_encoder",
                 &Arc::as_ptr(&self.wgpu_command_encoder),
             )
             .finish()
+    }
+}
+
+impl CoreCommandEncoder {
+    /// This method will start the wgpu_core level command recording.
+    pub unsafe fn as_hal_mut<A: hal::Api, F: FnOnce(Option<&mut A::CommandEncoder>) -> R, R>(
+        &self,
+        hal_command_encoder_callback: F,
+    ) -> R {
+        unsafe {
+            self.wgpu_command_encoder
+                .as_hal_mut::<A, F, R>(hal_command_encoder_callback)
+        }
     }
 }
 
@@ -1468,7 +1462,6 @@ impl dispatch::DeviceInterface for CoreDevice {
             .create_command_encoder(&desc.map_label(|l| l.map(Borrowed)));
 
         CoreCommandEncoder {
-            context: self.context.clone(),
             wgpu_command_encoder,
         }
         .into()
