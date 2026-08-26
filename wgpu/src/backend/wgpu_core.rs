@@ -104,68 +104,10 @@ impl ContextWgpuCore {
             )
         }?;
         let device = CoreDevice {
-            context: self.clone(),
             wgpu_device: device.clone(),
         };
         let queue = CoreQueue { wgpu_queue: queue };
         Ok((device, queue))
-    }
-
-    pub unsafe fn create_texture_from_hal<A: hal::Api>(
-        &self,
-        hal_texture: A::Texture,
-        device: &CoreDevice,
-        desc: &TextureDescriptor<'_>,
-        initial_state: wgt::TextureUses,
-        cleared: bool,
-    ) -> CoreTexture {
-        let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
-        let (wgpu_texture, error) = unsafe {
-            device.wgpu_device.create_texture_from_hal(
-                Box::new(hal_texture),
-                &descriptor,
-                initial_state,
-                cleared,
-            )
-        };
-        if let Some(cause) = error {
-            device
-                .wgpu_device
-                .handle_error(cause, desc.label, "Device::create_texture_from_hal");
-        }
-        CoreTexture { wgpu_texture }
-    }
-
-    /// # Safety
-    ///
-    /// - `hal_buffer` must be created from `device`.
-    /// - `hal_buffer` must be created respecting `desc`
-    /// - `hal_buffer` must be initialized
-    /// - `hal_buffer` must not have zero size.
-    pub unsafe fn create_buffer_from_hal<A: hal::Api>(
-        &self,
-        hal_buffer: A::Buffer,
-        device: &CoreDevice,
-        desc: &BufferDescriptor<'_>,
-    ) -> CoreBuffer {
-        let (wgpu_buffer, error) = unsafe {
-            device
-                .wgpu_device
-                .create_buffer_from_hal(Box::new(hal_buffer), &desc.map_label(|l| l.map(Borrowed)))
-        };
-        if let Some(cause) = error {
-            device
-                .wgpu_device
-                .handle_error(cause, desc.label, "Device::create_buffer_from_hal");
-        }
-        CoreBuffer { wgpu_buffer }
-    }
-
-    pub unsafe fn device_as_hal<A: hal::Api>(
-        &self,
-        device: &CoreDevice,
-    ) -> Option<impl Deref<Target = A::Device>> {
-        unsafe { device.wgpu_device.clone().as_hal::<A>() }
     }
 }
 
@@ -266,11 +208,59 @@ impl fmt::Debug for CoreAdapter {
 
 #[derive(Debug, Clone)]
 pub struct CoreDevice {
-    pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_device: Arc<wgc::device::Device>,
 }
 
 impl CoreDevice {
+    pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::Device>> {
+        unsafe { self.wgpu_device.clone().as_hal::<A>() }
+    }
+
+    pub unsafe fn create_texture_from_hal<A: hal::Api>(
+        &self,
+        hal_texture: A::Texture,
+        desc: &TextureDescriptor<'_>,
+        initial_state: wgt::TextureUses,
+        cleared: bool,
+    ) -> CoreTexture {
+        let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
+        let (wgpu_texture, error) = unsafe {
+            self.wgpu_device.create_texture_from_hal(
+                Box::new(hal_texture),
+                &descriptor,
+                initial_state,
+                cleared,
+            )
+        };
+        if let Some(cause) = error {
+            self.wgpu_device
+                .handle_error(cause, desc.label, "Device::create_texture_from_hal");
+        }
+        CoreTexture { wgpu_texture }
+    }
+
+    /// # Safety
+    ///
+    /// - `hal_buffer` must be created from `device`.
+    /// - `hal_buffer` must be created respecting `desc`
+    /// - `hal_buffer` must be initialized
+    /// - `hal_buffer` must not have zero size.
+    pub unsafe fn create_buffer_from_hal<A: hal::Api>(
+        &self,
+        hal_buffer: A::Buffer,
+        desc: &BufferDescriptor<'_>,
+    ) -> CoreBuffer {
+        let (wgpu_buffer, error) = unsafe {
+            self.wgpu_device
+                .create_buffer_from_hal(Box::new(hal_buffer), &desc.map_label(|l| l.map(Borrowed)))
+        };
+        if let Some(cause) = error {
+            self.wgpu_device
+                .handle_error(cause, desc.label, "Device::create_buffer_from_hal");
+        }
+        CoreBuffer { wgpu_buffer }
+    }
+
     /// Returns `true` if `texture` was created on `device`.
     #[cfg(webgl)]
     pub fn texture_belongs_to_device(&self, texture: &CoreTexture) -> bool {
@@ -730,7 +720,6 @@ impl dispatch::AdapterInterface for CoreAdapter {
             }
         };
         let device = CoreDevice {
-            context: self.context.clone(),
             wgpu_device: device,
         };
         let queue = CoreQueue { wgpu_queue: queue };
