@@ -4,8 +4,8 @@ use core::ptr::NonNull;
 use wgpu_core_remote_types::{
     encoders::RenderBundleDescriptor,
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
-    BufferDescriptor, ExternalTextureDescriptor, SamplerDescriptor, TextureDescriptor,
-    TextureViewDescriptor,
+    BufferDescriptor, ExternalTextureDescriptor, PipelineLayoutDescriptor, SamplerDescriptor,
+    TextureDescriptor, TextureViewDescriptor,
 };
 
 use wgpu_core::{
@@ -474,7 +474,7 @@ impl Global {
     pub fn device_create_pipeline_layout(
         &self,
         device_id: DeviceId,
-        desc: &binding_model::PipelineLayoutDescriptor<id::BindGroupLayoutId>,
+        desc: &PipelineLayoutDescriptor,
         id_in: id::PipelineLayoutId,
     ) {
         let mut hub = self.hub.borrow_mut();
@@ -494,7 +494,7 @@ impl Global {
             .collect::<Vec<_>>();
 
         let desc = binding_model::PipelineLayoutDescriptor {
-            label: desc.label.clone(),
+            label: desc.label.as_ref().map(|l| Cow::Borrowed(l.as_ref())),
             bind_group_layouts: Cow::Owned(bind_group_layouts),
             immediate_size: desc.immediate_size,
         };
