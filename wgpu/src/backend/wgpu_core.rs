@@ -61,7 +61,7 @@ impl ContextWgpuCore {
         unsafe { self.0.as_hal::<A>() }
     }
 
-    pub unsafe fn from_core_instance(core_instance: Arc<wgc::instance::Instance>) -> Self {
+    pub fn from_core_instance(core_instance: Arc<wgc::instance::Instance>) -> Self {
         Self(core_instance)
     }
 

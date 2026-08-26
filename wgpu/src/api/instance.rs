@@ -407,15 +407,9 @@ impl Instance {
     /// # Arguments
     ///
     /// - `core_instance` - wgpu-core instance.
-    ///
-    /// # Safety
-    ///
-    /// Refer to the creation of wgpu-core Instance.
-    pub unsafe fn from_core(core_instance: Arc<wgc::instance::Instance>) -> Self {
+    pub fn from_core(core_instance: Arc<wgc::instance::Instance>) -> Self {
         Self {
-            inner: unsafe {
-                crate::backend::ContextWgpuCore::from_core_instance(core_instance).into()
-            },
+            inner: crate::backend::ContextWgpuCore::from_core_instance(core_instance).into(),
         }
     }
 }
