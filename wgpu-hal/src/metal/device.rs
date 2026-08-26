@@ -677,24 +677,48 @@ impl crate::Device for super::Device {
                         )
                 }
                 .ok_or_else(|| {
-                    // Metal rejects some views that WebGPU permits, and returns
-                    // nil rather than reporting why. The one we have hit in
-                    // practice is a view of a memoryless texture, which is
-                    // refused on some GPU families (an iPhone XS / A12 refuses
-                    // it; an iPhone 12 / A14 allows it), so log enough to tell
-                    // that case apart from an ordinary allocation failure.
+                    // Metal refuses *any* view of a memoryless texture, whatever
+                    // the view asks for: its validation layer reports "cannot
+                    // create View from Memoryless texture". `TRANSIENT_ATTACHMENT`
+                    // maps to `MTLStorageModeMemoryless`, so that is the case
+                    // reachable from WebGPU, and it is the one hit in practice.
+                    // See <https://github.com/gpuweb/gpuweb/issues/6876>.
+                    //
+                    // The selector reports nil without a reason, so name the
+                    // cause where we can recognise it and record the parent
+                    // texture, the requested view and the arguments Metal was
+                    // actually given, so a report carries everything needed to
+                    // act on it.
+                    let storage_mode = texture.raw.storageMode();
+                    let cause = if storage_mode == MTLStorageMode::Memoryless {
+                        "Metal cannot create a view of a memoryless texture, which is \
+                         what TRANSIENT_ATTACHMENT usage selects"
+                    } else {
+                        "Metal did not report a reason"
+                    };
                     log::error!(
-                        "Metal returned no texture view for format {:?}, type {:?}, \
-                         mip levels {}..{}, array layers {}..{}, storage mode {:?}. \
-                         Note that Metal cannot create views of memoryless textures \
-                         on every GPU family.",
+                        "Metal declined to create a texture view: {cause}. \
+                         Texture: {:?}, {:?}, {}x{}x{}, {} mip level(s), \
+                         {} array layer(s), Metal usage {:?}, storage mode {:?}. \
+                         Requested view: {:?}. \
+                         Metal arguments: pixel format {:?}, texture type {:?}, \
+                         levels {}..{}, slices {}..{}.",
+                        texture.format,
+                        texture.raw_type,
+                        texture.copy_size.width,
+                        texture.copy_size.height,
+                        texture.copy_size.depth,
+                        texture.mip_levels,
+                        texture.array_layers,
+                        texture.raw.usage(),
+                        storage_mode,
+                        desc,
                         raw_format,
                         raw_type,
                         level_range.location,
                         level_range.location + level_range.length,
                         slice_range.location,
                         slice_range.location + slice_range.length,
-                        texture.raw.storageMode(),
                     );
                     crate::DeviceError::Unexpected
                 })?;
