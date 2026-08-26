@@ -8,6 +8,33 @@ pub type TexelCopyTextureInfo = wgt::TexelCopyTextureInfo<id::TextureId>;
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 pub type CommandBufferDescriptor<'a> = wgt::CommandBufferDescriptor<Label<'a>>;
 
+/// Describes a `RenderBundleEncoder`.
+///
+/// Corresponds to [WebGPU `GPURenderBundleEncoderDescriptor`](https://gpuweb.github.io/gpuweb/#dictdef-gpurenderbundleencoderdescriptor).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct RenderBundleEncoderDescriptor<'a> {
+    /// Debug label of the render bundle encoder.
+    ///
+    /// This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+    /// The formats of the color attachments that this render bundle is capable
+    /// to rendering to.
+    ///
+    /// This must match the formats of the color attachments in the
+    /// renderpass this render bundle is executed in.
+    pub color_formats: Cow<'a, [Option<wgt::TextureFormat>]>,
+    /// Information about the depth attachment that this render bundle is
+    /// capable to rendering to.
+    ///
+    /// The format must match the format of the depth attachments in the
+    /// renderpass this render bundle is executed in.
+    pub depth_stencil: Option<wgt::RenderBundleDepthStencil>,
+    /// Sample count this render bundle is capable of rendering to.
+    ///
+    /// This must match the pipelines and the renderpasses it is used in.
+    pub sample_count: u32,
+}
+
 /// Operation to perform to the output attachment at the start of a render pass.
 ///
 /// Corresponds to [WebGPU `GPULoadOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpuloadop),
