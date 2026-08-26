@@ -136,3 +136,5 @@ pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
     pub code: Cow<'a, str>,
 }
+
+pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
