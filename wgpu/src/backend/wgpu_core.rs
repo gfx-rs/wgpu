@@ -202,13 +202,6 @@ impl ContextWgpuCore {
             .is_ok()
     }
 
-    pub unsafe fn texture_view_as_hal<A: hal::Api>(
-        &self,
-        texture_view: &CoreTextureView,
-    ) -> Option<impl Deref<Target = A::TextureView>> {
-        unsafe { texture_view.wgpu_texture_view.clone().as_hal::<A>() }
-    }
-
     /// This method will start the wgpu_core level command recording.
     pub unsafe fn command_encoder_as_hal_mut<
         A: hal::Api,
@@ -378,8 +371,13 @@ pub struct CoreTexture {
 
 #[derive(Debug, Clone)]
 pub struct CoreTextureView {
-    pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_texture_view: Arc<wgc::resource::TextureView>,
+}
+
+impl CoreTextureView {
+    pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::TextureView>> {
+        unsafe { self.wgpu_texture_view.clone().as_hal::<A>() }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1876,11 +1874,7 @@ impl dispatch::TextureInterface for CoreTexture {
                 .device()
                 .handle_error(cause, desc.label, "Texture::create_view");
         }
-        CoreTextureView {
-            context: self.context.clone(),
-            wgpu_texture_view,
-        }
-        .into()
+        CoreTextureView { wgpu_texture_view }.into()
     }
 
     fn destroy(&self) {
