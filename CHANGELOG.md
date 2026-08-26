@@ -82,6 +82,17 @@ By @beicause in [#9553](https://github.com/gfx-rs/wgpu/pull/9553).
 
 By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
+#### `Device::create_render_bundle_encoder` now returns error
+
+Error is raised if for provided texture formats required features are not enabled on the device as per spec.
+
+```diff
+- device.create_render_bundle_encoder(&RenderBundleEncoderDescriptor::default())
++ device.create_render_bundle_encoder(&RenderBundleEncoderDescriptor::default()).unwrap()
+```
+
+By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
+
 ### Added/New Features
 
 #### General
@@ -90,6 +101,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Many types now offer `pub const fn default()` in addition to implementing the `Default` trait, allowing constants to make use of default values. By @kpreid in [#9929](https://github.com/gfx-rs/wgpu/pull/9929).
 - `wgpu-core` now exposes `validate_device_descriptor` and `validate_texture_descriptor` functions that perform the same descriptor validation the corresponding resource creation APIs would, without actually creating a resource. This may be useful in conjunction with hal raw APIs. By @andyleiserson in [#9967](https://github.com/gfx-rs/wgpu/pull/9967) and [#9979](https://github.com/gfx-rs/wgpu/pull/9979).
 - Added `TextureDescriptor::theoretical_memory_footprint` to estimate memory footprint of a texture. By @sagudev in [#10032](https://github.com/gfx-rs/wgpu/pull/10032).
+- `wgpu::WriteOnly<[_]>` now implements `Send`. By @kpreid in [#10163](https://github.com/gfx-rs/wgpu/pull/10163).
 
 #### Hal
 
@@ -132,7 +144,8 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Fix required immediate slots calculation and remove `naga::valid::FunctionInfo::immediate_slots_used`. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
 - Fix a spurious assertion failure in `Device::maintain` when multiple threads race polling the same device. By @AdrianEddy in [#9958](https://github.com/gfx-rs/wgpu/pull/9958).
 - Fix `PendingSubmission` releasing its lock guards out of stacking order, which tripped `--cfg wgpu_validate_locks` on any submission. By @AdrianEddy in [#9960](https://github.com/gfx-rs/wgpu/pull/9960).
-- Fixed some cases where initialization tracking was not correct. By @andyleiserson in [#10002](https://github.com/gfx-rs/wgpu/pull/10002).
+- Fix initialization tracking for some cases of array textures, 3d textures, and depth/stencil textures with divergent usage in a render pass. By @andyleiserson in [#10002](https://github.com/gfx-rs/wgpu/pull/10002) and [#10060](https://github.com/gfx-rs/wgpu/pull/10060).
+- Fixed a deadlock between `Queue::compact_blas` and `Queue::submit`, which acquired `Device::command_indices` and `Queue::pending_writes` in opposite orders. By @mstampfli in [#10118](https://github.com/gfx-rs/wgpu/pull/10118).
 
 #### naga
 
@@ -141,6 +154,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 #### Validation
 
+- Report an accurate validation error when a passthrough shader module has no entry points. By @ksh368-bit in [#10079](https://github.com/gfx-rs/wgpu/pull/10079).
 - Validate that the arguments are within the indirect buffer when encoding an indirect draw to a render bundle. Moves some indirect draw errors from `RenderPassErrorInner` to `RenderCommandError`. By @andyleiserson in [#9871](https://github.com/gfx-rs/wgpu/pull/9871).
 - When creating render pipelines, validate that a corresponding shader output is present for each color attachment with non-zero write mask, and that shader output includes alpha when the blend operation uses source alpha. By @andyleiserson in [#9939](https://github.com/gfx-rs/wgpu/pull/9939).
 - Reject bind group layout entries with `TASK` or `MESH` visibility unless `Features::EXPERIMENTAL_MESH_SHADER` is enabled. By @teoxoy in [#10042](https://github.com/gfx-rs/wgpu/issues/10042).
@@ -162,7 +176,6 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 #### Vulkan
 
 - Add OpenHarmony surface support via `VK_OHOS_surface`. Previously the Vulkan backend could not create a surface on OpenHarmony, leaving GLES as the only usable backend. By @ozongzi in [#9908](https://github.com/gfx-rs/wgpu/pull/9908).
-- Stop passing an un-waited fence to `vkAcquireNextImageKHR` on non-Windows platforms, which triggered `VUID-vkAcquireNextImageKHR-fence-10066` validation errors every frame since v30.0.0. By @ErichDonGubler in [#9855](https://github.com/gfx-rs/wgpu/issues/9855).
 
 #### Metal
 
@@ -194,13 +207,25 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 - Raise the minimum version of the `wasm-bindgen` family to the earliest releases that support wasm64. By @nickbabcock in [#9836](https://github.com/gfx-rs/wgpu/pull/9836).
 
-#### WebGPU
-
-- Upgrade vendored WebGPU bindings and `wasm-bindgen` to 0.2.127. By @beicause in [#10034](https://github.com/gfx-rs/wgpu/pull/10034).
-
 #### GLES
 
 - Update `glow` to 0.18 for wasm64 support. By @nickbabcock in [#9836](https://github.com/gfx-rs/wgpu/pull/9836).
+
+## v30.0.1 (2026-08-21)
+
+### Bug Fixes
+
+#### Vulkan
+
+- Stop passing an un-waited fence to `vkAcquireNextImageKHR` on non-Windows platforms, which triggered `VUID-vkAcquireNextImageKHR-fence-10066` validation errors every frame since v30.0.0. By @ErichDonGubler in [#9855](https://github.com/gfx-rs/wgpu/issues/9855).
+
+#### Metal
+
+- Resolve metal color space constants dynamically. By @andyleiserson in [#9819](https://github.com/gfx-rs/wgpu/issues/9819).
+
+#### WebGPU
+
+- Upgrade vendored WebGPU bindings and `wasm-bindgen` to 0.2.127. This fixes a panic “`can't access property "info", arg0 is null`” when using the WebGPU backend and `requestAdapter()` fails. By @beicause in [#10034](https://github.com/gfx-rs/wgpu/pull/10034), backported in [#10105](https://github.com/gfx-rs/wgpu/pull/10105).
 
 ## v30.0.0 (2026-07-01)
 

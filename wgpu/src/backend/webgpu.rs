@@ -2641,7 +2641,7 @@ impl dispatch::DeviceInterface for WebDevice {
     fn create_render_bundle_encoder(
         &self,
         desc: &crate::RenderBundleEncoderDescriptor<'_>,
-    ) -> dispatch::DispatchRenderBundleEncoder {
+    ) -> Result<dispatch::DispatchRenderBundleEncoder, crate::CreateRenderBundleEncoderError> {
         let mapped_color_formats = desc
             .color_formats
             .iter()
@@ -2668,13 +2668,16 @@ impl dispatch::DeviceInterface for WebDevice {
         let render_bundle_encoder = self
             .inner
             .create_render_bundle_encoder(&mapped_desc)
-            .unwrap();
+            .map_err(|e| {
+                let e = e.dyn_ref::<js_sys::Error>().expect("Expected a JS Error");
+                crate::CreateRenderBundleEncoderError::new(e.message().as_string().unwrap())
+            })?;
 
-        WebRenderBundleEncoder {
+        Ok(WebRenderBundleEncoder {
             inner: render_bundle_encoder,
             ident: crate::cmp::Identifier::create(),
         }
-        .into()
+        .into())
     }
 
     fn set_device_lost_callback(&self, device_lost_callback: dispatch::BoxDeviceLostCallback) {

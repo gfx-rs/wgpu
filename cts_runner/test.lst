@@ -55,6 +55,7 @@ webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_t
 webgpu:api,operation,render_pass,*
 webgpu:api,operation,render_pipeline,overrides:*
 webgpu:api,operation,render_pipeline,pipeline_output_targets:color,component_count,blend:*
+webgpu:api,operation,rendering,3d_texture_slices:*
 webgpu:api,operation,rendering,basic:clear:*
 webgpu:api,operation,rendering,basic:fullscreen_quad:*
 //FAIL: webgpu:api,operation,rendering,basic:large_draw:*
@@ -80,6 +81,7 @@ webgpu:api,validation,buffer,create:usage,*
 webgpu:api,validation,buffer,destroy:*
 webgpu:api,validation,capability_checks,features,clip_distances:*
 webgpu:api,validation,capability_checks,features,texture_component_swizzle:*
+webgpu:api,validation,capability_checks,features,texture_formats:render_bundle_encoder_descriptor_depth_stencil_format:*
 webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
 webgpu:api,validation,capability_checks,limits,maxBindingsPerBindGroup:validate,*
 webgpu:api,validation,capability_checks,limits,maxBufferSize:*

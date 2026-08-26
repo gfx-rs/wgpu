@@ -1067,11 +1067,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             entries: Borrowed(&entries),
         };
 
-        let (wgpu_bind_group, error) = self.wgpu_device.create_bind_group(&descriptor);
-        if let Some(cause) = error {
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_bind_group");
-        }
+        let wgpu_bind_group = self.wgpu_device.create_bind_group(&descriptor);
         CoreBindGroup { wgpu_bind_group }.into()
     }
 
@@ -1099,11 +1095,8 @@ impl dispatch::DeviceInterface for CoreDevice {
             immediate_size: desc.immediate_size,
         };
 
-        let (wgpu_pipeline_layout, error) = self.wgpu_device.create_pipeline_layout(&descriptor);
-        if let Some(cause) = error {
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_pipeline_layout");
-        }
+        let wgpu_pipeline_layout = self.wgpu_device.create_pipeline_layout(&descriptor);
+
         CorePipelineLayout {
             wgpu_pipeline_layout,
         }
@@ -1326,19 +1319,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
         };
 
-        let (wgpu_compute_pipeline, error) = self.wgpu_device.create_compute_pipeline(descriptor);
-        if let Some(cause) = error {
-            if let wgc::pipeline::CreateComputePipelineError::Internal(ref error) = cause {
-                log::error!(
-                    "Shader translation error for stage {:?}: {}",
-                    wgt::ShaderStages::COMPUTE,
-                    error
-                );
-                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
-            }
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_compute_pipeline");
-        }
+        let wgpu_compute_pipeline = self.wgpu_device.create_compute_pipeline(descriptor);
         CoreComputePipeline {
             wgpu_compute_pipeline,
         }
@@ -1412,12 +1393,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             .iter()
             .map(|plane| plane.inner.as_core().wgpu_texture_view.clone())
             .collect::<Vec<_>>();
-        let (wgpu_external_texture, error) =
-            self.wgpu_device.create_external_texture(&wgt_desc, &planes);
-        if let Some(cause) = error {
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_external_texture");
-        }
+        let wgpu_external_texture = self.wgpu_device.create_external_texture(&wgt_desc, &planes);
 
         CoreExternalTexture {
             wgpu_external_texture,
@@ -1480,11 +1456,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             border_color: desc.border_color,
         };
 
-        let (wgpu_sampler, error) = self.wgpu_device.create_sampler(&descriptor);
-        if let Some(cause) = error {
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_sampler");
-        }
+        let wgpu_sampler = self.wgpu_device.create_sampler(&descriptor);
         CoreSampler { wgpu_sampler }.into()
     }
 
@@ -1517,7 +1489,7 @@ impl dispatch::DeviceInterface for CoreDevice {
     fn create_render_bundle_encoder(
         &self,
         desc: &crate::RenderBundleEncoderDescriptor<'_>,
-    ) -> dispatch::DispatchRenderBundleEncoder {
+    ) -> Result<dispatch::DispatchRenderBundleEncoder, crate::CreateRenderBundleEncoderError> {
         let descriptor = wgc::command::RenderBundleEncoderDescriptor {
             label: desc.label.map(Borrowed),
             color_formats: Borrowed(desc.color_formats),
@@ -1525,16 +1497,12 @@ impl dispatch::DeviceInterface for CoreDevice {
             sample_count: desc.sample_count,
             multiview: desc.multiview,
         };
-        let (encoder, error) = self.wgpu_device.create_render_bundle_encoder(&descriptor);
-        if let Some(cause) = error {
-            self.wgpu_device.handle_error(
-                cause,
-                desc.label,
-                "Device::create_render_bundle_encoder",
-            );
-        }
+        let encoder = self
+            .wgpu_device
+            .create_render_bundle_encoder(&descriptor)
+            .map_err(|e| crate::CreateRenderBundleEncoderError::new(e.to_string()))?;
 
-        CoreRenderBundleEncoder { encoder }.into()
+        Ok(CoreRenderBundleEncoder { encoder }.into())
     }
 
     fn set_device_lost_callback(&self, device_lost_callback: dispatch::BoxDeviceLostCallback) {
@@ -1980,13 +1948,7 @@ impl dispatch::PipelineLayoutInterface for CorePipelineLayout {}
 
 impl dispatch::RenderPipelineInterface for CoreRenderPipeline {
     fn get_bind_group_layout(&self, index: u32) -> dispatch::DispatchBindGroupLayout {
-        let (wgpu_bind_group_layout, error) =
-            self.wgpu_render_pipeline.get_bind_group_layout(index);
-        if let Some(err) = error {
-            self.wgpu_render_pipeline
-                .device()
-                .handle_error_nolabel(err, "RenderPipeline::get_bind_group_layout")
-        }
+        let wgpu_bind_group_layout = self.wgpu_render_pipeline.get_bind_group_layout(index);
         CoreBindGroupLayout {
             wgpu_bind_group_layout,
         }
@@ -1996,13 +1958,7 @@ impl dispatch::RenderPipelineInterface for CoreRenderPipeline {
 
 impl dispatch::ComputePipelineInterface for CoreComputePipeline {
     fn get_bind_group_layout(&self, index: u32) -> dispatch::DispatchBindGroupLayout {
-        let (wgpu_bind_group_layout, error) =
-            self.wgpu_compute_pipeline.get_bind_group_layout(index);
-        if let Some(err) = error {
-            self.wgpu_compute_pipeline
-                .device()
-                .handle_error_nolabel(err, "ComputePipeline::get_bind_group_layout")
-        }
+        let wgpu_bind_group_layout = self.wgpu_compute_pipeline.get_bind_group_layout(index);
         CoreBindGroupLayout {
             wgpu_bind_group_layout,
         }

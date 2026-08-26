@@ -1901,16 +1901,33 @@ impl Texture {
             ));
         }
 
-        let format_is_good = if desc.range.aspect == wgt::TextureAspect::All {
-            resolved_format == self.desc.format || self.desc.view_formats.contains(&resolved_format)
+        if desc.range.aspect == wgt::TextureAspect::All {
+            if resolved_format != self.desc.format
+                && !self.desc.view_formats.contains(&resolved_format)
+            {
+                return Err(CreateTextureViewError::FormatReinterpretation {
+                    texture: self.desc.format,
+                    view: resolved_format,
+                });
+            }
         } else {
-            Some(resolved_format) == self.desc.format.aspect_specific_format(desc.range.aspect)
-        };
-        if !format_is_good {
-            return Err(CreateTextureViewError::FormatReinterpretation {
-                texture: self.desc.format,
-                view: resolved_format,
-            });
+            let aspect_format = self.desc.format.aspect_specific_format(desc.range.aspect);
+            match aspect_format {
+                Some(aspect_format) if aspect_format == resolved_format => (),
+                Some(aspect_format) => {
+                    return Err(CreateTextureViewError::WrongAspectReinterpretation {
+                        texture: self.desc.format,
+                        aspect: desc.range.aspect,
+                        aspect_format,
+                        requested_format: resolved_format,
+                    })
+                }
+                None => {
+                    // User requested a sub-aspect (not TextureAspect::All) that is not on the texture.
+                    // This should've already returned with the InvalidAspect check above.
+                    unreachable!()
+                }
+            }
         }
 
         // check if multisampled texture is seen as anything but 2D
@@ -2660,6 +2677,17 @@ pub enum CreateTextureViewError {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+
+    #[error(
+        "Trying to create a view of format {requested_format:?} on aspect {aspect:?} of format {texture:?}, \
+         but the actual format of this aspect is {aspect_format:?}"
+    )]
+    WrongAspectReinterpretation {
+        texture: wgt::TextureFormat,
+        aspect: wgt::TextureAspect,
+        aspect_format: wgt::TextureFormat,
+        requested_format: wgt::TextureFormat,
+    },
     #[error("TextureAspect::All cannot be used in texture views on multi-planar formats")]
     MultiplanarFullTexture(wgt::TextureFormat),
 }
@@ -2697,6 +2725,7 @@ impl WebGpuError for CreateTextureViewError {
             | Self::InvalidTextureViewUsage { .. }
             | Self::InvalidTransientTextureViewUsage { .. }
             | Self::MissingFeatures(_)
+            | Self::WrongAspectReinterpretation { .. }
             | Self::MultiplanarFullTexture(_) => ErrorType::Validation,
         }
     }
