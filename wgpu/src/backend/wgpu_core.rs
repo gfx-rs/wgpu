@@ -83,32 +83,6 @@ impl ContextWgpuCore {
     ) -> Arc<wgc::instance::Adapter> {
         unsafe { self.0.create_adapter_from_hal(hal_adapter.into()) }
     }
-
-    pub unsafe fn adapter_as_hal<A: hal::Api>(
-        &self,
-        adapter: &CoreAdapter,
-    ) -> Option<impl Deref<Target = A::Adapter> + WasmNotSendSync> {
-        unsafe { adapter.wgpu_adapter.clone().as_hal::<A>() }
-    }
-
-    pub unsafe fn create_device_from_hal<A: hal::Api>(
-        &self,
-        adapter: &CoreAdapter,
-        hal_device: hal::OpenDevice<A>,
-        desc: &crate::DeviceDescriptor<'_>,
-    ) -> Result<(CoreDevice, CoreQueue), crate::RequestDeviceError> {
-        let (device, queue) = unsafe {
-            adapter.wgpu_adapter.create_device_and_queue_from_hal(
-                hal_device.into(),
-                &desc.map_label(|l| l.map(Borrowed)),
-            )
-        }?;
-        let device = CoreDevice {
-            wgpu_device: device.clone(),
-        };
-        let queue = CoreQueue { wgpu_queue: queue };
-        Ok((device, queue))
-    }
 }
 
 fn map_buffer_copy_view(
@@ -193,16 +167,40 @@ impl CoreSurface {
 
 #[derive(Clone)]
 pub struct CoreAdapter {
-    pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_adapter: Arc<wgc::instance::Adapter>,
 }
 
 impl fmt::Debug for CoreAdapter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CoreAdapter")
-            .field("context", &self.context)
             .field("wgpu_adapter", &Arc::as_ptr(&self.wgpu_adapter))
             .finish()
+    }
+}
+
+impl CoreAdapter {
+    pub unsafe fn as_hal<A: hal::Api>(
+        &self,
+    ) -> Option<impl Deref<Target = A::Adapter> + WasmNotSendSync> {
+        unsafe { self.wgpu_adapter.clone().as_hal::<A>() }
+    }
+
+    pub unsafe fn create_device_from_hal<A: hal::Api>(
+        &self,
+        hal_device: hal::OpenDevice<A>,
+        desc: &crate::DeviceDescriptor<'_>,
+    ) -> Result<(CoreDevice, CoreQueue), crate::RequestDeviceError> {
+        let (device, queue) = unsafe {
+            self.wgpu_adapter.create_device_and_queue_from_hal(
+                hal_device.into(),
+                &desc.map_label(|l| l.map(Borrowed)),
+            )
+        }?;
+        let device = CoreDevice {
+            wgpu_device: device.clone(),
+        };
+        let queue = CoreQueue { wgpu_queue: queue };
+        Ok((device, queue))
     }
 }
 
@@ -645,10 +643,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             wgt::Backends::all(),
         );
         let adapter = adapter.map(|wgpu_adapter| {
-            let core = CoreAdapter {
-                context: self.clone(),
-                wgpu_adapter,
-            };
+            let core = CoreAdapter { wgpu_adapter };
             let generic: dispatch::DispatchAdapter = core.into();
             generic
         });
@@ -695,7 +690,6 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             .into_iter()
             .map(|adapter| {
                 let core = crate::backend::wgpu_core::CoreAdapter {
-                    context: self.clone(),
                     wgpu_adapter: adapter,
                 };
                 core.into()
