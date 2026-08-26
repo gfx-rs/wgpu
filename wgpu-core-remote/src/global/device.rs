@@ -3,6 +3,7 @@ use core::ptr::NonNull;
 use wgpu_core_remote_types::{
     encoders::RenderBundleDescriptor,
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
+    BufferDescriptor,
 };
 
 use wgpu_core::{
@@ -59,7 +60,7 @@ impl Global {
     pub fn device_create_buffer(
         &self,
         device_id: DeviceId,
-        desc: &resource::BufferDescriptor,
+        desc: &BufferDescriptor,
         id_in: id::BufferId,
     ) -> (id::BufferId, Option<CreateBufferError>) {
         let mut hub = self.hub.borrow_mut();
@@ -108,7 +109,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         id_in: id::BufferId,
-        desc: &resource::BufferDescriptor,
+        desc: &BufferDescriptor,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -287,7 +288,7 @@ impl Global {
         &self,
         hal_buffer: A::Buffer,
         device_id: DeviceId,
-        desc: &resource::BufferDescriptor,
+        desc: &BufferDescriptor,
         id_in: id::BufferId,
     ) -> (id::BufferId, Option<CreateBufferError>) {
         let mut hub = self.hub.borrow_mut();
