@@ -52,3 +52,4 @@ pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 pub type QueueDescriptor<'a> = wgt::QueueDescriptor<Label<'a>>;
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
+pub type ExternalTextureDescriptor<'a> = wgt::ExternalTextureDescriptor<Label<'a>>;

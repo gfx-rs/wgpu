@@ -3,7 +3,7 @@ use core::ptr::NonNull;
 use wgpu_core_remote_types::{
     encoders::RenderBundleDescriptor,
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
-    BufferDescriptor, TextureDescriptor,
+    BufferDescriptor, ExternalTextureDescriptor, TextureDescriptor,
 };
 
 use wgpu_core::{
@@ -163,7 +163,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         id_in: id::ExternalTextureId,
-        desc: &resource::ExternalTextureDescriptor,
+        desc: &ExternalTextureDescriptor,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -350,7 +350,7 @@ impl Global {
     pub fn device_create_external_texture(
         &self,
         device_id: DeviceId,
-        desc: &resource::ExternalTextureDescriptor,
+        desc: &ExternalTextureDescriptor,
         planes: &[id::TextureViewId],
         id_in: id::ExternalTextureId,
     ) {
