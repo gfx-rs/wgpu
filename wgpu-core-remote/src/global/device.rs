@@ -438,7 +438,7 @@ impl Global {
     pub fn device_create_bind_group_layout(
         &self,
         device_id: DeviceId,
-        desc: &binding_model::BindGroupLayoutDescriptor,
+        desc: &BindGroupLayoutDescriptor,
         id_in: id::BindGroupLayoutId,
     ) -> (
         id::BindGroupLayoutId,
@@ -453,7 +453,12 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (bgl, error) = device.create_bind_group_layout(desc);
+        let desc = binding_model::BindGroupLayoutDescriptor {
+            label: desc.label.as_ref().map(|l| Cow::Borrowed(l.as_ref())),
+            entries: Cow::Borrowed(&desc.entries),
+        };
+
+        let (bgl, error) = device.create_bind_group_layout(&desc);
 
         let id = bind_group_layouts.assign(id_in, bgl);
 
