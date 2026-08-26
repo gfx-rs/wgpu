@@ -474,7 +474,7 @@ impl GPUDevice {
       runtime_checks: wgpu_types::ShaderRuntimeChecks::default(),
     };
 
-    let (wgpu_shader_module, err) = self.wgpu_device.create_shader_module(
+    let wgpu_shader_module = self.wgpu_device.create_shader_module(
       &wgpu_descriptor,
       wgpu_core::pipeline::ShaderModuleSource::Wgsl(Cow::Borrowed(
         &descriptor.code,
@@ -488,7 +488,6 @@ impl GPUDevice {
     );
     let compilation_info = make_cppgc_object(scope, compilation_info);
     let compilation_info = v8::Global::new(scope, compilation_info);
-    self.error_handler.push_error(err);
 
     GPUShaderModule {
       wgpu_shader_module,

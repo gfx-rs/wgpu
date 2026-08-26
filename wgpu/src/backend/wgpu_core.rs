@@ -795,15 +795,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             ShaderSource::Naga(module) => wgc::pipeline::ShaderModuleSource::Naga(module),
             ShaderSource::Dummy(_) => panic!("found `ShaderSource::Dummy`"),
         };
-        let (wgpu_shader_module, error) =
-            self.wgpu_device.create_shader_module(&descriptor, source);
-        if let Some(cause) = error {
-            self.wgpu_device.handle_error(
-                cause.clone(),
-                desc.label,
-                "Device::create_shader_module",
-            );
-        }
+        let wgpu_shader_module = self.wgpu_device.create_shader_module(&descriptor, source);
 
         CoreShaderModule { wgpu_shader_module }.into()
     }
@@ -813,15 +805,8 @@ impl dispatch::DeviceInterface for CoreDevice {
         desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
     ) -> dispatch::DispatchShaderModule {
         let desc = desc.map_label(|l| l.map(Cow::from));
-        let (wgpu_shader_module, error) =
+        let wgpu_shader_module =
             unsafe { self.wgpu_device.create_shader_module_passthrough(&desc) };
-        if let Some(cause) = error {
-            self.wgpu_device.handle_error(
-                cause.clone(),
-                desc.label.as_deref(),
-                "Device::create_shader_module_passthrough",
-            );
-        }
 
         CoreShaderModule { wgpu_shader_module }.into()
     }

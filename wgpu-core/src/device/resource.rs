@@ -2410,10 +2410,7 @@ impl Device {
         self: &Arc<Self>,
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: pipeline::ShaderModuleSource<'a>,
-    ) -> (
-        Arc<pipeline::ShaderModule>,
-        Option<pipeline::CreateShaderModuleError>,
-    ) {
+    ) -> Arc<pipeline::ShaderModule> {
         profiling::scope!("Device::create_shader_module");
         #[cfg(feature = "trace")]
         let data = self.trace.lock().as_mut().map(|trace| {
@@ -2443,17 +2440,17 @@ impl Device {
                 }
             }
         });
-        let (shader, error) = match self.create_shader_module_inner(desc, source) {
-            Ok(shader) => (shader, None),
-            Err(e) => {
+        let shader = self
+            .create_shader_module_inner(desc, source)
+            .unwrap_or_else(|e| {
                 let shader = pipeline::ShaderModule::invalid(
                     Arc::clone(self),
                     desc.label.to_string(),
                     shader_module_error_into_compilation_info(&e),
                 );
-                (shader, Some(e))
-            }
-        };
+                self.handle_error(e, desc.label.as_deref(), "Device::create_shader_module");
+                shader
+            });
         api_log!("Device::create_shader_module -> {:?}", Arc::as_ptr(&shader));
 
         #[cfg(feature = "trace")]
@@ -2471,7 +2468,7 @@ impl Device {
                     data,
                 });
         };
-        (shader, error)
+        shader
     }
 
     pub(crate) fn create_shader_module_inner<'a>(
@@ -2619,23 +2616,24 @@ impl Device {
     pub unsafe fn create_shader_module_passthrough<'a>(
         self: &Arc<Self>,
         desc: &pipeline::ShaderModuleDescriptorPassthrough<'a>,
-    ) -> (
-        Arc<pipeline::ShaderModule>,
-        Option<pipeline::CreateShaderModuleError>,
-    ) {
+    ) -> Arc<pipeline::ShaderModule> {
         profiling::scope!("Device::create_shader_module_passthrough");
 
-        let (shader, error) = match unsafe { self.create_shader_module_passthrough_inner(desc) } {
-            Ok(shader) => (shader, None),
-            Err(e) => {
+        let shader =
+            unsafe { self.create_shader_module_passthrough_inner(desc) }.unwrap_or_else(|e| {
                 let shader = pipeline::ShaderModule::invalid(
                     Arc::clone(self),
                     desc.label.to_string(),
                     shader_module_error_into_compilation_info(&e),
                 );
-                (shader, Some(e))
-            }
-        };
+                self.handle_error(
+                    e,
+                    desc.label.as_deref(),
+                    "Device::create_shader_module_passthrough",
+                );
+                shader
+            });
+
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace::{DataKind, IntoTrace as _};
@@ -2668,7 +2666,7 @@ impl Device {
             "Device::create_shader_module_spirv -> {:?}",
             Arc::as_ptr(&shader)
         );
-        (shader, error)
+        shader
     }
 
     pub(crate) unsafe fn create_shader_module_passthrough_inner<'a>(
