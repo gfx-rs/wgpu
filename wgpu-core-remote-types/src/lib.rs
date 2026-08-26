@@ -50,3 +50,4 @@ assert_ffi_safe!(RequestAdapterOptions);
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 pub type QueueDescriptor<'a> = wgt::QueueDescriptor<Label<'a>>;
+pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
