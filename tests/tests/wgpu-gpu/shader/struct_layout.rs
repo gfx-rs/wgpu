@@ -643,7 +643,9 @@ static UNIFORM_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(
             ctx,
             InputStorageType::Storage,
-            create_64bit_struct_layout_tests(true),
+            create_64bit_struct_layout_tests(StructLayoutTestsConfig {
+                array_types_supported: true,
+            }),
         )
     });
 
@@ -659,7 +661,9 @@ static STORAGE_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(
             ctx,
             InputStorageType::Storage,
-            create_64bit_struct_layout_tests(true),
+            create_64bit_struct_layout_tests(StructLayoutTestsConfig {
+                array_types_supported: true,
+            }),
         )
     });
 
@@ -678,12 +682,21 @@ static IMMEDIATES_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new(
         shader_input_output_test(
             ctx,
             InputStorageType::Immediate,
-            // Immediates don't support array types
-            create_64bit_struct_layout_tests(false),
+            create_64bit_struct_layout_tests(StructLayoutTestsConfig {
+                array_types_supported: false,
+            }),
         )
     });
 
-fn create_64bit_struct_layout_tests(array_types_supported: bool) -> Vec<ShaderTest> {
+struct StructLayoutTestsConfig {
+    array_types_supported: bool,
+}
+
+fn create_64bit_struct_layout_tests(config: StructLayoutTestsConfig) -> Vec<ShaderTest> {
+    let StructLayoutTestsConfig {
+        array_types_supported,
+    } = config;
+
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
 
     let mut tests = Vec::new();
