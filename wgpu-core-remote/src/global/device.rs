@@ -639,35 +639,6 @@ impl Global {
         (id, error)
     }
 
-    /// # Safety
-    ///
-    /// This function passes source code or binary to the backend as-is and can potentially result in a
-    /// driver crash.
-    pub unsafe fn device_create_shader_module_passthrough(
-        &self,
-        device_id: DeviceId,
-        desc: &pipeline::ShaderModuleDescriptorPassthrough<'_>,
-        id_in: id::ShaderModuleId,
-    ) -> (
-        id::ShaderModuleId,
-        Option<pipeline::CreateShaderModuleError>,
-    ) {
-        let mut hub = self.hub.borrow_mut();
-        let Hub {
-            shader_modules,
-            devices,
-            ..
-        } = &mut *hub;
-
-        let device = devices.get(device_id);
-
-        let (shader, error) = unsafe { device.create_shader_module_passthrough(desc) };
-
-        let id = shader_modules.assign(id_in, shader);
-
-        (id, error)
-    }
-
     pub fn shader_module_drop(&self, shader_module_id: id::ShaderModuleId) {
         let mut hub = self.hub.borrow_mut();
 
