@@ -107,10 +107,7 @@ impl ContextWgpuCore {
             context: self.clone(),
             wgpu_device: device.clone(),
         };
-        let queue = CoreQueue {
-            context: self.clone(),
-            wgpu_queue: queue,
-        };
+        let queue = CoreQueue { wgpu_queue: queue };
         Ok((device, queue))
     }
 
@@ -169,13 +166,6 @@ impl ContextWgpuCore {
         device: &CoreDevice,
     ) -> Option<impl Deref<Target = A::Device>> {
         unsafe { device.wgpu_device.clone().as_hal::<A>() }
-    }
-
-    pub unsafe fn queue_as_hal<A: hal::Api>(
-        &self,
-        queue: &CoreQueue,
-    ) -> Option<impl Deref<Target = A::Queue> + WasmNotSendSync> {
-        unsafe { queue.wgpu_queue.clone().as_hal::<A>() }
     }
 }
 
@@ -390,16 +380,22 @@ pub struct CoreRenderBundle {
 
 #[derive(Clone)]
 pub struct CoreQueue {
-    pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_queue: Arc<wgc::device::queue::Queue>,
 }
 
 impl fmt::Debug for CoreQueue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CoreQueue")
-            .field("context", &self.context)
             .field("wgpu_queue", &Arc::as_ptr(&self.wgpu_queue))
             .finish()
+    }
+}
+
+impl CoreQueue {
+    pub unsafe fn as_hal<A: hal::Api>(
+        &self,
+    ) -> Option<impl Deref<Target = A::Queue> + WasmNotSendSync> {
+        unsafe { self.wgpu_queue.clone().as_hal::<A>() }
     }
 }
 
@@ -737,10 +733,7 @@ impl dispatch::AdapterInterface for CoreAdapter {
             context: self.context.clone(),
             wgpu_device: device,
         };
-        let queue = CoreQueue {
-            context: self.context.clone(),
-            wgpu_queue: queue,
-        };
+        let queue = CoreQueue { wgpu_queue: queue };
         Box::pin(ready(Ok((device.into(), queue.into()))))
     }
 
