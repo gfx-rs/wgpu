@@ -1,6 +1,7 @@
 use alloc::sync::Arc;
 use core::cell::RefCell;
 use core::fmt;
+use std::marker::PhantomData;
 use wgpu_core::binding_model::{BindGroup, BindGroupLayout, PipelineLayout};
 use wgpu_core::command::{
     CommandBuffer, CommandEncoder, ComputePass, RenderBundle, RenderBundleEncoder, RenderPass,
@@ -40,6 +41,7 @@ pub struct Global {
     pub(crate) hub: RefCell<Hub>,
     // the instance must be dropped last
     pub instance: Arc<Instance>,
+    _prevent_send_and_sync: PhantomData<*const ()>,
 }
 
 impl Global {
@@ -51,6 +53,7 @@ impl Global {
         Self {
             instance: Instance::new(name, instance_desc, telemetry),
             hub: RefCell::new(Hub::new()),
+            _prevent_send_and_sync: PhantomData,
         }
     }
 
@@ -58,6 +61,7 @@ impl Global {
         Self {
             instance,
             hub: RefCell::new(Hub::new()),
+            _prevent_send_and_sync: PhantomData,
         }
     }
 
