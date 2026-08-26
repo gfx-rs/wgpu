@@ -388,14 +388,12 @@ pub struct CorePipelineCache {
 }
 
 pub struct CoreCommandBuffer {
-    pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_command_buffer: Arc<wgc::command::CommandBuffer>,
 }
 
 impl fmt::Debug for CoreCommandBuffer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CoreCommandBuffer")
-            .field("context", &self.context)
             .field(
                 "wgpu_command_buffer",
                 &Arc::as_ptr(&self.wgpu_command_buffer),
@@ -2097,7 +2095,6 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         let descriptor = wgt::CommandBufferDescriptor::default();
         let wgpu_command_buffer = self.wgpu_command_encoder.finish(&descriptor);
         CoreCommandBuffer {
-            context: self.context.clone(),
             wgpu_command_buffer,
         }
         .into()
