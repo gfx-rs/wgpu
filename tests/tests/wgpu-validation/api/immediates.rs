@@ -537,13 +537,12 @@ fn render_multi_immediates_auto_layout_with_all_immediates_set_succeeds() {
     wgpu_test::valid(&device, || encoder.finish());
 
     let mut encoder = device.create_command_encoder(&Default::default());
-    let mut bundle_encoder = device
-        .create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+    let mut bundle_encoder =
+        device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
             color_formats: &[Some(output_texture_view.texture().format())],
             sample_count: 1,
             ..wgpu::RenderBundleEncoderDescriptor::default()
-        })
-        .unwrap();
+        });
     do_encoding(&mut bundle_encoder, &pipeline);
     let bundle = bundle_encoder.finish(&wgpu::RenderBundleDescriptor::default());
 

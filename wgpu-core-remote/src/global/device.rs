@@ -11,7 +11,7 @@ use wgpu_core_remote_types::{
 use wgpu_core::{
     binding_model::{self},
     command,
-    device::{DeviceLostClosure, MissingFeatures, WaitIdleError},
+    device::{DeviceLostClosure, WaitIdleError},
     error::EmptyErrorScopeStack,
     pipeline::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
@@ -704,7 +704,7 @@ impl Global {
         device_id: DeviceId,
         desc: &RenderBundleEncoderDescriptor,
         id_in: id::RenderBundleEncoderId,
-    ) -> Result<(), MissingFeatures> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_bundle_encoders,
@@ -722,11 +722,9 @@ impl Global {
             multiview: None,
         };
 
-        let render_bundle_encoder = device.create_render_bundle_encoder(&desc)?;
+        let render_bundle_encoder = device.create_render_bundle_encoder(&desc);
 
         render_bundle_encoders.assign(id_in, *render_bundle_encoder);
-
-        Ok(())
     }
 
     pub fn render_bundle_encoder_finish(
