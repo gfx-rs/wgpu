@@ -229,7 +229,7 @@ impl Surface<'_> {
     ) -> Option<impl Deref<Target = A::Surface> + WasmNotSendSync> {
         let core_surface = self.inner.as_core_opt()?;
 
-        unsafe { core_surface.context.surface_as_hal::<A>(core_surface) }
+        unsafe { core_surface.as_hal::<A>() }
     }
 
     #[cfg(custom)]
