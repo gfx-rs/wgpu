@@ -46,6 +46,12 @@ impl fmt::Debug for ContextWgpuCore {
     }
 }
 
+#[track_caller]
+#[cold]
+fn handle_error_fatal(cause: impl Error + WasmNotSendSync + 'static, operation: &'static str) -> ! {
+    panic!("Error in {operation}: {f}", f = format_error(&cause));
+}
+
 impl ContextWgpuCore {
     pub unsafe fn from_hal_instance<A: hal::Api>(hal_instance: A::Instance) -> Self {
         Self(wgc::instance::Instance::from_hal_instance::<A>(
@@ -170,16 +176,6 @@ impl ContextWgpuCore {
         surface: &CoreSurface,
     ) -> Option<impl Deref<Target = A::Surface>> {
         unsafe { surface.wgpu_surface.clone().as_hal::<A>() }
-    }
-
-    #[track_caller]
-    #[cold]
-    fn handle_error_fatal(
-        &self,
-        cause: impl Error + WasmNotSendSync + 'static,
-        operation: &'static str,
-    ) -> ! {
-        panic!("Error in {operation}: {f}", f = format_error(&cause));
     }
 
     pub unsafe fn queue_as_hal<A: hal::Api>(
@@ -680,7 +676,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
     fn poll_all_devices(&self, force_wait: bool) -> bool {
         match self.0.poll_all_devices(force_wait) {
             Ok(all_queue_empty) => all_queue_empty,
-            Err(err) => self.handle_error_fatal(err, "Instance::poll_all_devices"),
+            Err(err) => handle_error_fatal(err, "Instance::poll_all_devices"),
         }
     }
 
@@ -1514,7 +1510,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     return Err(poll_error);
                 }
 
-                self.context.handle_error_fatal(err, "Device::poll")
+                handle_error_fatal(err, "Device::poll")
             }
         }
     }
@@ -2865,9 +2861,7 @@ impl dispatch::SurfaceInterface for CoreSurface {
                         error_sink.handle_error_nolabel(err, "Surface::get_current_texture_view");
                         (None, crate::SurfaceStatus::Validation, output_detail)
                     }
-                    None => self
-                        .context
-                        .handle_error_fatal(err, "Surface::get_current_texture_view"),
+                    None => handle_error_fatal(err, "Surface::get_current_texture_view"),
                 }
             }
         }
