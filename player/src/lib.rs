@@ -153,7 +153,7 @@ impl Player {
                     .iter()
                     .map(|&id| self.resolve_texture_view_id(id))
                     .collect::<Vec<_>>();
-                let (external_texture, _error) = device.create_external_texture(&desc, &planes);
+                let external_texture = device.create_external_texture(&desc, &planes);
                 self.external_textures.insert(id, external_texture);
             }
             Action::DestroyExternalTexture(id) => {
@@ -169,7 +169,7 @@ impl Player {
                     .expect("invalid external texture");
             }
             Action::CreateSampler(id, desc) => {
-                let (sampler, _error) = device.create_sampler(&desc);
+                let sampler = device.create_sampler(&desc);
                 self.samplers.insert(id, sampler);
             }
             Action::DropSampler(id) => {
@@ -188,7 +188,7 @@ impl Player {
                 index,
             } => {
                 let pipeline = self.resolve_render_pipeline_id(pipeline);
-                let (bgl, _error) = pipeline.get_bind_group_layout(index);
+                let bgl = pipeline.get_bind_group_layout(index);
                 self.bind_group_layouts.insert(id, bgl);
             }
             Action::GetComputePipelineBindGroupLayout {
@@ -197,7 +197,7 @@ impl Player {
                 index,
             } => {
                 let pipeline = self.resolve_compute_pipeline_id(pipeline);
-                let (bgl, _error) = pipeline.get_bind_group_layout(index);
+                let bgl = pipeline.get_bind_group_layout(index);
                 self.bind_group_layouts.insert(id, bgl);
             }
             Action::DropBindGroupLayout(id) => {
@@ -219,7 +219,7 @@ impl Player {
                     immediate_size: desc.immediate_size,
                 };
 
-                let (pipeline_layout, _error) = device.create_pipeline_layout(&resolved_desc);
+                let pipeline_layout = device.create_pipeline_layout(&resolved_desc);
                 self.pipeline_layouts.insert(id, pipeline_layout);
             }
             Action::DropPipelineLayout(id) => {
@@ -229,7 +229,7 @@ impl Player {
             }
             Action::CreateBindGroup(id, desc) => {
                 let resolved_desc = self.resolve_bind_group_descriptor(desc);
-                let (bind_group, _error) = device.create_bind_group(&resolved_desc);
+                let bind_group = device.create_bind_group(&resolved_desc);
                 self.bind_groups.insert(id, bind_group);
             }
             Action::DropBindGroup(id) => {
@@ -319,7 +319,7 @@ impl Player {
             }
             Action::CreateComputePipeline { id, desc } => {
                 let resolved_desc = self.resolve_compute_pipeline_descriptor(desc);
-                let (pipeline, _error) = device.create_compute_pipeline(resolved_desc);
+                let pipeline = device.create_compute_pipeline(resolved_desc);
                 self.compute_pipelines.insert(id, pipeline);
             }
             Action::DropComputePipeline(id) => {

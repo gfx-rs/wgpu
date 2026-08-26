@@ -15,8 +15,6 @@ use crate::shader::GPUShaderModule;
 use crate::webidl::GPUPipelineLayoutOrGPUAutoLayoutMode;
 
 pub struct GPUComputePipeline {
-  pub error_handler: super::error::ErrorHandler,
-
   pub wgpu_compute_pipeline: Arc<wgpu_core::pipeline::ComputePipeline>,
   pub label: String,
 }
@@ -52,10 +50,8 @@ impl GPUComputePipeline {
 
   #[cppgc]
   fn get_bind_group_layout(&self, #[webidl] index: u32) -> GPUBindGroupLayout {
-    let (wgpu_bind_group_layout, err) =
+    let wgpu_bind_group_layout =
       self.wgpu_compute_pipeline.get_bind_group_layout(index);
-
-    self.error_handler.push_error(err);
 
     // TODO(wgpu): needs to support retrieving the label
     GPUBindGroupLayout {
