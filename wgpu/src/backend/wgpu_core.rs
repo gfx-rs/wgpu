@@ -479,32 +479,30 @@ impl fmt::Debug for CoreSurfaceOutputDetail {
     }
 }
 
-impl From<CreateShaderModuleError> for CompilationInfo {
-    fn from(value: CreateShaderModuleError) -> Self {
-        match value {
-            #[cfg(feature = "wgsl")]
-            CreateShaderModuleError::Parsing(v) => v.into(),
-            #[cfg(feature = "glsl")]
-            CreateShaderModuleError::ParsingGlsl(v) => v.into(),
-            #[cfg(feature = "spirv")]
-            CreateShaderModuleError::ParsingSpirV(v) => v.into(),
-            CreateShaderModuleError::Validation(v) => v.into(),
-            // Device errors are reported through the error sink, and are not compilation errors.
-            // Same goes for native shader module generation errors.
-            CreateShaderModuleError::Device(_) | CreateShaderModuleError::Generation => {
-                CompilationInfo {
-                    messages: Vec::new(),
-                }
+fn shader_module_error_into_compilation_info(value: CreateShaderModuleError) -> CompilationInfo {
+    match value {
+        #[cfg(feature = "wgsl")]
+        CreateShaderModuleError::Parsing(v) => crate::wgsl_to_compilation_info(v),
+        #[cfg(feature = "glsl")]
+        CreateShaderModuleError::ParsingGlsl(v) => crate::glsl_to_compilation_info(v),
+        #[cfg(feature = "spirv")]
+        CreateShaderModuleError::ParsingSpirV(v) => crate::spirv_to_compilation_info(v),
+        CreateShaderModuleError::Validation(v) => crate::naga_to_compilation_info(v),
+        // Device errors are reported through the error sink, and are not compilation errors.
+        // Same goes for native shader module generation errors.
+        CreateShaderModuleError::Device(_) | CreateShaderModuleError::Generation => {
+            CompilationInfo {
+                messages: Vec::new(),
             }
-            // Everything else is an error message without location information.
-            _ => CompilationInfo {
-                messages: vec![CompilationMessage {
-                    message: value.to_string(),
-                    message_type: CompilationMessageType::Error,
-                    location: None,
-                }],
-            },
         }
+        // Everything else is an error message without location information.
+        _ => CompilationInfo {
+            messages: vec![CompilationMessage {
+                message: value.to_string(),
+                message_type: CompilationMessageType::Error,
+                location: None,
+            }],
+        },
     }
 }
 
@@ -836,7 +834,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     desc.label,
                     "Device::create_shader_module",
                 );
-                CompilationInfo::from(cause)
+                shader_module_error_into_compilation_info(cause)
             }
             None => CompilationInfo { messages: vec![] },
         };
@@ -863,7 +861,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     desc.label.as_deref(),
                     "Device::create_shader_module_passthrough",
                 );
-                CompilationInfo::from(cause)
+                shader_module_error_into_compilation_info(cause)
             }
             None => CompilationInfo { messages: vec![] },
         };

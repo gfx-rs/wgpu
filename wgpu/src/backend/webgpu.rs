@@ -163,47 +163,43 @@ fn map_utf16_to_utf8_offset(utf16_offset: u32, text: &str) -> u32 {
     }
 }
 
-impl crate::CompilationMessage {
-    fn from_js(
-        js_message: webgpu_sys::GpuCompilationMessage,
-        compilation_info: &WebShaderCompilationInfo,
-    ) -> Self {
-        let message_type = match js_message.type_() {
-            webgpu_sys::GpuCompilationMessageType::Error => crate::CompilationMessageType::Error,
-            webgpu_sys::GpuCompilationMessageType::Warning => {
-                crate::CompilationMessageType::Warning
-            }
-            webgpu_sys::GpuCompilationMessageType::Info => crate::CompilationMessageType::Info,
-            _ => crate::CompilationMessageType::Error,
-        };
-        let utf16_offset = js_message.offset() as u32;
-        let utf16_length = js_message.length() as u32;
-        let span = match compilation_info {
-            WebShaderCompilationInfo::Wgsl { .. } if utf16_offset == 0 && utf16_length == 0 => None,
-            WebShaderCompilationInfo::Wgsl { source } => {
-                let offset = map_utf16_to_utf8_offset(utf16_offset, source);
-                let length = map_utf16_to_utf8_offset(utf16_length, &source[offset as usize..]);
-                let line_number = js_message.line_num() as u32; // That's legal, because we're counting lines the same way
+fn compilation_message_from_js(
+    js_message: webgpu_sys::GpuCompilationMessage,
+    compilation_info: &WebShaderCompilationInfo,
+) -> crate::CompilationMessage {
+    let message_type = match js_message.type_() {
+        webgpu_sys::GpuCompilationMessageType::Error => crate::CompilationMessageType::Error,
+        webgpu_sys::GpuCompilationMessageType::Warning => crate::CompilationMessageType::Warning,
+        webgpu_sys::GpuCompilationMessageType::Info => crate::CompilationMessageType::Info,
+        _ => crate::CompilationMessageType::Error,
+    };
+    let utf16_offset = js_message.offset() as u32;
+    let utf16_length = js_message.length() as u32;
+    let span = match compilation_info {
+        WebShaderCompilationInfo::Wgsl { .. } if utf16_offset == 0 && utf16_length == 0 => None,
+        WebShaderCompilationInfo::Wgsl { source } => {
+            let offset = map_utf16_to_utf8_offset(utf16_offset, source);
+            let length = map_utf16_to_utf8_offset(utf16_length, &source[offset as usize..]);
+            let line_number = js_message.line_num() as u32; // That's legal, because we're counting lines the same way
 
-                let prefix = &source[..offset as usize];
-                let line_start = prefix.rfind('\n').map(|pos| pos + 1).unwrap_or(0) as u32;
-                let line_position = offset - line_start + 1; // Counting UTF-8 byte indices
+            let prefix = &source[..offset as usize];
+            let line_start = prefix.rfind('\n').map(|pos| pos + 1).unwrap_or(0) as u32;
+            let line_position = offset - line_start + 1; // Counting UTF-8 byte indices
 
-                Some(crate::SourceLocation {
-                    offset,
-                    length,
-                    line_number,
-                    line_position,
-                })
-            }
-            WebShaderCompilationInfo::Transformed { .. } => None,
-        };
-
-        crate::CompilationMessage {
-            message: js_message.message(),
-            message_type,
-            location: span,
+            Some(crate::SourceLocation {
+                offset,
+                length,
+                line_number,
+                line_position,
+            })
         }
+        WebShaderCompilationInfo::Transformed { .. } => None,
+    };
+
+    crate::CompilationMessage {
+        message: js_message.message(),
+        message_type,
+        location: span,
     }
 }
 
@@ -1107,21 +1103,22 @@ fn future_compilation_info(
         _ => [].iter().cloned(),
     };
 
-    let messages =
-        match result {
-            Ok(info) => base_messages
-                .chain(info.messages().into_iter().map(|message| {
-                    crate::CompilationMessage::from_js(message, base_compilation_info)
-                }))
-                .collect(),
-            Err(_v) => base_messages
-                .chain(core::iter::once(crate::CompilationMessage {
-                    message: "Getting compilation info failed".to_string(),
-                    message_type: crate::CompilationMessageType::Error,
-                    location: None,
-                }))
-                .collect(),
-        };
+    let messages = match result {
+        Ok(info) => base_messages
+            .chain(
+                info.messages()
+                    .into_iter()
+                    .map(|message| compilation_message_from_js(message, base_compilation_info)),
+            )
+            .collect(),
+        Err(_v) => base_messages
+            .chain(core::iter::once(crate::CompilationMessage {
+                message: "Getting compilation info failed".to_string(),
+                message_type: crate::CompilationMessageType::Error,
+                location: None,
+            }))
+            .collect(),
+    };
 
     crate::CompilationInfo { messages }
 }
@@ -2007,7 +2004,7 @@ impl dispatch::DeviceInterface for WebDevice {
                 spv_parser
                     .parse()
                     .map_err(|inner| {
-                        crate::CompilationInfo::from(naga::error::ShaderError {
+                        crate::spirv_to_compilation_info(naga::error::ShaderError {
                             source: String::new(),
                             label: desc.label.map(|s| s.to_string()),
                             inner: Box::new(inner),
@@ -2044,7 +2041,7 @@ impl dispatch::DeviceInterface for WebDevice {
                 parser
                     .parse(&options, shader)
                     .map_err(|inner| {
-                        crate::CompilationInfo::from(naga::error::ShaderError {
+                        crate::glsl_to_compilation_info(naga::error::ShaderError {
                             source: shader.to_string(),
                             label: desc.label.map(|s| s.to_string()),
                             inner: Box::new(inner),
@@ -2097,7 +2094,7 @@ impl dispatch::DeviceInterface for WebDevice {
             let mut validator =
                 valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all());
             let module_info = validator.validate(module).map_err(|err| {
-                crate::CompilationInfo::from(naga::error::ShaderError {
+                crate::naga_to_compilation_info(naga::error::ShaderError {
                     source: source.to_string(),
                     label: desc.label.map(|s| s.to_string()),
                     inner: err,
