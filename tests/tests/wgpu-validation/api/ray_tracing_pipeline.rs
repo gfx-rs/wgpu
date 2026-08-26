@@ -26,21 +26,25 @@ fn check_visibility_requires_ray_tracing_pipelines_feature(visibility: ShaderSta
 }
 
 #[test]
+#[should_panic(expected = "entered unreachable code: ray tracing pipelines")]
 fn ray_generation_visibility_requires_ray_tracing_pipelines_feature() {
     check_visibility_requires_ray_tracing_pipelines_feature(ShaderStages::RAY_GENERATION);
 }
 
 #[test]
+#[should_panic(expected = "entered unreachable code: ray tracing pipelines")]
 fn any_hit_visibility_requires_ray_tracing_pipelines_feature() {
     check_visibility_requires_ray_tracing_pipelines_feature(ShaderStages::ANY_HIT);
 }
 
 #[test]
+#[should_panic(expected = "entered unreachable code: ray tracing pipelines")]
 fn closest_hit_visibility_requires_ray_tracing_pipelines_feature() {
     check_visibility_requires_ray_tracing_pipelines_feature(ShaderStages::CLOSEST_HIT);
 }
 
 #[test]
+#[should_panic(expected = "entered unreachable code: ray tracing pipelines")]
 fn miss_visibility_requires_ray_tracing_pipelines_feature() {
     check_visibility_requires_ray_tracing_pipelines_feature(ShaderStages::MISS);
 }
