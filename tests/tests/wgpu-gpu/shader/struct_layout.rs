@@ -565,10 +565,10 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     {
         let header = format!(
             "struct Inner {{ scalar: f32, {}scalar2: f32 }}",
-            if no_array_types {
-                ""
-            } else {
+            if !no_array_types {
                 "member: array<vec3<f32>, 2>, "
+            } else {
+                ""
             }
         );
         let members = String::from("inner: Inner, scalar3: f32, vector: vec3<f32>, scalar4: f32");
@@ -583,9 +583,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
             output[11] = bitcast<u32>(input.vector.z);
             output[12] = bitcast<u32>(input.scalar4);
         ",
-            if no_array_types {
-                ""
-            } else {
+            if !no_array_types {
                 "\
             output[1] = bitcast<u32>(input.inner.member[0].x);
             output[2] = bitcast<u32>(input.inner.member[0].y);
@@ -594,6 +592,8 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
             output[5] = bitcast<u32>(input.inner.member[1].y);
             output[6] = bitcast<u32>(input.inner.member[1].z);
             "
+            } else {
+                ""
             }
         );
 
@@ -603,17 +603,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                 members,
                 direct,
                 &input_values,
-                if no_array_types {
-                    &[
-                        0, // inner.scalar
-                        -1, -1, -1, // inner.member[0]
-                        -1, -1, -1, // inner.member[1]
-                        1,  // scalar2
-                        2,  // scalar3
-                        4, 5, 6, // vector
-                        7, // scalar4
-                    ]
-                } else {
+                if !no_array_types {
                     &[
                         0, // inner.scalar
                         4, 5, 6, // inner.member[0]
@@ -622,6 +612,16 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                         16, // scalar3
                         20, 21, 22, // vector
                         23, // scalar4
+                    ]
+                } else {
+                    &[
+                        0, // inner.scalar
+                        -1, -1, -1, // inner.member[0]
+                        -1, -1, -1, // inner.member[1]
+                        1,  // scalar2
+                        2,  // scalar3
+                        4, 5, 6, // vector
+                        7, // scalar4
                     ]
                 },
             )
@@ -716,10 +716,10 @@ fn create_64bit_struct_layout_tests(no_array_types: bool) -> Vec<ShaderTest> {
     {
         let header = format!(
             "struct Inner {{ scalar: u64, scalar32: u32{} }}",
-            if no_array_types {
-                ""
-            } else {
+            if !no_array_types {
                 ", member: array<vec3<u64>, 2>"
+            } else {
+                ""
             }
         );
         let members = String::from("inner: Inner");
@@ -730,9 +730,7 @@ fn create_64bit_struct_layout_tests(no_array_types: bool) -> Vec<ShaderTest> {
                 output[2] = bitcast<u32>(input.inner.scalar32);
                 {}
             ",
-            if no_array_types {
-                ""
-            } else {
+            if !no_array_types {
                 "\
                     for (var index = 0u; index < 2u; index += 1u) {
                         for (var component = 0u; component < 3u; component += 1u) {
@@ -741,6 +739,8 @@ fn create_64bit_struct_layout_tests(no_array_types: bool) -> Vec<ShaderTest> {
                         }
                     }
                 "
+            } else {
+                ""
             }
         );
 
@@ -750,19 +750,19 @@ fn create_64bit_struct_layout_tests(no_array_types: bool) -> Vec<ShaderTest> {
                 members,
                 direct,
                 &input_values,
-                if no_array_types {
-                    &[
-                        0, 1, // inner.scalar
-                        2, // inner.scalar32
-                        -1, -1, -1, -1, -1, -1, // inner.member[0]
-                        -1, -1, -1, -1, -1, -1, // inner.member[1]
-                    ]
-                } else {
+                if !no_array_types {
                     &[
                         0, 1, // inner.scalar
                         2, // inner.scalar32
                         8, 9, 10, 11, 12, 13, // inner.member[0]
                         16, 17, 18, 19, 20, 21, // inner.member[1]
+                    ]
+                } else {
+                    &[
+                        0, 1, // inner.scalar
+                        2, // inner.scalar32
+                        -1, -1, -1, -1, -1, -1, // inner.member[0]
+                        -1, -1, -1, -1, -1, -1, // inner.member[1]
                     ]
                 },
             )
