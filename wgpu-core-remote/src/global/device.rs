@@ -4,8 +4,8 @@ use core::ptr::NonNull;
 use wgpu_core_remote_types::{
     encoders::{RenderBundleDescriptor, RenderBundleEncoderDescriptor},
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
-    BufferDescriptor, ExternalTextureDescriptor, PipelineLayoutDescriptor, SamplerDescriptor,
-    ShaderModuleDescriptor, TextureDescriptor, TextureViewDescriptor,
+    BufferDescriptor, ExternalTextureDescriptor, PipelineLayoutDescriptor, QuerySetDescriptor,
+    SamplerDescriptor, ShaderModuleDescriptor, TextureDescriptor, TextureViewDescriptor,
 };
 
 use wgpu_core::{
@@ -740,7 +740,7 @@ impl Global {
     pub fn device_create_query_set(
         &self,
         device_id: DeviceId,
-        desc: &resource::QuerySetDescriptor,
+        desc: &QuerySetDescriptor,
         id_in: id::QuerySetId,
     ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
         let mut hub = self.hub.borrow_mut();
