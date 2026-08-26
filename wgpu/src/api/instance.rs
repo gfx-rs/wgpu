@@ -390,10 +390,7 @@ impl Instance {
     ) -> Adapter {
         let core_instance = self.inner.as_core();
         let wgpu_adapter = unsafe { core_instance.create_adapter_from_hal(hal_adapter) };
-        let core = backend::wgpu_core::CoreAdapter {
-            context: core_instance.clone(),
-            wgpu_adapter,
-        };
+        let core = backend::wgpu_core::CoreAdapter { wgpu_adapter };
 
         Adapter { inner: core.into() }
     }
