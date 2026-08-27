@@ -4856,6 +4856,7 @@ version = "30.0.0"
 dependencies = [
  "raw-window-handle",
  "serde",
+ "static_assertions",
  "wgpu-core",
  "wgpu-core-remote-types",
  "wgpu-hal",
