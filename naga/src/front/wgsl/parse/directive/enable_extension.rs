@@ -13,7 +13,7 @@ pub(crate) struct EnableExtensions {
     wgpu_mesh_shader: bool,
     wgpu_ray_query: bool,
     wgpu_ray_query_vertex_return: bool,
-    wgpu_ray_tracing_pipelines: bool,
+    wgpu_ray_tracing_pipeline: bool,
     dual_source_blending: bool,
     /// Whether `enable f16;` was written earlier in the shader module.
     f16: bool,
@@ -33,7 +33,7 @@ impl EnableExtensions {
             wgpu_mesh_shader: false,
             wgpu_ray_query: false,
             wgpu_ray_query_vertex_return: false,
-            wgpu_ray_tracing_pipelines: false,
+            wgpu_ray_tracing_pipeline: false,
             f16: false,
             wgpu_int16: false,
             dual_source_blending: false,
@@ -55,7 +55,7 @@ impl EnableExtensions {
                 &mut self.wgpu_ray_query_vertex_return
             }
             ImplementedEnableExtension::WgpuRayTracingPipeline => {
-                &mut self.wgpu_ray_tracing_pipelines
+                &mut self.wgpu_ray_tracing_pipeline
             }
             ImplementedEnableExtension::DualSourceBlending => &mut self.dual_source_blending,
             ImplementedEnableExtension::F16 => &mut self.f16,
@@ -78,7 +78,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::WgpuRayQueryVertexReturn => {
                 self.wgpu_ray_query_vertex_return
             }
-            ImplementedEnableExtension::WgpuRayTracingPipeline => self.wgpu_ray_tracing_pipelines,
+            ImplementedEnableExtension::WgpuRayTracingPipeline => self.wgpu_ray_tracing_pipeline,
             ImplementedEnableExtension::DualSourceBlending => self.dual_source_blending,
             ImplementedEnableExtension::F16 => self.f16,
             ImplementedEnableExtension::WgpuInt16 => self.wgpu_int16,
