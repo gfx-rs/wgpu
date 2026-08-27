@@ -2688,7 +2688,8 @@ pub(super) fn encode_render_pass(
             &mut tracker.textures,
             device,
             parent_state.snatch_guard,
-        );
+        )
+        .map_pass_err(pass_scope)?;
 
         pending_query_resets
             .reset_queries(transit, parent_state.snatch_guard)

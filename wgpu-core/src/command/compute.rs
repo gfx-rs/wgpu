@@ -895,7 +895,8 @@ pub(super) fn encode_compute_pass(
         &mut parent_state.tracker.textures,
         device,
         parent_state.snatch_guard,
-    );
+    )
+    .map_pass_err(pass_scope)?;
     CommandEncoder::insert_barriers_from_tracker(
         transit,
         parent_state.tracker,

@@ -700,7 +700,7 @@ fn handle_texture_init(
                 state.raw_encoder,
                 &mut state.tracker.textures,
                 &state.device.alignments,
-                state.device.zero_buffer.as_ref(),
+                state.device.zero_buffer()?,
                 state.snatch_guard,
                 state.device.instance_flags,
             )?;

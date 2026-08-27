@@ -61,6 +61,7 @@ impl Device {
             self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
         }
 
+        let zero_buffer = self.zero_buffer()?;
         let size_info = match &sizes {
             wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => {
                 if descriptors.len() as u32 > self.limits.max_blas_geometry_count {
@@ -84,7 +85,7 @@ impl Device {
                                 dyn hal::DynBuffer,
                             > {
                                 format: desc.index_format.unwrap(),
-                                buffer: Some(self.zero_buffer.as_ref()),
+                                buffer: Some(zero_buffer),
                                 offset: 0,
                                 count,
                             });
@@ -106,7 +107,7 @@ impl Device {
                         .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
                     {
                         transform = Some(wgpu_hal::AccelerationStructureTriangleTransform {
-                            buffer: self.zero_buffer.as_ref(),
+                            buffer: zero_buffer,
                             offset: 0,
                         })
                     }
@@ -119,7 +120,7 @@ impl Device {
                     }
 
                     entries.push(hal::AccelerationStructureTriangles::<dyn hal::DynBuffer> {
-                        vertex_buffer: Some(self.zero_buffer.as_ref()),
+                        vertex_buffer: Some(zero_buffer),
                         vertex_format: desc.vertex_format,
                         first_vertex: 0,
                         vertex_count: desc.vertex_count,
@@ -159,7 +160,7 @@ impl Device {
                     }
 
                     entries.push(hal::AccelerationStructureAABBs::<dyn hal::DynBuffer> {
-                        buffer: Some(self.zero_buffer.as_ref()),
+                        buffer: Some(zero_buffer),
                         offset: 0,
                         count: desc.primitive_count,
                         stride: AABB_GEOMETRY_MIN_STRIDE,
@@ -286,12 +287,13 @@ impl Device {
             self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
         }
 
+        let zero_buffer = self.zero_buffer()?;
         let size_info = unsafe {
             self.raw().get_acceleration_structure_build_sizes(
                 &hal::GetAccelerationStructureBuildSizesDescriptor {
                     entries: &hal::AccelerationStructureEntries::Instances(
                         hal::AccelerationStructureInstances {
-                            buffer: Some(self.zero_buffer.as_ref()),
+                            buffer: Some(zero_buffer),
                             offset: 0,
                             count: desc.max_instances,
                         },

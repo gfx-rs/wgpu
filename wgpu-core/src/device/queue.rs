@@ -74,33 +74,7 @@ impl Queue {
             }
         };
 
-        let mut pending_writes = PendingWrites::new(pending_encoder, instance_flags);
-
-        let zero_buffer = device.zero_buffer.as_ref();
-        pending_writes.activate();
-        unsafe {
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: zero_buffer,
-                    usage: hal::StateTransition {
-                        from: wgt::BufferUses::empty(),
-                        to: wgt::BufferUses::COPY_DST,
-                    },
-                }]);
-            pending_writes
-                .command_encoder
-                .clear_buffer(zero_buffer, 0..super::ZERO_BUFFER_SIZE);
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: zero_buffer,
-                    usage: hal::StateTransition {
-                        from: wgt::BufferUses::COPY_DST,
-                        to: wgt::BufferUses::COPY_SRC,
-                    },
-                }]);
-        }
+        let pending_writes = PendingWrites::new(pending_encoder, instance_flags);
 
         Ok(Queue {
             raw,
@@ -146,6 +120,8 @@ impl Queue {
         let mut pending_writes = self.pending_writes.lock();
 
         if needs_clear {
+            let zero_buffer = device.zero_buffer()?;
+            device.clear_zero_buffer_if_needed(&mut pending_writes);
             // After encoding the clear operation, we must not return without
             // adding the texture to `pending_writes`.
             let encoder = pending_writes.activate();
@@ -160,7 +136,7 @@ impl Queue {
                 encoder,
                 &mut trackers.textures,
                 &device.alignments,
-                device.zero_buffer.as_ref(),
+                zero_buffer,
                 &submission.snatch_guard,
                 device.instance_flags,
             )
@@ -485,6 +461,10 @@ impl PendingWrites {
         device: &Arc<Device>,
         queue: &Queue,
     ) -> Result<Option<EncoderInFlight>, DeviceError> {
+        // Pending writes go in ahead of every other command buffer in the
+        // submission, so this covers uses recorded outside of them.
+        device.clear_zero_buffer_if_needed(self);
+
         if self.is_recording {
             let pending_buffers = mem::take(&mut self.dst_buffers);
             let pending_textures = mem::take(&mut self.dst_textures);
@@ -1049,7 +1029,6 @@ impl Queue {
         }
 
         let mut pending_writes = self.pending_writes.lock();
-        let encoder = pending_writes.activate();
 
         // If the copy does not fully cover the layers, we need to initialize to
         // zero *first* as we don't keep track of partial texture layer inits.
@@ -1082,6 +1061,9 @@ impl Queue {
             }
         };
         if !layer_ranges_to_clear.is_empty() {
+            let zero_buffer = self.device.zero_buffer()?;
+            self.device.clear_zero_buffer_if_needed(&mut pending_writes);
+            let encoder = pending_writes.activate();
             let mut trackers = self.device.trackers.lock();
             for layer_range in layer_ranges_to_clear {
                 crate::command::clear_texture(
@@ -1094,7 +1076,7 @@ impl Queue {
                     encoder,
                     &mut trackers.textures,
                     &self.device.alignments,
-                    self.device.zero_buffer.as_ref(),
+                    zero_buffer,
                     &snatch_guard,
                     self.device.instance_flags,
                 )
@@ -1193,6 +1175,7 @@ impl Queue {
                 },
             };
 
+            let encoder = pending_writes.activate();
             let mut trackers = self.device.trackers.lock();
             let transition =
                 trackers
@@ -1338,7 +1321,6 @@ impl Queue {
         }
 
         let mut pending_writes = self.pending_writes.lock();
-        let encoder = pending_writes.activate();
 
         // If the copy does not fully cover the layers, we need to initialize to
         // zero *first* as we don't keep track of partial texture layer inits.
@@ -1371,6 +1353,9 @@ impl Queue {
             }
         };
         if !layer_ranges_to_clear.is_empty() {
+            let zero_buffer = self.device.zero_buffer()?;
+            self.device.clear_zero_buffer_if_needed(&mut pending_writes);
+            let encoder = pending_writes.activate();
             let mut trackers = self.device.trackers.lock();
             for layer_range in layer_ranges_to_clear {
                 crate::command::clear_texture(
@@ -1383,7 +1368,7 @@ impl Queue {
                     encoder,
                     &mut trackers.textures,
                     &self.device.alignments,
-                    self.device.zero_buffer.as_ref(),
+                    zero_buffer,
                     &snatch_guard,
                     self.device.instance_flags,
                 )
@@ -1402,6 +1387,7 @@ impl Queue {
             size: hal_copy_size,
         };
 
+        let encoder = pending_writes.activate();
         let mut trackers = self.device.trackers.lock();
         let transitions = trackers
             .textures
@@ -1896,10 +1882,9 @@ impl Queue {
                 .textures
                 .set_from_usage_scope_and_drain_transitions(&used_surface_textures, &snatch_guard)
                 .collect::<Vec<_>>();
+            let encoder = pending_writes.activate();
             unsafe {
-                pending_writes
-                    .command_encoder
-                    .transition_textures(&texture_barriers);
+                encoder.transition_textures(&texture_barriers);
             };
         }
 

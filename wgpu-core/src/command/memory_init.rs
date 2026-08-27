@@ -192,7 +192,7 @@ pub(crate) fn fixup_discarded_surfaces<InitIter: Iterator<Item = TextureSurfaceD
     texture_tracker: &mut TextureTracker,
     device: &Device,
     snatch_guard: &SnatchGuard<'_>,
-) {
+) -> Result<(), DeviceError> {
     for init in inits {
         let (layer_range, depth_slice) = if init.texture.desc.dimension == wgt::TextureDimension::D3
         {
@@ -213,12 +213,13 @@ pub(crate) fn fixup_discarded_surfaces<InitIter: Iterator<Item = TextureSurfaceD
             encoder,
             texture_tracker,
             &device.alignments,
-            device.zero_buffer.as_ref(),
+            device.zero_buffer()?,
             snatch_guard,
             device.instance_flags,
         )
         .unwrap();
     }
+    Ok(())
 }
 
 impl BakedCommands {
@@ -397,7 +398,7 @@ impl BakedCommands {
                     self.encoder.raw.as_mut(),
                     &mut device_tracker.textures,
                     &device.alignments,
-                    device.zero_buffer.as_ref(),
+                    device.zero_buffer()?,
                     snatch_guard,
                     device.instance_flags,
                 );
@@ -475,7 +476,7 @@ impl BakedCommands {
                 self.encoder.raw.as_mut(),
                 &mut device_tracker.textures,
                 &device.alignments,
-                device.zero_buffer.as_ref(),
+                device.zero_buffer()?,
                 snatch_guard,
                 device.instance_flags,
             );

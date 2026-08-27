@@ -87,6 +87,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         VERTEX_BUFFER_TAIL_INIT_MAP_WRITE_MAPPED_AT_CREATION,
         COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_ROW_PADDING_INIT,
         COPY_TEXTURE_TO_BUFFER_UNALIGNED_OFFSET_IMAGE_PADDING_INIT,
+        ZERO_BUFFER_IS_ALLOCATED_LAZILY,
     ]);
 }
 
@@ -2822,3 +2823,64 @@ async fn test_copy_texture_to_buffer_padding_init(
         "the destination buffer of copies from a never-written texture is not all zero",
     );
 }
+
+/// The zero buffer costs half a megabyte of GPU memory, so it must not be
+/// allocated until something actually needs zero-initialization.
+#[apply(gpu_test!)]
+static ZERO_BUFFER_IS_ALLOCATED_LAZILY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|ctx| {
+        fn zero_buffer_size(device: &Device) -> Option<u64> {
+            let report = device.generate_allocator_report()?;
+            Some(
+                report
+                    .allocations
+                    .iter()
+                    .filter(|allocation| allocation.name.contains("zero init buffer"))
+                    .map(|allocation| allocation.size)
+                    .sum(),
+            )
+        }
+
+        let Some(size) = zero_buffer_size(&ctx.device) else {
+            return;
+        };
+        assert_eq!(size, 0, "a fresh device allocated the zero buffer");
+
+        let texture = ctx.device.create_texture(&TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: 64,
+                height: 64,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::COPY_DST | TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        ctx.queue.write_texture(
+            texture.as_image_copy(),
+            &[0u8; 4 * 16 * 16],
+            TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * 16),
+                rows_per_image: Some(16),
+            },
+            Extent3d {
+                width: 16,
+                height: 16,
+                depth_or_array_layers: 1,
+            },
+        );
+        ctx.queue.submit([]);
+        ctx.device.poll(PollType::wait_indefinitely()).unwrap();
+
+        assert_ne!(
+            zero_buffer_size(&ctx.device),
+            Some(0),
+            "a partial write did not allocate the zero buffer"
+        );
+    });

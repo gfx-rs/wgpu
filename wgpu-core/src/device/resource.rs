@@ -62,8 +62,9 @@ use crate::{
 };
 
 use super::{
-    queue::Queue, DeviceDescriptor, DeviceError, DeviceLostClosure, UserClosures,
-    ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
+    queue::{PendingWrites, Queue},
+    DeviceDescriptor, DeviceError, DeviceLostClosure, UserClosures, ENTRYPOINT_FAILURE_ERROR,
+    ZERO_BUFFER_SIZE,
 };
 
 #[cfg(supports_64bit_atomics)]
@@ -245,7 +246,8 @@ pub struct Device {
     raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
     pub(crate) queue: OnceCell<Weak<Queue>>,
-    pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
+    zero_buffer: OnceCell<Box<dyn hal::DynBuffer>>,
+    zero_buffer_needs_clear: AtomicBool,
     pub(crate) empty_bgl: ManuallyDrop<Box<dyn hal::DynBindGroupLayout>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
@@ -381,9 +383,6 @@ impl Drop for Device {
         // Transfer the rest of the resources back to `DeviceResources`, which cleans them
         // up for us.
 
-        // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this
-        // point.
-        let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.empty_bgl anymore after this point.
         let empty_bgl = unsafe { ManuallyDrop::take(&mut self.empty_bgl) };
         // SAFETY: We are in the Drop impl and we don't use
@@ -395,7 +394,7 @@ impl Drop for Device {
 
         drop(DeviceResources {
             raw: self.raw.as_ref(),
-            zero_buffer: Some(zero_buffer),
+            zero_buffer: self.zero_buffer.take(),
             empty_bgl: Some(empty_bgl),
             default_external_texture_params_buffer: Some(default_external_texture_params_buffer),
             fence: Some(fence),
@@ -405,6 +404,71 @@ impl Drop for Device {
 }
 
 impl Device {
+    /// Source of zeroed bytes for resource initialization, created on first use.
+    /// It only reads as zeroes once [`Device::clear_zero_buffer_if_needed`] has
+    /// encoded the clear.
+    pub(crate) fn zero_buffer(&self) -> Result<&dyn hal::DynBuffer, DeviceError> {
+        let zero_buffer = self
+            .zero_buffer
+            .get_or_try_init(|| -> Result<_, DeviceError> {
+                let rt_uses = if self
+                    .features
+                    .intersects(wgt::Features::EXPERIMENTAL_RAY_QUERY)
+                {
+                    wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT
+                } else {
+                    wgt::BufferUses::empty()
+                };
+                let buffer = unsafe {
+                    self.raw.create_buffer(&hal::BufferDescriptor {
+                        label: hal_label(
+                            Some("(wgpu internal) zero init buffer"),
+                            self.instance_flags,
+                        ),
+                        size: ZERO_BUFFER_SIZE,
+                        usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
+                        memory_flags: hal::MemoryFlags::empty(),
+                    })
+                }
+                .map_err(|e| self.handle_hal_error(e))?;
+                self.zero_buffer_needs_clear.store(true, Ordering::Relaxed);
+                Ok(buffer)
+            })?;
+        Ok(zero_buffer.as_ref())
+    }
+
+    /// Encodes the clear that [`Device::zero_buffer`] still owes, if any. Callers
+    /// recording a use of it into `pending_writes` must call this first, so that
+    /// the clear precedes that use in the same command buffer.
+    pub(crate) fn clear_zero_buffer_if_needed(&self, pending_writes: &mut PendingWrites) {
+        let Some(zero_buffer) = self.zero_buffer.get() else {
+            return;
+        };
+        if !self.zero_buffer_needs_clear.swap(false, Ordering::Relaxed) {
+            return;
+        }
+
+        let zero_buffer = zero_buffer.as_ref();
+        let encoder = pending_writes.activate();
+        unsafe {
+            encoder.transition_buffers(&[hal::BufferBarrier {
+                buffer: zero_buffer,
+                usage: hal::StateTransition {
+                    from: wgt::BufferUses::empty(),
+                    to: wgt::BufferUses::COPY_DST,
+                },
+            }]);
+            encoder.clear_buffer(zero_buffer, 0..ZERO_BUFFER_SIZE);
+            encoder.transition_buffers(&[hal::BufferBarrier {
+                buffer: zero_buffer,
+                usage: hal::StateTransition {
+                    from: wgt::BufferUses::COPY_DST,
+                    to: wgt::BufferUses::COPY_SRC,
+                },
+            }]);
+        }
+    }
+
     pub fn features(&self) -> &wgt::Features {
         &self.features
     }
@@ -549,28 +613,6 @@ impl Device {
 
         let command_allocator = command::CommandAllocator::new();
 
-        let rt_uses = if desc
-            .required_features
-            .intersects(wgt::Features::EXPERIMENTAL_RAY_QUERY)
-        {
-            wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT
-        } else {
-            wgt::BufferUses::empty()
-        };
-
-        // Create zeroed buffer used for texture clears (and raytracing if required).
-        resources.zero_buffer = Some(
-            unsafe {
-                raw_device.create_buffer(&hal::BufferDescriptor {
-                    label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
-                    size: ZERO_BUFFER_SIZE,
-                    usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
-                    memory_flags: hal::MemoryFlags::empty(),
-                })
-            }
-            .map_err(DeviceError::from_hal)?,
-        );
-
         resources.empty_bgl = Some(
             unsafe {
                 raw_device.create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
@@ -623,7 +665,6 @@ impl Device {
         // Error returns after this point could bypass resource cleanup.
         #[deny(clippy::question_mark_used)]
         {
-            let zero_buffer = resources.zero_buffer.take().unwrap();
             let empty_bgl = resources.empty_bgl.take().unwrap();
             let default_external_texture_params_buffer = resources
                 .default_external_texture_params_buffer
@@ -637,7 +678,8 @@ impl Device {
                 raw: raw_device,
                 adapter: adapter.clone(),
                 queue: OnceCell::new(),
-                zero_buffer: ManuallyDrop::new(zero_buffer),
+                zero_buffer: OnceCell::new(),
+                zero_buffer_needs_clear: AtomicBool::new(false),
                 empty_bgl: ManuallyDrop::new(empty_bgl),
                 default_external_texture_params_buffer: ManuallyDrop::new(
                     default_external_texture_params_buffer,
@@ -728,17 +770,16 @@ impl Device {
         let queue = self.get_queue().unwrap();
         let mut pending_writes = queue.pending_writes.lock();
 
+        let encoder = pending_writes.activate();
         unsafe {
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: params_buffer,
-                    usage: hal::StateTransition {
-                        from: wgt::BufferUses::MAP_WRITE,
-                        to: wgt::BufferUses::COPY_DST,
-                    },
-                }]);
-            pending_writes.command_encoder.copy_buffer_to_buffer(
+            encoder.transition_buffers(&[hal::BufferBarrier {
+                buffer: params_buffer,
+                usage: hal::StateTransition {
+                    from: wgt::BufferUses::MAP_WRITE,
+                    to: wgt::BufferUses::COPY_DST,
+                },
+            }]);
+            encoder.copy_buffer_to_buffer(
                 staging_buffer.raw(),
                 params_buffer,
                 &[hal::BufferCopy {
@@ -747,17 +788,15 @@ impl Device {
                     size: staging_buffer.size,
                 }],
             );
-            pending_writes.consume(staging_buffer);
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: params_buffer,
-                    usage: hal::StateTransition {
-                        from: wgt::BufferUses::COPY_DST,
-                        to: wgt::BufferUses::UNIFORM,
-                    },
-                }]);
+            encoder.transition_buffers(&[hal::BufferBarrier {
+                buffer: params_buffer,
+                usage: hal::StateTransition {
+                    from: wgt::BufferUses::COPY_DST,
+                    to: wgt::BufferUses::UNIFORM,
+                },
+            }]);
         }
+        pending_writes.consume(staging_buffer);
 
         Ok(())
     }
