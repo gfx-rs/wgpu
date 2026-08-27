@@ -1343,16 +1343,17 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
-    /// Splat `value` to `size`, without using [`Splat`] expressions.
+    /// Evaluate a [`Splat`] of `value` to `size`.
     ///
-    /// This returns [`Compose`] or [`Literal`] expressions for a
-    /// vector with the given `size` whose components are all `value`.
+    /// This returns a [`Compose`] of [`Literal`] expressions representing
+    /// a vector with the given `size` whose components are all `value`.
     ///
     /// Use `span` as the span of the inserted expressions and
     /// resulting types.
     ///
     /// [`Splat`]: Expression::Splat
     /// [`Compose`]: Expression::Compose
+    /// [`Literal`]: Expression::Literal
     fn splat(
         &mut self,
         value: Handle<Expression>,
@@ -1381,7 +1382,7 @@ impl<'a> ConstantEvaluator<'a> {
                     _ => return Err(ConstantEvaluatorError::SplatScalarOnly),
                 };
                 let res_ty = self.types.insert(Type { name: None, inner }, span);
-                let value = self.eval_zero_value_impl(ty, span)?;
+                let value = self.zero_value(ty, span)?;
                 let expr = Expression::Compose {
                     ty: res_ty,
                     components: vec![value; size as usize],
@@ -2183,13 +2184,17 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
-    /// Lower a combination of [`Literal`], [`Compose`], [`ZeroValue`] and [`Splat`]
-    /// expressions to only [`Literal`] and [`Compose`] expressions.
+    /// Lower a combination of [`Compose`], [`Literal`], [`ZeroValue`] and
+    /// [`Splat`] expressions to only [`Compose`] and [`Literal`] expressions.
     ///
-    /// In the case of a vector [`Compose`] expression, flattens nested vectors.
+    /// If `expr` has a vector type, flattens nested vectors within it.
     ///
-    /// [`Literal`]: Expression::Literal
+    /// Does not flatten vector-typed expressions appearing elsewhere within
+    /// `expr`, e.g. if `expr` is struct-typed, however, typically such
+    /// nested composes are evaluated by separate calls to this function.
+    ///
     /// [`Compose`]: Expression::Compose
+    /// [`Literal`]: Expression::Literal
     /// [`ZeroValue`]: Expression::ZeroValue
     /// [`Splat`]: Expression::Splat
     fn eval_constructors(
@@ -2227,7 +2232,7 @@ impl<'a> ConstantEvaluator<'a> {
                                         span,
                                     )
                                 }));
-                                self.eval_zero_value_impl(component_ty, span)
+                                self.zero_value(component_ty, span)
                             }
                         })
                         .collect::<Result<Vec<_>, _>>()?,
@@ -2240,35 +2245,22 @@ impl<'a> ConstantEvaluator<'a> {
                 expr = self.splat(value, size, span)?;
             }
             Expression::ZeroValue(ty) => {
-                expr = self.eval_zero_value_impl(ty, span)?;
+                expr = self.zero_value(ty, span)?;
             }
             _ => {}
         }
         Ok(expr)
     }
 
-    /// Lower [`ZeroValue`] expressions to [`Literal`] and [`Compose`] expressions.
+    /// Evaluate the [`ZeroValue`] of `ty`.
+    ///
+    /// Returns [`Literal`] and [`Compose`] expressions representing the
+    /// zero value of the specified type.
     ///
     /// [`ZeroValue`]: Expression::ZeroValue
     /// [`Literal`]: Expression::Literal
     /// [`Compose`]: Expression::Compose
-    fn eval_zero_value(
-        &mut self,
-        expr: Handle<Expression>,
-        span: Span,
-    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        match self.expressions[expr] {
-            Expression::ZeroValue(ty) => self.eval_zero_value_impl(ty, span),
-            _ => Ok(expr),
-        }
-    }
-
-    /// Lower [`ZeroValue`] expressions to [`Literal`] and [`Compose`] expressions.
-    ///
-    /// [`ZeroValue`]: Expression::ZeroValue
-    /// [`Literal`]: Expression::Literal
-    /// [`Compose`]: Expression::Compose
-    fn eval_zero_value_impl(
+    fn zero_value(
         &mut self,
         ty: Handle<Type>,
         span: Span,
@@ -2288,7 +2280,7 @@ impl<'a> ConstantEvaluator<'a> {
                     },
                     span,
                 );
-                let el = self.eval_zero_value_impl(scalar_ty, span)?;
+                let el = self.zero_value(scalar_ty, span)?;
                 let expr = Expression::Compose {
                     ty,
                     components: vec![el; size as usize],
@@ -2307,7 +2299,7 @@ impl<'a> ConstantEvaluator<'a> {
                     },
                     span,
                 );
-                let el = self.eval_zero_value_impl(vec_ty, span)?;
+                let el = self.zero_value(vec_ty, span)?;
                 let expr = Expression::Compose {
                     ty,
                     components: vec![el; columns as usize],
@@ -2319,7 +2311,7 @@ impl<'a> ConstantEvaluator<'a> {
                 size: ArraySize::Constant(size),
                 ..
             } => {
-                let el = self.eval_zero_value_impl(base, span)?;
+                let el = self.zero_value(base, span)?;
                 let expr = Expression::Compose {
                     ty,
                     components: vec![el; size.get() as usize],
@@ -2330,7 +2322,7 @@ impl<'a> ConstantEvaluator<'a> {
                 let types: Vec<_> = members.iter().map(|m| m.ty).collect();
                 let mut components = Vec::with_capacity(members.len());
                 for ty in types {
-                    components.push(self.eval_zero_value_impl(ty, span)?);
+                    components.push(self.zero_value(ty, span)?);
                 }
                 let expr = Expression::Compose { ty, components };
                 self.register_evaluated_expr(expr, span)
@@ -2350,7 +2342,10 @@ impl<'a> ConstantEvaluator<'a> {
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
         use crate::Scalar as Sc;
 
-        let expr = self.eval_zero_value(expr, span)?;
+        let expr = match self.expressions[expr] {
+            Expression::ZeroValue(ty) => self.zero_value(ty, span)?,
+            _ => expr,
+        };
 
         let make_error = || -> Result<_, ConstantEvaluatorError> {
             let from = format!("{:?} {:?}", expr, self.expressions[expr]);
