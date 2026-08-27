@@ -392,3 +392,7 @@ impl fmt::Debug for Global {
         f.debug_struct("Global").finish()
     }
 }
+
+// Force the Rust compiler to compute `Send + Sync` for `Global`, which can avoid `recursion_limit`
+// issues in the resolver.
+static_assertions::assert_not_impl_any!(Global: Send, Sync);
