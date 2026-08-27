@@ -1,17 +1,19 @@
-use wgpu_core::device::DeviceDescriptor;
+use alloc::sync::Arc;
+
 use wgpu_core::instance::RequestDeviceError;
+use wgpu_core_remote_types::DeviceDescriptor;
+use wgpu_core_remote_types::RequestAdapterOptions;
 use wgt::Backends;
 
 use crate::global::Global;
 use crate::hub::Hub;
 use crate::id::{AdapterId, DeviceId, QueueId};
 
-pub type RequestAdapterOptions = wgt::RequestAdapterOptions<()>;
-
 impl Global {
     pub fn request_adapter(
         &self,
         desc: &RequestAdapterOptions,
+        apply_limit_buckets: bool,
         backends: Backends,
         id_in: AdapterId,
     ) -> Result<AdapterId, wgt::RequestAdapterError> {
@@ -20,7 +22,7 @@ impl Global {
             power_preference: desc.power_preference,
             force_fallback_adapter: desc.force_fallback_adapter,
             compatible_surface: None,
-            apply_limit_buckets: desc.apply_limit_buckets,
+            apply_limit_buckets,
         };
         let adapter = self.instance.request_adapter(&desc, backends)?;
         let id = hub.adapters.assign(id_in, adapter);
@@ -32,14 +34,14 @@ impl Global {
     /// The HAL adapter may be obtained e.g. by calling `enumerate_adapters` on
     /// the HAL directly.
     ///
-    /// If [limit bucketing][lt] is desired, [`crate::limits::apply_limit_buckets`]
+    /// If [limit bucketing][lt] is desired, [`wgpu_core::limits::apply_limit_buckets`]
     /// should be called with the HAL adapter before calling this function.
     ///
     /// # Safety
     ///
     /// `hal_adapter` must be created from this global internal instance handle.
     ///
-    /// [lt]: crate::limits#Limit-bucketing
+    /// [lt]: wgpu_core::limits#Limit-bucketing
     pub unsafe fn create_adapter_from_hal(
         &self,
         hal_adapter: hal::DynExposedAdapter,
@@ -106,9 +108,9 @@ impl Global {
         adapter.cooperative_matrix_properties()
     }
 
-    pub fn adapter_drop(&self, adapter_id: AdapterId) {
+    pub fn adapter_remove(&self, adapter_id: AdapterId) -> Arc<wgpu_core::instance::Adapter> {
         let mut hub = self.hub.borrow_mut();
-        hub.adapters.remove(adapter_id);
+        hub.adapters.remove(adapter_id)
     }
 }
 

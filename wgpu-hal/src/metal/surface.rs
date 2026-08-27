@@ -226,9 +226,11 @@ static COLOR_SPACES: Lazy<Result<ColorSpaces, crate::SurfaceError>> = Lazy::new(
         lib: &libloading::Library,
         name: &core::ffi::CStr,
     ) -> Result<&'static CFString, crate::SurfaceError> {
-        let sym = unsafe { lib.get(name.to_bytes_with_nul()) }
+        // The symbol is the address of the global holding the `CFString`
+        // pointer, so an extra dereference is needed to read it.
+        let sym = unsafe { lib.get::<*const &'static CFString>(name.to_bytes_with_nul()) }
             .map_err(|_| crate::SurfaceError::Other("error resolving symbol in CoreGraphics"))?;
-        Ok(*sym)
+        Ok(unsafe { **sym })
     }
     let extended_display_p3 = lookup(&lib, c"kCGColorSpaceExtendedDisplayP3")?;
     let itur_bt2100_pq = lookup(&lib, c"kCGColorSpaceITUR_2100_PQ")?;
