@@ -31,6 +31,7 @@ serde = ["dep:serde", "wgpu-types/serde", "wgpu-core/serde"]
 [dependencies]
 raw-window-handle.workspace = true
 serde = { workspace = true, optional = true }
+static_assertions = { workspace = true }
 wgpu-core = { workspace = true, default-features = false }
 wgpu-core-remote-types.workspace = true
 wgpu-hal = { workspace = true, default-features = false }
