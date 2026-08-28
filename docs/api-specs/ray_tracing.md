@@ -400,6 +400,25 @@ fn ch() {}
 fn miss() {}
 ```
 
+New builtins
+
+| Builtin                  | Type          | Stages                  | Description                                                                        |
+| ------------------------ | ------------- | ----------------------- | ---------------------------------------------------------------------------------- |
+| `ray_invocation_id`      | `vec3<u32>`   | all                     | The id of this ray within the rays created.                                          |
+| `num_ray_invocations`    | `vec3<u32>`   | all                     | The number of rays created.                                                          |
+| `world_ray_origin`       | `vec3<f32>`   | any hit, closest hit, miss | The origin of the ray in world space.                                             |
+| `world_ray_direction`    | `vec3<f32>`   | any hit, closest hit, miss | The direction of the ray in world space.                                          |
+| `ray_t_min`              | `f32`         | any hit, closest hit, miss | The `t_min` given in the `RayDesc`.                                               |
+| `ray_t_current_max`      | `f32`         | any hit, closest hit, miss | The closest committed hit if there is one, otherwise the `t_max` in the `RayDesc`. |
+| `object_ray_origin`      | `vec3<f32>`   | any hit, closest hit    | The origin of the ray in object space.                                               |
+| `object_ray_direction`   | `vec3<f32>`   | any hit, closest hit    | The direction of the ray in object space.                                            |
+| `instance_custom_data`   | `u32`         | any hit, closest hit    | Corresponds to `TlasInstance::custom_data` for the intersected object.               |
+| `geometry_index`         | `u32`         | any hit, closest hit    | The index of the geometry in the `Blas`.                                             |
+| `object_to_world`        | `mat4x3<f32>` | any hit, closest hit    | Matrix for converting from object-space to world-space.                              |
+| `world_to_object`        | `mat4x3<f32>` | any hit, closest hit    | Matrix for converting from world-space to object-space.                              |
+| `hit_kind`               | `u32`         | any hit, closest hit    | The kind of hit: 254 (0xFE) for a front facing triangle, 255 (0xFF) for a back facing one. |
+| `hit_barycentrics`       | `vec2<f32>`   | any hit, closest hit    | Two of the barycentric coordinates of the hit point, the third is `1.0 - x - y` (only useful if the hit was a triangle). |
+
 ### Acceleration structure tags
 
 These are tags that can be added to a acceleration structure (`acceleration_structure` ->

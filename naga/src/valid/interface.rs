@@ -640,6 +640,26 @@ impl VaryingContext<'_> {
                         },
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
+                    // Unlike the other ray tracing built-ins this is a `HitAttributeKHR`
+                    // variable rather than an input, and those are read-only outside of
+                    // intersection shaders, so it can never be an output.
+                    Bi::HitBarycentrics => (
+                        match self.stage {
+                            St::RayGeneration
+                            | St::Miss
+                            | St::Vertex
+                            | St::Fragment
+                            | St::Compute
+                            | St::Mesh
+                            | St::Task => false,
+                            St::AnyHit | St::ClosestHit => !self.output,
+                        },
+                        *ty_inner
+                            == Ti::Vector {
+                                size: Vs::Bi,
+                                scalar: crate::Scalar::F32,
+                            },
+                    ),
                     // Validated elsewhere, shouldn't be here
                     Bi::VertexCount | Bi::PrimitiveCount | Bi::Vertices | Bi::Primitives => {
                         (false, true)

@@ -145,6 +145,7 @@ pub fn map_built_in(
         "object_to_world" => crate::BuiltIn::ObjectToWorld,
         "world_to_object" => crate::BuiltIn::WorldToObject,
         "hit_kind" => crate::BuiltIn::HitKind,
+        "hit_barycentrics" => crate::BuiltIn::HitBarycentrics,
         _ => return Err(Box::new(Error::UnknownBuiltin(span))),
     };
     match built_in {

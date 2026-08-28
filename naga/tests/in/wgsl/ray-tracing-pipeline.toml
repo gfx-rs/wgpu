@@ -1,2 +1,5 @@
 capabilities = "RAY_TRACING_PIPELINE"
 targets = "WGSL | SPIRV"
+
+[spv]
+version = [1, 4]

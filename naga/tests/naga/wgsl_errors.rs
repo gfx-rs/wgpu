@@ -5423,6 +5423,7 @@ fn check_ray_tracing_pipeline_bindings() {
         ("object_to_world", "mat4x3<f32>"),
         ("world_to_object", "mat4x3<f32>"),
         ("hit_kind", "u32"),
+        ("hit_barycentrics", "vec2<f32>"),
     ] {
         for stage in ["@compute @workgroup_size(1)", " @vertex", "@fragment"] {
             check_one_validation!(
@@ -5440,6 +5441,30 @@ fn check_ray_tracing_pipeline_bindings() {
                 },)
             );
         }
+    }
+}
+
+/// Checks that `hit_barycentrics` is rejected in the ray tracing pipeline stages
+/// that have no hit, since it is backed by a hit attribute.
+#[test]
+fn check_ray_tracing_pipeline_hit_barycentrics_stage() {
+    for stage in ["@ray_generation", "@miss @incoming_payload(incoming)"] {
+        check_one_validation!(
+            &format!(
+                "enable wgpu_ray_tracing_pipeline;
+            var<incoming_ray_payload> incoming: u32;
+
+            {stage} fn main(@builtin(hit_barycentrics) bary: vec2<f32>) {{}}"
+            ),
+            Err(naga::valid::ValidationError::EntryPoint {
+                source: naga::valid::EntryPointError::Argument(
+                    0,
+                    naga::valid::VaryingError::InvalidBuiltInStage(_),
+                ),
+                ..
+            },),
+            Capabilities::RAY_TRACING_PIPELINE
+        );
     }
 }
 

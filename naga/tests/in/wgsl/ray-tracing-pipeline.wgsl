@@ -26,11 +26,13 @@ fn miss(@builtin(world_ray_origin) origin: vec3<f32>, @builtin(world_ray_directi
 
 @any_hit
 @incoming_payload(incoming_hit_num)
-fn any_hit_main(@builtin(instance_custom_data) data: u32, @builtin(geometry_index) geo_idx: u32, @builtin(ray_t_current_max) max: f32, @builtin(hit_kind) kind: u32) {
+fn any_hit_main(@builtin(instance_custom_data) data: u32, @builtin(geometry_index) geo_idx: u32, @builtin(ray_t_current_max) max: f32, @builtin(hit_kind) kind: u32, @builtin(hit_barycentrics) bary: vec2<f32>) {
     incoming_hit_num.hit_num++;
-    incoming_hit_num.selected_hit = data;
+    incoming_hit_num.selected_hit = data + u32(bary.x + bary.y);
 }
 
 @closest_hit
 @incoming_payload(incoming_hit_num)
-fn closest_hit_main(@builtin(object_ray_origin) origin: vec3<f32>, @builtin(object_ray_direction) dir: vec3<f32>, @builtin(object_to_world) obj_to_world: mat4x3<f32>, @builtin(world_to_object) world_to_obj: mat4x3<f32>) {}
+fn closest_hit_main(@builtin(object_ray_origin) origin: vec3<f32>, @builtin(object_ray_direction) dir: vec3<f32>, @builtin(object_to_world) obj_to_world: mat4x3<f32>, @builtin(world_to_object) world_to_obj: mat4x3<f32>, @builtin(hit_barycentrics) bary: vec2<f32>) {
+    incoming_hit_num.selected_hit = u32(1.0 - bary.x - bary.y);
+}

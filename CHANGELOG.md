@@ -81,6 +81,10 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 - Added `TextureDescriptor::theoretical_memory_footprint` to estimate memory footprint of a texture. By @sagudev in [#10032](https://github.com/gfx-rs/wgpu/pull/10032).
 - `wgpu::WriteOnly<[_]>` now implements `Send`. By @kpreid in [#10163](https://github.com/gfx-rs/wgpu/pull/10163).
 
+#### Naga
+
+- Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
+
 #### Hal
 
 - Add `BufferBinding::buffer`, a public read accessor for the bound buffer, which was previously inaccessible to out-of-tree `wgpu_hal::Api` implementations. By @danlehmann in [#9820](https://github.com/gfx-rs/wgpu/pull/9820).
@@ -152,6 +156,7 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 - Fix invalid HLSL generated for `textureSampleLevel` with non-2D textures. By @mvanhorn in [#9717](https://github.com/gfx-rs/wgpu/issues/9717).
 - Reject return types on compute shader entrypoints. By @ErichDonGubler in [#10026](https://github.com/gfx-rs/wgpu/pull/10026).
 - Reject `@location(…)`s in compute shaders. By @ErichDonGubler in [#10026](https://github.com/gfx-rs/wgpu/pull/10026).
+- Reject ray tracing pipeline shaders when the SPIR-V backend is targeting below SPIR-V 1.4. `SPV_KHR_ray_tracing` requires 1.4, which is also what lets it rely on every global variable being listed in the entry point interface. By @JMS55 in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 
 #### DX12
 
@@ -160,6 +165,7 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 #### Vulkan
 
 - Add OpenHarmony surface support via `VK_OHOS_surface`. Previously the Vulkan backend could not create a surface on OpenHarmony, leaving GLES as the only usable backend. By @ozongzi in [#9908](https://github.com/gfx-rs/wgpu/pull/9908).
+- Request `VK_KHR_spirv_1_4` and raise the generated SPIR-V version to 1.4 when `EXPERIMENTAL_RAY_TRACING_PIPELINES` is enabled on a pre-Vulkan-1.2 device. Ray tracing pipeline shaders were previously generated as SPIR-V 1.3 there, below what `SPV_KHR_ray_tracing` requires. This also fixes the same gap for `EXPERIMENTAL_MESH_SHADER`, which requested the extension but never raised the version. By @JMS55 in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 
 #### Metal
 
