@@ -425,7 +425,9 @@ impl Device {
     ///
     /// Use this when the video data already lives in wgpu textures, e.g.
     /// frames you decoded yourself. To bind a web media source directly on the
-    /// WebGPU backend, use `Device::import_external_texture` instead.
+    /// WebGPU backend, use
+    #[cfg_attr(webgpu, doc = "[`Device::import_external_texture`] instead.")]
+    #[cfg_attr(not(webgpu), doc = "`Device::import_external_texture` instead.")]
     #[must_use]
     pub fn create_external_texture(
         &self,
