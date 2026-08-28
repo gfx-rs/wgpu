@@ -101,6 +101,8 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 - Add `Device::create_texture_from_webgl_handle`, `Device::as_webgl_texture`, and `Device::as_webgl_context` for zero-copy interop between wgpu's WebGL (GLES) backend and raw `web_sys::WebGlTexture` handles.
 - `Queue::copy_external_image_to_texture` now accepts `ExternalImageSource::OffscreenCanvas` without `DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES`.
 - Uploading an `ExternalImageSource::VideoFrame` on the GLES backend no longer requires building with `--cfg web_sys_unstable_apis` (the corresponding `web-sys` APIs are stable now).
+#### WebGPU
+- Add `Device::import_external_texture` to bind a `GPUExternalTexture` sampled from an `HTMLVideoElement` or WebCodecs `VideoFrame`, without a copy. By @AdrianEddy in [#9936](https://github.com/gfx-rs/wgpu/pull/9936).
 
 ### Changes
 

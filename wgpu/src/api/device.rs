@@ -527,7 +527,17 @@ impl Device {
         Some(hal_device.context().webgl2_context.clone())
     }
 
-    /// Creates a new [`ExternalTexture`].
+    /// Creates a new [`ExternalTexture`] from plane textures the caller
+    /// already has.
+    ///
+    /// The planes and the [`ExternalTextureDescriptor`]'s conversion
+    /// parameters (YCbCr matrix, gamut and transfer functions) are supplied by
+    /// the caller, and wgpu performs the conversion when the texture is
+    /// sampled. Works on every backend.
+    ///
+    /// Use this when the video data already lives in wgpu textures, e.g.
+    /// frames you decoded yourself. To bind a web media source directly on the
+    /// WebGPU backend, use `Device::import_external_texture` instead.
     #[must_use]
     pub fn create_external_texture(
         &self,
@@ -539,6 +549,33 @@ impl Device {
         ExternalTexture {
             inner: external_texture,
         }
+    }
+
+    /// Imports a video source as an [`ExternalTexture`] on the WebGPU backend,
+    /// without a copy.
+    ///
+    /// Unlike [`Self::create_external_texture`] — where the caller supplies
+    /// plane textures and conversion parameters — this hands `source` to the
+    /// browser's `importExternalTexture`, which performs the color conversion
+    /// internally. Use it whenever the frames come from a web media source
+    /// rather than from data you decoded yourself.
+    ///
+    /// The result is valid only while `source` is: a `VideoFrame` until it is
+    /// closed, an `HTMLVideoElement` for the current task.
+    /// [`ExternalTexture::destroy`] is a no-op.
+    ///
+    /// Returns an error if this device is not on the WebGPU backend.
+    #[cfg(webgpu)]
+    pub fn import_external_texture(
+        &self,
+        source: &webgpu::ExternalTextureSource,
+    ) -> Result<ExternalTexture, NotWebGpuBackendError> {
+        let inner = self
+            .inner
+            .as_webgpu_opt()
+            .ok_or(NotWebGpuBackendError)?
+            .import_external_texture(source);
+        Ok(ExternalTexture { inner })
     }
 
     /// Creates a [`Buffer`] from a wgpu-hal Buffer.
@@ -898,6 +935,21 @@ impl fmt::Display for NotWebGlBackendError {
 
 #[cfg(webgl)]
 impl error::Error for NotWebGlBackendError {}
+/// The [`Device`] is not on the WebGPU backend.
+#[cfg(webgpu)]
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct NotWebGpuBackendError;
+
+#[cfg(webgpu)]
+impl fmt::Display for NotWebGpuBackendError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "this device is not using the WebGPU backend")
+    }
+}
+
+#[cfg(webgpu)]
+impl error::Error for NotWebGpuBackendError {}
 
 /// Requesting a device from an [`Adapter`] failed.
 #[derive(Clone, Debug)]

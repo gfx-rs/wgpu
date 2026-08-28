@@ -346,9 +346,9 @@ pub use web_sys;
 #[cfg(webgpu)]
 pub mod webgpu {
     pub use crate::backend::webgpu::webgpu_sys::{
-        GpuBuffer, GpuDevice, GpuQueue, GpuTexture, GpuTextureView,
+        GpuBuffer, GpuDevice, GpuExternalTexture, GpuQueue, GpuTexture, GpuTextureView,
     };
-    pub use crate::backend::webgpu::DropCallback;
+    pub use crate::backend::webgpu::{DropCallback, ExternalTextureSource};
 }
 
 #[doc(hidden)]
