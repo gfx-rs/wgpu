@@ -164,6 +164,60 @@ macro_rules! bitflags_array {
             }
         )*
     ) => {
+        bitflags_array! {
+            $(#[$outer])*
+            pub struct $name: [$T; $Len];
+
+            $(
+                $(#[$bit_outer])*
+                $vis struct $inner_name $lower_inner_name {
+                    $(
+                        $(#[doc $($args)*])*
+                        const $Flag = $value;
+                    )*
+                }
+            )*
+        }
+
+        // Parses kebab-case feature names (i.e. the names given in the spec, for features
+        // in FeaturesWebGPU, and otherwise the `wgpu-` prefixed names).
+        impl FromStr for $name {
+            type Err = ();
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(match s {
+                    $($($str_name $(| $alias)* => Self::$Flag,)*)*
+                    _ => return Err(()),
+                })
+            }
+        }
+
+        impl $name {
+             /// If the argument is a single [`Features`] flag, returns the corresponding
+            /// `kebab-case` feature name, otherwise `None`.
+            #[must_use]
+            pub fn as_str(&self) -> Option<&'static str> {
+                Some(match *self {
+                    $($(Self::$Flag => $str_name,)*)*
+                    _ => return None,
+                })
+            }
+        }
+    };
+    (
+        $(#[$outer:meta])*
+        pub struct $name:ident: [$T:ty; $Len:expr];
+
+        $(
+            $(#[$bit_outer:meta])*
+            $vis:vis struct $inner_name:ident $lower_inner_name:ident {
+                $(
+                    $(#[doc $($args:tt)*])*
+                    const $Flag:tt = $value:expr;
+                )*
+            }
+        )*
+    ) => {
         $(
             bitflags::bitflags! {
                 $(#[$bit_outer])*
@@ -513,16 +567,6 @@ macro_rules! bitflags_array {
                 bitflags::iter::IterNames::__private_const_new($name::FLAGS, *self, *self)
             }
 
-            /// If the argument is a single [`Features`] flag, returns the corresponding
-            /// `kebab-case` feature name, otherwise `None`.
-            #[must_use]
-            pub fn as_str(&self) -> Option<&'static str> {
-                Some(match *self {
-                    $($(Self::$Flag => $str_name,)*)*
-                    _ => return None,
-                })
-            }
-
             $(
                 $(
                     $(#[doc $($args)*])*
@@ -533,19 +577,6 @@ macro_rules! bitflags_array {
                     };
                 )*
             )*
-        }
-
-        // Parses kebab-case feature names (i.e. the names given in the spec, for features
-        // in FeaturesWebGPU, and otherwise the `wgpu-` prefixed names).
-        impl FromStr for $name {
-            type Err = ();
-
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
-                Ok(match s {
-                    $($($str_name $(| $alias)* => Self::$Flag,)*)*
-                    _ => return Err(()),
-                })
-            }
         }
 
         $(
