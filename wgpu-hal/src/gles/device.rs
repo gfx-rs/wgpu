@@ -875,8 +875,10 @@ impl crate::Device for super::Device {
         let gl = &self.shared.context.lock();
 
         let render_usage = wgt::TextureUses::COLOR_TARGET
-            | wgt::TextureUses::DEPTH_STENCIL_WRITE
-            | wgt::TextureUses::DEPTH_STENCIL_READ
+            | wgt::TextureUses::DEPTH_WRITE
+            | wgt::TextureUses::DEPTH_READ
+            | wgt::TextureUses::STENCIL_WRITE
+            | wgt::TextureUses::STENCIL_READ
             | wgt::TextureUses::TRANSIENT;
         let format_desc = self.shared.describe_texture_format(desc.format);
 

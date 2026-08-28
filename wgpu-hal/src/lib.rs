@@ -2816,7 +2816,7 @@ pub struct QueueFamilyOwnershipTransfer {
     pub dst: QueueFamily,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TextureBarrier<'a, T: DynTexture + ?Sized> {
     pub texture: &'a T,
     pub range: wgt::ImageSubresourceRange,
@@ -2828,6 +2828,17 @@ pub struct TextureBarrier<'a, T: DynTexture + ?Sized> {
     /// it. Leave it as `None` for the common case where no ownership transfer
     /// is required. See [`QueueFamilyOwnershipTransfer`] for details.
     pub queue_family_ownership_transfer: Option<QueueFamilyOwnershipTransfer>,
+}
+
+impl<'a, T: DynTexture + ?Sized> Clone for TextureBarrier<'a, T> {
+    fn clone(&self) -> Self {
+        Self {
+            texture: self.texture,
+            range: self.range,
+            queue_family_ownership_transfer: self.queue_family_ownership_transfer,
+            usage: self.usage.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2920,6 +2931,8 @@ pub struct DepthStencilAttachment<'a, T: DynTextureView + ?Sized> {
     pub target: Attachment<'a, T>,
     pub depth_ops: AttachmentOps,
     pub stencil_ops: AttachmentOps,
+    pub depth_read_only: bool,
+    pub stencil_read_only: bool,
     pub clear_value: (f32, u32),
 }
 

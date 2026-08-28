@@ -693,8 +693,12 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
-            handle_dsv_ro: if desc.usage.intersects(wgt::TextureUses::DEPTH_STENCIL_READ) {
-                let raw_desc = unsafe { view_desc.to_dsv(true) };
+            handle_dsv_wr: if desc.format.is_combined_depth_stencil_format()
+                && desc
+                    .usage
+                    .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
+            {
+                let raw_desc = unsafe { view_desc.to_dsv(false, true) };
                 let handle = self.dsv_pool.lock().alloc_handle()?;
                 unsafe {
                     self.raw
@@ -704,8 +708,40 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
-            handle_dsv_rw: if desc.usage.intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE) {
-                let raw_desc = unsafe { view_desc.to_dsv(false) };
+            handle_dsv_rw: if desc.format.is_combined_depth_stencil_format()
+                && desc
+                    .usage
+                    .contains(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_WRITE)
+            {
+                let raw_desc = unsafe { view_desc.to_dsv(true, false) };
+                let handle = self.dsv_pool.lock().alloc_handle()?;
+                unsafe {
+                    self.raw
+                        .CreateDepthStencilView(&texture.resource, Some(&raw_desc), handle.raw)
+                };
+                Some(handle)
+            } else {
+                None
+            },
+            handle_dsv_ww: if desc
+                .usage
+                .intersects(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE)
+            {
+                let raw_desc = unsafe { view_desc.to_dsv(false, false) };
+                let handle = self.dsv_pool.lock().alloc_handle()?;
+                unsafe {
+                    self.raw
+                        .CreateDepthStencilView(&texture.resource, Some(&raw_desc), handle.raw)
+                };
+                Some(handle)
+            } else {
+                None
+            },
+            handle_dsv_rr: if desc
+                .usage
+                .intersects(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_READ)
+            {
+                let raw_desc = unsafe { view_desc.to_dsv(true, true) };
                 let handle = self.dsv_pool.lock().alloc_handle()?;
                 unsafe {
                     self.raw
@@ -731,12 +767,22 @@ impl crate::Device for super::Device {
         if let Some(handle) = view.handle_rtv {
             self.rtv_pool.lock().free_handle(handle);
         }
-        if view.handle_dsv_ro.is_some() || view.handle_dsv_rw.is_some() {
+        if view.handle_dsv_rr.is_some()
+            || view.handle_dsv_wr.is_some()
+            || view.handle_dsv_rw.is_some()
+            || view.handle_dsv_ww.is_some()
+        {
             let mut pool = self.dsv_pool.lock();
-            if let Some(handle) = view.handle_dsv_ro {
+            if let Some(handle) = view.handle_dsv_rr {
+                pool.free_handle(handle);
+            }
+            if let Some(handle) = view.handle_dsv_wr {
                 pool.free_handle(handle);
             }
             if let Some(handle) = view.handle_dsv_rw {
+                pool.free_handle(handle);
+            }
+            if let Some(handle) = view.handle_dsv_ww {
                 pool.free_handle(handle);
             }
         }

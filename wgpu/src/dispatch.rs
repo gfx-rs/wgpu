@@ -693,8 +693,7 @@ pub trait BufferMappedRangeInterface: CommonTraits {
 /// a `DerefMut` implementation, and `as_*_mut` methods that return `&mut` references.
 /// This `D` does not implement `Clone`.
 ///
-/// The macro's `ref type` form defines `D` to hold an `Arc` pointing to the backend type,
-/// permitting `Clone` and `Deref`, but losing exclusive, mutable access.
+/// The macro's `ref type` form defines `D` to be `Clone` and `Deref`, but losing exclusive, mutable access.
 ///
 /// For example:
 ///
@@ -709,7 +708,7 @@ pub trait BufferMappedRangeInterface: CommonTraits {
 /// ```ignore
 /// pub enum DispatchBuffer {
 ///     #[cfg(wgpu_core)]
-///     Core(Arc<CoreBuffer>),
+///     Core(CoreBuffer),
 ///     #[cfg(webgpu)]
 ///     WebGPU(WebBuffer),
 ///     #[cfg(custom)]
@@ -748,7 +747,7 @@ macro_rules! dispatch_types {
         #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
         pub enum $name {
             #[cfg(wgpu_core)]
-            Core(Arc<$core_type>),
+            Core($core_type),
             #[cfg(webgpu)]
             WebGPU($webgpu_type),
             #[allow(clippy::allow_attributes, private_interfaces)]
@@ -818,7 +817,7 @@ macro_rules! dispatch_types {
         impl From<$core_type> for $name {
             #[inline]
             fn from(value: $core_type) -> Self {
-                Self::Core(Arc::new(value))
+                Self::Core(value)
             }
         }
 
@@ -837,7 +836,7 @@ macro_rules! dispatch_types {
             fn deref(&self) -> &Self::Target {
                 match self {
                     #[cfg(wgpu_core)]
-                    Self::Core(value) => value.as_ref(),
+                    Self::Core(value) => value,
                     #[cfg(webgpu)]
                     Self::WebGPU(value) => value,
                     #[cfg(custom)]

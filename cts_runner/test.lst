@@ -43,14 +43,7 @@ webgpu:api,operation,compute_pipeline,overrides:*
 //FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
 webgpu:api,operation,compute,basic:memcpy:*
 webgpu:api,operation,device,lost:*
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth16unorm";*
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth24plus";*
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth24plus-stencil8";depthReadOnly=false;stencilReadOnly=false
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth24plus-stencil8";depthReadOnly=true;stencilReadOnly=true
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float";*
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=false;stencilReadOnly=false
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=true;stencilReadOnly=true
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="stencil8";*
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:*
 
 webgpu:api,operation,render_pass,*
 webgpu:api,operation,render_pipeline,overrides:*
@@ -312,12 +305,7 @@ webgpu:api,validation,resource_usages,texture,in_pass_encoder:shader_stages_and_
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:subresources_and_binding_types_combination_for_aspect:*
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:subresources_and_binding_types_combination_for_color:compute=false;type0="render-target";type1="render-target"
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:unused_bindings_in_pipeline:*
-webgpu:api,validation,resource_usages,texture,in_render_common:subresources,color_attachment_and_bind_group:*
-webgpu:api,validation,resource_usages,texture,in_render_common:subresources,color_attachments:*
-// FAIL: webgpu:api,validation,resource_usages,texture,in_render_common:subresources,depth_stencil_attachment_and_bind_group:*
-// https://github.com/gfx-rs/wgpu/issues/8705
-webgpu:api,validation,resource_usages,texture,in_render_common:subresources,depth_stencil_texture_in_bind_groups:*
-webgpu:api,validation,resource_usages,texture,in_render_common:subresources,multiple_bind_groups:*
+webgpu:api,validation,resource_usages,texture,in_render_common:subresources,*
 webgpu:api,validation,resource_usages,texture,in_render_misc:*
 webgpu:api,validation,shader_module,*
 webgpu:api,validation,texture,bgra8unorm_storage:*

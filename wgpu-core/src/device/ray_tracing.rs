@@ -180,7 +180,7 @@ impl Device {
         let raw = unsafe {
             self.raw()
                 .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                    label: blas_desc.label.as_deref(),
+                    label: hal_label(blas_desc.label.as_deref(), self.instance_flags),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::BottomLevel,
                     allow_compaction: blas_desc
@@ -197,7 +197,10 @@ impl Device {
             Some(ManuallyDrop::new(unsafe {
                 self.raw()
                     .create_buffer(&hal::BufferDescriptor {
-                        label: Some("(wgpu internal) compaction read-back buffer"),
+                        label: hal_label(
+                            Some("(wgpu internal) compaction read-back buffer"),
+                            self.instance_flags,
+                        ),
                         size: size_of::<wgpu_types::BufferAddress>() as wgpu_types::BufferAddress,
                         usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_QUERY
                             | wgpu_types::BufferUses::MAP_READ,
@@ -301,7 +304,7 @@ impl Device {
         let raw = unsafe {
             self.raw()
                 .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                    label: desc.label.as_deref(),
+                    label: hal_label(desc.label.as_deref(), self.instance_flags),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::TopLevel,
                     allow_compaction: false,
