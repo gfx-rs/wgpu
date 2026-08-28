@@ -138,3 +138,33 @@ void main()
     _16._m1 = uint(clamp((1.0 - _179.x) - _179.y, 0.0, 4294967040.0));
 }
 
+
+/////////////////////////////////////////////////
+// Entry point: "closest_hit_triangle" (rchit) //
+/////////////////////////////////////////////////
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+struct _4
+{
+    uint _m0;
+    uint _m1;
+};
+
+struct _9
+{
+    uint _m0;
+    uint _m1;
+    float _m2;
+    float _m3;
+    vec3 _m4;
+    vec3 _m5;
+};
+
+layout(location = 0) rayPayloadInEXT _4 _16;
+
+void main()
+{
+    _16._m0 = uint(gl_PrimitiveID);
+}
+

@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 190
+; Bound: 196
 OpCapability Shader
 OpCapability RayTracingKHR
 OpExtension "SPV_KHR_ray_tracing"
@@ -11,6 +11,7 @@ OpEntryPoint RayGenerationKHR %24 "ray_gen_main" %19 %22 %12 %14
 OpEntryPoint MissKHR %139 "miss" %131 %134 %136
 OpEntryPoint AnyHitKHR %154 "any_hit_main" %142 %145 %147 %149 %151 %16
 OpEntryPoint ClosestHitKHR %181 "closest_hit_main" %170 %172 %174 %177 %179 %16
+OpEntryPoint ClosestHitKHR %193 "closest_hit_triangle" %191 %16
 OpMemberDecorate %4 0 Offset 0
 OpMemberDecorate %4 1 Offset 4
 OpMemberDecorate %9 0 Offset 0
@@ -34,6 +35,7 @@ OpDecorate %170 BuiltIn ObjectRayOriginKHR
 OpDecorate %172 BuiltIn ObjectRayDirectionKHR
 OpDecorate %174 BuiltIn ObjectToWorldKHR
 OpDecorate %177 BuiltIn WorldToObjectKHR
+OpDecorate %191 BuiltIn PrimitiveId
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 0
 %4 = OpTypeStruct %3 %3
@@ -96,6 +98,7 @@ OpDecorate %177 BuiltIn WorldToObjectKHR
 %174 = OpVariable  %175  Input
 %177 = OpVariable  %175  Input
 %179 = OpVariable  %152  HitAttributeKHR
+%191 = OpVariable  %143  Input
 %50 = OpFunction  %2  None %49
 %51 = OpFunctionParameter  %5
 %52 = OpFunctionParameter  %9
@@ -243,5 +246,14 @@ OpBranch %182
 %188 = OpConvertFToU  %3  %187
 %189 = OpAccessChain  %156  %16 %96
 OpStore %189 %188
+OpReturn
+OpFunctionEnd
+%193 = OpFunction  %2  None %25
+%190 = OpLabel
+%192 = OpLoad  %3  %191
+OpBranch %194
+%194 = OpLabel
+%195 = OpAccessChain  %156  %16 %32
+OpStore %195 %192
 OpReturn
 OpFunctionEnd

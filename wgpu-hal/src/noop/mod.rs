@@ -474,9 +474,7 @@ impl crate::Device for Context {
     }
     unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: Resource) {}
 
-    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
-        vec![]
-    }
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {}
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
         Default::default()

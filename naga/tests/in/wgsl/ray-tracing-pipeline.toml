@@ -3,3 +3,4 @@ targets = "WGSL | SPIRV"
 
 [spv]
 version = [1, 4]
+capabilities = ["RayTracingKHR"]
