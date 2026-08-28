@@ -23,8 +23,6 @@ use crate::get_data_slice;
 use crate::texture::GPUTextureFormat;
 
 pub struct GPURenderBundleEncoder {
-  pub error_handler: super::error::ErrorHandler,
-
   pub encoder: RefCell<Box<wgpu_core::command::RenderBundleEncoder>>,
   pub label: String,
 }
@@ -62,10 +60,7 @@ impl GPURenderBundleEncoder {
     let wgpu_descriptor = wgpu_core::command::RenderBundleDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
     };
-    let (wgpu_render_bundle, err) =
-      self.encoder.borrow_mut().finish(&wgpu_descriptor);
-
-    self.error_handler.push_error(err);
+    let wgpu_render_bundle = self.encoder.borrow_mut().finish(&wgpu_descriptor);
 
     GPURenderBundle {
       wgpu_render_bundle,
@@ -81,9 +76,7 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = encoder.push_debug_group(&group_label).err();
-
-    self.error_handler.push_error(err);
+    encoder.push_debug_group(&group_label);
 
     Ok(())
   }
@@ -94,9 +87,7 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = encoder.pop_debug_group().err();
-
-    self.error_handler.push_error(err);
+    encoder.pop_debug_group();
 
     Ok(())
   }
@@ -109,9 +100,8 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = encoder.insert_debug_marker(&marker_label).err();
+    encoder.insert_debug_marker(&marker_label);
 
-    self.error_handler.push_error(err);
     Ok(())
   }
 
@@ -162,17 +152,13 @@ impl GPURenderBundleEncoder {
 
       let offsets = &data[start..(start + len)];
 
-      let err = encoder
-        .set_bind_group(
-          index,
-          bind_group
-            .into_option()
-            .map(|bind_group| bind_group.wgpu_bind_group.clone()),
-          offsets,
-        )
-        .err();
-
-      self.error_handler.push_error(err);
+      encoder.set_bind_group(
+        index,
+        bind_group
+          .into_option()
+          .map(|bind_group| bind_group.wgpu_bind_group.clone()),
+        offsets,
+      );
     } else {
       let offsets = <Option<Vec<u32>>>::convert(
         scope,
@@ -186,17 +172,13 @@ impl GPURenderBundleEncoder {
       )?
       .unwrap_or_default();
 
-      let err = encoder
-        .set_bind_group(
-          index,
-          bind_group
-            .into_option()
-            .map(|bind_group| bind_group.wgpu_bind_group.clone()),
-          &offsets,
-        )
-        .err();
-
-      self.error_handler.push_error(err);
+      encoder.set_bind_group(
+        index,
+        bind_group
+          .into_option()
+          .map(|bind_group| bind_group.wgpu_bind_group.clone()),
+        &offsets,
+      );
     }
 
     Ok(())
@@ -210,11 +192,8 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = encoder
-      .set_pipeline(pipeline.wgpu_render_pipeline.clone())
-      .err();
+    encoder.set_pipeline(pipeline.wgpu_render_pipeline.clone());
 
-    self.error_handler.push_error(err);
     Ok(())
   }
 
@@ -230,16 +209,12 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = encoder
-      .set_index_buffer(
-        buffer.wgpu_buffer.clone(),
-        index_format.into(),
-        offset,
-        size.and_then(NonZeroU64::new),
-      )
-      .err();
-
-    self.error_handler.push_error(err);
+    encoder.set_index_buffer(
+      buffer.wgpu_buffer.clone(),
+      index_format.into(),
+      offset,
+      size.and_then(NonZeroU64::new),
+    );
 
     Ok(())
   }
@@ -256,17 +231,15 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = encoder
-      .set_vertex_buffer(
-        slot,
-        buffer
-          .into_option()
-          .map(|buffer| buffer.wgpu_buffer.clone()),
-        offset,
-        size.and_then(NonZeroU64::new),
-      )
-      .err();
-    self.error_handler.push_error(err);
+    encoder.set_vertex_buffer(
+      slot,
+      buffer
+        .into_option()
+        .map(|buffer| buffer.wgpu_buffer.clone()),
+      offset,
+      size.and_then(NonZeroU64::new),
+    );
+
     Ok(())
   }
 
@@ -282,10 +255,8 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = encoder
-      .draw(vertex_count, instance_count, first_vertex, first_instance)
-      .err();
-    self.error_handler.push_error(err);
+    encoder.draw(vertex_count, instance_count, first_vertex, first_instance);
+
     Ok(())
   }
 
@@ -302,16 +273,14 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = encoder
-      .draw_indexed(
-        index_count,
-        instance_count,
-        first_index,
-        base_vertex,
-        first_instance,
-      )
-      .err();
-    self.error_handler.push_error(err);
+    encoder.draw_indexed(
+      index_count,
+      instance_count,
+      first_index,
+      base_vertex,
+      first_instance,
+    );
+
     Ok(())
   }
 
@@ -325,10 +294,8 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = encoder
-      .draw_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset)
-      .err();
-    self.error_handler.push_error(err);
+    encoder.draw_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset);
+
     Ok(())
   }
 
@@ -342,13 +309,11 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = encoder
-      .draw_indexed_indirect(
-        indirect_buffer.wgpu_buffer.clone(),
-        indirect_offset,
-      )
-      .err();
-    self.error_handler.push_error(err);
+    encoder.draw_indexed_indirect(
+      indirect_buffer.wgpu_buffer.clone(),
+      indirect_offset,
+    );
+
     Ok(())
   }
 
@@ -367,8 +332,8 @@ impl GPURenderBundleEncoder {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut();
 
-    let err = encoder.set_immediates(offset, data).err();
-    self.error_handler.push_error(err);
+    encoder.set_immediates(offset, data);
+
     Ok(())
   }
 }

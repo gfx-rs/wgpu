@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "cts_runner",
     "deno_webgpu",
@@ -21,9 +21,12 @@ members = [
     "tests",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
+    "wgpu-core-remote",
+    "wgpu-core-remote-types",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
+    "wgpu-sync",
     "wgpu-types",
     "wgpu",
     "xtask",
@@ -46,9 +49,12 @@ default-members = [
     "tests",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
+    "wgpu-core-remote",
+    "wgpu-core-remote-types",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
+    "wgpu-sync",
     "wgpu-types",
     "wgpu",
     "xtask",
@@ -89,9 +95,12 @@ wgpu = { version = "30.0.0", path = "./wgpu", default-features = false, features
     "angle",
     "static-dxc",
 ] }
-wgpu-core = { version = "30.0.0", path = "./wgpu-core" }
-wgpu-hal = { version = "30.0.0", path = "./wgpu-hal" }
+wgpu-core = { version = "30.0.0", path = "./wgpu-core", default-features = false }
+wgpu-core-remote = { version = "30.0.0", path = "./wgpu-core-remote" }
+wgpu-core-remote-types = { version = "30.0.0", path = "./wgpu-core-remote-types" }
+wgpu-hal = { version = "30.0.0", path = "./wgpu-hal", default-features = false }
 wgpu-naga-bridge = { version = "30.0.0", path = "./wgpu-naga-bridge" }
+wgpu-sync = { version = "30.0.0", path = "./wgpu-sync", default-features = false }
 wgpu-test = { version = "30.0.0", path = "./tests" }
 wgpu-types = { version = "30.0.0", path = "./wgpu-types", default-features = false }
 
@@ -150,6 +159,8 @@ libfuzzer-sys = ">0.4.0,<=0.4.7"
 libloading = "0.8"
 libm = { version = "0.2.6", default-features = false }
 libtest-mimic = "0.8"
+# Minimum version supported by parking_lot 0.12.3
+lock_api = { version = "0.4.6", default-features = false }
 log = "0.4.29"
 macro_rules_attribute = "0.2"
 nanoserde = "0.2"
@@ -302,10 +313,10 @@ windows = { version = "0.62", default-features = false }
 # wasm dependencies
 console_error_panic_hook = "0.1.5"
 console_log = "1"
-js-sys = { version = "0.3.100", default-features = false }
-wasm-bindgen = { version = "0.2.123", default-features = false }
-wasm-bindgen-futures = { version = "0.4.73", default-features = false }
-web-sys = { version = "0.3.100", default-features = false }
+js-sys = { version = "0.3.104", default-features = false }
+wasm-bindgen = { version = "0.2.127", default-features = false }
+wasm-bindgen-futures = { version = "0.4.77", default-features = false }
+web-sys = { version = "0.3.104", default-features = false }
 web-time = "1.1.0"
 
 # deno dependencies

@@ -202,7 +202,7 @@ pub trait DeviceInterface: CommonTraits {
     fn create_render_bundle_encoder(
         &self,
         desc: &crate::RenderBundleEncoderDescriptor<'_>,
-    ) -> DispatchRenderBundleEncoder;
+    ) -> Result<DispatchRenderBundleEncoder, crate::CreateRenderBundleEncoderError>;
 
     fn set_device_lost_callback(&self, device_lost_callback: BoxDeviceLostCallback);
 
@@ -287,11 +287,27 @@ pub trait BufferInterface: CommonTraits {
     fn unmap(&self);
 
     fn destroy(&self);
+
+    fn size(&self) -> crate::BufferAddress;
+
+    fn usage(&self) -> crate::BufferUsages;
 }
 pub trait TextureInterface: CommonTraits {
     fn create_view(&self, desc: &crate::TextureViewDescriptor<'_>) -> DispatchTextureView;
 
     fn destroy(&self);
+
+    fn size(&self) -> wgt::Extent3d;
+
+    fn mip_level_count(&self) -> u32;
+
+    fn sample_count(&self) -> u32;
+
+    fn dimension(&self) -> wgt::TextureDimension;
+
+    fn format(&self) -> wgt::TextureFormat;
+
+    fn usage(&self) -> wgt::TextureUsages;
 }
 pub trait ExternalTextureInterface: CommonTraits {
     fn destroy(&self);
@@ -303,6 +319,10 @@ pub trait BlasInterface: CommonTraits {
 pub trait TlasInterface: CommonTraits {}
 pub trait QuerySetInterface: CommonTraits {
     fn destroy(&self);
+
+    fn ty(&self) -> crate::QueryType;
+
+    fn count(&self) -> u32;
 }
 pub trait PipelineLayoutInterface: CommonTraits {}
 pub trait RenderPipelineInterface: CommonTraits {
@@ -609,6 +629,7 @@ pub trait SurfaceInterface: CommonTraits {
     fn configure(&self, device: &DispatchDevice, config: &crate::SurfaceConfiguration);
     fn get_current_texture(
         &self,
+        desc: Option<crate::TextureDescriptor<'static>>,
     ) -> (
         Option<DispatchTexture>,
         crate::SurfaceStatus,
@@ -672,8 +693,7 @@ pub trait BufferMappedRangeInterface: CommonTraits {
 /// a `DerefMut` implementation, and `as_*_mut` methods that return `&mut` references.
 /// This `D` does not implement `Clone`.
 ///
-/// The macro's `ref type` form defines `D` to hold an `Arc` pointing to the backend type,
-/// permitting `Clone` and `Deref`, but losing exclusive, mutable access.
+/// The macro's `ref type` form defines `D` to be `Clone` and `Deref`, but losing exclusive, mutable access.
 ///
 /// For example:
 ///
@@ -688,7 +708,7 @@ pub trait BufferMappedRangeInterface: CommonTraits {
 /// ```ignore
 /// pub enum DispatchBuffer {
 ///     #[cfg(wgpu_core)]
-///     Core(Arc<CoreBuffer>),
+///     Core(CoreBuffer),
 ///     #[cfg(webgpu)]
 ///     WebGPU(WebBuffer),
 ///     #[cfg(custom)]
@@ -727,7 +747,7 @@ macro_rules! dispatch_types {
         #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
         pub enum $name {
             #[cfg(wgpu_core)]
-            Core(Arc<$core_type>),
+            Core($core_type),
             #[cfg(webgpu)]
             WebGPU($webgpu_type),
             #[allow(clippy::allow_attributes, private_interfaces)]
@@ -797,7 +817,7 @@ macro_rules! dispatch_types {
         impl From<$core_type> for $name {
             #[inline]
             fn from(value: $core_type) -> Self {
-                Self::Core(Arc::new(value))
+                Self::Core(value)
             }
         }
 
@@ -816,7 +836,7 @@ macro_rules! dispatch_types {
             fn deref(&self) -> &Self::Target {
                 match self {
                     #[cfg(wgpu_core)]
-                    Self::Core(value) => value.as_ref(),
+                    Self::Core(value) => value,
                     #[cfg(webgpu)]
                     Self::WebGPU(value) => value,
                     #[cfg(custom)]
