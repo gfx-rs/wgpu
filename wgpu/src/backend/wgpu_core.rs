@@ -190,6 +190,16 @@ impl ContextWgpuCore {
         unsafe { texture.wgpu_texture.clone().as_hal::<A>() }
     }
 
+    /// Returns `true` if `texture` was created on `device`.
+    #[cfg(webgl)]
+    pub fn texture_belongs_to_device(&self, texture: &CoreTexture, device: &CoreDevice) -> bool {
+        use wgc::resource::ParentDevice as _;
+        texture
+            .wgpu_texture
+            .same_device(&device.wgpu_device)
+            .is_ok()
+    }
+
     pub unsafe fn texture_view_as_hal<A: hal::Api>(
         &self,
         texture_view: &CoreTextureView,

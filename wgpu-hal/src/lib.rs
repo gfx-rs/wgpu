@@ -340,20 +340,47 @@ pub type AtomicFenceValue = core::sync::atomic::AtomicU64;
 pub type AtomicFenceValue = portable_atomic::AtomicU64;
 
 /// A callback to signal that wgpu is no longer using a resource.
-#[cfg(any(gles, vulkan, metal))]
+#[cfg(all(any(gles, vulkan, metal), not(webgl)))]
 pub type DropCallback = Box<dyn FnOnce() + Send + Sync + 'static>;
+
+/// A callback to signal that wgpu is no longer using a resource.
+///
+/// On WebGL the callback is not required to be `Send + Sync`, so it can
+/// capture JS handles — e.g. to `gl.deleteTexture` an imported
+/// `web_sys::WebGlTexture` once wgpu is done with it.
+#[cfg(webgl)]
+pub type DropCallback = Box<dyn FnOnce() + 'static>;
 
 #[cfg(any(gles, vulkan, metal))]
 pub struct DropGuard {
     callback: Option<DropCallback>,
 }
 
-#[cfg(all(any(gles, vulkan, metal), any(native, Emscripten)))]
+// SAFETY: On WebGL the callback may capture JS values, which are neither
+// `Send` nor `Sync`. Claiming both under the `send_sync` cfg follows the
+// `fragile-send-sync-non-atomic-wasm` contract: that feature promises the
+// program runs on a single thread (wasm without atomics).
+#[cfg(all(webgl, send_sync))]
+unsafe impl Send for DropGuard {}
+#[cfg(all(webgl, send_sync))]
+unsafe impl Sync for DropGuard {}
+
+#[cfg(any(gles, vulkan, metal))]
 impl DropGuard {
+    #[cfg(any(native, Emscripten))]
     fn from_option(callback: Option<DropCallback>) -> Option<Self> {
         callback.map(Self::new)
     }
 
+    /// A guard that may carry no callback, for resources that are externally
+    /// owned regardless of whether the caller wants a notification: the
+    /// guard's presence is what marks the resource as never-deleted-by-wgpu.
+    #[cfg(webgl)]
+    fn external(callback: Option<DropCallback>) -> Self {
+        Self { callback }
+    }
+
+    #[cfg(any(native, Emscripten))]
     fn new(callback: DropCallback) -> Self {
         Self {
             callback: Some(callback),
