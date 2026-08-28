@@ -96,6 +96,12 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 
 - Add ANGLE as an opt-in OpenGL backend on Windows via `cfg(windows_angle)`, while keeping the `angle` feature for ANGLE on macOS/iOS. By @csmoe in [#9422](https://github.com/gfx-rs/wgpu/pull/9422).
 
+#### WebGL
+
+- Add `Device::create_texture_from_webgl_handle`, `Device::as_webgl_texture`, and `Device::as_webgl_context` for zero-copy interop between wgpu's WebGL (GLES) backend and raw `web_sys::WebGlTexture` handles.
+- `Queue::copy_external_image_to_texture` now accepts `ExternalImageSource::OffscreenCanvas` without `DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES`.
+- Uploading an `ExternalImageSource::VideoFrame` on the GLES backend no longer requires building with `--cfg web_sys_unstable_apis` (the corresponding `web-sys` APIs are stable now).
+
 #### WebGPU
 
 - Add `Device::import_external_texture` to bind a `GPUExternalTexture` sampled from an `HTMLVideoElement` or WebCodecs `VideoFrame`, without a copy. By @AdrianEddy in [#9936](https://github.com/gfx-rs/wgpu/pull/9936).
@@ -153,6 +159,7 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 - Fix invalid HLSL generated for `textureSampleLevel` with non-2D textures. By @mvanhorn in [#9717](https://github.com/gfx-rs/wgpu/issues/9717).
 - Reject return types on compute shader entrypoints. By @ErichDonGubler in [#10026](https://github.com/gfx-rs/wgpu/pull/10026).
 - Reject `@location(…)`s in compute shaders. By @ErichDonGubler in [#10026](https://github.com/gfx-rs/wgpu/pull/10026).
+- Correctly emit primitive_index for the SPIR-V backend, handling mesh and raytracing shaders. Before, you could not use primitive_index with these shader types. An enable primitive_index statement is still required in wgsl shaders, in addition to enable wgpu_mesh_shader/enable wgpu_ray_tracing_pipeline. By @JMS55 in [#10153](https://github.com/gfx-rs/wgpu/pull/10153).
 
 #### DX12
 

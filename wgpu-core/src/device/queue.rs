@@ -1242,7 +1242,9 @@ impl Queue {
         self.device.check_is_valid()?;
 
         let mut needs_flag = false;
-        needs_flag |= matches!(source.source, wgt::ExternalImageSource::OffscreenCanvas(_));
+        // `OffscreenCanvas` needs no downlevel flag: WebGL2's `texSubImage2D`
+        // accepts it as a `TexImageSource` and the gles backend uploads it the
+        // same way as `HTMLCanvasElement`.
         needs_flag |= source.origin != wgt::Origin2d::ZERO;
         needs_flag |= destination.color_space != wgt::PredefinedColorSpace::Srgb;
         #[allow(clippy::bool_comparison)]

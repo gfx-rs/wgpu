@@ -22,7 +22,6 @@ struct _9
 
 layout(location = 0) rayPayloadEXT _4 _11;
 layout(set = 0, binding = 0) uniform accelerationStructureEXT _13;
-layout(location = 1) rayPayloadInEXT _4 _15;
 
 void _49(accelerationStructureEXT _50, _9 _51)
 {
@@ -72,10 +71,6 @@ struct _9
     vec3 _m5;
 };
 
-layout(location = 0) rayPayloadEXT _4 _11;
-layout(set = 0, binding = 0) uniform accelerationStructureEXT _13;
-layout(location = 1) rayPayloadInEXT _4 _15;
-
 void main()
 {
 }
@@ -103,9 +98,7 @@ struct _9
     vec3 _m5;
 };
 
-layout(location = 0) rayPayloadEXT _4 _11;
-layout(set = 0, binding = 0) uniform accelerationStructureEXT _13;
-layout(location = 1) rayPayloadInEXT _4 _15;
+layout(location = 0) rayPayloadInEXT _4 _15;
 
 void main()
 {
@@ -136,17 +129,13 @@ struct _9
     vec3 _m5;
 };
 
-layout(location = 0) rayPayloadEXT _4 _11;
-layout(set = 0, binding = 0) uniform accelerationStructureEXT _13;
-layout(location = 1) rayPayloadInEXT _4 _15;
-
 void main()
 {
 }
 
 
 /////////////////////////////////////////////////
-// Entry point: "closest_hit_instance" (rchit) //
+// Entry point: "closest_hit_triangle" (rchit) //
 /////////////////////////////////////////////////
 #version 460
 #extension GL_EXT_ray_tracing : require
@@ -167,12 +156,11 @@ struct _9
     vec3 _m5;
 };
 
-layout(location = 0) rayPayloadEXT _4 _11;
-layout(set = 0, binding = 0) uniform accelerationStructureEXT _13;
-layout(location = 1) rayPayloadInEXT _4 _15;
+layout(location = 0) rayPayloadInEXT _4 _15;
 
 void main()
 {
+    _15._m0 = uint(gl_PrimitiveID);
     _15._m0 = uint(gl_InstanceID);
 }
 

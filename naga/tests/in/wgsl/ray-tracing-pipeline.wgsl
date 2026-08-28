@@ -1,4 +1,5 @@
 enable wgpu_ray_tracing_pipeline;
+enable primitive_index;
 
 struct HitCounters {
     hit_num: u32,
@@ -37,6 +38,7 @@ fn closest_hit_main(@builtin(object_ray_origin) origin: vec3<f32>, @builtin(obje
 
 @closest_hit
 @incoming_payload(incoming_hit_num)
-fn closest_hit_instance(@builtin(instance_index) instance_index: u32) {
+fn closest_hit_triangle(@builtin(instance_index) instance_index: u32, @builtin(primitive_index) primitive_index: u32) {
+    incoming_hit_num.hit_num = primitive_index;
     incoming_hit_num.hit_num = instance_index;
 }
