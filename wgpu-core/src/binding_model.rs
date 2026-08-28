@@ -15,6 +15,7 @@ use serde::Deserialize;
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
+use wgpu_sync::OnceCell;
 use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
@@ -793,7 +794,7 @@ pub struct BindGroupLayout {
     pub(crate) state: ResourceState<BindGroupLayoutState>,
     pub(crate) device: Arc<Device>,
     pub(crate) entries: bgl::EntryMap,
-    pub(crate) exclusive_pipeline: crate::OnceCellOrLock<ExclusivePipeline>,
+    pub(crate) exclusive_pipeline: OnceCell<ExclusivePipeline>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
 }
@@ -874,7 +875,7 @@ impl BindGroupLayout {
             }),
             device: device.clone(),
             entries: bgl::EntryMap::default(),
-            exclusive_pipeline: crate::OnceCellOrLock::from(exclusive_pipeline),
+            exclusive_pipeline: OnceCell::from(exclusive_pipeline),
             label: String::new(),
         })
     }
@@ -884,7 +885,7 @@ impl BindGroupLayout {
             state: ResourceState::Invalid,
             device: device.clone(),
             entries: bgl::EntryMap::default(),
-            exclusive_pipeline: crate::OnceCellOrLock::from(ExclusivePipeline::None),
+            exclusive_pipeline: OnceCell::from(ExclusivePipeline::None),
             label,
         })
     }

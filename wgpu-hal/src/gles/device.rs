@@ -12,8 +12,9 @@ use core::{cmp::max, convert::TryInto, num::NonZeroU32, ptr, sync::atomic::Order
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use naga::FastHashMap;
+use wgpu_sync::Mutex;
 
-use super::{conv, lock, MaybeMutex, PrivateCapabilities};
+use super::{conv, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
 use crate::TlasInstance;
 
@@ -302,7 +303,7 @@ impl super::Device {
             target,
             size: desc.size,
             map_flags,
-            map_state: Arc::new(MaybeMutex::new(super::BufferMapState {
+            map_state: Arc::new(Mutex::new(super::BufferMapState {
                 mapped: false,
                 data: None,
                 offset_of_current_mapping: 0,
@@ -706,7 +707,7 @@ impl crate::Device for super::Device {
                 target,
                 size: desc.size,
                 map_flags: 0,
-                map_state: Arc::new(MaybeMutex::new(super::BufferMapState {
+                map_state: Arc::new(Mutex::new(super::BufferMapState {
                     mapped: false,
                     data: Some(vec![0; desc.size as usize]),
                     offset_of_current_mapping: 0,
@@ -810,7 +811,7 @@ impl crate::Device for super::Device {
             target,
             size: desc.size,
             map_flags,
-            map_state: Arc::new(MaybeMutex::new(super::BufferMapState {
+            map_state: Arc::new(Mutex::new(super::BufferMapState {
                 mapped: false,
                 data,
                 offset_of_current_mapping: 0,
@@ -846,7 +847,7 @@ impl crate::Device for super::Device {
         let is_coherent = buffer.map_flags & glow::MAP_COHERENT_BIT != 0;
         let ptr = match buffer.raw {
             None => {
-                let mut map_state = lock(&buffer.map_state);
+                let mut map_state = buffer.map_state.lock();
                 let vec = map_state.data.as_mut().unwrap();
                 let slice = &mut vec.as_mut_slice()[range.start as usize..range.end as usize];
                 slice.as_mut_ptr()
@@ -854,7 +855,7 @@ impl crate::Device for super::Device {
             Some(raw) => {
                 let gl = &self.shared.context.lock();
                 unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
-                let mut map_state = lock(&buffer.map_state);
+                let mut map_state = buffer.map_state.lock();
                 let ptr = if let Some(map_read_allocation) = map_state.data.as_mut() {
                     let slice = map_read_allocation.as_mut_slice();
                     unsafe { self.shared.get_buffer_sub_data(gl, buffer.target, 0, slice) };
@@ -896,7 +897,7 @@ impl crate::Device for super::Device {
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
         let gl = &self.shared.context.lock();
-        let mut map_state = lock(&buffer.map_state);
+        let mut map_state = buffer.map_state.lock();
         if core::mem::replace(&mut map_state.mapped, false) {
             if let Some(raw) = buffer.raw {
                 if map_state.data.is_none() {
@@ -913,7 +914,7 @@ impl crate::Device for super::Device {
         I: Iterator<Item = crate::MemoryRange>,
     {
         let gl = &self.shared.context.lock();
-        let map_state = lock(&buffer.map_state);
+        let map_state = buffer.map_state.lock();
         if map_state.mapped {
             if let Some(raw) = buffer.raw {
                 if map_state.data.is_none() {
@@ -943,8 +944,10 @@ impl crate::Device for super::Device {
         let gl = &self.shared.context.lock();
 
         let render_usage = wgt::TextureUses::COLOR_TARGET
-            | wgt::TextureUses::DEPTH_STENCIL_WRITE
-            | wgt::TextureUses::DEPTH_STENCIL_READ
+            | wgt::TextureUses::DEPTH_WRITE
+            | wgt::TextureUses::DEPTH_READ
+            | wgt::TextureUses::STENCIL_WRITE
+            | wgt::TextureUses::STENCIL_READ
             | wgt::TextureUses::TRANSIENT;
         let format_desc = self.shared.describe_texture_format(desc.format);
 

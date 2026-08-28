@@ -1,8 +1,8 @@
 use alloc::{format, string::String, vec::Vec};
 
 use glow::HasContext;
-use parking_lot::{Mutex, RwLock};
 use wasm_bindgen::{JsCast, JsValue};
+use wgpu_sync::{Mutex, RwLock};
 
 use super::TextureFormatDesc;
 

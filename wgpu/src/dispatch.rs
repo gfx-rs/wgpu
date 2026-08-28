@@ -202,7 +202,7 @@ pub trait DeviceInterface: CommonTraits {
     fn create_render_bundle_encoder(
         &self,
         desc: &crate::RenderBundleEncoderDescriptor<'_>,
-    ) -> DispatchRenderBundleEncoder;
+    ) -> Result<DispatchRenderBundleEncoder, crate::CreateRenderBundleEncoderError>;
 
     fn set_device_lost_callback(&self, device_lost_callback: BoxDeviceLostCallback);
 
@@ -287,11 +287,27 @@ pub trait BufferInterface: CommonTraits {
     fn unmap(&self);
 
     fn destroy(&self);
+
+    fn size(&self) -> crate::BufferAddress;
+
+    fn usage(&self) -> crate::BufferUsages;
 }
 pub trait TextureInterface: CommonTraits {
     fn create_view(&self, desc: &crate::TextureViewDescriptor<'_>) -> DispatchTextureView;
 
     fn destroy(&self);
+
+    fn size(&self) -> wgt::Extent3d;
+
+    fn mip_level_count(&self) -> u32;
+
+    fn sample_count(&self) -> u32;
+
+    fn dimension(&self) -> wgt::TextureDimension;
+
+    fn format(&self) -> wgt::TextureFormat;
+
+    fn usage(&self) -> wgt::TextureUsages;
 }
 pub trait ExternalTextureInterface: CommonTraits {
     fn destroy(&self);
@@ -303,6 +319,10 @@ pub trait BlasInterface: CommonTraits {
 pub trait TlasInterface: CommonTraits {}
 pub trait QuerySetInterface: CommonTraits {
     fn destroy(&self);
+
+    fn ty(&self) -> crate::QueryType;
+
+    fn count(&self) -> u32;
 }
 pub trait PipelineLayoutInterface: CommonTraits {}
 pub trait RenderPipelineInterface: CommonTraits {
@@ -609,6 +629,7 @@ pub trait SurfaceInterface: CommonTraits {
     fn configure(&self, device: &DispatchDevice, config: &crate::SurfaceConfiguration);
     fn get_current_texture(
         &self,
+        desc: Option<crate::TextureDescriptor<'static>>,
     ) -> (
         Option<DispatchTexture>,
         crate::SurfaceStatus,

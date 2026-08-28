@@ -5,7 +5,7 @@ use core::sync::atomic::Ordering;
 use arrayvec::ArrayVec;
 use glow::HasContext;
 
-use super::{conv::is_layered_target, lock, Command as C, PrivateCapabilities};
+use super::{conv::is_layered_target, Command as C, PrivateCapabilities};
 
 const DEBUG_ID: u32 = 0;
 
@@ -377,7 +377,7 @@ impl super::Queue {
                     }
                 }
                 None => {
-                    let mut map_state = lock(&dst.map_state);
+                    let mut map_state = dst.map_state.lock();
                     map_state.data.as_mut().unwrap().as_mut_slice()
                         [range.start as usize..range.end as usize]
                         .fill(0);
@@ -420,7 +420,7 @@ impl super::Queue {
                         };
                     }
                     (Some(src), None) => {
-                        let mut map_state = lock(&dst.map_state);
+                        let mut map_state = dst.map_state.lock();
                         let dst_data = &mut map_state.data.as_mut().unwrap().as_mut_slice()
                             [copy.dst_offset as usize..copy.dst_offset as usize + size];
 
@@ -435,7 +435,7 @@ impl super::Queue {
                         };
                     }
                     (None, Some(dst)) => {
-                        let map_state = lock(&src.map_state);
+                        let map_state = src.map_state.lock();
                         let src_data = &map_state.data.as_ref().unwrap().as_slice()
                             [copy.src_offset as usize..copy.src_offset as usize + size];
                         unsafe { gl.bind_buffer(copy_dst_target, Some(dst)) };
@@ -810,7 +810,7 @@ impl super::Queue {
                             glow::PixelUnpackData::BufferOffset(copy.buffer_layout.offset as u32)
                         }
                         None => {
-                            map_state = lock(&src.map_state);
+                            map_state = src.map_state.lock();
                             let src_data = &map_state.data.as_ref().unwrap().as_slice()
                                 [copy.buffer_layout.offset as usize..];
                             glow::PixelUnpackData::Slice(Some(src_data))
@@ -874,7 +874,7 @@ impl super::Queue {
                             )
                         }
                         None => {
-                            map_state = lock(&src.map_state);
+                            map_state = src.map_state.lock();
                             let src_data = &map_state.data.as_ref().unwrap().as_slice()
                                 [(offset as usize)..(offset + bytes_in_upload) as usize];
                             glow::CompressedPixelUnpackData::Slice(src_data)
@@ -955,7 +955,7 @@ impl super::Queue {
                             glow::PixelPackData::BufferOffset(offset as u32)
                         }
                         None => {
-                            map_state = lock(&dst.map_state);
+                            map_state = dst.map_state.lock();
                             let dst_data = &mut map_state.data.as_mut().unwrap().as_mut_slice()
                                 [offset as usize..];
                             glow::PixelPackData::Slice(Some(dst_data))
@@ -1122,7 +1122,7 @@ impl super::Queue {
                             };
                         }
                         None => {
-                            let mut map_state = lock(&dst.map_state);
+                            let mut map_state = dst.map_state.lock();
                             let data = map_state.data.as_mut().unwrap();
                             let len = query_data.len().min(data.len());
                             data[..len].copy_from_slice(&query_data[..len]);
@@ -1339,8 +1339,10 @@ impl super::Queue {
                 }
                 if usage.intersects(
                     wgt::TextureUses::COLOR_TARGET
-                        | wgt::TextureUses::DEPTH_STENCIL_READ
-                        | wgt::TextureUses::DEPTH_STENCIL_WRITE,
+                        | wgt::TextureUses::DEPTH_READ
+                        | wgt::TextureUses::DEPTH_WRITE
+                        | wgt::TextureUses::STENCIL_READ
+                        | wgt::TextureUses::STENCIL_WRITE,
                 ) {
                     flags |= glow::FRAMEBUFFER_BARRIER_BIT;
                 }

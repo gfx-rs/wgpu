@@ -16,6 +16,7 @@ use hal::ShouldBeNonZeroExt;
 use arrayvec::ArrayVec;
 use bitflags::Flags;
 use smallvec::SmallVec;
+use wgpu_sync::OnceCell;
 use wgt::{
     math::align_to, ColorWrites, DeviceLostReason, TextureFormat, TextureSampleType,
     TextureViewDimension,
@@ -36,6 +37,7 @@ use crate::{
         BufferMapPendingClosure, DeviceLostInvocation, HostMap, MissingDownlevelFlags,
         MissingFeatures, RenderPassContext,
     },
+    error::ErrorSink,
     hal_label,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
@@ -56,7 +58,7 @@ use crate::{
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
     validation::{self, check_color_attachment_count, PassthroughInterface, ShaderMetaData},
     weak_vec::WeakVec,
-    FastHashMap, LabelHelpers, OnceCellOrLock,
+    FastHashMap, LabelHelpers,
 };
 
 use super::{
@@ -205,13 +207,11 @@ impl ExternalTextureParams {
 
 /// Because all operations are push/swap (no longlived lock),
 /// we can have mutex without lock rank
-pub(crate) struct DeferredBufferMapPendingClosures(
-    parking_lot::Mutex<Vec<BufferMapPendingClosure>>,
-);
+pub(crate) struct DeferredBufferMapPendingClosures(wgpu_sync::Mutex<Vec<BufferMapPendingClosure>>);
 
 impl DeferredBufferMapPendingClosures {
     pub(crate) fn new() -> Self {
-        Self(parking_lot::Mutex::new(Vec::new()))
+        Self(wgpu_sync::Mutex::new(Vec::new()))
     }
 
     pub(crate) fn push(&self, closure: BufferMapPendingClosure) {
@@ -244,7 +244,7 @@ struct DeviceResources<'a> {
 pub struct Device {
     raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
-    pub(crate) queue: OnceCellOrLock<Weak<Queue>>,
+    pub(crate) queue: OnceCell<Weak<Queue>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     pub(crate) empty_bgl: ManuallyDrop<Box<dyn hal::DynBindGroupLayout>>,
     /// The `label` from the descriptor used to create the resource.
@@ -286,6 +286,8 @@ pub struct Device {
     /// has been destroyed and its queues are empty.
     pub(crate) device_lost_closure: Mutex<Option<DeviceLostClosure>>,
 
+    pub(crate) error_sink: ErrorSink,
+
     /// Stores the state of buffers and textures.
     pub(crate) trackers: Mutex<DeviceTracker>,
     pub(crate) tracker_indices: TrackerIndexAllocators,
@@ -312,8 +314,7 @@ pub struct Device {
     pub(crate) usage_scopes: UsageScopePool,
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
     // Optional so that we can late-initialize this after the queue is created.
-    pub(crate) timestamp_normalizer:
-        OnceCellOrLock<crate::timestamp_normalization::TimestampNormalizer>,
+    pub(crate) timestamp_normalizer: OnceCell<crate::timestamp_normalization::TimestampNormalizer>,
     /// Uniform buffer containing [`ExternalTextureParams`] with values such
     /// that a [`TextureView`] bound to a [`wgt::BindingType::ExternalTexture`]
     /// binding point will be rendered correctly. Intended to be used as the
@@ -635,7 +636,7 @@ impl Device {
             Ok(Self {
                 raw: raw_device,
                 adapter: adapter.clone(),
-                queue: OnceCellOrLock::new(),
+                queue: OnceCell::new(),
                 zero_buffer: ManuallyDrop::new(zero_buffer),
                 empty_bgl: ManuallyDrop::new(empty_bgl),
                 default_external_texture_params_buffer: ManuallyDrop::new(
@@ -656,6 +657,7 @@ impl Device {
                 snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
                 valid: AtomicBool::new(true),
                 device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
+                error_sink: ErrorSink::new(),
                 trackers: Mutex::new(
                     rank::DEVICE_TRACKERS,
                     DeviceTracker::new(ordered_buffer_usages, ordered_texture_usages),
@@ -673,7 +675,7 @@ impl Device {
                 instance_flags,
                 deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
                 usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
-                timestamp_normalizer: OnceCellOrLock::new(),
+                timestamp_normalizer: OnceCell::new(),
                 indirect_validation,
                 deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures::new(),
             })
@@ -782,10 +784,25 @@ impl Device {
         self.adapter.backend()
     }
 
+    /// Return true if `self` is still valid.
+    ///
+    /// Note that a `false` result here does *not* guarantee that no further activity will
+    /// occur on the `Device`. A [`Device`] can be marked invalid at any time, even while
+    /// locks are held, meaning that operations begun before the `Device` was marked
+    /// invalid will still generally run to completion. This is a consequence of
+    /// making [`Device::valid`] an `AtomicBool`. It could be avoided by making
+    /// [`Device::valid`] an ordinary `bool` field protected by the same locks that
+    /// all other operations acquire, but we use an `AtomicBool` because there
+    /// are many device validity checks and we want those to be cheap.
     pub fn is_valid(&self) -> bool {
         self.valid.load(Ordering::Acquire)
     }
 
+    /// Return `Err(DeviceError)` if `self` is not valid. Otherwise, return `Ok(())`.
+    ///
+    /// Note that an `Err` result here does *not* guarantee that no further activity will
+    /// occur on the `Device`. See the documentation for [`is_valid`][Self::is_valid] for
+    /// details.
     pub fn check_is_valid(&self) -> Result<(), DeviceError> {
         if self.is_valid() {
             Ok(())
@@ -1037,14 +1054,27 @@ impl Device {
             }
         };
 
-        // Prevent new commands from being submitted as we want to act on `queue_empty`.
-        let command_indices = self.command_indices.read();
-        // Check that the device is valid. This is combined with queue empty to decide whether
-        // to destroy all resources. Queue.submit blocks on command indices being writable
-        // and rejects if invalid so if the device in now invalid, and all submissions are
-        // finished, there will be no more submissions.
-        let device_valid = self.is_valid();
-        drop(command_indices);
+        // When a device is marked invalid, we must destroy all its hal resources once its
+        // queue is empty, by calling `release_gpu_resources`.
+        //
+        // However, checking device validity for this purpose is tricky. A device can be
+        // marked invalid at any time, regardless of what locks are held. This means that,
+        // even though queue submission does check device validity at the start (in
+        // `Queue::allocate_submission`), the submission will proceed even if the
+        // device gets marked invalid after that check. Thus, other threads can observe
+        // the queue becoming non-empty even after they have observed the device to be
+        // invalid.
+        //
+        // In this function, for `release_gpu_resources` to work as intended, we must be
+        // sure that no further work can be submitted. Specifically, we must be sure that
+        // if we see the device marked invalid, then so will any subsequent attempts to
+        // submit work to the queue, causing them to fail. To accomplish this, it suffices
+        // to hold the same lock while we call `is_valid` that `Queue::allocate_submission`
+        // holds while it does the submission.
+        let device_valid = {
+            let _command_indices_guard = self.command_indices.read();
+            self.is_valid()
+        };
 
         // Maintain all finished submissions on the queue, updating the relevant user closures and
         // collecting if the queue is empty.
@@ -2024,11 +2054,15 @@ impl Device {
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let clear_mode = if hal_usage
-            .intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE | wgt::TextureUses::COLOR_TARGET)
-            && desc.dimension == wgt::TextureDimension::D2
+            .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE)
+            || hal_usage.contains(wgt::TextureUses::COLOR_TARGET)
+                && desc.dimension == wgt::TextureDimension::D2
         {
             let (is_color, usage) = if desc.format.is_depth_stencil_format() {
-                (false, wgt::TextureUses::DEPTH_STENCIL_WRITE)
+                (
+                    false,
+                    wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE,
+                )
             } else {
                 (true, wgt::TextureUses::COLOR_TARGET)
             };
@@ -2155,16 +2189,19 @@ impl Device {
         self: &Arc<Self>,
         desc: &resource::ExternalTextureDescriptor,
         planes: &[Arc<TextureView>],
-    ) -> (
-        Arc<ExternalTexture>,
-        Option<resource::CreateExternalTextureError>,
-    ) {
+    ) -> Arc<ExternalTexture> {
         profiling::scope!("Device::create_external_texture");
 
-        let (external_texture, error) = match self.create_external_texture_inner(desc, planes) {
-            Ok(external_texture) => (external_texture, None),
-            Err(e) => (ExternalTexture::invalid(Arc::clone(self), desc), Some(e)),
-        };
+        let external_texture = self
+            .create_external_texture_inner(desc, planes)
+            .unwrap_or_else(|err| {
+                self.handle_error(
+                    err,
+                    desc.label.as_deref(),
+                    "Device::create_external_texture",
+                );
+                ExternalTexture::invalid(Arc::clone(self), desc)
+            });
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
@@ -2189,7 +2226,7 @@ impl Device {
             Arc::as_ptr(&external_texture)
         );
 
-        (external_texture, error)
+        external_texture
     }
 
     pub(crate) fn create_external_texture_inner(
@@ -2269,7 +2306,7 @@ impl Device {
             mapped_at_creation: false,
         };
         let params = self.create_buffer_inner(&params_desc)?;
-        self.get_queue().unwrap().write_buffer(
+        self.get_queue().unwrap().write_buffer_inner(
             params.clone(),
             0,
             bytemuck::bytes_of(&params_data),
@@ -2287,16 +2324,13 @@ impl Device {
         Ok(external_texture)
     }
 
-    pub fn create_sampler(
-        self: &Arc<Self>,
-        desc: &resource::SamplerDescriptor,
-    ) -> (Arc<Sampler>, Option<resource::CreateSamplerError>) {
+    pub fn create_sampler(self: &Arc<Self>, desc: &resource::SamplerDescriptor) -> Arc<Sampler> {
         profiling::scope!("Device::create_sampler");
 
-        let (sampler, error) = match self.create_sampler_inner(desc) {
-            Ok(sampler) => (sampler, None),
-            Err(e) => (Sampler::invalid(Arc::clone(self), desc), Some(e)),
-        };
+        let sampler = self.create_sampler_inner(desc).unwrap_or_else(|err| {
+            self.handle_error(err, desc.label.as_deref(), "Device::create_sampler");
+            Sampler::invalid(Arc::clone(self), desc)
+        });
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
@@ -2306,7 +2340,7 @@ impl Device {
 
         api_log!("Device::create_sampler -> {:?}", Arc::as_ptr(&sampler));
 
-        (sampler, error)
+        sampler
     }
 
     pub(crate) fn create_sampler_inner(
@@ -2784,23 +2818,27 @@ impl Device {
     pub fn create_command_encoder(
         self: &Arc<Self>,
         desc: &wgt::CommandEncoderDescriptor<crate::Label>,
-    ) -> (Arc<command::CommandEncoder>, Option<DeviceError>) {
+    ) -> Arc<command::CommandEncoder> {
         profiling::scope!("Device::create_command_encoder");
 
-        let (cmd_enc, error) = match self.create_command_encoder_inner(&desc.label) {
-            Ok(cmd_enc) => (cmd_enc, None),
-            Err(e) => (
-                command::CommandEncoder::new_invalid(self, &desc.label, e.clone().into()),
-                Some(e),
-            ),
-        };
+        let cmd_enc = self
+            .create_command_encoder_inner(&desc.label)
+            .unwrap_or_else(|err| {
+                let error = err.clone().into();
+                self.handle_error(
+                    err,
+                    desc.label.as_ref().map(|l| l.as_ref()),
+                    "Device::create_command_encoder",
+                );
+                command::CommandEncoder::new_invalid(self, &desc.label, error)
+            });
 
         api_log!(
             "Device::create_command_encoder -> {:?}",
             Arc::as_ptr(&cmd_enc)
         );
 
-        (cmd_enc, error)
+        cmd_enc
     }
 
     pub(crate) fn create_command_encoder_inner(
@@ -2826,17 +2864,22 @@ impl Device {
     pub fn create_render_bundle_encoder(
         self: &Arc<Self>,
         desc: &command::RenderBundleEncoderDescriptor,
-    ) -> (
-        Box<command::RenderBundleEncoder>,
-        Option<command::CreateRenderBundleError>,
-    ) {
+    ) -> Result<Box<command::RenderBundleEncoder>, MissingFeatures> {
         profiling::scope!("Device::create_render_bundle_encoder");
         api_log!("Device::create_render_bundle_encoder");
-        let (encoder, error) = match command::RenderBundleEncoder::new(self, desc) {
-            Ok(encoder) => (encoder, None),
-            Err(e) => (command::RenderBundleEncoder::dummy(self), Some(e)),
-        };
-        (Box::new(encoder), error)
+        command::RenderBundleEncoder::new(self, desc)
+            .or_else(|err| match err {
+                command::CreateRenderBundleError::MissingFeatures(missing) => Err(missing),
+                err => {
+                    self.handle_error(
+                        err,
+                        desc.label.as_ref().map(|l| l.as_ref()),
+                        "Device::create_render_bundle_encoder",
+                    );
+                    Ok(command::RenderBundleEncoder::dummy(self))
+                }
+            })
+            .map(Box::new)
     }
 
     /// Generate information about late-validated buffer bindings for pipelines.
@@ -3213,7 +3256,7 @@ impl Device {
             }),
             device: self.clone(),
             entries: entry_map,
-            exclusive_pipeline: OnceCellOrLock::new(),
+            exclusive_pipeline: OnceCell::new(),
             label: label.to_string(),
         };
 
@@ -3620,18 +3663,15 @@ impl Device {
     pub fn create_bind_group(
         self: &Arc<Self>,
         desc: &binding_model::BindGroupDescriptor,
-    ) -> (Arc<BindGroup>, Option<CreateBindGroupError>) {
+    ) -> Arc<BindGroup> {
         profiling::scope!("Device::create_bind_group");
         #[cfg(feature = "trace")]
         let trace_desc = (&desc).to_trace();
 
-        let (bind_group, error) = match self.create_bind_group_inner(desc) {
-            Ok(bind_group) => (bind_group, None),
-            Err(e) => (
-                BindGroup::invalid(self.clone(), desc.label.to_string(), desc.layout.clone()),
-                Some(e),
-            ),
-        };
+        let bind_group = self.create_bind_group_inner(desc).unwrap_or_else(|err| {
+            self.handle_error(err, desc.label.as_deref(), "Device::create_bind_group");
+            BindGroup::invalid(self.clone(), desc.label.to_string(), desc.layout.clone())
+        });
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
@@ -3646,7 +3686,7 @@ impl Device {
             Arc::as_ptr(&bind_group)
         );
 
-        (bind_group, error)
+        bind_group
     }
 
     // This function expects the provided bind group layout to be resolved
@@ -4021,7 +4061,14 @@ impl Device {
                     });
                 }
                 view.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
-                Ok(wgt::TextureUses::RESOURCE)
+                let depth_stencil_uses = if view.desc.aspects() == hal::FormatAspects::DEPTH {
+                    wgt::TextureUses::DEPTH_SAMPLED
+                } else if view.desc.aspects() == hal::FormatAspects::STENCIL {
+                    wgt::TextureUses::STENCIL_SAMPLED
+                } else {
+                    wgt::TextureUses::empty()
+                };
+                Ok(wgt::TextureUses::RESOURCE | depth_stencil_uses)
             }
             wgt::BindingType::StorageTexture {
                 access,
@@ -4106,18 +4153,14 @@ impl Device {
     pub fn create_pipeline_layout(
         self: &Arc<Self>,
         desc: &binding_model::PipelineLayoutDescriptor,
-    ) -> (
-        Arc<binding_model::PipelineLayout>,
-        Option<binding_model::CreatePipelineLayoutError>,
-    ) {
+    ) -> Arc<binding_model::PipelineLayout> {
         profiling::scope!("Device::create_pipeline_layout");
-        let (layout, error) = match self.create_pipeline_layout_impl(desc, false) {
-            Ok(layout) => (layout, None),
-            Err(e) => (
-                binding_model::PipelineLayout::invalid(Arc::clone(self), desc.label.to_string()),
-                Some(e),
-            ),
-        };
+        let layout = self
+            .create_pipeline_layout_impl(desc, false)
+            .unwrap_or_else(|err| {
+                self.handle_error(err, desc.label.as_deref(), "Device::create_pipeline_layout");
+                binding_model::PipelineLayout::invalid(Arc::clone(self), desc.label.to_string())
+            });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace::IntoTrace;
@@ -4130,7 +4173,7 @@ impl Device {
             "Device::create_pipeline_layout -> {:?}",
             Arc::as_ptr(&layout)
         );
-        (layout, error)
+        layout
     }
 
     fn create_pipeline_layout_impl(
@@ -4301,21 +4344,26 @@ impl Device {
         Ok(layout)
     }
 
+    /// Creates a compute pipeline. If the creation fails,
+    /// it will handle error in device and return an invalid compute pipeline.
+    ///
+    /// Corresponds to [GPUDevice.createComputePipeline](https://www.w3.org/TR/webgpu/#dom-gpudevice-createcomputepipeline)
     pub fn create_compute_pipeline(
         self: &Arc<Self>,
         desc: pipeline::ComputePipelineDescriptor,
-    ) -> (
-        Arc<pipeline::ComputePipeline>,
-        Option<pipeline::CreateComputePipelineError>,
-    ) {
+    ) -> Arc<pipeline::ComputePipeline> {
         profiling::scope!("Device::create_compute_pipeline");
-        let (compute_pipeline, error) = match self.create_compute_pipeline_inner(desc.clone()) {
-            Ok(compute_pipeline) => (compute_pipeline, None),
-            Err(error) => (
-                pipeline::ComputePipeline::invalid(self.clone(), desc.label.to_string()),
-                Some(error),
-            ),
-        };
+        let compute_pipeline = self
+            .create_compute_pipeline_or_error(desc.clone())
+            .unwrap_or_else(|err| {
+                self.handle_error(
+                    err,
+                    desc.label.as_deref(),
+                    "Device::create_compute_pipeline",
+                );
+
+                pipeline::ComputePipeline::invalid(self.clone(), desc.label.to_string())
+            });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace;
@@ -4329,10 +4377,13 @@ impl Device {
             "Device::create_compute_pipeline -> {:?}",
             Arc::as_ptr(&compute_pipeline)
         );
-        (compute_pipeline, error)
+        compute_pipeline
     }
 
-    pub fn create_compute_pipeline_inner(
+    /// Creates a compute pipeline without raising any error to device.
+    ///
+    /// Corresponds to [GPUDevice.createComputePipelineAsync](https://www.w3.org/TR/webgpu/#dom-gpudevice-createcomputepipelineasync)
+    pub fn create_compute_pipeline_or_error(
         self: &Arc<Self>,
         desc: pipeline::ComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
@@ -5626,9 +5677,8 @@ impl Device {
                 raw: Snatchable::new(raw),
             }),
             device: self.clone(),
-            label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.query_sets.clone()),
-            desc: desc.map_label(|_| ()),
+            desc: desc.map_label(|l| l.to_string()),
             initialized_slots: Mutex::new(
                 rank::QUERY_SET_INITIALIZED_SLOTS,
                 bit_vec::BitVec::from_elem(desc.count as usize, false),
@@ -5670,17 +5720,24 @@ impl Device {
         // initiate movement into those buckets, and it can do that by calling
         // "destroy" on all the resources we know about.
 
-        // During these iterations, we discard all errors. We don't care!
         let trackers = self.trackers.lock();
-        for buffer in trackers.buffers.used_resources() {
-            if let Some(buffer) = Weak::upgrade(buffer) {
-                buffer.destroy();
-            }
+        let buffers = trackers
+            .buffers
+            .used_resources()
+            .flat_map(Weak::upgrade)
+            .collect::<Vec<_>>();
+        let textures = trackers
+            .textures
+            .used_resources()
+            .flat_map(Weak::upgrade)
+            .collect::<Vec<_>>();
+        drop(trackers);
+
+        for buffer in buffers {
+            buffer.destroy();
         }
-        for texture in trackers.textures.used_resources() {
-            if let Some(texture) = Weak::upgrade(texture) {
-                texture.destroy();
-            }
+        for texture in textures {
+            texture.destroy();
         }
     }
 

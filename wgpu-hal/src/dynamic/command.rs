@@ -268,6 +268,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
             texture: barrier.texture.expect_downcast_ref(),
             usage: barrier.usage.clone(),
             range: barrier.range,
+            queue_family_ownership_transfer: barrier.queue_family_ownership_transfer,
         });
         unsafe { self.transition_textures(barriers) };
     }
@@ -818,6 +819,8 @@ impl<'a> DepthStencilAttachment<'a, dyn DynTextureView> {
             depth_ops: self.depth_ops,
             stencil_ops: self.stencil_ops,
             clear_value: self.clear_value,
+            depth_read_only: self.depth_read_only,
+            stencil_read_only: self.stencil_read_only,
         }
     }
 }
