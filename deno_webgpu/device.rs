@@ -263,9 +263,7 @@ impl GPUDevice {
       border_color: None,
     };
 
-    let (wgpu_sampler, err) = self.wgpu_device.create_sampler(&wgpu_descriptor);
-
-    self.error_handler.push_error(err);
+    let wgpu_sampler = self.wgpu_device.create_sampler(&wgpu_descriptor);
 
     Ok(GPUSampler {
       wgpu_sampler,
@@ -372,10 +370,8 @@ impl GPUDevice {
       immediate_size: descriptor.immediate_size,
     };
 
-    let (wgpu_pipeline_layout, err) =
+    let wgpu_pipeline_layout =
       self.wgpu_device.create_pipeline_layout(&wgpu_descriptor);
-
-    self.error_handler.push_error(err);
 
     GPUPipelineLayout {
       wgpu_pipeline_layout,
@@ -433,10 +429,7 @@ impl GPUDevice {
       entries: Cow::Owned(entries),
     };
 
-    let (wgpu_bind_group, err) =
-      self.wgpu_device.create_bind_group(&wgpu_descriptor);
-
-    self.error_handler.push_error(err);
+    let wgpu_bind_group = self.wgpu_device.create_bind_group(&wgpu_descriptor);
 
     GPUBindGroup {
       wgpu_bind_group,
@@ -482,9 +475,14 @@ impl GPUDevice {
     &self,
     #[webidl] descriptor: super::compute_pipeline::GPUComputePipelineDescriptor,
   ) -> GPUComputePipeline {
-    let (pipeline, err) = self.new_compute_pipeline(descriptor);
-    self.error_handler.push_error(err);
-    pipeline
+    let label = descriptor.label.clone();
+    let wgpu_descriptor = transform_compute_pipeline_descriptor(descriptor);
+    let wgpu_compute_pipeline =
+      self.wgpu_device.create_compute_pipeline(wgpu_descriptor);
+    GPUComputePipeline {
+      wgpu_compute_pipeline,
+      label,
+    }
   }
 
   #[required(1)]
@@ -510,18 +508,30 @@ impl GPUDevice {
     let resolver = v8::PromiseResolver::new(scope).unwrap();
     let promise = resolver.get_promise(scope);
 
-    let (pipeline, err) = self.new_compute_pipeline(descriptor);
-    if let Some(err) = err {
-      let err = make_pipeline_error(
-        scope,
-        GPUPipelineErrorReason::Validation,
-        &fmt_err(&err),
-      );
-      resolver.reject(scope, err.into());
-    } else {
-      let val = make_cppgc_object(scope, pipeline).into();
-      resolver.resolve(scope, val);
+    let label = descriptor.label.clone();
+    let wgpu_descriptor = transform_compute_pipeline_descriptor(descriptor);
+    match self
+      .wgpu_device
+      .create_compute_pipeline_or_error(wgpu_descriptor)
+    {
+      Ok(wgpu_compute_pipeline) => {
+        let pipeline = GPUComputePipeline {
+          wgpu_compute_pipeline,
+          label,
+        };
+        let val = make_cppgc_object(scope, pipeline).into();
+        resolver.resolve(scope, val);
+      }
+      Err(err) => {
+        let err = make_pipeline_error(
+          scope,
+          GPUPipelineErrorReason::Validation,
+          &fmt_err(&err),
+        );
+        resolver.reject(scope, err.into());
+      }
     }
+
     v8::Global::new(scope, promise)
   }
 
@@ -618,7 +628,7 @@ impl GPUDevice {
     &self,
     #[webidl]
     descriptor: super::render_bundle::GPURenderBundleEncoderDescriptor,
-  ) -> GPURenderBundleEncoder {
+  ) -> Result<GPURenderBundleEncoder, JsErrorBox> {
     let wgpu_descriptor = wgpu_core::command::RenderBundleEncoderDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
       color_formats: Cow::Owned(
@@ -639,16 +649,18 @@ impl GPUDevice {
       multiview: None,
     };
 
-    let (encoder, err) = self
+    let encoder = self
       .wgpu_device
-      .create_render_bundle_encoder(&wgpu_descriptor);
+      .create_render_bundle_encoder(&wgpu_descriptor)
+      .map_err(|err| {
+        let err = fmt_err(&err);
+        JsErrorBox::type_error(err)
+      })?;
 
-    self.error_handler.push_error(err);
-
-    GPURenderBundleEncoder {
+    Ok(GPURenderBundleEncoder {
       encoder: RefCell::new(encoder),
       label: descriptor.label,
-    }
+    })
   }
 
   #[required(1)]
@@ -725,39 +737,23 @@ impl GPUDevice {
   }
 }
 
-impl GPUDevice {
-  fn new_compute_pipeline(
-    &self,
-    descriptor: super::compute_pipeline::GPUComputePipelineDescriptor,
-  ) -> (
-    GPUComputePipeline,
-    Option<wgpu_core::pipeline::CreateComputePipelineError>,
-  ) {
-    let wgpu_descriptor = wgpu_core::pipeline::ComputePipelineDescriptor {
-      label: crate::transform_label(descriptor.label.clone()),
-      layout: descriptor.layout.into(),
-      stage: ProgrammableStageDescriptor {
-        module: descriptor.compute.module.wgpu_shader_module.clone(),
-        entry_point: descriptor.compute.entry_point.map(Into::into),
-        constants: descriptor.compute.constants.into_iter().collect(),
-        zero_initialize_workgroup_memory: true,
-      },
-      cache: None,
-    };
-
-    let (wgpu_compute_pipeline, err) =
-      self.wgpu_device.create_compute_pipeline(wgpu_descriptor);
-
-    (
-      GPUComputePipeline {
-        error_handler: self.error_handler.clone(),
-        wgpu_compute_pipeline,
-        label: descriptor.label.clone(),
-      },
-      err,
-    )
+fn transform_compute_pipeline_descriptor(
+  descriptor: super::compute_pipeline::GPUComputePipelineDescriptor,
+) -> wgpu_core::pipeline::ComputePipelineDescriptor<'static> {
+  wgpu_core::pipeline::ComputePipelineDescriptor {
+    label: crate::transform_label(descriptor.label.clone()),
+    layout: descriptor.layout.into(),
+    stage: ProgrammableStageDescriptor {
+      module: descriptor.compute.module.wgpu_shader_module.clone(),
+      entry_point: descriptor.compute.entry_point.map(Into::into),
+      constants: descriptor.compute.constants.into_iter().collect(),
+      zero_initialize_workgroup_memory: true,
+    },
+    cache: None,
   }
+}
 
+impl GPUDevice {
   fn new_render_pipeline(
     &self,
     descriptor: super::render_pipeline::GPURenderPipelineDescriptor,
@@ -911,7 +907,6 @@ impl GPUDevice {
 
     (
       GPURenderPipeline {
-        error_handler: self.error_handler.clone(),
         wgpu_render_pipeline,
         label: descriptor.label,
       },

@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     #[should_panic(
-        expected = "Cannot insert UntypedId(0,1), found existing resource UntypedId(0,1)"
+        expected = "Cannot insert TestMarkerId(0,1), found existing resource TestMarkerId(0,1)"
     )]
     fn insert_occupied_same_epoch() {
         let mut storage = Storage::new();
@@ -185,7 +185,7 @@ mod tests {
 
     #[test]
     #[should_panic(
-        expected = "Cannot insert UntypedId(0,2), found existing resource UntypedId(0,1)"
+        expected = "Cannot insert TestMarkerId(0,2), found existing resource TestMarkerId(0,1)"
     )]
     fn insert_occupied_different_epoch() {
         let mut storage = Storage::new();
@@ -194,7 +194,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Cannot remove UntypedId(0,2), found other resource UntypedId(0,1)")]
+    #[should_panic(
+        expected = "Cannot remove TestMarkerId(0,2), found other resource TestMarkerId(0,1)"
+    )]
     fn remove_epoch_mismatch() {
         let mut storage = Storage::new();
         storage.insert(id(0, 1), TestItem);
@@ -202,21 +204,23 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Cannot remove non-existent resource UntypedId(0,1)")]
+    #[should_panic(expected = "Cannot remove non-existent resource TestMarkerId(0,1)")]
     fn remove_vacant() {
         let mut storage = Storage::<TestItem>::new();
         storage.remove(id(0, 1));
     }
 
     #[test]
-    #[should_panic(expected = "Cannot get non-existent resource UntypedId(0,1)")]
+    #[should_panic(expected = "Cannot get non-existent resource TestMarkerId(0,1)")]
     fn get_vacant() {
         let storage = Storage::<TestItem>::new();
         storage.get(id(0, 1));
     }
 
     #[test]
-    #[should_panic(expected = "Cannot get UntypedId(0,2), found other resource UntypedId(0,1)")]
+    #[should_panic(
+        expected = "Cannot get TestMarkerId(0,2), found other resource TestMarkerId(0,1)"
+    )]
     fn get_epoch_mismatch() {
         let mut storage = Storage::new();
         storage.insert(id(0, 1), TestItem);
