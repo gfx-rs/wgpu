@@ -134,9 +134,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
         let raw = self.free.pop().unwrap();
 
-        // Set the name unconditionally, since there might be a
-        // previous name assigned to this.
-        unsafe { self.device.set_object_name(raw, label.unwrap_or_default()) };
+        if !self
+            .device
+            .instance
+            .flags
+            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+        {
+            // Set the name even if it is empty, since there might be a
+            // previous name assigned to the command buffer.
+            unsafe { self.device.set_object_name(raw, label.unwrap_or_default()) };
+        }
 
         // Reset some state in case the last renderpass was never ended.
         self.rpass_debug_marker_active = false;
