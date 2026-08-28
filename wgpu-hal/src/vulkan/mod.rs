@@ -858,8 +858,8 @@ impl AccelerationStructure {
     /// [`crate::Device::get_acceleration_structure_device_address`] instead.
     ///
     /// `wgpu` doesn't observe an external build, and rejects an acceleration structure
-    /// that it never built. One build through `wgpu` marks it built for the rest of its
-    /// lifetime. For a TLAS, a build with no instances is sufficient.
+    /// that it never built. Call `wgpu::CommandEncoder::mark_acceleration_structures_built`
+    /// on the encoder that recorded the build.
     ///
     /// # Safety
     ///
