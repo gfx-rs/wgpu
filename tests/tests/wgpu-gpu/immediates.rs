@@ -344,13 +344,14 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
         let mut render_pass = command_encoder.begin_render_pass(&render_pass_desc);
         if use_render_bundle {
             // Execute the commands in a render_bundle_encoder.
-            let mut render_bundle_encoder =
-                ctx.device
-                    .create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
-                        color_formats: &[Some(output_texture.format())],
-                        sample_count: 1,
-                        ..RenderBundleEncoderDescriptor::default()
-                    });
+            let mut render_bundle_encoder = ctx
+                .device
+                .create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
+                    color_formats: &[Some(output_texture.format())],
+                    sample_count: 1,
+                    ..RenderBundleEncoderDescriptor::default()
+                })
+                .unwrap();
             do_encoding(&mut render_bundle_encoder, &pipeline, &bind_group, &data);
             let render_bundle = render_bundle_encoder.finish(&RenderBundleDescriptor::default());
             render_pass.execute_bundles([&render_bundle]);

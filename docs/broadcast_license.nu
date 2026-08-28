@@ -15,6 +15,7 @@ let crates = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
+    "wgpu-sync",
     "wgpu-types",
     "naga",
     "naga-cli",

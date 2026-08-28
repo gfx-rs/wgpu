@@ -6,14 +6,12 @@ use wgt::error::{ErrorType, WebGpuError};
 use crate::{
     command::{encoder::EncodingState, ArcCommand, CommandEncoder, EncoderStateError},
     device::DeviceError,
-    global::Global,
-    id::{BufferId, CommandEncoderId, TextureId},
-    resource::{Buffer, InvalidResourceError, ParentDevice, Texture},
+    resource::{Buffer, InvalidResourceError, Labeled as _, ParentDevice, Texture},
     track::ResourceUsageCompatibilityError,
 };
 
 impl CommandEncoder {
-    pub fn transition_resources(
+    fn transition_resources_inner(
         self: &Arc<Self>,
         buffer_transitions: impl Iterator<Item = wgt::BufferTransition<Arc<Buffer>>>,
         texture_transitions: impl Iterator<Item = wgt::TextureTransition<Arc<Texture>>>,
@@ -46,41 +44,19 @@ impl CommandEncoder {
             })
         })
     }
-}
 
-impl Global {
-    pub fn command_encoder_transition_resources(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        buffer_transitions: impl Iterator<Item = wgt::BufferTransition<BufferId>>,
-        texture_transitions: impl Iterator<Item = wgt::TextureTransition<TextureId>>,
-    ) -> Result<(), EncoderStateError> {
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        let buffer_transitions = buffer_transitions
-            .map(|t| {
-                let buffer = hub.buffers.get(t.buffer);
-                wgt::BufferTransition {
-                    buffer,
-                    state: t.state,
-                }
-            })
-            .collect::<Vec<_>>();
-        let texture_transitions = texture_transitions
-            .map(|t| {
-                let texture = hub.textures.get(t.texture);
-                wgt::TextureTransition {
-                    texture,
-                    selector: t.selector,
-                    state: t.state,
-                }
-            })
-            .collect::<Vec<_>>();
-        cmd_enc.transition_resources(
-            buffer_transitions.into_iter(),
-            texture_transitions.into_iter(),
-        )
+    pub fn transition_resources(
+        self: &Arc<Self>,
+        buffer_transitions: impl Iterator<Item = wgt::BufferTransition<Arc<Buffer>>>,
+        texture_transitions: impl Iterator<Item = wgt::TextureTransition<Arc<Texture>>>,
+    ) {
+        if let Err(err) = self.transition_resources_inner(buffer_transitions, texture_transitions) {
+            self.device.handle_error(
+                err,
+                Some(self.label()),
+                "CommandEncoder::transition_resources",
+            );
+        }
     }
 }
 
