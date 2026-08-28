@@ -85,6 +85,8 @@ impl super::DeviceShared {
                     ref depth_stencil,
                     sample_count,
                     multiview_mask,
+                    depth_read_only,
+                    stencil_read_only,
                 } = *e.key();
 
                 let mut vk_attachments = Vec::new();
@@ -169,8 +171,22 @@ impl super::DeviceShared {
                         attachment: vk_attachments.len() as u32,
                         layout,
                     });
-                    let (load_op, store_op) = conv::map_attachment_ops(ops);
-                    let (stencil_load_op, stencil_store_op) = conv::map_attachment_ops(stencil_ops);
+                    let (load_op, mut store_op) = conv::map_attachment_ops(ops);
+                    let (stencil_load_op, mut stencil_store_op) =
+                        conv::map_attachment_ops(stencil_ops);
+
+                    let store_op_for_read_only = if self.private_caps.store_op_none {
+                        vk::AttachmentStoreOp::NONE
+                    } else {
+                        vk::AttachmentStoreOp::STORE
+                    };
+                    if depth_read_only {
+                        store_op = store_op_for_read_only;
+                    }
+                    if stencil_read_only {
+                        stencil_store_op = store_op_for_read_only;
+                    }
+
                     let vk_attachment = vk::AttachmentDescription::default()
                         .format(format)
                         .samples(samples)
@@ -2045,11 +2061,22 @@ impl crate::Device for super::Device {
 
         let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::default();
         if let Some(ref ds) = desc.depth_stencil {
+            (
+                compatible_rp_key.depth_read_only,
+                compatible_rp_key.stencil_read_only,
+            ) = (
+                ds.is_depth_read_only(),
+                ds.is_stencil_read_only(desc.primitive.cull_mode),
+            );
             let vk_format = self.shared.private_caps.map_texture_format(ds.format);
-            let vk_layout = if ds.is_read_only(desc.primitive.cull_mode) {
-                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
-            } else {
-                vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            let vk_layout = match (
+                compatible_rp_key.depth_read_only,
+                compatible_rp_key.stencil_read_only,
+            ) {
+                (true, true) => vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                (true, false) => vk::ImageLayout::DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL,
+                (false, true) => vk::ImageLayout::DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
+                (false, false) => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             };
             compatible_rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
                 base: super::AttachmentKey::compatible(vk_format, vk_layout),

@@ -1426,24 +1426,39 @@ impl RenderPassInfo {
             is_depth_read_only = at.depth.is_readonly();
             is_stencil_read_only = at.stencil.is_readonly();
 
-            let usage = if is_depth_read_only
-                && is_stencil_read_only
-                && device
+            let usage = 'b: {
+                if device
                     .downlevel
                     .flags
                     .contains(wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
-            {
-                // If the texture supports TEXTURE_BINDING, it can be used as a shader
-                // resource and a read-only depth attachment simultaneously. But if it
-                // doesn't support TEXTURE_BINDING, don't attempt to transition it to a
-                // shader resource state, because DX12 will raise an error.
-                if view.desc.usage.contains(TextureUsages::TEXTURE_BINDING) {
-                    wgt::TextureUses::DEPTH_STENCIL_READ | wgt::TextureUses::RESOURCE
+                {
+                    let depth_stencil_uses = match (is_depth_read_only, is_stencil_read_only) {
+                        (true, true) => {
+                            wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_READ
+                        }
+                        (true, false) => {
+                            wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_WRITE
+                        }
+                        (false, true) => {
+                            wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ
+                        }
+                        (false, false) => {
+                            break 'b wgt::TextureUses::DEPTH_WRITE
+                                | wgt::TextureUses::STENCIL_WRITE;
+                        }
+                    };
+                    // If the texture supports TEXTURE_BINDING, it can be used as a shader
+                    // resource and a read-only depth attachment simultaneously. But if it
+                    // doesn't support TEXTURE_BINDING, don't attempt to transition it to a
+                    // shader resource state, because DX12 will raise an error.
+                    if view.desc.usage.contains(TextureUsages::TEXTURE_BINDING) {
+                        depth_stencil_uses | wgt::TextureUses::RESOURCE
+                    } else {
+                        depth_stencil_uses
+                    }
                 } else {
-                    wgt::TextureUses::DEPTH_STENCIL_READ
+                    wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE
                 }
-            } else {
-                wgt::TextureUses::DEPTH_STENCIL_WRITE
             };
             render_attachments.push(view.to_render_attachment(usage));
 
@@ -1455,6 +1470,8 @@ impl RenderPassInfo {
                 depth_ops: at.depth.hal_ops(),
                 stencil_ops: at.stencil.hal_ops(),
                 clear_value: (at.depth.clear_value(), at.stencil.clear_value()),
+                depth_read_only: is_depth_read_only,
+                stencil_read_only: is_stencil_read_only,
             });
         }
 
@@ -1834,11 +1851,13 @@ impl RenderPassInfo {
                 depth_stencil_attachment: Some(hal::DepthStencilAttachment {
                     target: hal::Attachment {
                         view: view.try_raw(snatch_guard)?,
-                        usage: wgt::TextureUses::DEPTH_STENCIL_WRITE,
+                        usage: wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE,
                     },
                     depth_ops,
                     stencil_ops,
                     clear_value: (0.0, 0),
+                    depth_read_only: false,
+                    stencil_read_only: false,
                 }),
                 multiview_mask: self.multiview_mask,
                 timestamp_writes: None,
