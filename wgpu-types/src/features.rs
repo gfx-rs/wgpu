@@ -148,10 +148,12 @@ macro_rules! bitflags_independent_two_arg {
 // without changing this macro.
 /// Macro for creating sets of bitflags, we need this because there are almost more flags than bits
 /// in a u64, we can't use a u128 because of FFI, and the number of flags is increasing.
+///
+/// Alternatively we also want to separate WebGPU features from native WGPU features.
 macro_rules! bitflags_array {
     (
         $(#[$outer:meta])*
-        pub struct $name:ident: [$T:ty; $Len:expr];
+        pub struct ($name:ident, $name_bits:ident): [$T:ty; $Len:expr];
 
         $(
             $(#[$bit_outer:meta])*
@@ -166,7 +168,7 @@ macro_rules! bitflags_array {
     ) => {
         bitflags_array! {
             $(#[$outer])*
-            pub struct $name: [$T; $Len];
+            pub struct ($name, $name_bits): [$T; $Len];
 
             $(
                 $(#[$bit_outer])*
@@ -206,7 +208,7 @@ macro_rules! bitflags_array {
     };
     (
         $(#[$outer:meta])*
-        pub struct $name:ident: [$T:ty; $Len:expr];
+        pub struct ($name:ident, $name_bits:ident): [$T:ty; $Len:expr];
 
         $(
             $(#[$bit_outer:meta])*
@@ -241,7 +243,7 @@ macro_rules! bitflags_array {
         /// Bits from `Features` in array form
         #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-        pub struct FeatureBits(pub [$T; $Len]);
+        pub struct $name_bits(pub [$T; $Len]);
 
         bitflags_array_impl! { BitOr bitor $name | $($lower_inner_name)* }
         bitflags_array_impl! { BitAnd bitand $name & $($lower_inner_name)* }
@@ -298,11 +300,11 @@ macro_rules! bitflags_array {
         bitflags_array_impl_assign! { BitAndAssign bitand_assign $name &= $($lower_inner_name)* }
         bitflags_array_impl_assign! { BitXorAssign bitxor_assign $name ^= $($lower_inner_name)* }
 
-        bit_array_impl! { BitOr bitor FeatureBits |= }
-        bit_array_impl! { BitAnd bitand FeatureBits &= }
-        bit_array_impl! { BitXor bitxor FeatureBits ^= }
+        bit_array_impl! { BitOr bitor $name_bits |= }
+        bit_array_impl! { BitAnd bitand $name_bits &= }
+        bit_array_impl! { BitXor bitxor $name_bits ^= }
 
-        impl core::ops::Not for FeatureBits {
+        impl core::ops::Not for $name_bits {
             type Output = Self;
 
             #[inline]
@@ -313,7 +315,7 @@ macro_rules! bitflags_array {
         }
 
         #[cfg(feature = "serde")]
-        impl WriteHex for FeatureBits {
+        impl WriteHex for $name_bits {
             fn write_hex<W: fmt::Write>(&self, mut writer: W) -> fmt::Result {
                 let [$($lower_inner_name,)*] = self.0;
                 let mut wrote = false;
@@ -344,7 +346,7 @@ macro_rules! bitflags_array {
         }
 
         #[cfg(feature = "serde")]
-        impl ParseHex for FeatureBits {
+        impl ParseHex for $name_bits {
             fn parse_hex(input: &str) -> Result<Self, ParseError> {
 
                 let mut unset = Self::EMPTY;
@@ -372,7 +374,7 @@ macro_rules! bitflags_array {
             }
         }
 
-        impl bitflags::Bits for FeatureBits {
+        impl bitflags::Bits for $name_bits {
             const EMPTY: Self = $name::empty().bits();
 
             const ALL: Self = $name::all().bits();
@@ -381,15 +383,15 @@ macro_rules! bitflags_array {
         impl Flags for $name {
             const FLAGS: &'static [bitflags::Flag<Self>] = $name::FLAGS;
 
-            type Bits = FeatureBits;
+            type Bits = $name_bits;
 
-            fn bits(&self) -> FeatureBits {
-                FeatureBits([
+            fn bits(&self) -> $name_bits {
+                $name_bits([
                     $(self.$lower_inner_name.bits(),)*
                 ])
             }
 
-            fn from_bits_retain(bits: FeatureBits) -> Self {
+            fn from_bits_retain(bits: $name_bits) -> Self {
                 let [$($lower_inner_name,)*] = bits.0;
                 Self {
                     $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)*
@@ -415,8 +417,8 @@ macro_rules! bitflags_array {
             ];
 
             /// Gets the set flags as a container holding an array of bits.
-            pub const fn bits(&self) -> FeatureBits {
-                FeatureBits([
+            pub const fn bits(&self) -> $name_bits {
+                $name_bits([
                     $(self.$lower_inner_name.bits(),)*
                 ])
             }
@@ -505,7 +507,7 @@ macro_rules! bitflags_array {
 
             /// Takes in [`FeatureBits`] and returns None if there are invalid bits or otherwise Self with
             /// those bits set
-            pub const fn from_bits(bits:FeatureBits) -> Option<Self> {
+            pub const fn from_bits(bits: $name_bits) -> Option<Self> {
                 let [$($lower_inner_name,)*] = bits.0;
                 // The ? operator does not work in a const context.
                 Some(Self {
@@ -519,14 +521,14 @@ macro_rules! bitflags_array {
             }
 
             /// Takes in [`FeatureBits`] and returns Self with only valid bits (all other bits removed)
-            pub const fn from_bits_truncate(bits:FeatureBits) -> Self {
+            pub const fn from_bits_truncate(bits: $name_bits) -> Self {
                 let [$($lower_inner_name,)*] = bits.0;
                 Self { $($lower_inner_name: $inner_name::from_bits_truncate($lower_inner_name),)* }
             }
 
             /// Takes in [`FeatureBits`] and returns Self with all bits that were set without removing
             /// invalid bits
-            pub const fn from_bits_retain(bits:FeatureBits) -> Self {
+            pub const fn from_bits_retain(bits: $name_bits) -> Self {
                 let [$($lower_inner_name,)*] = bits.0;
                 Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
             }
@@ -580,7 +582,7 @@ macro_rules! bitflags_array {
         }
 
         $(
-            impl From<$inner_name> for Features {
+            impl From<$inner_name> for $name {
                 #[allow(clippy::needless_update, reason = "only useless if there is 1 member")]
                 fn from($lower_inner_name: $inner_name) -> Self {
                     Self {
@@ -619,7 +621,7 @@ bitflags_array! {
     /// https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename).
     #[repr(C)]
     #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct Features: [u64; 2];
+    pub struct (Features, FeatureBits): [u64; 2];
 
     /// Features that are not guaranteed to be supported.
     ///
