@@ -588,6 +588,7 @@ impl super::Queue {
                             // no typed overload for it. Re-wrap the same JS object as
                             // `HtmlCanvasElement` — a type-erased pass-through, not a
                             // conversion; the browser dispatches on the real object.
+                            // Tracked in wasm-bindgen PR#5312.
                             use wasm_bindgen::JsCast as _;
                             gl.tex_sub_image_3d_with_html_canvas_element(
                                 dst_target,
