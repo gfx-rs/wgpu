@@ -387,6 +387,7 @@ impl crate::Surface for super::Surface {
         let suf_texture = super::SurfaceTexture {
             texture: super::Texture {
                 raw: texture,
+                plane1: None,
                 format: swapchain_format,
                 raw_type: MTLTextureType::Type2D,
                 array_layers: 1,

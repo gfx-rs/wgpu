@@ -18,11 +18,7 @@ use super::{
     conv, TimestampQuerySupport,
 };
 use crate::CommandEncoder as _;
-use alloc::{
-    borrow::{Cow, ToOwned as _},
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
 use core::{ops::Range, ptr::NonNull, sync::atomic};
 use smallvec::SmallVec;
 
@@ -627,31 +623,38 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::TextureCopy>,
     {
-        let dst_texture = if src.format != dst.format {
+        let reinterpret_dst = if src.format != dst.format && !src.format.is_multi_planar_format() {
             let raw_format = self
                 .shared
                 .private_texture_format_caps
                 .map_format(src.format);
-            Cow::Owned(autoreleasepool(|_| {
+            Some(autoreleasepool(|_| {
                 dst.raw.newTextureViewWithPixelFormat(raw_format).unwrap()
             }))
         } else {
-            Cow::Borrowed(&dst.raw)
+            None
         };
+
         let encoder = self.enter_blit();
         for copy in regions {
             let src_origin = conv::map_origin(&copy.src_base.origin);
             let dst_origin = conv::map_origin(&copy.dst_base.origin);
             // no clamping is done: Metal expects physical sizes here
             let extent = conv::map_copy_extent(&copy.size);
+
+            let src_raw = src.raw_plane(copy.src_base.aspect);
+            let dst_raw = match reinterpret_dst.as_ref() {
+                Some(dst) => dst,
+                None => dst.raw_plane(copy.dst_base.aspect),
+            };
             unsafe {
                 encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin(
-                    &src.raw,
+                    src_raw,
                     copy.src_base.array_layer as usize,
                     copy.src_base.mip_level as usize,
                     src_origin,
                     extent,
-                    &dst_texture,
+                    dst_raw,
                     copy.dst_base.array_layer as usize,
                     copy.dst_base.mip_level as usize,
                     dst_origin,
@@ -694,7 +697,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     bytes_per_row as usize,
                     image_byte_stride as usize,
                     conv::map_copy_extent(&extent),
-                    &dst.raw,
+                    dst.raw_plane(copy.texture_base.aspect),
                     copy.texture_base.array_layer as usize,
                     copy.texture_base.mip_level as usize,
                     dst_origin,
@@ -728,7 +731,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .map_or(0, |v| v as u64 * bytes_per_row);
             unsafe {
                 encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage_options(
-                    &src.raw,
+                    src.raw_plane(copy.texture_base.aspect),
                     copy.texture_base.array_layer as usize,
                     copy.texture_base.mip_level as usize,
                     src_origin,

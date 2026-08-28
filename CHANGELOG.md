@@ -91,6 +91,7 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 
 - Fix Naga's Metal backend crashing when a storage texture was used as a function argument. By @ErichDonGubler in [#9867](https://github.com/gfx-rs/wgpu/pull/9867).
 - Fix `max_task_workgroup_count` being misreported on pre-Apple7 devices. By @inner-daemons in [#10065](https://github.com/gfx-rs/wgpu/pull/10065).
+- Added support for NV12 and P010 texture formats. Due to no native support, they're implemented using separate textures for each plane. By @jerzywilczek in [#9624](https://github.com/gfx-rs/wgpu/pull/9624)
 
 #### GLES
 

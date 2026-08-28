@@ -867,7 +867,9 @@ impl crate::BufferBinding<'_, Buffer> {
 
 #[derive(Debug)]
 pub struct Texture {
+    /// Should be accessed using [`Texture::raw_plane`]
     raw: Retained<ProtocolObject<dyn MTLTexture>>,
+    plane1: Option<Retained<ProtocolObject<dyn MTLTexture>>>,
     format: wgt::TextureFormat,
     raw_type: MTLTextureType,
     array_layers: u32,
@@ -880,8 +882,30 @@ pub struct Texture {
 }
 
 impl Texture {
+    /// Panics if called on a multi-plane texture
     pub fn raw_handle(&self) -> &ProtocolObject<dyn MTLTexture> {
+        if self.plane1.is_some() {
+            panic!("raw_handle called on a multi-plane texture");
+        }
+
         &self.raw
+    }
+
+    /// Panics if called on a single-plane texture and `aspect` is [`crate::FormatAspects::PLANE_1`].
+    pub fn raw_plane(
+        &self,
+        aspect: crate::FormatAspects,
+    ) -> &Retained<ProtocolObject<dyn MTLTexture>> {
+        match aspect {
+            crate::FormatAspects::PLANE_1 => self
+                .plane1
+                .as_ref()
+                .expect("plane_texture(PLANE_1) called on a single-plane texture"),
+            crate::FormatAspects::PLANE_2 => {
+                panic!("plane_texture(PLANE_2) called and 3-plane textures are unsupported")
+            }
+            _ => &self.raw,
+        }
     }
 }
 

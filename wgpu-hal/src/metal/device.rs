@@ -423,6 +423,29 @@ impl super::Device {
     ) -> super::Texture {
         super::Texture {
             raw,
+            plane1: None,
+            format,
+            raw_type,
+            array_layers,
+            mip_levels,
+            copy_size,
+            _drop_guard: DropGuard::from_option(drop_callback),
+        }
+    }
+
+    pub unsafe fn texture_from_raw_planar(
+        planes: [Retained<ProtocolObject<dyn MTLTexture>>; 2],
+        format: wgt::TextureFormat,
+        raw_type: MTLTextureType,
+        array_layers: u32,
+        mip_levels: u32,
+        copy_size: crate::CopyExtent,
+        drop_callback: Option<DropCallback>,
+    ) -> super::Texture {
+        let [plane0, plane1] = planes;
+        super::Texture {
+            raw: plane0,
+            plane1: Some(plane1),
             format,
             raw_type,
             array_layers,
@@ -521,87 +544,127 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> DeviceResult<super::Texture> {
-        let mtl_format = self
-            .shared
-            .private_texture_format_caps
-            .map_format(desc.format);
+        let raw_texture_with_format = |mtl_format,
+                                       width,
+                                       height|
+         -> DeviceResult<
+            Retained<ProtocolObject<dyn MTLTexture>>,
+        > {
+            autoreleasepool(|_| {
+                let descriptor = MTLTextureDescriptor::new();
 
-        autoreleasepool(|_| {
-            let descriptor = MTLTextureDescriptor::new();
+                let mtl_type = match desc.dimension {
+                    wgt::TextureDimension::D1 => MTLTextureType::Type1D,
+                    wgt::TextureDimension::D2 => {
+                        if desc.sample_count > 1 {
+                            unsafe { descriptor.setSampleCount(desc.sample_count as usize) };
 
-            let mtl_type = match desc.dimension {
-                wgt::TextureDimension::D1 => MTLTextureType::Type1D,
-                wgt::TextureDimension::D2 => {
-                    if desc.sample_count > 1 {
-                        unsafe { descriptor.setSampleCount(desc.sample_count as usize) };
-
-                        if desc.size.depth_or_array_layers > 1 {
+                            if desc.size.depth_or_array_layers > 1 {
+                                unsafe {
+                                    descriptor
+                                        .setArrayLength(desc.size.depth_or_array_layers as usize)
+                                };
+                                MTLTextureType::Type2DMultisampleArray
+                            } else {
+                                MTLTextureType::Type2DMultisample
+                            }
+                        } else if desc.size.depth_or_array_layers > 1 {
                             unsafe {
                                 descriptor.setArrayLength(desc.size.depth_or_array_layers as usize)
                             };
-                            MTLTextureType::Type2DMultisampleArray
+                            MTLTextureType::Type2DArray
                         } else {
-                            MTLTextureType::Type2DMultisample
+                            MTLTextureType::Type2D
                         }
-                    } else if desc.size.depth_or_array_layers > 1 {
-                        unsafe {
-                            descriptor.setArrayLength(desc.size.depth_or_array_layers as usize)
-                        };
-                        MTLTextureType::Type2DArray
-                    } else {
-                        MTLTextureType::Type2D
                     }
+                    wgt::TextureDimension::D3 => {
+                        unsafe { descriptor.setDepth(desc.size.depth_or_array_layers as usize) };
+                        MTLTextureType::Type3D
+                    }
+                };
+
+                let mtl_storage_mode = if desc.usage.contains(wgt::TextureUses::TRANSIENT)
+                    && self.shared.private_caps.supports_memoryless_storage
+                {
+                    MTLStorageMode::Memoryless
+                } else if IS_WATCHOS_ILP32 {
+                    // The AGXMetalS4 driver (A13/S6 GPU) crashes in
+                    // copyFromTexture:toBuffer: on Private textures — null deref at
+                    // offset 0x50 in the driver's internal texture state. Use Shared
+                    // storage which works correctly on Apple's unified memory
+                    // architecture and matches what native Swift Metal code uses on
+                    // these devices.
+                    MTLStorageMode::Shared
+                } else {
+                    MTLStorageMode::Private
+                };
+
+                descriptor.setTextureType(mtl_type);
+                unsafe { descriptor.setWidth(width) };
+                unsafe { descriptor.setHeight(height) };
+                unsafe { descriptor.setMipmapLevelCount(desc.mip_level_count as usize) };
+                descriptor.setPixelFormat(mtl_format);
+                descriptor.setUsage(conv::map_texture_usage(desc.format, desc.usage));
+                descriptor.setStorageMode(mtl_storage_mode);
+
+                let raw = self
+                    .shared
+                    .device
+                    .newTextureWithDescriptor(&descriptor)
+                    .ok_or(crate::DeviceError::OutOfMemory)?;
+                if let Some(label) = desc.label {
+                    raw.setLabel(Some(&NSString::from_str(label)));
                 }
-                wgt::TextureDimension::D3 => {
-                    unsafe { descriptor.setDepth(desc.size.depth_or_array_layers as usize) };
-                    MTLTextureType::Type3D
-                }
-            };
 
-            let mtl_storage_mode = if desc.usage.contains(wgt::TextureUses::TRANSIENT)
-                && self.shared.private_caps.supports_memoryless_storage
-            {
-                MTLStorageMode::Memoryless
-            } else if IS_WATCHOS_ILP32 {
-                // The AGXMetalS4 driver (A13/S6 GPU) crashes in
-                // copyFromTexture:toBuffer: on Private textures — null deref at
-                // offset 0x50 in the driver's internal texture state. Use Shared
-                // storage which works correctly on Apple's unified memory
-                // architecture and matches what native Swift Metal code uses on
-                // these devices.
-                MTLStorageMode::Shared
-            } else {
-                MTLStorageMode::Private
-            };
-
-            descriptor.setTextureType(mtl_type);
-            unsafe { descriptor.setWidth(desc.size.width as usize) };
-            unsafe { descriptor.setHeight(desc.size.height as usize) };
-            unsafe { descriptor.setMipmapLevelCount(desc.mip_level_count as usize) };
-            descriptor.setPixelFormat(mtl_format);
-            descriptor.setUsage(conv::map_texture_usage(desc.format, desc.usage));
-            descriptor.setStorageMode(mtl_storage_mode);
-
-            let raw = self
-                .shared
-                .device
-                .newTextureWithDescriptor(&descriptor)
-                .ok_or(crate::DeviceError::OutOfMemory)?;
-            if let Some(label) = desc.label {
-                raw.setLabel(Some(&NSString::from_str(label)));
-            }
-
-            self.counters.textures.add(1);
-
-            Ok(super::Texture {
-                raw,
-                format: desc.format,
-                raw_type: mtl_type,
-                mip_levels: desc.mip_level_count,
-                array_layers: desc.array_layer_count(),
-                copy_size: desc.copy_extent(),
-                _drop_guard: None,
+                Ok(raw)
             })
+        };
+
+        let (width, height) = (desc.size.width as usize, desc.size.height as usize);
+
+        if let Some(planes) = desc.format.planes() {
+            assert_eq!(planes, 2);
+        }
+
+        let (raw, plane1) = if let Some(2) = desc.format.planes() {
+            let format0 = desc
+                .format
+                .aspect_specific_format(wgt::TextureAspect::Plane0)
+                .unwrap();
+            let mtl_format0 = self.shared.private_texture_format_caps.map_format(format0);
+            let raw0 = raw_texture_with_format(mtl_format0, width, height)?;
+
+            let format1 = desc
+                .format
+                .aspect_specific_format(wgt::TextureAspect::Plane1)
+                .unwrap();
+            let mtl_format1 = self.shared.private_texture_format_caps.map_format(format1);
+            let raw1 = raw_texture_with_format(mtl_format1, width / 2, height / 2)?;
+
+            (raw0, Some(raw1))
+        } else {
+            let mtl_format = self
+                .shared
+                .private_texture_format_caps
+                .map_format(desc.format);
+
+            let raw = raw_texture_with_format(mtl_format, width, height)?;
+
+            (raw, None)
+        };
+
+        self.counters.textures.add(1);
+        let raw_type = raw.textureType();
+
+        Ok(super::Texture {
+            raw,
+            plane1,
+            format: desc.format,
+            raw_type,
+            mip_levels: desc.mip_level_count,
+            array_layers: desc.array_layer_count(),
+            copy_size: desc.copy_extent(),
+            _drop_guard: None,
         })
     }
 
@@ -633,11 +696,26 @@ impl crate::Device for super::Device {
             .private_texture_format_caps
             .map_view_format(desc.format, aspects);
 
+        let raw_source = if texture.format.is_multi_planar_format() {
+            texture.raw_plane(aspects)
+        } else {
+            &texture.raw
+        };
+
+        let texture_or_plane_format = if texture.format.is_multi_planar_format() {
+            texture
+                .format
+                .aspect_specific_format(desc.range.aspect)
+                .unwrap()
+        } else {
+            texture.format
+        };
+
         let format_equal = raw_format
             == self
                 .shared
                 .private_texture_format_caps
-                .map_format(texture.format);
+                .map_format(texture_or_plane_format);
         let type_equal = raw_type == texture.raw_type;
         let range_full_resource =
             desc.range
@@ -646,7 +724,7 @@ impl crate::Device for super::Device {
         let raw = if format_equal && type_equal && range_full_resource {
             // Some images are marked as framebuffer-only, and we can't create aliases of them.
             // Also helps working around Metal bugs with aliased array textures.
-            texture.raw.to_owned()
+            raw_source.to_owned()
         } else {
             let mip_level_count = desc
                 .range
@@ -667,8 +745,7 @@ impl crate::Device for super::Device {
                     length: array_layer_count as _,
                 };
                 let raw = unsafe {
-                    texture
-                        .raw
+                    raw_source
                         .newTextureViewWithPixelFormat_textureType_levels_slices(
                             raw_format,
                             raw_type,
