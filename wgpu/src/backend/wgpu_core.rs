@@ -2265,22 +2265,23 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 .map(|instance: &Option<crate::TlasInstance>| {
                     instance
                         .as_ref()
-                        .map(|instance| wgc::ray_tracing::TlasInstance {
+                        .map(|instance| wgc::ray_tracing::ArcTlasInstance {
                             blas: instance.blas.as_core().wgpu_blas.clone(),
-                            transform: &instance.transform,
+                            transform: instance.transform,
                             custom_data: instance.custom_data,
                             mask: instance.mask,
                         })
-                });
-            wgc::ray_tracing::TlasPackage {
+                })
+                .collect();
+            wgc::ray_tracing::ArcTlasPackage {
                 tlas: e.inner.as_core().wgpu_tlas.clone(),
-                instances: Box::new(instances),
+                instances,
                 lowest_unmodified: e.lowest_unmodified,
             }
         });
 
         self.wgpu_command_encoder
-            .build_acceleration_structures(blas, tlas)
+            .build_acceleration_structures(blas, tlas.collect())
     }
 
     fn transition_resources<'a>(

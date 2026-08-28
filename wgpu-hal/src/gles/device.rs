@@ -1807,7 +1807,7 @@ impl crate::Device for super::Device {
     ) {
     }
 
-    fn tlas_instance_to_bytes(&self, _instance: TlasInstance) -> Vec<u8> {
+    fn tlas_instance_to_bytes(&self, _instance: TlasInstance, _to_extend: &mut Vec<u8>) {
         unimplemented!()
     }
 

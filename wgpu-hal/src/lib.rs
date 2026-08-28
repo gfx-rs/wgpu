@@ -1203,7 +1203,10 @@ pub trait Device: WasmNotSendSync {
         &self,
         acceleration_structure: <Self::A as Api>::AccelerationStructure,
     );
-    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8>;
+    /// Converts the `TlasInstance` into a implementation defined format, appending it to
+    /// `to_extend`. The vector must be have a length exactly the old length plus
+    /// `Alignments::raw_tlas_instance_size`
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>);
 
     fn get_internal_counters(&self) -> wgt::HalCounters;
 
