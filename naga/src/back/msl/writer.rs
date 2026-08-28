@@ -4469,6 +4469,26 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, ");")?;
                 }
                 crate::Statement::RayPipelineFunction(_) => unreachable!(),
+                crate::Statement::DebugPrintf {
+                    ref format,
+                    ref arguments,
+                } => {
+                    // Shader logging is only available in MSL 3.2 and later.
+                    if context.expression.lang_version < (3, 2) {
+                        return Err(Error::UnsupportedDebugPrintf);
+                    }
+
+                    write!(
+                        self.out,
+                        "{level}metal::os_log_default.log_info(\"{}\"",
+                        format
+                    )?;
+                    for &arg in arguments {
+                        write!(self.out, ", ")?;
+                        self.put_expression(arg, &context.expression, true)?;
+                    }
+                    writeln!(self.out, ");")?;
+                }
             }
         }
 

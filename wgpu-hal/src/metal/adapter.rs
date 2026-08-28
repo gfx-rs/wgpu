@@ -1,15 +1,18 @@
-use objc2::rc::autoreleasepool;
+use block2::StackBlock;
+use objc2::rc::{autoreleasepool, Retained};
 use objc2::runtime::{AnyObject, ProtocolObject, Sel};
 use objc2::{available, sel};
-use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo};
+use objc2_foundation::{NSError, NSOperatingSystemVersion, NSProcessInfo, NSString};
 use objc2_metal::{
-    MTLArgumentBuffersTier, MTLCounterSamplingPoint, MTLDevice, MTLFeatureSet, MTLGPUFamily,
-    MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLPixelFormat,
+    MTLArgumentBuffersTier, MTLCommandQueueDescriptor, MTLCounterSamplingPoint, MTLDevice,
+    MTLFeatureSet, MTLGPUFamily, MTLIndirectAccelerationStructureInstanceDescriptor,
+    MTLLanguageVersion, MTLLogLevel, MTLLogState, MTLLogStateDescriptor, MTLPixelFormat,
     MTLReadWriteTextureTier,
 };
 use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+use core::ptr::NonNull;
 use core::sync::atomic;
 use wgpu_sync::{Mutex, OnceCell};
 
@@ -52,6 +55,34 @@ pub(super) const MAX_COMMAND_BUFFERS: usize = 4096;
 /// counting down from MAX_BUFFERS - 1.
 pub const MAX_BUFFERS: u32 = 31;
 
+/// Create an `MTLLogState` that forwards shader `debugPrintf` messages to the
+/// `log` crate, or the error reported by Metal if the log state could not be
+/// created.
+fn create_debug_printf_log_state(
+    device: &ProtocolObject<dyn MTLDevice>,
+) -> Result<Retained<ProtocolObject<dyn MTLLogState>>, Retained<NSError>> {
+    let log_desc = MTLLogStateDescriptor::new();
+    log_desc.setLevel(MTLLogLevel::Debug);
+
+    let log_state = device.newLogStateWithDescriptor_error(&log_desc)?;
+
+    let handler = StackBlock::new(
+        |_subsystem: *mut NSString,
+         _category: *mut NSString,
+         _level: MTLLogLevel,
+         message: NonNull<NSString>| {
+            // SAFETY: message is NonNull<NSString>.
+            let message = unsafe { message.as_ref() }.to_string();
+            log::info!("[shader debugPrintf] {message}");
+        },
+    );
+
+    // SAFETY: addLogHandler copies the block, so we don't need to keep it alive.
+    unsafe { log_state.addLogHandler(&handler) };
+
+    Ok(log_state)
+}
+
 impl super::Adapter {
     pub(super) fn new(shared: Arc<super::AdapterShared>) -> Self {
         Self { shared }
@@ -71,11 +102,30 @@ impl crate::Adapter for super::Adapter {
         _memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         autoreleasepool(|_| {
-            let queue = self
-                .shared
-                .device
-                .newCommandQueueWithMaxCommandBufferCount(MAX_COMMAND_BUFFERS)
-                .unwrap();
+            let device = &self.shared.device;
+
+            let cq_desc = MTLCommandQueueDescriptor::new();
+            // SAFETY: MAX_COMMAND_BUFFERS is a reasonable number of buffers.
+            unsafe {
+                cq_desc.setMaxCommandBufferCount(MAX_COMMAND_BUFFERS);
+            }
+
+            let use_debug_printf = features.contains(wgt::Features::DEBUG_PRINTF)
+                && self.shared.private_caps.supports_debug_printf;
+            self.shared
+                .use_debug_printf
+                .store(use_debug_printf, atomic::Ordering::Relaxed);
+
+            if use_debug_printf {
+                match create_debug_printf_log_state(device) {
+                    Ok(log_state) => cq_desc.setLogState(Some(&log_state)),
+                    Err(err) => log::warn!(
+                        "Failed to create an MTLLogState, debugPrintf output will not be captured: {err:?}"
+                    ),
+                }
+            }
+
+            let queue = device.newCommandQueueWithDescriptor(&cq_desc).unwrap();
 
             // Acquiring the meaning of timestamp ticks is hard with Metal!
             // The only thing there is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
@@ -1180,6 +1230,7 @@ impl super::CapabilitiesQuery {
                 tvos = 16.0,
                 visionos = 1.0
             ),
+            supports_debug_printf: msl_version >= MTLLanguageVersion::Version3_2,
         }
     }
 
@@ -1330,6 +1381,7 @@ impl super::CapabilitiesQuery {
         features.set(F::EXPERIMENTAL_RAY_QUERY, self.supports_raytracing);
 
         features.set(F::MULTISAMPLE_ARRAY, self.supports_multisample_array);
+        features.set(F::DEBUG_PRINTF, self.supports_debug_printf);
 
         features
     }
@@ -1567,6 +1619,7 @@ impl super::CapabilitiesQuery {
             timestamp_query_support: self.timestamp_query_support,
             supports_memoryless_storage: self.supports_memoryless_storage,
             mesh_shaders: self.mesh_shaders,
+            supports_debug_printf: self.supports_debug_printf,
         }
     }
 

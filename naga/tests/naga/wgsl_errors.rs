@@ -5406,6 +5406,81 @@ fn fs_main(@location(0) @interpolate(per_vertex) v: array<f32, 3>) -> @location(
     );
 }
 
+#[test]
+fn debug_printf_enable_extension() {
+    check_extension_validation!(
+        Capabilities::DEBUG_PRINTF,
+        r#"@compute @workgroup_size(1)
+fn main() {
+    debugPrintf("debug value: %d", 1i);
+}
+
+        "#,
+        r#"error: the `wgpu_debug_printf` enable extension is not enabled
+  ┌─ wgsl:3:5
+  │
+3 │     debugPrintf("debug value: %d", 1i);
+  │     ^^^^^^^^^^^ the `wgpu_debug_printf` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_debug_printf;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::MissingCapability(Capabilities::DEBUG_PRINTF)
+            ),
+            ..
+        })
+    );
+}
+
+#[test]
+fn debug_printf_rejects_string_literal_outside_call() {
+    check_error_matches(
+        r#"enable wgpu_debug_printf;
+
+@compute @workgroup_size(1)
+fn main() {
+    let _value = "not a debugPrintf format";
+}
+"#,
+        "String literals are only supported in debugPrintf",
+    );
+}
+
+#[test]
+fn debug_printf_rejects_non_literal_format() {
+    check_error_matches(
+        r#"enable wgpu_debug_printf;
+
+@compute @workgroup_size(1)
+fn main() {
+    debugPrintf(1i);
+}
+"#,
+        "debugPrintf's first argument must be a string literal",
+    );
+}
+
+#[test]
+fn debug_printf_rejects_vector_argument() {
+    check_validation! {
+        r#"enable wgpu_debug_printf;
+
+@compute @workgroup_size(1)
+fn main() {
+    debugPrintf("debug value: %v2f", vec2f(1.0, 2.0));
+}
+"#: Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::InvalidDebugPrintfArgument(_)
+            ),
+            ..
+        }),
+        Capabilities::DEBUG_PRINTF
+    }
+}
+
 /// Checks that every ray tracing pipeline binding in naga is invalid in other stages.
 #[test]
 fn check_ray_tracing_pipeline_bindings() {

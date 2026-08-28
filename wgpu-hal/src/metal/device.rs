@@ -1,5 +1,5 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::{mem::align_of, ptr::NonNull};
+use core::{mem::align_of, ptr::NonNull, sync::atomic};
 
 use bytemuck::TransparentWrapper;
 use objc2::{
@@ -275,6 +275,10 @@ impl super::Device {
                 // https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance
                 if available!(macos = 11.0, ios = 13.0, tvos = 14.0, visionos = 1.0) {
                     options.setPreserveInvariance(true);
+                }
+
+                if self.shared.use_debug_printf.load(atomic::Ordering::Relaxed) {
+                    options.setEnableLogging(true);
                 }
 
                 let library = self

@@ -3,6 +3,7 @@ mod buffer;
 mod buffer_mapping;
 mod buffer_slice;
 mod command_buffer_actions;
+mod debug_printf;
 mod device;
 mod encoding;
 mod error_scopes;

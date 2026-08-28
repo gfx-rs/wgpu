@@ -83,6 +83,21 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         return vk::FALSE;
     }
 
+    // The validation layers deliver the output of a shader's `debugPrintf` through the
+    // regular debug messenger callback, rather than through a dedicated channel.
+    //the layers tag them with this magic `messageIdNumber`, which they document precisely so that
+    // callbacks like this one can pick them out.
+    // See https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/main/docs/debug_printf.md
+    const DEBUG_PRINTF_MESSAGE_ID: i32 = 0x4fe1fef9;
+    if cd.message_id_number == DEBUG_PRINTF_MESSAGE_ID {
+        let message =
+            unsafe { cd.message_as_c_str() }.map_or(Cow::Borrowed(""), CStr::to_string_lossy);
+
+        log::info!("[shader debugPrintf] {}", message);
+
+        return vk::FALSE;
+    }
+
     let level = match message_severity {
         // We intentionally suppress info messages down to debug
         // so that users are not innundated with info messages from the runtime.
@@ -346,7 +361,7 @@ impl super::Instance {
             extensions.push(khr::get_display_properties2::NAME);
         }
 
-        if flags.contains(wgt::InstanceFlags::DEBUG) {
+        if flags.intersects(wgt::InstanceFlags::DEBUG | wgt::InstanceFlags::DEBUG_PRINTF) {
             // VK_EXT_debug_utils
             extensions.push(ext::debug_utils::NAME);
         }
@@ -861,6 +876,20 @@ impl super::Instance {
             .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
             && validation_features_are_enabled;
 
+        // Debug printf is implemented on top of the same shader instrumentation as
+        // GPU-assisted validation, so it needs the validation layers to be present. Older
+        // validation layers refused to run the two at once; current ones don't, so we ask
+        // for both if both were requested and let the layers sort it out.
+        let should_enable_debug_printf = desc.flags.intersects(wgt::InstanceFlags::DEBUG_PRINTF)
+            && validation_features_are_enabled;
+
+        if desc.flags.intersects(wgt::InstanceFlags::DEBUG_PRINTF) && !should_enable_debug_printf {
+            log::warn!(
+                "InstanceFlags::DEBUG_PRINTF was requested, but shader debug printf output will \
+                 not be captured: it requires the validation layers, which are not available."
+            );
+        }
+
         let has_nv_optimus = find_layer(&instance_layers, c"VK_LAYER_NV_optimus").is_some();
 
         let has_obs_layer = find_layer(&instance_layers, c"VK_LAYER_OBS_HOOK").is_some();
@@ -989,7 +1018,7 @@ impl super::Instance {
 
             // Enable explicit validation features if available
             let mut validation_features;
-            let mut validation_feature_list: ArrayVec<_, 3>;
+            let mut validation_feature_list: ArrayVec<_, 4>;
             if validation_features_are_enabled {
                 validation_feature_list = ArrayVec::new();
 
@@ -1002,6 +1031,11 @@ impl super::Instance {
                     validation_feature_list.push(vk::ValidationFeatureEnableEXT::GPU_ASSISTED);
                     validation_feature_list
                         .push(vk::ValidationFeatureEnableEXT::GPU_ASSISTED_RESERVE_BINDING_SLOT);
+                }
+
+                // Only capture shader `debugPrintf` output if requested.
+                if should_enable_debug_printf {
+                    validation_feature_list.push(vk::ValidationFeatureEnableEXT::DEBUG_PRINTF);
                 }
 
                 validation_features = vk::ValidationFeaturesEXT::default()

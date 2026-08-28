@@ -300,6 +300,7 @@ impl<W: Write> Writer<W> {
             ray_tracing_pipeline: bool,
             per_vertex: bool,
             binding_array: bool,
+            debug_printf: bool,
         }
         let mut needed = RequiredEnabled {
             mesh_shaders: module.uses_mesh_shaders(),
@@ -430,6 +431,8 @@ impl<W: Write> Writer<W> {
             needed.ray_tracing_pipeline = true;
         }
 
+        needed.debug_printf = module.uses_debug_printf();
+
         // Write required declarations
         let mut any_written = false;
         if needed.f16 {
@@ -474,6 +477,10 @@ impl<W: Write> Writer<W> {
         }
         if needed.per_vertex {
             writeln!(self.out, "enable wgpu_per_vertex;")?;
+            any_written = true;
+        }
+        if needed.debug_printf {
+            writeln!(self.out, "enable wgpu_debug_printf;")?;
             any_written = true;
         }
         if any_written {
@@ -1217,6 +1224,17 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, ");")?
                 }
             },
+            Statement::DebugPrintf {
+                ref format,
+                ref arguments,
+            } => {
+                write!(self.out, "{level}debugPrintf(\"{}\"", format)?;
+                for &arg in arguments {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, arg, func_ctx)?;
+                }
+                writeln!(self.out, ");")?;
+            }
         }
 
         Ok(())
