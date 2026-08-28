@@ -472,10 +472,11 @@ pub struct Texture {
     pub copy_size: CopyExtent,
 
     /// `Some` marks the underlying GL object as externally owned: wgpu-hal
-    /// never deletes it (the guard's callback, if any, fires instead). On
-    /// WebGL, imported handles additionally occupy a slot in glow's resource
-    /// tracker, which `destroy_texture` reclaims via
-    /// `unregister_external_texture`.
+    /// never deletes it (the guard's callback, if any, fires instead).
+    ///
+    /// On WebGL every handle also holds a slot in glow's resource tracker.
+    /// `destroy_texture` always releases that slot: by deleting the texture
+    /// when we own it, or by `unregister_external_texture` when we don't.
     ///
     /// The `drop_guard` field must be the last field of this struct so it is
     /// dropped last. Do not add new fields after it.
