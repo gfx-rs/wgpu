@@ -441,7 +441,10 @@ impl super::Writer {
     }
 
     /// This writes the actual loop
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     fn write_mesh_copy_loop(
         &mut self,
         body: &mut Vec<Instruction>,

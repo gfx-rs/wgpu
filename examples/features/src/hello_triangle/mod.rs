@@ -35,7 +35,10 @@ enum TriangleAction {
     Initialized(WgpuState),
 }
 
-#[expect(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "variant size is inherent to the schema"
+)]
 enum AppState {
     Uninitialized,
     Loading,

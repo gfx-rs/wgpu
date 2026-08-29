@@ -103,7 +103,10 @@ impl fmt::Debug for InternalCounter {
 }
 
 /// `wgpu-hal`'s part of [`InternalCounters`].
-#[allow(missing_docs)]
+#[allow(
+    missing_docs,
+    reason = "kept for internal items not part of the public API"
+)]
 #[derive(Clone, Debug, Default)]
 pub struct HalCounters {
     // API objects

@@ -271,7 +271,10 @@ crate::impl_parent_device!(Queue);
 crate::impl_storage_item!(Queue);
 
 impl Drop for Queue {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("Queue::drop");
         api_log!("Queue::drop {:?}", self as *const _);
@@ -1247,7 +1250,10 @@ impl Queue {
         // same way as `HTMLCanvasElement`.
         needs_flag |= source.origin != wgt::Origin2d::ZERO;
         needs_flag |= destination.color_space != wgt::PredefinedColorSpace::Srgb;
-        #[allow(clippy::bool_comparison)]
+        #[allow(
+            clippy::bool_comparison,
+            reason = "kept for explicitness at the guard site"
+        )]
         if matches!(source.source, wgt::ExternalImageSource::ImageBitmap(_)) {
             needs_flag |= source.flip_y != false;
             needs_flag |= destination.premultiplied_alpha != false;
@@ -1988,7 +1994,10 @@ impl Queue {
         self.lock_life().add_work_done_closure(closure)
     }
 
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     pub fn compact_blas(&self, blas: &Arc<Blas>) -> (Arc<Blas>, Option<CompactBlasError>) {
         api_log!(
             "Queue::compact_blas {:?}, {:?}",

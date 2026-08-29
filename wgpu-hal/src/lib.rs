@@ -239,7 +239,7 @@
 )]
 
 extern crate alloc;
-#[allow(unused_extern_crates)]
+#[allow(unused_extern_crates, reason = "kept for feature-gated usage")]
 extern crate naga_types as nt;
 extern crate wgpu_types as wgt;
 // Each of these backends needs `std` in some fashion; usually `std::thread` functions.
@@ -293,7 +293,7 @@ pub use dynamic::{
     DynTextureView,
 };
 
-#[allow(unused)]
+#[allow(unused, reason = "kept for tooling/other backends")]
 use alloc::boxed::Box;
 use alloc::{borrow::Cow, string::String, vec::Vec};
 use core::{
@@ -1067,7 +1067,10 @@ pub trait Device: WasmNotSendSync {
     ) -> Result<<Self::A as Api>::PipelineLayout, DeviceError>;
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: <Self::A as Api>::PipelineLayout);
 
-    #[allow(clippy::type_complexity)]
+    #[allow(
+        clippy::type_complexity,
+        reason = "kept as it reads clearer with the concrete type"
+    )]
     unsafe fn create_bind_group(
         &self,
         desc: &BindGroupDescriptor<
@@ -1087,7 +1090,10 @@ pub trait Device: WasmNotSendSync {
     ) -> Result<<Self::A as Api>::ShaderModule, ShaderError>;
     unsafe fn destroy_shader_module(&self, module: <Self::A as Api>::ShaderModule);
 
-    #[allow(clippy::type_complexity)]
+    #[allow(
+        clippy::type_complexity,
+        reason = "kept as it reads clearer with the concrete type"
+    )]
     unsafe fn create_render_pipeline(
         &self,
         desc: &RenderPipelineDescriptor<
@@ -1098,7 +1104,10 @@ pub trait Device: WasmNotSendSync {
     ) -> Result<<Self::A as Api>::RenderPipeline, PipelineError>;
     unsafe fn destroy_render_pipeline(&self, pipeline: <Self::A as Api>::RenderPipeline);
 
-    #[allow(clippy::type_complexity)]
+    #[allow(
+        clippy::type_complexity,
+        reason = "kept as it reads clearer with the concrete type"
+    )]
     unsafe fn create_compute_pipeline(
         &self,
         desc: &ComputePipelineDescriptor<
@@ -1109,7 +1118,10 @@ pub trait Device: WasmNotSendSync {
     ) -> Result<<Self::A as Api>::ComputePipeline, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: <Self::A as Api>::ComputePipeline);
 
-    #[allow(clippy::type_complexity)]
+    #[allow(
+        clippy::type_complexity,
+        reason = "kept as it reads clearer with the concrete type"
+    )]
     unsafe fn create_ray_tracing_pipeline(
         &self,
         desc: &RayTracingPipelineDescriptor<
@@ -1196,7 +1208,7 @@ pub trait Device: WasmNotSendSync {
     /// [api]: ../wgpu/struct.Device.html#method.stop_graphics_debugger_capture
     unsafe fn stop_graphics_debugger_capture(&self);
 
-    #[allow(unused_variables)]
+    #[allow(unused_variables, reason = "kept for API symmetry across backends")]
     unsafe fn pipeline_cache_get_data(
         &self,
         cache: &<Self::A as Api>::PipelineCache,

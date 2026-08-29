@@ -6,7 +6,7 @@ use crate::proc::overloads::one_bits_iter::OneBitsIter;
 macro_rules! define_scalar_set {
     { $( $scalar:ident, )* } => {
         /// An enum used to assign distinct bit numbers to [`ScalarSet`] elements.
-        #[expect(non_camel_case_types, clippy::upper_case_acronyms)]
+        #[expect(non_camel_case_types, clippy::upper_case_acronyms, reason = "kept to mirror spec acronym casing")]
         #[repr(u32)]
         enum ScalarSetBits {
             $( $scalar, )*
@@ -38,7 +38,7 @@ macro_rules! define_scalar_set {
 
         impl ScalarSet {
             /// Return the set of scalars containing only `scalar`.
-            #[expect(dead_code)]
+            #[expect(dead_code, reason = "used by some feature/backend combinations or not yet wired up")]
             pub const fn singleton(scalar: Scalar) -> Self {
                 match scalar {
                     $(

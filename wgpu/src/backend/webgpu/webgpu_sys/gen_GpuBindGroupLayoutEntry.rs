@@ -181,7 +181,10 @@ impl GpuBindGroupLayoutEntry {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new(binding: u32, visibility: u32) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_binding(binding);
         ret.set_visibility(visibility);

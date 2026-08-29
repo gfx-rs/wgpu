@@ -741,7 +741,10 @@ impl Dx12SwapchainKind {
 
 /// DXC shader model.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
-#[allow(missing_docs)]
+#[allow(
+    missing_docs,
+    reason = "kept for internal items not part of the public API"
+)]
 pub enum DxcShaderModel {
     V6_0,
     V6_1,

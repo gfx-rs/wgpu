@@ -1406,7 +1406,10 @@ pub struct RenderBundle {
 }
 
 impl Drop for RenderBundle {
-    #[expect(trivial_casts)]
+    #[expect(
+        trivial_casts,
+        reason = "casts kept explicit for type clarity across feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("RenderBundle::drop");
         api_log!("RenderBundle::drop {:?}", self as *const _);

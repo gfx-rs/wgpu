@@ -97,7 +97,10 @@ use wgpu_core::{
     resource::{Buffer, ExternalTexture, QuerySet, Sampler, Texture, TextureView},
 };
 
-#[allow(rustdoc::private_intra_doc_links)]
+#[allow(
+    rustdoc::private_intra_doc_links,
+    reason = "links to private items kept for convenience"
+)]
 /// All the resources tracked by a [`crate::global::Global`].
 ///
 /// Each field in [`Hub`] is a [`Registry`] holding all the values of a

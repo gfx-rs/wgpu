@@ -975,7 +975,7 @@ enum Command {
     },
     CopyBufferToTexture {
         src: Buffer,
-        #[allow(unused)]
+        #[allow(unused, reason = "kept for tooling/other backends")]
         src_target: BindTarget,
         dst: glow::Texture,
         dst_target: BindTarget,
@@ -987,7 +987,7 @@ enum Command {
         src_target: BindTarget,
         src_format: wgt::TextureFormat,
         dst: Buffer,
-        #[allow(unused)]
+        #[allow(unused, reason = "kept for tooling/other backends")]
         dst_target: BindTarget,
         copy: crate::BufferTextureCopy,
     },

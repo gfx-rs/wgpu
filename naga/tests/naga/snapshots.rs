@@ -4,7 +4,7 @@ use naga_test::*;
 const DIR_IN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/in");
 const DIR_OUT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/out");
 
-#[allow(unused_variables)]
+#[allow(unused_variables, reason = "kept for API symmetry across backends")]
 fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&str>) {
     let params = input.read_parameters(DIR_IN);
     let name = input.file_name.display().to_string();
@@ -418,7 +418,10 @@ fn write_output_msl(
     input.write_output_file("msl", "metal", string, DIR_OUT);
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "kept for API compatibility and readability"
+)]
 fn write_output_glsl(
     input: &Input,
     module: &naga::Module,

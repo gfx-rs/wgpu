@@ -122,7 +122,10 @@ impl GpuFragmentState {
         module: &GpuShaderModule,
         targets: &[::js_sys::JsNullable<GpuColorTargetState>],
     ) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_module(module);
         ret.set_targets(targets);

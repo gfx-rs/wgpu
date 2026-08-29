@@ -154,7 +154,10 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
     let target_tex = ctx.device.create_texture(&target_desc);
     let color_attachment_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
-    #[allow(clippy::type_complexity)]
+    #[allow(
+        clippy::type_complexity,
+        reason = "kept as it reads clearer with the concrete type"
+    )]
     let recording_ops: Vec<(_, Box<dyn Fn(&mut CommandEncoder)>)> = vec![
         (
             "begin_compute_pass",

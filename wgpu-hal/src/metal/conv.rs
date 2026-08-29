@@ -359,7 +359,10 @@ pub fn map_render_stages(stage: wgt::ShaderStages) -> MTLRenderStages {
 
 pub fn map_resource_usage(ty: &wgt::BindingType) -> MTLResourceUsage {
     match ty {
-        #[allow(deprecated)]
+        #[allow(
+            deprecated,
+            reason = "kept to support the API through the deprecation cycle"
+        )]
         wgt::BindingType::Texture { .. } => MTLResourceUsage::Sample,
         wgt::BindingType::StorageTexture { access, .. } => match access {
             wgt::StorageTextureAccess::WriteOnly => MTLResourceUsage::Write,

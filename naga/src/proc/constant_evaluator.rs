@@ -186,7 +186,7 @@ macro_rules! gen_component_wise_extractor {
 
         with_dollar_sign! {
             ($d:tt) => {
-                #[allow(unused)]
+                #[allow(unused, reason = "kept for tooling/other backends")]
                 #[doc = concat!(
                     "A convenience macro for using the same RHS for each [`",
                     stringify!($target),
@@ -377,7 +377,10 @@ impl LiteralVector {
         })
     }
 
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     /// Returns [`ArrayVec`] of [`Literal`]s
     fn to_literal_vec(&self) -> ArrayVec<Literal, { crate::VectorSize::MAX }> {
         macro_rules! decompose_literals {
@@ -405,7 +408,10 @@ impl LiteralVector {
         }
     }
 
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     /// Puts self into eval's expressions arena and returns handle to it
     fn register_as_evaluated_expr(
         &self,
@@ -605,7 +611,7 @@ macro_rules! match_literal_vector {
     ) => {
         match $lit_vec {
             $(
-                #[allow(unused_parens)]
+                #[allow(unused_parens, reason = "parens kept for grouping clarity")]
                 ($(LiteralVector::$ty(ref $var)),+) => { Ok(match_literal_vector!(@expand_ret $out; $ty $(; $ret)? ; $body)) }
             )+
             _ => Err(ConstantEvaluatorError::InvalidMathArg),
@@ -1785,7 +1791,10 @@ impl<'a> ConstantEvaluator<'a> {
             // bits
             crate::MathFunction::CountTrailingZeros => {
                 component_wise_concrete_int!(self, span, [arg], |e| {
-                    #[allow(clippy::useless_conversion)]
+                    #[allow(
+                        clippy::useless_conversion,
+                        reason = "conversion kept explicit for clarity"
+                    )]
                     Ok([e
                         .trailing_zeros()
                         .try_into()
@@ -1794,7 +1803,10 @@ impl<'a> ConstantEvaluator<'a> {
             }
             crate::MathFunction::CountLeadingZeros => {
                 component_wise_concrete_int!(self, span, [arg], |e| {
-                    #[allow(clippy::useless_conversion)]
+                    #[allow(
+                        clippy::useless_conversion,
+                        reason = "conversion kept explicit for clarity"
+                    )]
                     Ok([e
                         .leading_zeros()
                         .try_into()
@@ -1803,7 +1815,10 @@ impl<'a> ConstantEvaluator<'a> {
             }
             crate::MathFunction::CountOneBits => {
                 component_wise_concrete_int!(self, span, [arg], |e| {
-                    #[allow(clippy::useless_conversion)]
+                    #[allow(
+                        clippy::useless_conversion,
+                        reason = "conversion kept explicit for clarity"
+                    )]
                     Ok([e
                         .count_ones()
                         .try_into()

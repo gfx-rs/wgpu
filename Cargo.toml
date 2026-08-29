@@ -67,9 +67,10 @@ missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]
 ref_as_ptr = "warn"
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
 # NOTE: clippy configuration values (disallowed-types and
 # large-error-threshold) are in other file: clippy.toml
-
 [workspace.package]
 edition = "2021"
 rust-version = "1.93"

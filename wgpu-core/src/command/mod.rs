@@ -522,7 +522,10 @@ crate::impl_parent_device!(CommandEncoder);
 crate::impl_storage_item!(CommandEncoder);
 
 impl Drop for CommandEncoder {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("CommandEncoder::drop");
         api_log!("CommandEncoder::drop {:?}", self as *const _);
@@ -893,7 +896,10 @@ pub struct CommandBuffer {
 }
 
 impl Drop for CommandBuffer {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("CommandBuffer::drop");
         api_log!("CommandBuffer::drop {:?}", self as *const _);

@@ -238,7 +238,10 @@ enum UniformAction {
     Initialized(WgpuContext),
 }
 
-#[expect(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "variant size is inherent to the schema"
+)]
 enum RunState {
     Uninitialized,
     Loading,

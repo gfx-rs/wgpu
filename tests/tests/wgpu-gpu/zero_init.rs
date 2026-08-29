@@ -16,7 +16,10 @@ use wgpu_test::{
 
 /// A way to write data into a texture.
 #[derive(Clone, Copy)]
-#[allow(clippy::enum_variant_names)]
+#[allow(
+    clippy::enum_variant_names,
+    reason = "variants names differ for API clarity"
+)]
 enum WriteMethod {
     WriteTexture,
     CopyBufferToTexture,

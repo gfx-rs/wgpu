@@ -34,7 +34,10 @@ impl<T, U> Default for HandleVec<T, U> {
     }
 }
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "used by some feature/backend combinations or not yet wired up"
+)]
 impl<T, U> HandleVec<T, U> {
     pub(crate) const fn new() -> Self {
         Self {

@@ -325,7 +325,10 @@ pub enum GPUGenericError {
 
 pub enum GPUPipelineErrorReason {
   Validation,
-  #[expect(dead_code)]
+  #[expect(
+    dead_code,
+    reason = "used by some feature/backend combinations or not yet wired up"
+  )]
   Internal,
 }
 

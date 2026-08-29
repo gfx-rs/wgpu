@@ -85,7 +85,10 @@ async fn run_test(ctx: TestingContext, use_many_writes: bool) {
 
     let mut wrong_texels = Vec::new();
     for (zyx_index, cube) in texel_iter(&texture).enumerate() {
-        #[allow(clippy::cast_possible_wrap)]
+        #[allow(
+            clippy::cast_possible_wrap,
+            reason = "wrap is checked/guarded at the call site"
+        )]
         let expected = texel_for_cube(cube);
         let actual = light_texels[zyx_index];
         if expected != actual {

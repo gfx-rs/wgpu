@@ -2425,7 +2425,10 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Notes
     /// Doesn't add any newlines or leading/trailing spaces
-    #[allow(clippy::large_stack_frames)] // TODO(https://github.com/gfx-rs/wgpu/issues/9456)
+    #[allow(
+        clippy::large_stack_frames,
+        reason = "legitimate recursive/stack use, tracked in #9456"
+    )] // TODO(https://github.com/gfx-rs/wgpu/issues/9456)
     fn write_expr(
         &mut self,
         expr: Handle<crate::Expression>,
@@ -4083,7 +4086,10 @@ impl<'a, W: Write> Writer<'a, W> {
     }
 
     /// Helper method for writing an `ImageLoad` expression.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     fn write_image_load(
         &mut self,
         handle: Handle<crate::Expression>,

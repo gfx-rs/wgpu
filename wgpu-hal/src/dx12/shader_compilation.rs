@@ -175,7 +175,10 @@ impl FxcLib {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     fn compile(
         &self,
         source: &str,
@@ -328,7 +331,10 @@ unsafe fn dxc_create_instance<T: DxcObj>(
 }
 
 /// Owned PCWSTR
-#[allow(clippy::upper_case_acronyms)]
+#[allow(
+    clippy::upper_case_acronyms,
+    reason = "kept to match the spec/source acronym casing"
+)]
 struct OPCWSTR {
     inner: Vec<u16>,
 }

@@ -38,7 +38,10 @@ use crate::{
 const NAGA_LOCATION_SEMANTIC: &[u8] = c"LOC".to_bytes();
 
 impl super::Device {
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     pub(super) fn new(
         adapter: auxil::dxgi::factory::DxgiAdapter,
         raw: Direct3D12::ID3D12Device,
@@ -1415,7 +1418,7 @@ impl crate::Device for super::Device {
             // it so if we add more later, the value behaves correctly.
 
             // This is an allow as it doesn't trigger on 1.90, hal's MSRV.
-            #[allow(unused_assignments)]
+            #[allow(unused_assignments, reason = "kept for side effects / uniform shape")]
             {
                 bind_cbv.register += 1;
             }

@@ -242,7 +242,10 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
-    #[expect(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     pub(super) fn write_initialize_function(
         &mut self,
         module: &crate::Module,

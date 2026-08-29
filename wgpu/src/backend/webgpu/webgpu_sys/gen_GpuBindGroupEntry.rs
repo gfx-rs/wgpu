@@ -126,7 +126,10 @@ impl GpuBindGroupEntry {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new(binding: u32, resource: &GpuSampler) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_binding(binding);
         ret.set_resource(resource);
@@ -140,7 +143,10 @@ impl GpuBindGroupEntry {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new_with_gpu_texture(binding: u32, resource: &GpuTexture) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_binding(binding);
         ret.set_resource_gpu_texture(resource);
@@ -154,7 +160,10 @@ impl GpuBindGroupEntry {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new_with_gpu_texture_view(binding: u32, resource: &GpuTextureView) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_binding(binding);
         ret.set_resource_gpu_texture_view(resource);
@@ -168,7 +177,10 @@ impl GpuBindGroupEntry {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new_with_gpu_buffer(binding: u32, resource: &GpuBuffer) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_binding(binding);
         ret.set_resource_gpu_buffer(resource);
@@ -182,7 +194,10 @@ impl GpuBindGroupEntry {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new_with_gpu_buffer_binding(binding: u32, resource: &GpuBufferBinding) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_binding(binding);
         ret.set_resource_gpu_buffer_binding(resource);
@@ -196,7 +211,10 @@ impl GpuBindGroupEntry {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new_with_gpu_external_texture(binding: u32, resource: &GpuExternalTexture) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_binding(binding);
         ret.set_resource_gpu_external_texture(resource);

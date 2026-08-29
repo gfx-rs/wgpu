@@ -63,7 +63,10 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
     if !hunks_in_a_released_section.is_empty() {
         failed = true;
 
-        #[expect(clippy::uninlined_format_args)]
+        #[expect(
+            clippy::uninlined_format_args,
+            reason = "kept for older MSRV readability"
+        )]
         {
             eprintln!(
                 "Found hunk(s) in released sections of `{}`, which we don't want:\n",
@@ -84,7 +87,10 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
     }
 
     if failed {
-        #[expect(clippy::uninlined_format_args)]
+        #[expect(
+            clippy::uninlined_format_args,
+            reason = "kept for older MSRV readability"
+        )]
         let msg = format!(
             "one or more checks against `{}` failed; see above for details",
             CHANGELOG_PATH_RELATIVE,

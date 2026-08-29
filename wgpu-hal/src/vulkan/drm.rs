@@ -22,7 +22,10 @@ impl drm::Device for Card {}
 
 macro_rules! to_u64 {
     ($expr:expr) => {{
-        #[allow(trivial_numeric_casts)]
+        #[allow(
+            trivial_numeric_casts,
+            reason = "casts kept explicit for width clarity"
+        )]
         let expr = $expr as u64;
         assert!(size_of_val(&expr) <= size_of::<u64>());
         expr
@@ -180,7 +183,10 @@ impl super::Instance {
             //   `st_rdev` is `c_ulonglong`. So, we can't just do a `==` comparison.
             // - OpenBSD has `dev_t` on both sides, but is `i32` (N.B., unsigned). Therefore, we
             //   can't just use `u64::from`.
-            #[allow(clippy::useless_conversion)]
+            #[allow(
+                clippy::useless_conversion,
+                reason = "conversion kept explicit for clarity"
+            )]
             if [primary_devid, render_devid]
                 .map(|devid| to_u64!(devid))
                 .contains(&to_u64!(drm_stat.st_rdev))

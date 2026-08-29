@@ -80,7 +80,7 @@ impl From<&BindingType> for BindingTypeName {
 
 #[derive(Debug)]
 struct Resource {
-    #[allow(unused)]
+    #[allow(unused, reason = "kept for tooling/other backends")]
     name: Option<String>,
     bind: naga::ResourceBinding,
     ty: ResourceType,
@@ -406,7 +406,10 @@ pub struct PassthroughInterface {
 // Most shaders will use a standard interface which is very large.
 // Passthrough shaders have a much smaller interface. No reason to
 // box the standard interface though.
-#[expect(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "variant size is inherent to the schema"
+)]
 #[derive(Debug)]
 pub enum ShaderMetaData {
     Interface(Interface),

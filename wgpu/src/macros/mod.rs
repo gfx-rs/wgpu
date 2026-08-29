@@ -127,7 +127,10 @@ macro_rules! include_spirv {
 }
 
 #[cfg(all(feature = "spirv", test))]
-#[expect(dead_code)]
+#[expect(
+    dead_code,
+    reason = "used by some feature/backend combinations or not yet wired up"
+)]
 static SPIRV: crate::ShaderModuleDescriptor<'_> = include_spirv!("le-aligned.spv");
 
 /// Macro to load raw SPIR-V data statically, for use with [`Features::PASSTHROUGH_SHADERS`].
@@ -159,7 +162,10 @@ macro_rules! include_spirv_raw {
 }
 
 #[cfg(test)]
-#[expect(dead_code)]
+#[expect(
+    dead_code,
+    reason = "used by some feature/backend combinations or not yet wired up"
+)]
 static SPIRV_RAW: crate::ShaderModuleDescriptorPassthrough<'_> =
     include_spirv_raw!("le-aligned.spv");
 

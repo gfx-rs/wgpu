@@ -100,15 +100,30 @@ fn affine_to_rows(mat: &Affine3A) -> [f32; 12] {
 
 struct Example {
     rt_target: wgpu::Texture,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     rt_view: wgpu::TextureView,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     sampler: wgpu::Sampler,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     uniform_buf: wgpu::Buffer,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     vertex_buf: wgpu::Buffer,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     index_buf: wgpu::Buffer,
     tlas: wgpu::Tlas,
     compute_pipeline: wgpu::ComputePipeline,

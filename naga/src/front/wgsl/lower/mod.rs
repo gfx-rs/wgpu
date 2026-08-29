@@ -256,7 +256,10 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
         }
     }
 
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     const fn as_global(&mut self) -> GlobalContext<'a, '_, '_> {
         GlobalContext {
             enable_extensions: self.enable_extensions,
@@ -434,7 +437,10 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         }
     }
 
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     const fn as_const(&mut self) -> ExpressionContext<'source, '_, '_> {
         ExpressionContext {
             enable_extensions: self.enable_extensions,
@@ -3042,7 +3048,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     }
 
     /// Generate Naga IR for a call to a WGSL builtin function.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     fn call_builtin<'phrase>(
         &mut self,
         function_name: &'source str,

@@ -486,7 +486,10 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     pub(super) fn parse_image_sample(
         &mut self,
         mut words_left: u16,

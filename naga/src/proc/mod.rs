@@ -710,7 +710,10 @@ impl crate::Module {
     /// treated as expressions elsewhere, but that requires mutably modifying the
     /// module and the expressions should only be created at parse time, not validation
     /// time.
-    #[allow(clippy::type_complexity)]
+    #[allow(
+        clippy::type_complexity,
+        reason = "kept as it reads clearer with the concrete type"
+    )]
     pub fn analyze_mesh_shader_info(
         &self,
         gv: crate::Handle<crate::GlobalVariable>,

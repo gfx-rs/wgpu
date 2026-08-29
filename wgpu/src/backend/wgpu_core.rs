@@ -276,7 +276,10 @@ fn map_texture_copy_view(
     }
 }
 
-#[cfg_attr(not(webgl), expect(unused))]
+#[cfg_attr(
+    not(webgl),
+    expect(unused, reason = "cfg-gated out of the webgl build")
+)]
 fn map_texture_tagged_copy_view(
     view: crate::CopyExternalImageDestInfo<&api::Texture>,
 ) -> wgt::CopyExternalImageDestInfo<Arc<wgc::resource::Texture>> {

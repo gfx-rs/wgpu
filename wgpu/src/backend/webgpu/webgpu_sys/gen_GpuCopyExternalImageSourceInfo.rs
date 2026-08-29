@@ -180,7 +180,10 @@ impl GpuCopyExternalImageSourceInfo {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new(source: &ImageBitmap) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_source(source);
         ret
@@ -193,7 +196,10 @@ impl GpuCopyExternalImageSourceInfo {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new_with_image_data(source: &ImageData) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_source_image_data(source);
         ret
@@ -206,7 +212,10 @@ impl GpuCopyExternalImageSourceInfo {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new_with_html_image_element(source: &HtmlImageElement) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_source_html_image_element(source);
         ret
@@ -219,7 +228,10 @@ impl GpuCopyExternalImageSourceInfo {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new_with_html_video_element(source: &HtmlVideoElement) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_source_html_video_element(source);
         ret
@@ -232,7 +244,10 @@ impl GpuCopyExternalImageSourceInfo {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new_with_video_frame(source: &VideoFrame) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_source_video_frame(source);
         ret
@@ -245,7 +260,10 @@ impl GpuCopyExternalImageSourceInfo {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new_with_html_canvas_element(source: &HtmlCanvasElement) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_source_html_canvas_element(source);
         ret
@@ -258,7 +276,10 @@ impl GpuCopyExternalImageSourceInfo {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new_with_offscreen_canvas(source: &OffscreenCanvas) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_source_offscreen_canvas(source);
         ret

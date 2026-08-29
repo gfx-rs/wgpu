@@ -1017,7 +1017,10 @@ mod tests {
 
     /// Test that slicing correctly panics on an out-of-bounds range.
     #[test]
-    #[expect(clippy::reversed_empty_ranges)]
+    #[expect(
+        clippy::reversed_empty_ranges,
+        reason = "kept as the range intent is clear here"
+    )]
     fn slice_bounds_check_failures() {
         // RangeBounds isn’t dyn compatible, so we can’t make a list of test cases and have to
         // use a generic function.

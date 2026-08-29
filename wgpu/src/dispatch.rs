@@ -75,7 +75,10 @@ pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>)
 pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + 'static>;
 
 // remove when rust 1.86
-#[cfg_attr(not(custom), expect(dead_code))]
+#[cfg_attr(
+    not(custom),
+    expect(dead_code, reason = "cfg-gated out of the custom driver build")
+)]
 pub trait AsAny {
     fn as_any(&self) -> &dyn Any;
 }
@@ -750,7 +753,7 @@ macro_rules! dispatch_types {
             Core($core_type),
             #[cfg(webgpu)]
             WebGPU($webgpu_type),
-            #[allow(clippy::allow_attributes, private_interfaces)]
+            #[allow(clippy::allow_attributes, private_interfaces, reason = "allow_attributes not yet enabled workspace-wide")]
             #[cfg(custom)]
             Custom($custom_type),
         }
@@ -758,7 +761,7 @@ macro_rules! dispatch_types {
         impl $name {
             #[cfg(wgpu_core)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_core(&self) -> &$core_type {
                 match self {
                     Self::Core(value) => value,
@@ -768,7 +771,7 @@ macro_rules! dispatch_types {
 
             #[cfg(wgpu_core)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_core_opt(&self) -> Option<&$core_type> {
                 match self {
                     Self::Core(value) => Some(value),
@@ -778,7 +781,7 @@ macro_rules! dispatch_types {
 
             #[cfg(custom)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_custom<T: $interface>(&self) -> Option<&T> {
                 match self {
                     Self::Custom(value) => value.downcast(),
@@ -788,7 +791,7 @@ macro_rules! dispatch_types {
 
             #[cfg(webgpu)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_webgpu(&self) -> &$webgpu_type {
                 match self {
                     Self::WebGPU(value) => value,
@@ -798,7 +801,7 @@ macro_rules! dispatch_types {
 
             #[cfg(webgpu)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_webgpu_opt(&self) -> Option<&$webgpu_type> {
                 match self {
                     Self::WebGPU(value) => Some(value),
@@ -856,7 +859,7 @@ macro_rules! dispatch_types {
             Core($core_type),
             #[cfg(webgpu)]
             WebGPU($webgpu_type),
-            #[allow(clippy::allow_attributes, private_interfaces)]
+            #[allow(clippy::allow_attributes, private_interfaces, reason = "allow_attributes not yet enabled workspace-wide")]
             #[cfg(custom)]
             Custom($custom_type),
         }
@@ -864,7 +867,7 @@ macro_rules! dispatch_types {
         impl $name {
             #[cfg(wgpu_core)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_core(&self) -> &$core_type {
                 match self {
                     Self::Core(value) => value,
@@ -874,7 +877,7 @@ macro_rules! dispatch_types {
 
             #[cfg(wgpu_core)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_core_mut(&mut self) -> &mut $core_type {
                 match self {
                     Self::Core(value) => value,
@@ -884,7 +887,7 @@ macro_rules! dispatch_types {
 
             #[cfg(wgpu_core)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_core_opt(&self) -> Option<&$core_type> {
                 match self {
                     Self::Core(value) => Some(value),
@@ -894,7 +897,7 @@ macro_rules! dispatch_types {
 
             #[cfg(wgpu_core)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_core_mut_opt(
                 &mut self,
             ) -> Option<&mut $core_type> {
@@ -906,7 +909,7 @@ macro_rules! dispatch_types {
 
             #[cfg(custom)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_custom<T: $interface>(&self) -> Option<&T> {
                 match self {
                     Self::Custom(value) => value.downcast(),
@@ -916,7 +919,7 @@ macro_rules! dispatch_types {
 
             #[cfg(webgpu)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_webgpu(&self) -> &$webgpu_type {
                 match self {
                     Self::WebGPU(value) => value,
@@ -926,7 +929,7 @@ macro_rules! dispatch_types {
 
             #[cfg(webgpu)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_webgpu_mut(&mut self) -> &mut $webgpu_type {
                 match self {
                     Self::WebGPU(value) => value,
@@ -936,7 +939,7 @@ macro_rules! dispatch_types {
 
             #[cfg(webgpu)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_webgpu_opt(&self) -> Option<&$webgpu_type> {
                 match self {
                     Self::WebGPU(value) => Some(value),
@@ -946,7 +949,7 @@ macro_rules! dispatch_types {
 
             #[cfg(webgpu)]
             #[inline]
-            #[allow(clippy::allow_attributes, unused)]
+            #[allow(clippy::allow_attributes, unused, reason = "allow_attributes not yet enabled workspace-wide")]
             pub fn as_webgpu_mut_opt(
                 &mut self,
             ) -> Option<&mut $webgpu_type> {

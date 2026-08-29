@@ -550,7 +550,7 @@ impl Surface {
 #[derive(Debug, Clone, Copy)]
 enum MemoryArchitecture {
     Unified {
-        #[allow(unused)]
+        #[allow(unused, reason = "kept for tooling/other backends")]
         cache_coherent: bool,
     },
     NonUnified,
@@ -560,7 +560,7 @@ enum MemoryArchitecture {
 struct PrivateCapabilities {
     instance_flags: wgt::InstanceFlags,
     workarounds: Workarounds,
-    #[allow(unused)]
+    #[allow(unused, reason = "kept for tooling/other backends")]
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
     heap_create_not_zeroed: bool,

@@ -146,7 +146,7 @@ impl TimestampNormalizer {
                 })
             })?;
             #[cfg(not(feature = "wgsl"))]
-            #[allow(clippy::diverging_sub_expression)]
+            #[allow(clippy::diverging_sub_expression, reason = "kept for codegen clarity")]
             let module =
                 panic!("Timestamp normalization requires the wgsl feature flag to be enabled!");
 

@@ -275,7 +275,10 @@ mod compat {
                 .filter_map(|(i, e)| if e.is_valid() { Some(i) } else { None })
         }
 
-        #[allow(clippy::result_large_err)]
+        #[allow(
+            clippy::result_large_err,
+            reason = "error size kept as it is inherent to the error type"
+        )]
         pub fn get_invalid(&self) -> Result<(), (usize, Error)> {
             for (index, entry) in self.entries.iter().enumerate() {
                 entry.check().map_err(|e| (index, e))?;

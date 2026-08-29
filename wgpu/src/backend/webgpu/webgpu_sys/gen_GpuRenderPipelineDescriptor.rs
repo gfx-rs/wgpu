@@ -183,7 +183,10 @@ impl GpuRenderPipelineDescriptor {
     #[doc = "*This API is unstable and requires `--cfg=web_sys_unstable_apis` to be activated, as"]
     #[doc = "[described in the `wasm-bindgen` guide](https://wasm-bindgen.github.io/wasm-bindgen/web-sys/unstable-apis.html)*"]
     pub fn new(layout: &GpuPipelineLayout, vertex: &GpuVertexState) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_layout(layout);
         ret.set_vertex(vertex);
@@ -200,7 +203,10 @@ impl GpuRenderPipelineDescriptor {
         layout: GpuAutoLayoutMode,
         vertex: &GpuVertexState,
     ) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "intended by the macro/derived code that requires it"
+        )]
         let mut ret: Self = ::wasm_bindgen::JsCast::unchecked_into(::js_sys::Object::new());
         ret.set_layout_gpu_auto_layout_mode(layout);
         ret.set_vertex(vertex);

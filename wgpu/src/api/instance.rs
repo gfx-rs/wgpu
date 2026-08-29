@@ -63,7 +63,11 @@ impl Instance {
     ///
     /// - If no backend feature for the active target platform is enabled,
     ///   this method will panic; see [`Instance::enabled_backend_features()`].
-    #[allow(clippy::allow_attributes, unreachable_code)]
+    #[allow(
+        clippy::allow_attributes,
+        unreachable_code,
+        reason = "allow_attributes not yet enabled workspace-wide"
+    )]
     pub fn new(desc: InstanceDescriptor) -> Self {
         if Self::enabled_backend_features().is_empty() {
             panic!(

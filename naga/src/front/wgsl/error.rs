@@ -652,7 +652,10 @@ impl<'a> Error<'a> {
     #[inline(never)]
     // This function is not recursive, so it can exceed our conservatively-set
     // `stack-frame-limit` without causing problems.
-    #[allow(clippy::large_stack_frames)]
+    #[allow(
+        clippy::large_stack_frames,
+        reason = "legitimate recursive/stack use, tracked in #9456"
+    )]
     pub(crate) fn as_parse_error(&self, source: &'a str) -> ParseError {
         // This function normally produces a lot of binary bloat, so has been structured in a
         // non-idiomatic way to minimize its size.

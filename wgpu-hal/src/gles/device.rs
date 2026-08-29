@@ -1852,7 +1852,7 @@ impl crate::Device for super::Device {
             self.render_doc
                 .start_frame_capture(self.shared.context.raw_context(), ptr::null_mut())
         };
-        #[allow(unreachable_code)]
+        #[allow(unreachable_code, reason = "kept behind feature/version gates")]
         false
     }
     unsafe fn stop_graphics_debugger_capture(&self) {

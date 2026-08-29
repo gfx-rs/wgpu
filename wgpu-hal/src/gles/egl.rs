@@ -30,7 +30,10 @@ type EglInstance = khronos_egl::Instance<khronos_egl::Static>;
 
 type EglLabel = *const ffi::c_void;
 
-#[allow(clippy::upper_case_acronyms)]
+#[allow(
+    clippy::upper_case_acronyms,
+    reason = "kept to match the spec/source acronym casing"
+)]
 type EGLDEBUGPROCKHR = Option<
     unsafe extern "system" fn(
         error: khronos_egl::Enum,
@@ -275,7 +278,10 @@ struct EglContextLock<'a> {
 }
 
 /// A guard containing a lock to an [`AdapterContext`], while the GL context is kept current.
-#[expect(missing_debug_implementations)]
+#[expect(
+    missing_debug_implementations,
+    reason = "kept for the public API surface"
+)]
 pub struct AdapterContextLock<'a> {
     glow: MutexGuard<'a, ManuallyDrop<glow::Context>>,
     egl: Option<EglContextLock<'a>>,
@@ -1115,7 +1121,7 @@ pub struct Swapchain {
     extent: wgt::Extent3d,
     format: wgt::TextureFormat,
     format_desc: super::TextureFormatDesc,
-    #[allow(unused)]
+    #[allow(unused, reason = "kept for tooling/other backends")]
     sample_type: wgt::TextureSampleType,
 }
 

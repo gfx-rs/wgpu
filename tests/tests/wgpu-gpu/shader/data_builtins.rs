@@ -7,7 +7,10 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([UNPACK4xU8, UNPACK4xI8, PACK4xU8, PACK4xI8]);
 }
 
-#[allow(non_snake_case)]
+#[allow(
+    non_snake_case,
+    reason = "kept to mirror the source specification naming"
+)]
 fn create_unpack4xU8_test() -> Vec<ShaderTest> {
     let mut tests = Vec::new();
 
@@ -44,7 +47,10 @@ static UNPACK4xU8: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(ctx, InputStorageType::Storage, create_unpack4xU8_test())
     });
 
-#[allow(non_snake_case)]
+#[allow(
+    non_snake_case,
+    reason = "kept to mirror the source specification naming"
+)]
 fn create_unpack4xI8_test() -> Vec<ShaderTest> {
     let mut tests = Vec::with_capacity(2);
 
@@ -88,7 +94,10 @@ static UNPACK4xI8: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(ctx, InputStorageType::Storage, create_unpack4xI8_test())
     });
 
-#[allow(non_snake_case)]
+#[allow(
+    non_snake_case,
+    reason = "kept to mirror the source specification naming"
+)]
 fn create_pack4xU8_test() -> Vec<ShaderTest> {
     let mut tests = Vec::new();
 
@@ -117,7 +126,10 @@ static PACK4xU8: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(ctx, InputStorageType::Storage, create_pack4xU8_test())
     });
 
-#[allow(non_snake_case)]
+#[allow(
+    non_snake_case,
+    reason = "kept to mirror the source specification naming"
+)]
 fn create_pack4xI8_test() -> Vec<ShaderTest> {
     let mut tests = Vec::with_capacity(2);
 

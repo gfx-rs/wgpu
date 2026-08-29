@@ -207,7 +207,10 @@ impl Frontend {
         })
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     fn matrix_one_arg(
         &mut self,
         ctx: &mut Context,
@@ -869,7 +872,10 @@ impl Frontend {
 
     /// Processes a function call argument that appears in place of an output
     /// parameter.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     fn process_lhs_argument(
         &mut self,
         ctx: &mut Context,

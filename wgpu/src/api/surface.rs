@@ -508,7 +508,10 @@ pub(crate) enum CreateSurfaceErrorKind {
     Hal(wgc::instance::CreateSurfaceError),
 
     /// Error from WebGPU surface creation.
-    #[cfg_attr(not(webgpu), expect(dead_code))]
+    #[cfg_attr(
+        not(webgpu),
+        expect(dead_code, reason = "cfg-gated out of the webgpu build")
+    )]
     Web(String),
 
     /// Error when trying to get a [`RawDisplayHandle`][rdh] or a

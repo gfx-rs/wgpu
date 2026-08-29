@@ -190,7 +190,10 @@ impl super::Device {
 
                 let options = naga::back::msl::Options {
                     lang_version: match self.shared.private_caps.msl_version {
-                        #[allow(deprecated)]
+                        #[allow(
+                            deprecated,
+                            reason = "kept to support the API through the deprecation cycle"
+                        )]
                         MTLLanguageVersion::Version1_0 => (1, 0),
                         MTLLanguageVersion::Version1_1 => (1, 1),
                         MTLLanguageVersion::Version1_2 => (1, 2),
@@ -1347,7 +1350,10 @@ impl crate::Device for super::Device {
                     }
                 };
             }
-            #[allow(non_snake_case)]
+            #[allow(
+                non_snake_case,
+                reason = "kept to mirror the source specification naming"
+            )]
             impl MetalGenericRenderPipelineDescriptor {
                 unsafe fn setFragmentFunction(
                     &self,
@@ -1722,7 +1728,10 @@ impl crate::Device for super::Device {
                 //TODO: handle sample mask
                 match descriptor {
                     MetalGenericRenderPipelineDescriptor::Standard(ref inner) => {
-                        #[allow(deprecated)]
+                        #[allow(
+                            deprecated,
+                            reason = "kept to support the API through the deprecation cycle"
+                        )]
                         inner.setSampleCount(desc.multisample.count as _);
                     }
                     MetalGenericRenderPipelineDescriptor::Mesh(ref inner) => {
@@ -2059,7 +2068,10 @@ impl crate::Device for super::Device {
         let shared_capture_manager = unsafe { MTLCaptureManager::sharedCaptureManager() };
         let default_capture_scope = shared_capture_manager.newCaptureScopeWithDevice(device);
         shared_capture_manager.setDefaultCaptureScope(Some(&default_capture_scope));
-        #[allow(deprecated)]
+        #[allow(
+            deprecated,
+            reason = "kept to support the API through the deprecation cycle"
+        )]
         shared_capture_manager.startCaptureWithScope(&default_capture_scope);
         default_capture_scope.beginScope();
         true

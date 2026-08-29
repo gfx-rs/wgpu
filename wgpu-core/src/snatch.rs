@@ -5,7 +5,13 @@ use crate::lock::{rank, RankData, RwLock, RwLockReadGuard, RwLockWriteGuard};
 /// A guard that provides read access to snatchable data.
 pub struct SnatchGuard<'a>(RwLockReadGuard<'a, ()>);
 /// A guard that allows snatching the snatchable data.
-pub struct ExclusiveSnatchGuard<'a>(#[expect(dead_code)] RwLockWriteGuard<'a, ()>);
+pub struct ExclusiveSnatchGuard<'a>(
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
+    RwLockWriteGuard<'a, ()>,
+);
 
 /// A value that is mostly immutable but can be "snatched" if we need to destroy
 /// it early.
@@ -26,7 +32,10 @@ impl<T> Snatchable<T> {
         }
     }
 
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub fn empty() -> Self {
         SnatchableInner {
             value: UnsafeCell::new(None),

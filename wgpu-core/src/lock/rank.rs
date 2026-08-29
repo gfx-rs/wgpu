@@ -57,7 +57,7 @@ macro_rules! define_lock_ranks {
         )*
     } => {
         // An enum that assigns a unique number to each rank.
-        #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
+        #[allow(non_camel_case_types, clippy::upper_case_acronyms, reason = "kept to mirror spec acronym casing")]
         enum LockRankNumber { $( $name, )* }
 
         bitflags::bitflags! {

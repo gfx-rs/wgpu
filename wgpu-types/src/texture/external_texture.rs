@@ -25,7 +25,10 @@ pub enum ExternalTextureFormat {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, bytemuck::Zeroable, bytemuck::Pod)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[allow(missing_docs)]
+#[allow(
+    missing_docs,
+    reason = "kept for internal items not part of the public API"
+)]
 pub struct ExternalTextureTransferFunction {
     pub a: f32,
     pub b: f32,

@@ -778,7 +778,10 @@ impl super::Instruction {
     //
     //  Ray Query Instructions
     //
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     pub(super) fn ray_query_initialize(
         query: Word,
         acceleration_structure: Word,
@@ -869,7 +872,10 @@ impl super::Instruction {
     //  Ray Tracing Pipeline Instructions
     //
 
-    #[expect(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     pub(super) fn trace_ray(
         acceleration_structure: Word,
         ray_flags: Word,

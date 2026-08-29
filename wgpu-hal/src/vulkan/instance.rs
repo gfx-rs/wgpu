@@ -387,7 +387,10 @@ impl super::Instance {
     ///
     /// If `debug_utils_user_data` is `Some`, then the validation layer is
     /// available, so create a [`vk::DebugUtilsMessengerEXT`].
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     pub unsafe fn from_raw(
         entry: ash::Entry,
         raw_instance: ash::Instance,

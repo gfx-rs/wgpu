@@ -3,7 +3,10 @@
 use alloc::borrow::Cow;
 use core::mem;
 
-#[cfg_attr(not(any(feature = "spirv", doc)), expect(unused_imports))]
+#[cfg_attr(
+    not(any(feature = "spirv", doc)),
+    expect(unused_imports, reason = "cfg-gated out of the spirv build")
+)]
 use crate::ShaderSource;
 
 #[cfg(doc)]
@@ -75,7 +78,13 @@ const fn assert_has_spirv_magic_number_and_length(bytes: &[u8]) -> bool {
     }
 }
 
-#[cfg_attr(not(feature = "spirv"), expect(rustdoc::broken_intra_doc_links))]
+#[cfg_attr(
+    not(feature = "spirv"),
+    expect(
+        rustdoc::broken_intra_doc_links,
+        reason = "cfg-gated out of the spirv build"
+    )
+)]
 /// Version of [`make_spirv()`] intended for use with
 /// [`Device::create_shader_module_passthrough()`].
 ///

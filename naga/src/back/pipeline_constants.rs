@@ -21,7 +21,7 @@ use crate::{
 };
 
 // Possibly unused if not compiled with no_std
-#[allow(unused_imports)]
+#[allow(unused_imports, reason = "kept for feature-gated use")]
 use num_traits::float::FloatCore as _;
 
 #[derive(Error, Debug, Clone)]

@@ -503,7 +503,10 @@ impl<'a> Context<'a> {
                 vector = pointer;
             }
 
-            #[allow(clippy::needless_range_loop)]
+            #[allow(
+                clippy::needless_range_loop,
+                reason = "loop kept for clarity of index math"
+            )]
             for index in 0..size {
                 let dst = self.add_expression(
                     Expression::AccessIndex {
@@ -540,7 +543,10 @@ impl<'a> Context<'a> {
     }
 
     /// Internal implementation of [`lower`](Self::lower)
-    #[allow(clippy::large_stack_frames)] // TODO(https://github.com/gfx-rs/wgpu/issues/9456)
+    #[allow(
+        clippy::large_stack_frames,
+        reason = "legitimate recursive/stack use, tracked in #9456"
+    )] // TODO(https://github.com/gfx-rs/wgpu/issues/9456)
     fn lower_inner(
         &mut self,
         stmt: &StmtContext,

@@ -1111,7 +1111,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     /// A more complicated version of the binary op,
     /// where we force the operand to have the same type as the result.
     /// This is mostly needed for "i++" and "i--" coming from GLSL.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     fn parse_expr_binary_op_sign_adjusted(
         &mut self,
         ctx: &mut BlockContext,
@@ -1189,7 +1192,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     /// A version of the binary op where one or both of the arguments might need to be casted to a
     /// specific integer kind (unsigned or signed), used for operations like OpINotEqual or
     /// OpUGreaterThan.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     fn parse_expr_int_comparison(
         &mut self,
         ctx: &mut BlockContext,
@@ -1337,7 +1343,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     fn insert_composite(
         &self,
         root_expr: Handle<crate::Expression>,
@@ -1461,7 +1470,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         Ok((p_lexp_handle, p_base_ty.handle))
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     fn parse_atomic_expr_with_value(
         &mut self,
         inst: Instruction,

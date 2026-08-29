@@ -235,6 +235,7 @@
     // These degrade readability significantly.
     clippy::bool_assert_comparison,
     clippy::bool_comparison,
+    reason = "investigated separately",
 )]
 // NOTE: Keep this in sync with `wgpu-core`.
 #![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
@@ -303,7 +304,10 @@ pub use wgt::{
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_ALIGNMENT,
 };
 
-#[expect(deprecated)]
+#[expect(
+    deprecated,
+    reason = "kept to support the API through the deprecation cycle"
+)]
 pub use wgt::VERTEX_STRIDE_ALIGNMENT;
 
 // wasm-only types, we try to keep as many types non-platform

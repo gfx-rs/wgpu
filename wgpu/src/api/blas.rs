@@ -245,28 +245,58 @@ impl Blas {
 }
 
 /// Context version of [BlasTriangleGeometry].
-#[expect(missing_debug_implementations)]
+#[expect(
+    missing_debug_implementations,
+    reason = "kept for the public API surface"
+)]
 pub struct ContextBlasTriangleGeometry<'a> {
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) size: &'a BlasTriangleGeometrySizeDescriptor,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) vertex_buffer: &'a dispatch::DispatchBuffer,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) index_buffer: Option<&'a dispatch::DispatchBuffer>,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) transform_buffer: Option<&'a dispatch::DispatchBuffer>,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) first_vertex: u32,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) vertex_stride: wgt::BufferAddress,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) index_buffer_offset: Option<wgt::BufferAddress>,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) transform_buffer_offset: Option<wgt::BufferAddress>,
 }
 
 /// Context version of [BlasGeometries].
-#[expect(missing_debug_implementations)]
+#[expect(
+    missing_debug_implementations,
+    reason = "kept for the public API surface"
+)]
 pub enum ContextBlasGeometries<'a> {
     /// Triangle geometries.
     TriangleGeometries(Box<dyn Iterator<Item = ContextBlasTriangleGeometry<'a>> + 'a>),
@@ -275,24 +305,48 @@ pub enum ContextBlasGeometries<'a> {
 }
 
 /// Context version of [BlasAabbGeometry].
-#[expect(missing_debug_implementations)]
+#[expect(
+    missing_debug_implementations,
+    reason = "kept for the public API surface"
+)]
 pub struct ContextBlasAabbGeometry<'a> {
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) size: &'a BlasAABBGeometrySizeDescriptor,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) stride: wgt::BufferAddress,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) aabb_buffer: &'a dispatch::DispatchBuffer,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) primitive_offset: u32,
 }
 
 /// Context version see [BlasBuildEntry].
-#[expect(missing_debug_implementations)]
+#[expect(
+    missing_debug_implementations,
+    reason = "kept for the public API surface"
+)]
 pub struct ContextBlasBuildEntry<'a> {
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) blas: &'a dispatch::DispatchBlas,
-    #[expect(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) geometries: ContextBlasGeometries<'a>,
 }
 

@@ -464,7 +464,10 @@ pub struct Buffer {
 }
 
 impl Drop for Buffer {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("Buffer::drop");
         api_log!("Buffer::drop {:?}", self as *const _);
@@ -1396,7 +1399,10 @@ impl StagingBuffer {
     pub(crate) fn flush(self) -> FlushedStagingBuffer {
         let device = self.device.raw();
         if !self.is_coherent {
-            #[allow(clippy::single_range_in_vec_init)]
+            #[allow(
+                clippy::single_range_in_vec_init,
+                reason = "range kept explicit for readability"
+            )]
             unsafe {
                 device.flush_mapped_ranges(self.raw.as_ref(), &[0..self.size.get()])
             };
@@ -1585,7 +1591,10 @@ impl Texture {
 }
 
 impl Drop for Texture {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("Texture::drop");
         api_log!("Texture::drop {:?}", self as *const _);
@@ -2470,7 +2479,10 @@ pub struct TextureView {
 }
 
 impl Drop for TextureView {
-    #[expect(trivial_casts)]
+    #[expect(
+        trivial_casts,
+        reason = "casts kept explicit for type clarity across feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("TextureView::drop");
         api_log!("TextureView::drop {:?}", self as *const _);
@@ -2738,7 +2750,10 @@ pub struct ExternalTexture {
 }
 
 impl Drop for ExternalTexture {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("ExternalTexture::drop");
         api_log!("ExternalTexture::drop {:?}", self as *const _);
@@ -2894,7 +2909,10 @@ pub struct Sampler {
 }
 
 impl Drop for Sampler {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("Sampler::drop");
         api_log!("Sampler::drop {:?}", self as *const _);
@@ -3129,7 +3147,10 @@ impl QuerySet {
 }
 
 impl Drop for QuerySet {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("QuerySet::drop");
         api_log!("QuerySet::drop {:?}", self as *const _);
@@ -3252,7 +3273,10 @@ pub struct Blas {
 }
 
 impl Drop for Blas {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("Blas::drop");
         api_log!("Blas::drop {:?}", self as *const _);
@@ -3486,7 +3510,10 @@ pub struct Tlas {
 }
 
 impl Drop for Tlas {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("Tlas::drop");
         api_log!("Tlas::drop {:?}", self as *const _);

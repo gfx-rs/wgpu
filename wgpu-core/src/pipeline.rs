@@ -40,7 +40,10 @@ pub(crate) struct LateSizedBufferGroup {
     pub(crate) shader_sizes: Vec<wgt::BufferAddress>,
 }
 
-#[allow(clippy::large_enum_variant)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "variant size is inherent to the schema"
+)]
 pub enum ShaderModuleSource<'a> {
     #[cfg(feature = "wgsl")]
     Wgsl(Cow<'a, str>),
@@ -81,7 +84,10 @@ pub struct ShaderModule {
 }
 
 impl Drop for ShaderModule {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("ShaderModule::drop");
         api_log!("ShaderModule::drop {:?}", self as *const _);
@@ -377,7 +383,10 @@ pub struct ComputePipeline {
 }
 
 impl Drop for ComputePipeline {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("ComputePipeline::drop");
         api_log!("ComputePipeline::drop {:?}", self as *const _);
@@ -500,7 +509,10 @@ pub struct PipelineCache {
 }
 
 impl Drop for PipelineCache {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("PipelineCache::drop");
         api_log!("PipelineCache::drop {:?}", self as *const _);
@@ -1044,7 +1056,10 @@ pub struct RenderPipeline {
 }
 
 impl Drop for RenderPipeline {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("RenderPipeline::drop");
         api_log!("RenderPipeline::drop {:?}", self as *const _);

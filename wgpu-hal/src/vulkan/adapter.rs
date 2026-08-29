@@ -19,7 +19,10 @@ const INDEXING_FEATURES: wgt::Features = wgt::Features::TEXTURE_BINDING_ARRAY
     .union(wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING)
     .union(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS)
     .union(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY);
-#[expect(rustdoc::private_intra_doc_links)]
+#[expect(
+    rustdoc::private_intra_doc_links,
+    reason = "links to private items kept for convenience"
+)]
 /// Features supported by a [`vk::PhysicalDevice`] and its extensions.
 ///
 /// This is used in two phases:
@@ -2609,7 +2612,10 @@ impl super::Adapter {
     /// - `enabled_extensions` must be a superset of `required_device_extensions()`.
     /// - If `drop_callback` is [`None`], wgpu-hal will take ownership of `raw_device`. If
     ///   `drop_callback` is [`Some`], `raw_device` must be valid until the callback is called.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "kept for API compatibility and readability"
+    )]
     pub unsafe fn device_from_raw(
         &self,
         raw_device: ash::Device,

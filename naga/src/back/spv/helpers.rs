@@ -45,7 +45,10 @@ pub(super) fn debug_str_bytes_to_words(bytes: &[u8]) -> Vec<Word> {
 }
 
 /// split a string into chunks and keep utf8 valid
-#[allow(unstable_name_collisions)]
+#[allow(
+    unstable_name_collisions,
+    reason = "API naming matches the upstream unstable method"
+)]
 pub(super) fn string_to_byte_chunks(input: &str, limit: usize) -> Vec<&[u8]> {
     let mut offset: usize = 0;
     let mut start: usize = 0;
@@ -54,7 +57,10 @@ pub(super) fn string_to_byte_chunks(input: &str, limit: usize) -> Vec<&[u8]> {
         offset = input.floor_char_boundary_polyfill(offset + limit);
         // Clippy wants us to call as_bytes() first to avoid the UTF-8 check,
         // but we want to assert the output is valid UTF-8.
-        #[allow(clippy::sliced_string_as_bytes)]
+        #[allow(
+            clippy::sliced_string_as_bytes,
+            reason = "bytes form used intentionally for performance"
+        )]
         words.push(input[start..offset].as_bytes());
         start = offset;
     }

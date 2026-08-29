@@ -31,7 +31,10 @@ use crate::proc::TypeResolution;
 use alloc::vec::Vec;
 use core::fmt;
 
-#[expect(rustdoc::private_intra_doc_links)]
+#[expect(
+    rustdoc::private_intra_doc_links,
+    reason = "links to private items kept for convenience"
+)]
 /// A trait for types representing of a set of Naga IR type rules.
 ///
 /// Given an expression like `max(x, y)`, there are multiple type rules that

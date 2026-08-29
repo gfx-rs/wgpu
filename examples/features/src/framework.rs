@@ -351,7 +351,10 @@ enum AppAction {
     },
 }
 
-#[expect(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "variant size is inherent to the schema"
+)]
 enum AppState<E> {
     /// Waiting for the first `resumed()` call.
     Uninitialized,

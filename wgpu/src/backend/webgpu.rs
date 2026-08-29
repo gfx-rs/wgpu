@@ -2,7 +2,10 @@
 
 mod defined_non_null_js_value;
 mod ext_bindings;
-#[allow(clippy::allow_attributes)]
+#[allow(
+    clippy::allow_attributes,
+    reason = "needed until allow_attributes is enabled"
+)]
 pub(crate) mod webgpu_sys;
 
 use alloc::{

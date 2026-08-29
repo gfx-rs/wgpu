@@ -112,7 +112,10 @@ impl Data {
     }
 }
 
-#[allow(clippy::large_enum_variant)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "variant size is inherent to the schema"
+)]
 #[derive(Debug)]
 #[apply(serde_object_reference_struct)]
 pub enum Action<'a, R: ReferenceType> {

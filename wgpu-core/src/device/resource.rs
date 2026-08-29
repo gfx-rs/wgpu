@@ -364,7 +364,10 @@ impl Drop for DeviceResources<'_> {
 }
 
 impl Drop for Device {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {:?}", self as *const _);
@@ -1339,7 +1342,10 @@ impl Device {
                 // SAFETY: The buffer tail is valid and aligned.
                 mapping.ptr.cast::<u32>().as_ptr().write(0);
                 if !mapping.is_coherent {
-                    #[allow(clippy::single_range_in_vec_init)]
+                    #[allow(
+                        clippy::single_range_in_vec_init,
+                        reason = "range kept explicit for readability"
+                    )]
                     self.raw()
                         .flush_mapped_ranges(raw, &[tail_start..actual_size]);
                 }
@@ -1509,7 +1515,10 @@ impl Device {
         unsafe { core::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len()) };
 
         if !mapping.is_coherent {
-            #[allow(clippy::single_range_in_vec_init)]
+            #[allow(
+                clippy::single_range_in_vec_init,
+                reason = "range kept explicit for readability"
+            )]
             unsafe {
                 device
                     .raw()

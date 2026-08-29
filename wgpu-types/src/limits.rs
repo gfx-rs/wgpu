@@ -1043,7 +1043,10 @@ impl Limits {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DownlevelLimits {}
 
-#[allow(clippy::derivable_impls)]
+#[allow(
+    clippy::derivable_impls,
+    reason = "manual impl kept for explicit control"
+)]
 impl Default for DownlevelLimits {
     fn default() -> Self {
         DownlevelLimits {}

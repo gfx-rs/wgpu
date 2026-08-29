@@ -65,7 +65,10 @@ impl<A: hal::Api> ExecutionContext<A> {
     }
 }
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "used by some feature/backend combinations or not yet wired up"
+)]
 struct Example<A: hal::Api> {
     instance: A::Instance,
     adapter: A::Adapter,

@@ -84,7 +84,10 @@ where
         }
     }
 
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     pub(crate) fn iter(&self) -> impl Iterator<Item = (Id<T::Marker>, &T)> {
         self.map
             .iter()

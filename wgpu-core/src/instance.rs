@@ -1023,7 +1023,10 @@ impl Surface {
 }
 
 impl Drop for Surface {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("Surface::drop");
 
@@ -1301,7 +1304,10 @@ impl Adapter {
 }
 
 impl Drop for Adapter {
-    #[allow(trivial_casts)]
+    #[allow(
+        trivial_casts,
+        reason = "kept for type-clarity across platform feature gates"
+    )]
     fn drop(&mut self) {
         profiling::scope!("Adapter::drop");
         api_log!("Adapter::drop {:?}", self as *const _);

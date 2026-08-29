@@ -377,7 +377,7 @@ impl crate::framework::Example for Example {
         }
     }
 
-    #[expect(clippy::single_match)]
+    #[expect(clippy::single_match, reason = "single arm kept for readability")]
     fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
             winit::event::WindowEvent::CursorMoved { position, .. } => {

@@ -493,7 +493,7 @@ static WGSL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new
     .run_sync(wgsl_test);
 
 fn all_passthrough_shaders_binary(ctx: TestingContext) {
-    #[allow(unused_variables)]
+    #[allow(unused_variables, reason = "kept for API symmetry across backends")]
     let test_hash = test_hash(&ctx, "all_passthrough_binary");
     let desc = CreateShaderModuleDescriptorPassthrough {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
@@ -531,7 +531,7 @@ static ALL_PASSTHROUGH_SHADERS_BINARY: GpuTestConfiguration = GpuTestConfigurati
     .run_sync(all_passthrough_shaders_binary);
 
 fn all_passthrough_shader_source(ctx: TestingContext) {
-    #[allow(unused_variables)]
+    #[allow(unused_variables, reason = "kept for API symmetry across backends")]
     let test_hash = test_hash(&ctx, "all_passthrough_source");
     let desc = CreateShaderModuleDescriptorPassthrough {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {
@@ -565,7 +565,7 @@ static ALL_PASSTHROUGH_SHADERS_SOURCE: GpuTestConfiguration = GpuTestConfigurati
     .run_sync(all_passthrough_shader_source);
 
 fn explicit_layout_validation(ctx: TestingContext) {
-    #[allow(unused_variables)]
+    #[allow(unused_variables, reason = "kept for API symmetry across backends")]
     let test_hash = test_hash(&ctx, "explicit_layout_validation");
     let desc = CreateShaderModuleDescriptorPassthrough {
         entry_points: Cow::Borrowed(&[wgpu::PassthroughShaderEntryPoint {

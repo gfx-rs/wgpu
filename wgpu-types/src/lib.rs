@@ -347,7 +347,10 @@ pub struct Color {
     pub a: f64,
 }
 
-#[allow(missing_docs)]
+#[allow(
+    missing_docs,
+    reason = "kept for internal items not part of the public API"
+)]
 impl Color {
     pub const TRANSPARENT: Self = Self {
         r: 0.0,

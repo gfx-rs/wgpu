@@ -1015,7 +1015,7 @@ macro_rules! check_one_validation {
     ( $source:expr, $pattern:pat $( if $guard:expr )? ) => {
         let source = $source;
         let error = validation_error($source, naga::valid::Capabilities::default());
-        #[allow(clippy::redundant_pattern_matching)]
+        #[allow(clippy::redundant_pattern_matching, reason = "pattern kept explicit for clarity")]
         if ! matches!(&error, $pattern $( if $guard )? ) {
             eprintln!("validation error does not match pattern:\n\
                        source code: {}\n\
@@ -1035,7 +1035,7 @@ macro_rules! check_one_validation {
     ( $source:expr, $pattern:pat $( if $guard:expr )?, $capabilities:expr ) => {
         let source = $source;
         let error = validation_error($source, $capabilities);
-        #[allow(clippy::redundant_pattern_matching)]
+        #[allow(clippy::redundant_pattern_matching, reason = "pattern kept explicit for clarity")]
         if ! matches!(&error, $pattern $( if $guard )? ) {
             eprintln!("validation error does not match pattern:\n\
                        source code: {}\n\
@@ -1088,7 +1088,7 @@ macro_rules! check_one_validation {
 /// and ray tracing pipelines.
 macro_rules! check_extension_validation {
     ( $caps:expr, $source:expr, $parse_err:expr, $val_err_pat:pat $(, $other_caps:expr)? ) => {
-        #[allow(unused_mut, unused_assignments)]
+        #[allow(unused_mut, unused_assignments, reason = "kept for generated/feature-gated code")]
         let mut other_caps = naga::valid::Capabilities::empty();
         $(other_caps = $other_caps;)?
         let caps = $caps;
@@ -1147,7 +1147,7 @@ macro_rules! check_extension_validation {
         let error = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), !(caps | other_caps))
             .validate(&module).map_err(|e|e.into_inner());
         let error = error.as_ref(); // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
-        #[allow(clippy::redundant_pattern_matching)]
+        #[allow(clippy::redundant_pattern_matching, reason = "pattern kept explicit for clarity")]
         if !matches!(error, $val_err_pat) {
             eprintln!(
                 concat!(

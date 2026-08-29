@@ -12,7 +12,10 @@ pub enum PresentationTimer {
     ///
     /// [`IPresentationManager`]: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Graphics/CompositionSwapchain/struct.IPresentationManager.html
     /// [`QueryInterruptTimePrecise()`]: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/WindowsProgramming/fn.QueryInterruptTimePrecise.html
-    #[allow(non_snake_case)]
+    #[allow(
+        non_snake_case,
+        reason = "kept to mirror the source specification naming"
+    )]
     IPresentationManager {
         fnQueryInterruptTimePrecise: unsafe extern "system" fn(*mut u64),
     },

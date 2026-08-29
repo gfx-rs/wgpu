@@ -224,7 +224,10 @@ bitflags!(
     }
 );
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "used by some feature/backend combinations or not yet wired up"
+)]
 struct CapabilitiesQuery {
     msl_version: MTLLanguageVersion,
     fragment_rw_storage: bool,
@@ -374,7 +377,10 @@ struct PrivateDisabilities {
     /// Near depth is not respected properly on some Intel GPUs.
     broken_viewport_near_depth: bool,
     /// Multi-target clears don't appear to work properly on Intel GPUs.
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     broken_layered_clear_image: bool,
 }
 
@@ -1130,7 +1136,10 @@ impl crate::DynShaderModule for ShaderModule {}
 
 #[derive(Debug)]
 struct PipelineStageInfo {
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "used by some feature/backend combinations or not yet wired up"
+    )]
     library: Option<Retained<ProtocolObject<dyn MTLLibrary>>>,
     immediates: Option<ImmediateDataInfo>,
 

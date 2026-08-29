@@ -534,7 +534,7 @@ fn create_validation_module(
         })
     })?;
     #[cfg(not(feature = "wgsl"))]
-    #[allow(clippy::diverging_sub_expression)]
+    #[allow(clippy::diverging_sub_expression, reason = "kept for codegen clarity")]
     let module = panic!("Indirect validation requires the wgsl feature flag to be enabled!");
 
     let info = crate::device::create_validator(

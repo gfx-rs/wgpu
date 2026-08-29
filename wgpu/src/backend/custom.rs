@@ -1,6 +1,9 @@
 //! Provides wrappers custom backend implementations
 
-#![allow(ambiguous_wide_pointer_comparisons)]
+#![allow(
+    ambiguous_wide_pointer_comparisons,
+    reason = "custom backend is a deprecated shim"
+)]
 
 pub use crate::dispatch::*;
 
@@ -22,7 +25,7 @@ macro_rules! dyn_type {
                 Self(Arc::new(t))
             }
 
-            #[allow(clippy::allow_attributes, dead_code)]
+            #[allow(clippy::allow_attributes, dead_code, reason = "allow_attributes not yet enabled workspace-wide")]
             pub(crate) fn downcast<T: $interface>(&self) -> Option<&T> {
                 self.0.as_ref().as_any().downcast_ref()
             }

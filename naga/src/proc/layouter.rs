@@ -167,7 +167,10 @@ impl Layouter {
         self.layouts.clear();
     }
 
-    #[expect(rustdoc::private_intra_doc_links)]
+    #[expect(
+        rustdoc::private_intra_doc_links,
+        reason = "links to private items kept for convenience"
+    )]
     /// Extend this `Layouter` with layouts for any new entries in `gctx.types`.
     ///
     /// Ensure that every type in `gctx.types` has a corresponding [TypeLayout]
@@ -181,7 +184,10 @@ impl Layouter {
     /// end can call this function at any time, passing its current type and
     /// constant arenas, and then assume that layouts are available for all
     /// types.
-    #[allow(clippy::or_fun_call)]
+    #[allow(
+        clippy::or_fun_call,
+        reason = "lazy eval avoided intentionally as cost is trivial"
+    )]
     pub fn update(&mut self, gctx: super::GlobalCtx) -> Result<(), LayoutError> {
         use crate::TypeInner as Ti;
 

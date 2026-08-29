@@ -157,7 +157,7 @@ macro_rules! gpu_test {
     ) => {
         $crate::macro_support::paste! {
             $( #[ $meta ] )*
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, reason = "kept to mirror the source specification naming")]
             $vis fn $static_name() -> $crate::GpuTestConfiguration {
                 struct S;
 

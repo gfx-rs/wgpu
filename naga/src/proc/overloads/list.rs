@@ -167,7 +167,7 @@ const fn len_to_full_mask(n: usize) -> u64 {
         reason = "This is a const function, which _sometimes_ gets called, \
             so this lint is _sometimes_ triggered, depending on feature set."
     )]
-    #[allow(clippy::panic)]
+    #[allow(clippy::panic, reason = "panic is the intended contract here")]
     if n >= 64 {
         panic!("List::rules can only hold up to 63 rules");
     }

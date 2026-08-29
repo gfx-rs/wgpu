@@ -1973,7 +1973,10 @@ pub enum RayQueryFunction {
         /// [`AccelerationStructure`]: TypeInner::AccelerationStructure
         acceleration_structure: Handle<Expression>,
 
-        #[allow(rustdoc::private_intra_doc_links)]
+        #[allow(
+            rustdoc::private_intra_doc_links,
+            reason = "links to private items kept for convenience"
+        )]
         /// A struct of detailed parameters for the ray query.
         ///
         /// This expression should have the struct type given in
@@ -2726,7 +2729,10 @@ pub enum MeshOutputTopology {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "used by some feature/backend combinations or not yet wired up"
+)]
 pub struct MeshStageInfo {
     /// The type of primitive outputted.
     pub topology: MeshOutputTopology,
@@ -2761,7 +2767,10 @@ pub enum RayPipelineFunction {
         /// [`AccelerationStructure`]: TypeInner::AccelerationStructure
         acceleration_structure: Handle<Expression>,
 
-        #[allow(rustdoc::private_intra_doc_links)]
+        #[allow(
+            rustdoc::private_intra_doc_links,
+            reason = "links to private items kept for convenience"
+        )]
         /// A struct of detailed parameters for the ray query.
         ///
         /// This expression should have the struct type given in

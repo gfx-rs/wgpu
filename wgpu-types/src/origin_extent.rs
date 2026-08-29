@@ -12,9 +12,15 @@ use crate::TextureDimension;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Origin2d {
-    #[allow(missing_docs)]
+    #[allow(
+        missing_docs,
+        reason = "kept for internal items not part of the public API"
+    )]
     pub x: u32,
-    #[allow(missing_docs)]
+    #[allow(
+        missing_docs,
+        reason = "kept for internal items not part of the public API"
+    )]
     pub y: u32,
 }
 
