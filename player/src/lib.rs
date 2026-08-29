@@ -6,7 +6,14 @@
 extern crate wgpu_core as wgc;
 extern crate wgpu_types as wgt;
 
-use std::{borrow::Cow, convert::Infallible, sync::Arc};
+use std::{
+    borrow::Cow,
+    convert::Infallible,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 use hashbrown::HashMap;
 
@@ -447,12 +454,23 @@ impl Player {
         &mut self,
         id: wgc::id::PointerId<wgc::id::markers::Texture>,
         surface: &Arc<wgc::instance::Surface>,
-    ) {
+    ) -> wgt::SurfaceStatus {
+        static SURFACE_ERROR_COUNT: AtomicUsize = AtomicUsize::new(0);
         let frame = surface
             .get_current_texture()
             .expect("get_current_texture error");
-        let texture = frame.texture.expect("did not obtain a surface texture");
-        self.textures.insert(id, texture);
+        if matches!(
+            frame.status,
+            wgt::SurfaceStatus::Good | wgt::SurfaceStatus::Suboptimal
+        ) {
+            let texture = frame.texture.expect("did not obtain a surface texture");
+            self.textures.insert(id, texture);
+        } else {
+            log::warn!("getCurrentTexture returned {:?}", frame.status);
+            let prev_error_count = SURFACE_ERROR_COUNT.fetch_add(1, Ordering::SeqCst);
+            assert!(prev_error_count <= 10, "Too many surface errors, giving up",);
+        }
+        frame.status
     }
 
     pub fn resolve_buffer_id(

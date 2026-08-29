@@ -9,13 +9,13 @@ use core::{
     fmt,
     mem::{self, ManuallyDrop},
     num::NonZeroU32,
-    sync::atomic::{AtomicBool, Ordering},
 };
 use hal::ShouldBeNonZeroExt;
 
 use arrayvec::ArrayVec;
 use bitflags::Flags;
 use smallvec::SmallVec;
+use wgpu_sync::atomic::{AtomicBool, Ordering};
 use wgpu_sync::OnceCell;
 use wgt::{
     math::align_to, ColorWrites, DeviceLostReason, TextureFormat, TextureSampleType,
@@ -66,10 +66,7 @@ use super::{
     ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
 
-#[cfg(supports_64bit_atomics)]
-use core::sync::atomic::AtomicU64;
-#[cfg(not(supports_64bit_atomics))]
-use portable_atomic::AtomicU64;
+use wgpu_sync::atomic::AtomicU64;
 
 pub(crate) struct CommandIndices {
     /// The index of the last command submission that was attempted.
@@ -1537,11 +1534,12 @@ impl Device {
         hal_texture: Box<dyn hal::DynTexture>,
         desc: &resource::TextureDescriptor,
         initial_state: wgt::TextureUses,
+        cleared: bool,
     ) -> (Arc<Texture>, Option<resource::CreateTextureError>) {
         profiling::scope!("Device::create_texture_from_hal");
 
         let (texture, error) =
-            match self.create_texture_from_hal_inner(hal_texture, desc, initial_state) {
+            match self.create_texture_from_hal_inner(hal_texture, desc, initial_state, cleared) {
                 Ok(texture) => (texture, None),
                 Err(e) => (Texture::invalid(self, desc), Some(e)),
             };
@@ -1569,14 +1567,29 @@ impl Device {
         hal_texture: Box<dyn hal::DynTexture>,
         desc: &resource::TextureDescriptor,
         initial_state: wgt::TextureUses,
+        cleared: bool,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
-        self.check_is_valid()?;
-
-        let format_features = self
-            .describe_format_features(desc.format)
-            .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
-
+        // Count the raw texture before validation so the error paths below can
+        // hand it back through `destroy_texture`. Merely dropping a hal texture
+        // does not release what it wraps — e.g. an imported WebGL handle would
+        // stay registered in glow's resource tracker forever.
         unsafe { self.raw().add_raw_texture(&*hal_texture) };
+
+        if let Err(error) = self.check_is_valid() {
+            unsafe { self.raw().destroy_texture(hal_texture) };
+            return Err(error.into());
+        }
+
+        let format_features = match self.describe_format_features(desc.format) {
+            Ok(format_features) => format_features,
+            Err(error) => {
+                unsafe { self.raw().destroy_texture(hal_texture) };
+                return Err(resource::CreateTextureError::MissingFeatures(
+                    desc.format,
+                    error,
+                ));
+            }
+        };
 
         let texture = Texture::new(
             self,
@@ -1585,7 +1598,7 @@ impl Device {
             desc,
             format_features,
             resource::TextureClearMode::None,
-            false,
+            !cleared, // inverted so it marks the tracker properly
         );
 
         let texture = Arc::new(texture);
@@ -2040,11 +2053,15 @@ impl Device {
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let clear_mode = if hal_usage
-            .intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE | wgt::TextureUses::COLOR_TARGET)
-            && desc.dimension == wgt::TextureDimension::D2
+            .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE)
+            || hal_usage.contains(wgt::TextureUses::COLOR_TARGET)
+                && desc.dimension == wgt::TextureDimension::D2
         {
             let (is_color, usage) = if desc.format.is_depth_stencil_format() {
-                (false, wgt::TextureUses::DEPTH_STENCIL_WRITE)
+                (
+                    false,
+                    wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE,
+                )
             } else {
                 (true, wgt::TextureUses::COLOR_TARGET)
             };
@@ -4043,7 +4060,14 @@ impl Device {
                     });
                 }
                 view.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
-                Ok(wgt::TextureUses::RESOURCE)
+                let depth_stencil_uses = if view.desc.aspects() == hal::FormatAspects::DEPTH {
+                    wgt::TextureUses::DEPTH_SAMPLED
+                } else if view.desc.aspects() == hal::FormatAspects::STENCIL {
+                    wgt::TextureUses::STENCIL_SAMPLED
+                } else {
+                    wgt::TextureUses::empty()
+                };
+                Ok(wgt::TextureUses::RESOURCE | depth_stencil_uses)
             }
             wgt::BindingType::StorageTexture {
                 access,

@@ -107,7 +107,6 @@ impl ContextWgpuCore {
         let device = CoreDevice {
             context: self.clone(),
             wgpu_device: device.clone(),
-            features: desc.required_features,
         };
         let queue = CoreQueue {
             context: self.clone(),
@@ -122,6 +121,7 @@ impl ContextWgpuCore {
         device: &CoreDevice,
         desc: &TextureDescriptor<'_>,
         initial_state: wgt::TextureUses,
+        cleared: bool,
     ) -> CoreTexture {
         let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let (wgpu_texture, error) = unsafe {
@@ -129,6 +129,7 @@ impl ContextWgpuCore {
                 Box::new(hal_texture),
                 &descriptor,
                 initial_state,
+                cleared,
             )
         };
         if let Some(cause) = error {
@@ -189,6 +190,16 @@ impl ContextWgpuCore {
         texture: &CoreTexture,
     ) -> Option<impl Deref<Target = A::Texture>> {
         unsafe { texture.wgpu_texture.clone().as_hal::<A>() }
+    }
+
+    /// Returns `true` if `texture` was created on `device`.
+    #[cfg(webgl)]
+    pub fn texture_belongs_to_device(&self, texture: &CoreTexture, device: &CoreDevice) -> bool {
+        use wgc::resource::ParentDevice as _;
+        texture
+            .wgpu_texture
+            .same_device(&device.wgpu_device)
+            .is_ok()
     }
 
     pub unsafe fn texture_view_as_hal<A: hal::Api>(
@@ -304,12 +315,13 @@ fn map_pass_channel<V: Copy>(ops: Option<&Operations<V>>) -> wgc::command::PassC
     }
 }
 
+#[derive(Clone)]
 pub struct CoreSurface {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_surface: Arc<wgc::instance::Surface>,
     /// Configured device is needed to know which backend
     /// code to execute when acquiring a new frame.
-    configured_device: Mutex<Option<Arc<wgc::device::Device>>>,
+    configured_device: Arc<Mutex<Option<Arc<wgc::device::Device>>>>,
 }
 
 impl fmt::Debug for CoreSurface {
@@ -322,6 +334,7 @@ impl fmt::Debug for CoreSurface {
     }
 }
 
+#[derive(Clone)]
 pub struct CoreAdapter {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_adapter: Arc<wgc::instance::Adapter>,
@@ -336,68 +349,67 @@ impl fmt::Debug for CoreAdapter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreDevice {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_device: Arc<wgc::device::Device>,
-    features: Features,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreBuffer {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_buffer: Arc<wgc::resource::Buffer>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreShaderModule {
     pub(crate) wgpu_shader_module: Arc<wgc::pipeline::ShaderModule>,
     compilation_info: CompilationInfo,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreBindGroupLayout {
     pub(crate) wgpu_bind_group_layout: Arc<wgc::binding_model::BindGroupLayout>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreBindGroup {
     pub(crate) wgpu_bind_group: Arc<wgc::binding_model::BindGroup>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreTexture {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_texture: Arc<wgc::resource::Texture>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreTextureView {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_texture_view: Arc<wgc::resource::TextureView>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreExternalTexture {
     pub(crate) wgpu_external_texture: Arc<wgc::resource::ExternalTexture>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreSampler {
     pub(crate) wgpu_sampler: Arc<wgc::resource::Sampler>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreQuerySet {
     pub(crate) wgpu_query_set: Arc<wgc::resource::QuerySet>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CorePipelineLayout {
     pub(crate) wgpu_pipeline_layout: Arc<wgc::binding_model::PipelineLayout>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CorePipelineCache {
     pub(crate) wgpu_pipeline_cache: Arc<wgc::pipeline::PipelineCache>,
 }
@@ -424,11 +436,12 @@ pub struct CoreRenderBundleEncoder {
     encoder: Box<wgc::command::RenderBundleEncoder>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreRenderBundle {
     pub(crate) wgpu_render_bundle: Arc<wgc::command::RenderBundle>,
 }
 
+#[derive(Clone)]
 pub struct CoreQueue {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_queue: Arc<wgc::device::queue::Queue>,
@@ -443,12 +456,12 @@ impl fmt::Debug for CoreQueue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreComputePipeline {
     pub(crate) wgpu_compute_pipeline: Arc<wgc::pipeline::ComputePipeline>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreRenderPipeline {
     pub(crate) wgpu_render_pipeline: Arc<wgc::pipeline::RenderPipeline>,
 }
@@ -484,18 +497,19 @@ impl fmt::Debug for CoreCommandEncoder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreBlas {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_blas: Arc<wgc::resource::Blas>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CoreTlas {
     pub(crate) context: ContextWgpuCore,
     pub(crate) wgpu_tlas: Arc<wgc::resource::Tlas>,
 }
 
+#[derive(Clone)]
 pub struct CoreSurfaceOutputDetail {
     pub(crate) context: ContextWgpuCore,
     wgpu_surface: Arc<wgc::instance::Surface>,
@@ -655,7 +669,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
         Ok(CoreSurface {
             context: self.clone(),
             wgpu_surface,
-            configured_device: Mutex::default(),
+            configured_device: Arc::new(Mutex::default()),
         }
         .into())
     }
@@ -753,7 +767,6 @@ impl dispatch::AdapterInterface for CoreAdapter {
         let device = CoreDevice {
             context: self.context.clone(),
             wgpu_device: device,
-            features: desc.required_features,
         };
         let queue = CoreQueue {
             context: self.context.clone(),
@@ -945,7 +958,11 @@ impl dispatch::DeviceInterface for CoreDevice {
 
         let mut arrayed_texture_views = Vec::new();
         let mut arrayed_samplers = Vec::new();
-        if self.features.contains(Features::TEXTURE_BINDING_ARRAY) {
+        if self
+            .wgpu_device
+            .features()
+            .contains(Features::TEXTURE_BINDING_ARRAY)
+        {
             // gather all the array view first
             for entry in desc.entries.iter() {
                 if let BindingResource::TextureViewArray(array) = entry.resource {
@@ -968,7 +985,11 @@ impl dispatch::DeviceInterface for CoreDevice {
         let mut remaining_arrayed_samplers = &arrayed_samplers[..];
 
         let mut arrayed_buffer_bindings = Vec::new();
-        if self.features.contains(Features::BUFFER_BINDING_ARRAY) {
+        if self
+            .wgpu_device
+            .features()
+            .contains(Features::BUFFER_BINDING_ARRAY)
+        {
             // gather all the buffers first
             for entry in desc.entries.iter() {
                 if let BindingResource::BufferArray(array) = entry.resource {
@@ -984,7 +1005,8 @@ impl dispatch::DeviceInterface for CoreDevice {
 
         let mut arrayed_acceleration_structures = Vec::new();
         if self
-            .features
+            .wgpu_device
+            .features()
             .contains(Features::ACCELERATION_STRUCTURE_BINDING_ARRAY)
         {
             // Gather all the TLAS IDs used by TLAS arrays first (same pattern as other arrayed resources).
@@ -2255,22 +2277,23 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 .map(|instance: &Option<crate::TlasInstance>| {
                     instance
                         .as_ref()
-                        .map(|instance| wgc::ray_tracing::TlasInstance {
+                        .map(|instance| wgc::ray_tracing::ArcTlasInstance {
                             blas: instance.blas.as_core().wgpu_blas.clone(),
-                            transform: &instance.transform,
+                            transform: instance.transform,
                             custom_data: instance.custom_data,
                             mask: instance.mask,
                         })
-                });
-            wgc::ray_tracing::TlasPackage {
+                })
+                .collect();
+            wgc::ray_tracing::ArcTlasPackage {
                 tlas: e.inner.as_core().wgpu_tlas.clone(),
-                instances: Box::new(instances),
+                instances,
                 lowest_unmodified: e.lowest_unmodified,
             }
         });
 
         self.wgpu_command_encoder
-            .build_acceleration_structures(blas, tlas)
+            .build_acceleration_structures(blas, tlas.collect())
     }
 
     fn transition_resources<'a>(

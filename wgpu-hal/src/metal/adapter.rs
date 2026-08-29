@@ -10,8 +10,7 @@ use objc2_metal::{
 use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
-use core::sync::atomic;
-use wgpu_sync::{Mutex, OnceCell};
+use wgpu_sync::{atomic, Mutex, OnceCell};
 
 use crate::metal::QueueShared;
 
@@ -504,7 +503,8 @@ impl crate::Adapter for super::Adapter {
     fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
         wgt::TextureUses::INCLUSIVE
             | wgt::TextureUses::COLOR_TARGET
-            | wgt::TextureUses::DEPTH_STENCIL_WRITE
+            | wgt::TextureUses::DEPTH_WRITE
+            | wgt::TextureUses::STENCIL_WRITE
     }
 }
 
