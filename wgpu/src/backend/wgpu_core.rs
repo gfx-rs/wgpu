@@ -121,6 +121,7 @@ impl ContextWgpuCore {
         device: &CoreDevice,
         desc: &TextureDescriptor<'_>,
         initial_state: wgt::TextureUses,
+        cleared: bool,
     ) -> CoreTexture {
         let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let (wgpu_texture, error) = unsafe {
@@ -128,6 +129,7 @@ impl ContextWgpuCore {
                 Box::new(hal_texture),
                 &descriptor,
                 initial_state,
+                cleared,
             )
         };
         if let Some(cause) = error {

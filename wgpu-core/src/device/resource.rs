@@ -1534,11 +1534,12 @@ impl Device {
         hal_texture: Box<dyn hal::DynTexture>,
         desc: &resource::TextureDescriptor,
         initial_state: wgt::TextureUses,
+        cleared: bool,
     ) -> (Arc<Texture>, Option<resource::CreateTextureError>) {
         profiling::scope!("Device::create_texture_from_hal");
 
         let (texture, error) =
-            match self.create_texture_from_hal_inner(hal_texture, desc, initial_state) {
+            match self.create_texture_from_hal_inner(hal_texture, desc, initial_state, cleared) {
                 Ok(texture) => (texture, None),
                 Err(e) => (Texture::invalid(self, desc), Some(e)),
             };
@@ -1566,6 +1567,7 @@ impl Device {
         hal_texture: Box<dyn hal::DynTexture>,
         desc: &resource::TextureDescriptor,
         initial_state: wgt::TextureUses,
+        cleared: bool,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
         // Count the raw texture before validation so the error paths below can
         // hand it back through `destroy_texture`. Merely dropping a hal texture
@@ -1596,7 +1598,7 @@ impl Device {
             desc,
             format_features,
             resource::TextureClearMode::None,
-            false,
+            !cleared, // inverted so it marks the tracker properly
         );
 
         let texture = Arc::new(texture);
