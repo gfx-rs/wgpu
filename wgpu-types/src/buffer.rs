@@ -11,7 +11,7 @@ use crate::{DownlevelFlags, COPY_BUFFER_ALIGNMENT};
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BufferDescriptor<L> {
+pub struct BufferDescriptor<L, BU = BufferUsages> {
     /// Debug label of a buffer. This will show up in graphics debuggers for easy identification.
     pub label: L,
     /// Size of a buffer, in bytes.
@@ -22,7 +22,7 @@ pub struct BufferDescriptor<L> {
     /// Specifying only usages the application will actually perform may increase performance.
     /// Additionally, on the WebGL backend, there are restrictions on [`BufferUsages::INDEX`];
     /// see [`DownlevelFlags::UNRESTRICTED_INDEX_BUFFER`] for more information.
-    pub usage: BufferUsages,
+    pub usage: BU,
     /// Allows a buffer to be mapped immediately after they are made. It does not have to be [`BufferUsages::MAP_READ`] or
     /// [`BufferUsages::MAP_WRITE`], all buffers are allowed to be mapped at creation.
     ///
