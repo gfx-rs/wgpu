@@ -161,5 +161,6 @@ layout(location = 0) rayPayloadInEXT _4 _15;
 void main()
 {
     _15._m0 = uint(gl_PrimitiveID);
+    _15._m0 = uint(gl_InstanceID);
 }
 
