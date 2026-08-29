@@ -2912,7 +2912,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_terminate(module, level, query, &tracker_expr_name, func_ctx)?;
                     }
                     RayQueryFunction::Begin => {
-                        if self.options.ray_query_initialization_tracking { writeln!(self.out, "{level}{tracker_expr_name} = 0u;")?; }
+                        if self.options.ray_query_initialization_tracking {
+                            writeln!(self.out, "{level}{tracker_expr_name} = 0u;")?;
+                        }
                     }
                 }
             }

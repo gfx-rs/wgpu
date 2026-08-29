@@ -1591,7 +1591,7 @@ impl BlockContext<'_> {
                     let zero_value = self
                         .writer
                         .get_constant_scalar(crate::Literal::U32(RayQueryPoint::empty().bits()));
-    
+
                     block.body.push(Instruction::store(
                         tracker_ids.initialized_tracker,
                         zero_value,
