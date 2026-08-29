@@ -85,6 +85,8 @@ pub enum LocalVariableError {
     InitializerType,
     #[error("Initializer is not a const or override expression")]
     NonConstOrOverrideInitializer,
+    #[error("Local variable has a type `ray_query` and so cannot be initialized.")]
+    RayQueryWithInitializeExpression,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -1822,6 +1824,10 @@ impl super::Validator {
 
             if !local_expr_kind.is_const_or_override(init) {
                 return Err(LocalVariableError::NonConstOrOverrideInitializer);
+            }
+
+            if matches!(gctx.types[var.ty].inner, crate::TypeInner::RayQuery { .. }) {
+                return Err(LocalVariableError::RayQueryWithInitializeExpression);
             }
         }
 

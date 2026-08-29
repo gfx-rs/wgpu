@@ -5773,3 +5773,29 @@ fn ray_query_store() {
         Capabilities::RAY_QUERY
     }
 }
+
+#[test]
+fn ray_query_initializer() {
+    // ray queries cannot have initializers
+    check_validation! {
+        r#"
+            enable wgpu_ray_query;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                var rq: ray_query = ray_query();
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Compute,
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::LocalVariable {
+                    source: naga::valid::LocalVariableError::RayQueryWithInitializeExpression,
+                    ..
+                },
+            ),
+            ..
+        }),
+        Capabilities::RAY_QUERY
+    }
+}
