@@ -44,7 +44,7 @@ impl<L> BufferDescriptor<L> {
     }
 }
 
-bitflags::bitflags! {
+crate::bitflags_array! {
     /// Different ways that you can use a buffer.
     ///
     /// The usages determine what kind of memory the buffer is allocated from and what
@@ -56,45 +56,63 @@ bitflags::bitflags! {
     ///
     /// Corresponds to [WebGPU `GPUBufferUsageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpubufferusageflags).
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    pub struct (BufferUsages, BufferUsagesBits): [u32; 2];
+
+    /// Buffer usages that are defined in the WebGPU specification.
+    /// For all usages, see [`BufferUsages`].
+    ///
+    /// Corresponds to [WebGPU `GPUBufferUsage`](
+    /// https://gpuweb.github.io/gpuweb/#enumdef-gpubufferusage).
     #[repr(transparent)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct BufferUsages: u32 {
-        /// Allow a buffer to be mapped for reading using [`Buffer::map_async`] + [`Buffer::get_mapped_range`].
+    pub struct BufferUsagesWebGPU buffer_usages_webgpu {
+        /// Allow a buffer to be mapped for reading using `Buffer::map_async` + `Buffer::get_mapped_range`.
         /// This does not include creating a buffer with [`BufferDescriptor::mapped_at_creation`] set.
         ///
-        /// If [`Features::MAPPABLE_PRIMARY_BUFFERS`] isn't enabled, the only other usage a buffer
+        /// If [`Features::MAPPABLE_PRIMARY_BUFFERS`](crate::Features::MAPPABLE_PRIMARY_BUFFERS) isn't enabled, the only other usage a buffer
         /// may have is COPY_DST.
         const MAP_READ = 1 << 0;
-        /// Allow a buffer to be mapped for writing using [`Buffer::map_async`] + [`Buffer::get_mapped_range_mut`].
+        /// Allow a buffer to be mapped for writing using `Buffer::map_async` + `Buffer::get_mapped_range_mut`.
         /// This does not include creating a buffer with [`BufferDescriptor::mapped_at_creation`] set.
         ///
-        /// If [`Features::MAPPABLE_PRIMARY_BUFFERS`] feature isn't enabled, the only other usage a buffer
+        /// If [`Features::MAPPABLE_PRIMARY_BUFFERS`](crate::Features::MAPPABLE_PRIMARY_BUFFERS) feature isn't enabled, the only other usage a buffer
         /// may have is COPY_SRC.
         const MAP_WRITE = 1 << 1;
-        /// Allow a buffer to be the source buffer for a [`CommandEncoder::copy_buffer_to_buffer`] or [`CommandEncoder::copy_buffer_to_texture`]
+        /// Allow a buffer to be the source buffer for a `CommandEncoder::copy_buffer_to_buffer` or `CommandEncoder::copy_buffer_to_texture`
         /// operation.
         const COPY_SRC = 1 << 2;
-        /// Allow a buffer to be the destination buffer for a [`CommandEncoder::copy_buffer_to_buffer`], [`CommandEncoder::copy_texture_to_buffer`],
-        /// [`CommandEncoder::clear_buffer`] or [`Queue::write_buffer`] operation.
+        /// Allow a buffer to be the destination buffer for a `CommandEncoder::copy_buffer_to_buffer`, `CommandEncoder::copy_texture_to_buffer`,
+        /// `CommandEncoder::clear_buffer` or `Queue::write_buffer` operation.
         const COPY_DST = 1 << 3;
         /// Allow a buffer to be the index buffer in a draw operation.
         const INDEX = 1 << 4;
         /// Allow a buffer to be the vertex buffer in a draw operation.
         const VERTEX = 1 << 5;
-        /// Allow a buffer to be a [`BufferBindingType::Uniform`] inside a bind group.
+        /// Allow a buffer to be a [`BufferBindingType::Uniform`](crate::BufferBindingType::Uniform) inside a bind group.
         const UNIFORM = 1 << 6;
-        /// Allow a buffer to be a [`BufferBindingType::Storage`] inside a bind group.
+        /// Allow a buffer to be a [`BufferBindingType::Storage`](crate::BufferBindingType::Storage) inside a bind group.
         const STORAGE = 1 << 7;
         /// Allow a buffer to be the indirect buffer in an indirect draw call.
         const INDIRECT = 1 << 8;
-        /// Allow a buffer to be the destination buffer for a [`CommandEncoder::resolve_query_set`] operation.
+        /// Allow a buffer to be the destination buffer for a `CommandEncoder::resolve_query_set` operation.
         const QUERY_RESOLVE = 1 << 9;
+    }
+
+    /// Buffer usages that are available in WGPU only when targeting native.
+    /// For all usages, see [`BufferUsages`].
+    #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    pub struct BufferUsagesWGPU buffer_usages_wgpu {
         /// Allows a buffer to be used as input for a bottom level acceleration structure build
-        const BLAS_INPUT = 1 << 10;
+        const BLAS_INPUT = 1 << 0;
         /// Allows a buffer to be used as input for a top level acceleration structure build
-        const TLAS_INPUT = 1 << 11;
+        const TLAS_INPUT = 1 << 1;
     }
 }
 
