@@ -922,7 +922,7 @@ bitflags_array! {
         /// - DX12
         /// - Vulkan
         /// - Metal
-        /// - OpenGL
+        /// - OpenGL (not GLES)
         ///
         /// This is a native only feature.
         ///
@@ -936,7 +936,7 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - Vulkan
-        /// - OpenGL
+        /// - OpenGL (not GLES)
         ///
         /// This is a native only feature.
         ///
