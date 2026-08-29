@@ -534,6 +534,26 @@ crate::impl_labeled!(CommandEncoder);
 crate::impl_parent_device!(CommandEncoder);
 crate::impl_storage_item!(CommandEncoder);
 
+#[cfg(send_sync)]
+const _: () = {
+    // SAFETY: Bounds checked below
+    unsafe impl Send for CommandEncoder {}
+    // SAFETY: Bounds checked below
+    unsafe impl Sync for CommandEncoder {}
+
+    fn _command_encoder_fields_are_send_sync(obj: &CommandEncoder) {
+        fn _check_bound<T: Send + Sync>(_: &T) {}
+        let CommandEncoder {
+            device,
+            label,
+            data,
+        } = obj;
+        _check_bound(device);
+        _check_bound(label);
+        _check_bound(data);
+    }
+};
+
 impl Drop for CommandEncoder {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
@@ -901,6 +921,26 @@ pub struct CommandBuffer {
     /// The mutable state of this command buffer.
     pub(crate) data: Mutex<CommandEncoderStatus>,
 }
+
+#[cfg(send_sync)]
+const _: () = {
+    // SAFETY: Bounds checked below
+    unsafe impl Send for CommandBuffer {}
+    // SAFETY: Bounds checked below
+    unsafe impl Sync for CommandBuffer {}
+
+    fn _command_buffer_fields_are_send_sync(obj: &CommandBuffer) {
+        fn _check_bound<T: Send + Sync>(_: &T) {}
+        let CommandBuffer {
+            device,
+            label,
+            data,
+        } = obj;
+        _check_bound(device);
+        _check_bound(label);
+        _check_bound(data);
+    }
+};
 
 impl Drop for CommandBuffer {
     fn drop(&mut self) {
