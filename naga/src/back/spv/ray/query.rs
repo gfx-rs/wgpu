@@ -1586,16 +1586,18 @@ impl BlockContext<'_> {
             }
             crate::RayQueryFunction::Begin => {
                 // Reset the ray query initialization tracker to zero as this is equivalent to it being a new variable.
-
-                let zero_value = self
-                    .writer
-                    .get_constant_scalar(crate::Literal::U32(RayQueryPoint::empty().bits()));
-
-                block.body.push(Instruction::store(
-                    tracker_ids.initialized_tracker,
-                    zero_value,
-                    None,
-                ));
+                // If initialization tracking is disabled, then the previous state doesn't matter as it is UB.
+                if self.writer.ray_query_initialization_tracking {
+                    let zero_value = self
+                        .writer
+                        .get_constant_scalar(crate::Literal::U32(RayQueryPoint::empty().bits()));
+    
+                    block.body.push(Instruction::store(
+                        tracker_ids.initialized_tracker,
+                        zero_value,
+                        None,
+                    ));
+                }
             }
         }
     }

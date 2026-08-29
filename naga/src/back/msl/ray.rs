@@ -530,7 +530,9 @@ impl<W: Write> Writer<W> {
             // a new variable as nothing else should be used if the ray query is marked as
             // uninitialized.
             crate::RayQueryFunction::Begin => {
-                writeln!(self.out, "{level}{tracker_expr_name} = 0u;")?;
+                if context.expression.ray_query_initialization_tracking {
+                    writeln!(self.out, "{level}{tracker_expr_name} = 0u;")?;
+                }
             }
         }
 
