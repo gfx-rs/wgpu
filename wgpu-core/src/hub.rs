@@ -259,3 +259,61 @@ impl Hub {
         }
     }
 }
+
+#[cfg(send_sync)]
+const _: () = {
+    // SAFETY: Bounds checked below
+    unsafe impl Send for Hub {}
+    // SAFETY: Bounds checked below
+    unsafe impl Sync for Hub {}
+
+    fn _hub_fields_are_send_sync(hub: &Hub) {
+        fn _check_bound<T: Send + Sync>(_: &T) {}
+        let Hub {
+            adapters,
+            devices,
+            queues,
+            pipeline_layouts,
+            shader_modules,
+            bind_group_layouts,
+            bind_groups,
+            command_encoders,
+            command_buffers,
+            render_bundles,
+            render_pipelines,
+            compute_pipelines,
+            pipeline_caches,
+            query_sets,
+            buffers,
+            staging_buffers,
+            textures,
+            texture_views,
+            external_textures,
+            samplers,
+            blas_s,
+            tlas_s,
+        } = hub;
+        _check_bound(adapters);
+        _check_bound(devices);
+        _check_bound(queues);
+        _check_bound(pipeline_layouts);
+        _check_bound(shader_modules);
+        _check_bound(bind_group_layouts);
+        _check_bound(bind_groups);
+        _check_bound(command_encoders);
+        _check_bound(command_buffers);
+        _check_bound(render_bundles);
+        _check_bound(render_pipelines);
+        _check_bound(compute_pipelines);
+        _check_bound(pipeline_caches);
+        _check_bound(query_sets);
+        _check_bound(buffers);
+        _check_bound(staging_buffers);
+        _check_bound(textures);
+        _check_bound(texture_views);
+        _check_bound(external_textures);
+        _check_bound(samplers);
+        _check_bound(blas_s);
+        _check_bound(tlas_s);
+    }
+};
