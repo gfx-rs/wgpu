@@ -1142,6 +1142,7 @@ impl FunctionInfo {
                         }
                         crate::RayQueryFunction::ConfirmIntersection => {}
                         crate::RayQueryFunction::Terminate => {}
+                        crate::RayQueryFunction::Begin => {}
                     }
                     FunctionUniformity::new()
                 }

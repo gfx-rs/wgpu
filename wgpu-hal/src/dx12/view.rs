@@ -292,20 +292,19 @@ impl ViewDescriptor {
 
     pub(crate) unsafe fn to_dsv(
         &self,
-        read_only: bool,
+        depth_read_only: bool,
+        stencil_read_only: bool,
     ) -> Direct3D12::D3D12_DEPTH_STENCIL_VIEW_DESC {
         let mut desc = Direct3D12::D3D12_DEPTH_STENCIL_VIEW_DESC {
             Format: self.rtv_dsv_format,
             ViewDimension: Direct3D12::D3D12_DSV_DIMENSION_UNKNOWN,
             Flags: {
                 let mut flags = Direct3D12::D3D12_DSV_FLAG_NONE;
-                if read_only {
-                    if self.aspects.contains(crate::FormatAspects::DEPTH) {
-                        flags |= Direct3D12::D3D12_DSV_FLAG_READ_ONLY_DEPTH;
-                    }
-                    if self.aspects.contains(crate::FormatAspects::STENCIL) {
-                        flags |= Direct3D12::D3D12_DSV_FLAG_READ_ONLY_STENCIL;
-                    }
+                if depth_read_only && self.aspects.contains(crate::FormatAspects::DEPTH) {
+                    flags |= Direct3D12::D3D12_DSV_FLAG_READ_ONLY_DEPTH;
+                }
+                if stencil_read_only && self.aspects.contains(crate::FormatAspects::STENCIL) {
+                    flags |= Direct3D12::D3D12_DSV_FLAG_READ_ONLY_STENCIL;
                 }
                 flags
             },
