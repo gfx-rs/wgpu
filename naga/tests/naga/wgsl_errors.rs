@@ -5799,3 +5799,19 @@ fn ray_query_initializer() {
         Capabilities::RAY_QUERY
     }
 }
+
+#[test]
+fn ray_query_let() {
+    check_error_matches(
+        "
+            enable wgpu_ray_query;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                var rq: ray_query;
+                let _rq_1 = rq;
+            }
+        ",
+        "Ray query with initialize",
+    );
+}

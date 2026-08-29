@@ -1860,6 +1860,18 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ctx.named_expressions
                         .insert(initializer, (l.name.name.to_string(), l.name.span));
 
+                    if matches!(
+                        ctx.module.types[ty].inner,
+                        crate::TypeInner::RayQuery { .. }
+                    ) {
+                        // If a `let` variable is a ray query, it must be invalid as a `let`
+                        // must have an initializer (it is also pretty useless as all other
+                        // operations are disallowed, or require write-able variables).
+                        return Err(Box::new(Error::RayQueryWithInitializer(
+                            ctx.function.expressions.get_span(initializer),
+                        )));
+                    }
+
                     return Ok(());
                 }
                 ast::LocalDecl::Var(ref v) => {
