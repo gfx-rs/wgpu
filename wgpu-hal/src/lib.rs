@@ -308,15 +308,8 @@ use core::{
 use bitflags::bitflags;
 use raw_window_handle::DisplayHandle;
 use thiserror::Error;
+use wgpu_sync::Arc;
 use wgt::WasmNotSendSync;
-
-cfg_if::cfg_if! {
-    if #[cfg(supports_ptr_atomics)] {
-        use alloc::sync::Arc;
-    } else if #[cfg(feature = "portable-atomic")] {
-        use portable_atomic_util::Arc;
-    }
-}
 
 // - Vertex + Fragment
 // - Compute
@@ -334,10 +327,7 @@ pub const QUERY_SIZE: wgt::BufferAddress = 8;
 pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
-#[cfg(supports_64bit_atomics)]
-pub type AtomicFenceValue = core::sync::atomic::AtomicU64;
-#[cfg(not(supports_64bit_atomics))]
-pub type AtomicFenceValue = portable_atomic::AtomicU64;
+pub type AtomicFenceValue = wgpu_sync::atomic::AtomicU64;
 
 /// A callback to signal that wgpu is no longer using a resource.
 #[cfg(all(any(gles, vulkan, metal), not(webgl)))]
@@ -597,7 +587,7 @@ impl InstanceError {
     #[allow(dead_code, reason = "may be unused on some platforms")]
     pub(crate) fn with_source(message: String, source: impl Error + Send + Sync + 'static) -> Self {
         cfg_if::cfg_if! {
-            if #[cfg(supports_ptr_atomics)] {
+            if #[cfg(target_has_atomic = "ptr")] {
                 let source = Arc::new(source);
             } else {
                 // TODO(https://github.com/rust-lang/rust/issues/18598): avoid indirection via Box once arbitrary types support unsized coercion

@@ -1009,7 +1009,7 @@ struct ResourceIdentityFactory<T> {
     #[cfg(not(target_has_atomic = "64"))]
     next_id: Mutex<u64>,
     #[cfg(target_has_atomic = "64")]
-    next_id: core::sync::atomic::AtomicU64,
+    next_id: wgpu_sync::atomic::AtomicU64,
     _phantom: PhantomData<T>,
 }
 
@@ -1019,7 +1019,7 @@ impl<T> ResourceIdentityFactory<T> {
             #[cfg(not(target_has_atomic = "64"))]
             next_id: Mutex::new(0),
             #[cfg(target_has_atomic = "64")]
-            next_id: core::sync::atomic::AtomicU64::new(0),
+            next_id: wgpu_sync::atomic::AtomicU64::new(0),
             _phantom: PhantomData,
         }
     }

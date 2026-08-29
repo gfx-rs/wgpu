@@ -3230,7 +3230,12 @@ impl Writer {
                         )?;
                         BuiltIn::CullDistance
                     }
-                    Bi::InstanceIndex => BuiltIn::InstanceIndex,
+                    Bi::InstanceIndex => match stage {
+                        crate::ShaderStage::AnyHit | crate::ShaderStage::ClosestHit => {
+                            BuiltIn::InstanceId
+                        }
+                        _ => BuiltIn::InstanceIndex,
+                    },
                     Bi::PointSize => BuiltIn::PointSize,
                     Bi::VertexIndex => BuiltIn::VertexIndex,
                     Bi::DrawIndex => {

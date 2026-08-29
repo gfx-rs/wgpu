@@ -1,13 +1,7 @@
 use alloc::vec::Vec;
 use core::{cell::UnsafeCell, ops::Range, ptr};
 
-cfg_if::cfg_if! {
-    if #[cfg(supports_ptr_atomics)] {
-        use alloc::sync::Arc;
-    } else if #[cfg(feature = "portable-atomic")] {
-        use portable_atomic_util::Arc;
-    }
-}
+use wgpu_sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct Buffer {
