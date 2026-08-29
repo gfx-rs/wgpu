@@ -2980,7 +2980,18 @@ impl Writer {
         ty: Handle<crate::Type>,
         binding: &crate::Binding,
     ) -> Result<Word, Error> {
-        // Triangle barycentrics are supplied as a HitAttributeKHR` variable, not as an `Input` builtin.
+        // Triangle barycentrics are supplied as a `HitAttributeKHR` variable, not as an `Input`
+        // builtin: when a hit group has no intersection shader, the hit attribute an any-hit or
+        // closest-hit shader reads is a two-component float vector holding the barycentric
+        // coordinates of the hit, and hit attributes carry no `BuiltIn` decoration.
+        //
+        // SPEC: https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#interfaces-raypipeline
+        //
+        // Declaring it here, alongside the entry point's other varyings, works because ray tracing
+        // requires SPIR-V 1.4, where the `OpEntryPoint` interface lists global variables from every
+        // storage class rather than just `Input` and `Output`.
+        //
+        // SPEC: https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpEntryPoint
         let class = match *binding {
             crate::Binding::BuiltIn(crate::BuiltIn::HitBarycentrics) => {
                 spirv::StorageClass::HitAttributeKHR
@@ -3355,7 +3366,7 @@ impl Writer {
                     Bi::ObjectToWorld => BuiltIn::ObjectToWorldKHR,
                     Bi::WorldToObject => BuiltIn::WorldToObjectKHR,
                     Bi::HitKind => BuiltIn::HitKindKHR,
-                    // Written into the entry point's `HitAttributeKHR` variable instead.
+                    // Read from the entry point's `HitAttributeKHR` variable instead.
                     Bi::HitBarycentrics => return Ok(BindingDecorations::None),
                 };
 
@@ -3761,8 +3772,11 @@ impl Writer {
             }
         }
         if has_ray_tracing_pipeline {
-            // `SPV_KHR_ray_tracing` requires SPIR-V 1.4, which is also what lets it
-            // rely on every global variable appearing in the entry point interface.
+            // `SPV_KHR_ray_tracing` requires SPIR-V 1.4. That is also what lets `write_varying`
+            // emit `hit_barycentrics` as a `HitAttributeKHR` variable, since only from 1.4 on does
+            // the `OpEntryPoint` interface cover storage classes other than `Input` and `Output`.
+            //
+            // SPEC: https://github.khronos.org/SPIRV-Registry/extensions/KHR/SPV_KHR_ray_tracing.html
             let lang_version = self.lang_version();
             if lang_version.0 <= 1 && lang_version.1 < 4 {
                 return Err(Error::SpirvVersionTooLow(1, 4));
