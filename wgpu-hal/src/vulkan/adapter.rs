@@ -2998,6 +2998,7 @@ impl super::Adapter {
             relay_semaphores: Mutex::new(relay_semaphores),
             signal_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Signal)),
             wait_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Wait)),
+            next_submit_chain: Mutex::new(None),
         };
 
         let allocation_sizes = AllocationSizes::from_memory_hints(memory_hints).into();
