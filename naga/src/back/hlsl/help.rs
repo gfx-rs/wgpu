@@ -2053,16 +2053,16 @@ impl<W: Write> super::Writer<'_, W> {
     }
 
     /// Writes out the sampler index buffer declaration if it hasn't been written yet.
+    ///
+    /// `bind_target` is the register the index buffer is bound to, resolved by
+    /// the caller with [`Options::resolve_sampler_index_buffer_binding`].
+    ///
+    /// [`Options::resolve_sampler_index_buffer_binding`]: super::Options::resolve_sampler_index_buffer_binding
     pub(super) fn write_wrapped_sampler_buffer(
         &mut self,
         key: super::SamplerIndexBufferKey,
+        bind_target: super::BindTarget,
     ) -> BackendResult {
-        // The astute will notice that we do a double hash lookup, but we do this to avoid
-        // holding a mutable reference to `self` while trying to call `write_sampler_heaps`.
-        //
-        // We only pay this double lookup cost when we actually need to write out the sampler
-        // buffer, which should be not be common.
-
         if self.wrapped.sampler_index_buffers.contains_key(&key) {
             return Ok(());
         };
@@ -2074,20 +2074,6 @@ impl<W: Write> super::Writer<'_, W> {
         let sampler_array_name = self
             .namer
             .call(&format!("nagaGroup{}SamplerIndexArray", key.group));
-
-        let bind_target = match self.options.sampler_buffer_binding_map.get(&key) {
-            Some(&bind_target) => bind_target,
-            None if self.options.fake_missing_bindings => super::BindTarget {
-                space: u8::MAX,
-                register: key.group,
-                binding_array_size: None,
-                dynamic_storage_buffer_offsets_index: None,
-                restrict_indexing: false,
-            },
-            None => {
-                unreachable!("Sampler buffer of group {key:?} not bound to a register");
-            }
-        };
 
         writeln!(
             self.out,

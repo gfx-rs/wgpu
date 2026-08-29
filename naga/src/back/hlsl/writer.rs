@@ -465,11 +465,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         .iter()
                         .find(|&(var_handle, var)| match var.binding {
                             Some(ref binding) if !info[var_handle].is_empty() => {
-                                self.options.resolve_resource_binding(binding).is_err()
+                                (self.options.resolve_resource_binding(binding).is_err()
                                     && self
                                         .options
                                         .resolve_external_texture_resource_binding(binding)
-                                        .is_err()
+                                        .is_err())
+                                    || sampler_index_buffer_key(module, var).is_some_and(|key| {
+                                        self.options
+                                            .resolve_sampler_index_buffer_binding(key)
+                                            .is_err()
+                                    })
                             }
                             _ => false,
                         })
@@ -516,6 +521,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     .options
                                     .resolve_external_texture_resource_binding(binding)
                                     .is_err()
+                                {
+                                    ep_error = Some(err);
+                                    break;
+                                }
+                            }
+                            if let Some(key) = sampler_index_buffer_key(module, var) {
+                                if let Err(err) =
+                                    self.options.resolve_sampler_index_buffer_binding(key)
                                 {
                                     ep_error = Some(err);
                                     break;
@@ -1064,7 +1077,22 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         let is_sampler = matches!(*handle_ty, TypeInner::Sampler { .. });
 
         if is_sampler {
-            return self.write_global_sampler(module, handle, global);
+            let key = super::SamplerIndexBufferKey {
+                group: global.binding.as_ref().unwrap().group,
+            };
+            let index_buffer_target = match self.options.resolve_sampler_index_buffer_binding(key) {
+                Ok(index_buffer_target) => index_buffer_target,
+                Err(err) => {
+                    log::debug!(
+                        "Skipping global {:?} (name {:?}) for being inaccessible: {}",
+                        handle,
+                        global.name,
+                        err,
+                    );
+                    return Ok(());
+                }
+            };
+            return self.write_global_sampler(module, handle, global, key, index_buffer_target);
         }
 
         // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-variable-register
@@ -1226,13 +1254,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module: &Module,
         handle: Handle<crate::GlobalVariable>,
         global: &crate::GlobalVariable,
+        key: super::SamplerIndexBufferKey,
+        index_buffer_target: super::BindTarget,
     ) -> BackendResult {
         let binding = *global.binding.as_ref().unwrap();
 
-        let key = super::SamplerIndexBufferKey {
-            group: binding.group,
-        };
-        self.write_wrapped_sampler_buffer(key)?;
+        self.write_wrapped_sampler_buffer(key, index_buffer_target)?;
 
         // This was already validated, so we can confidently unwrap it.
         let bt = self.options.resolve_resource_binding(&binding).unwrap();
@@ -4961,6 +4988,37 @@ pub(super) fn get_inner_matrix_data(
         TypeInner::Array { base, .. } => get_inner_matrix_data(module, base),
         _ => None,
     }
+}
+
+/// The sampler index buffer that writing `var`'s declaration will require, if
+/// `var` is a sampler global or a binding array of samplers.
+///
+/// A sampler global's own [`BindTarget`] does not name a register. It holds an
+/// index into the sampler index buffer shared by every sampler in its bind
+/// group, and that buffer needs a register of its own, resolved separately from
+/// [`Options::sampler_buffer_binding_map`]. Callers that check whether a global
+/// is accessible must therefore check this second binding too, not just the
+/// global's own [`ResourceBinding`].
+///
+/// [`BindTarget`]: super::BindTarget
+/// [`Options::sampler_buffer_binding_map`]: super::Options::sampler_buffer_binding_map
+/// [`ResourceBinding`]: crate::ResourceBinding
+fn sampler_index_buffer_key(
+    module: &Module,
+    var: &crate::GlobalVariable,
+) -> Option<super::SamplerIndexBufferKey> {
+    let inner = &module.types[var.ty].inner;
+    // Mirrors the unwrapping that `write_global` does to decide `is_sampler`.
+    let handle_ty = match *inner {
+        TypeInner::BindingArray { ref base, .. } => &module.types[*base].inner,
+        _ => inner,
+    };
+    if !matches!(*handle_ty, TypeInner::Sampler { .. }) {
+        return None;
+    }
+    Some(super::SamplerIndexBufferKey {
+        group: var.binding.as_ref()?.group,
+    })
 }
 
 /// If `base` is an access chain of the form `mat`, `mat[col]`, or `mat[col][row]`,

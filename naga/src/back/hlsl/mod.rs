@@ -466,6 +466,8 @@ type BackendResult = Result<(), Error>;
 pub enum EntryPointError {
     #[error("mapping of {0:?} is missing")]
     MissingBinding(crate::ResourceBinding),
+    #[error("mapping of the sampler index buffer of group {0} is missing")]
+    MissingSamplerIndexBuffer(u32),
 }
 
 /// Configuration used in the [`Writer`].
@@ -601,6 +603,36 @@ impl Options {
                 restrict_indexing: false,
             }),
             None => Err(EntryPointError::MissingBinding(*res_binding)),
+        }
+    }
+
+    /// Find the [`BindTarget`] for the sampler index buffer of `key`'s group.
+    ///
+    /// A sampler global's own [`BindTarget`] does not name a register: it holds
+    /// an index into its bind group's sampler index buffer, and that buffer
+    /// needs a register of its own. [`sampler_buffer_binding_map`] only has an
+    /// entry for a group whose layout actually contains samplers, so this can
+    /// fail even when [`resolve_resource_binding`] succeeds for the same
+    /// global: [`binding_map`] is keyed on group and binding alone, and carries
+    /// no indication of which kind of resource the layout has in that slot.
+    ///
+    /// [`sampler_buffer_binding_map`]: Options::sampler_buffer_binding_map
+    /// [`resolve_resource_binding`]: Options::resolve_resource_binding
+    /// [`binding_map`]: Options::binding_map
+    fn resolve_sampler_index_buffer_binding(
+        &self,
+        key: SamplerIndexBufferKey,
+    ) -> Result<BindTarget, EntryPointError> {
+        match self.sampler_buffer_binding_map.get(&key) {
+            Some(&target) => Ok(target),
+            None if self.fake_missing_bindings => Ok(BindTarget {
+                space: u8::MAX,
+                register: key.group,
+                binding_array_size: None,
+                dynamic_storage_buffer_offsets_index: None,
+                restrict_indexing: false,
+            }),
+            None => Err(EntryPointError::MissingSamplerIndexBuffer(key.group)),
         }
     }
 
