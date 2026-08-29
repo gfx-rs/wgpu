@@ -63,9 +63,9 @@ pub enum RayTracingIntersectionDescriptor<'a> {
     /// a BLAS with triangle geometry is intersected.
     Triangle {
         /// Stage to call if, after the entire intersection process is complete, a triangle within an instance bound to this
-        /// descriptor is is the closest hit.
+        /// descriptor is the closest hit.
         closest_hit: RayTracingStage<'a>,
-        /// Optional stage to call when a trianle within an instance bound to this descriptor is hit at any point during the
+        /// Optional stage to call when a triangle within an instance bound to this descriptor is hit at any point during the
         /// intersection process.
         any_hit: Option<RayTracingStage<'a>>,
     },
