@@ -473,6 +473,13 @@ struct PrivateCapabilities {
     /// The data size parameter is just this * the group count, so we store this to not
     /// require an unnecessary parameter.
     ray_tracing_pipeline_group_data_size: u32,
+
+    /// Whether `VK_ATTACHMENT_STORE_OP_NONE` is supported. This includes:
+    /// - `VK_ATTACHMENT_STORE_OP_NONE` provided by `VK_VERSION_1_3`.
+    /// - `VK_ATTACHMENT_STORE_OP_NONE_KHR` provided by `VK_KHR_dynamic_rendering`, or `VK_KHR_load_store_op_none` (promoted to Vulkan 1.4).
+    /// - `VK_ATTACHMENT_STORE_OP_NONE_QCOM` provided by `VK_QCOM_render_pass_store_ops`.
+    /// - `VK_ATTACHMENT_STORE_OP_NONE_EXT` provided by `VK_EXT_load_store_op_none`.
+    store_op_none: bool,
 }
 
 bitflags::bitflags!(
@@ -545,6 +552,8 @@ struct RenderPassKey {
     depth_stencil: Option<DepthStencilAttachmentKey>,
     sample_count: u32,
     multiview_mask: Option<NonZeroU32>,
+    depth_read_only: bool,
+    stencil_read_only: bool,
 }
 
 struct DeviceShared {
@@ -1000,7 +1009,7 @@ struct ResourceIdentityFactory<T> {
     #[cfg(not(target_has_atomic = "64"))]
     next_id: Mutex<u64>,
     #[cfg(target_has_atomic = "64")]
-    next_id: core::sync::atomic::AtomicU64,
+    next_id: wgpu_sync::atomic::AtomicU64,
     _phantom: PhantomData<T>,
 }
 
@@ -1010,7 +1019,7 @@ impl<T> ResourceIdentityFactory<T> {
             #[cfg(not(target_has_atomic = "64"))]
             next_id: Mutex::new(0),
             #[cfg(target_has_atomic = "64")]
-            next_id: core::sync::atomic::AtomicU64::new(0),
+            next_id: wgpu_sync::atomic::AtomicU64::new(0),
             _phantom: PhantomData,
         }
     }

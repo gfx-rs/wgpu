@@ -6,7 +6,14 @@
 extern crate wgpu_core as wgc;
 extern crate wgpu_types as wgt;
 
-use std::{borrow::Cow, convert::Infallible, sync::Arc};
+use std::{
+    borrow::Cow,
+    convert::Infallible,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 use hashbrown::HashMap;
 
@@ -153,7 +160,7 @@ impl Player {
                     .iter()
                     .map(|&id| self.resolve_texture_view_id(id))
                     .collect::<Vec<_>>();
-                let (external_texture, _error) = device.create_external_texture(&desc, &planes);
+                let external_texture = device.create_external_texture(&desc, &planes);
                 self.external_textures.insert(id, external_texture);
             }
             Action::DestroyExternalTexture(id) => {
@@ -169,7 +176,7 @@ impl Player {
                     .expect("invalid external texture");
             }
             Action::CreateSampler(id, desc) => {
-                let (sampler, _error) = device.create_sampler(&desc);
+                let sampler = device.create_sampler(&desc);
                 self.samplers.insert(id, sampler);
             }
             Action::DropSampler(id) => {
@@ -188,7 +195,7 @@ impl Player {
                 index,
             } => {
                 let pipeline = self.resolve_render_pipeline_id(pipeline);
-                let (bgl, _error) = pipeline.get_bind_group_layout(index);
+                let bgl = pipeline.get_bind_group_layout(index);
                 self.bind_group_layouts.insert(id, bgl);
             }
             Action::GetComputePipelineBindGroupLayout {
@@ -197,7 +204,7 @@ impl Player {
                 index,
             } => {
                 let pipeline = self.resolve_compute_pipeline_id(pipeline);
-                let (bgl, _error) = pipeline.get_bind_group_layout(index);
+                let bgl = pipeline.get_bind_group_layout(index);
                 self.bind_group_layouts.insert(id, bgl);
             }
             Action::DropBindGroupLayout(id) => {
@@ -219,7 +226,7 @@ impl Player {
                     immediate_size: desc.immediate_size,
                 };
 
-                let (pipeline_layout, _error) = device.create_pipeline_layout(&resolved_desc);
+                let pipeline_layout = device.create_pipeline_layout(&resolved_desc);
                 self.pipeline_layouts.insert(id, pipeline_layout);
             }
             Action::DropPipelineLayout(id) => {
@@ -229,7 +236,7 @@ impl Player {
             }
             Action::CreateBindGroup(id, desc) => {
                 let resolved_desc = self.resolve_bind_group_descriptor(desc);
-                let (bind_group, _error) = device.create_bind_group(&resolved_desc);
+                let bind_group = device.create_bind_group(&resolved_desc);
                 self.bind_groups.insert(id, bind_group);
             }
             Action::DropBindGroup(id) => {
@@ -319,7 +326,7 @@ impl Player {
             }
             Action::CreateComputePipeline { id, desc } => {
                 let resolved_desc = self.resolve_compute_pipeline_descriptor(desc);
-                let (pipeline, _error) = device.create_compute_pipeline(resolved_desc);
+                let pipeline = device.create_compute_pipeline(resolved_desc);
                 self.compute_pipelines.insert(id, pipeline);
             }
             Action::DropComputePipeline(id) => {
@@ -447,12 +454,23 @@ impl Player {
         &mut self,
         id: wgc::id::PointerId<wgc::id::markers::Texture>,
         surface: &Arc<wgc::instance::Surface>,
-    ) {
+    ) -> wgt::SurfaceStatus {
+        static SURFACE_ERROR_COUNT: AtomicUsize = AtomicUsize::new(0);
         let frame = surface
             .get_current_texture()
             .expect("get_current_texture error");
-        let texture = frame.texture.expect("did not obtain a surface texture");
-        self.textures.insert(id, texture);
+        if matches!(
+            frame.status,
+            wgt::SurfaceStatus::Good | wgt::SurfaceStatus::Suboptimal
+        ) {
+            let texture = frame.texture.expect("did not obtain a surface texture");
+            self.textures.insert(id, texture);
+        } else {
+            log::warn!("getCurrentTexture returned {:?}", frame.status);
+            let prev_error_count = SURFACE_ERROR_COUNT.fetch_add(1, Ordering::SeqCst);
+            assert!(prev_error_count <= 10, "Too many surface errors, giving up",);
+        }
+        frame.status
     }
 
     pub fn resolve_buffer_id(

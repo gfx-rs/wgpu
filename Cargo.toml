@@ -49,6 +49,8 @@ default-members = [
     "tests",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
+    "wgpu-core-remote",
+    "wgpu-core-remote-types",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
@@ -93,10 +95,10 @@ wgpu = { version = "30.0.0", path = "./wgpu", default-features = false, features
     "angle",
     "static-dxc",
 ] }
-wgpu-core = { version = "30.0.0", path = "./wgpu-core" }
+wgpu-core = { version = "30.0.0", path = "./wgpu-core", default-features = false }
 wgpu-core-remote = { version = "30.0.0", path = "./wgpu-core-remote" }
 wgpu-core-remote-types = { version = "30.0.0", path = "./wgpu-core-remote-types" }
-wgpu-hal = { version = "30.0.0", path = "./wgpu-hal" }
+wgpu-hal = { version = "30.0.0", path = "./wgpu-hal", default-features = false }
 wgpu-naga-bridge = { version = "30.0.0", path = "./wgpu-naga-bridge" }
 wgpu-sync = { version = "30.0.0", path = "./wgpu-sync", default-features = false }
 wgpu-test = { version = "30.0.0", path = "./tests" }

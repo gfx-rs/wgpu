@@ -23,8 +23,9 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::{ops::Range, ptr::NonNull, sync::atomic};
+use core::{ops::Range, ptr::NonNull};
 use smallvec::SmallVec;
+use wgpu_sync::atomic;
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;

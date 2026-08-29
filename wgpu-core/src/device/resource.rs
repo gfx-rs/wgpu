@@ -9,13 +9,13 @@ use core::{
     fmt,
     mem::{self, ManuallyDrop},
     num::NonZeroU32,
-    sync::atomic::{AtomicBool, Ordering},
 };
 use hal::ShouldBeNonZeroExt;
 
 use arrayvec::ArrayVec;
 use bitflags::Flags;
 use smallvec::SmallVec;
+use wgpu_sync::atomic::{AtomicBool, Ordering};
 use wgpu_sync::OnceCell;
 use wgt::{
     math::align_to, ColorWrites, DeviceLostReason, TextureFormat, TextureSampleType,
@@ -66,10 +66,7 @@ use super::{
     ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
 
-#[cfg(supports_64bit_atomics)]
-use core::sync::atomic::AtomicU64;
-#[cfg(not(supports_64bit_atomics))]
-use portable_atomic::AtomicU64;
+use wgpu_sync::atomic::AtomicU64;
 
 pub(crate) struct CommandIndices {
     /// The index of the last command submission that was attempted.
@@ -1570,13 +1567,27 @@ impl Device {
         desc: &resource::TextureDescriptor,
         initial_state: wgt::TextureUses,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
-        self.check_is_valid()?;
-
-        let format_features = self
-            .describe_format_features(desc.format)
-            .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
-
+        // Count the raw texture before validation so the error paths below can
+        // hand it back through `destroy_texture`. Merely dropping a hal texture
+        // does not release what it wraps — e.g. an imported WebGL handle would
+        // stay registered in glow's resource tracker forever.
         unsafe { self.raw().add_raw_texture(&*hal_texture) };
+
+        if let Err(error) = self.check_is_valid() {
+            unsafe { self.raw().destroy_texture(hal_texture) };
+            return Err(error.into());
+        }
+
+        let format_features = match self.describe_format_features(desc.format) {
+            Ok(format_features) => format_features,
+            Err(error) => {
+                unsafe { self.raw().destroy_texture(hal_texture) };
+                return Err(resource::CreateTextureError::MissingFeatures(
+                    desc.format,
+                    error,
+                ));
+            }
+        };
 
         let texture = Texture::new(
             self,
@@ -2040,11 +2051,15 @@ impl Device {
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let clear_mode = if hal_usage
-            .intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE | wgt::TextureUses::COLOR_TARGET)
-            && desc.dimension == wgt::TextureDimension::D2
+            .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE)
+            || hal_usage.contains(wgt::TextureUses::COLOR_TARGET)
+                && desc.dimension == wgt::TextureDimension::D2
         {
             let (is_color, usage) = if desc.format.is_depth_stencil_format() {
-                (false, wgt::TextureUses::DEPTH_STENCIL_WRITE)
+                (
+                    false,
+                    wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE,
+                )
             } else {
                 (true, wgt::TextureUses::COLOR_TARGET)
             };
@@ -2171,16 +2186,19 @@ impl Device {
         self: &Arc<Self>,
         desc: &resource::ExternalTextureDescriptor,
         planes: &[Arc<TextureView>],
-    ) -> (
-        Arc<ExternalTexture>,
-        Option<resource::CreateExternalTextureError>,
-    ) {
+    ) -> Arc<ExternalTexture> {
         profiling::scope!("Device::create_external_texture");
 
-        let (external_texture, error) = match self.create_external_texture_inner(desc, planes) {
-            Ok(external_texture) => (external_texture, None),
-            Err(e) => (ExternalTexture::invalid(Arc::clone(self), desc), Some(e)),
-        };
+        let external_texture = self
+            .create_external_texture_inner(desc, planes)
+            .unwrap_or_else(|err| {
+                self.handle_error(
+                    err,
+                    desc.label.as_deref(),
+                    "Device::create_external_texture",
+                );
+                ExternalTexture::invalid(Arc::clone(self), desc)
+            });
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
@@ -2205,7 +2223,7 @@ impl Device {
             Arc::as_ptr(&external_texture)
         );
 
-        (external_texture, error)
+        external_texture
     }
 
     pub(crate) fn create_external_texture_inner(
@@ -2303,16 +2321,13 @@ impl Device {
         Ok(external_texture)
     }
 
-    pub fn create_sampler(
-        self: &Arc<Self>,
-        desc: &resource::SamplerDescriptor,
-    ) -> (Arc<Sampler>, Option<resource::CreateSamplerError>) {
+    pub fn create_sampler(self: &Arc<Self>, desc: &resource::SamplerDescriptor) -> Arc<Sampler> {
         profiling::scope!("Device::create_sampler");
 
-        let (sampler, error) = match self.create_sampler_inner(desc) {
-            Ok(sampler) => (sampler, None),
-            Err(e) => (Sampler::invalid(Arc::clone(self), desc), Some(e)),
-        };
+        let sampler = self.create_sampler_inner(desc).unwrap_or_else(|err| {
+            self.handle_error(err, desc.label.as_deref(), "Device::create_sampler");
+            Sampler::invalid(Arc::clone(self), desc)
+        });
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
@@ -2322,7 +2337,7 @@ impl Device {
 
         api_log!("Device::create_sampler -> {:?}", Arc::as_ptr(&sampler));
 
-        (sampler, error)
+        sampler
     }
 
     pub(crate) fn create_sampler_inner(
@@ -2846,17 +2861,22 @@ impl Device {
     pub fn create_render_bundle_encoder(
         self: &Arc<Self>,
         desc: &command::RenderBundleEncoderDescriptor,
-    ) -> (
-        Box<command::RenderBundleEncoder>,
-        Option<command::CreateRenderBundleError>,
-    ) {
+    ) -> Result<Box<command::RenderBundleEncoder>, MissingFeatures> {
         profiling::scope!("Device::create_render_bundle_encoder");
         api_log!("Device::create_render_bundle_encoder");
-        let (encoder, error) = match command::RenderBundleEncoder::new(self, desc) {
-            Ok(encoder) => (encoder, None),
-            Err(e) => (command::RenderBundleEncoder::dummy(self), Some(e)),
-        };
-        (Box::new(encoder), error)
+        command::RenderBundleEncoder::new(self, desc)
+            .or_else(|err| match err {
+                command::CreateRenderBundleError::MissingFeatures(missing) => Err(missing),
+                err => {
+                    self.handle_error(
+                        err,
+                        desc.label.as_ref().map(|l| l.as_ref()),
+                        "Device::create_render_bundle_encoder",
+                    );
+                    Ok(command::RenderBundleEncoder::dummy(self))
+                }
+            })
+            .map(Box::new)
     }
 
     /// Generate information about late-validated buffer bindings for pipelines.
@@ -3640,18 +3660,15 @@ impl Device {
     pub fn create_bind_group(
         self: &Arc<Self>,
         desc: &binding_model::BindGroupDescriptor,
-    ) -> (Arc<BindGroup>, Option<CreateBindGroupError>) {
+    ) -> Arc<BindGroup> {
         profiling::scope!("Device::create_bind_group");
         #[cfg(feature = "trace")]
         let trace_desc = (&desc).to_trace();
 
-        let (bind_group, error) = match self.create_bind_group_inner(desc) {
-            Ok(bind_group) => (bind_group, None),
-            Err(e) => (
-                BindGroup::invalid(self.clone(), desc.label.to_string(), desc.layout.clone()),
-                Some(e),
-            ),
-        };
+        let bind_group = self.create_bind_group_inner(desc).unwrap_or_else(|err| {
+            self.handle_error(err, desc.label.as_deref(), "Device::create_bind_group");
+            BindGroup::invalid(self.clone(), desc.label.to_string(), desc.layout.clone())
+        });
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
@@ -3666,7 +3683,7 @@ impl Device {
             Arc::as_ptr(&bind_group)
         );
 
-        (bind_group, error)
+        bind_group
     }
 
     // This function expects the provided bind group layout to be resolved
@@ -4041,7 +4058,14 @@ impl Device {
                     });
                 }
                 view.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
-                Ok(wgt::TextureUses::RESOURCE)
+                let depth_stencil_uses = if view.desc.aspects() == hal::FormatAspects::DEPTH {
+                    wgt::TextureUses::DEPTH_SAMPLED
+                } else if view.desc.aspects() == hal::FormatAspects::STENCIL {
+                    wgt::TextureUses::STENCIL_SAMPLED
+                } else {
+                    wgt::TextureUses::empty()
+                };
+                Ok(wgt::TextureUses::RESOURCE | depth_stencil_uses)
             }
             wgt::BindingType::StorageTexture {
                 access,
@@ -4126,18 +4150,14 @@ impl Device {
     pub fn create_pipeline_layout(
         self: &Arc<Self>,
         desc: &binding_model::PipelineLayoutDescriptor,
-    ) -> (
-        Arc<binding_model::PipelineLayout>,
-        Option<binding_model::CreatePipelineLayoutError>,
-    ) {
+    ) -> Arc<binding_model::PipelineLayout> {
         profiling::scope!("Device::create_pipeline_layout");
-        let (layout, error) = match self.create_pipeline_layout_impl(desc, false) {
-            Ok(layout) => (layout, None),
-            Err(e) => (
-                binding_model::PipelineLayout::invalid(Arc::clone(self), desc.label.to_string()),
-                Some(e),
-            ),
-        };
+        let layout = self
+            .create_pipeline_layout_impl(desc, false)
+            .unwrap_or_else(|err| {
+                self.handle_error(err, desc.label.as_deref(), "Device::create_pipeline_layout");
+                binding_model::PipelineLayout::invalid(Arc::clone(self), desc.label.to_string())
+            });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace::IntoTrace;
@@ -4150,7 +4170,7 @@ impl Device {
             "Device::create_pipeline_layout -> {:?}",
             Arc::as_ptr(&layout)
         );
-        (layout, error)
+        layout
     }
 
     fn create_pipeline_layout_impl(
@@ -4321,21 +4341,26 @@ impl Device {
         Ok(layout)
     }
 
+    /// Creates a compute pipeline. If the creation fails,
+    /// it will handle error in device and return an invalid compute pipeline.
+    ///
+    /// Corresponds to [GPUDevice.createComputePipeline](https://www.w3.org/TR/webgpu/#dom-gpudevice-createcomputepipeline)
     pub fn create_compute_pipeline(
         self: &Arc<Self>,
         desc: pipeline::ComputePipelineDescriptor,
-    ) -> (
-        Arc<pipeline::ComputePipeline>,
-        Option<pipeline::CreateComputePipelineError>,
-    ) {
+    ) -> Arc<pipeline::ComputePipeline> {
         profiling::scope!("Device::create_compute_pipeline");
-        let (compute_pipeline, error) = match self.create_compute_pipeline_inner(desc.clone()) {
-            Ok(compute_pipeline) => (compute_pipeline, None),
-            Err(error) => (
-                pipeline::ComputePipeline::invalid(self.clone(), desc.label.to_string()),
-                Some(error),
-            ),
-        };
+        let compute_pipeline = self
+            .create_compute_pipeline_or_error(desc.clone())
+            .unwrap_or_else(|err| {
+                self.handle_error(
+                    err,
+                    desc.label.as_deref(),
+                    "Device::create_compute_pipeline",
+                );
+
+                pipeline::ComputePipeline::invalid(self.clone(), desc.label.to_string())
+            });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace;
@@ -4349,10 +4374,13 @@ impl Device {
             "Device::create_compute_pipeline -> {:?}",
             Arc::as_ptr(&compute_pipeline)
         );
-        (compute_pipeline, error)
+        compute_pipeline
     }
 
-    pub fn create_compute_pipeline_inner(
+    /// Creates a compute pipeline without raising any error to device.
+    ///
+    /// Corresponds to [GPUDevice.createComputePipelineAsync](https://www.w3.org/TR/webgpu/#dom-gpudevice-createcomputepipelineasync)
+    pub fn create_compute_pipeline_or_error(
         self: &Arc<Self>,
         desc: pipeline::ComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {

@@ -1,8 +1,8 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
-use core::{ptr, sync::atomic::AtomicU64};
+use core::ptr;
 use std::thread;
 
-use wgpu_sync::Mutex;
+use wgpu_sync::{atomic::AtomicU64, Mutex};
 use windows::{
     core::Interface as _,
     Win32::{
@@ -1397,7 +1397,8 @@ impl crate::Adapter for super::Adapter {
     fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
         wgt::TextureUses::INCLUSIVE
             | wgt::TextureUses::COLOR_TARGET
-            | wgt::TextureUses::DEPTH_STENCIL_WRITE
+            | wgt::TextureUses::DEPTH_WRITE
+            | wgt::TextureUses::STENCIL_WRITE
     }
 }
 
