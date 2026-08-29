@@ -1,0 +1,14 @@
+[package]
+name = "wgpu-bug-repro-03-surface-reconfigure-leak"
+edition = "2021"
+rust-version = "1.87"
+publish = false
+
+[dependencies]
+env_logger.workspace = true
+pollster.workspace = true
+# `counters` is what makes `Device::get_internal_counters()` return real values
+# instead of zeroes. Without it this repro cannot tell a wgpu-owned leak apart
+# from a driver-owned one, which is the whole point.
+wgpu = { workspace = true, features = ["counters"] }
+winit.workspace = true
