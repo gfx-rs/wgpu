@@ -1182,8 +1182,7 @@ pub fn write_vec(
 pub fn supported_capabilities() -> crate::valid::Capabilities {
     use crate::valid::Capabilities as Caps;
 
-    Caps::IMMEDIATES
-        | Caps::FLOAT64
+    Caps::FLOAT64
         | Caps::PRIMITIVE_INDEX
         | Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY
         | Caps::BUFFER_BINDING_ARRAY

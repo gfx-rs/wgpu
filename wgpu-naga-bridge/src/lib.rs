@@ -11,10 +11,6 @@ pub fn features_to_naga_capabilities(
     downlevel: wgt::DownlevelFlags,
 ) -> Caps {
     let mut caps = Caps::empty();
-    caps.set(
-        Caps::IMMEDIATES,
-        features.contains(wgt::Features::IMMEDIATES),
-    );
     caps.set(Caps::FLOAT64, features.contains(wgt::Features::SHADER_F64));
     caps.set(
         Caps::SHADER_FLOAT16,

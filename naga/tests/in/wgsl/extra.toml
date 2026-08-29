@@ -1,4 +1,4 @@
-capabilities = "IMMEDIATES | PRIMITIVE_INDEX"
+capabilities = "PRIMITIVE_INDEX"
 targets = "SPIRV | METAL | WGSL"
 
 [msl]

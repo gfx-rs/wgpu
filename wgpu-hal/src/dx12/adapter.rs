@@ -474,7 +474,6 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
-            | wgt::Features::IMMEDIATES
             | wgt::Features::PRIMITIVE_INDEX
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
             | wgt::Features::DUAL_SOURCE_BLENDING

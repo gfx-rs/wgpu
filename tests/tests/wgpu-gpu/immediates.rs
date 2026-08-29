@@ -20,14 +20,10 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 /// will remain unchanged.
 #[apply(gpu_test!)]
 static PARTIAL_UPDATE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(wgpu::Features::IMMEDIATES)
-            .limits(wgpu::Limits {
-                max_immediate_size: 32,
-                ..Default::default()
-            }),
-    )
+    .parameters(TestParameters::default().limits(wgpu::Limits {
+        max_immediate_size: 32,
+        ..Default::default()
+    }))
     .run_async(partial_update_test);
 
 const SHADER: &str = r#"
@@ -163,7 +159,7 @@ async fn partial_update_test(ctx: TestingContext) {
 static RENDER_PASS_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::IMMEDIATES | Features::VERTEX_WRITABLE_STORAGE)
+            .features(Features::VERTEX_WRITABLE_STORAGE)
             .limits(wgpu::Limits {
                 max_immediate_size: 64,
                 ..Default::default()

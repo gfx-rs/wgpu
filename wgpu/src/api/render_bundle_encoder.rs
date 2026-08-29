@@ -236,7 +236,6 @@ impl<'a> RenderBundleEncoder<'a> {
     }
 }
 
-/// [`Features::IMMEDIATES`] must be enabled on the device in order to call these functions.
 impl RenderBundleEncoder<'_> {
     /// Set immediate data for subsequent draw calls within the render bundle.
     ///

@@ -359,7 +359,7 @@ extern "C" {
     pub fn set_immediates_with_u8_slice(
         this: &GpuRenderPassEncoder,
         range_offset: u32,
-        data: &mut [u8],
+        data: &[u8],
     ) -> Result<(), JsValue>;
 
     #[wasm_bindgen(

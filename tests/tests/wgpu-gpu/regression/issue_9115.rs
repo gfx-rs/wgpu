@@ -15,14 +15,10 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 /// See <https://github.com/gfx-rs/wgpu/issues/9115>.
 #[apply(gpu_test!)]
 static IMMEDIATES_WITH_UNIFORM_IN_SINGLE_MODULE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(wgpu::Features::IMMEDIATES)
-            .limits(wgpu::Limits {
-                max_immediate_size: 32,
-                ..Default::default()
-            }),
-    )
+    .parameters(TestParameters::default().limits(wgpu::Limits {
+        max_immediate_size: 32,
+        ..Default::default()
+    }))
     .run_async(immediates_with_uniform_in_single_module);
 
 #[repr(C)]

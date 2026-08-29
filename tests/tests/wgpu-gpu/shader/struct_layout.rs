@@ -56,7 +56,6 @@ static STORAGE_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
 static IMMEDIATES_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::IMMEDIATES)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits {
                 max_immediate_size: MAX_BUFFER_SIZE as u32,
@@ -635,7 +634,7 @@ static STORAGE_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
 static IMMEDIATES_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::SHADER_INT64 | Features::IMMEDIATES)
+            .features(Features::SHADER_INT64)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits {
                 max_immediate_size: MAX_BUFFER_SIZE as u32,

@@ -1,4 +1,3 @@
-capabilities = "IMMEDIATES"
 targets = "GLSL | HLSL | ANALYSIS"
 
 [hlsl]

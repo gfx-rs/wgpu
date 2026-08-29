@@ -999,8 +999,6 @@ where
     /// The number of bytes of immediate data that are allocated for use
     /// in the shader. The `var<immediate>`s in the shader attached to
     /// this pipeline must be equal or smaller than this size.
-    ///
-    /// If this value is non-zero, [`wgt::Features::IMMEDIATES`] must be enabled.
     pub immediate_size: u32,
 }
 
