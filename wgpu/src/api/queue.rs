@@ -186,7 +186,9 @@ impl Queue {
     /// This operation allocates a temporary buffer and then returns a
     /// [`QueueWriteBufferView`], which
     ///
-    /// * dereferences to a `[u8]` of length `size`, and
+    /// * gives write access to `size` bytes through
+    ///   [`slice()`][QueueWriteBufferView::slice] and
+    ///   [`copy_from_slice()`][QueueWriteBufferView::copy_from_slice], and
     /// * when dropped, schedules a copy of its contents into `buffer` at `offset`.
     ///
     /// Therefore, this obtains the same result as [`Queue::write_buffer()`], but may
@@ -196,13 +198,14 @@ impl Queue {
     ///
     /// The data must be written fully in-bounds, that is, `offset + size <= buffer.len()`.
     ///
+    /// Returns `None` if the write is not valid for `buffer`, or if the staging buffer could not
+    /// be allocated. The error is reported to the innermost error scope, or to the handler set by
+    /// [`Device::on_uncaptured_error()`] if no error scope is active.
+    ///
     /// # Performance considerations
     ///
     /// * For small data not separately heap-allocated, there is no advantage of this
     ///   over [`Queue::write_buffer()`].
-    ///
-    /// * Reading from the returned view may be slow, and will not yield the current
-    ///   contents of `buffer`. You should treat it as “write-only”.
     ///
     /// * Dropping the [`QueueWriteBufferView`] does *not* submit the
     ///   transfer to the GPU immediately. The transfer begins only on the next
