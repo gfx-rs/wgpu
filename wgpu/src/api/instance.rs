@@ -44,7 +44,8 @@ crate::cmp::impl_eq_ord_hash_proxy!(Instance => .inner);
 impl Default for Instance {
     /// Creates a new instance of wgpu with default options.
     ///
-    /// Backends are set to `Backends::all()`, and FXC is chosen as the `dx12_shader_compiler`.
+    /// Backends are set to `Backends::all()`, and `Dx12Compiler::Auto` is chosen as the
+    /// `dx12_shader_compiler`.
     ///
     /// # Panics
     ///

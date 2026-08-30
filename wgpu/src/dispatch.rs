@@ -1,6 +1,6 @@
 //! Infrastructure for dispatching calls to the appropriate "backend". The "backends" are:
 //!
-//! - `wgpu_core`: An implementation of the the wgpu api on top of various native graphics APIs.
+//! - `wgpu_core`: An implementation of the wgpu api on top of various native graphics APIs.
 //! - `webgpu`: An implementation of the wgpu api which calls WebGPU directly.
 //!
 //! The interface traits are all object safe and listed in the `InterfaceTypes` trait.

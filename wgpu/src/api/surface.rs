@@ -36,7 +36,7 @@ pub struct Surface<'window> {
     // `Surface::get_current_texture` method.
     // Because the `Surface::configure` method operates on an immutable reference this type has to
     // be wrapped in a mutex and since the configuration is only supplied after the surface has
-    // been created is is additionally wrapped in an option.
+    // been created it is additionally wrapped in an option.
     pub(crate) config: Mutex<Option<SurfaceConfiguration>>,
 
     /// Optionally, keep the source of the handle used for the surface alive.

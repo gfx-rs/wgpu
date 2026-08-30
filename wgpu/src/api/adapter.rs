@@ -46,13 +46,12 @@ impl Adapter {
     /// [`Adapter`].
     /// However, `wgpu` does not currently enforce this restriction.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// - `request_device()` was already called on this `Adapter`.
     /// - Features specified by `desc` are not supported by this adapter.
-    /// - Unsafe features were requested but not enabled when requesting the adapter.
+    /// - `desc` requests experimental features, but `desc.experimental_features` does not enable
+    ///   them.
     /// - Limits requested exceed the values provided by the adapter.
-    /// - Adapter does not support all features wgpu requires to safely operate.
     ///
     /// [Per the WebGPU specification]: https://www.w3.org/TR/webgpu/#dom-gpuadapter-requestdevice
     pub fn request_device(
