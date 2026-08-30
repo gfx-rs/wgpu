@@ -3606,9 +3606,7 @@ fn execute_bundle(
         }
     })?;
 
-    unsafe {
-        state.pass.scope.merge_render_bundle(&bundle_state.used)?;
-    };
+    state.pass.scope.merge_render_bundle(&bundle_state.used)?;
     state.reset_bundle();
     Ok(())
 }
