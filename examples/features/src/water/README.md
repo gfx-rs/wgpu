@@ -8,7 +8,7 @@ It demonstrates Read only Depth/Stencil (abbreviated RODS), where a depth/stenci
 
 ```
 water
-├── main.rs ------------------ Main program
+├── mod.rs ------------------- Main program
 ├── point_gen.rs ------------- Hexagon point generation
 ├── README.md ---------------- This readme
 ├── screenshot.png ----------- Screenshot

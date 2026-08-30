@@ -64,7 +64,7 @@ As mentioned above, invocations exist both within the context of a workgroup gri
 
 ## Barriers and Workgroups
 
-Arguably, workgroups are at their most useful when being used alongside barriers. Since barriers are already explained more thoroughly in the hello-synchronization example, this section will be short. Despite affecting different memory address spaces, all synchronization functions affect invocations on a workgroup level, synchronizing the workgroup. See [hello-synchronization/README.md](../hello-synchronization/README.md) for more.
+Arguably, workgroups are at their most useful when being used alongside barriers. Since barriers are already explained more thoroughly in the hello-synchronization example, this section will be short. Despite affecting different memory address spaces, all synchronization functions affect invocations on a workgroup level, synchronizing the workgroup. See [hello_synchronization/README.md](../hello_synchronization/README.md) for more.
 
 ## Links to Technical Resources
 
