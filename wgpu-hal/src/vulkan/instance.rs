@@ -398,6 +398,8 @@ impl super::Instance {
         flags: wgt::InstanceFlags,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         has_nv_optimus: bool,
+        swapchain_kind: wgt::VulkanSwapchainKind,
+        agility_sdk: Option<wgt::Dx12AgilitySDK>,
         drop_callback: Option<crate::DropCallback>,
     ) -> Result<Self, crate::InstanceError> {
         log::debug!("Instance version: 0x{instance_api_version:x}");
@@ -441,6 +443,23 @@ impl super::Instance {
 
         let drop_guard = crate::DropGuard::from_option(drop_callback);
 
+        // Resolve the swapchain kind: DXGI kinds are Windows-only, and even there fall back to
+        // `Native` when DXGI is unavailable (see `init_dxgi_instance`).
+        #[cfg(windows)]
+        let (swapchain_kind, dxgi_instance) =
+            super::swapchain::init_dxgi_instance(swapchain_kind, agility_sdk.as_ref(), flags);
+        #[cfg(not(windows))]
+        let swapchain_kind = if swapchain_kind == wgt::VulkanSwapchainKind::Native {
+            let _ = &agility_sdk;
+            swapchain_kind
+        } else {
+            log::warn!(
+                "VulkanSwapchainKind::{swapchain_kind:?} is only supported on Windows; \
+                 using the native Vulkan swapchain"
+            );
+            wgt::VulkanSwapchainKind::Native
+        };
+
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
                 raw: raw_instance,
@@ -454,6 +473,9 @@ impl super::Instance {
                 has_nv_optimus,
                 instance_api_version,
                 android_sdk_version,
+                swapchain_kind,
+                #[cfg(windows)]
+                dxgi_instance,
             }),
         })
     }
@@ -668,6 +690,34 @@ impl super::Instance {
         hinstance: vk::HINSTANCE,
         hwnd: vk::HWND,
     ) -> Result<super::Surface, crate::InstanceError> {
+        // A DXGI swapchain kind routes HWND surfaces to the DXGI interop surface instead of
+        // `VK_KHR_win32_surface`.
+        #[cfg(windows)]
+        match self.shared.swapchain_kind {
+            wgt::VulkanSwapchainKind::Native => {}
+            kind @ (wgt::VulkanSwapchainKind::DxgiFromHwnd
+            | wgt::VulkanSwapchainKind::DxgiFromVisual) => {
+                use windows::Win32::Foundation::HWND;
+                let hwnd = HWND(hwnd as _);
+                let target = match kind {
+                    wgt::VulkanSwapchainKind::DxgiFromHwnd => {
+                        crate::auxil::dxgi::swapchain::SurfaceTarget::WndHandle(hwnd)
+                    }
+                    _ => crate::auxil::dxgi::swapchain::SurfaceTarget::VisualFromWndHandle {
+                        handle: hwnd,
+                        dcomp_state: wgpu_sync::Mutex::new(Default::default()),
+                    },
+                };
+                return Ok(super::Surface {
+                    swapchain: RwLock::new(None),
+                    inner: Box::new(super::swapchain::DxgiSurface::new(
+                        Arc::clone(&self.shared),
+                        target,
+                    )),
+                });
+            }
+        }
+
         if !self.shared.extensions.contains(&khr::win32_surface::NAME) {
             return Err(crate::InstanceError::new(String::from(
                 "Vulkan driver does not support VK_KHR_win32_surface",
@@ -1021,6 +1071,9 @@ impl super::Instance {
             })?
         };
 
+        let swapchain_kind = desc.backend_options.vulkan.swapchain_kind;
+        let agility_sdk = desc.backend_options.vulkan.agility_sdk.clone();
+
         unsafe {
             Self::from_raw(
                 entry,
@@ -1032,6 +1085,8 @@ impl super::Instance {
                 desc.flags,
                 desc.memory_budget_thresholds,
                 has_nv_optimus,
+                swapchain_kind,
+                agility_sdk,
                 None,
             )
         }
@@ -1171,6 +1226,32 @@ impl crate::Instance for super::Instance {
                             exposed.adapter.private_caps.can_present = false;
                         }
                     }
+                }
+            }
+        }
+
+        // When a DXGI swapchain is selected, an adapter that lacks the interop prerequisites
+        // (a valid LUID, timeline semaphores, and both external-memory/semaphore win32 extensions)
+        // cannot present through the DXGI path, and there is no per-surface native fallback.
+        #[cfg(windows)]
+        if self.shared.swapchain_kind != wgt::VulkanSwapchainKind::Native {
+            for exposed in exposed_adapters.iter_mut() {
+                let interop_capable = exposed.adapter.private_caps.device_luid.is_some()
+                    && exposed.adapter.private_caps.timeline_semaphores
+                    && exposed
+                        .adapter
+                        .phd_capabilities
+                        .supports_extension(khr::external_memory_win32::NAME)
+                    && exposed
+                        .adapter
+                        .phd_capabilities
+                        .supports_extension(khr::external_semaphore_win32::NAME);
+                if !interop_capable {
+                    log::warn!(
+                        "Disabling presentation on '{}': missing DXGI interop prerequisites",
+                        exposed.info.name
+                    );
+                    exposed.adapter.private_caps.can_present = false;
                 }
             }
         }

@@ -187,6 +187,17 @@ pub struct InstanceShared {
     /// except for a `VkPhysicalDevice` and its children.
     instance_api_version: u32,
 
+    /// The kind of swapchain used by surfaces created by this instance.
+    ///
+    /// Resolved at instance creation from `VulkanBackendOptions`; a requested DXGI kind is
+    /// downgraded to `Native` if DXGI is unavailable.
+    swapchain_kind: wgt::VulkanSwapchainKind,
+
+    /// Instance-wide DXGI state backing the interop swapchain; `Some` only when
+    /// [`Self::swapchain_kind`] is a DXGI kind and DXGI is available.
+    #[cfg(windows)]
+    dxgi_instance: Option<swapchain::DxgiInstance>,
+
     // The `drop_guard` field must be the last field of this struct so it is dropped last.
     // Do not add new fields after it.
     drop_guard: Option<crate::DropGuard>,
@@ -205,6 +216,9 @@ impl fmt::Debug for InstanceShared {
             has_nv_optimus,
             android_sdk_version,
             instance_api_version,
+            swapchain_kind,
+            #[cfg(windows)]
+                dxgi_instance: _,
             drop_guard: _,
         } = self;
         f.debug_struct("InstanceShared")
@@ -214,6 +228,7 @@ impl fmt::Debug for InstanceShared {
             .field("has_nv_optimus", has_nv_optimus)
             .field("android_sdk_version", android_sdk_version)
             .field("instance_api_version", instance_api_version)
+            .field("swapchain_kind", swapchain_kind)
             .finish_non_exhaustive()
     }
 }
@@ -412,6 +427,8 @@ struct DeviceExtensionFunctions {
     mesh_shading: Option<ext::mesh_shader::Device>,
     #[cfg_attr(not(unix), allow(dead_code))]
     external_memory_fd: Option<khr::external_memory_fd::Device>,
+    #[cfg_attr(not(windows), allow(dead_code))]
+    external_semaphore_win32: Option<khr::external_semaphore_win32::Device>,
 }
 
 struct RayTracingDeviceExtensionFunctions {
@@ -430,6 +447,11 @@ struct PrivateCapabilities {
     texture_s8: bool,
     /// Ability to present contents to any screen. Only needed to work around broken platform configurations.
     can_present: bool,
+    /// The device LUID from `VK_KHR_external_memory_capabilities`, used to match this Vulkan
+    /// physical device against a DXGI adapter for the Windows interop swapchain. `None` when the
+    /// device does not report a valid LUID.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    device_luid: Option<[u8; vk::LUID_SIZE]>,
     non_coherent_map_mask: wgt::BufferAddress,
     multi_draw_indirect: bool,
     max_draw_indirect_count: u32,
@@ -627,6 +649,11 @@ struct DeviceShared {
     texture_view_identity_factory: ResourceIdentityFactory<vk::ImageView>,
 
     empty_descriptor_set_layout: vk::DescriptorSetLayout,
+
+    /// The D3D12 device used for the DXGI interop swapchain, created lazily and shared by all
+    /// DXGI surfaces configured against this device. See [`swapchain::InteropDevice`].
+    #[cfg(windows)]
+    dxgi_interop: wgpu_sync::OnceCell<swapchain::InteropDevice>,
 
     // The `drop_guard` field must be the last field of this struct so it is dropped last.
     // Do not add new fields after it.
@@ -950,6 +977,10 @@ pub struct Texture {
     format: wgt::TextureFormat,
     copy_size: crate::CopyExtent,
     identity: ResourceIdentity<vk::Image>,
+    /// Layout to transition to for `TextureUses::PRESENT`: `PRESENT_SRC_KHR` for native
+    /// `VK_KHR_swapchain` images, `GENERAL` for DXGI interop images, whose D3D12 consumer does
+    /// not observe Vulkan image layouts.
+    present_layout: vk::ImageLayout,
 
     // The `drop_guard` field must be the last field of this struct so it is dropped last.
     // Do not add new fields after it.

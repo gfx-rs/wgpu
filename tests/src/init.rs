@@ -77,6 +77,7 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
                 },
                 ..Default::default()
             },
+            vulkan: wgpu::VulkanBackendOptions::default(),
             // Allow the noop backend to be used in tests. This will not be used unless
             // WGPU_GPU_TESTS_USE_NOOP_BACKEND env var is set, because wgpu-info will not
             // enumerate the noop backend.

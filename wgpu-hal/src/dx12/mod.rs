@@ -80,16 +80,13 @@ Otherwise, we pass a range corresponding only to the current bind group.
 mod adapter;
 mod command;
 mod conv;
-mod dcomp;
 mod descriptor;
 mod device;
-mod device_creation;
 mod instance;
 mod pipeline_desc;
 mod sampler;
 mod shader_compilation;
 mod suballocation;
-mod types;
 mod view;
 
 use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
@@ -113,187 +110,24 @@ use windows::{
     },
 };
 
-use self::dcomp::DCompLib;
 use crate::auxil::{
     self,
     dxgi::{
+        d3d12_lib::D3D12Lib,
+        dcomp::DCompLib,
+        device_factory::DeviceFactory,
         dxgi_lib::DxgiLib,
         factory::{DxgiAdapter, DxgiFactory},
         result::HResult,
+        swapchain::SurfaceTarget,
+        types::ISwapChainPanelNative,
     },
-    dyn_lib::DynLib,
 };
 
-#[derive(Debug)]
-struct D3D12Lib {
-    lib: DynLib,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum CreateDeviceError {
-    GetProcAddress,
-    D3D12CreateDevice(windows_core::HRESULT),
-    RetDeviceIsNull,
-}
-
-impl D3D12Lib {
-    fn new() -> Result<Self, libloading::Error> {
-        unsafe { DynLib::new("d3d12.dll").map(|lib| Self { lib }) }
-    }
-
-    fn create_device(
-        &self,
-        adapter: &DxgiAdapter,
-        feature_level: Direct3D::D3D_FEATURE_LEVEL,
-    ) -> Result<Direct3D12::ID3D12Device, CreateDeviceError> {
-        // Calls windows::Win32::Graphics::Direct3D12::D3D12CreateDevice on d3d12.dll
-        type Fun = extern "system" fn(
-            padapter: *mut ffi::c_void,
-            minimumfeaturelevel: Direct3D::D3D_FEATURE_LEVEL,
-            riid: *const windows_core::GUID,
-            ppdevice: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"D3D12CreateDevice".to_bytes()) }
-                .map_err(|_| CreateDeviceError::GetProcAddress)?;
-
-        let mut result__: Option<Direct3D12::ID3D12Device> = None;
-
-        let res = (func)(
-            adapter.as_raw(),
-            feature_level,
-            // TODO: Generic?
-            &Direct3D12::ID3D12Device::IID,
-            <*mut _>::cast(&mut result__),
-        );
-
-        if res.is_err() {
-            return Err(CreateDeviceError::D3D12CreateDevice(res));
-        }
-
-        result__.ok_or(CreateDeviceError::RetDeviceIsNull)
-    }
-
-    fn serialize_root_signature(
-        &self,
-        version: Direct3D12::D3D_ROOT_SIGNATURE_VERSION,
-        parameters: &[Direct3D12::D3D12_ROOT_PARAMETER],
-        static_samplers: &[Direct3D12::D3D12_STATIC_SAMPLER_DESC],
-        flags: Direct3D12::D3D12_ROOT_SIGNATURE_FLAGS,
-    ) -> Result<D3DBlob, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Direct3D12::D3D12SerializeRootSignature on d3d12.dll
-        type Fun = extern "system" fn(
-            prootsignature: *const Direct3D12::D3D12_ROOT_SIGNATURE_DESC,
-            version: Direct3D12::D3D_ROOT_SIGNATURE_VERSION,
-            ppblob: *mut *mut ffi::c_void,
-            pperrorblob: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"D3D12SerializeRootSignature".to_bytes()) }?;
-
-        let desc = Direct3D12::D3D12_ROOT_SIGNATURE_DESC {
-            NumParameters: parameters.len() as _,
-            pParameters: parameters.as_ptr(),
-            NumStaticSamplers: static_samplers.len() as _,
-            pStaticSamplers: static_samplers.as_ptr(),
-            Flags: flags,
-        };
-
-        let mut blob = None;
-        let mut error = None::<Direct3D::ID3DBlob>;
-        (func)(
-            &desc,
-            version,
-            <*mut _>::cast(&mut blob),
-            <*mut _>::cast(&mut error),
-        )
-        .ok()
-        .into_device_result("Root signature serialization")?;
-
-        if let Some(error) = error {
-            let error = D3DBlob(error);
-            log::error!(
-                "Root signature serialization error: {:?}",
-                unsafe { error.as_c_str() }.unwrap().to_str().unwrap()
-            );
-            return Err(crate::DeviceError::Unexpected); // could be hal_usage_error or hal_internal_error
-        }
-
-        blob.ok_or(crate::DeviceError::Unexpected)
-    }
-
-    fn debug_interface(&self) -> Result<Option<Direct3D12::ID3D12Debug>, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Direct3D12::D3D12GetDebugInterface on d3d12.dll
-        type Fun = extern "system" fn(
-            riid: *const windows_core::GUID,
-            ppvdebug: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"D3D12GetDebugInterface".to_bytes()) }?;
-
-        let mut result__ = None;
-
-        let res = (func)(&Direct3D12::ID3D12Debug::IID, <*mut _>::cast(&mut result__)).ok();
-
-        if let Err(ref err) = res {
-            match err.code() {
-                Dxgi::DXGI_ERROR_SDK_COMPONENT_MISSING => return Ok(None),
-                _ => {}
-            }
-        }
-
-        res.into_device_result("GetDebugInterface")?;
-
-        result__.ok_or(crate::DeviceError::Unexpected).map(Some)
-    }
-
-    /// Calls D3D12GetInterface to obtain a COM interface by CLSID and IID.
-    ///
-    /// This is used by the Independent Devices API to obtain `ID3D12SDKConfiguration1`.
-    fn get_interface<T: Interface>(
-        &self,
-        clsid: &windows_core::GUID,
-    ) -> Result<T, GetInterfaceError> {
-        // Calls windows::Win32::Graphics::Direct3D12::D3D12GetInterface on d3d12.dll
-        type Fun = extern "system" fn(
-            rclsid: *const windows_core::GUID,
-            riid: *const windows_core::GUID,
-            ppvdebug: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"D3D12GetInterface".to_bytes()) }
-                .map_err(|_| GetInterfaceError::GetProcAddress)?;
-
-        let mut result__: Option<T> = None;
-
-        let res = (func)(clsid, &T::IID, <*mut _>::cast(&mut result__));
-
-        if res.is_err() {
-            return Err(GetInterfaceError::D3D12GetInterface(res));
-        }
-
-        result__.ok_or(GetInterfaceError::RetIsNull)
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(super) enum GetInterfaceError {
-    GetProcAddress,
-    D3D12GetInterface(windows_core::HRESULT),
-    RetIsNull,
-}
-
-impl fmt::Display for GetInterfaceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::GetProcAddress => write!(f, "D3D12GetInterface not found in d3d12.dll"),
-            Self::D3D12GetInterface(hr) => write!(f, "D3D12GetInterface failed: {hr}"),
-            Self::RetIsNull => write!(f, "D3D12GetInterface returned null"),
-        }
-    }
-}
-
-impl core::error::Error for GetInterfaceError {}
+// `CreateDeviceError` lives in `auxil::dxgi::d3d12_lib` (shared with the Vulkan DXGI path) but is
+// part of the DX12 public API via `D3D12ExposeAdapterResult`, so re-export it to keep
+// `wgpu_hal::dx12::CreateDeviceError` stable.
+pub use crate::auxil::dxgi::d3d12_lib::CreateDeviceError;
 
 /// Create a temporary "owned" copy inside a [`mem::ManuallyDrop`] without increasing the refcount or
 /// moving away the source variable.
@@ -336,10 +170,6 @@ impl Deref for D3DBlob {
 impl D3DBlob {
     unsafe fn as_slice(&self) -> &[u8] {
         unsafe { core::slice::from_raw_parts(self.GetBufferPointer().cast(), self.GetBufferSize()) }
-    }
-
-    unsafe fn as_c_str(&self) -> Result<&ffi::CStr, ffi::FromBytesUntilNulError> {
-        ffi::CStr::from_bytes_until_nul(unsafe { self.as_slice() })
     }
 }
 
@@ -418,7 +248,7 @@ pub struct Instance {
     // object's Release call goes through the d3d12.dll vtable.  If
     // `library` (which unloads d3d12.dll) is dropped first the Release
     // segfaults.
-    device_factory: Arc<device_creation::DeviceFactory>,
+    device_factory: Arc<DeviceFactory>,
     library: Arc<D3D12Lib>,
     dcomp_lib: Arc<DCompLib>,
     supports_allow_tearing: bool,
@@ -475,7 +305,7 @@ impl Instance {
         swap_chain_panel: *mut ffi::c_void,
     ) -> Surface {
         let swap_chain_panel =
-            unsafe { types::ISwapChainPanelNative::from_raw_borrowed(&swap_chain_panel) }
+            unsafe { ISwapChainPanelNative::from_raw_borrowed(&swap_chain_panel) }
                 .expect("COM pointer should not be NULL");
         Surface {
             factory: self.factory.clone(),
@@ -504,20 +334,6 @@ struct SwapChain {
     present_mode: wgt::PresentMode,
     format: wgt::TextureFormat,
     size: wgt::Extent3d,
-}
-
-enum SurfaceTarget {
-    /// Borrowed, lifetime externally managed
-    WndHandle(Foundation::HWND),
-    /// `handle` is borrowed, lifetime externally managed
-    VisualFromWndHandle {
-        handle: Foundation::HWND,
-        dcomp_state: Mutex<dcomp::DCompState>,
-    },
-    Visual(DirectComposition::IDCompositionVisual),
-    /// Borrowed, lifetime externally managed
-    SurfaceHandle(Foundation::HANDLE),
-    SwapChainPanel(types::ISwapChainPanelNative),
 }
 
 pub struct Surface {
@@ -1315,50 +1131,6 @@ impl SwapChain {
         }
         self.raw
     }
-
-    unsafe fn wait(
-        &mut self,
-        timeout: Option<core::time::Duration>,
-    ) -> Result<bool, crate::SurfaceError> {
-        let timeout_ms = match timeout {
-            Some(duration) => duration.as_millis() as u32,
-            None => Threading::INFINITE,
-        };
-
-        if let Some(waitable) = self.waitable {
-            match unsafe { Threading::WaitForSingleObject(waitable, timeout_ms) } {
-                Foundation::WAIT_ABANDONED | Foundation::WAIT_FAILED => {
-                    Err(crate::SurfaceError::Lost)
-                }
-                Foundation::WAIT_OBJECT_0 => Ok(true),
-                Foundation::WAIT_TIMEOUT => Ok(false),
-                other => {
-                    log::error!("Unexpected wait status: 0x{other:x?}");
-                    Err(crate::SurfaceError::Lost)
-                }
-            }
-        } else {
-            Ok(true)
-        }
-    }
-}
-
-fn map_surface_color_space(
-    color_space: wgt::SurfaceColorSpace,
-) -> Dxgi::Common::DXGI_COLOR_SPACE_TYPE {
-    use wgt::SurfaceColorSpace as Scs;
-    match color_space {
-        Scs::Srgb => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,
-        Scs::ExtendedSrgbLinear => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709,
-        Scs::Bt2100Pq => Dxgi::Common::DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020,
-        Scs::Auto
-        | Scs::DisplayP3
-        | Scs::Bt2100Hlg
-        | Scs::ExtendedSrgb
-        | Scs::ExtendedDisplayP3 => {
-            unreachable!("`{color_space:?}` is never reported in the DX12 surface capabilities")
-        }
-    }
 }
 
 impl crate::Surface for Surface {
@@ -1369,16 +1141,16 @@ impl crate::Surface for Surface {
         device: &Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
-        let mut flags = Dxgi::DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
-        // We always set ALLOW_TEARING on the swapchain no matter
-        // what kind of swapchain we want because ResizeBuffers
-        // cannot change the swapchain's ALLOW_TEARING flag.
-        //
-        // This does not change the behavior of the swapchain, just
-        // allow present calls to use tearing.
-        if self.supports_allow_tearing {
-            flags |= Dxgi::DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-        }
+        // Only create the swapchain with the frame-latency waitable object when we will use
+        // it, so `None` honors its documented "no waitable flag" behavior.
+        let frame_latency_waitable = !matches!(
+            device.options.latency_waitable_object,
+            wgt::Dx12UseFrameLatencyWaitableObject::None
+        );
+        let flags = auxil::dxgi::swapchain::swap_chain_flags(
+            self.supports_allow_tearing,
+            frame_latency_waitable,
+        );
 
         // While `configure`s contract ensures that no work on the GPU's main queues
         // are in flight, we still need to wait for the present queue to be idle.
@@ -1415,24 +1187,13 @@ impl crate::Surface for Surface {
                 raw
             }
             None => {
-                let desc = Dxgi::DXGI_SWAP_CHAIN_DESC1 {
-                    AlphaMode: auxil::dxgi::conv::map_acomposite_alpha_mode(
-                        config.composite_alpha_mode,
-                    ),
-                    Width: config.extent.width,
-                    Height: config.extent.height,
-                    Format: non_srgb_format,
-                    Stereo: false.into(),
-                    SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
-                        Count: 1,
-                        Quality: 0,
-                    },
-                    BufferUsage: Dxgi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
-                    BufferCount: swap_chain_buffer,
-                    Scaling: Dxgi::DXGI_SCALING_STRETCH,
-                    SwapEffect: Dxgi::DXGI_SWAP_EFFECT_FLIP_DISCARD,
-                    Flags: flags.0 as u32,
-                };
+                let desc = auxil::dxgi::swapchain::swap_chain_descriptor(
+                    non_srgb_format,
+                    config.extent,
+                    swap_chain_buffer,
+                    auxil::dxgi::conv::map_acomposite_alpha_mode(config.composite_alpha_mode),
+                    flags,
+                );
                 let swap_chain1 = match self.target {
                     SurfaceTarget::Visual(_)
                     | SurfaceTarget::VisualFromWndHandle { .. }
@@ -1545,7 +1306,7 @@ impl crate::Surface for Surface {
         // correctly even when the check returns false (as the MS docs note). This
         // lets an app configure e.g. BT.2100 PQ on an SDR output and let the
         // compositor map it.
-        let color_space = map_surface_color_space(config.color_space);
+        let color_space = auxil::dxgi::swapchain::map_surface_color_space(config.color_space);
         // SAFETY: `swap_chain` is a live `IDXGISwapChain3`; `color_space` is a
         // valid `DXGI_COLOR_SPACE_TYPE`.
         unsafe { swap_chain.SetColorSpace1(color_space) }.map_err(|err| {
@@ -1570,15 +1331,14 @@ impl crate::Surface for Surface {
             | SurfaceTarget::SwapChainPanel(_) => {}
         }
 
-        unsafe { swap_chain.SetMaximumFrameLatency(config.maximum_frame_latency) }
-            .into_device_result("SetMaximumFrameLatency")?;
-
-        let waitable = match device.options.latency_waitable_object {
-            wgt::Dx12UseFrameLatencyWaitableObject::None => None,
-            wgt::Dx12UseFrameLatencyWaitableObject::Wait
-            | wgt::Dx12UseFrameLatencyWaitableObject::DontWait => {
-                Some(unsafe { swap_chain.GetFrameLatencyWaitableObject() })
-            }
+        // `IDXGISwapChain2::SetMaximumFrameLatency` and `GetFrameLatencyWaitableObject` both
+        // require the swapchain to have been created with the frame-latency waitable flag.
+        let waitable = if frame_latency_waitable {
+            unsafe { swap_chain.SetMaximumFrameLatency(config.maximum_frame_latency) }
+                .into_device_result("SetMaximumFrameLatency")?;
+            Some(unsafe { swap_chain.GetFrameLatencyWaitableObject() })
+        } else {
+            None
         };
 
         let mut resources = Vec::with_capacity(swap_chain_buffer as usize);
@@ -1630,7 +1390,7 @@ impl crate::Surface for Surface {
             wgt::Dx12UseFrameLatencyWaitableObject::None
             | wgt::Dx12UseFrameLatencyWaitableObject::DontWait => {}
             wgt::Dx12UseFrameLatencyWaitableObject::Wait => {
-                unsafe { sc.wait(timeout) }?;
+                auxil::dxgi::swapchain::wait_for_waitable(sc.waitable, timeout)?;
             }
         }
 
@@ -1724,13 +1484,7 @@ impl crate::Queue for Queue {
         let sc = swapchain.as_mut().unwrap();
         sc.acquired_count -= 1;
 
-        let (interval, flags) = match sc.present_mode {
-            // We only allow immediate if ALLOW_TEARING is valid.
-            wgt::PresentMode::Immediate => (0, Dxgi::DXGI_PRESENT_ALLOW_TEARING),
-            wgt::PresentMode::Mailbox => (0, Dxgi::DXGI_PRESENT::default()),
-            wgt::PresentMode::Fifo => (1, Dxgi::DXGI_PRESENT::default()),
-            m => unreachable!("Cannot make surface with present mode {m:?}"),
-        };
+        let (interval, flags) = auxil::dxgi::swapchain::present_flags(sc.present_mode);
 
         profiling::scope!("IDXGISwapchain3::Present");
         unsafe { sc.raw.Present(interval, flags) }

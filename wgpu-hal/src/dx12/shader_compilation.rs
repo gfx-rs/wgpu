@@ -3,6 +3,7 @@ use core::ffi::CStr;
 use std::path::PathBuf;
 
 use crate::auxil::dxgi::result::HResult;
+use crate::auxil::dyn_lib::DynLib;
 use thiserror::Error;
 use windows::{
     core::{Interface, PCSTR, PCWSTR},
@@ -155,7 +156,7 @@ type D3DCompileFn = unsafe extern "system" fn(
 struct FxcLib {
     // `d3dcompile_fn` points into `_lib`, so `_lib` must be held for as long
     // as we want to keep compiling shaders with FXC.
-    _lib: crate::dx12::DynLib,
+    _lib: DynLib,
     d3dcompile_fn: D3DCompileFn,
 }
 
@@ -164,7 +165,7 @@ impl FxcLib {
 
     fn new_dynamic() -> Result<Self, GetContainerError> {
         unsafe {
-            let lib = crate::dx12::DynLib::new(Self::PATH)
+            let lib = DynLib::new(Self::PATH)
                 .map_err(|e| GetContainerError::FailedToLoad(FxcLib::PATH, e))?;
             let d3dcompile_fn: D3DCompileFn = *lib.get::<D3DCompileFn>(c"D3DCompile".to_bytes())?;
 
@@ -288,12 +289,12 @@ impl DxcObj for Dxc::IDxcValidator {
 
 #[derive(Debug)]
 struct DxcLib {
-    lib: crate::dx12::DynLib,
+    lib: DynLib,
 }
 
 impl DxcLib {
     fn new_dynamic(lib_path: PathBuf) -> Result<Self, libloading::Error> {
-        unsafe { crate::dx12::DynLib::new(lib_path).map(|lib| Self { lib }) }
+        unsafe { DynLib::new(lib_path).map(|lib| Self { lib }) }
     }
 
     pub fn create_instance<T: DxcObj>(&self) -> Result<T, crate::DeviceError> {
