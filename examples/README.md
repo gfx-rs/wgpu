@@ -5,7 +5,7 @@
 # Examples
 
 If you are just starting your graphics programming journey entirely, we recommend going through [Learn-wgpu](https://sotrh.github.io/learn-wgpu/)
-for a mode guided tutorial, which will also teach you the basics of graphics programming.
+for a more guided tutorial, which will also teach you the basics of graphics programming.
 
 ## Standalone Examples
 
@@ -39,17 +39,17 @@ These examples use a common framework to handle wgpu init, window creation, and 
 - `bunnymark` - Demonstrates many things, but chief among them is performing numerous draw calls with different bind groups in one render pass. The example also uses textures for the icon and uniform buffers to transfer both global and per-particle states.
 - `skybox` - Shows off too many concepts to list here. The name comes from game development where a "skybox" acts as a background for rendering, usually to add a sky texture for immersion, although they can also be used for backdrops to give the idea of a world beyond the game scene. This example does so much more than this, though, as it uses a car model loaded from a file and uses the user's mouse to rotate the car model in 3d. `skybox` also makes use of depth textures and similar app patterns to `uniform_values`.
 - `shadow` - Likely by far the most complex example (certainly the largest in lines of code) of the official wgpu examples. `shadow` demonstrates basic scene rendering with the main attraction being lighting and shadows (as the name implies). It is recommended that any user looking into lighting be very familiar with the basic concepts of not only rendering with wgpu but also the primary mathematical ideas of computer graphics.
-- `multiple-render-targets` - Demonstrates how to render to two texture targets simultaneously from fragment shader.
+- `multiple_render_targets` - Demonstrates how to render to two texture targets simultaneously from fragment shader.
 - `render_to_texture` - Renders to an image texture offscreen, demonstrating both off-screen rendering as well as how to add a sort of resolution-agnostic screenshot feature to an engine. This example either outputs an image file of your naming (pass command line arguments after specifying a `--` like `cargo run --bin wgpu-examples -- render_to_texture "test.png"`) or adds an `img` element containing the image to the page in WASM.
 - `render_with_compute` - Renders an image using compute shaders.
 - `ray_cube_fragment` - Demonstrates using ray queries with a fragment shader.
 - `ray_scene` - Demonstrates using ray queries and model loading
 - `ray_shadows` - Demonstrates a simple use of ray queries - high quality shadows - uses a light set with immediates to raytrace through an untransformed scene and detect whether there is something obstructing the light.
 - `mesh_shader` - Renders a triangle to a window with mesh shaders, while showcasing most mesh shader related features(task shaders, payloads, per primitive data).
+- `multiview` - Renders different content to different layers of an array texture in one draw call, the way a VR application renders both eyes at once.
 
 #### Compute
 
-- `hello_compute` - Demonstrates the basic workflow for getting arrays of numbers to the GPU, executing a shader on them, and getting the results back. The operation it performs is finding the Collatz value (how many iterations of the [Collatz equation](https://en.wikipedia.org/wiki/Collatz_conjecture) it takes for the number to either reach 1 or overflow) of a set of numbers and prints the results.
 - `repeated_compute` - Mostly for going into detail on subjects `hello-compute` did not. It, too, computes the Collatz conjecture, but this time, it automatically loads large arrays of randomly generated numbers, prints them, runs them, and prints the result. It does this cycle 10 times.
 - `hello_workgroups` - Teaches the user about the basics of compute workgroups; what they are and what they can do.
 - `hello_synchronization` - Teaches the user about synchronization in WGSL, the ability to force all invocations in a workgroup to synchronize with each other before continuing via a sort of barrier.
@@ -61,6 +61,10 @@ These examples use a common framework to handle wgpu init, window creation, and 
 - `boids` - Demonstrates how to combine compute and render workflows by performing a [boid](https://en.wikipedia.org/wiki/Boids) simulation and rendering the boids to the screen as little triangles.
 - `ray_cube_compute` - Demonstrates using ray queries with a compute shader.
 - `ray_traced_triangle` - A simpler example demonstrating using ray queries with a compute shader
+
+#### Other
+
+- `error_scope` - Demonstrates wgpu's error scopes: pushing a scope, reading the first error it caught, and nesting scopes. Renders nothing and logs its results.
 
 ## Running on the Web
 
