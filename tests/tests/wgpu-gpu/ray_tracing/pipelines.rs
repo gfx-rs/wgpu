@@ -10,6 +10,7 @@ use wgpu_types::AccelerationStructureFlags;
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.push(PIPELINE_CREATE_USE);
+    tests.push(RAY_TRACING_PASS_NO_FEATURE);
 }
 
 #[apply(gpu_test!)]
@@ -198,4 +199,20 @@ fn pipeline_create_use(ctx: TestingContext) {
         },
         None,
     );
+}
+
+#[apply(gpu_test!)]
+static RAY_TRACING_PASS_NO_FEATURE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(ray_tracing_pass_no_feature);
+
+fn ray_tracing_pass_no_feature(ctx: TestingContext) {
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+
+    let pass = encoder.begin_ray_tracing_pass(&RayTracingPassDescriptor::default());
+    drop(pass);
+
+    fail(&ctx.device, || encoder.finish(), None);
 }

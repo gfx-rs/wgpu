@@ -69,17 +69,24 @@ impl fmt::Debug for RayTracingPass {
 
 impl RayTracingPass {
     /// If the parent command encoder is invalid, the returned pass will be invalid.
-    fn new(parent: Arc<CommandEncoder>, desc: RayTracingPassDescriptor) -> Self {
+    fn new(
+        parent: Arc<CommandEncoder>,
+        desc: RayTracingPassDescriptor,
+    ) -> Result<Self, MissingFeatures> {
+        parent
+            .device
+            .require_features(wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)?;
+
         let RayTracingPassDescriptor { label } = desc;
 
-        Self {
+        Ok(Self {
             base: BasePass::new(&label),
             device: parent.device.clone(),
             parent: Some(parent),
 
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
-        }
+        })
     }
 
     fn new_invalid(parent: Arc<CommandEncoder>, label: &Label, err: RayTracingPassError) -> Self {
@@ -193,6 +200,10 @@ pub enum TraceRayError {
     TooManyTotal { current: u32, limit: u32 },
     #[error(transparent)]
     BindingSizeTooSmall(#[from] LateMinBufferBindingSizeMismatch),
+    #[error("Not all immediate data required by the pipeline has been set via set_immediates (missing byte ranges: {missing})")]
+    MissingImmediateData {
+        missing: naga::valid::ImmediateSlots,
+    },
 }
 
 impl WebGpuError for TraceRayError {
@@ -328,6 +339,18 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         if let Some(pipeline) = self.pipeline.as_ref() {
             self.pass.binder.check_compatibility(pipeline.as_ref())?;
             self.pass.binder.check_late_buffer_bindings()?;
+            if !self
+                .pass
+                .immediate_state
+                .immediate_slots_set
+                .contains(pipeline.immediate_slots_required)
+            {
+                return Err(TraceRayError::MissingImmediateData {
+                    missing: pipeline
+                        .immediate_slots_required
+                        .difference(self.pass.immediate_state.immediate_slots_set),
+                });
+            }
             Ok(())
         } else {
             Err(TraceRayError::MissingPipeline(pass::MissingPipeline))
@@ -558,6 +581,7 @@ impl CommandEncoder {
         let label = desc.label.as_deref().map(Cow::Borrowed);
 
         let scope = PassErrorScope::Pass;
+
         let mut cmd_buf_data = self.data.lock();
 
         match cmd_buf_data.lock_encoder() {
@@ -570,10 +594,26 @@ impl CommandEncoder {
                     );
                 }
 
-                (
-                    RayTracingPass::new(self.clone(), RayTracingPassDescriptor { label }),
-                    None,
-                )
+                let pass = match RayTracingPass::new(
+                    self.clone(),
+                    RayTracingPassDescriptor {
+                        label: label.clone(),
+                    },
+                ) {
+                    Ok(pass) => pass,
+                    Err(err) => {
+                        return (
+                            RayTracingPass::new_invalid(
+                                self.clone(),
+                                &label,
+                                err.map_pass_err(scope),
+                            ),
+                            None,
+                        );
+                    }
+                };
+
+                (pass, None)
             }
             Err(err @ SErr::Locked) => {
                 // Attempting to open a new pass while the encoder is locked
@@ -818,9 +858,15 @@ fn trace_rays(
     // `saturating_mul` is fine here as it is the limit, so a lower limit if it would overflow is just a
     // slightly greater restriction.
     let dim_size_limit = [
-        limits.max_compute_workgroup_size_x.saturating_mul(limits.max_compute_workgroups_per_dimension),
-        limits.max_compute_workgroup_size_y.saturating_mul(limits.max_compute_workgroups_per_dimension),
-        limits.max_compute_workgroup_size_z.saturating_mul(limits.max_compute_workgroups_per_dimension),
+        limits
+            .max_compute_workgroup_size_x
+            .saturating_mul(limits.max_compute_workgroups_per_dimension),
+        limits
+            .max_compute_workgroup_size_y
+            .saturating_mul(limits.max_compute_workgroups_per_dimension),
+        limits
+            .max_compute_workgroup_size_z
+            .saturating_mul(limits.max_compute_workgroups_per_dimension),
     ];
 
     if dims[0] > dim_size_limit[0] {
@@ -850,7 +896,9 @@ fn trace_rays(
         ));
     }
 
-    let tot_rays = dims[0].checked_mul(dims[1]).and_then(|tmp| tmp.checked_mul(dims[2]));
+    let tot_rays = dims[0]
+        .checked_mul(dims[1])
+        .and_then(|tmp| tmp.checked_mul(dims[2]));
 
     if tot_rays.is_none_or(|tot_rays| tot_rays > limits.max_ray_dispatch_count) {
         return Err(RayTracingPassErrorInner::TraceRay(

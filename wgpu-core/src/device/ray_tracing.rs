@@ -750,6 +750,14 @@ impl Device {
             desc.intersections.len(),
         )?;
 
+        let naga::valid::ImmediateUsage::Valid {
+            slots: immediate_slots_required,
+            size: _,
+        } = io.immediates
+        else {
+            unreachable!("Immediates exceeding maxImmediateSize should have been rejected");
+        };
+
         let pipeline = pipeline::RayTracingPipeline {
             state: ResourceState::Valid(pipeline::RayTracingPipelineState {
                 raw: ManuallyDrop::new(raw),
@@ -759,6 +767,7 @@ impl Device {
             }),
             device: self.clone(),
             late_sized_buffer_groups,
+            immediate_slots_required,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.ray_tracing_pipelines.clone()),
         };

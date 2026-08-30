@@ -1436,6 +1436,7 @@ pub struct RayTracingPipeline {
     pub(crate) state: ResourceState<RayTracingPipelineState>,
     pub(crate) device: Arc<Device>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
+    pub(crate) immediate_slots_required: naga::valid::ImmediateSlots,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
@@ -1486,6 +1487,7 @@ impl RayTracingPipeline {
             tracking_data: TrackingData::new(device.tracker_indices.compute_pipelines.clone()),
             state: ResourceState::Invalid,
             device,
+            immediate_slots_required: naga::valid::ImmediateSlots::default(),
             late_sized_buffer_groups: ArrayVec::new(),
             label,
         })
