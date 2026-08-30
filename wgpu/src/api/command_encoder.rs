@@ -109,7 +109,7 @@ impl CommandEncoder {
 
     /// Begins recording of a ray tracing pass.
     ///
-    /// This function returns a [`RayTracingPass`] object which records a single compute pass.
+    /// This function returns a [`RayTracingPass`] object which records a single ray tracing pass.
     ///
     /// As long as the returned  [`RayTracingPass`] has not ended,
     /// any mutating operation on this command encoder causes an error and invalidates it.
