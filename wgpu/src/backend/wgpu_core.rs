@@ -1875,6 +1875,7 @@ impl dispatch::TextureInterface for CoreTexture {
                 base_array_layer: desc.base_array_layer,
                 array_layer_count: desc.array_layer_count,
             },
+            swizzle: desc.swizzle,
         };
         let (wgpu_texture_view, error) = self.wgpu_texture.create_view(&descriptor);
         if let Some(cause) = error {

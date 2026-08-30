@@ -484,7 +484,8 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_ATOMIC
             | wgt::Features::PASSTHROUGH_SHADERS
             | wgt::Features::EXTERNAL_TEXTURE
-            | wgt::Features::MEMORY_DECORATION_COHERENT;
+            | wgt::Features::MEMORY_DECORATION_COHERENT
+            | wgt::Features::TEXTURE_COMPONENT_SWIZZLE;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.

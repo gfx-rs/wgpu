@@ -44,6 +44,28 @@ Bottom level categories:
 
 ### Major changes
 
+### `TEXTURE_COMPONENT_SWIZZLE` feature and `swizzle` field in `TextureViewDescriptor`
+
+A new `swizzle` field is in `TextureViewDescriptor` used for mapping red/green/blue/alpha channels of the texture view
+when accessed by shaders. This requires `TEXTURE_COMPONENT_SWIZZLE` feature if `swizzle` is not identity.
+
+```diff
+let texture_view_desc = wgpu::TextureViewDescriptor {
+    label: None,
+    format: Some(wgpu::TextureFormat::Rgba8Unorm),
+    dimension: Some(wgpu::TextureViewDimension::D2),
+    usage: None,
+    aspect: wgpu::TextureAspect::All,
+    base_mip_level: 0,
+    mip_level_count: None,
+    base_array_layer: 0,
+    array_layer_count: None,
++   swizzle: wgpu::TextureComponentSwizzle::default(),
+}
+```
+
+By @beicause in [#9553](https://github.com/gfx-rs/wgpu/pull/9553).
+
 #### `DeviceDescriptor` has new field `default_queue`
 
 `DeviceDescriptor` has new field `default_queue` of type `QueueDescriptor`, which allows setting label for default device queue:
