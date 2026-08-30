@@ -732,7 +732,7 @@ pub(super) fn encode_ray_tracing_pass(
                 .map_pass_err(scope)?;
             }
             ArcRayTracingCommand::SetPipeline(pipeline) => {
-                let scope = PassErrorScope::SetPipelineCompute;
+                let scope = PassErrorScope::SetPipelineRayTracing;
                 set_pipeline(&mut state, device, pipeline).map_pass_err(scope)?;
             }
             ArcRayTracingCommand::SetImmediate { offset, data } => {
