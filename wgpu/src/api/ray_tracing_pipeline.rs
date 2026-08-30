@@ -95,7 +95,7 @@ pub struct RayTracingPipelineDescriptor<'a> {
     /// You can use [`RayTracingPipeline::get_bind_group_layout`] to create bind groups for use with the
     /// default layout. However, these bind groups cannot be used with any other pipelines. This is
     /// convenient for simple pipelines, but using an explicit layout is recommended in most cases.
-    /// 
+    ///
     /// Keep phrasing in sync. with [`RenderPipelineDescriptor`] and [`ComputePipelineDescriptor`].
     ///
     /// [default layout]: https://www.w3.org/TR/webgpu/#default-pipeline-layout

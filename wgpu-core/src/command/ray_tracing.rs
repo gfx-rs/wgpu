@@ -250,7 +250,11 @@ pub(crate) fn build_acceleration_structures(
         let mut instance_count = 0;
 
         let mut max_intersection_idx = 0;
-        for (instance_idx, instance) in mem::take(&mut package.instances).into_iter().flatten().enumerate() {
+        for (instance_idx, instance) in mem::take(&mut package.instances)
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
             if instance.custom_data >= (1u32 << 24u32) {
                 return Err(BuildAccelerationStructureError::TlasInvalidCustomData(
                     tlas.error_ident(),

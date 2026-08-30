@@ -1296,7 +1296,7 @@ pub struct RayTracingPipelineDescriptor<
 }
 
 /// Metal's shader binding data is opaque, but Vulkan's and DX12's has opaque data
-/// but a non-opaque storage mechanism, so each require seperate codepaths. 
+/// but a non-opaque storage mechanism, so each require seperate codepaths.
 /// Therefore, this is a semi-opaque structure because if metal gets ray tracing pipelines,
 /// this will need to turn into an enum so it shouldn't have other code
 /// tangled with it.
@@ -1348,15 +1348,17 @@ impl ShaderBindingData {
 
         base_data.resize(padded_intersection_offset as _, 0);
 
-        let intersection_data = unsafe {
-            device.raw().get_raytracing_pipeline_group_data(
-                pipeline,
-                2..(2 + num_intersection_groups as u32),
-            )
-        }
-        .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
+        if num_intersection_groups != 0 {
+            let intersection_data = unsafe {
+                device.raw().get_raytracing_pipeline_group_data(
+                    pipeline,
+                    2..(2 + num_intersection_groups as u32),
+                )
+            }
+            .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
 
-        base_data.extend_from_slice(&intersection_data);
+            base_data.extend_from_slice(&intersection_data);
+        }
 
         let buffer = unsafe {
             device.raw().create_buffer(&BufferDescriptor {
@@ -1371,7 +1373,13 @@ impl ShaderBindingData {
 
         // If there is no queue anymore, the ray tracing pipeline can't be accessed, so we don't have to worry about UB from uninitialized values
         if let Some(queue) = device.get_queue() {
-            let mut staging = crate::resource::StagingBuffer::new(&device, NonZeroU64::new(base_data.len() as _).expect("The total number of groups is always greater than zero, and `ray_tracing_pipeline_group_data_size` must be too."))?;
+            let mut staging = crate::resource::StagingBuffer::new(
+                &device,
+                NonZeroU64::new(base_data.len() as _).expect(
+                    "The total number of groups is always greater than zero,
+                         and `ray_tracing_pipeline_group_data_size` must be too.",
+                ),
+            )?;
 
             staging.write(&base_data);
 
