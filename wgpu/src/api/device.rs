@@ -95,11 +95,12 @@ impl Device {
 
     /// Check for resource cleanups and mapping callbacks. Will block if [`PollType::Wait`] is passed.
     ///
-    /// Return `true` if the queue is empty, or `false` if there are more queue
-    /// submissions still in flight. (Note that, unless access to the [`Queue`] is
-    /// coordinated somehow, this information could be out of date by the time
-    /// the caller receives it. `Queue`s can be shared between threads, so
-    /// other threads could submit new work at any time.)
+    /// Returns [`PollStatus::QueueEmpty`] if the queue is empty, or
+    /// [`PollStatus::WaitSucceeded`] or [`PollStatus::Poll`] if there are more
+    /// queue submissions still in flight. (Note that, unless access to the
+    /// [`Queue`] is coordinated somehow, this information could be out of date
+    /// by the time the caller receives it. `Queue`s can be shared between
+    /// threads, so other threads could submit new work at any time.)
     ///
     /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
     pub fn poll(&self, poll_type: PollType) -> Result<crate::PollStatus, crate::PollError> {
