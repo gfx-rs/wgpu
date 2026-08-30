@@ -161,7 +161,7 @@ fn main() -> Result<()> {
         let older_rank = &ranks[bit];
         if older_rank.is_leaf() {
             println!(
-                "    rank {} {:?} followed by {{ }};",
+                "    rank {} {:?} followed by {{ }}",
                 older_rank.const_name, older_rank.member_name
             );
             continue;
