@@ -328,6 +328,20 @@ impl Device {
     /// may be discarded), `initial_state` may be set to
     /// `TextureUses::UNINITIALIZED`.
     ///
+    /// # `cleared`
+    ///
+    /// Whether the wrapped resource's contents are already valid/defined.
+    /// This drives wgpu's lazy-clear tracking, which otherwise clears a
+    /// texture's subresources on first use to avoid exposing undefined
+    /// memory. Set `cleared` to `true` if the contents are already valid
+    /// (e.g. just cleared or written to on the driver side), or `false` if
+    /// they're undefined, so wgpu clears them before they are read. Falsely
+    /// passing `true` skips that clear and exposes uninitialized/stale GPU
+    /// memory to subsequent reads.
+    ///
+    /// This is unrelated to `initial_state`, which only describes the
+    /// tracker's usage state, not the validity of the contents.
+    ///
     /// # Safety
     ///
     /// - `hal_texture` must be created from this device internal handle
@@ -336,6 +350,8 @@ impl Device {
     /// - `initial_state`, if it is not `TextureUses::UNINITIALIZED`, must
     ///   match the actual driver-side layout/state of the wrapped resource at
     ///   the moment of wrap.
+    /// - `cleared` must not be `true` unless the resource's contents are
+    ///   actually valid/defined
     #[cfg(wgpu_core)]
     #[must_use]
     pub unsafe fn create_texture_from_hal<A: hal::Api>(
@@ -343,6 +359,7 @@ impl Device {
         hal_texture: A::Texture,
         desc: &TextureDescriptor<'_>,
         initial_state: wgt::TextureUses,
+        cleared: bool,
     ) -> Texture {
         let texture = unsafe {
             let core_device = self.inner.as_core();
@@ -351,6 +368,7 @@ impl Device {
                 core_device,
                 desc,
                 initial_state,
+                cleared,
             )
         };
         Texture {

@@ -1,10 +1,9 @@
-# Ray Tracing Extensions
-
-🧪Experimental🧪
+/*!
+# 🧪Experimental🧪 Ray Tracing
 
 `wgpu` supports an experimental version of ray tracing which is subject to change. The extensions allow for acceleration structures to be created and built (with
-`Features::EXPERIMENTAL_RAY_QUERY` enabled) and interacted with in shaders. Currently `naga` only supports ray queries
-(accessible with `Features::EXPERIMENTAL_RAY_QUERY` enabled in wgpu).
+[`Features::EXPERIMENTAL_RAY_QUERY`] enabled) and interacted with in shaders. Currently `naga` only supports ray queries
+(accessible with [`Features::EXPERIMENTAL_RAY_QUERY`] enabled in wgpu).
 
 **Note**: The features documented here may have major bugs in them and are expected to be subject
 to breaking changes, suggestions for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040).
@@ -18,7 +17,7 @@ an [introduction](https://developer.nvidia.com/blog/introduction-nvidia-rtx-dire
 The documentation and specific details of the functions and structures provided
 can be found with their definitions.
 
-Acceleration structures do not have a separate feature, instead they are enabled by `Features::EXPERIMENTAL_RAY_QUERY`, unlike vulkan.
+Acceleration structures do not have a separate feature, instead they are enabled by [`Features::EXPERIMENTAL_RAY_QUERY`], unlike vulkan.
 When ray tracing pipelines are added, that feature will also enable acceleration structures.
 
 A [`Blas`] can be created with [`Device::create_blas`].
@@ -72,7 +71,7 @@ Some memory is allocated when building to be "scratch" data (a temporary buffer 
 the build) and instance staging memory (to copy the instances to the GPU). The some of this can be reused for between
 the [`Blas`] and [`Tlas`] builds so in general it is advisable to try and integrate the builds together. Because
 building is slow, it should be done as few times as possible. For moving geometry (players, particles, etc.), use
-[`PREFER_FAST_BUILD`](https://wgpu.rs/doc/wgpu_hal/struct.AccelerationStructureBuildFlags.html#associatedconstant.PREFER_FAST_BUILD)
+[`AccelerationStructureFlags::PREFER_FAST_BUILD`](wgt::AccelerationStructureFlags::PREFER_FAST_BUILD)
 to speed up builds. Updating (performing a partial rebuild) is currently unsupported, but may be implemented in the
 future. You should compact any geometry which will not change (e.g. static level geometry) once it has been built.
 
@@ -80,7 +79,7 @@ future. You should compact any geometry which will not change (e.g. static level
 
 Once a [`Blas`] has been built, it can be compacted. Acceleration structures are allocated conservatively, without
 knowing the exact data that is inside them. Once a [`Blas`] has been built, the driver can make data specific
-optimisations to make the [`BLAS`] smaller. To begin compaction call [`Blas::prepare_compaction_async`] on it. This
+optimisations to make the [`Blas`] smaller. To begin compaction call [`Blas::prepare_compaction_async`] on it. This
 method waits until all builds operating on the [`Blas`] are finished, prepares the [`Blas`] to be compacted, and runs
 the given callback. To check whether the [`Blas`] is ready, you can also call [`Blas::ready_for_compaction`] instead of
 waiting for the callback (useful if you are asynchronously compacting a large number of [`Blas`]es). Submitting a
@@ -95,44 +94,38 @@ An example of compaction being run when [`Blas`]es are ready, this would be in a
 problem, otherwise (e.g. if you get an out of memory error) you should compact immediately (and switching all
 non-compacted [`Blas`]es to compacted ones).
 
-```rust
+```no_run
+# let queue: wgpu::Queue = unimplemented!();
+# let device: wgpu::Device = unimplemented!();
+# let mut tlas: wgpu::Tlas = unimplemented!();
 use std::iter;
 use wgpu::Blas;
 
 struct BlasToBeCompacted {
     blas: Blas,
-    /// The index into the TlasInstance this BLAS is used in.
+    /// The index into the TLAS instance this BLAS is used in.
     tlas_index: usize,
 }
 
-fn render(/*whatever args you need to render*/) {
-  /* additional code to prepare the renderer */
-  //An iterator of whatever BLASes you have called `prepare_compaction_async` on.
-  let blas_s_pending_compaction: impl Iterator<Item = BlasToBeCompacted> = iter::empty();
-  for blas_to_be_compacted in blas_s_pending_compaction {
+// An iterator over whatever BLASes you have called `prepare_compaction_async` on.
+let blas_s_pending_compaction = iter::empty::<BlasToBeCompacted>();
+for blas_to_be_compacted in blas_s_pending_compaction {
     if blas_to_be_compacted.blas.ready_for_compaction() {
         let compacted_blas = queue.compact_blas(&blas_to_be_compacted.blas);
-        tlas_instance[blas_to_be_compacted.tlas_index].set_blas(&compacted_blas);
+        tlas[blas_to_be_compacted.tlas_index]
+            .as_mut()
+            .unwrap()
+            .set_blas(&compacted_blas);
     }
-  }
-  let mut encoder =
-    device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-  /* do other preparations on the TlasInstance.*/
-  encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas_package));
-  /* more render code */
-  queue.submit([encoder.finish()]);
 }
+let mut encoder =
+    device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+// do any other preparations on the TLAS here
+encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas));
+// more render code
+queue.submit([encoder.finish()]);
 ```
 
-[`Device::create_blas`]: https://wgpu.rs/doc/wgpu/struct.Device.html#method.create_blas
-[`CommandEncoder::build_acceleration_structures`]: https://wgpu.rs/doc/wgpu/struct.CommandEncoder.html#method.build_acceleration_structures
-[`Device::create_tlas`]: https://wgpu.rs/doc/wgpu/struct.Device.html#method.create_tlas
-[`Tlas`]: https://wgpu.rs/doc/wgpu/struct.Tlas.html
-[`Blas`]: https://wgpu.rs/doc/wgpu/struct.Blas.html
-[`TlasInstance`]: https://wgpu.rs/doc/wgpu/struct.TlasInstance.html
-[`Blas::prepare_compaction_async`]: https://wgpu.rs/doc/wgpu/struct.Blas.html#method.prepare_compaction_async
-[`Blas::ready_for_compaction`]: https://wgpu.rs/doc/wgpu/struct.Blas.html#method.ready_for_compaction
-[`Queue::compact_blas`]: https://wgpu.rs/doc/wgpu/struct.Queue.html#method.compact_blas
 
 ## `naga`'s raytracing API:
 
@@ -437,3 +430,7 @@ These are tags that can be added to a acceleration structure (`acceleration_stru
 | Tag             | Requirements                          | Description                                                            |
 | --------------- | ------------------------------------- | ---------------------------------------------------------------------- |
 | `vertex_return` | `enable wgpu_ray_query_vertex_return` | Allows getting the vertices of the hit triangle when using ray queries |
+
+*/
+
+use crate::{Blas, CommandEncoder, Device, Features, Queue, Tlas, TlasInstance};
