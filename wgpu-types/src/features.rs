@@ -10,9 +10,8 @@
 //!
 //! The [`bitflags`] crate names flags by stringifying the
 //! `SCREAMING_SNAKE_CASE` identifier. These names are returned by
-//! [`Features::iter_names`] and parsed by [`Features::from_name`].
-//! [`bitflags`] does not currently support customized flag naming.
-//! See <https://github.com/bitflags/bitflags/issues/470>.
+//! [`Features::iter_names`] and parsed by [`Features::from_name`]. They are
+//! distinct from the `kebab-case` names above.
 
 use crate::{link_to_wgpu_docs, link_to_wgpu_item, VertexFormat};
 #[cfg(feature = "serde")]
@@ -689,6 +688,8 @@ bitflags_array! {
         ///
         /// Supported Platforms:
         /// - Vulkan
+        ///
+        /// Potential Platforms:
         /// - DX12
         ///
         /// This is a native only feature with a [proposal](https://github.com/gpuweb/gpuweb/blob/0008bd30da2366af88180b511a5d0d0c1dffbc36/proposals/pipeline-statistics-query.md) for the web.
@@ -777,9 +778,9 @@ bitflags_array! {
         /// values.
         ///
         /// Supported platforms:
-        /// - DX12
-        /// - Metal (with MSL 2.0+ on macOS 10.13+)
         /// - Vulkan
+        /// - DX12 (with resource binding tier 3)
+        /// - Metal (with MSL 3.0+ and argument buffer tier 2)
         ///
         /// This is a native only feature.
         #[name("wgpu-texture-binding-array", "texture-binding-array")]
@@ -802,6 +803,10 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - Vulkan
+        /// - Metal (with MSL 2.0+ and argument buffer tier 2)
+        ///
+        /// Potential Platforms:
+        /// - DX12
         ///
         /// This is a native only feature.
         #[name("wgpu-buffer-binding-array", "buffer-binding-array")]
@@ -814,8 +819,9 @@ bitflags_array! {
         /// values.
         ///
         /// Supported platforms:
-        /// - Metal (with MSL 2.2+ on macOS 10.13+)
         /// - Vulkan
+        /// - DX12 (with resource binding tier 3)
+        /// - Metal (with MSL 3.0+ and argument buffer tier 2)
         ///
         /// This is a native only feature.
         #[name("wgpu-storage-resource-binding-array", "storage-resource-binding-array")]
@@ -839,9 +845,9 @@ bitflags_array! {
         /// WGSL and HLSL do not need any extension.
         ///
         /// Supported platforms:
-        /// - DX12
-        /// - Metal (with MSL 2.0+ on macOS 10.13+)
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderSampledImageArrayNonUniformIndexing & shaderStorageBufferArrayNonUniformIndexing feature)
+        /// - DX12 (with resource binding tier 3)
+        /// - Metal (with MSL 3.0+ and argument buffer tier 2)
         ///
         /// This is a native only feature.
         #[name("wgpu-sampled-texture-and-storage-buffer-array-non-uniform-indexing", "sampled-texture-and-storage-buffer-array-non-uniform-indexing")]
@@ -851,9 +857,9 @@ bitflags_array! {
         /// ex. `texture_array[vertex_data]`
         ///
         /// Supported platforms:
-        /// - DX12
-        /// - Metal (with MSL 2.0+ on macOS 10.13+)
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderStorageTextureArrayNonUniformIndexing feature)
+        /// - DX12 (with resource binding tier 3)
+        /// - Metal (with MSL 3.0+ and argument buffer tier 2)
         ///
         /// This is a native only feature.
         #[name("wgpu-storage-texture-array-non-uniform-indexing", "storage-texture-array-non-uniform-indexing")]
@@ -862,7 +868,8 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - Vulkan
-        /// - DX12
+        /// - DX12 (with resource binding tier 3)
+        /// - Metal (with MSL 3.0+ and argument buffer tier 2)
         ///
         /// This is a native only feature.
         #[name("wgpu-partially-bound-binding-array", "partially-bound-binding-array")]
@@ -920,14 +927,14 @@ bitflags_array! {
         /// This allows drawing polygons/triangles as lines (wireframe) instead of filled
         ///
         /// Supported platforms:
+        /// - Vulkan (with fillModeNonSolid)
         /// - DX12
-        /// - Vulkan
         /// - Metal
-        /// - OpenGL (not GLES)
+        /// - OpenGL (desktop only)
         ///
         /// This is a native only feature.
         ///
-        /// [`PrimitiveState::polygon_mode`]: super::PrimitiveState
+        /// [`PrimitiveState::polygon_mode`]: super::PrimitiveState::polygon_mode
         /// [`PolygonMode::Line`]: super::PolygonMode::Line
         #[name("wgpu-polygon-mode-line", "polygon-mode-line")]
         const POLYGON_MODE_LINE = 1 << 19;
@@ -936,12 +943,14 @@ bitflags_array! {
         /// This allows only drawing the vertices of polygons/triangles instead of filled
         ///
         /// Supported platforms:
-        /// - Vulkan
-        /// - OpenGL (not GLES)
+        /// - Vulkan (with fillModeNonSolid)
+        /// - OpenGL (desktop only)
+        ///
+        /// DX12 and Metal have no point fill mode.
         ///
         /// This is a native only feature.
         ///
-        /// [`PrimitiveState::polygon_mode`]: super::PrimitiveState
+        /// [`PrimitiveState::polygon_mode`]: super::PrimitiveState::polygon_mode
         /// [`PolygonMode::Point`]: super::PolygonMode::Point
         #[name("wgpu-polygon-mode-point", "polygon-mode-point")]
         const POLYGON_MODE_POINT = 1 << 20;
@@ -951,7 +960,8 @@ bitflags_array! {
         /// Only triangles are supported.
         ///
         /// Supported platforms:
-        /// - Vulkan
+        /// - Vulkan (with VK_EXT_conservative_rasterization)
+        /// - DX12 (with conservative rasterization tier 1+)
         ///
         /// This is a native only feature.
         ///
@@ -963,7 +973,10 @@ bitflags_array! {
         /// Note: some (tiled-based) platforms do not support vertex shaders with any side-effects.
         ///
         /// Supported Platforms:
-        /// - All
+        /// - Vulkan (with vertexPipelineStoresAndAtomics)
+        /// - DX12 (with feature level 11.1+)
+        /// - Metal
+        /// - OpenGL (with vertex storage and vertex shader storage textures)
         ///
         /// This is a native only feature.
         #[name("wgpu-vertex-writable-storage", "vertex-writable-storage")]
@@ -979,10 +992,10 @@ bitflags_array! {
         /// Enables multiview render passes and `builtin(view_index)` in vertex/mesh shaders.
         ///
         /// Supported platforms:
-        /// - Vulkan
-        /// - Metal
-        /// - DX12
-        /// - OpenGL (web only)
+        /// - Vulkan (with multiview)
+        /// - DX12 (with view instancing and SM 6.1+)
+        /// - Metal (with a vertex amplification factor above one)
+        /// - OpenGL (with OVR_multiview2)
         ///
         /// This is a native only feature.
         #[name("wgpu-multiview", "multiview")]
@@ -1048,14 +1061,18 @@ bitflags_array! {
 
         // Shader:
 
-        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
-        /// major bugs in it and are expected to be subject to breaking changes, suggestions
-        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have major bugs and
+        /// are expected to be subject to breaking changes.
+        ///
+        /// Post suggestions for the API exposed by this on
+        /// [the ray-tracing tracking issue](https://github.com/gfx-rs/wgpu/issues/6762).
         ///
         /// Allows for the creation of ray-tracing queries within shaders.
         ///
         /// Supported platforms:
-        /// - Vulkan
+        /// - Vulkan (with VK_KHR_ray_query)
+        /// - DX12 (with raytracing tier 1.1+ and SM 6.5+)
+        /// - Metal (with raytracing support)
         ///
         /// This is a native-only feature.
         #[name("wgpu-ray-query")]
@@ -1276,15 +1293,15 @@ bitflags_array! {
         #[name("wgpu-uniform-buffer-binding-arrays", "uniform-buffer-binding-arrays")]
         const UNIFORM_BUFFER_BINDING_ARRAYS = 1 << 47;
 
-        /// Enables mesh shaders and task shaders in mesh shader pipelines. This extension does NOT imply support for
-        /// compiling mesh shaders at runtime.
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have major bugs and
+        /// are expected to be subject to breaking changes.
+        ///
+        /// Enables mesh shaders and task shaders in mesh shader pipelines.
         ///
         /// Supported platforms:
         /// - Vulkan (with [VK_EXT_mesh_shader](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_mesh_shader.html))
         /// - DX12
         /// - Metal
-        ///
-        /// Naga is only supported on vulkan. On other platforms you will have to use passthrough shaders.
         ///
         /// It is recommended to use [`Device::create_shader_module_trusted`] with [`ShaderRuntimeChecks::unchecked()`]
         /// to avoid workgroup memory zero initialization, which can be expensive due to zero initialization being
@@ -1303,9 +1320,11 @@ bitflags_array! {
         #[name("wgpu-mesh-shader")]
         const EXPERIMENTAL_MESH_SHADER = 1 << 48;
 
-        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
-        /// major bugs in them and are expected to be subject to breaking changes, suggestions
-        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/6762)
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have major bugs and
+        /// are expected to be subject to breaking changes.
+        ///
+        /// Post suggestions for the API exposed by this on
+        /// [the ray-tracing tracking issue](https://github.com/gfx-rs/wgpu/issues/6762).
         ///
         /// Allows for returning of the hit triangle's vertex position when tracing with an
         /// acceleration structure marked with [`AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`].
@@ -1319,14 +1338,15 @@ bitflags_array! {
         #[name("wgpu-ray-hit-vertex-return")]
         const EXPERIMENTAL_RAY_HIT_VERTEX_RETURN = 1 << 49;
 
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have major bugs and
+        /// are expected to be subject to breaking changes.
+        ///
         /// Enables multiview in mesh shader pipelines
         ///
         /// Supported platforms:
         /// - Vulkan (with [VK_EXT_mesh_shader](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_mesh_shader.html))
-        ///
-        /// Potential Platforms:
-        /// - DX12
-        /// - Metal
+        /// - DX12 (with mesh shaders, view instancing, and SM 6.1+)
+        /// - Metal (with mesh shaders and a vertex amplification factor above one)
         ///
         /// This is a native only feature.
         #[name("wgpu-mesh-shader-multiview")]
@@ -1338,7 +1358,7 @@ bitflags_array! {
         /// - Vulkan
         /// - DX12
         ///
-        /// [BlasTriangleGeometrySizeDescriptor::vertex_format]: super::BlasTriangleGeometrySizeDescriptor
+        /// [BlasTriangleGeometrySizeDescriptor::vertex_format]: super::BlasTriangleGeometrySizeDescriptor::vertex_format
         #[name("wgpu-extended-acceleration-structure-vertex-formats")]
         const EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS = 1 << 51;
 
@@ -1348,14 +1368,14 @@ bitflags_array! {
         /// Shader code isn't parsed or interpreted in any way. It is the user's
         /// responsibility to ensure the code and reflection (if passed) are correct.
         ///
-        /// Supported platforms
+        /// Supported platforms:
         /// - Vulkan
         /// - DX12
         /// - Metal
-        /// - WebGPU
+        /// - OpenGL
         ///
-        /// Ideally, in the future, all platforms will be supported. For more info, see
-        /// [this comment](https://github.com/gfx-rs/wgpu/issues/3103#issuecomment-2833058367).
+        /// Potential Platforms:
+        /// - WebGPU
         ///
         #[doc = link_to_wgpu_docs!(["`Device::create_shader_module_passthrough`"]: "struct.Device.html#method.create_shader_module_passthrough")]
         #[name("wgpu-passthrough-shaders", "passthrough-shaders")]
@@ -1384,6 +1404,9 @@ bitflags_array! {
         #[name("wgpu-selective-multiview")]
         const SELECTIVE_MULTIVIEW = 1 << 54;
 
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have major bugs and
+        /// are expected to be subject to breaking changes.
+        ///
         /// Enables the use of point-primitive outputs from mesh shaders. Making use of this feature also requires enabling
         /// `Features::EXPERIMENTAL_MESH_SHADER`.
         ///
@@ -1406,6 +1429,9 @@ bitflags_array! {
         #[name("wgpu-multisample-array")]
         const MULTISAMPLE_ARRAY = 1 << 56;
 
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have major bugs and
+        /// are expected to be subject to breaking changes.
+        ///
         /// Enables cooperative matrix operations (also known as tensor cores on NVIDIA GPUs
         /// or simdgroup matrix operations on Apple GPUs).
         ///
@@ -1430,6 +1456,8 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - Vulkan (with VK_KHR_fragment_shader_barycentric)
+        /// - DX12 (with barycentrics support and SM 6.1+)
+        /// - Metal (with per-vertex support)
         ///
         /// This is a native only feature.
         #[name("wgpu-shader-per-vertex")]
@@ -1438,12 +1466,12 @@ bitflags_array! {
         /// Enables shader `draw_index` builtin.
         ///
         /// Supported platforms:
-        /// - GLES
-        /// - Vulkan
+        /// - Vulkan (with shaderDrawParameters or VK_KHR_shader_draw_parameters)
         ///
-        /// Potential platforms:
+        /// Potential Platforms:
         /// - DX12
         /// - Metal
+        /// - OpenGL
         ///
         /// This is a native only feature.
         #[name("wgpu-shader-draw-index")]
@@ -1485,7 +1513,21 @@ bitflags_array! {
         #[name("wgpu-memory-decoration-volatile")]
         const MEMORY_DECORATION_VOLATILE = 1 << 62;
 
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have major bugs and
+        /// are expected to be subject to breaking changes.
+        ///
+        /// Post suggestions for the API exposed by this on
+        /// [the ray-tracing tracking issue](https://github.com/gfx-rs/wgpu/issues/6762).
+        ///
         /// Allows for constructing ray tracing pipelines.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with VK_KHR_ray_tracing_pipeline)
+        ///
+        /// Potential Platforms:
+        /// - DX12
+        ///
+        /// This is a native only feature.
         #[name("wgpu-ray-tracing-pipelines")]
         const EXPERIMENTAL_RAY_TRACING_PIPELINES = 1 << 24;
 
@@ -1748,6 +1790,8 @@ bitflags_array! {
         ///
         /// Supported Platforms:
         /// - Vulkan
+        /// - DX12
+        /// - Metal
         /// - WebGPU
         #[name("float32-blendable")]
         const FLOAT32_BLENDABLE = WEBGPU_FEATURE_FLOAT32_BLENDABLE;
@@ -1809,7 +1853,7 @@ bitflags_array! {
         #[doc = link_to_wgpu_item!(struct RenderPass)]
         #[doc = link_to_wgpu_item!(struct PipelineLayoutDescriptor)]
         #[doc = link_to_wgpu_docs!(["`RenderPass::set_immediates`"]: "struct.RenderPass.html#method.set_immediates")]
-        /// [`Limits::max_immediate_size`]: super::Limits
+        /// [`Limits::max_immediate_size`]: super::Limits::max_immediate_size
         #[name("immediates")]
         const IMMEDIATES = WEBGPU_FEATURE_IMMEDIATES;
 
@@ -1822,8 +1866,14 @@ bitflags_array! {
         /// Supported platforms:
         /// - Vulkan (with geometryShader)
         /// - DX12
-        /// - Metal (some)
-        /// - OpenGL (some)
+        /// - Metal (with primitive index support)
+        /// - OpenGL 3.2+ / GLES 3.2+, or with OES_geometry_shader or GL_ARB_geometry_shader4
+        ///
+        /// Potential Platforms:
+        /// - WebGPU
+        ///
+        /// The feature is in the WebGPU specification, but the WebGPU backend
+        /// does not map it yet, so it is never reported there.
         ///
         /// This is a web and native feature. `primitive-index` is its
         /// WebGPU-defined name, and `shader-primitive-index` is accepted to
