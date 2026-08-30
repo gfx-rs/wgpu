@@ -4,11 +4,10 @@ pub use wgt::markers::*;
 ///
 /// This is used for tracing.
 ///
-/// As of `wgpu` v27, commands are encoded all at once when
-/// `CommandEncoder::finish` is called, not when the encoding methods are
-/// called for each command. This implies storing a representation of the
-/// commands in memory until `finish` is called. The
-/// serialized trace identifies resources by the integer value of
+/// Commands are encoded all at once when `CommandEncoder::finish` is called,
+/// not when the encoding methods are called for each command. This implies
+/// storing a representation of the commands in memory until `finish` is
+/// called. The serialized trace identifies resources by the integer value of
 /// `Arc::as_ptr`. These IDs have the type [`crate::id::PointerId`]. The
 /// trace player uses hash maps to go from `PointerId`s to `Arc`s
 /// when replaying a trace.

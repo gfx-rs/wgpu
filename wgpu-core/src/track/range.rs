@@ -9,7 +9,7 @@ use core::{fmt::Debug, iter, ops::Range};
 /// are often grouped together linearly.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct RangedStates<I, T> {
-    /// List of ranges, each associated with a singe value.
+    /// List of ranges, each associated with a single value.
     /// Ranges of keys have to be non-intersecting and ordered.
     ranges: SmallVec<[(Range<I>, T); 1]>,
 }
