@@ -657,7 +657,7 @@ impl crate::Device for super::Device {
                 .array_layer_count
                 .unwrap_or(texture.array_layers - desc.range.base_array_layer);
 
-            autoreleasepool(|_| {
+            autoreleasepool(|_| -> Result<_, crate::DeviceError> {
                 let level_range = NSRange {
                     location: desc.range.base_mip_level as _,
                     length: mip_level_count as _,
@@ -675,13 +675,58 @@ impl crate::Device for super::Device {
                             level_range,
                             slice_range,
                         )
-                        .unwrap()
-                };
+                }
+                .ok_or_else(|| {
+                    // Metal refuses *any* view of a memoryless texture, whatever
+                    // the view asks for: its validation layer reports "cannot
+                    // create View from Memoryless texture". `TRANSIENT_ATTACHMENT`
+                    // maps to `MTLStorageModeMemoryless`, so that is the case
+                    // reachable from WebGPU, and it is the one hit in practice.
+                    // See <https://github.com/gpuweb/gpuweb/issues/6876>.
+                    //
+                    // The selector reports nil without a reason, so name the
+                    // cause where we can recognise it and record the parent
+                    // texture, the requested view and the arguments Metal was
+                    // actually given, so a report carries everything needed to
+                    // act on it.
+                    let storage_mode = texture.raw.storageMode();
+                    let cause = if storage_mode == MTLStorageMode::Memoryless {
+                        "Metal cannot create a view of a memoryless texture, which is \
+                         what TRANSIENT_ATTACHMENT usage selects"
+                    } else {
+                        "Metal did not report a reason"
+                    };
+                    log::error!(
+                        "Metal declined to create a texture view: {cause}. \
+                         Texture: {:?}, {:?}, {}x{}x{}, {} mip level(s), \
+                         {} array layer(s), Metal usage {:?}, storage mode {:?}. \
+                         Requested view: {:?}. \
+                         Metal arguments: pixel format {:?}, texture type {:?}, \
+                         levels {}..{}, slices {}..{}.",
+                        texture.format,
+                        texture.raw_type,
+                        texture.copy_size.width,
+                        texture.copy_size.height,
+                        texture.copy_size.depth,
+                        texture.mip_levels,
+                        texture.array_layers,
+                        texture.raw.usage(),
+                        storage_mode,
+                        desc,
+                        raw_format,
+                        raw_type,
+                        level_range.location,
+                        level_range.location + level_range.length,
+                        slice_range.location,
+                        slice_range.location + slice_range.length,
+                    );
+                    crate::DeviceError::Unexpected
+                })?;
                 if let Some(label) = desc.label {
                     raw.setLabel(Some(&NSString::from_str(label)));
                 }
-                raw
-            })
+                Ok(raw)
+            })?
         };
 
         self.counters.texture_views.add(1);
