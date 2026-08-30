@@ -1,10 +1,10 @@
 ---
 name: webgpu-specs
 description: Download WebGPU and WGSL specifications for use as a reference
-allowed-tools: "Bash(sh .claude/skills/webgpu-specs/download.sh)"
+allowed-tools: "Bash(sh .agents/skills/webgpu-specs/download.sh)"
 ---
 
-Run `sh .claude/skills/webgpu-specs/download.sh` to download the
+Run `sh .agents/skills/webgpu-specs/download.sh` to download the
 WebGPU and WGSL specifications if they are not present or if they have
 been updated. You do not need to change directory before running the script.
 

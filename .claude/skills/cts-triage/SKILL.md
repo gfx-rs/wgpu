@@ -120,7 +120,7 @@ Group failures into categories:
 
 **Known Issues - Skip:**
 
-- Known failure patterns (documented in AGENTS.md)
+- Known failure patterns (documented in Common Patterns below)
 - Track count but don't try to fix
 
 ## Step 8: Identify Root Causes
@@ -214,21 +214,32 @@ The validation is triggering incorrectly. When `depthCompare` is undefined/missi
 [repeat as needed for additional issues]
 ````
 
-## Step 11: Update test.lst
+## Step 11: Update CTS Result Lists
 
-For fixed tests that are now passing, add them to `cts_runner/test.lst`:
+The result lists have these purposes:
 
-1. **Use wildcards** to minimize lines:
+- `cts_runner/test.lst` contains suites with no failures. It is not an
+  exhaustive list of passing suites.
+- `cts_runner/fail.lst` contains suites with failures. A comment can record the
+  pass rate, especially when the pass rate is high.
+- `cts_runner/skip.lst` contains suites in which at least 90% of the tests are
+  skipped.
 
-   ```
-   webgpu:api,validation,category:subcategory:isAsync=false;*
-   ```
+If you fix a suite, add it to `cts_runner/test.lst` only when all of its tests
+pass or skip. Do not add a suite that has any failures.
 
-2. **Group related tests** when possible:
-   - If multiple subcategories all pass, use a higher-level wildcard
-   - Example: `webgpu:api,validation,category:*` if all subcategories pass
+Use wildcards to minimize the number of selectors:
 
-3. **Maintain alphabetical order** roughly in the file
+```
+webgpu:api,validation,category:subcategory:isAsync=false;*
+```
+
+Use a higher-level wildcard only when all tests that it matches belong in the
+same result list. Do not use a wildcard that also matches tests from another
+result list.
+
+Keep the selectors in the order that the `lst_files_are_sorted` integration
+test requires. This rule also applies to selectors in comments.
 
 ## Step 12: Verify and Build
 
