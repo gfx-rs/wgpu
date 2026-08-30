@@ -77,7 +77,7 @@ impl TlasInstance {
     /// Note: while one of these contains a reference to a BLAS that BLAS will not be dropped,
     /// but it can still be destroyed. Destroying a BLAS that is referenced by one or more
     /// TlasInstance(s) will immediately make them invalid. If one or more of those invalid
-    /// TlasInstances is inside a TlasPackage that is attempted to be built, the build will
+    /// TlasInstances is inside a Tlas that is attempted to be built, the build will
     /// generate a validation error.
     pub fn new(blas: &Blas, transform: [f32; 12], custom_data: u32, mask: u8) -> Self {
         Self {
