@@ -179,6 +179,17 @@ However, the author submitting the PR must fully adhere to [Change Ownership](#c
 The author is responsible for the code, regardless of how it was created.
 Do not use "LLM generated" as a justification for low quality code.
 
+Additionally, please write Issue and PR descriptions and large explanatory
+comment blocks yourself. These need to be read by maintainers and maintainer
+time is at a premium, so be respectful of maintainers time by not giving
+them unadultered LLM content to read.
+
+#### Undue Burden
+
+We reserve the right to close any PRs that cause an undue burden on
+the maintainership. This could include, but is not limited to, [massive PRs](#large-pull-requests-are-risky),
+[LLM slop](#llms-ai), or contributions not in good faith.
+
 #### Designing new features
 
 As an open source project, wgpu wants to serve a broad audience. This
@@ -193,12 +204,6 @@ maintainership before you invest yourself too heavily. Try to build a
 consensus on the approach, including API changes, shader language
 extensions, implementation architecture, error handling, testing
 plans, benchmarking, and so on.
-
-#### Undue Burden
-
-We reserve the right to close any PRs that cause an undue burden on
-the maintainership. This could include, but is not limited to, [massive PRs](#large-pull-requests-are-risky),
-[LLM slop](#llms-ai), or contributions not in good faith.
 
 #### Large pull requests are risky
 
