@@ -48,7 +48,7 @@ impl BufferBindGroupState {
         }
     }
 
-    /// Optimize the buffer bind group state by sorting it by ID.
+    /// Optimize the buffer bind group state by sorting it by tracker index.
     ///
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant ascending order.
@@ -98,7 +98,7 @@ impl BufferUsageScope {
 
     /// Sets the size of all the vectors inside the tracker.
     ///
-    /// Must be called with the highest possible Buffer ID before
+    /// Must be called with the highest possible buffer tracker index before
     /// all unsafe functions are called.
     pub fn set_size(&mut self, size: usize) {
         self.state.resize(size, BufferUses::empty());
@@ -126,8 +126,8 @@ impl BufferUsageScope {
     ///
     /// # Safety
     ///
-    /// [`Self::set_size`] must be called with the maximum possible Buffer ID before this
-    /// method is called.
+    /// [`Self::set_size`] must be called with the maximum possible buffer tracker
+    /// index before this method is called.
     pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &BufferBindGroupState,
@@ -153,7 +153,7 @@ impl BufferUsageScope {
     /// If any of the resulting states is invalid, stops the merge and returns a usage
     /// conflict with the details of the invalid state.
     ///
-    /// If the given tracker uses IDs higher than the length of internal vectors,
+    /// If the given tracker uses tracker indices higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn merge_usage_scope(
         &mut self,
@@ -190,7 +190,7 @@ impl BufferUsageScope {
     /// If the resulting state is invalid, returns a usage
     /// conflict with the details of the invalid state.
     ///
-    /// If the ID is higher than the length of internal vectors,
+    /// If the tracker index is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn merge_single(
         &mut self,
@@ -311,7 +311,7 @@ impl BufferTracker {
 
     /// Sets the size of all the vectors inside the tracker.
     ///
-    /// Must be called with the highest possible Buffer ID before
+    /// Must be called with the highest possible buffer tracker index before
     /// all unsafe functions are called.
     pub fn set_size(&mut self, size: usize) {
         self.start.resize(size, BufferUses::empty());
@@ -354,7 +354,7 @@ impl BufferTracker {
     /// If a transition is needed to get the buffer into the given state, that transition
     /// is returned. No more than one transition is needed.
     ///
-    /// If the ID is higher than the length of internal vectors,
+    /// If the tracker index is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_single(
         &mut self,
@@ -387,7 +387,7 @@ impl BufferTracker {
     /// those transitions are stored within the tracker. A subsequent
     /// call to [`Self::drain_transitions`] is needed to get those transitions.
     ///
-    /// If the ID is higher than the length of internal vectors,
+    /// If the tracker index is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_from_tracker(&mut self, tracker: &Self) {
         let incoming_size = tracker.start.len();
@@ -421,7 +421,7 @@ impl BufferTracker {
     /// those transitions are stored within the tracker. A subsequent
     /// call to [`Self::drain_transitions`] is needed to get those transitions.
     ///
-    /// If the ID is higher than the length of internal vectors,
+    /// If the tracker index is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_from_usage_scope(&mut self, scope: &BufferUsageScope) {
         let incoming_size = scope.state.len();
@@ -457,14 +457,10 @@ impl BufferTracker {
     ///
     /// This is a really funky method used by Compute Passes to generate
     /// barriers after a call to dispatch without needing to iterate
-    /// over all elements in the usage scope. We use each the
-    /// a given iterator of ids as a source of which IDs to look at.
-    /// All the IDs must have first been added to the usage scope.
-    ///
-    /// # Panics
-    ///
-    /// If a resource identified by `index_source` is not found in the usage
-    /// scope.
+    /// over all elements in the usage scope. We use
+    /// a given iterator of tracker indices as a source of which resources to look at.
+    /// All the tracker indices must have first been added to the usage scope.
+    /// An index that is missing from the scope is skipped silently.
     pub fn set_and_remove_from_usage_scope_sparse(
         &mut self,
         scope: &mut BufferUsageScope,
@@ -696,11 +692,11 @@ impl DeviceBufferTracker {
 enum BufferStateProvider<'a> {
     /// Get a state that was provided directly.
     Direct { state: BufferUses },
-    /// Get a state from an an array of states.
+    /// Get a state from an array of states.
     Indirect { state: &'a [BufferUses] },
 }
 impl BufferStateProvider<'_> {
-    /// Gets the state from the provider, given a resource ID index.
+    /// Gets the state from the provider, given a resource tracker index.
     ///
     /// # Safety
     ///

@@ -4,7 +4,7 @@ use crate::{
 };
 use alloc::sync::Arc;
 
-/// A tracker that holds tracks BLASes.
+/// A tracker that tracks BLASes.
 ///
 /// This is mostly a safe shell around [`ResourceMetadata`]
 #[derive(Debug)]
@@ -38,7 +38,7 @@ impl BlasTracker {
 
     /// Sets the size of all the vectors inside the tracker.
     ///
-    /// Must be called with the highest possible Texture ID before
+    /// Must be called with the highest possible BLAS tracker index before
     /// all unsafe functions are called.
     pub fn set_size(&mut self, size: usize) {
         self.size = size;
@@ -52,7 +52,7 @@ impl BlasTracker {
         }
     }
 
-    /// Returns true if the tracker owns the given texture.
+    /// Returns true if the tracker owns the given BLAS.
     pub fn contains(&self, blas: &Blas) -> bool {
         self.metadata.contains(blas.tracker_index().as_usize())
     }
