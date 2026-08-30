@@ -143,8 +143,8 @@ impl Draw {
             pipeline_layout,
             pipeline,
 
-            free_indirect_entries: Mutex::new(rank::BUFFER_POOL, Vec::new()),
-            free_metadata_entries: Mutex::new(rank::BUFFER_POOL, Vec::new()),
+            free_indirect_entries: Mutex::new(rank::DRAW_FREE_ENTRIES, Vec::new()),
+            free_metadata_entries: Mutex::new(rank::DRAW_FREE_ENTRIES, Vec::new()),
         })
     }
 
