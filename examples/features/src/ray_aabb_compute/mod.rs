@@ -130,6 +130,7 @@ impl crate::framework::Example for Example {
             mip_level_count: None,
             base_array_layer: 0,
             array_layer_count: None,
+            swizzle: wgpu::TextureComponentSwizzle::default(),
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {

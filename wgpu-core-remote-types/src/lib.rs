@@ -80,6 +80,12 @@ pub struct TextureViewDescriptor<'a> {
     pub usage: Option<wgt::TextureUsages>,
     /// Range within the texture that is accessible via this view.
     pub range: wgt::ImageSubresourceRange,
+    /// Texture component swizzle.
+    /// When the texture view is accessed by a shader, the red/green/blue/alpha channels are replaced
+    /// by the value corresponding to the component specified in [`wgt::TextureComponentSwizzle`].
+    ///
+    /// This requires [`wgt::Features::TEXTURE_COMPONENT_SWIZZLE`] if it is not identity swizzle.
+    pub swizzle: wgt::TextureComponentSwizzle,
 }
 
 /// Describes a `Sampler`
