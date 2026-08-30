@@ -585,11 +585,7 @@ impl<'a> UsageScope<'a> {
     /// Only stateful things are merged in herell other resources are owned
     /// indirectly by a bind group or are merged directly into the command buffer tracker.
     ///
-    /// # Safety
-    ///
-    /// The maximum ID given by each bind group resource must be less than the
-    /// length of the storage given at the call to `new`.
-    pub unsafe fn merge_render_bundle(
+    pub fn merge_render_bundle(
         &mut self,
         render_bundle: &RenderBundleScope,
     ) -> Result<(), ResourceUsageCompatibilityError> {
