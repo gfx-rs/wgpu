@@ -47,8 +47,9 @@
 //!
 //! As described in <https://github.com/gfx-rs/wgpu/issues/4514>, some language
 //! front ends miscompile `switch` statements where all cases branch to the same
-//! body. Our HLSL and GLSL backends render [`Switch`] statements with a single
-//! [`SwitchCase`] as `do {} while(false);` loops.
+//! body. Our HLSL and GLSL backends render such a [`Switch`] statement as a
+//! `do {} while(false);` loop. A [`Switch`] has a single body when every
+//! [`SwitchCase`] but the last is an empty fall-through case.
 //!
 //! However, this rewriting introduces a new loop that could "capture"
 //! `continue` statements in its body. To avoid doing so, we apply the
@@ -209,7 +210,7 @@ impl ContinueCtx {
     /// Updates internal state to record entering a [`Switch`] statement.
     ///
     /// Return `Some(variable)` if this [`Switch`] is nested within a [`Loop`],
-    /// and the caller should introcue a new `bool` local variable named
+    /// and the caller should introduce a new `bool` local variable named
     /// `variable` above the `switch`, for forwarding [`Continue`] statements.
     ///
     /// `variable` is guaranteed not to conflict with any names used by the

@@ -288,7 +288,7 @@ impl ForDebugWithTypes for &[Rule] {}
 /// constants from [`ScalarSet`].
 ///
 /// When a return type identifier is given, it is treated as a variant
-/// of the the [`ConclusionRule`] enum.
+/// of the [`ConclusionRule`] enum.
 macro_rules! regular {
     // regular!(ARITY, CONSTRUCTOR of SCALAR)
     ( $arity:literal , $( $constr:ident )|* of $( $scalar:ident )|*) => {

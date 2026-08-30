@@ -44,7 +44,7 @@ bitflags::bitflags! {
         /// The data can be copied around.
         const COPY = 0x4;
 
-        /// Can be be used in pipeline stage I/O.
+        /// Can be used in pipeline stage I/O.
         ///
         /// Applies to the following:
         ///   - Types that may be used in a [`Location`] binding (numeric scalars and vectors)
