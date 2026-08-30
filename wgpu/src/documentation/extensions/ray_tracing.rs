@@ -2,11 +2,12 @@
 # 🧪Experimental🧪 Ray Tracing
 
 `wgpu` supports an experimental version of ray tracing which is subject to change. The extensions allow for acceleration structures to be created and built (with
-[`Features::EXPERIMENTAL_RAY_QUERY`] enabled) and interacted with in shaders. Currently `naga` only supports ray queries
-(accessible with [`Features::EXPERIMENTAL_RAY_QUERY`] enabled in wgpu).
+[`Features::EXPERIMENTAL_RAY_QUERY`] enabled) and interacted with in shaders. `naga` and `wgpu-hal`
+support ray tracing pipelines as well as ray queries, but the `wgpu` crate exposes no API to create
+one, so ray queries are the only path available today.
 
 **Note**: The features documented here may have major bugs in them and are expected to be subject
-to breaking changes, suggestions for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040).
+to breaking changes, suggestions for the API exposed by this should be posted on [the ray-tracing tracking issue](https://github.com/gfx-rs/wgpu/issues/6762).
 Large changes may mean that this documentation may be out of date.
 
 **_This is not_** an introduction to raytracing, and assumes basic prior knowledge, to look at the fundamentals look at
@@ -18,7 +19,8 @@ The documentation and specific details of the functions and structures provided
 can be found with their definitions.
 
 Acceleration structures do not have a separate feature, instead they are enabled by [`Features::EXPERIMENTAL_RAY_QUERY`], unlike vulkan.
-When ray tracing pipelines are added, that feature will also enable acceleration structures.
+[`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`] does not enable them yet; it will once the `wgpu`
+crate exposes ray tracing pipelines.
 
 A [`Blas`] can be created with [`Device::create_blas`].
 A [`Tlas`] can be created with [`Device::create_tlas`].
@@ -131,8 +133,8 @@ queue.submit([encoder.finish()]);
 
 `naga` supports ray queries (also known as inline raytracing). To enable basic ray query functions you must add
 `enable wgpu_ray_query` to the shader, ray queries and acceleration structures also support tags which require extra
-`enable` extensions (see Acceleration structure tags for more info). Ray tracing pipelines are currently in
-development. Naming is mostly taken from vulkan.
+`enable` extensions (see Acceleration structure tags for more info). `naga` also accepts
+`enable wgpu_ray_tracing_pipeline` for ray tracing pipelines. Naming is mostly taken from vulkan.
 
 ### Ray Queries
 
@@ -154,7 +156,7 @@ rayQueryInitialize(rq: ptr<function, ray_query<vertex_return>>, acceleration_str
 //   this function returns false.
 // - A `Candidate` intersection interrupts the ray traversal.
 // - A `Candidate` intersection may happen anywhere along the ray, it should not be relied on to give the closest hit. A
-//   `Candidate` intersection is to allow the user themselves to decide if that intersection is valid*. If one wants to get
+//   `Candidate` intersection is to allow the user themselves to decide if that intersection is valid. If one wants to get
 //   the closest hit a `Committed` intersection should be used.
 // - Calling this function multiple times will cause the ray traversal to continue if it was interrupted by a `Candidate`
 //   intersection.
@@ -249,13 +251,13 @@ getCommittedHitVertexPositions(rq: ptr<function, ray_query<vertex_return>>) -> a
 getCandidateHitVertexPositions(rq: ptr<function, ray_query<vertex_return>>) -> array<vec3<f32>, 3>
 
 // A `RayDesc` is invalid if:
-// - `ray_desc.flags` contains more than one of `SKIP_TRIANGLES` and `SKIP_AABBS`
-// - `ray_desc.flags` contains more than one of `SKIP_TRIANGLES`, `CULL_BACK_FACING` and `CULL_FRONT_FACING`
-// - `ray_desc.flags` contains more than one of `FORCE_OPAQUE`, `FORCE_NO_OPAQUE`, `CULL_OPAQUE`, `CULL_NO_OPAQUE`
-// - `ray_desc.t_min` is less than `0.0`, or is not finite (`NaN` or `Inf`).
-// - `ray_desc.t_max` is less than `0.0`, less than `ray_desc.t_min` (the first rule is implied by the second).
+// - `ray_desc.flags` contains more than one of `RAY_FLAG_SKIP_TRIANGLES` and `RAY_FLAG_SKIP_AABBS`
+// - `ray_desc.flags` contains more than one of `RAY_FLAG_SKIP_TRIANGLES`, `RAY_FLAG_CULL_BACK_FACING` and `RAY_FLAG_CULL_FRONT_FACING`
+// - `ray_desc.flags` contains more than one of `RAY_FLAG_FORCE_OPAQUE`, `RAY_FLAG_FORCE_NO_OPAQUE`, `RAY_FLAG_CULL_OPAQUE`, `RAY_FLAG_CULL_NO_OPAQUE`
+// - `ray_desc.tmin` is less than `0.0`, or is not finite (`NaN` or `Inf`).
+// - `ray_desc.tmax` is less than `0.0`, less than `ray_desc.tmin` (the first rule is implied by the second).
 // - Any component of `ray_desc.origin` or `ray_desc.dir` is not finite (`NaN` or `Inf`)
-// - `ray_desc.dir`'s length is zero (this implies `ray_desc.dir`)
+// - `ray_desc.dir`'s length is zero
 struct RayDesc {
     // Contains flags to use for this ray (e.g. consider all `Blas`es opaque)
     flags: u32,
@@ -263,9 +265,9 @@ struct RayDesc {
     // the `Blas` contained within that `TlasInstance` may be hit.
     cull_mask: u32,
     // Only points on the ray whose t is greater than this may be hit.
-    t_min: f32,
+    tmin: f32,
     // Only points on the ray whose t is less than this may be hit.
-    t_max: f32,
+    tmax: f32,
     // The origin of the ray.
     origin: vec3<f32>,
     // The direction of the ray, t is calculated as the length down the ray divided by the length of `dir`.
@@ -281,7 +283,7 @@ struct RayIntersection {
     // Corresponds to `instance.custom_data` where `instance` is the `TlasInstance`
     // that the intersected object was contained in.
     instance_custom_data: u32,
-    // The index into the `TlasPackage` to get the `TlasInstance` that the hit object is in
+    // The index into the `Tlas` to get the `TlasInstance` that the hit object is in
     instance_index: u32,
     // The offset into the shader binding table. Currently, this value is always 0.
     sbt_record_offset: u32,
@@ -298,46 +300,49 @@ struct RayIntersection {
     // Matrix for converting from object-space to world-space.
     //
     // This matrix needs to be on the left side of the multiplication. Using it the other way round will not work.
-    // Use it this way: `let transformed_vector = intersecion.object_to_world * vec4<f32>(x, y, z, transform_multiplier);
+    // Use it this way: `let transformed_vector = intersection.object_to_world * vec4<f32>(x, y, z, transform_multiplier);`
     object_to_world: mat4x3<f32>,
     // Matrix for converting from world-space to object-space
     //
     // This matrix needs to be on the left side of the multiplication. Using it the other way round will not work.
-    // Use it this way: `let transformed_vector = intersecion.world_to_object * vec4<f32>(x, y, z, transform_multiplier);
+    // Use it this way: `let transformed_vector = intersection.world_to_object * vec4<f32>(x, y, z, transform_multiplier);`
     world_to_object: mat4x3<f32>,
 }
 
 /// -- Flags for `RayDesc::flags` --
 
+// No flags.
+const RAY_FLAG_NONE = 0x0;
+
 // All `Blas`es are marked as opaque.
-const FORCE_OPAQUE = 0x1;
+const RAY_FLAG_FORCE_OPAQUE = 0x1;
 
 // All `Blas`es are marked as non-opaque.
-const FORCE_NO_OPAQUE = 0x2;
+const RAY_FLAG_FORCE_NO_OPAQUE = 0x2;
 
 // Instead of searching for the closest hit return the first hit.
-const TERMINATE_ON_FIRST_HIT = 0x4;
+const RAY_FLAG_TERMINATE_ON_FIRST_HIT = 0x4;
 
 // Unused: implemented for raytracing pipelines.
-const SKIP_CLOSEST_HIT_SHADER = 0x8;
+const RAY_FLAG_SKIP_CLOSEST_HIT_SHADER = 0x8;
 
 // If `RayIntersection::front_face` is false do not return a hit.
-const CULL_BACK_FACING = 0x10;
+const RAY_FLAG_CULL_BACK_FACING = 0x10;
 
 // If `RayIntersection::front_face` is true do not return a hit.
-const CULL_FRONT_FACING = 0x20;
+const RAY_FLAG_CULL_FRONT_FACING = 0x20;
 
 // If the `Blas` a intersection is checking is marked as opaque do not return a hit.
-const CULL_OPAQUE = 0x40;
+const RAY_FLAG_CULL_OPAQUE = 0x40;
 
 // If the `Blas` a intersection is checking is not marked as opaque do not return a hit.
-const CULL_NO_OPAQUE = 0x80;
+const RAY_FLAG_CULL_NO_OPAQUE = 0x80;
 
 // If the `Blas` a intersection is checking contains triangles do not return a hit.
-const SKIP_TRIANGLES = 0x100;
+const RAY_FLAG_SKIP_TRIANGLES = 0x100;
 
 // If the `Blas` a intersection is checking contains AABBs do not return a hit.
-const SKIP_AABBS = 0x200;
+const RAY_FLAG_SKIP_AABBS = 0x200;
 
 /// -- Constants for `RayIntersection::kind` --
 
@@ -362,36 +367,94 @@ Functions
 
 ```wgsl
 // Begins to check where (if anywhere) the ray defined by `ray_desc` hits in `acceleration_structure` calling through the `any_hit` shaders and `closest_hit` shader if something was hit or the `miss` shader if no hit was found
+// `T` is the type of the `ray_payload` global that `payload` points at.
 traceRay<T>(acceleration_structure: acceleration_structure, ray_desc: RayDesc, payload: ptr<ray_payload, T>)
 ```
 
-> [!CAUTION]
->
 > #### ⚠️Undefined behavior ⚠️:
 >
-> Calling `traceRay` inside another `traceRay` more than `max_recursion_depth` times
->
-> \*this is only known undefined behaviour, and will be worked around in the future.
+> Calling `traceRay` inside another `traceRay` more than
+> [`Limits::max_ray_recursion_depth`] times. This is the only known undefined
+> behavior in the ray tracing extensions, and a future release will remove it.
 
 New shader stages
 
+Ray tracing pipeline stages need `enable wgpu_ray_tracing_pipeline;`. The `@any_hit`, `@closest_hit`
+and `@miss` stages must also carry an `@incoming_payload(G)` attribute, where `G` names a global
+variable in the `incoming_ray_payload` address space. That variable holds the payload passed to
+`traceRay` by the `@ray_generation` stage, which declares its own payload in the `ray_payload`
+address space.
+
 ```wgsl
+enable wgpu_ray_tracing_pipeline;
+
+struct Payload {
+    foo: u32,
+}
+
+@group(0) @binding(0)
+var acc_struct: acceleration_structure;
+
+var<ray_payload> payload: Payload;
+
 // First stage to be called, allowed to call `traceRay`
 @ray_generation
-fn rg() {}
+fn ray_gen() {
+    payload = Payload();
+    let desc = RayDesc(RAY_FLAG_NONE, 0xffu, 0.01, 100.0, vec3(0.0), vec3(0.0, 1.0, 0.0));
+    traceRay(acc_struct, desc, &payload);
+}
+
+var<incoming_ray_payload> incoming_payload: Payload;
 
 // Stage called on any hit that is not opaque, not allowed to call `traceRay`
 @any_hit
-fn ah() {}
+@incoming_payload(incoming_payload)
+fn any_hit(@builtin(hit_kind) kind: u32) {
+    do_something_any_hit(&incoming_payload)
+}
 
 // Stage called on the closest hit, allowed to call `traceRay`
 @closest_hit
-fn ch() {}
+@incoming_payload(incoming_payload)
+fn closest_hit(@builtin(object_to_world) obj_to_world: mat4x3<f32>) {
+    do_something_closest_hit(&incoming_payload)
+}
 
-// Stage call if there was never a hit, allowed to call `traceRay`
+// Stage called if there was never a hit, allowed to call `traceRay`
 @miss
-fn miss() {}
+@incoming_payload(incoming_payload)
+fn miss(@builtin(world_ray_origin) origin: vec3<f32>) {
+    do_something_miss(&incoming_payload)
+}
 ```
+
+Ray Tracing pipeline-specific builtins
+
+| Builtin                | Type          | Stages                     | Description                                                                                                                                                  |
+| ---------------------- | ------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ray_invocation_id`    | `vec3<u32>`   | all                        | The id of this ray within the rays created.                                                                                                                  |
+| `num_ray_invocations`  | `vec3<u32>`   | all                        | The number of rays created.                                                                                                                                  |
+| `world_ray_origin`     | `vec3<f32>`   | any hit, closest hit, miss | The origin of the ray in world space.                                                                                                                        |
+| `world_ray_direction`  | `vec3<f32>`   | any hit, closest hit, miss | The direction of the ray in world space.                                                                                                                     |
+| `ray_t_min`            | `f32`         | any hit, closest hit, miss | The `t_min` given in the `RayDesc`.                                                                                                                          |
+| `ray_t_current_max`    | `f32`         | any hit, closest hit, miss | The closest committed hit if there is one, otherwise the `t_max` in the `RayDesc`.                                                                           |
+| `object_ray_origin`    | `vec3<f32>`   | any hit, closest hit       | The origin of the ray in the space of the hit object.                                                                                                        |
+| `object_ray_direction` | `vec3<f32>`   | any hit, closest hit       | The direction of the ray in the space of the hit object.                                                                                                     |
+| `instance_custom_data` | `u32`         | any hit, closest hit       | Corresponds to `TlasInstance::custom_data` for the intersected object.                                                                                       |
+| `geometry_index`       | `u32`         | any hit, closest hit       | The index of the geometry in the `Blas`.                                                                                                                     |
+| `object_to_world`      | `mat4x3<f32>` | any hit, closest hit       | Matrix for converting from the space of the hit object to world-space.                                                                                       |
+| `world_to_object`      | `mat4x3<f32>` | any hit, closest hit       | Matrix for converting from world-space to the space of the hit object.                                                                                       |
+| `hit_kind`             | `u32`         | any hit, closest hit       | The kind of hit: 254 (0xFE) for a front facing triangle, 255 (0xFF) for a back facing one.                                                                   |
+
+Builtins usable in ray tracing pipelines that are not specific to them
+
+| Builtin                  | Type  | Stages               | Description                                                                                    |
+| ------------------------ | ----- | -------------------- | ---------------------------------------------------------------------------------------------- |
+| `instance_index`         | `u32` | any hit, closest hit | The index of the intersected instance in the `Tlas`.                                           |
+| `primitive_index`        | `u32` | any hit, closest hit | The index of the intersected primitive within the geometry, requires `enable primitive_index`. |
+| `subgroup_size`          | `u32` | all                  | The number of invocations in the subgroup, requires `enable subgroups`.                        |
+| `subgroup_invocation_id` | `u32` | all                  | The id of this invocation within the subgroup, requires `enable subgroups`.                    |
 
 ### Acceleration structure tags
 
@@ -401,8 +464,8 @@ These are tags that can be added to a acceleration structure (`acceleration_stru
 
 | Tag             | Requirements                          | Description                                                            |
 | --------------- | ------------------------------------- | ---------------------------------------------------------------------- |
-| `vertex_return` | `enable wgpu_ray_query_vertex_return` | Allows getting the vertices of the hit triangle when using ray queries |
+| `vertex_return` | `enable wgpu_ray_query_vertex_return`, [`Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN`], and [`AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`](wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN) on the BLAS | Allows getting the vertices of the hit triangle when using ray queries |
 
 */
 
-use crate::{Blas, CommandEncoder, Device, Features, Queue, Tlas, TlasInstance};
+use crate::{Blas, CommandEncoder, Device, Features, Limits, Queue, Tlas, TlasInstance};
