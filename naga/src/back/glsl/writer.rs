@@ -2548,7 +2548,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // `ImageSample` is a bit complicated compared to the rest of the IR.
             //
             // First there are three variations depending whether the sample level is explicitly set,
-            // if it's automatic or it it's bias:
+            // if it's automatic or if it's bias:
             // `texture(image, coordinate)` - Automatic sample level
             // `texture(image, coordinate, bias)` - Bias sample level
             // `textureLod(image, coordinate, level)` - Zero or Exact sample level

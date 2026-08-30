@@ -28,8 +28,6 @@ let module_info: naga::valid::ModuleInfo =
         naga::valid::ValidationFlags::all(),
         naga::valid::Capabilities::all(),
     )
-    .subgroup_stages(naga::valid::ShaderStages::all())
-    .subgroup_operations(naga::valid::SubgroupOperationSet::all())
     .validate(&module)?;
 
 // Translate the module.

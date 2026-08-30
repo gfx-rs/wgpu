@@ -3,9 +3,9 @@
 [![Matrix](https://img.shields.io/badge/Matrix-%23naga%3Amatrix.org-blueviolet.svg)](https://matrix.to/#/#naga:matrix.org)
 [![Crates.io](https://img.shields.io/crates/v/naga.svg?label=naga)](https://crates.io/crates/naga)
 [![Docs.rs](https://docs.rs/naga/badge.svg)](https://docs.rs/naga)
-[![Build Status](https://github.com/gfx-rs/naga/workflows/pipeline/badge.svg)](https://github.com/gfx-rs/naga/actions)
-![MSRV](https://img.shields.io/badge/rustc-1.90-blue.svg)
-[![codecov.io](https://codecov.io/gh/gfx-rs/naga/branch/master/graph/badge.svg?token=9VOKYO8BM2)](https://codecov.io/gh/gfx-rs/naga)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/gfx-rs/wgpu/ci.yml?branch=trunk&logo=github&label=CI)](https://github.com/gfx-rs/wgpu/actions)
+![MSRV](https://img.shields.io/badge/rustc-1.87-blue.svg)
+[![codecov.io](https://img.shields.io/codecov/c/github/gfx-rs/wgpu?logo=codecov&logoColor=fff&label=codecov&token=84qJTesmeS)](https://codecov.io/gh/gfx-rs/wgpu)
 
 The shader translation library for the needs of [wgpu](https://github.com/gfx-rs/wgpu).
 

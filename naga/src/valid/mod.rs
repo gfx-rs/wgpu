@@ -325,7 +325,7 @@ impl super::GatherMode {
 }
 
 bitflags::bitflags! {
-    /// Validation flags.
+    /// A set of shader stages.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]

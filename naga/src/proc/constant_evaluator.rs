@@ -744,7 +744,7 @@ impl ExpressionKindTracker {
         }
     }
 
-    /// Forces the the expression to not be const
+    /// Forces the expression to not be const
     pub fn force_non_const(&mut self, value: Handle<Expression>) {
         self.inner[value] = ExpressionKind::Runtime;
     }
