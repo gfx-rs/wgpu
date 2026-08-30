@@ -76,24 +76,17 @@ wasm-bindgen target/wasm32-unknown-unknown/debug/wgpu-examples.wasm \
 
 ### Setting up the page
 
-Create an `index.html` file in the `target/generated` directory that loads
-the generated module:
+Copy the static files the xtask ships into the `target/generated` directory:
 
-```html
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  </head>
-  <body>
-    <script type="module">
-      import init from "./webgpu.js"; // or "./webgl2.js"
-      init();
-    </script>
-  </body>
-</html>
+```bash
+cp examples/features/web-static/index.html target/generated/
 ```
+
+`examples/features/web-static/index.html` provides the `canvas` element the
+examples bind to, and reads the `backend` and `example` query parameters to
+pick which module to load and which example to run. A hand-written page
+without that canvas, or without an `example` query parameter, cannot run any
+example.
 
 ### Running the code
 

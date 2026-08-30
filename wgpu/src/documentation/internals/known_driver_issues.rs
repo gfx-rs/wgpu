@@ -54,13 +54,13 @@ the same issue.
   | Driver Version   | 24.20.100.6287      |
 
   The extension is supported, but the pointer to the function is NULL.
-  Escalated in <https://github.com/MaikKlein/ash/issues/484>. Still needs an
+  Escalated in <https://github.com/ash-rs/ash/issues/484>. Still needs an
   upstream report.
 
 ## Intel / DirectX 12
 
 - **Offset after resizing window** —
-  [wgpu-rs#647](https://github.com/gfx-rs/wgpu-rs/issues/647)
+  [wgpu#1061](https://github.com/gfx-rs/wgpu/issues/1061)
 
   | Property         | Values observed   |
   | ---------------- | ----------------- |
@@ -84,19 +84,6 @@ the same issue.
 
   Reported in
   <https://github.com/IGCIT/Intel-GPU-Community-Issue-Tracker-IGCIT/issues/44>.
-
-## Intel / DX11
-
-- **Buffer write not synchronized with draw** —
-  [wgpu#1060](https://github.com/gfx-rs/wgpu/issues/1060)
-
-  | Property         | Values observed |
-  | ---------------- | --------------- |
-  | Operating System | Windows         |
-
-  Buffer upload isn't being properly synchronized with the draw call that is
-  using it. This is entirely on the driver to get right; there is no way to
-  do manual sync.
 
 ## Intel / All
 

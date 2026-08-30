@@ -9,6 +9,8 @@ external learning resources and a primer on the core concepts of the API.
 Learning materials:
 
 - [Learn Wgpu tutorial](https://sotrh.github.io/learn-wgpu/)
+- [WebGPU Fundamentals](https://webgpufundamentals.org/), a tutorial for
+  WebGPU, whose API is very close to `wgpu`'s.
 - [Draw You a Triangle for Great Good](https://github.com/dwbrite/wgpu-rendering-project/wiki/Draw-You-a-Triangle-for-Great-Good)
 - Chinese version of [学习 wgpu](https://jinleili.github.io/learn-wgpu-zh/)
 - [GPU Architecture](https://docs.google.com/presentation/d/1qi2j-SZuzew7Rrf5VKEPDZAQQEitV40k9fKvwJNyicM/edit),
@@ -23,7 +25,8 @@ Reference material:
 
 Runtimes:
 
-- The [Deno](https://deno.land/) JS/TS runtime.
+- The [Deno](https://deno.land/) JS/TS runtime implements WebGPU on top of
+  `wgpu`, so you can write WebGPU in TypeScript against the same implementation.
 
 ## Important concepts
 

@@ -1,6 +1,4 @@
 /*!
-Debugging
-
 Tools and techniques for investigating correctness, validation, and
 performance problems in `wgpu` applications.
 */

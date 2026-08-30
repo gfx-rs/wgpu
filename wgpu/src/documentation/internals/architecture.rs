@@ -132,9 +132,6 @@ The `wgpu_hal` API requires some objects to outlive others. For example, a
 `wgpu_hal::CommandEncoder`, etc.) created from it. The `wgpu_core` types
 ensure that these requirements are upheld, mostly just by using `Arc`.
 
-TODO: Command-buffer resource usage through submission probably counts as
-"lifetime tracking" too.
-
 This `wgpu_hal` requirement arises mostly from the Vulkan backend. Direct3D
 and Metal both use reference counting internally for most operations, but
 Vulkan foists the entire problem off on its users.
@@ -198,30 +195,44 @@ a single state.
 
 Within `wgpu_core`, the `Tracker` type records a set of resources, their
 current states, and (for command buffers being recorded) the initial state
-they should be in. `Tracker` also notes which stateless resources (samplers;
-render pipelines) a `CommandBuffer` uses, in order to keep them alive until
-the commands have been submitted and finished running.
+they should be in. `Tracker` also notes which stateless resources (texture
+views; bind groups; compute and render pipelines; render bundles; query sets;
+top-level acceleration structures) a `CommandBuffer` uses, in order to keep
+them alive until the commands have been submitted and finished running.
 
 [ResourceBarrier]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12graphicscommandlist-resourcebarrier
 [VkCmdPipelineBarrier]: https://docs.vulkan.org/refpages/latest/refpages/source/vkCmdPipelineBarrier.html
 [`transition_buffers`]: https://docs.rs/wgpu-hal/latest/wgpu_hal/trait.DynCommandEncoder.html#tymethod.transition_buffers
 [`transition_textures`]: https://docs.rs/wgpu-hal/latest/wgpu_hal/trait.DynCommandEncoder.html#tymethod.transition_textures
 
-### MemoryInitTracker
+### InitTracker
 
-Tracks the memory-initialization state of buffer resources, i.e. whether
-they have been written to either by the user or by `wgpu` previously
-zero-initializing them (WebGPU requires all buffers to behave *as if* they
-are zero-initialized). A `MemoryInitTracker` tracks a single buffer and
-allows inserting zero-initialization lazily on use. Zero-init is inserted if
-necessary at:
+Tracks the memory-initialization state of buffer and texture resources, i.e.
+whether they have been written to either by the user or by `wgpu` previously
+zero-initializing them (WebGPU requires all buffers and textures to behave
+*as if* they are zero-initialized). An `InitTracker` tracks a single
+resource and allows inserting zero-initialization lazily on use. The
+granularity differs by resource: `BufferInitTracker` tracks byte ranges, and
+`TextureInitTracker` tracks one mip level per array layer. Zero-init is
+inserted if necessary at:
 
-- memory mapping, and
+- memory mapping (buffers only), and
 - `queue_submit` (for all bindings).
 
 ### Device maintain
 
-TODO (what/why).
+`Device::maintain` is how `wgpu_core` learns that submitted GPU work has
+finished. Each `Queue::submit` advances a single monotonic device fence by one.
+`maintain` reads that fence and retires every submission at or below the
+current value: it drops the resources those submissions kept alive, completes
+buffer mappings that were waiting on them, and collects the callbacks
+registered by `Buffer::map_async`, `Queue::on_submitted_work_done`, and BLAS
+compaction.
+
+`maintain` always retires every finished submission, even when the caller asked
+to wait for one specific submission index. It runs from `Device::poll`, at the
+end of `Queue::submit`, from `Surface::configure`, and when a `Queue` is
+dropped.
 
 ### Cross-device use
 

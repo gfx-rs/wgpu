@@ -46,9 +46,10 @@ and, through [`DisplayHdrInfo`], the display's advisory capabilities;
 
 1. **Query capabilities.** Call [`Surface::get_capabilities`]. To use HDR or
    wide-gamut output, read [`SurfaceCapabilities::format_capabilities`] (each
-   format and the [`SurfaceColorSpaces`] it supports), **not**
-   [`SurfaceCapabilities::formats`]: the latter lists only formats usable
-   with [`Auto`](SurfaceColorSpace::Auto), which never selects HDR.
+   format and the [`SurfaceColorSpaces`] it supports), **not** the list in
+   [`SurfaceCapabilities::formats`]; that list holds only the formats usable
+   with [`Auto`](SurfaceColorSpace::Auto), which selects no HDR or wide-gamut
+   color space other than linear extended sRGB on [`Rgba16Float`].
    [`SurfaceCapabilities::color_spaces`] is a convenience lookup for one
    format.
 2. **Optionally query the display.** Call [`Surface::display_hdr_info`] for the
@@ -65,8 +66,9 @@ and, through [`DisplayHdrInfo`], the display's advisory capabilities;
    HDR is advertised, such as when OS HDR is off.
 4. **Configure the surface.** Set [`SurfaceConfiguration::color_space`] and
    `format`. [`Auto`](SurfaceColorSpace::Auto) (the default) reproduces
-   wgpu's historical behavior and never picks HDR; any other value must be in
-   that format's advertised set or configuration fails validation.
+   wgpu's historical behavior: linear extended sRGB on [`Rgba16Float`], and
+   sRGB for every other format. Any other value must be in that format's
+   advertised set or configuration fails validation.
 5. **Encode what you write to the surface texture.** For an `*Srgb` format,
    output linear and the hardware encodes for you. Otherwise the values your
    shader writes to the surface texture must already carry the encoding the
@@ -133,7 +135,7 @@ conversion. The [HDR surface example] implements every encoder in WGSL.
   [`ExtendedSrgb`](SurfaceColorSpace::ExtendedSrgb) is the same range but
   sRGB-*encoded* (gamma), the web's HDR path.
 
-[HDR surface example]: https://github.com/gfx-rs/wgpu/tree/v29/examples/standalone/03_hdr_surface
+[HDR surface example]: https://github.com/gfx-rs/wgpu/tree/v30/examples/standalone/03_hdr_surface
 [BT.709]: https://www.itu.int/rec/R-REC-BT.709
 [BT.2020]: https://www.itu.int/rec/R-REC-BT.2020
 [Display P3]: https://en.wikipedia.org/wiki/DCI-P3#Display_P3
@@ -141,9 +143,10 @@ conversion. The [HDR surface example] implements every encoder in WGSL.
 [PQ]: https://en.wikipedia.org/wiki/Perceptual_quantizer
 [HLG]: https://www.itu.int/rec/R-REC-BT.2100
 [scRGB]: https://en.wikipedia.org/wiki/ScRGB
+[`Rgba16Float`]: TextureFormat::Rgba16Float
 */
 
 use crate::{
     DisplayHdrInfo, Surface, SurfaceCapabilities, SurfaceColorSpace, SurfaceColorSpaces,
-    SurfaceConfiguration,
+    SurfaceConfiguration, TextureFormat,
 };

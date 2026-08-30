@@ -1,6 +1,4 @@
 /*!
-Getting Started
-
 First steps for new `wgpu` users: running the bundled examples and learning
 the core concepts of the API.
 */
