@@ -706,7 +706,7 @@ impl InstanceBuilder {
         mut desc: wgt::InstanceDescriptor,
         telemetry: Option<hal::Telemetry>,
     ) -> Self {
-        return Self {
+        Self {
             instance: Instance {
                 _name: name.to_owned(),
                 instance_per_backend: Vec::new(),
@@ -721,7 +721,7 @@ impl InstanceBuilder {
             },
             instance_desc: desc,
             telemetry,
-        };
+        }
     }
 
     pub fn try_add_hal<A: hal::Api>(&mut self, api: A) {
@@ -734,6 +734,10 @@ impl InstanceBuilder {
         _: A,
         f: impl FnOnce(&hal::InstanceDescriptor) -> Result<A::Instance, hal::InstanceError>,
     ) {
+        if self.instance.supported_backends.contains(A::VARIANT.into()) {
+            return;
+        }
+
         // Whether or not the backend was requested, and whether or not it succeeds,
         // note that we *could* try it.
         self.instance.supported_backends |= A::VARIANT.into();
