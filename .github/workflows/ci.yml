@@ -841,6 +841,12 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v7
 
+      # Only pull requests give a well-defined commit range. The merge queue
+      # runs the commits that this check already saw on the pull request.
+      - name: Check for AI-authored commits
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/ai-commit-check
+
       - name: Install repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
