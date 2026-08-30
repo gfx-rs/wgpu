@@ -73,6 +73,23 @@ impl Global {
 // All other errors should be stored in the pass for later reporting when
 // `CommandEncoder.finish()` is called.
 impl Global {
+    pub fn compute_pass_set_resource_table(
+        &self,
+        pass_id: id::ComputePassEncoderId,
+        resource_table_id: Option<id::ResourceTableId>,
+    ) {
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            compute_passes,
+            resource_tables,
+            ..
+        } = &mut *hub;
+        let pass = compute_passes.get_mut(pass_id);
+        pass.set_resource_table(
+            resource_table_id.map(|resource_table_id| resource_tables.get(resource_table_id)),
+        )
+    }
+
     pub fn compute_pass_set_bind_group(
         &self,
         pass_id: id::ComputePassEncoderId,

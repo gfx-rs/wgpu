@@ -113,6 +113,7 @@ impl MultiTargetRenderer {
             label: None,
             bind_group_layouts: &[Some(&texture_bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -183,6 +184,7 @@ impl MultiTargetRenderer {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
         rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.bindgroup, &[]);
@@ -233,6 +235,7 @@ impl TargetRenderer {
             label: None,
             bind_group_layouts: &[Some(&texture_bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -341,6 +344,7 @@ impl TargetRenderer {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
         rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.bindgroup_left, &[]);

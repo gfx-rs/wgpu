@@ -12,7 +12,7 @@ use crate::{
 use super::{
     DynAccelerationStructure, DynBindGroup, DynBuffer, DynCommandBuffer, DynComputePipeline,
     DynPipelineLayout, DynQuerySet, DynRenderPipeline, DynResource, DynResourceExt as _,
-    DynTexture, DynTextureView,
+    DynResourceTable, DynTexture, DynTextureView,
 };
 
 pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
@@ -66,6 +66,15 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         group: &dyn DynBindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     );
+
+    unsafe fn set_resource_table(
+        &mut self,
+        layout: &dyn DynPipelineLayout,
+        index: u32,
+        table: &dyn DynResourceTable,
+    );
+
+    unsafe fn resource_table_memory_barrier(&mut self);
 
     unsafe fn set_immediates(
         &mut self,
@@ -342,6 +351,21 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         let layout = layout.expect_downcast_ref();
         let group = group.expect_downcast_ref();
         unsafe { C::set_bind_group(self, layout, index, group, dynamic_offsets) };
+    }
+
+    unsafe fn set_resource_table(
+        &mut self,
+        layout: &dyn DynPipelineLayout,
+        index: u32,
+        table: &dyn DynResourceTable,
+    ) {
+        let layout = layout.expect_downcast_ref();
+        let table = table.expect_downcast_ref();
+        unsafe { C::set_resource_table(self, layout, index, table) };
+    }
+
+    unsafe fn resource_table_memory_barrier(&mut self) {
+        unsafe { C::resource_table_memory_barrier(self) };
     }
 
     unsafe fn set_immediates(

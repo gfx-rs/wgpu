@@ -329,6 +329,7 @@ impl crate::framework::Example for Example {
             label: Some("main"),
             bind_group_layouts: &[Some(&bind_group_layout), Some(&uniform_bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         let index_format = wgpu::IndexFormat::Uint16;
@@ -403,6 +404,7 @@ impl crate::framework::Example for Example {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
 
         rpass.set_pipeline(&self.pipeline);

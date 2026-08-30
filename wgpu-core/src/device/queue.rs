@@ -39,6 +39,7 @@ use crate::{
         StagingBuffer, Texture, TextureInner, Trackable, TrackingData,
     },
     resource_log,
+    resource_table::DestroyedResourceTable,
     scratch::ScratchBuffer,
     snatch::{SnatchGuard, Snatchable},
     track::{self, Tracker, TrackerIndex},
@@ -334,6 +335,7 @@ pub enum TempResource {
     DestroyedBuffer(DestroyedBuffer),
     DestroyedTexture(DestroyedTexture),
     DestroyedQuerySet(DestroyedQuerySet),
+    DestroyedResourceTable(DestroyedResourceTable),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a
@@ -602,6 +604,8 @@ pub enum QueueSubmitError {
     CommandEncoder(#[from] CommandEncoderError),
     #[error(transparent)]
     ValidateAsActionsError(#[from] crate::ray_tracing::ValidateAsActionsError),
+    #[error(transparent)]
+    ResourceTableConflict(#[from] crate::resource_table::ResourceTableConflictError),
 }
 
 impl From<InvalidOrDestroyedResourceError> for QueueSubmitError {
@@ -620,6 +624,7 @@ impl WebGpuError for QueueSubmitError {
             Self::CommandEncoder(e) => e.webgpu_error_type(),
             Self::ValidateAsActionsError(e) => e.webgpu_error_type(),
             Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::ResourceTableConflict(e) => e.webgpu_error_type(),
             Self::DestroyedResource(_) | Self::BufferStillMapped(_) => ErrorType::Validation,
         }
     }
@@ -1603,13 +1608,30 @@ impl Queue {
                         }
                     };
 
+                    // Reject resource-table usage conflicts (work item 0.9): a
+                    // table-visible texture written in a scope of this command
+                    // buffer. Done before any slot marking or barrier splicing so
+                    // a conflicting submission aborts cleanly.
+                    if let Err(e) = baked.check_resource_table_conflicts() {
+                        break 'error Err(e.into());
+                    }
+
+                    // Capture the deferred query-resolve insertion points before
+                    // they are drained; the resource-table gap splice needs them
+                    // to correct its own insertion points.
+                    let query_insertion_points: Vec<usize> = baked
+                        .deferred_query_set_resolves
+                        .iter()
+                        .map(|resolve| resolve.insertion_point)
+                        .collect();
+
                     if let Err(e) = baked
                         .process_deferred_query_set_resolves(&self.device, &submission.snatch_guard)
                     {
                         break 'error Err(e.into());
                     }
 
-                    baked_command_buffers.push(baked);
+                    baked_command_buffers.push((baked, query_insertion_points));
                 }
 
                 if let Some(first_error) = first_error {
@@ -1633,8 +1655,23 @@ impl Queue {
                 // Note: locking the trackers has to be done after the storages
                 let mut trackers = self.device.trackers.lock();
 
-                for mut baked in baked_command_buffers {
+                for (mut baked, query_insertion_points) in baked_command_buffers {
                     profiling::scope!("process baked commands");
+
+                    // Mark referenced resource tables in use and splice the
+                    // pass-start layout transitions (work item 0.8, D2). Done
+                    // before the "Transit" prologue below so the device tracker
+                    // still reflects each table texture's pre-command-buffer
+                    // layout.
+                    if let Err(e) = baked.process_resource_table_gaps(
+                        &self.device,
+                        &mut trackers,
+                        &query_insertion_points,
+                        submit_index,
+                        &submission.snatch_guard,
+                    ) {
+                        break 'error Err(e.into());
+                    }
 
                     // execute resource transitions
                     if let Err(e) = baked.encoder.open_pass(hal_label(

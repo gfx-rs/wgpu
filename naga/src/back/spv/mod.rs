@@ -180,6 +180,11 @@ pub enum Error {
     SpirvVersionTooLow(u8, u8),
     #[error("mapping of {0:?} is missing")]
     MissingBinding(crate::ResourceBinding),
+    #[error(
+        "the module uses resource tables (`getResource`), but no `resource_table_target` was \
+         provided in the SPIR-V backend options"
+    )]
+    MissingResourceTableTarget,
 }
 
 #[derive(Default)]
@@ -964,6 +969,22 @@ pub struct Writer {
     fake_missing_bindings: bool,
     binding_map: BindingMap,
 
+    /// Where to place the resource table's synthesized descriptor array(s).
+    ///
+    /// Copied from [`Options::resource_table_target`].
+    resource_table_target: Option<ResourceTableBindTarget>,
+
+    /// For each distinct resource type `T` used by a [`ResourceTableGet`]
+    /// expression in the module, the id of the synthesized `OpVariable` of
+    /// type `OpTypeRuntimeArray<T>` in `UniformConstant` storage.
+    ///
+    /// Populated by [`Writer::write_resource_table_globals`] before functions
+    /// are written, and read when lowering `ResourceTableGet`. All the
+    /// variables share one descriptor set/binding (descriptor aliasing).
+    ///
+    /// [`ResourceTableGet`]: crate::Expression::ResourceTableGet
+    resource_table_globals: crate::FastHashMap<Handle<crate::Type>, Word>,
+
     // Cached expressions are only meaningful within a BlockContext, but we
     // retain the table here between functions to save heap allocations.
     saved_cached: CachedExpressions,
@@ -1072,6 +1093,19 @@ pub struct Options<'a> {
     /// If this is `None`, all capabilities are permitted.
     pub capabilities: Option<crate::FastHashSet<Capability>>,
 
+    /// Descriptor set and binding at which to place the resource table's
+    /// synthesized descriptor array(s).
+    ///
+    /// The resource table (`getResource<T>`) has no Naga [`GlobalVariable`];
+    /// the backend synthesizes one `OpTypeRuntimeArray<T>` global per distinct
+    /// `T` used, all aliased at this set/binding. Required when a module
+    /// contains a [`ResourceTableGet`] expression; writing such a module while
+    /// this is `None` fails with [`Error::MissingResourceTableTarget`].
+    ///
+    /// [`GlobalVariable`]: crate::GlobalVariable
+    /// [`ResourceTableGet`]: crate::Expression::ResourceTableGet
+    pub resource_table_target: Option<ResourceTableBindTarget>,
+
     /// How should generate code handle array, vector, matrix, or image texel
     /// indices that are out of range?
     pub bounds_check_policies: BoundsCheckPolicies,
@@ -1133,6 +1167,7 @@ impl Default for Options<'_> {
             fake_missing_bindings: true,
             binding_map: BindingMap::default(),
             capabilities: None,
+            resource_table_target: None,
             bounds_check_policies: BoundsCheckPolicies::default(),
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,
             force_loop_bounding: true,
@@ -1227,4 +1262,8 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE
         | Caps::LINEAR_INTERPOLATION
+        // Note: `ResourceTableGet` lowering is not implemented yet, but the
+        // capability is listed here so that resource-table snapshot tests can
+        // target SPIR-V once work item 0.3 lands.
+        | Caps::RESOURCE_TABLE
 }

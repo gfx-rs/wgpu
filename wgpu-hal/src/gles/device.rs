@@ -415,6 +415,7 @@ impl super::Device {
                 buffer: BoundsCheckPolicy::Unchecked,
                 image_load: image_check,
                 binding_array: BoundsCheckPolicy::Unchecked,
+                resource_table: BoundsCheckPolicy::Unchecked,
             };
 
             let mut output = String::new();
@@ -1887,6 +1888,24 @@ impl crate::Device for super::Device {
     }
 
     fn tlas_instance_to_bytes(&self, _instance: TlasInstance, _to_extend: &mut Vec<u8>) {
+        unimplemented!()
+    }
+
+    unsafe fn create_resource_table(
+        &self,
+        _desc: &crate::ResourceTableDescriptor,
+    ) -> Result<super::ResourceTable, crate::DeviceError> {
+        unimplemented!()
+    }
+    unsafe fn destroy_resource_table(&self, _table: super::ResourceTable) {
+        unimplemented!()
+    }
+    unsafe fn update_table_slot(
+        &self,
+        _table: &super::ResourceTable,
+        _slot: u32,
+        _update: crate::ResourceTableUpdate<'_, super::TextureView>,
+    ) {
         unimplemented!()
     }
 

@@ -40,6 +40,7 @@ fn test_with_module(ctx: TestingContext, vertex: wgpu::ShaderModule, fragment: w
             label: None,
             bind_group_layouts: &[],
             immediate_size: 0,
+            uses_resource_table: false,
         });
     let _pipeline = ctx
         .device

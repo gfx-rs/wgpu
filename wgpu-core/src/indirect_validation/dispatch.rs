@@ -187,6 +187,7 @@ impl Dispatch {
                 Some(src_bind_group_layout.as_ref()),
             ],
             immediate_size: 4,
+            uses_resource_table: false,
         };
         let pipeline_layout = unsafe {
             device

@@ -35,6 +35,7 @@ impl Global {
             render_passes,
             texture_views,
             query_sets,
+            resource_tables,
             ..
         } = &mut *hub;
 
@@ -95,6 +96,9 @@ impl Global {
                 .as_ref()
                 .map(|query_set| query_sets.get(*query_set)),
             multiview_mask: None,
+            resource_table: desc
+                .resource_table
+                .map(|resource_table| resource_tables.get(resource_table)),
         };
 
         let render_pass = cmd_enc.begin_render_pass(desc);

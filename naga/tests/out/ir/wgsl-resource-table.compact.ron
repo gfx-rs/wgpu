@@ -1,0 +1,458 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Sampler(
+                comparison: false,
+            ),
+        ),
+        (
+            name: None,
+            inner: Sampler(
+                comparison: true,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Sampled(
+                    kind: Float,
+                    multi: false,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Depth(
+                    multi: false,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: true,
+                class: Sampled(
+                    kind: Uint,
+                    multi: false,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                scalar: (
+                    kind: Sint,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Sampled(
+                    kind: Float,
+                    multi: true,
+                ),
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        ray_vertex_return: None,
+        external_texture_params: None,
+        external_texture_transfer_function: None,
+        predeclared_types: {},
+    ),
+    constants: [
+        (
+            name: Some("FIXED_INDEX"),
+            ty: 2,
+            init: 0,
+        ),
+    ],
+    overrides: [],
+    global_variables: [
+        (
+            name: Some("samp"),
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 0,
+            init: None,
+            memory_decorations: (""),
+        ),
+        (
+            name: Some("samp_cmp"),
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 1,
+            )),
+            ty: 1,
+            init: None,
+            memory_decorations: (""),
+        ),
+        (
+            name: Some("uniform_index"),
+            space: Uniform,
+            binding: Some((
+                group: 0,
+                binding: 2,
+            )),
+            ty: 2,
+            init: None,
+            memory_decorations: (""),
+        ),
+    ],
+    global_expressions: [
+        Literal(U32(7)),
+    ],
+    functions: [],
+    entry_points: [
+        (
+            name: "fs_main",
+            stage: Fragment,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("fs_main"),
+                arguments: [
+                    (
+                        name: Some("pos"),
+                        ty: 3,
+                        binding: Some(BuiltIn(Position(
+                            invariant: false,
+                        ))),
+                    ),
+                    (
+                        name: Some("dynamic_index"),
+                        ty: 2,
+                        binding: Some(Location(
+                            location: 0,
+                            interpolation: Some(Flat),
+                            sampling: None,
+                            blend_src: None,
+                            per_primitive: false,
+                        )),
+                    ),
+                ],
+                result: Some((
+                    ty: 3,
+                    binding: Some(Location(
+                        location: 0,
+                        interpolation: Some(Perspective),
+                        sampling: Some(Center),
+                        blend_src: None,
+                        per_primitive: false,
+                    )),
+                )),
+                local_variables: [],
+                expressions: [
+                    FunctionArgument(0),
+                    FunctionArgument(1),
+                    Constant(0),
+                    ResourceTableGet(
+                        ty: 4,
+                        index: 2,
+                    ),
+                    GlobalVariable(0),
+                    Swizzle(
+                        size: Bi,
+                        vector: 0,
+                        pattern: (X, Y, X, X),
+                    ),
+                    ImageSample(
+                        image: 3,
+                        sampler: 4,
+                        gather: None,
+                        coordinate: 5,
+                        array_index: None,
+                        offset: None,
+                        level: Auto,
+                        depth_ref: None,
+                        clamp_to_edge: false,
+                    ),
+                    GlobalVariable(2),
+                    Load(
+                        pointer: 7,
+                    ),
+                    ResourceTableGet(
+                        ty: 4,
+                        index: 8,
+                    ),
+                    GlobalVariable(0),
+                    Swizzle(
+                        size: Bi,
+                        vector: 0,
+                        pattern: (X, Y, X, X),
+                    ),
+                    ImageSample(
+                        image: 9,
+                        sampler: 10,
+                        gather: None,
+                        coordinate: 11,
+                        array_index: None,
+                        offset: None,
+                        level: Auto,
+                        depth_ref: None,
+                        clamp_to_edge: false,
+                    ),
+                    ResourceTableGet(
+                        ty: 4,
+                        index: 1,
+                    ),
+                    GlobalVariable(0),
+                    Swizzle(
+                        size: Bi,
+                        vector: 0,
+                        pattern: (X, Y, X, X),
+                    ),
+                    ImageSample(
+                        image: 13,
+                        sampler: 14,
+                        gather: None,
+                        coordinate: 15,
+                        array_index: None,
+                        offset: None,
+                        level: Auto,
+                        depth_ref: None,
+                        clamp_to_edge: false,
+                    ),
+                    Literal(U32(1)),
+                    Binary(
+                        op: Add,
+                        left: 1,
+                        right: 17,
+                    ),
+                    ResourceTableGet(
+                        ty: 5,
+                        index: 18,
+                    ),
+                    GlobalVariable(1),
+                    Swizzle(
+                        size: Bi,
+                        vector: 0,
+                        pattern: (X, Y, X, X),
+                    ),
+                    Literal(F32(0.5)),
+                    ImageSample(
+                        image: 19,
+                        sampler: 20,
+                        gather: None,
+                        coordinate: 21,
+                        array_index: None,
+                        offset: None,
+                        level: Auto,
+                        depth_ref: Some(22),
+                        clamp_to_edge: false,
+                    ),
+                    GlobalVariable(2),
+                    Load(
+                        pointer: 24,
+                    ),
+                    ResourceTableGet(
+                        ty: 6,
+                        index: 25,
+                    ),
+                    Literal(I32(0)),
+                    Literal(I32(0)),
+                    Compose(
+                        ty: 7,
+                        components: [
+                            27,
+                            28,
+                        ],
+                    ),
+                    Literal(I32(3)),
+                    Literal(I32(0)),
+                    ImageLoad(
+                        image: 26,
+                        coordinate: 29,
+                        array_index: Some(30),
+                        sample: None,
+                        level: Some(31),
+                    ),
+                    Literal(U32(0)),
+                    ResourceTableGet(
+                        ty: 8,
+                        index: 33,
+                    ),
+                    Literal(I32(0)),
+                    Literal(I32(0)),
+                    Compose(
+                        ty: 7,
+                        components: [
+                            35,
+                            36,
+                        ],
+                    ),
+                    Literal(I32(2)),
+                    ImageLoad(
+                        image: 34,
+                        coordinate: 37,
+                        array_index: None,
+                        sample: Some(38),
+                        level: None,
+                    ),
+                    Binary(
+                        op: Add,
+                        left: 6,
+                        right: 12,
+                    ),
+                    Binary(
+                        op: Add,
+                        left: 40,
+                        right: 16,
+                    ),
+                    Splat(
+                        size: Quad,
+                        value: 23,
+                    ),
+                    Binary(
+                        op: Add,
+                        left: 41,
+                        right: 42,
+                    ),
+                    As(
+                        expr: 32,
+                        kind: Float,
+                        convert: Some(4),
+                    ),
+                    Binary(
+                        op: Add,
+                        left: 43,
+                        right: 44,
+                    ),
+                    Binary(
+                        op: Add,
+                        left: 45,
+                        right: 39,
+                    ),
+                ],
+                named_expressions: {
+                    0: "pos",
+                    1: "dynamic_index",
+                    3: "tex_const",
+                    6: "color_const",
+                    9: "tex_uniform",
+                    12: "color_uniform",
+                    13: "tex_dynamic",
+                    16: "color_dynamic",
+                    19: "depth",
+                    23: "shadow",
+                    26: "tex_array",
+                    32: "texel_array",
+                    34: "tex_ms",
+                    39: "texel_ms",
+                },
+                body: [
+                    Emit((
+                        start: 3,
+                        end: 4,
+                    )),
+                    Emit((
+                        start: 5,
+                        end: 7,
+                    )),
+                    Emit((
+                        start: 8,
+                        end: 10,
+                    )),
+                    Emit((
+                        start: 11,
+                        end: 13,
+                    )),
+                    Emit((
+                        start: 13,
+                        end: 14,
+                    )),
+                    Emit((
+                        start: 15,
+                        end: 17,
+                    )),
+                    Emit((
+                        start: 18,
+                        end: 20,
+                    )),
+                    Emit((
+                        start: 21,
+                        end: 22,
+                    )),
+                    Emit((
+                        start: 23,
+                        end: 24,
+                    )),
+                    Emit((
+                        start: 25,
+                        end: 27,
+                    )),
+                    Emit((
+                        start: 29,
+                        end: 30,
+                    )),
+                    Emit((
+                        start: 32,
+                        end: 33,
+                    )),
+                    Emit((
+                        start: 34,
+                        end: 35,
+                    )),
+                    Emit((
+                        start: 37,
+                        end: 38,
+                    )),
+                    Emit((
+                        start: 39,
+                        end: 40,
+                    )),
+                    Emit((
+                        start: 40,
+                        end: 47,
+                    )),
+                    Return(
+                        value: Some(46),
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: None,
+            task_payload: None,
+            incoming_ray_payload: None,
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+    doc_comments: None,
+)

@@ -86,6 +86,7 @@ dyn_type!(pub ref struct DynExternalTexture(dyn ExternalTextureInterface));
 dyn_type!(pub ref struct DynBlas(dyn BlasInterface));
 dyn_type!(pub ref struct DynTlas(dyn TlasInterface));
 dyn_type!(pub ref struct DynQuerySet(dyn QuerySetInterface));
+dyn_type!(pub ref struct DynResourceTable(dyn ResourceTableInterface));
 dyn_type!(pub ref struct DynPipelineLayout(dyn PipelineLayoutInterface));
 dyn_type!(pub ref struct DynRenderPipeline(dyn RenderPipelineInterface));
 dyn_type!(pub ref struct DynComputePipeline(dyn ComputePipelineInterface));

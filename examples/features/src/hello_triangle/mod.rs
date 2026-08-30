@@ -162,6 +162,7 @@ impl ApplicationHandler<TriangleAction> for App {
                 label: None,
                 bind_group_layouts: &[],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
             let swapchain_capabilities = surface.get_capabilities(&adapter);
@@ -305,6 +306,7 @@ impl ApplicationHandler<TriangleAction> for App {
                         timestamp_writes: None,
                         occlusion_query_set: None,
                         multiview_mask: None,
+                        resource_table: None,
                     });
                     rpass.set_pipeline(&wgpu_state.render_pipeline);
                     rpass.draw(0..3, 0..1);

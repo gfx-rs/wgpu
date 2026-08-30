@@ -96,6 +96,7 @@ impl<'a> TextureBlitterBuilder<'a> {
                 label: Some("wgpu::util::TextureBlitter::pipeline_layout"),
                 bind_group_layouts: &[Some(&bind_group_layout)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         let shader = self.device.create_shader_module(include_wgsl!("blit.wgsl"));
@@ -212,6 +213,7 @@ impl TextureBlitter {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &bind_group, &[]);

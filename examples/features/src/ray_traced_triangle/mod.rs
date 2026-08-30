@@ -270,6 +270,7 @@ impl crate::framework::Example for Example {
                 label: Some("pipeline layout for shader.wgsl"),
                 bind_group_layouts: &[Some(&bgl)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -285,6 +286,7 @@ impl crate::framework::Example for Example {
             label: Some("pipeline layout for blit.wgsl"),
             bind_group_layouts: &[Some(&blit_bgl)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         let blit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -415,6 +417,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
+                resource_table: None,
             });
 
             rpass.set_pipeline(&self.blit_pipeline);

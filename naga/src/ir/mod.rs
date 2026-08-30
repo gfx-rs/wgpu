@@ -1926,6 +1926,29 @@ pub enum Expression {
         b: Handle<Expression>,
         c: Handle<Expression>,
     },
+
+    /// Fetch a resource of type `ty` from the bound resource table at `index`.
+    ///
+    /// This is the IR form of the WGSL `getResource<T>(index)` builtin, part of
+    /// the bindless/resource-table feature (`enable resource_table;`). It
+    /// requires [`Capabilities::RESOURCE_TABLE`].
+    ///
+    /// `ty` is the fully resolved resource type `T` that this access produces,
+    /// carried on the expression so that the typifier can report the result
+    /// type without any additional context. In M0 the only supported types are
+    /// sampled and depth textures ([`TypeInner::Image`] with an
+    /// [`ImageClass::Sampled`] or [`ImageClass::Depth`] class).
+    ///
+    /// `index` is a `u32` selecting the slot in the table.
+    ///
+    /// [`Capabilities::RESOURCE_TABLE`]: crate::valid::Capabilities::RESOURCE_TABLE
+    /// [`TypeInner::Image`]: crate::TypeInner::Image
+    /// [`ImageClass::Sampled`]: crate::ImageClass::Sampled
+    /// [`ImageClass::Depth`]: crate::ImageClass::Depth
+    ResourceTableGet {
+        ty: Handle<Type>,
+        index: Handle<Expression>,
+    },
 }
 
 /// The value of the switch case.

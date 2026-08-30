@@ -208,6 +208,7 @@ impl TestResources {
                 label: None,
                 bind_group_layouts: &[Some(&bgl)],
                 immediate_size: 4,
+                uses_resource_table: false,
             });
 
         let pipeline = ctx

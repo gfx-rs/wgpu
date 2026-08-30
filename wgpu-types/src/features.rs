@@ -1486,7 +1486,65 @@ bitflags_array! {
         #[name("wgpu-ray-tracing-pipelines")]
         const EXPERIMENTAL_RAY_TRACING_PIPELINES = 1 << 24;
 
-        // Adding a new feature? All bits in the first u64 are used. Use the second u64 (bits 64+).
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in them and are expected to be subject to breaking changes, suggestions
+        /// for the API exposed by this should be posted on [the resource table issue](https://github.com/gfx-rs/wgpu/issues/8557)
+        ///
+        /// Enables [`GPUResourceTable`]-style resource tables: device-timeline-mutable, sparse
+        /// descriptor tables of sampled textures (and, starting with
+        /// [`Features::EXPERIMENTAL_HETEROGENEOUS_RESOURCE_TABLE`], samplers), bound as encoder
+        /// state and accessed from WGSL via `enable resource_table;` and `getResource<T>(index)`.
+        /// This is the primary (checked) resource-table feature.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        ///
+        /// [`GPUResourceTable`]: https://github.com/gpuweb/gpuweb/issues/5372
+        #[name("wgpu-sampling-resource-table")]
+        const EXPERIMENTAL_SAMPLING_RESOURCE_TABLE = 1 << 14;
+
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in them and are expected to be subject to breaking changes, suggestions
+        /// for the API exposed by this should be posted on [the resource table issue](https://github.com/gfx-rs/wgpu/issues/8557)
+        ///
+        /// Extends resource tables to also hold storage textures and buffers, in addition to
+        /// the sampled textures and samplers already allowed by
+        /// [`Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE`], which this feature implies and
+        /// therefore also requires enabling.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        #[name("wgpu-heterogeneous-resource-table")]
+        const EXPERIMENTAL_HETEROGENEOUS_RESOURCE_TABLE = 1 << 16;
+
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in them and are expected to be subject to breaking changes, suggestions
+        /// for the API exposed by this should be posted on [the resource table issue](https://github.com/gfx-rs/wgpu/issues/8557)
+        ///
+        /// Unsafe add-on to the resource-table features: elides emission of the shader-side
+        /// type/bounds/visibility checks that `getResource` would otherwise perform. An
+        /// out-of-bounds or type-confused `getResource` access becomes driver undefined behavior
+        /// instead of returning a default resource.
+        ///
+        /// During early development (M0) this is the only implemented resource-table code path,
+        /// so using resource tables at all currently also requires enabling this feature; the
+        /// checked path will become the primary, and this will become purely an opt-in relaxation,
+        /// once it lands.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        #[name("wgpu-resource-table-unchecked")]
+        const EXPERIMENTAL_RESOURCE_TABLE_UNCHECKED = 1 << 25;
+
+        // Adding a new feature? The first u64 is now full (bits 14, 16, and 25 were the last
+        // gaps). Adding another native feature requires growing the bitflags array; the second
+        // u64 is reserved for standard WebGPU features (`FeaturesWebGPU`), not native ones.
     }
 
     /// Features that are not guaranteed to be supported.
@@ -1859,7 +1917,10 @@ impl Features {
                 | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
                 | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits()
-                | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits(),
+                | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits()
+                | FeaturesWGPU::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE.bits()
+                | FeaturesWGPU::EXPERIMENTAL_HETEROGENEOUS_RESOURCE_TABLE.bits()
+                | FeaturesWGPU::EXPERIMENTAL_RESOURCE_TABLE_UNCHECKED.bits(),
             FeaturesWebGPU::empty().bits(),
         ]))
     }

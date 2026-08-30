@@ -154,6 +154,7 @@ async fn per_vertex(ctx: TestingContext) {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
 
         rpass.set_pipeline(&pipeline);

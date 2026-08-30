@@ -4,12 +4,14 @@ use crate::{
     command::{
         memory_init::CommandBufferTextureMemoryActions,
         query::{DeferredQuerySetResolve, QuerySetWrites},
+        ResourceTableGap,
     },
     device::{queue::TempResource, Device},
     init_tracker::BufferInitTrackerAction,
     ray_tracing::AsAction,
     snatch::SnatchGuard,
-    track::Tracker,
+    track::{Tracker, TrackerIndex},
+    FastHashMap,
 };
 
 /// State applicable when encoding commands onto a compute pass, render pass, or
@@ -56,4 +58,14 @@ pub(crate) struct EncodingState<'snatch_guard, 'cmd_enc, E: ?Sized = dyn hal::Dy
 
     pub(crate) query_set_writes: &'cmd_enc mut QuerySetWrites,
     pub(crate) deferred_query_set_resolves: &'cmd_enc mut Vec<DeferredQuerySetResolve>,
+
+    /// Pass-start gaps recorded for table-bound passes (work item 0.8).
+    pub(crate) resource_table_gaps: &'cmd_enc mut Vec<ResourceTableGap>,
+
+    /// Textures used in a pass of this command buffer in a way that forces an
+    /// image layout incompatible with sampling them through a resource table,
+    /// accumulated for resource-table usage-conflict validation (work item 0.9).
+    /// Populated only when the sampling resource-table feature is enabled.
+    pub(crate) resource_table_member_usages:
+        &'cmd_enc mut FastHashMap<TrackerIndex, wgt::TextureUses>,
 }

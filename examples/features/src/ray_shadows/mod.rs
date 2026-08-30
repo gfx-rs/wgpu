@@ -187,6 +187,7 @@ impl crate::framework::Example for Example {
             label: None,
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 16,
+            uses_resource_table: false,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -324,6 +325,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
+                resource_table: None,
             });
 
             rpass.set_pipeline(&self.pipeline);

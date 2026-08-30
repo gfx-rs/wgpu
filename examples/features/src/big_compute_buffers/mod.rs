@@ -129,6 +129,7 @@ fn setup_pipeline(
         label: Some("Compute Pipeline Layout"),
         bind_group_layouts: &[Some(&bind_group_layout)],
         immediate_size: 0,
+        uses_resource_table: false,
     });
 
     device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {

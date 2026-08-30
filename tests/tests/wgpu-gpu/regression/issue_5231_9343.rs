@@ -104,6 +104,7 @@ fn read_only_depth_test(ctx: &TestingContext, sample_depth: bool) {
             label: None,
             bind_group_layouts: &[],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let color_target = ColorTargetState {
@@ -180,6 +181,7 @@ fn read_only_depth_test(ctx: &TestingContext, sample_depth: bool) {
                 label: None,
                 bind_group_layouts: &[Some(&bgl)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         sample_shader = ctx.device.create_shader_module(ShaderModuleDescriptor {
@@ -263,6 +265,7 @@ fn read_only_depth_test(ctx: &TestingContext, sample_depth: bool) {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
         rpass.set_pipeline(&write_pipeline);
         rpass.draw(0..1, 0..1);
@@ -291,6 +294,7 @@ fn read_only_depth_test(ctx: &TestingContext, sample_depth: bool) {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
         rpass.set_pipeline(&readonly_pipeline);
         if let Some(bg) = &bind_group {

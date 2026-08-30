@@ -108,6 +108,7 @@ impl crate::framework::Example for Example {
                 label: Some("compute"),
                 bind_group_layouts: &[Some(&compute_bind_group_layout)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         // create render pipeline with empty bind group layout
@@ -117,6 +118,7 @@ impl crate::framework::Example for Example {
                 label: Some("render"),
                 bind_group_layouts: &[],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -276,6 +278,7 @@ impl crate::framework::Example for Example {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         };
 
         // get command encoder

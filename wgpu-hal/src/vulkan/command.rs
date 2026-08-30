@@ -983,6 +983,52 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         };
     }
+    unsafe fn set_resource_table(
+        &mut self,
+        layout: &super::PipelineLayout,
+        index: u32,
+        table: &super::ResourceTable,
+    ) {
+        debug_assert_eq!(
+            index, layout.binding_group_count,
+            "the resource table must bind at the set index following the last bind group (D15)"
+        );
+        // Same bind-point handling as `set_bind_group`, but a single set and no
+        // dynamic offsets.
+        let sets = [table.set];
+        unsafe {
+            self.device.raw.cmd_bind_descriptor_sets(
+                self.active,
+                self.bind_point,
+                layout.raw,
+                index,
+                &sets,
+                &[],
+            )
+        };
+    }
+
+    unsafe fn resource_table_memory_barrier(&mut self) {
+        // A global compute→compute memory barrier, no image layout transition
+        // (work item 0.10; see the trait docs and `plans/resource-table.md`).
+        // Conservatively covers read/write in both directions so it serves
+        // write→table-read (RAW), table-read→write (WAR), and write→write.
+        let access = vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE;
+        unsafe {
+            self.device.raw.cmd_pipeline_barrier(
+                self.active,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::DependencyFlags::empty(),
+                &[vk::MemoryBarrier::default()
+                    .src_access_mask(access)
+                    .dst_access_mask(access)],
+                &[],
+                &[],
+            )
+        };
+    }
+
     unsafe fn set_immediates(
         &mut self,
         layout: &super::PipelineLayout,

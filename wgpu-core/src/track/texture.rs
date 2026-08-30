@@ -24,7 +24,7 @@ use crate::{
     snatch::SnatchGuard,
     track::{
         skip_barrier, ResourceMetadata, ResourceMetadataProvider, ResourceUsageCompatibilityError,
-        ResourceUses,
+        ResourceUses, TrackerIndex,
     },
 };
 use hal::TextureBarrier;
@@ -196,6 +196,17 @@ impl TextureViewBindGroupState {
     /// duplicates.
     pub fn used_textures(&self) -> impl Iterator<Item = &Arc<Texture>> {
         self.views.iter().map(|(v, _)| &v.parent)
+    }
+
+    /// Whether any view in this bind group is bound with a writable storage
+    /// usage. Feeds the resource-table hazard dirty bits (work item 0.10).
+    pub(crate) fn has_writable_usage(&self) -> bool {
+        const WRITABLE: TextureUses = TextureUses::STORAGE_WRITE_ONLY
+            .union(TextureUses::STORAGE_READ_WRITE)
+            .union(TextureUses::STORAGE_ATOMIC);
+        self.views
+            .iter()
+            .any(|(_, state)| state.intersects(WRITABLE))
     }
 }
 
@@ -439,6 +450,74 @@ impl TextureUsageScope {
 
         Ok(())
     }
+
+    /// Record every owned texture whose merged usage within this scope forces an
+    /// image layout incompatible with a resource-table member's sampled
+    /// steady-state into `out`, OR-ing the offending usage bits keyed by tracker
+    /// index (whole-resource granularity, D9 in `plans/resource-table.md`).
+    ///
+    /// A render pass is a single usage scope, so this captures the pass's complete
+    /// set of texture usages (attachments, storage and sampled bindings). It powers
+    /// resource-table usage-conflict validation (work item 0.9): a table-member
+    /// texture used in a layout-incompatible way in a submission that also binds the
+    /// table is rejected at submit under the M0 strict (v0) semantics. See
+    /// [`TABLE_INCOMPATIBLE_USAGES`].
+    pub(crate) fn collect_table_incompatible_usages(
+        &self,
+        out: &mut FastHashMap<TrackerIndex, TextureUses>,
+    ) {
+        collect_table_incompatible_usages(&self.metadata, &self.set, out);
+    }
+}
+
+/// Texture usages that force an image layout *other* than a resource-table
+/// member's sampled steady-state (`SHADER_READ_ONLY_OPTIMAL` for color,
+/// `DEPTH_STENCIL_READ_ONLY` for depth).
+///
+/// `RESOURCE`, `DEPTH_READ` and `STENCIL_READ` produce exactly those benign layouts
+/// (see `wgpu_hal`'s `derive_image_layout`, which is what `update_table_slot`
+/// uses to pin the descriptor) and are therefore *excluded*. Every other real
+/// usage maps to a different layout, so sampling a table member left in such a
+/// state would be driver UB (Invariant 3 in `plans/resource-table.md`). The
+/// internal pseudo-states (`UNINITIALIZED`/`TRANSIENT`/`COMPLEX`/`UNKNOWN`) are
+/// not real usages and are likewise excluded.
+const TABLE_INCOMPATIBLE_USAGES: TextureUses = TextureUses::COPY_SRC
+    .union(TextureUses::COPY_DST)
+    .union(TextureUses::COLOR_TARGET)
+    .union(TextureUses::DEPTH_WRITE)
+    .union(TextureUses::STENCIL_WRITE)
+    .union(TextureUses::STORAGE_READ_ONLY)
+    .union(TextureUses::STORAGE_WRITE_ONLY)
+    .union(TextureUses::STORAGE_READ_WRITE)
+    .union(TextureUses::STORAGE_ATOMIC)
+    .union(TextureUses::PRESENT);
+
+/// Shared body of the `collect_table_incompatible_usages` accessors on
+/// [`TextureUsageScope`] and [`TextureTracker`]: fold each owned texture's stored
+/// state to the [`TABLE_INCOMPATIBLE_USAGES`] bits it carries.
+fn collect_table_incompatible_usages(
+    metadata: &ResourceMetadata<Arc<Texture>>,
+    set: &TextureStateSet,
+    out: &mut FastHashMap<TrackerIndex, TextureUses>,
+) {
+    for index in metadata.owned_indices() {
+        // SAFETY: `index` comes from `metadata.owned_indices()`, and `set` is sized
+        // in lockstep with `metadata` (see the owning type's `set_size`).
+        let incompatible = match unsafe { set.get_unchecked(index) } {
+            SingleOrManyStates::Single(state) => state & TABLE_INCOMPATIBLE_USAGES,
+            SingleOrManyStates::Many(complex) => complex
+                .to_selector_state_iter()
+                .fold(TextureUses::empty(), |acc, (_, state)| {
+                    acc | (state & TABLE_INCOMPATIBLE_USAGES)
+                }),
+        };
+        if !incompatible.is_empty() {
+            // SAFETY: as above.
+            let texture = unsafe { metadata.get_resource_unchecked(index) };
+            *out.entry(texture.tracker_index())
+                .or_insert(TextureUses::empty()) |= incompatible;
+        }
+    }
 }
 
 pub(crate) trait TextureTrackerSetSingle {
@@ -509,6 +588,47 @@ impl TextureTracker {
     pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Texture>> + '_ {
         self.metadata.owned_resources()
     }
+
+    /// Record every tracked texture whose usage anywhere in this command buffer
+    /// forces an image layout incompatible with a resource-table member's sampled
+    /// steady-state into `out`, keyed by tracker index. See
+    /// [`TextureUsageScope::collect_table_incompatible_usages`] for the purpose
+    /// (work item 0.9 resource-table conflict validation) and
+    /// [`TABLE_INCOMPATIBLE_USAGES`] for which usages qualify.
+    ///
+    /// A command-buffer tracker records only the *start* and *end* state of each
+    /// subresource (not a union over every intermediate usage), so this folds
+    /// **both**: a texture written in one dispatch and then read in a later
+    /// dispatch of the same compute pass — whose end state flips to a read — is
+    /// still reported via its start state. This is what closes the reviewer's
+    /// write-before-read repro that an end-state-only fold missed, and it also
+    /// catches non-write layout-forcing usages (storage reads, and `COPY_SRC` /
+    /// `COPY_DST` from top-level transfer commands, which land directly here).
+    ///
+    /// A residual escape remains: an incompatible use fully *sandwiched* between
+    /// benign reads of the same texture at both the tracker's start and end
+    /// states is not caught by start/end alone. Its severity depends on shape:
+    ///
+    /// - **Intra-pass** (e.g. sample, storage-write, sample within one compute
+    ///   pass): layout-unsafe, but memory-safe, because the work item 0.10
+    ///   intra-pass hazard barrier still orders the write against the surrounding
+    ///   reads.
+    /// - **Cross-pass** (e.g. a bindful sample of the member in one pass, then a
+    ///   top-level transfer writing the member, then a table read in a *later*
+    ///   pass with no bindful use of the member there): not caught either, and
+    ///   the intra-pass barrier does not reach across passes — so this shape is
+    ///   both layout-unsafe and a genuine memory hazard.
+    ///
+    /// Closing both shapes needs the per-dispatch layout-override tracker
+    /// deferred past M0 (D11).
+    pub(crate) fn collect_table_incompatible_usages(
+        &self,
+        out: &mut FastHashMap<TrackerIndex, TextureUses>,
+    ) {
+        collect_table_incompatible_usages(&self.metadata, &self.start_set, out);
+        collect_table_incompatible_usages(&self.metadata, &self.end_set, out);
+    }
+
     /// Drain all currently pending transitions.
     pub fn drain_transitions<'a>(
         &'a mut self,

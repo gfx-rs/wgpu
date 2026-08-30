@@ -716,8 +716,9 @@ impl super::Device {
         &self,
         stage: &crate::ProgrammableStage<super::ShaderModule>,
         naga_stage: naga::ShaderStage,
-        binding_map: &naga::back::spv::BindingMap,
+        layout: &super::PipelineLayout,
     ) -> Result<CompiledStage, crate::PipelineError> {
+        let binding_map = &layout.binding_map;
         let stage_flags = crate::auxil::map_naga_stage(naga_stage);
         let vk_module = match *stage.module {
             super::ShaderModule::Raw(raw) => raw,
@@ -733,6 +734,7 @@ impl super::Device {
                     || !runtime_checks.force_loop_bounding
                     || !runtime_checks.ray_query_initialization_tracking
                     || !binding_map.is_empty()
+                    || layout.resource_table_target.is_some()
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory
                     || !runtime_checks.task_shader_dispatch_tracking
@@ -748,6 +750,7 @@ impl super::Device {
                             buffer: naga::proc::BoundsCheckPolicy::Unchecked,
                             image_load: naga::proc::BoundsCheckPolicy::Unchecked,
                             binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+                            resource_table: naga::proc::BoundsCheckPolicy::Unchecked,
                         };
                     }
                     if !runtime_checks.force_loop_bounding {
@@ -759,6 +762,11 @@ impl super::Device {
                     if !binding_map.is_empty() {
                         temp_options.binding_map = binding_map.clone();
                     }
+
+                    // Point the SPIR-V backend at the table's descriptor
+                    // set/binding when this pipeline uses a resource table
+                    // (`None` otherwise, matching `self.naga_options`).
+                    temp_options.resource_table_target = layout.resource_table_target;
 
                     if let Some(ref debug) = naga_shader.debug_source {
                         temp_options.debug_info = Some(naga::back::spv::DebugInfo {
@@ -1572,7 +1580,7 @@ impl crate::Device for super::Device {
         desc: &crate::PipelineLayoutDescriptor<super::BindGroupLayout>,
     ) -> Result<super::PipelineLayout, crate::DeviceError> {
         //Note: not bothering with on stack array here as it's low frequency
-        let vk_set_layouts = desc
+        let mut vk_set_layouts = desc
             .bind_group_layouts
             .iter()
             .map(|bgl| match bgl {
@@ -1589,6 +1597,25 @@ impl crate::Device for super::Device {
                 }
             })
             .collect::<Vec<_>>();
+
+        // The resource table (when this layout uses one) binds at the set index
+        // immediately after the last bind group (D15): its descriptor set is
+        // appended here as the final set layout, and the SPIR-V backend targets
+        // that same set index for `getResource`.
+        let binding_group_count = desc.bind_group_layouts.len() as u32;
+        let resource_table_target = if desc.uses_resource_table {
+            let resource_table = self.shared.resource_table.as_ref().expect(
+                "create_pipeline_layout: `uses_resource_table` set, but the device was created \
+                 without the EXPERIMENTAL_SAMPLING_RESOURCE_TABLE feature",
+            );
+            vk_set_layouts.push(resource_table.set_layout);
+            Some(naga::back::spv::ResourceTableBindTarget {
+                descriptor_set: binding_group_count,
+                binding: 0,
+            })
+        } else {
+            None
+        };
         let vk_immediates_ranges: Option<vk::PushConstantRange> = if desc.immediate_size != 0 {
             Some(vk::PushConstantRange {
                 stage_flags: vk::ShaderStageFlags::ALL,
@@ -1640,7 +1667,12 @@ impl crate::Device for super::Device {
         }
 
         self.counters.pipeline_layouts.add(1);
-        Ok(super::PipelineLayout { raw, binding_map })
+        Ok(super::PipelineLayout {
+            raw,
+            binding_map,
+            binding_group_count,
+            resource_table_target,
+        })
     }
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: super::PipelineLayout) {
         unsafe {
@@ -1873,7 +1905,14 @@ impl crate::Device for super::Device {
                     .shared
                     .workarounds
                     .contains(super::Workarounds::SEPARATE_ENTRY_POINTS)
-                    || !naga_shader.module.overrides.is_empty() =>
+                    || !naga_shader.module.overrides.is_empty()
+                    // Modules using resource tables (`getResource`) must be
+                    // compiled per-pipeline: the SPIR-V backend needs the
+                    // table's descriptor set/binding (`resource_table_target`),
+                    // which is only known from the pipeline layout. Eagerly
+                    // compiling here (with `resource_table_target: None`) would
+                    // fail with `Error::MissingResourceTableTarget`.
+                    || naga_shader.info.uses_resource_table() =>
             {
                 super::ShaderModule::Intermediate {
                     naga_shader,
@@ -1897,6 +1936,7 @@ impl crate::Device for super::Device {
                         buffer: naga::proc::BoundsCheckPolicy::Unchecked,
                         image_load: naga::proc::BoundsCheckPolicy::Unchecked,
                         binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+                        resource_table: naga::proc::BoundsCheckPolicy::Unchecked,
                     };
                 }
                 let spv = naga::back::spv::write_vec(
@@ -2005,7 +2045,7 @@ impl crate::Device for super::Device {
                 compiled_vs = Some(self.compile_stage(
                     vertex_stage,
                     naga::ShaderStage::Vertex,
-                    &desc.layout.binding_map,
+                    desc.layout,
                 )?);
                 stages.push(compiled_vs.as_ref().unwrap().create_info);
             }
@@ -2014,28 +2054,19 @@ impl crate::Device for super::Device {
                 mesh_stage,
             } => {
                 if let Some(t) = task_stage.as_ref() {
-                    compiled_ts = Some(self.compile_stage(
-                        t,
-                        naga::ShaderStage::Task,
-                        &desc.layout.binding_map,
-                    )?);
+                    compiled_ts =
+                        Some(self.compile_stage(t, naga::ShaderStage::Task, desc.layout)?);
                     stages.push(compiled_ts.as_ref().unwrap().create_info);
                 }
-                compiled_ms = Some(self.compile_stage(
-                    mesh_stage,
-                    naga::ShaderStage::Mesh,
-                    &desc.layout.binding_map,
-                )?);
+                compiled_ms =
+                    Some(self.compile_stage(mesh_stage, naga::ShaderStage::Mesh, desc.layout)?);
                 stages.push(compiled_ms.as_ref().unwrap().create_info);
             }
         }
         let compiled_fs = match desc.fragment_stage {
             Some(ref stage) => {
-                let compiled = self.compile_stage(
-                    stage,
-                    naga::ShaderStage::Fragment,
-                    &desc.layout.binding_map,
-                )?;
+                let compiled =
+                    self.compile_stage(stage, naga::ShaderStage::Fragment, desc.layout)?;
                 stages.push(compiled.create_info);
                 Some(compiled)
             }
@@ -2253,11 +2284,7 @@ impl crate::Device for super::Device {
             super::PipelineCache,
         >,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
-        let compiled = self.compile_stage(
-            &desc.stage,
-            naga::ShaderStage::Compute,
-            &desc.layout.binding_map,
-        )?;
+        let compiled = self.compile_stage(&desc.stage, naga::ShaderStage::Compute, desc.layout)?;
 
         let vk_infos = [{
             vk::ComputePipelineCreateInfo::default()
@@ -2314,7 +2341,7 @@ impl crate::Device for super::Device {
         let compiled_ray_gen = self.compile_stage(
             &desc.ray_generation,
             naga::ShaderStage::RayGeneration,
-            &desc.layout.binding_map,
+            desc.layout,
         )?;
 
         groups.push(
@@ -2328,11 +2355,7 @@ impl crate::Device for super::Device {
 
         stages.push(compiled_ray_gen.create_info);
 
-        let compiled_miss = self.compile_stage(
-            &desc.miss,
-            naga::ShaderStage::Miss,
-            &desc.layout.binding_map,
-        )?;
+        let compiled_miss = self.compile_stage(&desc.miss, naga::ShaderStage::Miss, desc.layout)?;
 
         groups.push(
             vk::RayTracingShaderGroupCreateInfoKHR::default()
@@ -2353,7 +2376,7 @@ impl crate::Device for super::Device {
             let compiled_closest_hits = self.compile_stage(
                 &group.closest_hit,
                 naga::ShaderStage::ClosestHit,
-                &desc.layout.binding_map,
+                desc.layout,
             )?;
 
             let closest_idx = stages.len();
@@ -2371,11 +2394,8 @@ impl crate::Device for super::Device {
                     .ty(vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP);
 
             if let Some(any_hit) = &group.any_hit {
-                let compiled_any_hit = self.compile_stage(
-                    any_hit,
-                    naga::ShaderStage::AnyHit,
-                    &desc.layout.binding_map,
-                )?;
+                let compiled_any_hit =
+                    self.compile_stage(any_hit, naga::ShaderStage::AnyHit, desc.layout)?;
 
                 let any_idx = stages.len();
 
@@ -2960,6 +2980,121 @@ impl crate::Device for super::Device {
             }
             if let Some(query) = acceleration_structure.compacted_size_query {
                 self.shared.raw.destroy_query_pool(query, None)
+            }
+        }
+    }
+
+    unsafe fn create_resource_table(
+        &self,
+        desc: &crate::ResourceTableDescriptor,
+    ) -> Result<super::ResourceTable, crate::DeviceError> {
+        let resource_table = self.shared.resource_table.as_ref().expect(
+            "create_resource_table: the device was created without the \
+             EXPERIMENTAL_SAMPLING_RESOURCE_TABLE feature",
+        );
+
+        // The shared set layout's runtime array is capped at `max_size`; a
+        // set's variable descriptor count may not exceed it. wgpu-core
+        // validates `desc.size` against its own `MAX_RESOURCE_TABLE_SIZE`
+        // (65536), which core assumes always fits within `max_size` here.
+        // That assumption should always hold on conformant Vulkan drivers
+        // (the UAB sampled-image limits' spec floor is ~500k, far above the
+        // 65536 cap), so this is unreachable in practice. Guard against a
+        // hypothetical non-conformant driver disagreeing with core anyway,
+        // rather than silently truncating: a truncated table would let a
+        // later in-bounds-per-core `update_table_slot` write past the end of
+        // the real descriptor array.
+        if desc.size > resource_table.max_size {
+            log::error!(
+                "create_resource_table: requested size {} exceeds the device's \
+                 resource table capacity {} (driver's UPDATE_AFTER_BIND sampled-image \
+                 limits are narrower than wgpu-core's validation assumes)",
+                desc.size,
+                resource_table.max_size,
+            );
+            return Err(crate::DeviceError::Unexpected);
+        }
+        let size = desc.size;
+
+        // A dedicated update-after-bind pool holding exactly one set with room
+        // for `size` sampled images. `VkDescriptorPoolSize::descriptor_count`
+        // must be non-zero, so a zero-sized table still reserves one slot.
+        let pool_sizes = [vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::SAMPLED_IMAGE,
+            descriptor_count: size.max(1),
+        }];
+        let pool_info = vk::DescriptorPoolCreateInfo::default()
+            .flags(vk::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND)
+            .max_sets(1)
+            .pool_sizes(&pool_sizes);
+        let pool = unsafe {
+            self.shared
+                .raw
+                .create_descriptor_pool(&pool_info, None)
+                .map_err(super::map_host_device_oom_err)?
+        };
+
+        // The runtime array's actual length is the variable descriptor count,
+        // supplied through `p_next` (the shared `DescriptorAllocator` has no
+        // hook for this, hence the bespoke allocation path).
+        let descriptor_counts = [size];
+        let mut variable_count_info =
+            vk::DescriptorSetVariableDescriptorCountAllocateInfo::default()
+                .descriptor_counts(&descriptor_counts);
+        let set_layouts = [resource_table.set_layout];
+        let alloc_info = vk::DescriptorSetAllocateInfo::default()
+            .descriptor_pool(pool)
+            .set_layouts(&set_layouts)
+            .push_next(&mut variable_count_info);
+
+        let set = match unsafe { self.shared.raw.allocate_descriptor_sets(&alloc_info) } {
+            Ok(mut sets) => sets.pop().unwrap(),
+            Err(err) => {
+                unsafe { self.shared.raw.destroy_descriptor_pool(pool, None) };
+                return Err(super::map_host_device_oom_err(err));
+            }
+        };
+
+        if let Some(label) = desc.label {
+            unsafe { self.shared.set_object_name(set, label) };
+        }
+
+        Ok(super::ResourceTable { pool, set, size })
+    }
+
+    unsafe fn destroy_resource_table(&self, table: super::ResourceTable) {
+        // Destroying the pool frees the set allocated from it.
+        unsafe { self.shared.raw.destroy_descriptor_pool(table.pool, None) };
+    }
+
+    unsafe fn update_table_slot(
+        &self,
+        table: &super::ResourceTable,
+        slot: u32,
+        update: crate::ResourceTableUpdate<'_, super::TextureView>,
+    ) {
+        debug_assert!(
+            slot < table.size,
+            "resource-table slot {slot} out of range (table size {})",
+            table.size
+        );
+        match update {
+            crate::ResourceTableUpdate::SampledTextureView(view) => {
+                // Match the steady-state layout ordinary sampled-texture bind
+                // group writes use (`SHADER_READ_ONLY_OPTIMAL`, or the depth
+                // variant); see `create_bind_group`.
+                let image_layout =
+                    conv::derive_image_layout(wgt::TextureUses::RESOURCE, view.format);
+                let image_info = [vk::DescriptorImageInfo::default()
+                    .image_view(view.raw)
+                    .image_layout(image_layout)];
+                let write = vk::WriteDescriptorSet::default()
+                    .dst_set(table.set)
+                    .dst_binding(0)
+                    .dst_array_element(slot)
+                    .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                    .image_info(&image_info);
+                unsafe { self.shared.raw.update_descriptor_sets(&[write], &[]) };
             }
         }
     }

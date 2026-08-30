@@ -221,6 +221,7 @@ ids! {
     pub type QuerySetId QuerySet;
     pub type BlasId Blas;
     pub type TlasId Tlas;
+    pub type ResourceTableId ResourceTable;
 }
 
 #[test]

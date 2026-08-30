@@ -49,6 +49,7 @@ impl crate::framework::Example for Example {
             label: None,
             bind_group_layouts: &[],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
@@ -217,6 +218,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
+                resource_table: None,
             });
 
             rpass.set_stencil_reference(1);

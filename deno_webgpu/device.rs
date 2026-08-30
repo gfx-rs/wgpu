@@ -368,6 +368,8 @@ impl GPUDevice {
       label: crate::transform_label(descriptor.label.clone()),
       bind_group_layouts: Cow::Owned(bind_group_layouts),
       immediate_size: descriptor.immediate_size,
+      // Resource tables are not exposed through the WebGPU API surface yet.
+      uses_resource_table: false,
     };
 
     let wgpu_pipeline_layout =

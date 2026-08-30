@@ -79,6 +79,7 @@ impl crate::framework::Example for Example {
                 label: None,
                 bind_group_layouts: &[],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         let shader_triangle_and_lines =
@@ -196,6 +197,7 @@ impl crate::framework::Example for Example {
                 label: None,
                 bind_group_layouts: &[Some(&bind_group_layout)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
             let shader = device.create_shader_module(wgpu::include_wgsl!("upscale.wgsl"));
             (
@@ -274,6 +276,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
+                resource_table: None,
             });
 
             rpass.set_pipeline(&self.pipeline_triangle_conservative);
@@ -297,6 +300,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
+                resource_table: None,
             });
 
             rpass.set_pipeline(&self.pipeline_upscale);

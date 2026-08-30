@@ -77,6 +77,7 @@ async fn immediates_with_uniform_in_single_module(ctx: TestingContext) {
             label: Some("pll"),
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: size_of::<Immediates>() as u32,
+            uses_resource_table: false,
         });
 
     let pipeline = ctx
@@ -146,6 +147,7 @@ async fn immediates_with_uniform_in_single_module(ctx: TestingContext) {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
 
         rpass.set_pipeline(&pipeline);

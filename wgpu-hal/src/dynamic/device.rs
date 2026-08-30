@@ -6,15 +6,16 @@ use crate::{
     ComputePipelineDescriptor, Device, DeviceError, FenceValue,
     GetAccelerationStructureBuildSizesDescriptor, Label, MemoryRange, PipelineCacheDescriptor,
     PipelineCacheError, PipelineError, PipelineLayoutDescriptor, RayObjectIntersectionState,
-    RayTracingPipelineDescriptor, RenderPipelineDescriptor, SamplerDescriptor, ShaderError,
-    ShaderInput, ShaderModuleDescriptor, TextureDescriptor, TextureViewDescriptor, TlasInstance,
+    RayTracingPipelineDescriptor, RenderPipelineDescriptor, ResourceTableDescriptor,
+    ResourceTableUpdate, SamplerDescriptor, ShaderError, ShaderInput, ShaderModuleDescriptor,
+    TextureDescriptor, TextureViewDescriptor, TlasInstance,
 };
 
 use super::{
     DynAccelerationStructure, DynBindGroup, DynBindGroupLayout, DynBuffer, DynCommandEncoder,
     DynComputePipeline, DynFence, DynPipelineCache, DynPipelineLayout, DynQuerySet, DynQueue,
-    DynRayTracingPipeline, DynRenderPipeline, DynResource, DynResourceExt as _, DynSampler,
-    DynShaderModule, DynTexture, DynTextureView,
+    DynRayTracingPipeline, DynRenderPipeline, DynResource, DynResourceExt as _, DynResourceTable,
+    DynSampler, DynShaderModule, DynTexture, DynTextureView,
 };
 
 pub trait DynDevice: DynResource {
@@ -176,6 +177,18 @@ pub trait DynDevice: DynResource {
     );
     fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>);
 
+    unsafe fn create_resource_table(
+        &self,
+        desc: &ResourceTableDescriptor,
+    ) -> Result<Box<dyn DynResourceTable>, DeviceError>;
+    unsafe fn destroy_resource_table(&self, table: Box<dyn DynResourceTable>);
+    unsafe fn update_table_slot(
+        &self,
+        table: &dyn DynResourceTable,
+        slot: u32,
+        update: ResourceTableUpdate<'_, dyn DynTextureView>,
+    );
+
     fn get_internal_counters(&self) -> wgt::HalCounters;
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport>;
 
@@ -312,6 +325,7 @@ impl<D: Device + DynResource> DynDevice for D {
             bind_group_layouts: &bind_group_layouts,
             immediate_size: desc.immediate_size,
             flags: desc.flags,
+            uses_resource_table: desc.uses_resource_table,
         };
 
         unsafe { D::create_pipeline_layout(self, &desc) }
@@ -606,6 +620,29 @@ impl<D: Device + DynResource> DynDevice for D {
 
     fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {
         D::tlas_instance_to_bytes(self, instance, to_extend)
+    }
+
+    unsafe fn create_resource_table(
+        &self,
+        desc: &ResourceTableDescriptor,
+    ) -> Result<Box<dyn DynResourceTable>, DeviceError> {
+        unsafe { D::create_resource_table(self, desc) }
+            .map(|b| -> Box<dyn DynResourceTable> { Box::new(b) })
+    }
+
+    unsafe fn destroy_resource_table(&self, table: Box<dyn DynResourceTable>) {
+        unsafe { D::destroy_resource_table(self, table.unbox()) };
+    }
+
+    unsafe fn update_table_slot(
+        &self,
+        table: &dyn DynResourceTable,
+        slot: u32,
+        update: ResourceTableUpdate<'_, dyn DynTextureView>,
+    ) {
+        let table = table.expect_downcast_ref();
+        let update = update.expect_downcast();
+        unsafe { D::update_table_slot(self, table, slot, update) };
     }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {

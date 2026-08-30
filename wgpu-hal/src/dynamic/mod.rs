@@ -24,7 +24,7 @@ use crate::{
     AccelerationStructureAABBs, AccelerationStructureEntries, AccelerationStructureInstances,
     AccelerationStructureTriangleIndices, AccelerationStructureTriangleTransform,
     AccelerationStructureTriangles, BufferBinding, ExternalTextureBinding, ProgrammableStage,
-    TextureBinding,
+    ResourceTableUpdate, TextureBinding,
 };
 
 /// Base trait for all resources, allows downcasting via [`Any`].
@@ -107,6 +107,7 @@ pub trait DynPipelineLayout: DynResource + fmt::Debug {}
 pub trait DynQuerySet: DynResource + fmt::Debug {}
 pub trait DynRenderPipeline: DynResource + fmt::Debug {}
 pub trait DynRayTracingPipeline: DynResource + fmt::Debug {}
+pub trait DynResourceTable: DynResource + fmt::Debug {}
 pub trait DynSampler: DynResource + fmt::Debug {}
 pub trait DynShaderModule: DynResource + fmt::Debug {}
 pub trait DynSurfaceTexture:
@@ -131,6 +132,16 @@ impl<'a> TextureBinding<'a, dyn DynTextureView> {
         TextureBinding {
             view: self.view.expect_downcast_ref(),
             usage: self.usage,
+        }
+    }
+}
+
+impl<'a> ResourceTableUpdate<'a, dyn DynTextureView> {
+    pub fn expect_downcast<T: DynTextureView>(self) -> ResourceTableUpdate<'a, T> {
+        match self {
+            ResourceTableUpdate::SampledTextureView(view) => {
+                ResourceTableUpdate::SampledTextureView(view.expect_downcast_ref())
+            }
         }
     }
 }

@@ -1,0 +1,25 @@
+# Review item M3: exercises the SPIR-V backend's whole-module resource-table
+# global synthesis (naga/src/back/spv/writer.rs write_resource_table_globals
+# + the entry-point interface listing at ~1591-1608) across a module with
+# TWO entry points, only one of which uses the table:
+#
+# - `vs_main` never calls `getResource`, but the synthesis scan collects
+#   table types module-wide, and every entry point's interface lists *all*
+#   synthesized table globals (a safe superset spirv-val tolerates) rather
+#   than only the ones that entry point's call tree actually reaches. This
+#   snapshot lets that over-listing be inspected directly (both
+#   `OpEntryPoint` lines appear in the same `spvasm` file).
+# - `fs_main` reaches `getResource` only through a helper function
+#   (`sample_table`), exercising the "may live in a called helper" case.
+targets = "IR | SPIRV"
+capabilities = "RESOURCE_TABLE"
+
+[spv]
+# SPIR-V 1.4: the synthesized table globals have no IR `GlobalVariable`, and
+# at >= 1.4 every global an entry point statically uses must appear in its
+# `OpEntryPoint` interface. Matches resource-table.toml's rationale.
+version = [1, 4]
+
+[spv.resource_table_target]
+descriptor_set = 1
+binding = 0

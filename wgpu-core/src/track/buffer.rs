@@ -62,6 +62,14 @@ impl BufferBindGroupState {
         self.buffers.iter().map(|(b, _)| b)
     }
 
+    /// Whether any buffer in this bind group is bound with a writable storage
+    /// usage. Feeds the resource-table hazard dirty bits (work item 0.10).
+    pub(crate) fn has_writable_usage(&self) -> bool {
+        self.buffers
+            .iter()
+            .any(|(_, state)| state.contains(BufferUses::STORAGE_READ_WRITE))
+    }
+
     /// Adds the given resource with the given state.
     pub fn insert_single(&mut self, buffer: Arc<Buffer>, state: BufferUses) {
         self.buffers.push((buffer, state));

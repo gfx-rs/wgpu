@@ -292,3 +292,16 @@ impl crate::resource::Tlas {
         SnatchableResourceGuard::new(self)
     }
 }
+
+impl crate::resource_table::ResourceTable {
+    /// # Safety
+    ///
+    /// - The raw resource table handle must not be manually destroyed
+    pub unsafe fn as_hal<A: hal::Api>(
+        self: Arc<Self>,
+    ) -> Option<impl Deref<Target = A::ResourceTable>> {
+        profiling::scope!("ResourceTable::as_hal");
+
+        SnatchableResourceGuard::new(self)
+    }
+}

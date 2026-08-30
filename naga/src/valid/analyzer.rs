@@ -206,6 +206,13 @@ impl ExpressionInfo {
 enum GlobalOrArgument {
     Global(Handle<crate::GlobalVariable>),
     Argument(u32),
+    /// A resource fetched from the bindless resource table.
+    ///
+    /// Such resources are not associated with any global variable, so they
+    /// can never participate in [`FunctionInfo::sampling_set`], which exists
+    /// for GLSL's texture-combined samplers. Backends that support resource
+    /// tables do not need combined-sampler reflection info.
+    ResourceTable,
 }
 
 impl GlobalOrArgument {
@@ -221,6 +228,7 @@ impl GlobalOrArgument {
                 crate::Expression::GlobalVariable(var) => GlobalOrArgument::Global(var),
                 _ => return Err(ExpressionError::ExpectedGlobalOrArgument),
             },
+            crate::Expression::ResourceTableGet { .. } => GlobalOrArgument::ResourceTable,
             _ => return Err(ExpressionError::ExpectedGlobalOrArgument),
         })
     }
@@ -449,6 +457,7 @@ impl FunctionInfo {
             // we may now be able to determine which globals those referred to.
             let image_storage = match sampling.image {
                 GlobalOrArgument::Global(var) => GlobalOrArgument::Global(var),
+                GlobalOrArgument::ResourceTable => GlobalOrArgument::ResourceTable,
                 GlobalOrArgument::Argument(i) => {
                     let Some(handle) = arguments.get(i as usize).cloned() else {
                         // Argument count mismatch, will be reported later by validate_call
@@ -465,6 +474,7 @@ impl FunctionInfo {
 
             let sampler_storage = match sampling.sampler {
                 GlobalOrArgument::Global(var) => GlobalOrArgument::Global(var),
+                GlobalOrArgument::ResourceTable => GlobalOrArgument::ResourceTable,
                 GlobalOrArgument::Argument(i) => {
                     let Some(handle) = arguments.get(i as usize).cloned() else {
                         // Argument count mismatch, will be reported later by validate_call
@@ -853,6 +863,15 @@ impl FunctionInfo {
             E::CooperativeMultiplyAdd { a, b, c } => Uniformity {
                 non_uniform_result: self.add_ref(a).or(self.add_ref(b).or(self.add_ref(c))),
                 requirements: UniformityRequirements::COOP_OPS,
+            },
+            // The fetched resource is non-uniform whenever the index is. No
+            // non-uniform-indexing capability check is needed here: the SPIR-V
+            // backend decorates resource table accesses `NonUniform`
+            // unconditionally, so `RESOURCE_TABLE` implies non-uniform
+            // indexing support.
+            E::ResourceTableGet { ty: _, index } => Uniformity {
+                non_uniform_result: self.add_ref(index),
+                requirements: UniformityRequirements::empty(),
             },
         };
 
@@ -1301,6 +1320,26 @@ impl ModuleInfo {
 
     pub fn get_entry_point(&self, index: usize) -> &FunctionInfo {
         &self.entry_points[index]
+    }
+
+    /// Whether the module accesses the bindless resource table, i.e. contains
+    /// any [`Expression::ResourceTableGet`] (`getResource<T>` in WGSL).
+    ///
+    /// Consumed by wgpu-core to decide whether a pipeline reserves the
+    /// resource-table binding set and the epoch immediate.
+    ///
+    /// [`Expression::ResourceTableGet`]: crate::Expression::ResourceTableGet
+    pub const fn uses_resource_table(&self) -> bool {
+        self.uses_resource_table
+    }
+
+    /// Whether the module requests any writable resource-table types.
+    ///
+    /// Always `false` in M0 (writable resource types are rejected by the front
+    /// end). Later milestones flip this on for modules that write through the
+    /// table so wgpu-core can narrow its intra-pass write-hazard dirty bits.
+    pub const fn requests_writable_table_types(&self) -> bool {
+        self.requests_writable_table_types
     }
 }
 

@@ -358,3 +358,133 @@ fn f16_io_polyfill_codegen() {
         "Expected 4 OpFConvert instructions for polyfilled I/O"
     );
 }
+
+/// A `getResource<T>` fetch lowers to a runtime-descriptor-array access that is
+/// unconditionally decorated `NonUniform`, so the backend must request the
+/// `RuntimeDescriptorArray` and `ShaderNonUniform` capabilities.
+#[test]
+fn resource_table() {
+    use naga::back::spv;
+    use naga::valid;
+
+    let source = r#"
+        enable resource_table;
+
+        @group(0) @binding(0) var samp: sampler;
+
+        @fragment
+        fn main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+            let tex = getResource<texture_2d<f32>>(0u);
+            return textureSample(tex, samp, pos.xy);
+        }
+    "#;
+
+    let module = naga::front::wgsl::parse_str(source).unwrap();
+    let info = valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
+        .validate(&module)
+        .unwrap();
+
+    let options = spv::Options {
+        resource_table_target: Some(spv::ResourceTableBindTarget {
+            descriptor_set: 1,
+            binding: 0,
+        }),
+        ..Default::default()
+    };
+    let mut words = vec![];
+    let mut writer = spv::Writer::new(&options).unwrap();
+    writer
+        .write(&module, &info, None, &None, &mut words)
+        .unwrap();
+    let caps = writer.get_capabilities_used();
+    assert!(caps.contains(&Ca::RuntimeDescriptorArray));
+    assert!(caps.contains(&Ca::ShaderNonUniform));
+}
+
+/// Lowering `getResource` with no `resource_table_target` in the options is a
+/// clean backend error, not a panic or a silently-invalid module.
+#[test]
+fn resource_table_missing_target() {
+    use naga::back::spv;
+    use naga::valid;
+
+    let source = r#"
+        enable resource_table;
+
+        @group(0) @binding(0) var samp: sampler;
+
+        @fragment
+        fn main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+            let tex = getResource<texture_2d<f32>>(0u);
+            return textureSample(tex, samp, pos.xy);
+        }
+    "#;
+
+    let module = naga::front::wgsl::parse_str(source).unwrap();
+    let info = valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
+        .validate(&module)
+        .unwrap();
+
+    // `Options::default()` leaves `resource_table_target` as `None`.
+    let mut words = vec![];
+    let mut writer = spv::Writer::new(&spv::Options::default()).unwrap();
+    let err = writer
+        .write(&module, &info, None, &None, &mut words)
+        .unwrap_err();
+    assert!(matches!(err, spv::Error::MissingResourceTableTarget));
+}
+
+/// M0 only implements the `Unchecked` bounds-check policy for the resource
+/// table; the checked lowering arrives with the metadata buffer in M1. Any
+/// other policy must be a clean backend error at the gate in
+/// `back/spv/block.rs` (~line 2202), not a panic or a silently-unchecked
+/// lowering.
+#[test]
+fn resource_table_checked_policy_not_implemented() {
+    use naga::back::spv;
+    use naga::proc::{BoundsCheckPolicies, BoundsCheckPolicy};
+    use naga::valid;
+
+    let source = r#"
+        enable resource_table;
+
+        @group(0) @binding(0) var samp: sampler;
+
+        @fragment
+        fn main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+            let tex = getResource<texture_2d<f32>>(0u);
+            return textureSample(tex, samp, pos.xy);
+        }
+    "#;
+
+    let module = naga::front::wgsl::parse_str(source).unwrap();
+    let info = valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
+        .validate(&module)
+        .unwrap();
+
+    for policy in [
+        BoundsCheckPolicy::Restrict,
+        BoundsCheckPolicy::ReadZeroSkipWrite,
+    ] {
+        let options = spv::Options {
+            resource_table_target: Some(spv::ResourceTableBindTarget {
+                descriptor_set: 1,
+                binding: 0,
+            }),
+            bounds_check_policies: BoundsCheckPolicies {
+                resource_table: policy,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut words = vec![];
+        let mut writer = spv::Writer::new(&options).unwrap();
+        let err = writer
+            .write(&module, &info, None, &None, &mut words)
+            .unwrap_err();
+        assert!(
+            matches!(err, spv::Error::FeatureNotImplemented(_)),
+            "policy {policy:?} should be rejected, got {err:?}"
+        );
+    }
+}

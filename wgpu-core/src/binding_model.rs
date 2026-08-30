@@ -1002,6 +1002,15 @@ where
     ///
     /// If this value is non-zero, [`wgt::Features::IMMEDIATES`] must be enabled.
     pub immediate_size: u32,
+    /// Whether pipelines using this layout may access a resource table via the
+    /// `getResource` WGSL builtin.
+    ///
+    /// When `true`, a resource-table descriptor set is appended to the layout at
+    /// the set index following the last bind group (see D15 in
+    /// `plans/resource-table.md`), and pipelines whose shaders use `getResource`
+    /// must be created with such a layout. Requires
+    /// [`wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE`].
+    pub uses_resource_table: bool,
 }
 
 #[derive(Debug)]
@@ -1013,6 +1022,9 @@ pub struct PipelineLayout {
     pub(crate) bind_group_layouts: ArrayVec<Option<Arc<BindGroupLayout>>, { hal::MAX_BIND_GROUPS }>,
     pub(crate) immediate_size: u32,
     pub(crate) buffers_and_acceleration_structures_in_vertex_stage: u32,
+    /// Whether pipelines using this layout may access a resource table
+    /// (`getResource`). See [`PipelineLayoutDescriptor::uses_resource_table`].
+    pub(crate) uses_resource_table: bool,
 }
 
 impl Drop for PipelineLayout {
@@ -1095,6 +1107,7 @@ impl PipelineLayout {
             bind_group_layouts: ArrayVec::new(),
             immediate_size: 0,
             buffers_and_acceleration_structures_in_vertex_stage: 0,
+            uses_resource_table: false,
         })
     }
 }

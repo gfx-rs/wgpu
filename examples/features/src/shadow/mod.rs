@@ -468,6 +468,7 @@ impl crate::framework::Example for Example {
                 label: Some("shadow"),
                 bind_group_layouts: &[Some(&bind_group_layout), Some(&local_bind_group_layout)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -584,6 +585,7 @@ impl crate::framework::Example for Example {
                 label: Some("main"),
                 bind_group_layouts: &[Some(&bind_group_layout), Some(&local_bind_group_layout)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
             let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
@@ -773,6 +775,7 @@ impl crate::framework::Example for Example {
                     timestamp_writes: None,
                     occlusion_query_set: None,
                     multiview_mask: None,
+                    resource_table: None,
                 });
                 pass.set_pipeline(&self.shadow_pass.pipeline);
                 pass.set_bind_group(0, &self.shadow_pass.bind_group, &[]);
@@ -819,6 +822,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
+                resource_table: None,
             });
             pass.set_pipeline(&self.forward_pass.pipeline);
             pass.set_bind_group(0, &self.forward_pass.bind_group, &[]);

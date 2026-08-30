@@ -92,6 +92,7 @@ impl crate::Api for Api {
     type PipelineCache = PipelineCache;
 
     type AccelerationStructure = AccelerationStructure;
+    type ResourceTable = ResourceTable;
 }
 
 crate::impl_dyn_resource!(
@@ -112,6 +113,7 @@ crate::impl_dyn_resource!(
     Queue,
     RenderPipeline,
     RayTracingPipeline,
+    ResourceTable,
     Sampler,
     ShaderModule,
     Surface,
@@ -1407,6 +1409,13 @@ impl AccelerationStructure {
 impl crate::DynAccelerationStructure for AccelerationStructure {}
 unsafe impl Send for AccelerationStructure {}
 unsafe impl Sync for AccelerationStructure {}
+
+/// Placeholder resource-table type; a real Metal implementation lands with
+/// the M3m explicit-synchronization track (`plans/resource-table.md`).
+#[derive(Debug)]
+pub struct ResourceTable;
+
+impl crate::DynResourceTable for ResourceTable {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OsType {

@@ -132,6 +132,7 @@ impl State {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
 
         // If you wanted to call any drawing commands, they would go here.

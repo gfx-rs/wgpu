@@ -128,6 +128,8 @@ impl GPUCommandEncoder {
         .occlusion_query_set
         .map(|query_set| query_set.wgpu_query_set.clone()),
       multiview_mask: NonZero::new(descriptor.multiview_mask),
+      // Resource tables are not exposed through the WebGPU API surface yet.
+      resource_table: None,
     };
 
     let render_pass =

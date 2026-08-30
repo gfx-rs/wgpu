@@ -476,6 +476,7 @@ fn copy_via_compute(
         label: None,
         bind_group_layouts: &[Some(&bgl)],
         immediate_size: 0,
+        uses_resource_table: false,
     });
 
     let source = String::from(include_str!("copy_texture_to_buffer.wgsl"));

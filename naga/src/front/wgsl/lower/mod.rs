@@ -9,7 +9,9 @@ use core::{matches, num::NonZeroU32};
 
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
-use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
+use crate::front::wgsl::parse::directive::enable_extension::{
+    EnableExtensions, ImplementedEnableExtension,
+};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::wgsl::Result;
@@ -3184,6 +3186,46 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         },
                         MustUse::Yes,
                     )
+                }
+                "getResource" => {
+                    ctx.enable_extensions
+                        .require(ImplementedEnableExtension::ResourceTable, function_span)?;
+
+                    let (ty, ty_span) = template_params.ty_with_span(self, ctx)?;
+
+                    // M0 accepts only sampled and depth textures. Reject the
+                    // rest of the proposal's `T` types with errors saying when
+                    // they will become available.
+                    match ctx.module.types[ty].inner {
+                        ir::TypeInner::Image {
+                            class: ir::ImageClass::Sampled { .. } | ir::ImageClass::Depth { .. },
+                            ..
+                        } => {}
+                        ir::TypeInner::Sampler { .. } => {
+                            return Err(Box::new(Error::ResourceTableSamplerUnsupported(ty_span)))
+                        }
+                        ir::TypeInner::Image {
+                            class: ir::ImageClass::Storage { .. },
+                            ..
+                        } => {
+                            return Err(Box::new(Error::ResourceTableStorageTextureUnsupported(
+                                ty_span,
+                            )))
+                        }
+                        _ => {
+                            return Err(Box::new(Error::ResourceTableInvalidType {
+                                span: ty_span,
+                                ty: ctx.type_to_string(ty),
+                            }))
+                        }
+                    }
+
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let index =
+                        self.expression_with_leaf_scalar(args.next()?, ir::Scalar::U32, ctx)?;
+                    args.finish()?;
+
+                    (ir::Expression::ResourceTableGet { ty, index }, MustUse::Yes)
                 }
                 "coopLoad" | "coopLoadT" => {
                     let row_major = function_name.ends_with("T");

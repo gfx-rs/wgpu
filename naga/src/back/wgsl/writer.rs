@@ -1935,6 +1935,11 @@ impl<W: Write> Writer<W> {
             // Not supported yet
             Expression::RayQueryGetIntersection { .. }
             | Expression::RayQueryVertexPositions { .. } => unreachable!(),
+            Expression::ResourceTableGet { .. } => {
+                return Err(Error::Unimplemented(
+                    "resource tables are not supported by the WGSL backend".into(),
+                ))
+            }
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }

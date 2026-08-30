@@ -4838,4 +4838,6 @@
         ))),
         Handle(3),
     ],
+    uses_resource_table: false,
+    requests_writable_table_types: false,
 )

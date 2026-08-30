@@ -429,6 +429,7 @@ impl crate::framework::Example for Example {
                 label: Some("water"),
                 bind_group_layouts: &[Some(&water_bind_group_layout)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         let terrain_pipeline_layout =
@@ -436,6 +437,7 @@ impl crate::framework::Example for Example {
                 label: Some("terrain"),
                 bind_group_layouts: &[Some(&terrain_bind_group_layout)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
 
         let water_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -751,6 +753,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
+                resource_table: None,
             });
 
             rpass.execute_bundles([&self.terrain_bundle]);
@@ -780,6 +783,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
+                resource_table: None,
             });
             rpass.set_pipeline(&self.terrain_pipeline);
             rpass.set_bind_group(0, &self.terrain_normal_bind_group, &[]);
@@ -808,6 +812,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
+                resource_table: None,
             });
 
             rpass.set_pipeline(&self.water_pipeline);

@@ -42,6 +42,15 @@ pub struct PipelineLayoutDescriptor<'a> {
     ///
     /// If this value is non-zero, [`Features::IMMEDIATES`] must be enabled.
     pub immediate_size: u32,
+    /// Whether pipelines using this layout may access a resource table via the `getResource`
+    /// WGSL builtin.
+    ///
+    /// When `true`, a resource-table binding is appended to the layout following the last bind
+    /// group, and pipelines whose shaders use `getResource` must be created with such a layout.
+    ///
+    /// Requires [`Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE`]. This is a native-only,
+    /// experimental feature.
+    pub uses_resource_table: bool,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(PipelineLayoutDescriptor<'_>: Send, Sync);

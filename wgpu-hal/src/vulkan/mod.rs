@@ -87,6 +87,7 @@ impl crate::Api for Api {
     type QuerySet = QuerySet;
     type Fence = Fence;
     type AccelerationStructure = AccelerationStructure;
+    type ResourceTable = ResourceTable;
     type PipelineCache = PipelineCache;
 
     type BindGroupLayout = BindGroupLayout;
@@ -116,6 +117,7 @@ crate::impl_dyn_resource!(
     Queue,
     RenderPipeline,
     RayTracingPipeline,
+    ResourceTable,
     Sampler,
     ShaderModule,
     Surface,
@@ -625,6 +627,10 @@ struct DeviceShared {
 
     empty_descriptor_set_layout: vk::DescriptorSetLayout,
 
+    /// Shared resource-table layout + slot-count cap, present only when the
+    /// resource-table feature was enabled at device creation.
+    resource_table: Option<ResourceTableShared>,
+
     // The `drop_guard` field must be the last field of this struct so it is dropped last.
     // Do not add new fields after it.
     drop_guard: Option<crate::DropGuard>,
@@ -639,6 +645,12 @@ impl Drop for DeviceShared {
             self.raw
                 .destroy_descriptor_set_layout(self.empty_descriptor_set_layout, None)
         };
+        if let Some(ref resource_table) = self.resource_table {
+            unsafe {
+                self.raw
+                    .destroy_descriptor_set_layout(resource_table.set_layout, None)
+            };
+        }
         if self.drop_guard.is_none() {
             unsafe { self.raw.destroy_device(None) };
         }
@@ -901,6 +913,57 @@ pub struct AccelerationStructure {
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
 
+/// A Vulkan-backed resource table (see the WebGPU bindless proposal).
+///
+/// Each table owns a dedicated [update-after-bind] descriptor pool and a single
+/// descriptor set allocated from the device-wide shared table layout
+/// (`DeviceShared::resource_table`). The set's binding 0 is a variable-count
+/// `SAMPLED_IMAGE` runtime array; slots are written through
+/// [`Device::update_table_slot`] and the whole set is bound as encoder state by
+/// [`CommandEncoder::set_resource_table`].
+///
+/// [update-after-bind]: ash::vk::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND
+/// [`Device::update_table_slot`]: crate::Device::update_table_slot
+/// [`CommandEncoder::set_resource_table`]: crate::CommandEncoder::set_resource_table
+#[derive(Debug)]
+pub struct ResourceTable {
+    /// The per-table descriptor pool, created with `UPDATE_AFTER_BIND`.
+    pool: vk::DescriptorPool,
+    /// The single set allocated from `pool` using the shared table layout.
+    set: vk::DescriptorSet,
+    /// The variable descriptor count the set was allocated with (number of
+    /// slots). Used to bounds-check slot writes in debug builds.
+    size: u32,
+}
+
+impl ResourceTable {
+    /// The largest table size wgpu's resource-table API permits (the proposal's
+    /// `size ≤ 65536`). Caps the shared set layout's `descriptorCount`.
+    const MAX_SIZE: u32 = 1 << 16;
+}
+
+impl crate::DynResourceTable for ResourceTable {}
+
+/// Device-wide state shared by all [`ResourceTable`]s.
+///
+/// Present only when the resource-table feature
+/// ([`wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE`]) was requested at
+/// device creation; a device without descriptor-indexing enabled leaves
+/// [`DeviceShared::resource_table`] `None`.
+#[derive(Debug)]
+struct ResourceTableShared {
+    /// The single descriptor set layout every table's set is allocated from:
+    /// binding 0 is a variable-count `SAMPLED_IMAGE` runtime array with
+    /// `UPDATE_AFTER_BIND | PARTIALLY_BOUND | UPDATE_UNUSED_WHILE_PENDING |
+    /// VARIABLE_DESCRIPTOR_COUNT` and the `UPDATE_AFTER_BIND_POOL` layout flag.
+    set_layout: vk::DescriptorSetLayout,
+    /// Upper bound on any single table's slot count (the runtime array's
+    /// `descriptorCount` in `set_layout`), derived from the device's
+    /// update-after-bind sampled-image limits and capped at
+    /// [`ResourceTable::MAX_SIZE`].
+    max_size: u32,
+}
+
 #[derive(Debug)]
 pub enum TextureMemory {
     // shared memory in GPU allocator (owned by wgpu-hal)
@@ -1012,6 +1075,19 @@ impl crate::DynBindGroupLayout for BindGroupLayout {}
 pub struct PipelineLayout {
     raw: vk::PipelineLayout,
     binding_map: naga::back::spv::BindingMap,
+    /// Number of bind-group slots in this layout (`bind_group_layouts.len()`).
+    ///
+    /// The resource table, when present, binds at this set index (D15 in
+    /// `plans/resource-table.md`): it always follows the last ordinary bind
+    /// group. Stored so later work items can reason about the layout's shape.
+    binding_group_count: u32,
+    /// The descriptor set/binding the SPIR-V backend must target when lowering
+    /// `getResource`. `Some` iff this layout was created with
+    /// [`uses_resource_table`]; its `descriptor_set` equals
+    /// `binding_group_count`, its `binding` is 0.
+    ///
+    /// [`uses_resource_table`]: crate::PipelineLayoutDescriptor::uses_resource_table
+    resource_table_target: Option<naga::back::spv::ResourceTableBindTarget>,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}

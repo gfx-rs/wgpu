@@ -224,6 +224,12 @@ bitflags::bitflags! {
         ///
         /// [`Interpolation::Linear`]: crate::Interpolation::Linear
         const LINEAR_INTERPOLATION = 1 << 44;
+        /// Support for the bindless resource table: the `enable resource_table;`
+        /// WGSL extension, the `getResource<T>(index)` builtin, and the
+        /// [`Expression::ResourceTableGet`] IR expression.
+        ///
+        /// [`Expression::ResourceTableGet`]: crate::Expression::ResourceTableGet
+        const RESOURCE_TABLE = 1 << 45;
     }
 }
 
@@ -247,6 +253,7 @@ impl Capabilities {
             Self::COOPERATIVE_MATRIX => Some(Ext::WgpuCooperativeMatrix),
             Self::RAY_TRACING_PIPELINE => Some(Ext::WgpuRayTracingPipeline),
             Self::PER_VERTEX => Some(Ext::WgpuPerVertex),
+            Self::RESOURCE_TABLE => Some(Ext::ResourceTable),
             Self::BUFFER_BINDING_ARRAY
             | Self::BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
             | Self::STORAGE_BUFFER_BINDING_ARRAY
@@ -351,6 +358,25 @@ pub struct ModuleInfo {
     functions: Vec<FunctionInfo>,
     entry_points: Vec<FunctionInfo>,
     const_expression_types: Box<[TypeResolution]>,
+
+    /// Whether the module contains any [`Expression::ResourceTableGet`], i.e.
+    /// uses the bindless resource table via `getResource<T>`.
+    ///
+    /// This is a module-level fact consumed by wgpu-core to decide whether a
+    /// pipeline reserves the resource-table binding (and the epoch immediate).
+    ///
+    /// [`Expression::ResourceTableGet`]: crate::Expression::ResourceTableGet
+    uses_resource_table: bool,
+
+    /// Whether the module requests any writable resource-table types.
+    ///
+    /// In M0 this is always `false`, because writable (storage) resource types
+    /// are rejected by the front end. It exists now so that later milestones
+    /// (heterogeneous/writable resource tables) can flip it without changing
+    /// the reflection surface, and so wgpu-core can narrow its intra-pass
+    /// write-hazard dirty-bit triggers to modules that actually write through
+    /// the table.
+    requests_writable_table_types: bool,
 }
 
 impl ops::Index<Handle<crate::Type>> for ModuleInfo {
@@ -785,6 +811,11 @@ impl Validator {
             entry_points: Vec::with_capacity(module.entry_points.len()),
             const_expression_types: vec![placeholder; module.global_expressions.len()]
                 .into_boxed_slice(),
+            // Populated after all functions and entry points are validated.
+            uses_resource_table: false,
+            // Always `false` in M0: writable resource types are rejected by the
+            // front end, so no module can request them yet.
+            requests_writable_table_types: false,
         };
 
         for (handle, ty) in module.types.iter() {
@@ -917,6 +948,22 @@ impl Validator {
                 }
             }
         }
+
+        // Reflection: record whether the resource table is used anywhere in the
+        // module. `ResourceTableGet` is never a const-expression, so only
+        // function and entry-point expression arenas can contain it.
+        mod_info.uses_resource_table = module
+            .functions
+            .iter()
+            .map(|(_, f)| &f.expressions)
+            .chain(
+                module
+                    .entry_points
+                    .iter()
+                    .map(|ep| &ep.function.expressions),
+            )
+            .flat_map(|arena| arena.iter())
+            .any(|(_, expr)| matches!(*expr, crate::Expression::ResourceTableGet { .. }));
 
         Ok(mod_info)
     }

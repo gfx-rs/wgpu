@@ -4660,6 +4660,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             | Expression::CooperativeMultiplyAdd { .. } => {
                 unreachable!()
             }
+            Expression::ResourceTableGet { .. } => {
+                return Err(Error::Unimplemented(
+                    "resource tables are not supported by the HLSL backend".into(),
+                ))
+            }
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }

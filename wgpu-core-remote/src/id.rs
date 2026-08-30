@@ -17,4 +17,5 @@ impl wgpu_core::command::ReferenceType for IdReferences {
     type ComputePipeline = ComputePipelineId;
     type Blas = BlasId;
     type Tlas = TlasId;
+    type ResourceTable = ResourceTableId;
 }

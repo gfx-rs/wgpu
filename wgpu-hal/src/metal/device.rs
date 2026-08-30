@@ -219,6 +219,7 @@ impl super::Device {
                         image_load: bounds_check_policy,
                         // TODO: support bounds checks on binding arrays
                         binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+                        resource_table: naga::proc::BoundsCheckPolicy::Unchecked,
                     },
                     zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
                     force_loop_bounding: stage.module.runtime_checks.force_loop_bounding,
@@ -2118,6 +2119,26 @@ impl crate::Device for super::Device {
         _acceleration_structure: super::AccelerationStructure,
     ) {
         // self.counters.acceleration_structures.sub(1);
+    }
+
+    unsafe fn create_resource_table(
+        &self,
+        _desc: &crate::ResourceTableDescriptor,
+    ) -> Result<super::ResourceTable, crate::DeviceError> {
+        unimplemented!("resource tables land in a later change")
+    }
+
+    unsafe fn destroy_resource_table(&self, _table: super::ResourceTable) {
+        unimplemented!("resource tables land in a later change")
+    }
+
+    unsafe fn update_table_slot(
+        &self,
+        _table: &super::ResourceTable,
+        _slot: u32,
+        _update: crate::ResourceTableUpdate<'_, super::TextureView>,
+    ) {
+        unimplemented!("resource tables land in a later change")
     }
 
     fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {

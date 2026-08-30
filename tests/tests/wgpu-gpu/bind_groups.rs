@@ -73,6 +73,7 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
             label: Some("pipeline_layout"),
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let pipelines = SHADER_SRC
@@ -304,6 +305,7 @@ static BIND_GROUP_WITH_MAX_BINDING_INDEX: GpuTestConfiguration = GpuTestConfigur
             label: None,
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         let shader = format!(
@@ -476,6 +478,7 @@ async fn bind_group_stage_order(ctx: TestingContext) {
         label: Some("pipeline layout"),
         bind_group_layouts: &[Some(&bind_group_layout)],
         immediate_size: 0,
+        uses_resource_table: false,
     });
 
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {

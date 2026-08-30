@@ -71,6 +71,10 @@ pub struct Player {
     samplers: HashMap<wgc::id::PointerId<wgc::id::markers::Sampler>, Arc<wgc::resource::Sampler>>,
     blas_s: HashMap<wgc::id::PointerId<wgc::id::markers::Blas>, Arc<wgc::resource::Blas>>,
     tlas_s: HashMap<wgc::id::PointerId<wgc::id::markers::Tlas>, Arc<wgc::resource::Tlas>>,
+    resource_tables: HashMap<
+        wgc::id::PointerId<wgc::id::markers::ResourceTable>,
+        Arc<wgc::resource_table::ResourceTable>,
+    >,
 }
 
 impl Default for Player {
@@ -92,6 +96,7 @@ impl Default for Player {
             samplers: HashMap::new(),
             blas_s: HashMap::new(),
             tlas_s: HashMap::new(),
+            resource_tables: HashMap::new(),
         }
     }
 }
@@ -224,6 +229,7 @@ impl Player {
                     label: desc.label.clone(),
                     bind_group_layouts: Cow::from(&bind_group_layouts),
                     immediate_size: desc.immediate_size,
+                    uses_resource_table: desc.uses_resource_table,
                 };
 
                 let pipeline_layout = device.create_pipeline_layout(&resolved_desc);
@@ -444,6 +450,45 @@ impl Player {
             Action::DropTlas(id) => {
                 self.tlas_s.remove(&id).expect("invalid tlas");
             }
+            Action::CreateResourceTable { id, desc } => {
+                let (resource_table, _error) = device.create_resource_table(&desc);
+                self.resource_tables.insert(id, resource_table);
+            }
+            Action::DestroyResourceTable(id) => {
+                let resource_table = self
+                    .resource_tables
+                    .get(&id)
+                    .expect("invalid resource table");
+                resource_table.destroy();
+            }
+            Action::DropResourceTable(id) => {
+                self.resource_tables
+                    .remove(&id)
+                    .expect("invalid resource table");
+            }
+            Action::UpdateResourceTableSlot {
+                id,
+                slot,
+                texture_view,
+            } => {
+                let resource_table = self
+                    .resource_tables
+                    .get(&id)
+                    .expect("invalid resource table");
+                let texture_view = self.resolve_texture_view_id(texture_view);
+                resource_table
+                    .update_slot(slot, &texture_view)
+                    .expect("resource table update failed");
+            }
+            Action::RemoveResourceTableBinding { id, slot } => {
+                let resource_table = self
+                    .resource_tables
+                    .get(&id)
+                    .expect("invalid resource table");
+                resource_table
+                    .remove_binding(slot)
+                    .expect("resource table remove_binding failed");
+            }
         }
     }
 
@@ -599,6 +644,16 @@ impl Player {
         id: wgc::id::PointerId<wgc::id::markers::QuerySet>,
     ) -> Arc<wgc::resource::QuerySet> {
         self.query_sets.get(&id).expect("invalid query set").clone()
+    }
+
+    fn resolve_resource_table_id(
+        &self,
+        id: wgc::id::PointerId<wgc::id::markers::ResourceTable>,
+    ) -> Arc<wgc::resource_table::ResourceTable> {
+        self.resource_tables
+            .get(&id)
+            .expect("invalid resource table")
+            .clone()
     }
 
     fn resolve_blas_id(
@@ -897,6 +952,7 @@ impl Player {
                 timestamp_writes,
                 occlusion_query_set,
                 multiview_mask,
+                resource_table,
             } => Command::RunRenderPass {
                 pass: self.resolve_render_pass(pass),
                 color_attachments: self.resolve_color_attachments(color_attachments),
@@ -905,6 +961,7 @@ impl Player {
                 timestamp_writes: timestamp_writes.map(|tw| self.resolve_pass_timestamp_writes(tw)),
                 occlusion_query_set: occlusion_query_set.map(|qs| self.resolve_query_set_id(qs)),
                 multiview_mask,
+                resource_table: resource_table.map(|rt| self.resolve_resource_table_id(rt)),
             },
             Command::BuildAccelerationStructures { blas, tlas } => {
                 Command::BuildAccelerationStructures {
@@ -1013,6 +1070,9 @@ impl Player {
                 bind_group: bind_group.map(|bg| self.resolve_bind_group_id(bg)),
             },
             C::SetPipeline(id) => C::SetPipeline(self.resolve_compute_pipeline_id(id)),
+            C::SetResourceTable { resource_table } => C::SetResourceTable {
+                resource_table: resource_table.map(|rt| self.resolve_resource_table_id(rt)),
+            },
             C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::DispatchWorkgroups(groups) => C::DispatchWorkgroups(groups),
             C::DispatchWorkgroupsIndirect { buffer, offset } => C::DispatchWorkgroupsIndirect {

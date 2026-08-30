@@ -124,6 +124,18 @@ pub struct BoundsCheckPolicies {
 
     /// How should the generated code handle binding array indexes that are out of bounds.
     pub binding_array: BoundsCheckPolicy,
+
+    /// How should the generated code handle resource-table (`getResource<T>`)
+    /// indexes that are out of bounds, or that select a slot whose contents do
+    /// not match `T`?
+    ///
+    /// M0 of the resource-table feature only implements [`Unchecked`]; any
+    /// other policy is rejected by the SPIR-V backend, because the checked
+    /// lowering (type-class compare + visibility-mask test + select) depends on
+    /// the metadata buffer that arrives in M1.
+    ///
+    /// [`Unchecked`]: BoundsCheckPolicy::Unchecked
+    pub resource_table: BoundsCheckPolicy,
 }
 
 /// The default `BoundsCheckPolicy` is `Unchecked`.
@@ -166,6 +178,9 @@ impl BoundsCheckPolicies {
 
     /// Return `true` if any of `self`'s policies are `policy`.
     pub fn contains(&self, policy: BoundsCheckPolicy) -> bool {
+        // `binding_array` and `resource_table` are deliberately omitted: both
+        // have dedicated backend lowering paths and are not consulted by the
+        // generic (Access/ImageLoad) bounds-check machinery that calls this.
         self.index == policy || self.buffer == policy || self.image_load == policy
     }
 }

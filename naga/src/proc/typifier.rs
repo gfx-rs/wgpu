@@ -821,6 +821,7 @@ impl<'a> ResolveContext<'a> {
                 })
             }
             crate::Expression::CooperativeMultiplyAdd { a: _, b: _, c } => past(c)?.clone(),
+            crate::Expression::ResourceTableGet { ty, index: _ } => TypeResolution::Handle(ty),
         })
     }
 }

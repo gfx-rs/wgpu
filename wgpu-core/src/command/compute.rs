@@ -23,8 +23,8 @@ use crate::{
         },
         ArcCommand, BasePass, BindGroupStateChange, CommandEncoder, CommandEncoderError,
         DebugGroupError, EncoderStateError, InnerCommandEncoder, MapPassErr, PassErrorScope,
-        PassStateError, PassTimestampWrites, QueryUseError, StateChange, TimestampWritesError,
-        TransitionResourcesError,
+        PassStateError, PassTimestampWrites, QueryUseError, ResourceTableGap, StateChange,
+        TimestampWritesError, TransitionResourcesError,
     },
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     hal_label, id, impl_resource_type,
@@ -149,6 +149,11 @@ pub enum DispatchError {
     MissingImmediateData {
         missing: naga::valid::ImmediateSlots,
     },
+    #[error(
+        "The bound pipeline's layout declares a resource table (`uses_resource_table`), but no \
+         resource table has been bound with `set_resource_table`"
+    )]
+    MissingResourceTable,
 }
 
 impl WebGpuError for DispatchError {
@@ -280,6 +285,44 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
     active_query: Option<(Arc<QuerySet>, u32)>,
 
     intermediate_trackers: Tracker,
+
+    /// The resource table bound as encoder state via `set_resource_table`, if
+    /// any (work item 0.7 of the bindless feature).
+    resource_table: Option<Arc<crate::resource_table::ResourceTable>>,
+
+    /// Whether the bound resource table still needs to be (re)emitted to the hal
+    /// before the next dispatch. Set when the table or the pipeline layout
+    /// changes, since binding a pipeline with an incompatible layout disturbs
+    /// the table's descriptor set (which binds at the highest set index).
+    resource_table_dirty: bool,
+
+    /// Every *distinct* resource table bound during this pass (D2 gap recording).
+    ///
+    /// Unlike a render pass — whose table is fixed by the pass descriptor and so
+    /// immutable — a compute pass may rebind (or unbind) the table between
+    /// dispatches via `set_resource_table`. Each distinct table that was ever
+    /// bound must still get its own pass-start layout gap at submit, so we
+    /// accumulate them here rather than recording only the final binding
+    /// (`resource_table`), which would silently drop earlier tables' transitions.
+    resource_tables_seen: Vec<Arc<crate::resource_table::ResourceTable>>,
+
+    /// Resource-table hazard dirty bits (work item 0.10; see
+    /// `plans/resource-table.md`, the *Barriers → Inside table-bound compute
+    /// passes* section).
+    ///
+    /// Inside a table-bound compute pass, a bindful storage write in one
+    /// dispatch may be read through the table by a later dispatch (or a table
+    /// read may be clobbered by a later bindful write). These two bits track
+    /// whether such a hazard is outstanding so that a single conservative
+    /// compute→compute memory barrier can be emitted before the dependent
+    /// dispatch and both bits cleared. The barrier is a plain memory barrier
+    /// with no image layout transition — layout correctness never depends on
+    /// it (Invariant 3).
+    ///
+    /// `dirty_write` is set by any dispatch with a writable bindful binding;
+    /// `dirty_table_read` by any dispatch that reads through the table.
+    dirty_write: bool,
+    dirty_table_read: bool,
 }
 
 impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
@@ -299,6 +342,15 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
                         .difference(self.pass.immediate_state.immediate_slots_set),
                 });
             }
+            // If the pipeline's layout declares a resource table, one must be
+            // bound (work item 0.7). `pipeline.layout()` returning an error here
+            // would mean an invalid layout, which the binder compatibility check
+            // above would already have rejected.
+            if let Ok(layout) = pipeline.layout() {
+                if layout.uses_resource_table && self.resource_table.is_none() {
+                    return Err(DispatchError::MissingResourceTable);
+                }
+            }
             Ok(())
         } else {
             Err(DispatchError::MissingPipeline(pass::MissingPipeline))
@@ -311,6 +363,39 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         self.pass
             .immediate_state
             .flush_immediates(layout, self.pass.base.raw_encoder);
+    }
+
+    /// Emit the hal binding for the resource table if the current pipeline needs
+    /// one and it has not yet been (re)bound (work item 0.7).
+    ///
+    /// Called from `flush_bindings`, i.e. after `is_ready` has confirmed a
+    /// pipeline is bound and (if required) a table is present. The table binds
+    /// at the set index following the last bind group (D15), which for the
+    /// bound pipeline's layout is its bind-group count.
+    fn flush_resource_table(&mut self) -> Result<(), ComputePassErrorInner> {
+        if !self.resource_table_dirty {
+            return Ok(());
+        }
+        let Some(pipeline) = self.pipeline.as_ref() else {
+            return Ok(());
+        };
+        let layout = pipeline.layout()?;
+        if !layout.uses_resource_table {
+            return Ok(());
+        }
+        let Some(resource_table) = self.resource_table.as_ref() else {
+            return Ok(());
+        };
+        let index = layout.bind_group_layouts.len() as u32;
+        let raw_table = resource_table.try_raw(self.pass.base.snatch_guard)?;
+        unsafe {
+            self.pass
+                .base
+                .raw_encoder
+                .set_resource_table(layout.raw()?, index, raw_table);
+        }
+        self.resource_table_dirty = false;
+        Ok(())
     }
 
     /// Flush binding state in preparation for a dispatch.
@@ -396,12 +481,67 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
 
         flush_bindings_helper(&mut self.pass)?;
 
+        self.flush_resource_table()?;
+
         CommandEncoder::drain_barriers(
             self.pass.base.raw_encoder,
             &mut self.intermediate_trackers,
             self.pass.base.snatch_guard,
         );
+
+        self.flush_resource_table_barrier();
+
         Ok(())
+    }
+
+    /// Emit the resource-table hazard barrier for the upcoming dispatch, if
+    /// needed, and update the dirty bits (work item 0.10).
+    ///
+    /// Called from `flush_bindings`, i.e. once per user dispatch. Internal
+    /// injected dispatches (e.g. indirect-dispatch validation) do not go
+    /// through here and so never affect the dirty bits, matching the design
+    /// (their writes are not part of a user usage scope).
+    fn flush_resource_table_barrier(&mut self) {
+        // Fast path: if no resource table has ever been bound in this pass, there
+        // is no table hazard to track, so the common (non-bindless) dispatch pays
+        // ~nothing — we skip the per-dispatch `has_writable` bind-group scan and
+        // the dirty-bit bookkeeping entirely (work item 0.10 / finding fix). Once
+        // a table is bound the hazard scheme engages for the rest of the pass.
+        if self.resource_tables_seen.is_empty() {
+            return;
+        }
+
+        // Does this dispatch read through the resource table? `is_ready` (called
+        // before every dispatch) guarantees a table is bound whenever the
+        // pipeline layout declares one, so the layout flag alone is decisive.
+        let uses_table = self.resource_table.is_some()
+            && self
+                .pipeline
+                .as_ref()
+                .and_then(|pipeline| pipeline.layout().ok())
+                .is_some_and(|layout| layout.uses_resource_table);
+
+        // Does this dispatch write through a bindful storage binding?
+        let has_writable = self
+            .pass
+            .binder
+            .list_active()
+            .any(|bind_group| bind_group.used.has_writable_bindings());
+
+        // A prior write feeding this table read (RAW), or a prior table read
+        // clobbered by this write (WAR), needs a single global compute→compute
+        // memory barrier. One barrier discharges both bits.
+        if (uses_table && self.dirty_write) || (has_writable && self.dirty_table_read) {
+            unsafe {
+                self.pass.base.raw_encoder.resource_table_memory_barrier();
+            }
+            self.dirty_write = false;
+            self.dirty_table_read = false;
+        }
+
+        // Record this dispatch's own effects for the next dispatch.
+        self.dirty_write |= has_writable;
+        self.dirty_table_read |= uses_table;
     }
 }
 
@@ -659,6 +799,8 @@ pub(super) fn encode_compute_pass(
                 debug_scope_depth: &mut debug_scope_depth,
                 query_set_writes: parent_state.query_set_writes,
                 deferred_query_set_resolves: parent_state.deferred_query_set_resolves,
+                resource_table_gaps: parent_state.resource_table_gaps,
+                resource_table_member_usages: parent_state.resource_table_member_usages,
             },
             binder: Binder::new(),
             temp_offsets: Vec::new(),
@@ -674,6 +816,12 @@ pub(super) fn encode_compute_pass(
             device.ordered_buffer_usages,
             device.ordered_texture_usages,
         ),
+
+        resource_table: None,
+        resource_table_dirty: false,
+        resource_tables_seen: Vec::new(),
+        dirty_write: false,
+        dirty_table_read: false,
     };
 
     let indices = &device.tracker_indices;
@@ -765,6 +913,10 @@ pub(super) fn encode_compute_pass(
                     false,
                 )
                 .map_pass_err(scope)?;
+            }
+            ArcComputeCommand::SetResourceTable { resource_table } => {
+                let scope = PassErrorScope::SetResourceTable;
+                set_resource_table(&mut state, device, resource_table).map_pass_err(scope)?;
             }
             ArcComputeCommand::SetPipeline(pipeline) => {
                 let scope = PassErrorScope::SetPipelineCompute;
@@ -871,6 +1023,7 @@ pub(super) fn encode_compute_pass(
             ..
         },
         intermediate_trackers,
+        resource_tables_seen,
         ..
     } = state;
 
@@ -908,6 +1061,38 @@ pub(super) fn encode_compute_pass(
         .close_and_swap()
         .map_pass_err(pass_scope)?;
 
+    // Record the textures this pass used in a resource-table-incompatible layout
+    // for usage-conflict validation (work item 0.9). Gated on the feature that
+    // permits binding a table at all, so the common (non-bindless) path pays
+    // nothing. The tracker method folds the pass's start *and* end states, so a
+    // texture written in one dispatch and read in a later one (end-state flips to
+    // a read) is still reported; see its docs for the residual completeness
+    // limitation.
+    if device
+        .features
+        .contains(wgt::Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE)
+    {
+        intermediate_trackers
+            .textures
+            .collect_table_incompatible_usages(parent_state.resource_table_member_usages);
+    }
+
+    // Record a pass-start gap (D2) per distinct table bound during this pass. The
+    // pass body is now the last element of the list; each barrier command buffer
+    // is spliced at submit time immediately before it, all at the same insertion
+    // point. Recording one gap per table (rather than only the final binding)
+    // ensures every table's members get their `RESOURCE` transition even when the
+    // pass rebound the table between dispatches (M1).
+    if !resource_tables_seen.is_empty() {
+        let insertion_point = parent_state.raw_encoder.list.len() - 1;
+        for table in resource_tables_seen {
+            parent_state.resource_table_gaps.push(ResourceTableGap {
+                table,
+                insertion_point,
+            });
+        }
+    }
+
     Ok(())
 }
 
@@ -942,7 +1127,46 @@ fn set_pipeline(
         &mut state.pass,
         pipeline_layout,
         &pipeline.late_sized_buffer_groups,
-    )
+    )?;
+
+    // Binding a pipeline with a (potentially) different layout may disturb the
+    // resource table's descriptor set, which binds at the highest set index, so
+    // re-emit it before the next dispatch (work item 0.7).
+    state.resource_table_dirty = true;
+    Ok(())
+}
+
+fn set_resource_table(
+    state: &mut State,
+    device: &Arc<Device>,
+    resource_table: Option<Arc<crate::resource_table::ResourceTable>>,
+) -> Result<(), ComputePassErrorInner> {
+    if let Some(ref resource_table) = resource_table {
+        resource_table.same_device(device)?;
+        // Keep the table alive for the lifetime of the command buffer and record
+        // it as referenced so that queue submit (work item 0.8) can mark its
+        // slots in use and answer `ActiveSubmission::contains_resource_table`.
+        state
+            .pass
+            .base
+            .tracker
+            .resource_tables
+            .insert_single(Arc::clone(resource_table));
+        // Remember every distinct table bound during the pass so each gets its
+        // own pass-start layout gap at submit, even one later replaced or unbound
+        // (a compute pass may rebind mid-pass; see `State::resource_tables_seen`).
+        if !state
+            .resource_tables_seen
+            .iter()
+            .any(|seen| Arc::ptr_eq(seen, resource_table))
+        {
+            state.resource_tables_seen.push(Arc::clone(resource_table));
+        }
+    }
+    state.resource_table = resource_table;
+    // The binding (or unbinding) takes effect at the next dispatch.
+    state.resource_table_dirty = true;
+    Ok(())
 }
 
 fn dispatch_workgroups(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorInner> {
@@ -1121,6 +1345,11 @@ fn dispatch_workgroups_indirect(
                     );
                 }
             }
+
+            // The indirect-validation dispatch above bound its own pipeline,
+            // disturbing the resource table's descriptor set (highest set
+            // index), so force it to be re-emitted by the flush below (0.7).
+            state.resource_table_dirty = true;
         }
 
         unsafe {
@@ -1254,6 +1483,38 @@ impl ComputePass {
         if let Err(error) = self.set_pipeline_inner(compute_pipeline) {
             self.device
                 .handle_error(error, self.label(), "ComputePass::set_pipeline");
+        }
+    }
+
+    /// Bind a resource table as compute-pass encoder state, or unbind the
+    /// current one with `None` (work item 0.7 of the bindless feature).
+    fn set_resource_table_inner(
+        &mut self,
+        resource_table: Option<Arc<crate::resource_table::ResourceTable>>,
+    ) -> Result<(), PassStateError> {
+        let scope = PassErrorScope::SetResourceTable;
+        let base = pass_base!(self, scope);
+
+        let resource_table = if let Some(resource_table) = resource_table {
+            pass_try!(base, scope, resource_table.check_is_valid());
+            Some(resource_table)
+        } else {
+            None
+        };
+
+        base.commands
+            .push(ArcComputeCommand::SetResourceTable { resource_table });
+
+        Ok(())
+    }
+
+    pub fn set_resource_table(
+        &mut self,
+        resource_table: Option<Arc<crate::resource_table::ResourceTable>>,
+    ) {
+        if let Err(error) = self.set_resource_table_inner(resource_table) {
+            self.device
+                .handle_error(error, self.label(), "ComputePass::set_resource_table");
         }
     }
 

@@ -90,6 +90,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             label: None,
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {

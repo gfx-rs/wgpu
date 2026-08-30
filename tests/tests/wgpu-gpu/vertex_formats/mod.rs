@@ -255,6 +255,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
             label: None,
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let dummy = ctx
@@ -361,6 +362,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
 
         rpass.set_vertex_buffer(0, buffer_input.slice(..));

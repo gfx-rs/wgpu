@@ -182,6 +182,7 @@ impl WgpuContext {
             // (4)
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         let swapchain_capabilities = surface.get_capabilities(&adapter);
@@ -472,6 +473,7 @@ impl ApplicationHandler<UniformAction> for App {
                         occlusion_query_set: None,
                         timestamp_writes: None,
                         multiview_mask: None,
+                        resource_table: None,
                     });
                     render_pass.set_pipeline(&wgpu_ctx.pipeline);
                     // (9)

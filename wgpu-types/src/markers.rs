@@ -61,4 +61,5 @@ ids! {
     pub type QuerySet;
     pub type Blas;
     pub type Tlas;
+    pub type ResourceTable;
 }

@@ -376,6 +376,7 @@ impl crate::Api for Api {
     type PipelineCache = PipelineCache;
 
     type AccelerationStructure = AccelerationStructure;
+    type ResourceTable = ResourceTable;
 }
 
 crate::impl_dyn_resource!(
@@ -396,6 +397,7 @@ crate::impl_dyn_resource!(
     Queue,
     RayTracingPipeline,
     RenderPipeline,
+    ResourceTable,
     Sampler,
     ShaderModule,
     Surface,
@@ -1307,6 +1309,13 @@ pub struct AccelerationStructure {
 }
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
+
+/// Placeholder resource-table type; a real DX12 implementation lands with M3
+/// (`plans/resource-table.md`).
+#[derive(Debug)]
+pub struct ResourceTable;
+
+impl crate::DynResourceTable for ResourceTable {}
 
 impl SwapChain {
     unsafe fn release_resources(mut self) -> Dxgi::IDXGISwapChain3 {

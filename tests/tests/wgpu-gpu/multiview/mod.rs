@@ -189,6 +189,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32) {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: NonZero::new(layer_mask),
+            resource_table: None,
         });
         rpass.set_pipeline(&pipeline);
         rpass.draw(0..6, 0..1);

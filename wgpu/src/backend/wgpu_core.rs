@@ -240,6 +240,13 @@ impl ContextWgpuCore {
         unsafe { tlas.wgpu_tlas.clone().as_hal::<A>() }
     }
 
+    pub unsafe fn resource_table_as_hal<A: hal::Api>(
+        &self,
+        table: &CoreResourceTable,
+    ) -> Option<impl Deref<Target = A::ResourceTable>> {
+        unsafe { table.wgpu_resource_table.clone().as_hal::<A>() }
+    }
+
     #[track_caller]
     #[cold]
     fn handle_error_fatal(
@@ -402,6 +409,12 @@ pub struct CoreSampler {
 #[derive(Debug, Clone)]
 pub struct CoreQuerySet {
     pub(crate) wgpu_query_set: Arc<wgc::resource::QuerySet>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CoreResourceTable {
+    pub(crate) context: ContextWgpuCore,
+    pub(crate) wgpu_resource_table: Arc<wgc::resource_table::ResourceTable>,
 }
 
 #[derive(Debug, Clone)]
@@ -593,6 +606,7 @@ crate::cmp::impl_eq_ord_hash_arc_address!(CoreExternalTexture => .wgpu_external_
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreBlas => .wgpu_blas);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreTlas => .wgpu_tlas);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreQuerySet => .wgpu_query_set);
+crate::cmp::impl_eq_ord_hash_arc_address!(CoreResourceTable => .wgpu_resource_table);
 crate::cmp::impl_eq_ord_hash_arc_address!(CorePipelineLayout => .wgpu_pipeline_layout);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreRenderPipeline => .wgpu_render_pipeline);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreComputePipeline => .wgpu_compute_pipeline);
@@ -1115,6 +1129,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             label: desc.label.map(Borrowed),
             bind_group_layouts: Borrowed(&temp_layouts),
             immediate_size: desc.immediate_size,
+            uses_resource_table: desc.uses_resource_table,
         };
 
         let wgpu_pipeline_layout = self.wgpu_device.create_pipeline_layout(&descriptor);
@@ -1491,6 +1506,24 @@ impl dispatch::DeviceInterface for CoreDevice {
                 .handle_error_nolabel(cause, "Device::create_query_set");
         }
         CoreQuerySet { wgpu_query_set }.into()
+    }
+
+    fn create_resource_table(
+        &self,
+        desc: &crate::ResourceTableDescriptor<'_>,
+    ) -> dispatch::DispatchResourceTable {
+        let (wgpu_resource_table, error) = self
+            .wgpu_device
+            .create_resource_table(&desc.map_label(|l| l.map(Borrowed)));
+        if let Some(cause) = error {
+            self.wgpu_device
+                .handle_error(cause, desc.label, "Device::create_resource_table");
+        }
+        CoreResourceTable {
+            context: self.context.clone(),
+            wgpu_resource_table,
+        }
+        .into()
     }
 
     fn create_command_encoder(
@@ -1965,6 +1998,55 @@ impl dispatch::QuerySetInterface for CoreQuerySet {
     }
 }
 
+impl From<wgc::resource_table::UpdateResourceTableError> for crate::ResourceTableError {
+    fn from(error: wgc::resource_table::UpdateResourceTableError) -> Self {
+        use wgc::resource_table::UpdateResourceTableError as E;
+        match error {
+            E::SlotInUse { available_after } => Self::SlotInUse {
+                available_after: crate::SubmissionIndex {
+                    index: available_after,
+                },
+            },
+            E::SlotOutOfBounds { slot, size } => Self::SlotOutOfBounds { slot, size },
+            E::NoAvailableSlot => Self::NoAvailableSlot,
+            other => Self::Other(other.to_string()),
+        }
+    }
+}
+
+impl dispatch::ResourceTableInterface for CoreResourceTable {
+    fn destroy(&self) {
+        self.wgpu_resource_table.destroy();
+    }
+
+    fn update(
+        &self,
+        slot: u32,
+        texture_view: &dispatch::DispatchTextureView,
+    ) -> Result<(), crate::ResourceTableError> {
+        let view = &texture_view.as_core().wgpu_texture_view;
+        self.wgpu_resource_table
+            .update_slot(slot, view)
+            .map_err(Into::into)
+    }
+
+    fn insert_binding(
+        &self,
+        texture_view: &dispatch::DispatchTextureView,
+    ) -> Result<u32, crate::ResourceTableError> {
+        let view = &texture_view.as_core().wgpu_texture_view;
+        self.wgpu_resource_table
+            .insert_binding(view)
+            .map_err(Into::into)
+    }
+
+    fn remove_binding(&self, slot: u32) -> Result<(), crate::ResourceTableError> {
+        self.wgpu_resource_table
+            .remove_binding(slot)
+            .map_err(Into::into)
+    }
+}
+
 impl dispatch::PipelineLayoutInterface for CorePipelineLayout {}
 
 impl dispatch::RenderPipelineInterface for CoreRenderPipeline {
@@ -2128,6 +2210,9 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                     .occlusion_query_set
                     .map(|qs| qs.inner.as_core().wgpu_query_set.clone()),
                 multiview_mask: desc.multiview_mask,
+                resource_table: desc.resource_table.map(|resource_table| {
+                    resource_table.inner.as_core().wgpu_resource_table.clone()
+                }),
             },
         );
 
@@ -2342,6 +2427,13 @@ impl dispatch::ComputePassInterface for CoreComputePass {
 
     fn set_immediates(&mut self, offset: u32, data: &[u8]) {
         self.pass.set_immediates(offset, data);
+    }
+
+    fn set_resource_table(&mut self, resource_table: Option<&dispatch::DispatchResourceTable>) {
+        let resource_table =
+            resource_table.map(|table| table.as_core().wgpu_resource_table.clone());
+
+        self.pass.set_resource_table(resource_table);
     }
 
     fn insert_debug_marker(&mut self, label: &str) {

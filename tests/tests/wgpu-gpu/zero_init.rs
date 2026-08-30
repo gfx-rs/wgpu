@@ -673,6 +673,7 @@ impl<'ctx> RenderTargetInitCase<'ctx> {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
     }
 
@@ -718,6 +719,7 @@ impl<'ctx> RenderTargetInitCase<'ctx> {
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
+            resource_table: None,
         });
     }
 
@@ -2046,6 +2048,7 @@ static DYNAMIC_OFFSET_BUFFER_BINDING_INIT: GpuTestConfiguration = GpuTestConfigu
                 label: None,
                 bind_group_layouts: &[Some(&bgl)],
                 immediate_size: 0,
+                uses_resource_table: false,
             });
         let pipeline = ctx
             .device
@@ -2573,6 +2576,7 @@ async fn check_vertex_buffer_tail_init(
             label: None,
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
     let pipeline = ctx

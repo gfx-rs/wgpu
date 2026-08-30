@@ -199,6 +199,10 @@ validation_canary = [
 name = "halmark"
 
 [[example]]
+name = "resource-table"
+required-features = ["vulkan"]
+
+[[example]]
 name = "raw-gles"
 required-features = ["gles"]
 

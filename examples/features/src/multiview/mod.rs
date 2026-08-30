@@ -133,6 +133,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: NonZero::new(LAYER_MASK),
+                resource_table: None,
             });
             rpass.set_pipeline(&self.pipeline);
             rpass.draw(0..6, 0..1);

@@ -63,6 +63,7 @@ mod render_target;
 mod resolve_query_set_init;
 mod resource_descriptor_accessor;
 mod resource_error;
+mod resource_table;
 mod samplers;
 mod scissor_tests;
 mod shader;
@@ -150,6 +151,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     render_target::all_tests(&mut tests);
     resource_descriptor_accessor::all_tests(&mut tests);
     resource_error::all_tests(&mut tests);
+    resource_table::all_tests(&mut tests);
     samplers::all_tests(&mut tests);
     scissor_tests::all_tests(&mut tests);
     shader_primitive_index::all_tests(&mut tests);

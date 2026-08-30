@@ -1,0 +1,24 @@
+# Exercises the SPIR-V backend's unchecked resource-table lowering (work item
+# 0.3). The backend synthesizes one aliased `OpTypeRuntimeArray` global per
+# distinct `getResource<T>` type, all at the descriptor set/binding below.
+targets = "IR | SPIRV"
+capabilities = "RESOURCE_TABLE"
+
+[spv]
+# SPIR-V 1.4 (rather than the 1.1 used by binding-arrays): the synthesized
+# table globals have no IR `GlobalVariable`, and at >= 1.4 every global an entry
+# point statically uses must appear in its `OpEntryPoint` interface. Pinning 1.4
+# here exercises that path, which the Vulkan hal depends on (it emits SPIR-V
+# 1.5/1.6 on Vulkan 1.2+ devices). The descriptor-indexing capabilities
+# themselves only require the `SPV_EXT_descriptor_indexing` extension, available
+# since 1.0.
+version = [1, 4]
+
+# The table has no IR `GlobalVariable`; the backend needs to be told where to
+# place its synthesized descriptor array(s). The Vulkan hal binds this at the
+# descriptor set following the pipeline layout's bind groups (here group 0 is
+# used by the sampler/uniform, so the table lives at set 1), image array at
+# binding 0.
+[spv.resource_table_target]
+descriptor_set = 1
+binding = 0

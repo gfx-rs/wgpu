@@ -159,6 +159,7 @@ impl crate::framework::Example for Example {
             label: None,
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
+            uses_resource_table: false,
         });
 
         // Create the texture
@@ -357,6 +358,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
+                resource_table: None,
             });
             rpass.push_debug_group("Prepare data for draw.");
             rpass.set_pipeline(&self.pipeline);

@@ -824,7 +824,8 @@ impl super::Validator {
                             | Ex::RayQueryGetIntersection { .. }
                             | Ex::RayQueryVertexPositions { .. }
                             | Ex::CooperativeLoad { .. }
-                            | Ex::CooperativeMultiplyAdd { .. } => {
+                            | Ex::CooperativeMultiplyAdd { .. }
+                            | Ex::ResourceTableGet { .. } => {
                                 self.emit_expression(handle, context)?
                             }
                             Ex::CallResult(_)

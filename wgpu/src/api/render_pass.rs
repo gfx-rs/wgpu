@@ -680,6 +680,15 @@ pub struct RenderPassDescriptor<'a> {
     /// This doesn't influence load/store/clear/etc operations, as those are defined for attachments,
     /// therefore affecting all attachments. Meaning, this affects only any shaders executed on the `RenderPass`.
     pub multiview_mask: Option<NonZeroU32>,
+    /// The resource table bound as pass-level encoder state, if any.
+    ///
+    /// Shader executions in this pass will be able to access resources in this table via the
+    /// WGSL `getResource<T>(index)` builtin, provided the active pipeline's layout was created
+    /// with [`PipelineLayoutDescriptor::uses_resource_table`] set.
+    ///
+    /// Requires [`Features::EXPERIMENTAL_SAMPLING_RESOURCE_TABLE`]. This is a native-only,
+    /// experimental feature.
+    pub resource_table: Option<&'a ResourceTable>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPassDescriptor<'_>: Send, Sync);

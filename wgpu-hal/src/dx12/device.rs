@@ -2682,6 +2682,26 @@ impl crate::Device for super::Device {
         );
     }
 
+    unsafe fn create_resource_table(
+        &self,
+        _desc: &crate::ResourceTableDescriptor,
+    ) -> Result<super::ResourceTable, crate::DeviceError> {
+        unimplemented!("resource tables land in the next change")
+    }
+
+    unsafe fn destroy_resource_table(&self, _table: super::ResourceTable) {
+        unimplemented!("resource tables land in the next change")
+    }
+
+    unsafe fn update_table_slot(
+        &self,
+        _table: &super::ResourceTable,
+        _slot: u32,
+        _update: crate::ResourceTableUpdate<'_, super::TextureView>,
+    ) {
+        unimplemented!("resource tables land in the next change")
+    }
+
     fn get_internal_counters(&self) -> wgt::HalCounters {
         self.counters.as_ref().clone()
     }

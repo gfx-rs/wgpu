@@ -95,6 +95,7 @@ use wgpu_core::{
     instance::Adapter,
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     resource::{Buffer, ExternalTexture, QuerySet, Sampler, Texture, TextureView},
+    resource_table::ResourceTable,
 };
 
 #[allow(rustdoc::private_intra_doc_links)]
@@ -135,6 +136,7 @@ pub struct Hub {
     pub(crate) texture_views: Registry<Arc<TextureView>>,
     pub(crate) external_textures: Registry<Arc<ExternalTexture>>,
     pub(crate) samplers: Registry<Arc<Sampler>>,
+    pub(crate) resource_tables: Registry<Arc<ResourceTable>>,
     pub(crate) render_passes: Registry<RenderPass>,
     pub(crate) compute_passes: Registry<ComputePass>,
     pub(crate) render_bundle_encoders: Registry<RenderBundleEncoder>,
@@ -161,6 +163,7 @@ impl Hub {
             texture_views: Registry::new(),
             external_textures: Registry::new(),
             samplers: Registry::new(),
+            resource_tables: Registry::new(),
             render_passes: Registry::new(),
             compute_passes: Registry::new(),
             render_bundle_encoders: Registry::new(),

@@ -237,6 +237,13 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn create_resource_table(
+        &self,
+        _desc: &wgpu::ResourceTableDescriptor<'_>,
+    ) -> wgpu::custom::DispatchResourceTable {
+        unimplemented!()
+    }
+
     fn create_command_encoder(
         &self,
         _desc: &wgpu::CommandEncoderDescriptor<'_>,

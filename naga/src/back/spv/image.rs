@@ -383,6 +383,11 @@ impl BlockContext<'_> {
             crate::Expression::Access { .. } | crate::Expression::AccessIndex { .. } => {
                 self.cached[expr_handle]
             }
+            // A `getResource<T>` fetch: `write_expression` has already emitted
+            // the `OpAccessChain` + `OpLoad` into the table's descriptor array
+            // and cached the loaded image id. Image ops (`textureLoad`,
+            // `textureSample`, ...) consume it like any other image handle.
+            crate::Expression::ResourceTableGet { .. } => self.cached[expr_handle],
             ref other => unreachable!("Unexpected image expression {:?}", other),
         };
 

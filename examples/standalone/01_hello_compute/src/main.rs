@@ -170,6 +170,7 @@ fn main() {
         label: None,
         bind_group_layouts: &[Some(&bind_group_layout)],
         immediate_size: 0,
+        uses_resource_table: false,
     });
 
     // The pipeline is the ready-to-go program state for the GPU. It contains the shader modules,

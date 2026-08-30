@@ -100,6 +100,7 @@ async fn test_impl(ctx: &TestingContext) {
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
+                resource_table: None,
             });
             render_pass.set_pipeline(&pipeline);
             render_pass.draw(0..3, 0..1);

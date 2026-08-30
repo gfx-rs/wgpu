@@ -128,6 +128,9 @@ pub struct PipelineLayoutDescriptor<'a> {
     ///
     /// If this value is non-zero, [`wgt::Features::IMMEDIATES`] must be enabled.
     pub immediate_size: u32,
+    /// Whether pipelines with this layout may access the device's resource table
+    /// via the WGSL `getResource<T>(index)` builtin.
+    pub uses_resource_table: bool,
 }
 
 /// Corresponds to [WebGPU `GPUShaderModuleDescriptor`](https://gpuweb.github.io/gpuweb/#dictdef-gpushadermoduledescriptor).

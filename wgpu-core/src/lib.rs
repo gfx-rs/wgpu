@@ -87,6 +87,7 @@ mod pool;
 pub mod present;
 pub mod ray_tracing;
 pub mod resource;
+pub mod resource_table;
 mod snatch;
 pub mod storage;
 mod timestamp_normalization;

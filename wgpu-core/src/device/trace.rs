@@ -251,6 +251,25 @@ pub enum Action<'a, R: ReferenceType> {
         desc: crate::resource::TlasDescriptor<'a>,
     },
     DropTlas(R::Tlas),
+    CreateResourceTable {
+        id: PointerId<markers::ResourceTable>,
+        desc: crate::resource_table::ResourceTableDescriptor<'a>,
+    },
+    DestroyResourceTable(PointerId<markers::ResourceTable>),
+    DropResourceTable(PointerId<markers::ResourceTable>),
+    /// Bind a texture view into a resource table slot (covers both `update` and
+    /// `insert_binding`; the latter records the concrete slot it chose so replay
+    /// is deterministic).
+    UpdateResourceTableSlot {
+        id: PointerId<markers::ResourceTable>,
+        slot: u32,
+        texture_view: PointerId<markers::TextureView>,
+    },
+    /// Clear a resource table slot (`remove_binding`).
+    RemoveResourceTableBinding {
+        id: PointerId<markers::ResourceTable>,
+        slot: u32,
+    },
 }
 
 /// cbindgen:ignore

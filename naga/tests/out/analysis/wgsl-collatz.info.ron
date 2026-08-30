@@ -433,4 +433,6 @@
         ),
     ],
     const_expression_types: [],
+    uses_resource_table: false,
+    requests_writable_table_types: false,
 )
