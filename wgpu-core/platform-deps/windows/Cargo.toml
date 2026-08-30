@@ -2,7 +2,7 @@
 name = "wgpu-core-deps-windows"
 version.workspace = true
 edition.workspace = true
-description = "Feature unification helper crate for the Windows/Linux/Android platforms"
+description = "Feature unification helper crate for the Windows platform"
 homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true

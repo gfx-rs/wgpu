@@ -87,17 +87,16 @@ mod pool;
 pub mod present;
 pub mod ray_tracing;
 pub mod resource;
+mod scratch;
 mod snatch;
 pub mod storage;
 mod timestamp_normalization;
 mod track;
-mod weak_vec;
 // This is public for users who pre-compile shaders while still wanting to
 // preserve all run-time checks that `wgpu-core` does.
-// See <https://github.com/gfx-rs/wgpu/issues/3103>, after which this can be
-// made private again.
-mod scratch;
+// See <https://github.com/gfx-rs/wgpu/issues/3103>.
 pub mod validation;
+mod weak_vec;
 
 pub use validation::{map_storage_format_from_naga, map_storage_format_to_naga};
 
