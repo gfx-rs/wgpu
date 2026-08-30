@@ -1245,7 +1245,9 @@ pub struct RayTracingPipelineDescriptor<
     pub cache: Option<PLC>,
 }
 
-/// This is a semi-opaque structure because if metal gets ray tracing pipelines,
+/// Metal's shader binding data is opaque, but Vulkan's and DX12's has opaque data
+/// but a non-opaque storage mechanism, so each require seperate codepaths. 
+/// Therefore, this is a semi-opaque structure because if metal gets ray tracing pipelines,
 /// this will need to turn into an enum so it shouldn't have other code
 /// tangled with it.
 #[derive(Debug)]
@@ -1266,14 +1268,14 @@ impl ShaderBindingData {
     ) -> Result<Self, CreateRayTracingPipelineError> {
         let mut base_data = Vec::new();
 
-        let closest_hit_data = unsafe {
+        let ray_generation_data = unsafe {
             device
                 .raw()
                 .get_raytracing_pipeline_group_data(pipeline, 0..1)
         }
         .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
 
-        base_data.extend_from_slice(&closest_hit_data);
+        base_data.extend_from_slice(&ray_generation_data);
 
         let padded_miss_offset = (base_data.len() as wgt::BufferAddress).next_multiple_of(
             device.alignments.ray_tracing_pipeline_data_offset_alignment as wgt::BufferAddress,
