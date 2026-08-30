@@ -123,7 +123,7 @@ gles = [
     "dep:objc2",
     "dep:profiling",
     "dep:wasm-bindgen",
-    "dep:wayland-sys",
+    "dep:wayland-egl",
     "dep:web-sys",
     "dep:windows-result",
     "naga/glsl-out",
@@ -254,10 +254,9 @@ renderdoc-sys = { workspace = true, optional = true }
 # Backend: Vulkan
 libc = { workspace = true, optional = true }
 # backend: GLES
-wayland-sys = { version = "0.31.3", features = [
-    "client",
+# XXX Release
+wayland-egl = { git  = "https://github.com/smithay/wayland-rs", default-features = false, features = [
     "dlopen",
-    "egl",
 ], optional = true }
 
 ## Support creating textures from DRM display/window handles.
