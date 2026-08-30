@@ -11,7 +11,7 @@ The tests require that the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)
 is installed on the system and the `bin` folder of the SDK is in your `PATH`.
 Without this some tests may fail to run, or report false negatives.
 
-Additionally you require you run the tests with `cargo-nextest`.
+Additionally you must run the tests with `cargo-nextest`.
 This is what our xtask calls. You can install it with `cargo install cargo-nextest`.
 
 ## Run All Tests
@@ -29,14 +29,17 @@ This is a table of contents, in the form of the repository's directory structure
   - [features](#example-tests)
 - naga
   - tests
-    - [example_wgsl](#naga-example-tests)
-    - [snapshot](#naga-snapshot-tests)
-    - [spirv-capabilities](#naga-spirv-capabilities-test)
-    - [validation](#naga-validation)
-    - [wgsl_errors](#naga-wgsl-error-tests)
+    - [example_wgsl.rs](#naga-example-tests)
+    - [snapshots.rs](#naga-snapshot-tests)
+    - [spirv_capabilities.rs](#naga-spir-v-capabilities-tests)
+    - [spirv_debug_info.rs](#naga-spir-v-debug-info-tests)
+    - [spirv_roundtrip.rs](#naga-spir-v-roundtrip-tests)
+    - [validation.rs](#naga-validation-tests)
+    - [wgsl_errors.rs](#naga-wgsl-error-tests)
 - player
   - [tests](#player-tests)
 - tests
+  - [wasm](#wasm-tests)
   - [compile](#wgpu-compile-tests)
   - [dependency](#wgpu-dependency-tests)
   - [gpu](#wgpu-gpu-tests)
@@ -44,7 +47,7 @@ This is a table of contents, in the form of the repository's directory structure
   - [validation](#wgpu-validation-tests)
 
 And where applicable [unit-tests](#unit-tests)
-are scatteredthroughout the codebase.
+are scattered throughout the codebase.
 
 ## Benchmark Tests
 
@@ -68,7 +71,7 @@ To run the benchmarks for benchmarking purposes, use `cargo bench`.
 ## Example Tests
 
 - Located in: `examples/features`
-- Run with `cargo xtask test --bin wgpu-examples`
+- Run with `cargo xtask test --lib -p wgpu-examples`
 - Uses a custom `#[apply(gpu_test!)]` harness.
 - `wgpu` integration tests, with access to `wgpu_test` helpers.
 
@@ -86,7 +89,7 @@ they should be easy to copy into a standalone project.
 
 ## `naga` Example Tests
 
-- Located in: `naga/tests/naga/example_wgsl`
+- Located in: `naga/tests/naga/example_wgsl.rs`
 - Run with `cargo nextest run --test naga example_wgsl`
 
 This simple test ensures that all wgsl files in the `examples`
@@ -94,7 +97,7 @@ directory can be parsed by `naga`'s `wgsl` parser and validate correctly.
 
 ## `naga` Snapshot Tests
 
-- Located in: `naga/tests/naga/snapshot`, `naga/tests/in`, and `naga/tests/out`
+- Located in: `naga/tests/naga/snapshots.rs`, `naga/tests/in`, and `naga/tests/out`
 - Run with `cargo nextest run --test naga snapshots`
 - Data driven snapshot tests for `naga`'s input/output.
 
@@ -120,16 +123,32 @@ will use the respective tool to validate the generated code.
 
 ## `naga` SPIR-V Capabilities Tests
 
-- Located in: `naga/tests/naga/spirv_capabilities`
+- Located in: `naga/tests/naga/spirv_capabilities.rs`
 - Run with `cargo nextest run --test naga spirv_capabilities`
 - Uses the standard `#[test]` harness.
 
 These tests convert the given wgsl snippet to spirv and
 then assert that the spirv has enabled the expected capabilities.
 
+## `naga` SPIR-V Debug Info Tests
+
+- Located in: `naga/tests/naga/spirv_debug_info.rs`
+- Run with `cargo nextest run --test naga spirv_debug_info`
+
+These tests emit SPIR-V with debug info turned on and run the result through
+`spirv-val`. They need `spirv-val` from the Vulkan SDK on your `PATH`.
+
+## `naga` SPIR-V Roundtrip Tests
+
+- Located in: `naga/tests/naga/spirv_roundtrip.rs`
+- Run with `cargo nextest run --test naga spirv_roundtrip`
+
+These tests write a WGSL module out as SPIR-V, parse the SPIR-V back in, and
+assert on the module that comes back.
+
 ## `naga` Validation Tests
 
-- Located in: `naga/tests/naga/validation`
+- Located in: `naga/tests/naga/validation.rs`
 - Run with `cargo nextest run --test naga validation`
 
 These are hand rolled tests against the naga's validator.
@@ -139,7 +158,7 @@ the [wgsl errors](#naga-wgsl-error-tests) tests.
 
 ## `naga` WGSL Error Tests
 
-- Located in: `naga/tests/naga/wgsl_errors`
+- Located in: `naga/tests/naga/wgsl_errors.rs`
 - Run with `cargo nextest run --test naga wgsl_errors`
 
 These are tests for the error messages that the `wgsl` frontend
@@ -236,11 +255,32 @@ does not support those features.
 ## Unit Tests
 
 - Located throughout the codebase.
-- Run with `cargo nextest test -p <package>`
+- Run with `cargo nextest run -p <package>`
 - Standard `#[test]`s.
 
 Throughout the codebase we have standard `#[test]`s that test individual
 functions or small parts of the codebase. These don't run on the gpu.
+
+## Wasm Tests
+
+- Located in: `tests/wasm`
+- Run with `cargo xtask test-wasm`
+
+`cargo xtask test-wasm` builds the `wgpu-gpu` test binary and the examples for
+`wasm32-unknown-unknown`, then runs them in headless Chromium through
+[Playwright](https://playwright.dev/). It needs `npm` on your `PATH`, and it
+installs the browser itself on first run. `tests/wasm/runner` is the Playwright
+harness and `tests/wasm/web` is the page the tests load into.
+
+Useful flags:
+
+- `--list` lists the tests without running them.
+- `--show` runs the browser with a window instead of headless.
+- `--debug` opens the Playwright inspector.
+- `--test-threads <n>` sets how many browser contexts run at once. The default
+  is half the available parallelism, and at least 4.
+
+CI runs this on every pull request.
 
 ## WebGPU CTS
 
@@ -282,3 +322,13 @@ the actual allocator being invoked does not guarantee that.
 To improve our coverage of memory initialization, we set `LVP_POISON_MEMORY=true` in Linux
 (Vulkan) CI. This instructs llvmpipe to fill all newly initialized memory with a non-zero
 value, so tests will reliably fail if the memory is not properly initialized.
+
+## Environment Variables
+
+| Variable                            | Effect                                                                                                                                          |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LVP_POISON_MEMORY=true`            | Makes llvmpipe fill newly allocated memory with a non-zero value. See [Memory Initialization Testing](#memory-initialization-testing).          |
+| `NAGA_SNAPSHOT=<substring>`         | Restricts the [`naga` snapshot tests](#naga-snapshot-tests) to input files whose name contains `<substring>`.                                   |
+| `WGPU_GPU_TESTS_USE_NOOP_BACKEND=1` | Makes the GPU tests enumerate only the noop backend, skipping `.gpuconfig`. `cargo xtask miri` sets this, because miri cannot load driver DLLs. |
+| `WGPU_BACKEND`                      | Restricts which backends the GPU tests and the benchmarks use.                                                                                  |
+| `WGPU_ADAPTER_NAME`                 | Restricts which adapter the GPU tests and the benchmarks use.                                                                                   |
