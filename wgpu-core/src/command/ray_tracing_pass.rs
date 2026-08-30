@@ -815,10 +815,12 @@ fn trace_rays(
 
     let limits = &state.pass.base.device.limits;
 
+    // `saturating_mul` is fine here as it is the limit, so a lower limit if it would overflow is just a
+    // slightly greater restriction.
     let dim_size_limit = [
-        limits.max_compute_workgroup_size_x * limits.max_compute_workgroups_per_dimension,
-        limits.max_compute_workgroup_size_y * limits.max_compute_workgroups_per_dimension,
-        limits.max_compute_workgroup_size_z * limits.max_compute_workgroups_per_dimension,
+        limits.max_compute_workgroup_size_x.saturating_mul(limits.max_compute_workgroups_per_dimension),
+        limits.max_compute_workgroup_size_y.saturating_mul(limits.max_compute_workgroups_per_dimension),
+        limits.max_compute_workgroup_size_z.saturating_mul(limits.max_compute_workgroups_per_dimension),
     ];
 
     if dims[0] > dim_size_limit[0] {
@@ -848,12 +850,12 @@ fn trace_rays(
         ));
     }
 
-    let tot_rays = dims[0] * dims[1] * dims[2];
+    let tot_rays = dims[0].checked_mul(dims[1]).and_then(|tmp| tmp.checked_mul(dims[2]));
 
-    if tot_rays > limits.max_ray_dispatch_count {
+    if tot_rays.is_none_or(|tot_rays| tot_rays > limits.max_ray_dispatch_count) {
         return Err(RayTracingPassErrorInner::TraceRay(
             TraceRayError::TooManyTotal {
-                current: tot_rays,
+                current: tot_rays.unwrap_or(u32::MAX),
                 limit: limits.max_ray_dispatch_count,
             },
         ));
