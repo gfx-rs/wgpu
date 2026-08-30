@@ -1,9 +1,9 @@
 //! Instrumented lock types.
 //!
 //! This module defines a set of instrumented wrappers for the lock
-//! types used in `wgpu-core` ([`Mutex`], [`RwLock`], and
-//! [`SnatchLock`]) that help us understand and validate `wgpu-core`
-//! synchronization.
+//! types used in `wgpu-core` ([`Mutex`] and [`RwLock`]) that help us
+//! understand and validate `wgpu-core` synchronization. [`SnatchLock`]
+//! is built on this module's [`RwLock`], so it is instrumented too.
 //!
 //! - The [`ranked`] module defines lock types that perform run-time
 //!   checks to ensure that each thread acquires locks only in a
@@ -19,13 +19,16 @@
 //!
 //! If the `wgpu_validate_locks` config is set (for example, with
 //! `RUSTFLAGS='--cfg wgpu_validate_locks'`), `wgpu-core` uses the
-//! [`ranked`] module's locks. We hope to make this the default for
-//! debug builds soon.
+//! [`ranked`] module's locks.
 //!
 //! If the `observe_locks` feature is enabled, `wgpu-core` uses the
 //! [`observing`] module's locks.
 //!
 //! Otherwise, `wgpu-core` uses the [`vanilla`] module's locks.
+//!
+//! The `wgpu_validate_locks` config requires the `std` feature, and it
+//! must not be combined with the `observe_locks` feature. Either
+//! violation fails to compile.
 //!
 //! [`Mutex`]: wgpu_sync::Mutex
 //! [`RwLock`]: wgpu_sync::RwLock

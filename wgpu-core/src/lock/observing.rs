@@ -1,7 +1,7 @@
 //! Lock types that observe lock acquisition order.
 //!
-//! This module's [`Mutex`] type is instrumented to observe the
-//! nesting of `wgpu-core` lock acquisitions. Whenever `wgpu-core`
+//! This module's [`Mutex`] and [`RwLock`] types are instrumented to
+//! observe the nesting of `wgpu-core` lock acquisitions. Whenever `wgpu-core`
 //! acquires one lock while it is already holding another, we note
 //! that nesting pair. This tells us what the [`LockRank::followers`]
 //! set for each lock would need to include to accommodate
@@ -348,7 +348,7 @@ struct ObservationLog {
     ///
     /// This is a hashset of raw pointers because raw pointers have
     /// the [`Eq`] and [`Hash`] relations we want: the pointer value, not
-    /// the contents. There's no unsafe code in this module.
+    /// the contents. We never dereference these pointers.
     locations_seen: FastHashSet<*const Location<'static>>,
 
     /// Buffer for serializing events, retained for allocation reuse.
