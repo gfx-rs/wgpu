@@ -6,12 +6,12 @@ var<storage, read_write> output: array<{{type}}>;
 
 @compute @workgroup_size(1)
 fn copy_texture_to_buffer() {
-    let layers = i32(textureNumLayers(texture));
+    let layers = textureNumLayers(texture);
     let dim = textureDimensions(texture);
-    for (var l = 0; l < layers; l++) {
+    for (var l = 0u; l < layers; l++) {
         for (var y = 0u; y < dim.y; y++) {
             for (var x = 0u; x < dim.x; x++) {
-                output[x + y * dim.x] = textureLoad(texture, vec2(x, y), l, 0).x;
+                output[(l * dim.y + y) * dim.x + x] = textureLoad(texture, vec2(x, y), l, 0).x;
             }
         }
     }

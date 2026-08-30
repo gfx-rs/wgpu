@@ -683,7 +683,6 @@ impl PhysicalDeviceFeatures {
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
-            | Df::READ_ONLY_DEPTH_STENCIL
             | Df::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | Df::COMPARISON_SAMPLERS
             | Df::VERTEX_STORAGE
@@ -698,6 +697,15 @@ impl PhysicalDeviceFeatures {
             | Df::SHADER_F16_IN_F32
             | Df::MSL2_1
             | Df::LINEAR_INTERPOLATION;
+
+        // `VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL`
+        // and `VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL`
+        // is required for separate read-only depth stencil.
+        dl_flags.set(
+            Df::READ_ONLY_DEPTH_STENCIL,
+            caps.device_api_version >= vk::API_VERSION_1_1
+                || caps.supports_extension(khr::maintenance2::NAME),
+        );
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
@@ -1324,6 +1332,34 @@ impl PhysicalDeviceProperties {
             // Optional `VK_KHR_shader_integer_dot_product`
             if self.supports_extension(khr::shader_integer_dot_product::NAME) {
                 extensions.push(khr::shader_integer_dot_product::NAME);
+            }
+
+            // Optional `VK_KHR_dynamic_rendering`.
+            // Depends on:
+            // - `VK_KHR_get_physical_device_properties2` or Vulkan 1.1, and `VK_KHR_depth_stencil_resolve`
+            // - or Vulkan 1.2
+            //
+            // We only check Vulkan 1.2 for now, as `VK_KHR_depth_stencil_resolve`
+            // also depends a bunch of extensions.
+            if self.device_api_version >= vk::API_VERSION_1_2
+                && self.supports_extension(khr::dynamic_rendering::NAME)
+            {
+                extensions.push(khr::dynamic_rendering::NAME);
+            }
+
+            // Optional `VK_KHR_load_store_op_none`
+            if self.supports_extension(khr::load_store_op_none::NAME) {
+                extensions.push(khr::load_store_op_none::NAME);
+            }
+
+            // Optional `VK_QCOM_render_pass_store_ops`
+            if self.supports_extension(ash::qcom::render_pass_store_ops::NAME) {
+                extensions.push(ash::qcom::render_pass_store_ops::NAME);
+            }
+
+            // Optional `VK_EXT_load_store_op_none`
+            if self.supports_extension(ext::load_store_op_none::NAME) {
+                extensions.push(ext::load_store_op_none::NAME);
             }
         }
 
@@ -2460,6 +2496,12 @@ impl super::Instance {
                 .unwrap_or(0),
             scratch_buffer_alignment: alignments.ray_tracing_scratch_buffer_alignment,
             ray_tracing_pipeline_group_data_size: alignments.ray_tracing_pipeline_group_data_size,
+            store_op_none: phd_capabilities.device_api_version >= vk::API_VERSION_1_3
+                || (phd_capabilities.device_api_version >= vk::API_VERSION_1_2
+                    && phd_capabilities.supports_extension(khr::dynamic_rendering::NAME))
+                || phd_capabilities.supports_extension(khr::load_store_op_none::NAME)
+                || phd_capabilities.supports_extension(ash::qcom::render_pass_store_ops::NAME)
+                || phd_capabilities.supports_extension(ext::load_store_op_none::NAME),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -2956,6 +2998,7 @@ impl super::Adapter {
             relay_semaphores: Mutex::new(relay_semaphores),
             signal_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Signal)),
             wait_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Wait)),
+            next_submit_chain: Mutex::new(None),
         };
 
         let allocation_sizes = AllocationSizes::from_memory_hints(memory_hints).into();

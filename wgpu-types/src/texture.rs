@@ -216,7 +216,7 @@ bitflags::bitflags! {
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[cfg_attr(feature = "serde", serde(transparent))]
-    pub struct TextureUses: u16 {
+    pub struct TextureUses: u32 {
         /// The texture is in unknown state.
         const UNINITIALIZED = 1 << 0;
         /// Ready to present image to the surface.
@@ -231,36 +231,45 @@ bitflags::bitflags! {
         const RESOURCE = 1 << 4;
         /// The color target of a renderpass.
         const COLOR_TARGET = 1 << 5;
-        /// Read-only depth stencil usage.
-        const DEPTH_STENCIL_READ = 1 << 6;
-        /// Read-write depth stencil usage
-        const DEPTH_STENCIL_WRITE = 1 << 7;
+        /// Read-only depth usage.
+        const DEPTH_READ = 1 << 6;
+        /// Read-write depth usage
+        const DEPTH_WRITE = 1 << 7;
+        /// Read-only stencil usage.
+        const STENCIL_READ = 1 << 8;
+        /// Read-write stencil usage
+        const STENCIL_WRITE = 1 << 9;
         /// Read-only storage texture usage. Corresponds to a UAV in d3d, so is exclusive, despite being read only.
         /// cbindgen:ignore
-        const STORAGE_READ_ONLY = 1 << 8;
+        const STORAGE_READ_ONLY = 1 << 10;
         /// Write-only storage texture usage.
         /// cbindgen:ignore
-        const STORAGE_WRITE_ONLY = 1 << 9;
+        const STORAGE_WRITE_ONLY = 1 << 11;
         /// Read-write storage texture usage.
         /// cbindgen:ignore
-        const STORAGE_READ_WRITE = 1 << 10;
+        const STORAGE_READ_WRITE = 1 << 12;
         /// Image atomic enabled storage.
         /// cbindgen:ignore
-        const STORAGE_ATOMIC = 1 << 11;
+        const STORAGE_ATOMIC = 1 << 13;
         /// Transient texture that may not have any backing memory. Not a resource state stored in the trackers, only used for passing down usages to create_texture.
-        const TRANSIENT = 1 << 12;
+        const TRANSIENT = 1 << 14;
         /// The combination of states that a texture may be in _at the same time_.
         /// cbindgen:ignore
-        const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits() | Self::STORAGE_READ_ONLY.bits();
+        const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_READ.bits()| Self::STENCIL_READ.bits() | Self::STORAGE_READ_ONLY.bits();
         /// The combination of states that a texture must exclusively be in.
         /// cbindgen:ignore
-        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
+        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
-        const COMPLEX = 1 << 13;
+        const COMPLEX = 1 << 15;
         /// Flag used by the wgpu-core texture tracker to say that the tracker does not know the state of the sub-resource.
         /// This is different from UNINITIALIZED as that says the tracker does know, but the texture has not been initialized.
-        const UNKNOWN = 1 << 14;
+        const UNKNOWN = 1 << 16;
+
+        /// Flag used by texture tracker to say the read-only depth aspect of texture is sampled.
+        const DEPTH_SAMPLED = 1 << 17;
+        /// Flag used by texture tracker to say the read-only stencil aspect of texture is sampled.
+        const STENCIL_SAMPLED = 1 << 18;
     }
 }
 

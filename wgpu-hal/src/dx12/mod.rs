@@ -93,11 +93,12 @@ mod types;
 mod view;
 
 use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
-use core::{ffi, fmt, mem, ops::Deref, sync::atomic::AtomicU64};
+use core::{ffi, fmt, mem, ops::Deref};
 
 use arrayvec::ArrayVec;
 use hashbrown::HashMap;
 use suballocation::Allocator;
+use wgpu_sync::atomic::AtomicU64;
 use wgpu_sync::{Mutex, RwLock};
 use windows::{
     core::{Free as _, Interface},
@@ -1063,8 +1064,14 @@ pub struct TextureView {
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,
     handle_rtv: Option<descriptor::Handle>,
-    handle_dsv_ro: Option<descriptor::Handle>,
+    /// Depth write stencil read-only view.
+    handle_dsv_wr: Option<descriptor::Handle>,
+    /// Depth read-only stencil write view.
     handle_dsv_rw: Option<descriptor::Handle>,
+    /// Depth read-only stencil read-only view.
+    handle_dsv_rr: Option<descriptor::Handle>,
+    /// Depth write stencil write view.
+    handle_dsv_ww: Option<descriptor::Handle>,
 }
 
 impl crate::DynTextureView for TextureView {}

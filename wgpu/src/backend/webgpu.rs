@@ -20,9 +20,9 @@ use core::{
     future::Future,
     ops::Range,
     pin::Pin,
-    sync::atomic::{AtomicU8, Ordering},
     task::{self, Poll},
 };
+use wgpu_sync::atomic::{AtomicU8, Ordering};
 use wgt::Backends;
 
 use js_sys::Promise;
@@ -1409,8 +1409,22 @@ pub struct WebTexture {
     desc: crate::TextureDescriptor<'static>,
 }
 
+/// A video source for [`Device::import_external_texture`].
+///
+/// This is the `source` of a WebGPU `GPUExternalTextureDescriptor`.
+///
+/// [`Device::import_external_texture`]: crate::Device::import_external_texture
+#[derive(Debug, Clone)]
+pub enum ExternalTextureSource {
+    /// An `HTMLVideoElement`.
+    HtmlVideoElement(web_sys::HtmlVideoElement),
+    /// A WebCodecs `VideoFrame`.
+    VideoFrame(web_sys::VideoFrame),
+}
+
 #[derive(Debug, Clone)]
 pub struct WebExternalTexture {
+    pub(crate) inner: webgpu_sys::GpuExternalTexture,
     /// Unique identifier for this ExternalTexture.
     ident: crate::cmp::Identifier,
 }
@@ -1927,6 +1941,34 @@ impl WebDevice {
         }
         .into()
     }
+
+    /// Import a video source as a `GPUExternalTexture`, without a copy.
+    ///
+    /// The browser performs the YCbCr-to-RGB conversion internally. The result is
+    /// valid only while the source is: a `VideoFrame` until it is closed, an
+    /// `HTMLVideoElement` for the current task.
+    pub(crate) fn import_external_texture(
+        &self,
+        source: &ExternalTextureSource,
+    ) -> dispatch::DispatchExternalTexture {
+        let descriptor = match source {
+            ExternalTextureSource::HtmlVideoElement(v) => {
+                webgpu_sys::GpuExternalTextureDescriptor::new(v)
+            }
+            ExternalTextureSource::VideoFrame(f) => {
+                webgpu_sys::GpuExternalTextureDescriptor::new_with_video_frame(f)
+            }
+        };
+        let inner = self
+            .inner
+            .import_external_texture(&descriptor)
+            .expect("importExternalTexture failed");
+        WebExternalTexture {
+            inner,
+            ident: crate::cmp::Identifier::create(),
+        }
+        .into()
+    }
 }
 
 impl dispatch::DeviceInterface for WebDevice {
@@ -2288,8 +2330,12 @@ impl dispatch::DeviceInterface for WebDevice {
                 crate::BindingResource::AccelerationStructureArray(_) => {
                     unimplemented!("Raytracing not implemented for web")
                 }
-                crate::BindingResource::ExternalTexture(_) => {
-                    unimplemented!("ExternalTexture not implemented for web")
+                crate::BindingResource::ExternalTexture(external_texture) => {
+                    let external_texture = &external_texture.inner.as_webgpu().inner;
+                    webgpu_sys::GpuBindGroupEntry::new_with_gpu_external_texture(
+                        binding.binding,
+                        external_texture,
+                    )
                 }
             })
             .collect::<Vec<webgpu_sys::GpuBindGroupEntry>>();
@@ -2557,7 +2603,11 @@ impl dispatch::DeviceInterface for WebDevice {
         _desc: &crate::ExternalTextureDescriptor<'_>,
         _planes: &[&crate::TextureView],
     ) -> dispatch::DispatchExternalTexture {
-        unimplemented!("ExternalTexture not implemented for web");
+        // The browser builds external textures from a video source, not from
+        // plane textures. Use `Device::import_external_texture` on this backend.
+        unimplemented!(
+            "plane-based external textures are unsupported on WebGPU; use Device::import_external_texture"
+        );
     }
 
     fn create_blas(
@@ -2644,7 +2694,7 @@ impl dispatch::DeviceInterface for WebDevice {
     fn create_render_bundle_encoder(
         &self,
         desc: &crate::RenderBundleEncoderDescriptor<'_>,
-    ) -> dispatch::DispatchRenderBundleEncoder {
+    ) -> Result<dispatch::DispatchRenderBundleEncoder, crate::CreateRenderBundleEncoderError> {
         let mapped_color_formats = desc
             .color_formats
             .iter()
@@ -2671,13 +2721,16 @@ impl dispatch::DeviceInterface for WebDevice {
         let render_bundle_encoder = self
             .inner
             .create_render_bundle_encoder(&mapped_desc)
-            .unwrap();
+            .map_err(|e| {
+                let e = e.dyn_ref::<js_sys::Error>().expect("Expected a JS Error");
+                crate::CreateRenderBundleEncoderError::new(e.message().as_string().unwrap())
+            })?;
 
-        WebRenderBundleEncoder {
+        Ok(WebRenderBundleEncoder {
             inner: render_bundle_encoder,
             ident: crate::cmp::Identifier::create(),
         }
-        .into()
+        .into())
     }
 
     fn set_device_lost_callback(&self, device_lost_callback: dispatch::BoxDeviceLostCallback) {
@@ -3123,12 +3176,12 @@ impl Drop for WebTexture {
 
 impl dispatch::ExternalTextureInterface for WebExternalTexture {
     fn destroy(&self) {
-        unimplemented!("ExternalTexture not implemented for web");
+        // A `GPUExternalTexture` has no `destroy()`; it expires automatically.
     }
 }
 impl Drop for WebExternalTexture {
     fn drop(&mut self) {
-        unimplemented!("ExternalTexture not implemented for web");
+        // no-op
     }
 }
 

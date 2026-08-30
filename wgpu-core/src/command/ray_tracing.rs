@@ -1,6 +1,7 @@
 use alloc::{sync::Arc, vec::Vec};
 use core::{
     cmp::max,
+    mem,
     num::NonZeroU64,
     ops::{Deref, Range},
 };
@@ -19,8 +20,8 @@ use crate::{
     init_tracker::MemoryInitKind,
     ray_tracing::{
         ArcBlasAabbGeometry, ArcBlasBuildEntry, ArcBlasGeometries, ArcBlasTriangleGeometry,
-        ArcTlasInstance, ArcTlasPackage, BlasBuildEntry, BlasGeometries,
-        BuildAccelerationStructureError, OwnedBlasBuildEntry, OwnedTlasPackage, TlasPackage,
+        ArcTlasPackage, BlasBuildEntry, BlasGeometries, BuildAccelerationStructureError,
+        OwnedBlasBuildEntry, OwnedTlasPackage,
     },
     resource::{Blas, BlasCompactState, Labeled, StagingBuffer, Tlas, Trackable},
     scratch::ScratchBuffer,
@@ -108,7 +109,7 @@ impl super::CommandEncoder {
     fn build_acceleration_structures_inner<'a>(
         self: &Arc<Self>,
         blas_iter: impl Iterator<Item = BlasBuildEntry<'a, Arc<Blas>, Arc<Buffer>>>,
-        tlas_iter: impl Iterator<Item = TlasPackage<'a, Arc<Tlas>, Arc<Blas>>>,
+        tlases: Vec<ArcTlasPackage>,
     ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::build_acceleration_structures");
 
@@ -170,47 +171,23 @@ impl super::CommandEncoder {
                 })
                 .collect::<Result<_, BuildAccelerationStructureError>>()?;
 
-            let tlas = tlas_iter
-                .map(|tlas_package| {
-                    let instances = tlas_package
-                        .instances
-                        .map(|instance| {
-                            instance
-                                .as_ref()
-                                .map(|instance| {
-                                    let blas = instance.blas.clone();
-                                    blas.check_is_valid()?;
-                                    Ok(ArcTlasInstance {
-                                        blas,
-                                        transform: *instance.transform,
-                                        custom_data: instance.custom_data,
-                                        mask: instance.mask,
-                                        intersection_index: instance.intersection_index,
-                                    })
-                                })
-                                .transpose()
-                        })
-                        .collect::<Result<_, BuildAccelerationStructureError>>()?;
-                    let tlas = tlas_package.tlas;
-                    tlas.check_is_valid()?;
-                    Ok(ArcTlasPackage {
-                        tlas,
-                        instances,
-                        lowest_unmodified: tlas_package.lowest_unmodified,
-                    })
-                })
-                .collect::<Result<_, BuildAccelerationStructureError>>()?;
+            for tlas_package in &tlases {
+                tlas_package.tlas.check_is_valid()?;
+                for instance in tlas_package.instances.iter().flatten() {
+                    instance.blas.check_is_valid()?;
+                }
+            }
 
-            Ok(ArcCommand::BuildAccelerationStructures { blas, tlas })
+            Ok(ArcCommand::BuildAccelerationStructures { blas, tlas: tlases })
         })
     }
 
     pub fn build_acceleration_structures<'a>(
         self: &Arc<Self>,
         blas_iter: impl Iterator<Item = BlasBuildEntry<'a, Arc<Blas>, Arc<Buffer>>>,
-        tlas_iter: impl Iterator<Item = TlasPackage<'a, Arc<Tlas>, Arc<Blas>>>,
+        tlases: Vec<ArcTlasPackage>,
     ) {
-        if let Err(err) = self.build_acceleration_structures_inner(blas_iter, tlas_iter) {
+        if let Err(err) = self.build_acceleration_structures_inner(blas_iter, tlases) {
             self.device.handle_error(
                 err,
                 Some(self.label()),
@@ -222,9 +199,10 @@ impl super::CommandEncoder {
 
 pub(crate) fn build_acceleration_structures(
     state: &mut EncodingState,
-    blas: Vec<OwnedBlasBuildEntry<ArcReferences>>,
-    tlas: Vec<OwnedTlasPackage<ArcReferences>>,
+    blases: Vec<OwnedBlasBuildEntry<ArcReferences>>,
+    mut tlases: Vec<OwnedTlasPackage<ArcReferences>>,
 ) -> Result<(), BuildAccelerationStructureError> {
+    profiling::scope!("build_acceleration_structures");
     state
         .device
         .require_features(Features::EXPERIMENTAL_RAY_QUERY)
@@ -234,12 +212,12 @@ pub(crate) fn build_acceleration_structures(
                 .require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
         })?;
 
-    let mut build_command = AsBuild::with_capacity(blas.len(), tlas.len());
+    let mut build_command = AsBuild::with_capacity(blases.len(), tlases.len());
     let mut input_barriers = Vec::<hal::BufferBarrier<dyn hal::DynBuffer>>::new();
     let mut scratch_buffer_blas_size = 0;
-    let mut blas_storage = Vec::with_capacity(blas.len());
+    let mut blas_storage = Vec::with_capacity(blases.len());
     iter_blas(
-        blas.iter(),
+        blases.iter(),
         &mut build_command,
         &mut input_barriers,
         &mut scratch_buffer_blas_size,
@@ -248,10 +226,13 @@ pub(crate) fn build_acceleration_structures(
     )?;
 
     let mut scratch_buffer_tlas_size: u64 = 0;
-    let mut tlas_storage = Vec::<TlasStore>::with_capacity(tlas.len());
+    let mut tlas_storage = Vec::<TlasStore>::with_capacity(tlases.len());
     let mut instance_buffer_staging_source = Vec::<u8>::new();
 
-    for package in tlas.iter() {
+    // We cannot move out of `tlases` because it will be borrowed by `tlas_storage`,
+    // but each package’s `instances` is consumed by the `mem::take` below.
+    for package in tlases.iter_mut() {
+        profiling::scope!("tlas validation");
         let tlas = &package.tlas;
         state.tracker.tlas_s.insert_single(tlas.clone());
 
@@ -269,7 +250,7 @@ pub(crate) fn build_acceleration_structures(
         let mut instance_count = 0;
 
         let mut max_intersection_idx = 0;
-        for (instance_idx, instance) in package.instances.iter().flatten().enumerate() {
+        for (instance_idx, instance) in mem::take(&mut package.instances).into_iter().flatten().enumerate() {
             if instance.custom_data >= (1u32 << 24u32) {
                 return Err(BuildAccelerationStructureError::TlasInvalidCustomData(
                     tlas.error_ident(),
@@ -279,7 +260,7 @@ pub(crate) fn build_acceleration_structures(
 
             max_intersection_idx = max_intersection_idx.max(instance.intersection_index);
 
-            let blas = &instance.blas;
+            let blas = instance.blas;
             let is_new_dependency = seen_dependencies.insert(blas.tracker_index());
 
             if is_new_dependency {
@@ -300,7 +281,21 @@ pub(crate) fn build_acceleration_structures(
                     .require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)?;
             }
 
-            instance_buffer_staging_source.extend(state.device.raw().tlas_instance_to_bytes(
+            if instance.intersection_index >= (1u32 << 24u32) {
+                return Err(
+                    BuildAccelerationStructureError::TlasInvalidIntersectionIndex(
+                        tlas.error_ident(),
+                        instance_idx,
+                        instance.intersection_index,
+                    ),
+                );
+            } else if instance.intersection_index != 0 {
+                state
+                    .device
+                    .require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)?;
+            }
+
+            state.device.raw().tlas_instance_to_bytes(
                 hal::TlasInstance {
                     transform: instance.transform,
                     custom_data: instance.custom_data,
@@ -308,7 +303,8 @@ pub(crate) fn build_acceleration_structures(
                     blas_address: blas.handle,
                     pipeline_intersection_data_offset: instance.intersection_index,
                 },
-            ));
+                &mut instance_buffer_staging_source,
+            );
 
             if tlas
                 .flags
@@ -328,7 +324,7 @@ pub(crate) fn build_acceleration_structures(
             instance_count += 1;
 
             if is_new_dependency {
-                dependencies.push(blas.clone());
+                dependencies.push(blas);
             }
         }
 
@@ -415,7 +411,7 @@ pub(crate) fn build_acceleration_structures(
     let raw_encoder = &mut state.raw_encoder;
 
     let mut blas_s_compactable = Vec::new();
-    let mut descriptors = Vec::with_capacity(blas.len());
+    let mut descriptors = Vec::with_capacity(blases.len());
 
     for storage in &blas_storage {
         descriptors.push(map_blas(

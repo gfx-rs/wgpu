@@ -2120,7 +2120,7 @@ impl crate::Device for super::Device {
         // self.counters.acceleration_structures.sub(1);
     }
 
-    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {
         let temp = MTLIndirectAccelerationStructureInstanceDescriptor {
             transformationMatrix: MTLPackedFloat4x3 {
                 columns: [
@@ -2155,7 +2155,7 @@ impl crate::Device for super::Device {
 
         wgt::bytemuck_wrapper!(unsafe struct Desc(MTLIndirectAccelerationStructureInstanceDescriptor));
 
-        bytemuck::bytes_of(&Desc::wrap(temp)).to_vec()
+        to_extend.extend_from_slice(bytemuck::bytes_of(&Desc::wrap(temp)))
     }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {

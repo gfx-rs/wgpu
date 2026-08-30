@@ -33,7 +33,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
+use core::{fmt, iter, ops, ptr::NonNull};
 
 use bitflags::bitflags;
 use hashbrown::HashMap;
@@ -55,7 +55,7 @@ use objc2_metal::{
     MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
-use wgpu_sync::{Condvar, Mutex, OnceCell, RwLock};
+use wgpu_sync::{atomic, Condvar, Mutex, OnceCell, RwLock};
 
 #[derive(Clone, Debug)]
 pub struct Api;
