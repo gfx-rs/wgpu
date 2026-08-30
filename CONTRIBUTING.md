@@ -24,14 +24,18 @@ contribute. If you are unfamiliar with the wgpu project, we recommend you read
 
 - [`GOVERNANCE.md`]: An overview of the wgpu project's goals and governance.
 - [`CODE_OF_CONDUCT.md`]: The code of conduct for the wgpu project.
+- [`docs/managing-cargo-dependencies.md`]: What to consider before adding or upgrading a cargo dependency.
 - [`docs/release-checklist.md`]: Checklist for creating a new release of wgpu.
 - [`docs/review-checklist.md`]: Checklist for reviewing a pull request in wgpu.
+- [`docs/running-tests-on-android-and-ios.md`]: Cross-compiling the tests to a phone and running them there.
 - [`docs/testing.md`]: Information on the test suites in wgpu and naga.
 
 [`GOVERNANCE.md`]: ./GOVERNANCE.md
 [`CODE_OF_CONDUCT.md`]: ./CODE_OF_CONDUCT.md
+[`docs/managing-cargo-dependencies.md`]: ./docs/managing-cargo-dependencies.md
 [`docs/release-checklist.md`]: ./docs/release-checklist.md
 [`docs/review-checklist.md`]: ./docs/review-checklist.md
+[`docs/running-tests-on-android-and-ios.md`]: ./docs/running-tests-on-android-and-ios.md
 [`docs/testing.md`]: ./docs/testing.md
 
 ## Talking to other humans in the wgpu project
