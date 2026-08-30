@@ -794,7 +794,7 @@ impl DxcShaderModel {
 /// Selects which DX12 shader compiler to use.
 #[derive(Clone, Debug, Eq, PartialEq, ConstDefault!)]
 pub enum Dx12Compiler {
-    /// The Fxc compiler (default) is old, slow and unmaintained.
+    /// The Fxc compiler is old, slow and unmaintained.
     ///
     /// However, it doesn't require any additional .dlls to be shipped with the application.
     Fxc,
