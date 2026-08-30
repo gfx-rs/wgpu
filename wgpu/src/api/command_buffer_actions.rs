@@ -81,10 +81,6 @@ macro_rules! impl_deferred_command_buffer_actions {
         /// While a buffer is mapped, it cannot be used by other commands; at any time,
         /// either the GPU or the CPU has exclusive access to the buffer’s contents.
         ///
-        /// # Panics
-        ///
-        /// - If `bounds` is outside the bounds of `buffer`.
-        ///
         /// # Panics During Submit
         ///
         /// - If the buffer is already mapped.

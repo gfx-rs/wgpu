@@ -104,12 +104,12 @@ use crate::*;
 ///   the buffer's contents.
 ///
 /// - Or, you can call `buffer.slice(range).get_mapped_range_mut()` to obtain a
-///   [`BufferViewMut`], which dereferences to a `&mut [u8]` that you can use to
-///   read and write the buffer's contents.
+///   [`BufferViewMut`], whose [`slice()`][BufferViewMut::slice] method gives you
+///   a [`WriteOnly`] pointer that you can use to write the buffer's contents.
 ///
-/// The given `range` must fall within the mapped portion of the buffer. If you
-/// attempt to access overlapping ranges, even for shared access only, these
-/// methods panic.
+/// The given `range` must fall within the mapped portion of the buffer. These
+/// methods return an error if `range` overlaps an outstanding view, unless both
+/// that view and the new view are read-only.
 ///
 /// While a buffer is mapped, you may not submit any commands to the GPU that
 /// access it. You may record command buffers that use the buffer, but if you
@@ -158,26 +158,22 @@ use crate::*;
 ///   data like this. In real code, there might be an [`Arc`] to some larger
 ///   structure that itself owns `buffer`.
 ///
-/// - Then, it calls [`Buffer::slice`] to make a [`BufferSlice`] referring to
-///   the buffer's entire contents.
-///
-/// - Next, it calls [`BufferSlice::map_async`] to request that the bytes to
-///   which the slice refers be made accessible to the CPU ("mapped"). This may
-///   entail waiting for previously enqueued operations on `buffer` to finish.
-///   Although [`map_async`] itself always returns immediately, it saves the
-///   callback function to be invoked later.
+/// - Then, it calls [`Buffer::map_async`] to request that the buffer's entire
+///   contents be made accessible to the CPU ("mapped"). This may entail waiting
+///   for previously enqueued operations on `buffer` to finish. Although
+///   [`map_async`] itself always returns immediately, it saves the callback
+///   function to be invoked later.
 ///
 /// - When some later call to [`Device::poll`] or [`Instance::poll_all`] (not
 ///   shown in this example) determines that the buffer is mapped and ready for
 ///   the CPU to use, it invokes the callback function.
 ///
-/// - The callback function calls [`Buffer::slice`] and then
-///   [`BufferSlice::get_mapped_range_mut`] to obtain a [`BufferViewMut`], which
-///   dereferences to a `&mut [u8]` slice referring to the buffer's bytes.
+/// - The callback function calls [`Buffer::get_mapped_range_mut`] to obtain a
+///   [`BufferViewMut`], and calls [`BufferViewMut::slice`] to obtain a
+///   [`WriteOnly`] pointer to the buffer's bytes.
 ///
-/// - It then uses the [`bytemuck`] crate to turn the `&mut [u8]` into a `&mut
-///   [f32]`, and calls the slice [`fill`] method to fill the buffer with a
-///   useful value.
+/// - It then calls [`into_chunks`] to divide those bytes into four-byte chunks,
+///   and calls [`fill`] to write the same `f32` into every chunk.
 ///
 /// - Finally, the callback drops the view and calls [`Buffer::unmap`] to unmap
 ///   the buffer. In real code, the callback would also need to do some sort of
@@ -190,9 +186,9 @@ use crate::*;
 /// execution makes it hard to avoid friction altogether.
 ///
 /// [`Arc`]: std::sync::Arc
-/// [`map_async`]: BufferSlice::map_async
-/// [`bytemuck`]: https://crates.io/crates/bytemuck
-/// [`fill`]: slice::fill
+/// [`map_async`]: Buffer::map_async
+/// [`into_chunks`]: WriteOnly::into_chunks
+/// [`fill`]: WriteOnly::fill
 ///
 /// ## Mapping buffers on the web
 ///
@@ -372,9 +368,11 @@ impl Buffer {
     ///
     /// This can also be performed using [`BufferSlice::map_async()`].
     ///
+    /// If the buffer is already mapped, this leaves the existing mapping unchanged and invokes
+    /// `callback` with [`BufferAsyncError`].
+    ///
     /// # Panics
     ///
-    /// - If the buffer is already mapped.
     /// - If the buffer’s [`BufferUsages`] do not allow the requested [`MapMode`].
     /// - If `bounds` is outside of the bounds of `self`.
     /// - If `bounds` does not start at a multiple of [`MAP_ALIGNMENT`].
@@ -401,8 +399,8 @@ impl Buffer {
     /// Returns a [`BufferView`] referring to the buffer range represented by
     /// `self`. See the documentation for [`BufferView`] for details.
     ///
-    /// `bounds` may be less than the bounds passed to [`Self::map_async()`],
-    /// and multiple views may be obtained and used simultaneously as long as they do not overlap.
+    /// `bounds` may be less than the bounds passed to [`Self::map_async()`], and multiple views
+    /// may be obtained and used simultaneously. Two views may overlap only if both are read-only.
     ///
     /// This can also be performed using [`BufferSlice::get_mapped_range()`].
     ///
@@ -601,8 +599,8 @@ impl<'a> BufferSlice<'a> {
     /// Returns a [`BufferView`] referring to the buffer range represented by
     /// `self`. See the documentation for [`BufferView`] for details.
     ///
-    /// Multiple views may be obtained and used simultaneously as long as they are from
-    /// non-overlapping slices.
+    /// Multiple views may be obtained and used simultaneously. Two views may overlap only if both
+    /// are read-only.
     ///
     /// This can also be performed using [`Buffer::get_mapped_range()`].
     ///
