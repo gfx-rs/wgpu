@@ -5,6 +5,7 @@ edition.workspace = true
 description = "CLI for the naga shader translator and validator. Part of the wgpu project"
 repository.workspace = true
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
+readme = "README.md"
 license.workspace = true
 rust-version.workspace = true
 
