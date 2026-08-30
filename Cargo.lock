@@ -4777,6 +4777,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-bug-repro-03-semaphore-reuse"
+version = "0.0.0"
+dependencies = [
+ "env_logger",
+ "pollster",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "wgpu-core"
 version = "30.0.0"
 dependencies = [
