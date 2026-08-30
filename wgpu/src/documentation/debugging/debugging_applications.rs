@@ -84,9 +84,7 @@ computing, it's time to dive into GPU debugging. Many tools exist today:
   - Vulkan initialization may fail in RenderDoc under Wayland (see
     [issue 3889](https://github.com/gfx-rs/wgpu/issues/3889)). To work around
     it, force winit to use X11 by setting the `WAYLAND_DISPLAY` environment
-    variable to an empty string for winit versions `0.28.2` and onward, or
-    the `WINIT_UNIX_BACKEND` environment variable to `"x11"` for winit
-    versions up to `0.29.1`. When in doubt, do both.
+    variable to an empty string.
 - PIX can be used on Windows to capture D3D12.
 - Xcode has powerful Metal GPU capture support with full shader debugging.
 
@@ -100,7 +98,8 @@ the project settings.
 
 ### Capturing WebGPU in Chrome with Xcode
 
-<https://ced.quest/chromium-metal-debugger.html>
+The original host is down, so this links to the Internet Archive copy:
+<https://web.archive.org/web/20260616122634/https://ced.quest/chromium-metal-debugger.html>
 
 ## CPU debugging
 
@@ -115,13 +114,18 @@ which helps you locate the problem.
 
 ## Rubber-duck debugging
 
-Hop on to [`#wgpu:matrix.org`](https://matrix.to/#/#wgpu:matrix.org) and try
-to explain what happens and why. Maybe we listen. Maybe you'll figure out
-the answer by then ;)
+Hop on to one of the community channels and try to explain what happens and
+why. Maybe we listen. Maybe you'll figure out the answer by then ;)
+
+- [`#wgpu:matrix.org`](https://matrix.to/#/#wgpu:matrix.org), for `wgpu`'s
+  own development.
+- [`#wgpu-users:matrix.org`](https://matrix.to/#/#wgpu-users:matrix.org), for
+  using the library and the surrounding ecosystem.
+- [`#wgpu` on the Rust Gamedev Discord](https://discord.gg/X3MYBNXUMJ).
 
 ## Tracing infrastructure
 
-API tracing is built into `wgpu-core` under the `trace` feature. To record a
+API tracing is built into `wgpu` under the `trace` feature. To record a
 trace, first make sure this feature is enabled, then set the `trace` field
 of the [`DeviceDescriptor`] to [`Trace::Directory`](crate::Trace) with an existing folder
 path when calling [`Adapter::request_device`]. The device will then record a
@@ -143,7 +147,7 @@ message like:
 
 ```text
 thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value:
-Error { code: Eof, position: Position { line: 96233, col: 1 } }', player/src/bin/play.rs:28:70
+Error { code: Eof, position: Position { line: 96233, col: 1 } }', player/src/bin/play.rs:57:89
 ```
 
 ### Running in Gecko

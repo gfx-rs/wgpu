@@ -1,6 +1,4 @@
 /*!
-Best Practices
-
 Patterns and pitfalls for writing efficient, well-structured `wgpu` code.
 */
 
