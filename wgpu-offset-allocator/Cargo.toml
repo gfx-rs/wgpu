@@ -1,0 +1,35 @@
+[package]
+name = "wgpu-offset-allocator"
+version.workspace = true
+# This crate is a derivative work of AMD's VulkanMemoryAllocator and
+# D3D12MemoryAllocator, so it credits their authors and, unlike the rest of the
+# workspace (`MIT OR Apache-2.0`), is licensed MIT-only to match the upstream
+# sources. See the crate's `LICENSE` file and README for details.
+authors = [
+    "Adam Sawicki / Advanced Micro Devices, Inc. (VulkanMemoryAllocator, D3D12MemoryAllocator)",
+    "The gfx-rs developers",
+]
+edition.workspace = true
+description = "Pure integer offset/size suballocation (TLSF), ported from VMA and D3D12MA"
+homepage.workspace = true
+repository.workspace = true
+license = "MIT"
+# Pinned to wgpu-hal's MSRV rather than the workspace default, because this crate is
+# intended to be consumed by wgpu-hal and downstream projects (e.g. Firefox) that pin
+# to an older Rust than the workspace's development toolchain.
+rust-version = "1.87"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
+
+[dependencies]
+
+# The property tests depend on `proptest`, which pulls in `wait-timeout` and does not
+# build on `wasm32`. Gate the dev-dependency (and the `proptests` test module) so the
+# crate still builds and tests on wasm.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+proptest.workspace = true

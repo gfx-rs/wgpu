@@ -93,6 +93,19 @@ Error is raised if for provided texture formats required features are not enable
 
 By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 
+#### In-tree memory allocator for Vulkan and D3D12
+
+wgpu-hal's Vulkan and D3D12 backends now suballocate device memory with an in-tree allocator, built on two new crates: `wgpu-offset-allocator` and `wgpu-block-pool`, whose algorithms and policy are derived from AMD's VulkanMemoryAllocator and D3D12MemoryAllocator. The `gpu-allocator` dependency has been removed.
+
+`MemoryBudgetThresholds::for_resource_creation` is now enforced inside the allocator, where it only gates the creation of new memory blocks and dedicated allocations. Previously it was a heuristic pre-check that could reject a resource even when it would have fit in already-allocated memory.
+
+Also fixed along the way:
+
+- On Vulkan, buffers used as acceleration-structure build inputs are now explicitly 16-byte aligned, as acceleration-structure build commands require. Previously this held only by accident of allocator layout and could be violated on some drivers (observed on AMD).
+- Device memory is no longer leaked on rare error paths during resource creation.
+
+By @cwfitzgerald in [#9794](https://github.com/gfx-rs/wgpu/pull/9794).
+
 ### Added/New Features
 
 #### General

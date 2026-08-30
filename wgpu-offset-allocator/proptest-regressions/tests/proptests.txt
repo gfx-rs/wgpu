@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc d8f654d9c880e2a5a5b3991ba29113c4697bc6da26a325f55e90707987f07e8a # shrinks to ops = [Alloc { size: 1, align_shift: 0, alloc_type: Unknown, strategy: Balanced }]
+cc 5a0af91bafd3f9fd98f8dc3f8b8f58a6063feacd2b3a1dfe0769ae57326155fc # shrinks to ops = [Alloc { size: 1888, align_shift: 0, alloc_type: Buffer, strategy: Balanced }, Alloc { size: 1, align_shift: 5, alloc_type: ImageLinear, strategy: Balanced }, Free { index: 7 }, Free { index: 0 }]

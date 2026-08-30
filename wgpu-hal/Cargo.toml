@@ -103,7 +103,8 @@ vulkan = [
     "dep:smallvec",
     "dep:windows",
     "dep:windows-core",
-    "gpu-allocator/vulkan",
+    "dep:wgpu-block-pool",
+    "dep:wgpu-offset-allocator",
     "windows/Win32",
     "windows/Win32_Devices_Display",
     "windows/Win32_Foundation",
@@ -140,13 +141,13 @@ dx12 = [
     "dep:arrayvec",
     "dep:bit-set",
     "dep:bytemuck",
-    "dep:gpu-allocator",
     "dep:libloading",
     "dep:ordered-float",
     "dep:profiling",
     "dep:range-alloc",
+    "dep:wgpu-block-pool",
+    "dep:wgpu-offset-allocator",
     "dep:windows-core",
-    "gpu-allocator/d3d12",
     "naga/hlsl-out",
     "wgpu-sync/std", # Required for send/sync
     "windows/Win32_Devices_DeviceAndDriverInstallation",
@@ -212,6 +213,9 @@ wgpu-naga-bridge.workspace = true
 naga-types = { workspace = true }
 wgpu-sync = { workspace = true, default-features = false }
 wgpu-types = { workspace = true, default-features = false }
+# Backend: Vulkan and Dx12 (in-repo suballocator)
+wgpu-block-pool = { workspace = true, optional = true }
+wgpu-offset-allocator = { workspace = true, optional = true }
 
 # Dependencies in the lib and empty backend
 bitflags.workspace = true
@@ -236,8 +240,6 @@ glow = { workspace = true, optional = true }
 ########################
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-# Backend: Vulkan and Dx12
-gpu-allocator = { workspace = true, optional = true }
 # Backend: Vulkan
 ash = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true, features = ["union"] }

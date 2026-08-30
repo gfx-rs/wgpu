@@ -16,9 +16,6 @@ skip = [
     # Used by hashbrown 0.15.5
     { name = "foldhash", version = "0.1.5" },
 
-    # naga depends on hashbrown 0.16 directly, while naga -> indexmap pulls hashbrown 0.17
-    { name = "hashbrown", version = "0.16.1" },
-
     # wgpu-hal -> drm -> drm-sys uses an older version, while wgpu-hal -> drm -> rustix uses a newer one
     { name = "linux-raw-sys", version = "0.9.4" },
 ]

@@ -34,6 +34,7 @@ mod instance;
 mod pnext_chain;
 mod sampler;
 mod semaphore_list;
+mod suballocation;
 mod swapchain;
 
 pub use adapter::PhysicalDeviceFeatures;
@@ -606,6 +607,9 @@ struct DeviceShared {
     raw_queue: vk::Queue,
     instance: Arc<InstanceShared>,
     physical_device: vk::PhysicalDevice,
+    /// The device's Vulkan API version (`vk::API_VERSION_1_*`). Used to gate the use of
+    /// core 1.1 entry points such as `vkGetBufferMemoryRequirements2`.
+    device_api_version: u32,
     enabled_extensions: Vec<&'static CStr>,
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
@@ -653,9 +657,8 @@ impl Drop for DeviceShared {
     reason = "needs work to not be disastrously verbose"
 )]
 pub struct Device {
-    mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
+    mem_allocator: Mutex<suballocation::Allocator>,
     desc_allocator: Mutex<descriptor::DescriptorAllocator>,
-    valid_ash_memory_types: u32,
     naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
@@ -666,7 +669,12 @@ pub struct Device {
 }
 
 impl Drop for Device {
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        // The in-repo suballocator does not hold the device, so it cannot release its
+        // block / dedicated device memory in its own `Drop`. Release it here, while
+        // `self.shared` (and thus the `ash::Device`) is still alive.
+        self.mem_allocator.lock().cleanup(&self.shared);
+    }
 }
 
 /// Semaphores for forcing queue submissions to run in order.
@@ -788,7 +796,7 @@ impl Drop for Queue {
 }
 #[derive(Debug)]
 enum BufferMemoryBacking {
-    Managed(gpu_allocator::vulkan::Allocation),
+    Managed(suballocation::Allocation),
     VulkanMemory {
         memory: vk::DeviceMemory,
         offset: u64,
@@ -798,7 +806,7 @@ enum BufferMemoryBacking {
 impl BufferMemoryBacking {
     fn memory(&self) -> vk::DeviceMemory {
         match self {
-            Self::Managed(m) => unsafe { m.memory() },
+            Self::Managed(m) => m.memory(),
             Self::VulkanMemory { memory, .. } => *memory,
         }
     }
@@ -898,7 +906,7 @@ impl crate::DynBuffer for Buffer {}
 pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
-    allocation: gpu_allocator::vulkan::Allocation,
+    allocation: suballocation::Allocation,
     compacted_size_query: Option<vk::QueryPool>,
 }
 
@@ -933,8 +941,8 @@ impl AccelerationStructure {
 
 #[derive(Debug)]
 pub enum TextureMemory {
-    // shared memory in GPU allocator (owned by wgpu-hal)
-    Allocation(gpu_allocator::vulkan::Allocation),
+    // shared memory in the in-repo suballocator (owned by wgpu-hal)
+    Allocation(suballocation::Allocation),
 
     // dedicated memory (owned by wgpu-hal)
     Dedicated(vk::DeviceMemory),

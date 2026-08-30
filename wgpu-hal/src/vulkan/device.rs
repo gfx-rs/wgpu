@@ -257,12 +257,30 @@ impl super::DeviceShared {
         let allocation = allocation.lock();
         let mask = self.private_caps.non_coherent_map_mask;
         Some(ranges.map(move |range| {
+            let (offset, size) =
+                mapped_memory_range_bounds(allocation.offset(), allocation.size(), range, mask);
             vk::MappedMemoryRange::default()
                 .memory(allocation.memory())
-                .offset((allocation.offset() + range.start) & !mask)
-                .size((range.end - range.start + mask) & !mask)
+                .offset(offset)
+                .size(size)
         }))
     }
+}
+
+fn mapped_memory_range_bounds(
+    allocation_offset: u64,
+    allocation_size: u64,
+    range: crate::MemoryRange,
+    non_coherent_map_mask: u64,
+) -> (u64, u64) {
+    let allocation_end = allocation_offset.saturating_add(allocation_size);
+    let absolute_start = allocation_offset.saturating_add(range.start);
+    let absolute_end = allocation_offset.saturating_add(range.end);
+    let aligned_start = absolute_start & !non_coherent_map_mask;
+    let aligned_end = absolute_end.saturating_add(non_coherent_map_mask) & !non_coherent_map_mask;
+    let clamped_end = aligned_end.min(allocation_end);
+
+    (aligned_start, clamped_end.saturating_sub(aligned_start))
 }
 
 struct CompiledStage {
@@ -278,11 +296,6 @@ struct MemoryProperties {
 }
 
 impl MemoryProperties {
-    fn types(&self) -> &[vk::MemoryType] {
-        let count = self.base.memory_type_count as usize;
-        &self.base.memory_types[0..count]
-    }
-
     fn heaps(&self) -> &[vk::MemoryHeap] {
         let count = self.base.memory_heap_count as usize;
         &self.base.memory_heaps[0..count]
@@ -899,95 +912,52 @@ impl super::Device {
         })
     }
 
-    /// Predict whether a proposed allocation will result in an OOM condition.
+    /// Queries the driver's dedicated-allocation requirements for a buffer.
     ///
-    /// If so, returns `Err(crate::DeviceError::OutOfMemory)`. If not, returns
-    /// `Ok(())`.
-    ///
-    /// The prediction quality depends on accurately selecting the heap that
-    /// [`gpu_allocator`] will use for the allocation, and is subject to
-    /// deteriorate if the logic in [`gpu_allocator`] changes.
-    fn error_if_would_oom_on_resource_allocation(
-        &self,
-        location: gpu_allocator::MemoryLocation,
-        requirements: &vk::MemoryRequirements,
-    ) -> Result<(), crate::DeviceError> {
-        use gpu_allocator::MemoryLocation;
-
-        let Some(threshold) = self
-            .shared
-            .instance
-            .memory_budget_thresholds
-            .for_resource_creation
-        else {
-            return Ok(());
-        };
-
-        let Some(memory_properties) = self.get_memory_properties() else {
-            return Ok(());
-        };
-
-        let preferred_flags = match location {
-            MemoryLocation::GpuOnly => vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            MemoryLocation::CpuToGpu => {
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::DEVICE_LOCAL
-            }
-            MemoryLocation::GpuToCpu => {
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT
-                    | vk::MemoryPropertyFlags::HOST_CACHED
-            }
-            MemoryLocation::Unknown => vk::MemoryPropertyFlags::empty(),
-        };
-
-        let mut selected_heap = memory_properties
-            .types()
-            .iter()
-            .enumerate()
-            .find(|(i, ty)| {
-                (1 << i) & requirements.memory_type_bits != 0
-                    && ty.property_flags.contains(preferred_flags)
-            });
-
-        if selected_heap.is_none() {
-            let required_flags = match location {
-                MemoryLocation::GpuOnly => vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu => {
-                    vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT
-                }
-                MemoryLocation::Unknown => vk::MemoryPropertyFlags::empty(),
-            };
-            selected_heap = memory_properties
-                .types()
-                .iter()
-                .enumerate()
-                .find(|(i, ty)| {
-                    (1 << i) & requirements.memory_type_bits != 0
-                        && ty.property_flags.contains(required_flags)
-                });
+    /// Uses `vkGetBufferMemoryRequirements2` (core Vulkan 1.1) when available, returning
+    /// `(requires_dedicated, prefers_dedicated)`. On Vulkan 1.0 (where the entry point is
+    /// absent) it conservatively returns `(false, false)`, matching the previous
+    /// allocator, which never made these resources dedicated.
+    fn buffer_dedicated_requirements(&self, buffer: vk::Buffer) -> (bool, bool) {
+        if self.shared.device_api_version < vk::API_VERSION_1_1 {
+            return (false, false);
         }
+        let info = vk::BufferMemoryRequirementsInfo2::default().buffer(buffer);
+        let mut dedicated = vk::MemoryDedicatedRequirements::default();
+        let mut req2 = vk::MemoryRequirements2::default().push_next(&mut dedicated);
+        // SAFETY: `buffer` is a live buffer of this device; `req2` is a valid, fully
+        // initialized output structure with the dedicated-requirements struct chained.
+        unsafe {
+            self.shared
+                .raw
+                .get_buffer_memory_requirements2(&info, &mut req2)
+        };
+        (
+            dedicated.requires_dedicated_allocation != vk::FALSE,
+            dedicated.prefers_dedicated_allocation != vk::FALSE,
+        )
+    }
 
-        if let Some((_, ty)) = selected_heap {
-            let i = ty.heap_index as usize;
-            let heap_usage = memory_properties.heap_usage()[i];
-            let heap_budget = memory_properties.heap_budget()[i];
-            if heap_usage + requirements.size < heap_budget / 100 * threshold as u64 {
-                Ok(())
-            } else {
-                log::warn!(
-                    "Allocation would result in an OOM condition\n\
-                    Request: {requirements:?}\n\
-                    Heap {index} had {heap_usage}B used of {heap_budget}B total before this request.",
-                    index = ty.heap_index,
-                );
-                Err(crate::DeviceError::OutOfMemory)
-            }
-        } else {
-            log::warn!("Failed to find a suitable heap for {requirements:?}");
-            Err(crate::DeviceError::OutOfMemory)
+    /// Queries the driver's dedicated-allocation requirements for an image. See
+    /// [`buffer_dedicated_requirements`](Self::buffer_dedicated_requirements).
+    fn image_dedicated_requirements(&self, image: vk::Image) -> (bool, bool) {
+        if self.shared.device_api_version < vk::API_VERSION_1_1 {
+            return (false, false);
         }
+        let info = vk::ImageMemoryRequirementsInfo2::default().image(image);
+        let mut dedicated = vk::MemoryDedicatedRequirements::default();
+        let mut req2 = vk::MemoryRequirements2::default().push_next(&mut dedicated);
+        // SAFETY: `image` is a live image of this device; `req2` is a valid, fully
+        // initialized output structure with the dedicated-requirements struct chained.
+        unsafe {
+            self.shared
+                .raw
+                .get_image_memory_requirements2(&info, &mut req2)
+        };
+        (
+            dedicated.requires_dedicated_allocation != vk::FALSE,
+            dedicated.prefers_dedicated_allocation != vk::FALSE,
+        )
     }
 }
 
@@ -1015,17 +985,12 @@ impl crate::Device for super::Device {
         let is_cpu_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
-        let location = match (is_cpu_read, is_cpu_write) {
-            (true, true) => gpu_allocator::MemoryLocation::CpuToGpu,
-            (true, false) => gpu_allocator::MemoryLocation::GpuToCpu,
-            (false, true) => gpu_allocator::MemoryLocation::CpuToGpu,
-            (false, false) => gpu_allocator::MemoryLocation::GpuOnly,
+        let usage = match (is_cpu_read, is_cpu_write) {
+            (true, true) => super::suballocation::MemoryUsage::CpuToGpu,
+            (true, false) => super::suballocation::MemoryUsage::GpuToCpu,
+            (false, true) => super::suballocation::MemoryUsage::CpuToGpu,
+            (false, false) => super::suballocation::MemoryUsage::GpuOnly,
         };
-
-        self.error_if_would_oom_on_resource_allocation(location, &requirements)
-            .inspect_err(|_| {
-                unsafe { self.shared.raw.destroy_buffer(raw, None) };
-            })?;
 
         let name = desc.label.unwrap_or("Unlabeled buffer");
 
@@ -1039,32 +1004,53 @@ impl crate::Device for super::Device {
                 .max(self.shared.private_caps.scratch_buffer_alignment as u64);
         }
 
+        if desc.usage.intersects(
+            wgt::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT
+                | wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+        ) {
+            // Acceleration-structure build commands require the device address of geometry
+            // / instance data to be aligned to 16 bytes (e.g.
+            // VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-03715). The buffer's own
+            // memory `alignment` can be smaller (as low as 4 on some drivers), so floor it
+            // to 16 to guarantee the bound offset — and therefore the device address —
+            // meets that requirement. The previous `gpu-allocator` happened to satisfy this
+            // via its coarser block layout; the tighter suballocator does not, so we make
+            // the requirement explicit.
+            requirements.alignment = requirements.alignment.max(16);
+        }
+
+        let (requires_dedicated, prefers_dedicated) = self.buffer_dedicated_requirements(raw);
+
         let allocation = self
             .mem_allocator
             .lock()
-            .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-                name,
-                requirements: vk::MemoryRequirements {
-                    memory_type_bits: requirements.memory_type_bits & self.valid_ash_memory_types,
-                    ..requirements
+            .allocate(
+                &self.shared,
+                super::suballocation::AllocationRequest {
+                    name,
+                    requirements,
+                    usage,
+                    alloc_type: super::suballocation::AllocationType::Buffer,
+                    dedicated_handle: super::suballocation::DedicatedHandle::Buffer(raw),
+                    requires_dedicated,
+                    prefers_dedicated,
                 },
-                location,
-                linear: true, // Buffers are always linear
-                allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
-            })
+            )
             .inspect_err(|_| {
                 unsafe { self.shared.raw.destroy_buffer(raw, None) };
             })?;
 
-        unsafe {
+        if let Err(e) = unsafe {
             self.shared
                 .raw
                 .bind_buffer_memory(raw, allocation.memory(), allocation.offset())
-        }
-        .map_err(super::map_host_device_oom_and_ioca_err)
-        .inspect_err(|_| {
+        } {
+            // Bind failed: free the allocation back to the allocator before destroying the
+            // buffer, so the pooled slot / dedicated memory is not leaked.
+            self.mem_allocator.lock().free(&self.shared, allocation);
             unsafe { self.shared.raw.destroy_buffer(raw, None) };
-        })?;
+            return Err(super::map_host_device_oom_and_ioca_err(e));
+        }
 
         if let Some(label) = desc.label {
             unsafe { self.shared.set_object_name(raw, label) };
@@ -1088,10 +1074,7 @@ impl crate::Device for super::Device {
                 self.counters.buffer_memory.sub(allocation.size() as isize);
                 match allocation {
                     super::BufferMemoryBacking::Managed(allocation) => {
-                        let result = self.mem_allocator.lock().free(allocation);
-                        if let Err(err) = result {
-                            log::warn!("Failed to free buffer allocation: {err}");
-                        }
+                        self.mem_allocator.lock().free(&self.shared, allocation);
                     }
                     super::BufferMemoryBacking::VulkanMemory { memory, .. } => unsafe {
                         self.shared.raw.free_memory(memory, None);
@@ -1129,14 +1112,16 @@ impl crate::Device for super::Device {
         let is_coherent = allocation
             .memory_properties()
             .contains(vk::MemoryPropertyFlags::HOST_COHERENT);
+        // The allocation was made from a host-visible type and persistently mapped at
+        // block creation, so `mapped_ptr()` is `Some`. If it is `None` (a non-mappable
+        // memory type reached this path), report device loss rather than panicking.
+        let base = allocation.mapped_ptr().ok_or(crate::DeviceError::Lost)?;
+        // SAFETY: `base` is the mapped pointer for this allocation (block base +
+        // allocation offset); adding `range.start` stays within the buffer's mapped range,
+        // which the caller guarantees is within the buffer's size.
+        let mapped = unsafe { base.cast::<u8>().as_ptr().offset(range.start as isize) };
         Ok(crate::BufferMapping {
-            ptr: unsafe {
-                allocation
-                    .mapped_ptr()
-                    .unwrap()
-                    .cast()
-                    .offset(range.start as isize)
-            },
+            ptr: ptr::NonNull::new(mapped).ok_or(crate::DeviceError::Lost)?,
             is_coherent,
         })
     }
@@ -1189,45 +1174,53 @@ impl crate::Device for super::Device {
     ) -> Result<super::Texture, crate::DeviceError> {
         let image = self.create_image_without_memory(desc, None)?;
 
-        self.error_if_would_oom_on_resource_allocation(
-            gpu_allocator::MemoryLocation::GpuOnly,
-            &image.requirements,
-        )
-        .inspect_err(|_| {
-            unsafe { self.shared.raw.destroy_image(image.raw, None) };
-        })?;
-
         let name = desc.label.unwrap_or("Unlabeled texture");
+
+        let (mut requires_dedicated, prefers_dedicated) =
+            self.image_dedicated_requirements(image.raw);
+        // A lazily-allocated (TRANSIENT) image lives in LAZILY_ALLOCATED memory, which is
+        // not poolable or mappable, so it must be a dedicated allocation. When
+        // `create_image_without_memory` pinned the requirements to such a type it is the
+        // sole allowed bit; force a dedicated allocation for it.
+        if desc.usage.contains(wgt::TextureUses::TRANSIENT) {
+            requires_dedicated = true;
+        }
 
         let allocation = self
             .mem_allocator
             .lock()
-            .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-                name,
-                requirements: vk::MemoryRequirements {
-                    memory_type_bits: image.requirements.memory_type_bits
-                        & self.valid_ash_memory_types,
-                    ..image.requirements
+            .allocate(
+                &self.shared,
+                super::suballocation::AllocationRequest {
+                    name,
+                    requirements: image.requirements,
+                    usage: super::suballocation::MemoryUsage::GpuOnly,
+                    // Optimal-tiling images; the granularity conflict table treats this
+                    // conservatively against buffers.
+                    alloc_type: super::suballocation::AllocationType::ImageOptimal,
+                    dedicated_handle: super::suballocation::DedicatedHandle::Image(image.raw),
+                    requires_dedicated,
+                    prefers_dedicated,
                 },
-                location: gpu_allocator::MemoryLocation::GpuOnly,
-                linear: false,
-                allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
-            })
+            )
             .inspect_err(|_| {
                 unsafe { self.shared.raw.destroy_image(image.raw, None) };
             })?;
 
-        self.counters.texture_memory.add(allocation.size() as isize);
-
-        unsafe {
+        if let Err(e) = unsafe {
             self.shared
                 .raw
                 .bind_image_memory(image.raw, allocation.memory(), allocation.offset())
-        }
-        .map_err(super::map_host_device_oom_err)
-        .inspect_err(|_| {
+        } {
+            // Bind failed: free the allocation back to the allocator before destroying the
+            // image, so the pooled slot / dedicated memory is not leaked. The counter is
+            // only added after a successful bind, so nothing needs to be subtracted here.
+            self.mem_allocator.lock().free(&self.shared, allocation);
             unsafe { self.shared.raw.destroy_image(image.raw, None) };
-        })?;
+            return Err(super::map_host_device_oom_err(e));
+        }
+
+        self.counters.texture_memory.add(allocation.size() as isize);
 
         Ok(unsafe {
             self.texture_from_raw(
@@ -1247,10 +1240,7 @@ impl crate::Device for super::Device {
         match texture.memory {
             super::TextureMemory::Allocation(allocation) => {
                 self.counters.texture_memory.sub(allocation.size() as isize);
-                let result = self.mem_allocator.lock().free(allocation);
-                if let Err(err) = result {
-                    log::warn!("Failed to free texture allocation: {err}");
-                }
+                self.mem_allocator.lock().free(&self.shared, allocation);
             }
             super::TextureMemory::Dedicated(memory) => unsafe {
                 self.shared.raw.free_memory(memory, None);
@@ -2524,14 +2514,12 @@ impl crate::Device for super::Device {
         // Assume each query is 256 bytes. This is the case for occlusion
         // queries on an AMD W6800 with driver version 32.0.12030.9. The
         // size and allocation policy may vary; this is an approximate
-        // check only.
-        self.error_if_would_oom_on_resource_allocation(
-            gpu_allocator::MemoryLocation::GpuToCpu,
-            &vk::MemoryRequirements {
-                size: desc.count as u64 * 256,
-                alignment: 256,
-                memory_type_bits: self.valid_ash_memory_types,
-            },
+        // check only. The query pool allocates its own memory (not via our
+        // suballocator), so this is a pure budget probe.
+        self.mem_allocator.lock().check_external_allocation(
+            &self.shared,
+            super::suballocation::MemoryUsage::GpuToCpu,
+            desc.count as u64 * 256,
         )?;
 
         let (vk_type, pipeline_statistics) = match desc.ty {
@@ -2871,39 +2859,43 @@ impl crate::Device for super::Device {
 
             let requirements = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
 
-            self.error_if_would_oom_on_resource_allocation(
-                gpu_allocator::MemoryLocation::GpuOnly,
-                &requirements,
-            )
-            .inspect_err(|_| {
-                self.shared.raw.destroy_buffer(raw_buffer, None);
-            })?;
-
             let name = desc
                 .label
                 .unwrap_or("Unlabeled acceleration structure buffer");
 
+            let (requires_dedicated, prefers_dedicated) =
+                self.buffer_dedicated_requirements(raw_buffer);
+
             let allocation = self
                 .mem_allocator
                 .lock()
-                .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-                    name,
-                    requirements,
-                    location: gpu_allocator::MemoryLocation::GpuOnly,
-                    linear: true, // Buffers are always linear
-                    allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
-                })
+                .allocate(
+                    &self.shared,
+                    super::suballocation::AllocationRequest {
+                        name,
+                        requirements,
+                        usage: super::suballocation::MemoryUsage::GpuOnly,
+                        alloc_type: super::suballocation::AllocationType::Buffer,
+                        dedicated_handle: super::suballocation::DedicatedHandle::Buffer(raw_buffer),
+                        requires_dedicated,
+                        prefers_dedicated,
+                    },
+                )
                 .inspect_err(|_| {
                     self.shared.raw.destroy_buffer(raw_buffer, None);
                 })?;
 
-            self.shared
-                .raw
-                .bind_buffer_memory(raw_buffer, allocation.memory(), allocation.offset())
-                .map_err(super::map_host_device_oom_and_ioca_err)
-                .inspect_err(|_| {
-                    self.shared.raw.destroy_buffer(raw_buffer, None);
-                })?;
+            if let Err(e) = self.shared.raw.bind_buffer_memory(
+                raw_buffer,
+                allocation.memory(),
+                allocation.offset(),
+            ) {
+                // Bind failed: free the allocation back to the allocator before destroying
+                // the buffer, so the pooled slot / dedicated memory is not leaked.
+                self.mem_allocator.lock().free(&self.shared, allocation);
+                self.shared.raw.destroy_buffer(raw_buffer, None);
+                return Err(super::map_host_device_oom_and_ioca_err(e));
+            }
 
             if let Some(label) = desc.label {
                 self.shared.set_object_name(raw_buffer, label);
@@ -2915,13 +2907,20 @@ impl crate::Device for super::Device {
                 .size(desc.size)
                 .ty(conv::map_acceleration_structure_format(desc.format));
 
-            let raw_acceleration_structure = ray_tracing_functions
+            let raw_acceleration_structure = match ray_tracing_functions
                 .acceleration_structure
                 .create_acceleration_structure(&vk_info, None)
-                .map_err(super::map_host_oom_and_ioca_err)
-                .inspect_err(|_| {
+            {
+                Ok(raw) => raw,
+                Err(e) => {
+                    // Creation failed: free the allocation back to the allocator before
+                    // destroying the buffer, so the pooled slot / dedicated memory is not
+                    // leaked.
+                    self.mem_allocator.lock().free(&self.shared, allocation);
                     self.shared.raw.destroy_buffer(raw_buffer, None);
-                })?;
+                    return Err(super::map_host_oom_and_ioca_err(e));
+                }
+            };
 
             if let Some(label) = desc.label {
                 self.shared
@@ -2933,18 +2932,20 @@ impl crate::Device for super::Device {
                     .query_type(vk::QueryType::ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR)
                     .query_count(1);
 
-                let raw = self
-                    .shared
-                    .raw
-                    .create_query_pool(&vk_info, None)
-                    .map_err(super::map_host_device_oom_err)
-                    .inspect_err(|_| {
+                match self.shared.raw.create_query_pool(&vk_info, None) {
+                    Ok(raw) => Some(raw),
+                    Err(e) => {
+                        // Creation failed: free the allocation back to the allocator before
+                        // destroying the acceleration structure and buffer, so the pooled
+                        // slot / dedicated memory is not leaked.
+                        self.mem_allocator.lock().free(&self.shared, allocation);
                         ray_tracing_functions
                             .acceleration_structure
                             .destroy_acceleration_structure(raw_acceleration_structure, None);
                         self.shared.raw.destroy_buffer(raw_buffer, None);
-                    })?;
-                Some(raw)
+                        return Err(super::map_host_device_oom_err(e));
+                    }
+                }
             } else {
                 None
             };
@@ -2976,13 +2977,9 @@ impl crate::Device for super::Device {
             self.shared
                 .raw
                 .destroy_buffer(acceleration_structure.buffer, None);
-            let result = self
-                .mem_allocator
+            self.mem_allocator
                 .lock()
-                .free(acceleration_structure.allocation);
-            if let Err(err) = result {
-                log::warn!("Failed to free buffer acceleration structure: {err}");
-            }
+                .free(&self.shared, acceleration_structure.allocation);
             if let Some(query) = acceleration_structure.compacted_size_query {
                 self.shared.raw.destroy_query_pool(query, None)
             }
@@ -2998,36 +2995,7 @@ impl crate::Device for super::Device {
     }
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
-        let gpu_allocator::AllocatorReport {
-            allocations,
-            blocks,
-            total_allocated_bytes,
-            total_capacity_bytes,
-        } = self.mem_allocator.lock().generate_report();
-
-        let allocations = allocations
-            .into_iter()
-            .map(|alloc| wgt::AllocationReport {
-                name: alloc.name,
-                offset: alloc.offset,
-                size: alloc.size,
-            })
-            .collect();
-
-        let blocks = blocks
-            .into_iter()
-            .map(|block| wgt::MemoryBlockReport {
-                size: block.size,
-                allocations: block.allocations.clone(),
-            })
-            .collect();
-
-        Some(wgt::AllocatorReport {
-            allocations,
-            blocks,
-            total_allocated_bytes,
-            total_reserved_bytes: total_capacity_bytes,
-        })
+        Some(self.mem_allocator.lock().generate_report())
     }
 
     fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {
@@ -3165,4 +3133,19 @@ impl super::DeviceShared {
 struct ImageWithoutMemory {
     raw: vk::Image,
     requirements: vk::MemoryRequirements,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::mapped_memory_range_bounds;
+
+    #[test]
+    fn mapped_memory_range_aligns_absolute_end() {
+        assert_eq!(mapped_memory_range_bounds(0, 1024, 255..257, 255), (0, 512));
+    }
+
+    #[test]
+    fn mapped_memory_range_clamps_to_allocation_end() {
+        assert_eq!(mapped_memory_range_bounds(0, 300, 255..300, 255), (0, 300));
+    }
 }
