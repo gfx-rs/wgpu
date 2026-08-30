@@ -83,39 +83,41 @@ An example of using mesh shaders to render a single triangle can be seen
 - Using mesh shaders with multiview requires enabling [`Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW`].
 - Using mesh shaders with point primitives requires enabling [`Features::EXPERIMENTAL_MESH_SHADER_POINTS`].
 - Queries are unsupported
-- Primitive index support will be added once support lands in for them in general.
+- Writing the `primitive_index` builtin requires enabling [`Features::PRIMITIVE_INDEX`].
 
 ### Limits
 
 > **NOTE**: More limits will be added when support is added to `naga`.
 
-- `Limits::max_task_mesh_workgroup_total_count` - the maximum total number of workgroups from a `draw_mesh_tasks` command or similar. The dimensions passed must be less than or equal to this limit when multiplied together.
-- `Limits::max_task_mesh_workgroups_per_dimension` - the maximum for each of the 3 workgroup dimensions in a `draw_mesh_tasks` command. Each dimension passed must be less than or equal to this limit.
-- `max_task_invocations_per_workgroup` - The maximum total number of threads in a task shader workgroup, given by `workgroupSize.x * workgroupSize.y * workgroupSize.z`.
-- `max_task_invocations_per_dimension` the maximum value for each of `workgroupSize.x`, `workgroupSize.y` and `workgroupSize.z` in task shader workgroups.
-- `max_mesh_invocations_per_workgroup` - The maximum total number of threads in a mesh shader workgroup, given by `workgroupSize.x * workgroupSize.y * workgroupSize.z`.
-- `max_mesh_invocations_per_dimension` the maximum value for each of `workgroupSize.x`, `workgroupSize.y` and `workgroupSize.z` in mesh shader workgroups.
-- `max_task_payload_size` - the size of an `var<task_payload>` variable, in bytes.
-- `max_mesh_output_vertices` - the maximum number of vertices that a single mesh shader workgroup may output.
-- `max_mesh_output_primitives` - the maximum number of primitives that a single mesh shader workgroup may output.
-- `max_mesh_multiview_count` - the maximum number of views used when multiview rendering with a mesh shader pipeline.
-- `max_mesh_output_layers` - the maximum number of output layers for a mesh shader pipeline.
+- [`Limits::max_task_workgroup_total_count`] - the maximum total number of workgroups from a [`RenderPass::draw_mesh_tasks`] command or similar on a pipeline that has a task shader. The dimensions passed must be less than or equal to this limit when multiplied together.
+- [`Limits::max_task_workgroups_per_dimension`] - the maximum for each of the 3 workgroup dimensions in a [`RenderPass::draw_mesh_tasks`] command on a pipeline that has a task shader. Each dimension passed must be less than or equal to this limit.
+- [`Limits::max_mesh_workgroup_total_count`] - the same total, for a pipeline that has no task shader. It also bounds the mesh shader grid size that a task shader returns.
+- [`Limits::max_mesh_workgroups_per_dimension`] - the same per-dimension maximum, for a pipeline that has no task shader. It also bounds the mesh shader grid size that a task shader returns.
+- [`Limits::max_task_invocations_per_workgroup`] - The maximum total number of threads in a task shader workgroup, given by `workgroupSize.x * workgroupSize.y * workgroupSize.z`.
+- [`Limits::max_task_invocations_per_dimension`] the maximum value for each of `workgroupSize.x`, `workgroupSize.y` and `workgroupSize.z` in task shader workgroups.
+- [`Limits::max_mesh_invocations_per_workgroup`] - The maximum total number of threads in a mesh shader workgroup, given by `workgroupSize.x * workgroupSize.y * workgroupSize.z`.
+- [`Limits::max_mesh_invocations_per_dimension`] the maximum value for each of `workgroupSize.x`, `workgroupSize.y` and `workgroupSize.z` in mesh shader workgroups.
+- [`Limits::max_task_payload_size`] - the size of an `var<task_payload>` variable, in bytes.
+- [`Limits::max_mesh_output_vertices`] - the maximum number of vertices that a single mesh shader workgroup may output.
+- [`Limits::max_mesh_output_primitives`] - the maximum number of primitives that a single mesh shader workgroup may output.
+- [`Limits::max_mesh_multiview_view_count`] - the maximum number of views used when multiview rendering with a mesh shader pipeline.
+- [`Limits::max_mesh_output_layers`] - the maximum number of output layers for a mesh shader pipeline.
 
 ## Naga implementation
 
 ### Supported frontends
 
-- 🛠️ WGSL
+- ✔️ WGSL
 - ❌ SPIR-V
 - 🚫 GLSL
 
 ### Supported backends
 
-- 🛠️ SPIR-V
-- 🛠️ HLSL
-- ❌ MSL
+- ✔️ SPIR-V
+- ✔️ HLSL
+- ✔️ MSL
 - 🚫 GLSL
-- 🚫 WGSL
+- ✔️ WGSL
 
 ✔️ = Complete
 🛠️ = In progress
@@ -132,7 +134,7 @@ Two new shader stages will be added to `WGSL`. Fragment shaders are also modifie
 
 ### Task shader
 
-A function with the `@task` attribute is a **task shader entry point**. A mesh shader pipeline may optionally specify a task shader entry point, and if it does, mesh draw commands using that pipeline dispatch a **task shader grid** of workgroups running the task shader entry point. Like compute shader dispatches, the three-component size passed to `draw_mesh_tasks`, or drawn from the indirect buffer for its indirect variants, specifies the size of the task shader grid as the number of workgroups along each of the grid's three axes.
+A function with the `@task` attribute is a **task shader entry point**. A mesh shader pipeline may optionally specify a task shader entry point, and if it does, mesh draw commands using that pipeline dispatch a **task shader grid** of workgroups running the task shader entry point. Like compute shader dispatches, the three-component size passed to [`RenderPass::draw_mesh_tasks`], or drawn from the indirect buffer for its indirect variants, specifies the size of the task shader grid as the number of workgroups along each of the grid's three axes.
 
 A task shader entry point must have a `@workgroup_size` attribute, meeting the same requirements as one appearing on a compute shader entry point.
 
@@ -140,18 +142,18 @@ A task shader entry point must also have a `@payload(G)` property, where `G` is 
 
 A task shader entry point must return a `vec3<u32>` value decorated with `@builtin(mesh_task_size)`. The return value of each workgroup's first invocation (that is, the one whose `local_invocation_index` is `0`) is taken as the size of a **mesh shader grid** to dispatch, measured in workgroups. (If the task shader entry point returns `vec3(0, 0, 0)`, then no mesh shaders are dispatched.) Mesh shader grids are described in the next section.
 
-The output of a task shader is set to zero if it violates either of the limits `max_task_mesh_workgroup_total_count` or `max_task_mesh_workgroups_per_dimension`.
+The output of a task shader is set to zero if it violates either of the limits [`Limits::max_mesh_workgroup_total_count`] or [`Limits::max_mesh_workgroups_per_dimension`].
 
 Each task shader workgroup dispatches an independent mesh shader grid: in mesh shader invocations, `@builtin` values like `workgroup_id` and `global_invocation_id` describe the position of the workgroup and invocation within that grid;
 and `@builtin(num_workgroups)` matches the task shader workgroup's return value. If this output violates any limits, it may be zeroed or cause undefined behavior, depending on the compilation options. Mesh shaders dispatched for other task shader workgroups are not included in the count. If it is necessary for a mesh shader to know which task shader workgroup dispatched it, the task shader can include its own workgroup id in the task payload.
 
-Task shaders can use compute and subgroup builtin inputs, in addition to `view_index` and `draw_id`.
+Task shaders can use compute and subgroup builtin inputs, in addition to `view_index` and `draw_index`. Using `draw_index` also requires the `enable draw_index;` directive.
 
 ### Mesh shader
 
 A function with the `@mesh` attribute is a **mesh shader entry point**. Mesh shaders must not return anything.
 
-Like compute shaders, mesh shaders are invoked in a grid of workgroups, called a **mesh shader grid**. If the mesh shader pipeline has a task shader, then each task shader workgroup determines the size of a mesh shader grid to be dispatched, as described above. Otherwise, the three-component size passed to `draw_mesh_tasks`, or drawn from the indirect buffer for its indirect variants, specifies the size of the mesh shader grid directly, as the number of workgroups along each of the grid's three axes.
+Like compute shaders, mesh shaders are invoked in a grid of workgroups, called a **mesh shader grid**. If the mesh shader pipeline has a task shader, then each task shader workgroup determines the size of a mesh shader grid to be dispatched, as described above. Otherwise, the three-component size passed to [`RenderPass::draw_mesh_tasks`], or drawn from the indirect buffer for its indirect variants, specifies the size of the mesh shader grid directly, as the number of workgroups along each of the grid's three axes.
 
 If the mesh shader pipeline has a task shader entry point, then the pipeline's mesh shader entry point must also have a `@payload(G)` attribute, and the sizes of the variables must match. Mesh shader invocations can read from, but not write to, this variable, which is initialized to whatever value was written to it by the task shader workgroup that dispatched this mesh shader grid.
 
@@ -178,7 +180,7 @@ The primitive output type `P` must be a struct type, every member of which eithe
 
 - `triangle_indices`, `line_indices`, or `point_index`: The annotated member must be of type `vec3<u32>`, `vec2<u32>`, or `u32`.
 
-  The member's components are indices (or, its value is an index) into the list of vertices generated by this workgroup, identifying the vertices of the primitive to be drawn. These indices must be less than the value of `numVertices` passed to `setMeshOutputs`.
+  The member's components are indices (or, its value is an index) into the list of vertices generated by this workgroup, identifying the vertices of the primitive to be drawn. These indices must be less than the value written to the `@builtin(vertex_count)` member of the mesh output variable.
 
   The type `P` must contain exactly one member with one of these attributes, determining what sort of primitives the mesh shader generates.
 
@@ -188,7 +190,7 @@ The `@location` attributes of `P` and `V` must not overlap, since they are merge
 
 Mesh shaders may write to the `primitive_index` builtin. This is treated just like a field decorated with `@location`, so if the mesh shader outputs `primitive_index` the fragment shader must input it, and if the fragment shader inputs it, the mesh shader must write it (unlike vertex shader pipelines).
 
-Mesh shaders can use compute and mesh shader builtin inputs, in addition to `view_index`, and if no task shader is present, `draw_id`.
+Mesh shaders can use compute and mesh shader builtin inputs, in addition to `view_index`, and if no task shader is present, `draw_index`. Using `draw_index` also requires the `enable draw_index;` directive.
 
 ### Fragment shader
 
@@ -283,4 +285,4 @@ fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4
 
 */
 
-use crate::{Device, Features, RenderPass};
+use crate::{Device, Features, Limits, RenderPass};
