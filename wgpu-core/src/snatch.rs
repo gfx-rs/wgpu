@@ -60,7 +60,13 @@ impl<T> fmt::Debug for SnatchableInner<T> {
     }
 }
 
-unsafe impl<T> Sync for SnatchableInner<T> {}
+// SAFETY: The `UnsafeCell` is only read through `get`, which needs a read guard
+// of the owning device's `SnatchLock`, and only written through `snatch`, which
+// needs that lock's write guard. The lock serializes the writes against the
+// reads. `get` hands out `&T` to whatever thread holds the read guard, and
+// `snatch` moves `T` to whatever thread holds the write guard, hence the
+// `T: Send + Sync` bound.
+unsafe impl<T: Send + Sync> Sync for SnatchableInner<T> {}
 
 use trace::LockTrace;
 #[cfg(all(debug_assertions, feature = "std"))]
