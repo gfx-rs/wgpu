@@ -343,6 +343,7 @@ impl Global {
             dimension: desc.dimension,
             usage: desc.usage,
             range: desc.range,
+            swizzle: desc.swizzle,
         };
 
         let (view, error) = texture.create_view(&desc);

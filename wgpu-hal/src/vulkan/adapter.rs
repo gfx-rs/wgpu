@@ -601,11 +601,14 @@ impl PhysicalDeviceFeatures {
                 None
             },
             portability_subset: if enabled_extensions.contains(&khr::portability_subset::NAME) {
+                let image_view_format_swizzle_needed =
+                    requested_features.intersects(wgt::Features::TEXTURE_COMPONENT_SWIZZLE);
                 let multisample_array_needed =
                     requested_features.intersects(wgt::Features::MULTISAMPLE_ARRAY);
 
                 Some(
                     vk::PhysicalDevicePortabilitySubsetFeaturesKHR::default()
+                        .image_view_format_swizzle(image_view_format_swizzle_needed)
                         .multisample_array_image(multisample_array_needed),
                 )
             } else {
@@ -1090,11 +1093,18 @@ impl PhysicalDeviceFeatures {
 
         // Not supported by default by `VK_KHR_portability_subset`, which we use on apple platforms.
         features.set(
+            F::TEXTURE_COMPONENT_SWIZZLE,
+            self.portability_subset
+                .map(|p| p.image_view_format_swizzle == vk::TRUE)
+                .unwrap_or(true),
+        );
+        features.set(
             F::MULTISAMPLE_ARRAY,
             self.portability_subset
                 .map(|p| p.multisample_array_image == vk::TRUE)
                 .unwrap_or(true),
         );
+
         // Enable cooperative matrix if any configuration is supported. The SPIR-V
         // we emit for it uses `Device`-scope atomics under the Vulkan memory model,
         // so the device must also support `vulkanMemoryModelDeviceScope`, otherwise
@@ -1156,6 +1166,10 @@ pub struct PhysicalDeviceProperties {
     /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_KHR_maintenance4` extension, promoted to Vulkan 1.3.
     maintenance_4: Option<vk::PhysicalDeviceMaintenance4Properties<'static>>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_KHR_maintenance5` extension, promoted to Vulkan 1.4.
+    maintenance_5: Option<vk::PhysicalDeviceMaintenance5PropertiesKHR<'static>>,
 
     /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_EXT_descriptor_indexing` extension, promoted to Vulkan 1.2.
@@ -1910,6 +1924,9 @@ impl super::InstanceShared {
                     || capabilities.supports_extension(khr::maintenance3::NAME);
                 let supports_maintenance4 = capabilities.device_api_version >= vk::API_VERSION_1_3
                     || capabilities.supports_extension(khr::maintenance4::NAME);
+                let supports_maintenance5 = capabilities.device_api_version
+                    >= vk::make_api_version(0, 1, 4, 0) // TODO: Use `vk::API_VERSION_1_4` after `ash` is updated.
+                    || capabilities.supports_extension(khr::maintenance5::NAME);
                 let supports_descriptor_indexing = capabilities.device_api_version
                     >= vk::API_VERSION_1_2
                     || capabilities.supports_extension(ext::descriptor_indexing::NAME);
@@ -1943,6 +1960,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .maintenance_4
                         .insert(vk::PhysicalDeviceMaintenance4Properties::default());
+                    properties2 = properties2.push_next(next);
+                }
+
+                if supports_maintenance5 {
+                    let next = capabilities
+                        .maintenance_5
+                        .insert(vk::PhysicalDeviceMaintenance5PropertiesKHR::default());
                     properties2 = properties2.push_next(next);
                 }
 
@@ -2499,6 +2523,10 @@ impl super::Instance {
                 .map(|a| a.max_multiview_instance_index)
                 .unwrap_or(0),
             scratch_buffer_alignment: alignments.ray_tracing_scratch_buffer_alignment,
+            depth_stencil_swizzle_one_support: phd_capabilities
+                .maintenance_5
+                .map(|maintenance_5| maintenance_5.depth_stencil_swizzle_one_support == vk::TRUE)
+                .unwrap_or(false),
             ray_tracing_pipeline_group_data_size: alignments.ray_tracing_pipeline_group_data_size,
             store_op_none: phd_capabilities.device_api_version >= vk::API_VERSION_1_3
                 || (phd_capabilities.device_api_version >= vk::API_VERSION_1_2

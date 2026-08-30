@@ -331,6 +331,7 @@ struct CapabilitiesQuery {
     supports_raytracing: bool,
     shader_per_vertex: bool,
     supports_multisample_array: bool,
+    texture_component_swizzle: bool,
 }
 
 #[derive(Debug)]
@@ -342,6 +343,7 @@ struct PrivateCapabilities {
     timestamp_query_support: TimestampQuerySupport,
     supports_memoryless_storage: bool,
     mesh_shaders: bool,
+    texture_component_swizzle: bool,
 }
 
 #[derive(Debug)]
@@ -891,7 +893,15 @@ unsafe impl Send for Texture {}
 unsafe impl Sync for Texture {}
 
 #[derive(Debug)]
+struct AttachmentInfo {
+    texture: Retained<ProtocolObject<dyn MTLTexture>>,
+    base_mip_level: u32,
+    base_array_layer: u32,
+}
+
+#[derive(Debug)]
 pub struct TextureView {
+    attachment: AttachmentInfo,
     raw: Retained<ProtocolObject<dyn MTLTexture>>,
     aspects: crate::FormatAspects,
 }

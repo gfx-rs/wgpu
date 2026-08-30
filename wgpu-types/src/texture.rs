@@ -450,6 +450,89 @@ pub enum StorageTextureAccess {
     Atomic,
 }
 
+/// Specifies the component swizzle for a channel.
+///
+/// Used in [`TextureComponentSwizzle`]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ComponentSwizzle {
+    /// Force its value to 0.
+    Zero,
+    /// Force its value to 1.
+    One,
+    /// Take its value from the red channel of the texture.
+    R,
+    /// Take its value from the green channel of the texture.
+    G,
+    /// Take its value from the blue channel of the texture.
+    B,
+    /// Take its value from the alpha channel of the texture.
+    A,
+}
+
+/// Specifies the texture component swizzle for each channel.
+///
+/// Used in [`TextureViewDescriptor::swizzle`].
+///
+/// Example:
+/// ```rust
+/// # use wgpu_types::{TextureComponentSwizzle, ComponentSwizzle};
+/// // The swizzle maps `xgxr` to `rg01`, or maps `rgba` to `ag01`
+/// TextureComponentSwizzle {
+///     r: ComponentSwizzle::A,
+///     g: ComponentSwizzle::G,
+///     b: ComponentSwizzle::Zero,
+///     a: ComponentSwizzle::One,
+/// };
+/// ```
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct TextureComponentSwizzle {
+    /// Replace the red channel with the [`ComponentSwizzle`].
+    pub r: ComponentSwizzle,
+    /// Replace the green channel with the [`ComponentSwizzle`].
+    pub g: ComponentSwizzle,
+    /// Replace the blue channel with the [`ComponentSwizzle`].
+    pub b: ComponentSwizzle,
+    /// Replace the alpha channel with the [`ComponentSwizzle`].
+    pub a: ComponentSwizzle,
+}
+
+impl Default for TextureComponentSwizzle {
+    fn default() -> Self {
+        Self {
+            r: ComponentSwizzle::R,
+            g: ComponentSwizzle::G,
+            b: ComponentSwizzle::B,
+            a: ComponentSwizzle::A,
+        }
+    }
+}
+
+impl TextureComponentSwizzle {
+    fn select(&self, component: ComponentSwizzle) -> ComponentSwizzle {
+        match component {
+            ComponentSwizzle::Zero => ComponentSwizzle::Zero,
+            ComponentSwizzle::One => ComponentSwizzle::One,
+            ComponentSwizzle::R => self.r,
+            ComponentSwizzle::G => self.g,
+            ComponentSwizzle::B => self.b,
+            ComponentSwizzle::A => self.a,
+        }
+    }
+
+    /// Computes a swizzle that when applied, is equivalent to applying `self` then `other`,
+    /// like the order of WGSL swizzles (`value.rgba.rgba`).
+    pub fn compose(&self, other: Self) -> Self {
+        Self {
+            r: self.select(other.r),
+            g: self.select(other.g),
+            b: self.select(other.b),
+            a: self.select(other.a),
+        }
+    }
+}
+
 /// Describes a [`TextureView`].
 ///
 /// For use with [`Texture::create_view()`].
@@ -487,6 +570,12 @@ pub struct TextureViewDescriptor<L> {
     /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
     /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
     pub array_layer_count: Option<u32>,
+    /// Texture component swizzle.
+    /// When the texture view is accessed by a shader, the red/green/blue/alpha channels are replaced
+    /// by the value corresponding to the component specified in [`TextureComponentSwizzle`].
+    ///
+    /// This requires [`Features::TEXTURE_COMPONENT_SWIZZLE`] if it is not identity swizzle.
+    pub swizzle: TextureComponentSwizzle,
 }
 
 impl<L> TextureViewDescriptor<L> {
@@ -503,6 +592,7 @@ impl<L> TextureViewDescriptor<L> {
             mip_level_count: self.mip_level_count,
             base_array_layer: self.base_array_layer,
             array_layer_count: self.array_layer_count,
+            swizzle: self.swizzle,
         }
     }
 }
