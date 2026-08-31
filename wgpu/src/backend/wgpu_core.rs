@@ -409,6 +409,16 @@ impl CoreQueue {
     ) -> Option<impl Deref<Target = A::Queue> + WasmNotSendSync> {
         unsafe { self.wgpu_queue.clone().as_hal::<A>() }
     }
+
+    pub(crate) fn from_core(core_queue: Arc<wgc::device::queue::Queue>) -> Self {
+        Self {
+            wgpu_queue: core_queue,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::device::queue::Queue> {
+        self.wgpu_queue.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
