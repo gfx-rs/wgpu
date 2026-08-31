@@ -820,7 +820,10 @@ impl crate::Device for super::Device {
             MipLODBias: 0f32,
             MaxAnisotropy: desc.anisotropy_clamp as u32,
 
-            ComparisonFunc: conv::map_comparison(desc.compare.unwrap_or_default()),
+            ComparisonFunc: desc
+                .compare
+                .map(conv::map_comparison)
+                .unwrap_or(Direct3D12::D3D12_COMPARISON_FUNC_NONE),
             BorderColor: border_color,
             MinLOD: desc.lod_clamp.start,
             MaxLOD: desc.lod_clamp.end,
