@@ -415,6 +415,18 @@ pub struct CoreExternalTexture {
     pub(crate) wgpu_external_texture: Arc<wgc::resource::ExternalTexture>,
 }
 
+impl CoreExternalTexture {
+    pub(crate) fn from_core(core_external_texture: Arc<wgc::resource::ExternalTexture>) -> Self {
+        Self {
+            wgpu_external_texture: core_external_texture,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::resource::ExternalTexture> {
+        self.wgpu_external_texture.clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CoreSampler {
     pub(crate) wgpu_sampler: Arc<wgc::resource::Sampler>,
