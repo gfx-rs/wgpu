@@ -822,8 +822,7 @@ impl crate::Device for super::Device {
 
             ComparisonFunc: desc
                 .compare
-                .map(conv::map_comparison)
-                .unwrap_or(Direct3D12::D3D12_COMPARISON_FUNC_NONE),
+                .map_or(Direct3D12::D3D12_COMPARISON_FUNC_NONE, conv::map_comparison),
             BorderColor: border_color,
             MinLOD: desc.lod_clamp.start,
             MaxLOD: desc.lod_clamp.end,
