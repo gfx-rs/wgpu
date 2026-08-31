@@ -315,6 +315,18 @@ pub struct CoreShaderModule {
     pub(crate) wgpu_shader_module: Arc<wgc::pipeline::ShaderModule>,
 }
 
+impl CoreShaderModule {
+    pub(crate) fn from_core(core_shader_module: Arc<wgc::pipeline::ShaderModule>) -> Self {
+        Self {
+            wgpu_shader_module: core_shader_module,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::pipeline::ShaderModule> {
+        self.wgpu_shader_module.clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CoreBindGroupLayout {
     pub(crate) wgpu_bind_group_layout: Arc<wgc::binding_model::BindGroupLayout>,
