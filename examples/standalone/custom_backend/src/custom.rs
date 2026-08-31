@@ -355,7 +355,7 @@ impl QueueInterface for CustomQueue {
     fn submit(
         &self,
         _command_buffers: &mut dyn Iterator<Item = wgpu::custom::DispatchCommandBuffer>,
-    ) -> u64 {
+    ) -> Option<u64> {
         unimplemented!()
     }
 

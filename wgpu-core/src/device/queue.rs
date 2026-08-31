@@ -129,9 +129,7 @@ impl Queue {
         texture: &Arc<Texture>,
     ) -> Result<(), DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
-        let submission = self
-            .allocate_submission(snatch_guard)
-            .map_err(|(_index, e)| e)?;
+        let submission = self.allocate_submission(snatch_guard)?;
         let device = &self.device;
 
         // If the texture is uninitialized it needs to be cleared before presenting
@@ -1451,9 +1449,7 @@ impl Queue {
         buffer: &Arc<Buffer>,
         snatch_guard: SnatchGuard,
     ) -> Result<(), BufferAccessError> {
-        let submission = self
-            .allocate_submission(snatch_guard)
-            .map_err(|(_index, e)| e)?;
+        let submission = self.allocate_submission(snatch_guard)?;
 
         let pending_writes = self.pending_writes.lock();
         if !pending_writes.contains_buffer(buffer) {
@@ -1467,9 +1463,7 @@ impl Queue {
 
     fn flush_pending_writes(&self) -> Result<Option<SubmissionIndex>, DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
-        let submission = self
-            .allocate_submission(snatch_guard)
-            .map_err(|(_index, e)| e)?;
+        let submission = self.allocate_submission(snatch_guard)?;
         let submit_index = submission.index;
         let pending_writes = self.pending_writes.lock();
         if pending_writes.is_recording {
@@ -1510,20 +1504,21 @@ impl Queue {
     fn submit_inner(
         &self,
         command_buffers: &[Arc<CommandBuffer>],
-    ) -> Result<SubmissionIndex, (SubmissionIndex, QueueSubmitError)> {
+    ) -> Result<SubmissionIndex, Box<(Option<SubmissionIndex>, QueueSubmitError)>> {
         profiling::scope!("Queue::submit");
         api_log!("Queue::submit");
 
         let snatch_guard = self.device.snatchable_lock.read();
         let mut submission = self
             .allocate_submission(snatch_guard)
-            .map_err(|(index, e)| (index, e.into()))?;
+            .map_err(|e| (None, e.into()))?;
         let submit_index = submission.index;
 
         // If we encounter an error after we have started updating global state and before
         // successful submission, we must lose the device to avoid continuing with
         // potentially inaccurate resource state.
         let mut lose_device_on_error = false;
+        let mut successfully_submitted = false;
 
         let res = 'error: {
             let mut used_surface_textures = track::TextureUsageScope::default();
@@ -1730,6 +1725,7 @@ impl Queue {
                 Ok(result) => result,
                 Err(e) => break 'error Err(e.into()),
             };
+            successfully_submitted = true;
 
             profiling::scope!("cleanup");
 
@@ -1765,7 +1761,10 @@ impl Queue {
                 if lose_device_on_error {
                     self.device.lose("submission failed");
                 }
-                return Err((submit_index, e));
+                return Err(Box::new((
+                    successfully_submitted.then_some(submit_index),
+                    e,
+                )));
             }
         };
 
@@ -1779,10 +1778,11 @@ impl Queue {
         Ok(submit_index)
     }
 
-    pub fn submit(&self, command_buffers: &[Arc<CommandBuffer>]) -> SubmissionIndex {
+    pub fn submit(&self, command_buffers: &[Arc<CommandBuffer>]) -> Option<SubmissionIndex> {
         match self.submit_inner(command_buffers) {
-            Ok(submit_index) => submit_index,
-            Err((submit_index, e)) => {
+            Ok(submit_index) => Some(submit_index),
+            Err(e) => {
+                let (submit_index, e) = *e;
                 self.device
                     .handle_error(e, Some(self.label()), "Queue::submit");
                 submit_index
@@ -1815,14 +1815,12 @@ impl Queue {
     fn allocate_submission<'a>(
         &'a self,
         snatch_guard: SnatchGuard<'a>,
-    ) -> Result<PendingSubmission<'a>, (SubmissionIndex, DeviceError)> {
+    ) -> Result<PendingSubmission<'a>, DeviceError> {
         let mut command_index_guard = self.device.command_indices.write();
         command_index_guard.active_submission_index += 1;
         let index = command_index_guard.active_submission_index;
 
-        if let Err(e) = self.device.check_is_valid() {
-            return Err((index, e));
-        }
+        self.device.check_is_valid()?;
 
         let submission = PendingSubmission {
             queue: self,

@@ -1629,7 +1629,7 @@ impl dispatch::QueueInterface for CoreQueue {
     fn submit(
         &self,
         command_buffers: &mut dyn Iterator<Item = dispatch::DispatchCommandBuffer>,
-    ) -> u64 {
+    ) -> Option<u64> {
         let temp_command_buffers = command_buffers.collect::<SmallVec<[_; 4]>>();
         let command_buffers = temp_command_buffers
             .iter()
