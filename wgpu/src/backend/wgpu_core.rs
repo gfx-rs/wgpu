@@ -398,6 +398,17 @@ pub struct CorePipelineCache {
 pub struct CoreCommandBuffer {
     pub(crate) wgpu_command_buffer: Arc<wgc::command::CommandBuffer>,
 }
+impl CoreCommandBuffer {
+    pub(crate) fn from_core(core_buffer: Arc<wgc::command::CommandBuffer>) -> Self {
+        Self {
+            wgpu_command_buffer: core_buffer,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::command::CommandBuffer> {
+        self.wgpu_command_buffer.clone()
+    }
+}
 
 impl fmt::Debug for CoreCommandBuffer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
