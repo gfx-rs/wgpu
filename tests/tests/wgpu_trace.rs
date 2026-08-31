@@ -199,9 +199,11 @@ fn trace_texture_test() {
         view_formats: Vec::new(),
     };
 
-    let (texture, error) = device.create_texture(&desc);
+    device.push_error_scope(wgpu::ErrorFilter::Validation);
 
-    assert!(error.is_none());
+    let texture = device.create_texture(&desc);
+
+    assert!(device.pop_error_scope().unwrap().is_none());
 
     let texture_error = device.create_texture_error(&desc);
 

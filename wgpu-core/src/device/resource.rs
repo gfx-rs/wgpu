@@ -2015,6 +2015,8 @@ impl Device {
 
         let mut hal_view_formats = Vec::new();
         for format in desc.view_formats.iter() {
+            self.require_features(format.required_features())
+                .map_err(|error| CreateTextureError::MissingFeatures(*format, error))?;
             if desc.format == *format {
                 continue;
             }
@@ -2139,18 +2141,14 @@ impl Device {
         Ok(texture)
     }
 
-    pub fn create_texture(
-        self: &Arc<Self>,
-        desc: &resource::TextureDescriptor,
-    ) -> (Arc<Texture>, Option<resource::CreateTextureError>) {
+    /// <https://www.w3.org/TR/webgpu/#dom-gpudevice-createtexture>
+    pub fn create_texture(self: &Arc<Self>, desc: &resource::TextureDescriptor) -> Arc<Texture> {
         profiling::scope!("Device::create_texture");
-        let (texture, error) = match self.create_texture_inner(desc) {
-            Ok(texture) => (texture, None),
-            Err(e) => {
-                let texture = Texture::invalid(self, desc);
-                (texture, Some(e))
-            }
-        };
+
+        let texture = self.create_texture_inner(desc).unwrap_or_else(|err| {
+            self.handle_error(err, desc.label.as_deref(), "Device::create_texture");
+            Texture::invalid(self, desc)
+        });
         api_log!(
             "Device::create_texture({desc:?}) -> {:?}",
             Arc::as_ptr(&texture)
@@ -2165,7 +2163,7 @@ impl Device {
                 desc.clone(),
             ));
         }
-        (texture, error)
+        texture
     }
 
     /// Creates a texture that is guaranteed to be invalid
