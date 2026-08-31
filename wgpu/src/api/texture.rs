@@ -181,6 +181,20 @@ impl Texture {
     pub fn usage(&self) -> TextureUsages {
         self.inner.usage()
     }
+
+    /// Marks this texture's contents as already initialized, skipping wgpu's
+    /// lazy zero-initialization of it.
+    ///
+    /// This is a no-op on backends without a concept of lazy
+    /// zero-initialization, such as WebGPU.
+    ///
+    /// # Safety
+    ///
+    /// The entire contents of the texture must already be initialized, e.g. by
+    /// writing to it through the handle returned by [`Texture::as_hal`].
+    pub unsafe fn mark_externally_initialized(&self) {
+        unsafe { self.inner.mark_externally_initialized() }
+    }
 }
 
 /// Describes a [`Texture`].

@@ -308,6 +308,17 @@ pub trait TextureInterface: CommonTraits {
     fn format(&self) -> wgt::TextureFormat;
 
     fn usage(&self) -> wgt::TextureUsages;
+
+    /// Marks this texture's contents as already initialized, skipping wgpu's
+    /// lazy zero-initialization of it.
+    ///
+    /// Defaults to a no-op, which is a valid implementation for backends
+    /// (such as WebGPU) that have no concept of lazy zero-initialization.
+    ///
+    /// # Safety
+    ///
+    /// The entire contents of the texture must already be initialized.
+    unsafe fn mark_externally_initialized(&self) {}
 }
 pub trait ExternalTextureInterface: CommonTraits {
     fn destroy(&self);
