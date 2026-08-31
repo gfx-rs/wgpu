@@ -686,6 +686,7 @@ impl Surface {
         &self,
         _suf_texture: super::Texture,
         context: &AdapterContext,
+        _damage_rects: &[wgt::DamageRect],
     ) -> Result<(), crate::SurfaceError> {
         let swapchain = self.swapchain.read();
         let sc = swapchain.as_ref().unwrap();

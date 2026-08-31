@@ -549,6 +549,25 @@ bitflags::bitflags! {
     }
 }
 
+/// A region of a surface that changed since the last present, in device pixels
+/// with a top-left origin.
+///
+/// Used with `wgpu::Queue::present_with_damage` to let the compositor limit
+/// repainting to the affected area. Regions are clipped to the surface bounds;
+/// if nothing remains after clipping, the whole surface is presented.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DamageRect {
+    /// Horizontal offset in pixels from the top-left corner.
+    pub x: i32,
+    /// Vertical offset in pixels from the top-left corner.
+    pub y: i32,
+    /// Width of the damaged region in pixels.
+    pub width: u32,
+    /// Height of the damaged region in pixels.
+    pub height: u32,
+}
+
 /// Corresponds to a [`GPUDeviceLostReason`].
 ///
 /// [`GPUDeviceLostReason`]: https://www.w3.org/TR/webgpu/#enumdef-gpudevicelostreason

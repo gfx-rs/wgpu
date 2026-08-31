@@ -593,6 +593,7 @@ impl Swapchain for NativeSwapchain {
         &mut self,
         queue: &crate::vulkan::Queue,
         texture: crate::vulkan::SurfaceTexture,
+        damage_rects: &[wgt::DamageRect],
     ) -> Result<(), crate::SurfaceError> {
         let metadata = texture
             .metadata
@@ -624,7 +625,7 @@ impl Swapchain for NativeSwapchain {
 
         let mut display_timing;
         let present_times;
-        let mut vk_info = if let Some(present_time) = self.next_present_time.take() {
+        let vk_info = if let Some(present_time) = self.next_present_time.take() {
             debug_assert!(
                 self.device
                     .features
@@ -638,6 +639,20 @@ impl Swapchain for NativeSwapchain {
         } else {
             vk_info
         };
+
+        let rects: Vec<vk::RectLayerKHR>;
+        let present_region;
+        let mut present_regions;
+        let mut vk_info =
+            if self.device.private_caps.incremental_present && !damage_rects.is_empty() {
+                rects = conv::map_damage_rects(damage_rects, self.config.extent);
+                present_region = vk::PresentRegionKHR::default().rectangles(&rects);
+                present_regions = vk::PresentRegionsKHR::default()
+                    .regions(core::slice::from_ref(&present_region));
+                vk_info.push_next(&mut present_regions)
+            } else {
+                vk_info
+            };
 
         if let Some(chain) = self.next_present_chain.take() {
             // SAFETY: The contract on `Surface::set_next_present_chain()` keeps the chain

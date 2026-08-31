@@ -1988,8 +1988,9 @@ impl crate::Queue for super::Queue {
         &self,
         surface: &super::Surface,
         texture: super::Texture,
+        damage_rects: &[wgt::DamageRect],
     ) -> Result<(), crate::SurfaceError> {
-        unsafe { surface.present(texture, &self.shared.context) }
+        unsafe { surface.present(texture, &self.shared.context, damage_rects) }
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {

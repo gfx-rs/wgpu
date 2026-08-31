@@ -52,6 +52,13 @@ type EglDebugMessageControlFun = unsafe extern "system" fn(
     attrib_list: *const khronos_egl::Attrib,
 ) -> ffi::c_int;
 
+type EglSwapBuffersWithDamageFun = unsafe extern "system" fn(
+    display: *const ffi::c_void,
+    surface: *const ffi::c_void,
+    rects: *const ffi::c_int,
+    n_rects: ffi::c_int,
+) -> ffi::c_uint;
+
 unsafe extern "system" fn egl_debug_proc(
     error: khronos_egl::Enum,
     command_raw: *const ffi::c_char,
@@ -352,6 +359,7 @@ struct Inner {
     config: khronos_egl::Config,
     /// Method by which the framebuffer should support srgb
     srgb_kind: SrgbFrameBufferKind,
+    swap_buffers_with_damage: Option<EglSwapBuffersWithDamageFun>,
 }
 
 #[cfg(send_sync)]
@@ -436,6 +444,23 @@ impl Inner {
             log::debug!("\tEGL surface: -srgb");
             SrgbFrameBufferKind::None
         };
+
+        let swap_buffers_with_damage =
+            if display_extensions.contains("EGL_KHR_swap_buffers_with_damage") {
+                egl.get_proc_address("eglSwapBuffersWithDamageKHR")
+            } else if display_extensions.contains("EGL_EXT_swap_buffers_with_damage") {
+                egl.get_proc_address("eglSwapBuffersWithDamageEXT")
+            } else {
+                None
+            }
+            .map(|address| unsafe {
+                core::mem::transmute::<extern "system" fn(), EglSwapBuffersWithDamageFun>(address)
+            });
+        if swap_buffers_with_damage.is_some() {
+            log::debug!("\tEGL surface: +swap_buffers_with_damage");
+        } else {
+            log::debug!("\tEGL surface: -swap_buffers_with_damage");
+        }
 
         if log::max_level() >= log::LevelFilter::Trace {
             log::trace!("Configurations:");
@@ -653,6 +678,7 @@ impl Inner {
             supports_native_window,
             config,
             srgb_kind,
+            swap_buffers_with_damage,
         })
     }
 }
@@ -1008,6 +1034,7 @@ impl crate::Instance for Instance {
             raw_window_handle: window_handle,
             swapchain: RwLock::new(None),
             srgb_kind: inner.srgb_kind,
+            swap_buffers_with_damage: inner.swap_buffers_with_damage,
         })
     }
 
@@ -1128,6 +1155,7 @@ pub struct Surface {
     raw_window_handle: raw_window_handle::RawWindowHandle,
     swapchain: RwLock<Option<Swapchain>>,
     srgb_kind: SrgbFrameBufferKind,
+    swap_buffers_with_damage: Option<EglSwapBuffersWithDamageFun>,
 }
 
 unsafe impl Send for Surface {}
@@ -1138,6 +1166,7 @@ impl Surface {
         &self,
         _suf_texture: super::Texture,
         context: &AdapterContext,
+        damage_rects: &[wgt::DamageRect],
     ) -> Result<(), crate::SurfaceError> {
         let gl = unsafe { context.get_without_egl_lock() };
         let swapchain = self.swapchain.read();
@@ -1194,14 +1223,46 @@ impl Surface {
 
         unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None) };
 
-        self.egl
-            .instance
-            .swap_buffers(self.egl.display, sc.surface)
-            .map_err(|e| {
-                log::error!("swap_buffers failed: {e}");
-                crate::SurfaceError::Lost
-                // TODO: should we unset the current context here?
-            })?;
+        match self.swap_buffers_with_damage {
+            Some(swap_with_damage) if !damage_rects.is_empty() => {
+                // Rects are flat `[x, y, width, height]` EGLints, with a bottom-left origin, so
+                // flip y from the top-left origin `DamageRect` uses.
+                let surface_height = sc.extent.height as i32;
+                let rects = damage_rects
+                    .iter()
+                    .flat_map(|rect| {
+                        [
+                            rect.x,
+                            surface_height - rect.y - rect.height as i32,
+                            rect.width as ffi::c_int,
+                            rect.height as ffi::c_int,
+                        ]
+                    })
+                    .collect::<Vec<ffi::c_int>>();
+                let ok = unsafe {
+                    swap_with_damage(
+                        self.egl.display.as_ptr(),
+                        sc.surface.as_ptr(),
+                        rects.as_ptr(),
+                        damage_rects.len() as ffi::c_int,
+                    )
+                };
+                if ok == khronos_egl::FALSE {
+                    log::error!("swap_buffers_with_damage failed");
+                    return Err(crate::SurfaceError::Lost);
+                }
+            }
+            _ => {
+                self.egl
+                    .instance
+                    .swap_buffers(self.egl.display, sc.surface)
+                    .map_err(|e| {
+                        log::error!("swap_buffers failed: {e}");
+                        crate::SurfaceError::Lost
+                        // TODO: should we unset the current context here?
+                    })?;
+            }
+        }
         self.egl
             .instance
             .make_current(self.egl.display, None, None, None)

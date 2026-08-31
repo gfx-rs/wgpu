@@ -1677,6 +1677,22 @@ impl dispatch::QueueInterface for CoreQueue {
             }
         }
     }
+
+    fn present_with_damage(
+        &self,
+        detail: &dispatch::DispatchSurfaceOutputDetail,
+        damage_rects: &[wgt::DamageRect],
+    ) {
+        let detail = detail.as_core();
+        match detail.wgpu_surface.present_with_damage(damage_rects) {
+            Ok(_status) => (),
+            Err(err) => {
+                self.wgpu_queue
+                    .device()
+                    .handle_error_nolabel(err, "Queue::present_with_damage");
+            }
+        }
+    }
 }
 
 impl dispatch::ShaderModuleInterface for CoreShaderModule {

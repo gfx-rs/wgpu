@@ -522,6 +522,9 @@ struct PrivateCapabilities {
     /// - `VK_ATTACHMENT_STORE_OP_NONE_QCOM` provided by `VK_QCOM_render_pass_store_ops`.
     /// - `VK_ATTACHMENT_STORE_OP_NONE_EXT` provided by `VK_EXT_load_store_op_none`.
     store_op_none: bool,
+
+    /// True if `VK_KHR_incremental_present` is enabled on the device.
+    incremental_present: bool,
 }
 
 bitflags::bitflags!(
@@ -1641,10 +1644,16 @@ impl crate::Queue for Queue {
         &self,
         surface: &Surface,
         texture: SurfaceTexture,
+        damage_rects: &[wgt::DamageRect],
     ) -> Result<(), crate::SurfaceError> {
         let mut swapchain = surface.swapchain.write();
 
-        unsafe { swapchain.as_mut().unwrap().present(self, texture) }
+        unsafe {
+            swapchain
+                .as_mut()
+                .unwrap()
+                .present(self, texture, damage_rects)
+        }
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {

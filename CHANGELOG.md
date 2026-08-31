@@ -91,6 +91,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - `wgpu-core` now exposes `validate_device_descriptor` and `validate_texture_descriptor` functions that perform the same descriptor validation the corresponding resource creation APIs would, without actually creating a resource. This may be useful in conjunction with hal raw APIs. By @andyleiserson in [#9967](https://github.com/gfx-rs/wgpu/pull/9967) and [#9979](https://github.com/gfx-rs/wgpu/pull/9979).
 - Added `TextureDescriptor::theoretical_memory_footprint` to estimate memory footprint of a texture. By @sagudev in [#10032](https://github.com/gfx-rs/wgpu/pull/10032).
 - `wgpu::WriteOnly<[_]>` now implements `Send`. By @kpreid in [#10163](https://github.com/gfx-rs/wgpu/pull/10163).
+- Add `Queue::present_with_damage`, which takes a slice of the new `DamageRect` type describing the regions that changed since the last present. Backends that support incremental presentation forward these to the compositor so it can limit repainting; the rects are a hint and are ignored elsewhere. Currently implemented for Vulkan (`VK_KHR_incremental_present`), DX12 (`IDXGISwapChain1::Present1` dirty rects) and EGL (`EGL_KHR_swap_buffers_with_damage` / `EGL_EXT_swap_buffers_with_damage`). By @sauliusvl in [#10152](https://github.com/gfx-rs/wgpu/pull/10152).
 
 #### Hal
 
@@ -136,6 +137,10 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - `naga::valid::ValidationError` is now always returned boxed, to avoid `clippy::large_result_err` warning. By @beicause in [#9612](https://github.com/gfx-rs/wgpu/pull/9612)
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
+
+#### Hal
+
+- `hal::Queue::present` gained a `damage_rects: &[wgt::DamageRect]` parameter, describing the regions that changed since the last present. Pass an empty slice to present the whole surface, matching the previous behavior. By @sauliusvl in [#10152](https://github.com/gfx-rs/wgpu/pull/10152).
 
 ### Bug Fixes
 

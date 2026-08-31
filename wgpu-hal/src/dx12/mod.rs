@@ -1719,6 +1719,7 @@ impl crate::Queue for Queue {
         &self,
         surface: &Surface,
         _texture: Texture,
+        damage_rects: &[wgt::DamageRect],
     ) -> Result<(), crate::SurfaceError> {
         let mut swapchain = surface.swap_chain.write();
         let sc = swapchain.as_mut().unwrap();
@@ -1732,10 +1733,33 @@ impl crate::Queue for Queue {
             m => unreachable!("Cannot make surface with present mode {m:?}"),
         };
 
-        profiling::scope!("IDXGISwapchain3::Present");
-        unsafe { sc.raw.Present(interval, flags) }
+        // `RECT` is inclusive-exclusive edges, matching `ClippedDamageRect`. Dirty
+        // rects must lie within the back buffer, so out-of-range damage is clipped;
+        // if nothing survives we leave the list empty, which DXGI reads as a full
+        // present.
+        let mut dirty_rects = damage_rects
+            .iter()
+            .filter_map(|&rect| {
+                let clipped = auxil::clip_damage_rect(rect, sc.size)?;
+                Some(Foundation::RECT {
+                    left: clipped.left,
+                    top: clipped.top,
+                    right: clipped.right,
+                    bottom: clipped.bottom,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        profiling::scope!("IDXGISwapchain3::Present1");
+        let params = Dxgi::DXGI_PRESENT_PARAMETERS {
+            DirtyRectsCount: dirty_rects.len() as u32,
+            pDirtyRects: dirty_rects.as_mut_ptr(),
+            pScrollRect: core::ptr::null_mut(),
+            pScrollOffset: core::ptr::null_mut(),
+        };
+        unsafe { sc.raw.Present1(interval, flags, &params) }
             .ok()
-            .into_device_result("Present")?;
+            .into_device_result("Present1")?;
 
         Ok(())
     }
