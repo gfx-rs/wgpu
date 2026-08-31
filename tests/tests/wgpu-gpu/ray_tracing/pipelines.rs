@@ -138,7 +138,7 @@ fn pipeline_create_use(ctx: TestingContext) {
                     compilation_options: Default::default(),
                 }),
             }],
-            max_recersion_depth: 1,
+            max_recursion_depth: 1,
             cache: None,
         });
 

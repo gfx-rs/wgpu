@@ -1406,7 +1406,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     },
                 })
                 .collect::<Vec<_>>(),
-            max_recursion_depth: desc.max_recersion_depth,
+            max_recursion_depth: desc.max_recursion_depth,
             cache: desc
                 .cache
                 .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
