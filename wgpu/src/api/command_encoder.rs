@@ -442,3 +442,23 @@ impl CommandEncoder {
         );
     }
 }
+
+#[cfg(wgpu_core)]
+impl CommandEncoder {
+    /// Create a new command encoder of wgpu from a wgpu-core command encoder.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_encoder` - wgpu-core command encoder.
+    pub fn from_core(core_encoder: alloc::sync::Arc<wgc::command::CommandEncoder>) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreCommandEncoder::from_core(core_encoder).into(),
+            actions: SharedDeferredCommandBufferActions::default(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core command encoder if this `CommandEncoder` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::command::CommandEncoder>> {
+        self.inner.as_core_opt().map(|cd| cd.as_core())
+    }
+}

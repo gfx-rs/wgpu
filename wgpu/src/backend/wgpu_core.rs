@@ -501,6 +501,16 @@ impl CoreCommandEncoder {
                 .as_hal_mut::<A, F, R>(hal_command_encoder_callback)
         }
     }
+
+    pub(crate) fn from_core(core_encoder: Arc<wgc::command::CommandEncoder>) -> Self {
+        Self {
+            wgpu_command_encoder: core_encoder,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::command::CommandEncoder> {
+        self.wgpu_command_encoder.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
