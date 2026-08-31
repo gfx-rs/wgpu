@@ -733,6 +733,26 @@ fn map_texture_aspect(aspect: wgt::TextureAspect) -> webgpu_sys::GpuTextureAspec
     }
 }
 
+fn map_component_swizzle(swizzle: wgt::ComponentSwizzle) -> char {
+    match swizzle {
+        wgt::ComponentSwizzle::Zero => '0',
+        wgt::ComponentSwizzle::One => '1',
+        wgt::ComponentSwizzle::R => 'r',
+        wgt::ComponentSwizzle::G => 'g',
+        wgt::ComponentSwizzle::B => 'b',
+        wgt::ComponentSwizzle::A => 'a',
+    }
+}
+fn map_texture_component_swizzle(
+    swizzle: wgt::TextureComponentSwizzle,
+) -> arrayvec::ArrayString<4> {
+    let mut s = arrayvec::ArrayString::new();
+    for component in [swizzle.r, swizzle.g, swizzle.b, swizzle.a] {
+        s.push(map_component_swizzle(component));
+    }
+    s
+}
+
 fn map_filter_mode(mode: wgt::FilterMode) -> webgpu_sys::GpuFilterMode {
     match mode {
         wgt::FilterMode::Nearest => webgpu_sys::GpuFilterMode::Nearest,
@@ -2671,7 +2691,7 @@ impl dispatch::DeviceInterface for WebDevice {
     fn create_render_bundle_encoder(
         &self,
         desc: &crate::RenderBundleEncoderDescriptor<'_>,
-    ) -> Result<dispatch::DispatchRenderBundleEncoder, crate::CreateRenderBundleEncoderError> {
+    ) -> dispatch::DispatchRenderBundleEncoder {
         let mapped_color_formats = desc
             .color_formats
             .iter()
@@ -2698,16 +2718,13 @@ impl dispatch::DeviceInterface for WebDevice {
         let render_bundle_encoder = self
             .inner
             .create_render_bundle_encoder(&mapped_desc)
-            .map_err(|e| {
-                let e = e.dyn_ref::<js_sys::Error>().expect("Expected a JS Error");
-                crate::CreateRenderBundleEncoderError::new(e.message().as_string().unwrap())
-            })?;
+            .unwrap();
 
-        Ok(WebRenderBundleEncoder {
+        WebRenderBundleEncoder {
             inner: render_bundle_encoder,
             ident: crate::cmp::Identifier::create(),
         }
-        .into())
+        .into()
     }
 
     fn set_device_lost_callback(&self, device_lost_callback: dispatch::BoxDeviceLostCallback) {
@@ -3104,6 +3121,7 @@ impl dispatch::TextureInterface for WebTexture {
             mapped.set_label(label);
         }
         mapped.set_usage(desc.usage.unwrap_or(wgt::TextureUsages::empty()).bits());
+        mapped.set_swizzle(&map_texture_component_swizzle(desc.swizzle));
 
         let view = self.inner.create_view_with_descriptor(&mapped).unwrap();
 

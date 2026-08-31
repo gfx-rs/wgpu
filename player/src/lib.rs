@@ -129,7 +129,7 @@ impl Player {
                 let _ = buffer.unmap();
             }
             Action::CreateTexture(id, desc) => {
-                let (texture, _) = device.create_texture(&desc);
+                let texture = device.create_texture(&desc);
 
                 self.textures.insert(id, texture);
             }

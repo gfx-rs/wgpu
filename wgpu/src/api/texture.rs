@@ -60,7 +60,7 @@ impl Texture {
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::Texture>> {
         let texture = self.inner.as_core_opt()?;
-        unsafe { texture.context.texture_as_hal::<A>(texture) }
+        unsafe { texture.as_hal::<A>() }
     }
 
     /// Returns the underlying [`webgpu::GpuTexture`] handle if this `Texture`

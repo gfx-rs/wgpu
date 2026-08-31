@@ -11,7 +11,7 @@ use wgpu_core_remote_types::{
 use wgpu_core::{
     binding_model::{self},
     command,
-    device::{DeviceLostClosure, MissingFeatures, WaitIdleError},
+    device::{DeviceLostClosure, WaitIdleError},
     error::EmptyErrorScopeStack,
     pipeline::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
@@ -223,7 +223,7 @@ impl Global {
         device_id: DeviceId,
         desc: &TextureDescriptor,
         id_in: id::TextureId,
-    ) -> (id::TextureId, Option<resource::CreateTextureError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
 
         let Hub {
@@ -232,11 +232,9 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (texture, error) = device.create_texture(desc);
+        let texture = device.create_texture(desc);
 
-        let id = textures.assign(id_in, texture);
-
-        (id, error)
+        textures.assign(id_in, texture);
     }
 
     pub fn device_validate_texture_descriptor(
@@ -343,6 +341,7 @@ impl Global {
             dimension: desc.dimension,
             usage: desc.usage,
             range: desc.range,
+            swizzle: desc.swizzle,
         };
 
         let (view, error) = texture.create_view(&desc);
@@ -705,7 +704,7 @@ impl Global {
         device_id: DeviceId,
         desc: &RenderBundleEncoderDescriptor,
         id_in: id::RenderBundleEncoderId,
-    ) -> Result<(), MissingFeatures> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_bundle_encoders,
@@ -723,11 +722,9 @@ impl Global {
             multiview: None,
         };
 
-        let render_bundle_encoder = device.create_render_bundle_encoder(&desc)?;
+        let render_bundle_encoder = device.create_render_bundle_encoder(&desc);
 
         render_bundle_encoders.assign(id_in, *render_bundle_encoder);
-
-        Ok(())
     }
 
     pub fn render_bundle_encoder_finish(

@@ -423,7 +423,8 @@ impl Device {
     pub(crate) fn raw(&self) -> &dyn hal::DynDevice {
         self.raw.as_ref()
     }
-    pub(crate) fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
+
+    pub fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
         if self.features.contains(feature) {
             Ok(())
         } else {
@@ -2014,6 +2015,8 @@ impl Device {
 
         let mut hal_view_formats = Vec::new();
         for format in desc.view_formats.iter() {
+            self.require_features(format.required_features())
+                .map_err(|error| CreateTextureError::MissingFeatures(*format, error))?;
             if desc.format == *format {
                 continue;
             }
@@ -2088,6 +2091,7 @@ impl Device {
                                     base_array_layer: array_layer,
                                     array_layer_count: Some(1),
                                 },
+                                swizzle: wgt::TextureComponentSwizzle::default(),
                             };
                             clear_views.push(ManuallyDrop::new(
                                 unsafe {
@@ -2137,18 +2141,14 @@ impl Device {
         Ok(texture)
     }
 
-    pub fn create_texture(
-        self: &Arc<Self>,
-        desc: &resource::TextureDescriptor,
-    ) -> (Arc<Texture>, Option<resource::CreateTextureError>) {
+    /// <https://www.w3.org/TR/webgpu/#dom-gpudevice-createtexture>
+    pub fn create_texture(self: &Arc<Self>, desc: &resource::TextureDescriptor) -> Arc<Texture> {
         profiling::scope!("Device::create_texture");
-        let (texture, error) = match self.create_texture_inner(desc) {
-            Ok(texture) => (texture, None),
-            Err(e) => {
-                let texture = Texture::invalid(self, desc);
-                (texture, Some(e))
-            }
-        };
+
+        let texture = self.create_texture_inner(desc).unwrap_or_else(|err| {
+            self.handle_error(err, desc.label.as_deref(), "Device::create_texture");
+            Texture::invalid(self, desc)
+        });
         api_log!(
             "Device::create_texture({desc:?}) -> {:?}",
             Arc::as_ptr(&texture)
@@ -2163,7 +2163,7 @@ impl Device {
                 desc.clone(),
             ));
         }
-        (texture, error)
+        texture
     }
 
     /// Creates a texture that is guaranteed to be invalid
@@ -2863,22 +2863,19 @@ impl Device {
     pub fn create_render_bundle_encoder(
         self: &Arc<Self>,
         desc: &command::RenderBundleEncoderDescriptor,
-    ) -> Result<Box<command::RenderBundleEncoder>, MissingFeatures> {
+    ) -> Box<command::RenderBundleEncoder> {
         profiling::scope!("Device::create_render_bundle_encoder");
         api_log!("Device::create_render_bundle_encoder");
-        command::RenderBundleEncoder::new(self, desc)
-            .or_else(|err| match err {
-                command::CreateRenderBundleError::MissingFeatures(missing) => Err(missing),
-                err => {
-                    self.handle_error(
-                        err,
-                        desc.label.as_ref().map(|l| l.as_ref()),
-                        "Device::create_render_bundle_encoder",
-                    );
-                    Ok(command::RenderBundleEncoder::dummy(self))
-                }
-            })
-            .map(Box::new)
+        Box::new(
+            command::RenderBundleEncoder::new(self, desc).unwrap_or_else(|err| {
+                self.handle_error(
+                    err,
+                    desc.label.as_deref(),
+                    "Device::create_render_bundle_encoder",
+                );
+                command::RenderBundleEncoder::dummy(self)
+            }),
+        )
     }
 
     /// Generate information about late-validated buffer bindings for pipelines.
@@ -4094,6 +4091,12 @@ impl Device {
                     return Err(Error::InvalidStorageTextureMipLevelCount {
                         binding,
                         mip_level_count,
+                    });
+                }
+
+                if view.desc.swizzle != wgt::TextureComponentSwizzle::default() {
+                    return Err(Error::InvalidStorageTextureSwizzle {
+                        swizzle: view.desc.swizzle,
                     });
                 }
 

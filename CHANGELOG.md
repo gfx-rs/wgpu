@@ -44,6 +44,28 @@ Bottom level categories:
 
 ### Major changes
 
+### `TEXTURE_COMPONENT_SWIZZLE` feature and `swizzle` field in `TextureViewDescriptor`
+
+A new `swizzle` field is in `TextureViewDescriptor` used for mapping red/green/blue/alpha channels of the texture view
+when accessed by shaders. This requires `TEXTURE_COMPONENT_SWIZZLE` feature if `swizzle` is not identity.
+
+```diff
+let texture_view_desc = wgpu::TextureViewDescriptor {
+    label: None,
+    format: Some(wgpu::TextureFormat::Rgba8Unorm),
+    dimension: Some(wgpu::TextureViewDimension::D2),
+    usage: None,
+    aspect: wgpu::TextureAspect::All,
+    base_mip_level: 0,
+    mip_level_count: None,
+    base_array_layer: 0,
+    array_layer_count: None,
++   swizzle: wgpu::TextureComponentSwizzle::default(),
+}
+```
+
+By @beicause in [#9553](https://github.com/gfx-rs/wgpu/pull/9553).
+
 #### `DeviceDescriptor` has new field `default_queue`
 
 `DeviceDescriptor` has new field `default_queue` of type `QueueDescriptor`, which allows setting label for default device queue:
@@ -60,17 +82,6 @@ Bottom level categories:
 
 By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
-#### `Device::create_render_bundle_encoder` now returns error
-
-Error is raised if for provided texture formats required features are not enabled on the device as per spec.
-
-```diff
-- device.create_render_bundle_encoder(&RenderBundleEncoderDescriptor::default())
-+ device.create_render_bundle_encoder(&RenderBundleEncoderDescriptor::default()).unwrap()
-```
-
-By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
-
 ### Added/New Features
 
 #### General
@@ -86,6 +97,7 @@ By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
 - Add `BufferBinding::buffer`, a public read accessor for the bound buffer, which was previously inaccessible to out-of-tree `wgpu_hal::Api` implementations. By @danlehmann in [#9820](https://github.com/gfx-rs/wgpu/pull/9820).
 - Allow specifying a queue family ownership transfer when transitioning a texture. `hal::TextureBarrier` gained an optional `queue_family_ownership_transfer` field (honored only by the Vulkan backend) so that images imported from external memory can be acquired from and released back to the queue family of an external or foreign owner, described by the new `hal::QueueFamily` enum. Resolves [#2948](https://github.com/gfx-rs/wgpu/issues/2948). By @alexander-bruun in [#9668](https://github.com/gfx-rs/wgpu/pull/9668).
 - Add `wgpu_hal::vulkan::Surface::set_next_present_chain`, which attaches a caller-provided `pNext` chain to the `VkPresentInfoKHR` of the surface's next presentation. With `Adapter::open_with_callback` to enable the device extension, this supports presentation extensions wgpu has no dedicated support for, such as [VK_NV_present_metering](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_present_metering.html) for metering the display timing of frame-generation frames. By @stuartparmenter in [#9847](https://github.com/gfx-rs/wgpu/pull/9847).
+- Add `wgpu_hal::vulkan::AccelerationStructure::raw_handle`, which returns the underlying `VkAccelerationStructureKHR`. Use it with `Adapter::open_with_callback` to record acceleration structure commands from extensions wgpu doesn't support, such as [VK_NV_cluster_acceleration_structure](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_cluster_acceleration_structure.html). Mark the result with `CommandEncoder::mark_acceleration_structures_built`. By @stuartparmenter in [#10187](https://github.com/gfx-rs/wgpu/pull/10187).
 - Add `wgpu_hal::vulkan::Surface::set_next_swapchain_create_chain` and `wgpu_hal::vulkan::Queue::set_next_submit_chain`. The first attaches a caller-provided `pNext` chain to the `VkSwapchainCreateInfoKHR` of the surface's next configuration. The second attaches one to the `VkSubmitInfo` of the queue's next submission. Together with `set_next_present_chain` and the existing raw-handle accessors, this makes [VK_NV_low_latency2](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_low_latency2.html) usable on a wgpu swapchain. That extension is the Vulkan interface for NVIDIA Reflex. By @stuartparmenter in [#10095](https://github.com/gfx-rs/wgpu/pull/10095).
 
 #### Metal

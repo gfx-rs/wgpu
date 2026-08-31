@@ -508,6 +508,9 @@ struct PrivateCapabilities {
     ///  a scratch buffer when building acceleration structures.
     scratch_buffer_alignment: u32,
 
+    /// Indicating that depth/stencil texturing operations with `VK_COMPONENT_SWIZZLE_ONE` have defined behavior.
+    depth_stencil_swizzle_one_support: bool,
+
     /// `get_raytracing_pipeline_group_data` requires both a group count and a data size.
     /// The data size parameter is just this * the group count, so we store this to not
     /// require an unnecessary parameter.
@@ -900,6 +903,33 @@ pub struct AccelerationStructure {
 }
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
+
+impl AccelerationStructure {
+    /// Returns the raw Vulkan acceleration structure handle.
+    ///
+    /// This allows recording acceleration structure commands that `wgpu-hal` doesn't
+    /// support. If those commands come from a device extension, enable it with
+    /// [`Adapter::open_with_callback`].
+    ///
+    /// For a device address, use
+    /// [`crate::Device::get_acceleration_structure_device_address`] instead.
+    ///
+    /// `wgpu` doesn't observe an external build, and rejects an acceleration structure
+    /// that it never built. Call `wgpu::CommandEncoder::mark_acceleration_structures_built`
+    /// on the encoder that recorded the build.
+    ///
+    /// # Safety
+    ///
+    /// - The acceleration structure handle must not be manually destroyed, or used after
+    ///   the acceleration structure is dropped
+    /// - External work using the handle must be synchronized against `wgpu`'s own reads
+    ///   and writes, such as compaction
+    /// - An external build must not write more data than the size the acceleration
+    ///   structure was created with
+    pub unsafe fn raw_handle(&self) -> vk::AccelerationStructureKHR {
+        self.raw
+    }
+}
 
 #[derive(Debug)]
 pub enum TextureMemory {

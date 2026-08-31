@@ -202,7 +202,7 @@ pub trait DeviceInterface: CommonTraits {
     fn create_render_bundle_encoder(
         &self,
         desc: &crate::RenderBundleEncoderDescriptor<'_>,
-    ) -> Result<DispatchRenderBundleEncoder, crate::CreateRenderBundleEncoderError>;
+    ) -> DispatchRenderBundleEncoder;
 
     fn set_device_lost_callback(&self, device_lost_callback: BoxDeviceLostCallback);
 
