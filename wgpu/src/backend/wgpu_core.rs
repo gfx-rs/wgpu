@@ -1824,6 +1824,10 @@ impl dispatch::TextureInterface for CoreTexture {
     fn usage(&self) -> wgt::TextureUsages {
         self.wgpu_texture.descriptor().usage
     }
+
+    unsafe fn mark_externally_initialized(&self) {
+        unsafe { self.wgpu_texture.mark_externally_initialized() }
+    }
 }
 
 impl dispatch::BlasInterface for CoreBlas {

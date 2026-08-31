@@ -2829,7 +2829,15 @@ async fn test_copy_texture_to_buffer_padding_init(
 #[apply(gpu_test!)]
 static MARK_EXTERNALLY_INITIALIZED_SKIPS_LAZY_CLEAR: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default().limits(Limits::downlevel_defaults()))
+        .parameters(
+            TestParameters::default()
+                .limits(Limits::downlevel_defaults())
+                // This test pokes at raw hal texture state, which is only
+                // exercised below for the desktop-native backends.
+                .skip(FailureCase::backend(
+                    Backends::all() - (Backends::VULKAN | Backends::METAL | Backends::DX12),
+                )),
+        )
         .run_async(|ctx| async move {
             match ctx.adapter_info.backend {
                 #[cfg(any(
@@ -2849,11 +2857,10 @@ static MARK_EXTERNALLY_INITIALIZED_SKIPS_LAZY_CLEAR: GpuTestConfiguration =
                 Backend::Dx12 => {
                     check_mark_externally_initialized::<hal::dx12::Api>(&ctx).await;
                 }
-                other => {
-                    // This test pokes at raw hal texture state, which is only
-                    // exercised above for the desktop-native backends.
-                    log::info!("Skipping mark_externally_initialized test on {other:?}");
-                }
+                other => unreachable!(
+                    "test is configured to skip all backends except Vulkan/Metal/Dx12, \
+                     but ran on {other:?}"
+                ),
             }
         });
 
