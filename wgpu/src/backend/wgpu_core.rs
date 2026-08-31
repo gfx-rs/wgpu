@@ -442,6 +442,18 @@ pub struct CorePipelineLayout {
     pub(crate) wgpu_pipeline_layout: Arc<wgc::binding_model::PipelineLayout>,
 }
 
+impl CorePipelineLayout {
+    pub(crate) fn from_core(core_pipeline_layout: Arc<wgc::binding_model::PipelineLayout>) -> Self {
+        Self {
+            wgpu_pipeline_layout: core_pipeline_layout,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::binding_model::PipelineLayout> {
+        self.wgpu_pipeline_layout.clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CorePipelineCache {
     pub(crate) wgpu_pipeline_cache: Arc<wgc::pipeline::PipelineCache>,
