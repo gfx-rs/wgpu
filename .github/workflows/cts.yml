@@ -145,19 +145,19 @@ jobs:
 
       - name: (Windows) Install DXC
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-dxc
+        uses: $/.github/actions/install-dxc
 
       # Note: `target-dir` is intentionally different from other jobs.
       # See note above about `llvm-cov show-env`.
       - name: (Windows) Install WARP
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-warp
+        uses: $/.github/actions/install-warp
         with:
           target-dir: "target/debug"
 
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
-        uses: ./.github/actions/install-mesa
+        uses: $/.github/actions/install-mesa
         with:
           target-dir: "target/debug"
 
