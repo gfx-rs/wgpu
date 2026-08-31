@@ -211,7 +211,7 @@ strum = { version = "0.28", default-features = false, features = ["derive"] }
 tempfile = "3"
 toml = "1.0.0"
 trybuild = "1"
-tracy-client = "0.18"
+tracy-client = "0.19"
 thiserror = { version = "2.0.12", default-features = false }
 ureq = { version = "3.2.0", default-features = false }
 unicode-ident = "1.0.5"
