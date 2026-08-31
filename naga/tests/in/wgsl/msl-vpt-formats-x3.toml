@@ -51,7 +51,8 @@ attributes = [
     { offset = 656, shader_location = 41, format = "float16" },
     { offset = 672, shader_location = 42, format = "float16x2" },
     { offset = 688, shader_location = 43, format = "float16x4" },
+    { offset = 704, shader_location = 44, format = "snorm10-10-10-2" },
 ]
 id = 1
 step_mode = "ByVertex"
-stride = 704
+stride = 720

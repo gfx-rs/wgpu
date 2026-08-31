@@ -588,6 +588,10 @@ fn map_vertex_format(format: wgt::VertexFormat) -> webgpu_sys::GpuVertexFormat {
         VertexFormat::Sint32x4 => vf::Sint32x4,
         VertexFormat::Unorm10_10_10_2 => vf::Unorm1010102,
         VertexFormat::Unorm8x4Bgra => vf::Unorm8x4Bgra,
+        VertexFormat::Snorm10_10_10_2 => {
+            // https://github.com/gfx-rs/wgpu/issues/10216
+            panic!("snorm10-10-10-2 is not yet available on the WebGPU backend")
+        }
         VertexFormat::Float64
         | VertexFormat::Float64x2
         | VertexFormat::Float64x3

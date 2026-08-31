@@ -241,6 +241,7 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> MTLVertexFormat {
         Vf::Sint32x4 => MTL::Int4,
         Vf::Float32x4 => MTL::Float4,
         Vf::Unorm10_10_10_2 => MTL::UInt1010102Normalized,
+        Vf::Snorm10_10_10_2 => MTL::Int1010102Normalized,
         Vf::Unorm8x4Bgra => MTL::UChar4Normalized_BGRA,
         Vf::Float64 | Vf::Float64x2 | Vf::Float64x3 | Vf::Float64x4 => unimplemented!(),
     }

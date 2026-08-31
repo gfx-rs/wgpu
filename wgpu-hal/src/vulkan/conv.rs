@@ -473,6 +473,9 @@ pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> vk::Format {
         Vf::Float64x3 => vk::Format::R64G64B64_SFLOAT,
         Vf::Float64x4 => vk::Format::R64G64B64A64_SFLOAT,
         Vf::Unorm10_10_10_2 => vk::Format::A2B10G10R10_UNORM_PACK32,
+        // Note that, unlike the unorm variant, this format has no mandatory format
+        // features in Vulkan, so vertex buffer support is not guaranteed.
+        Vf::Snorm10_10_10_2 => vk::Format::A2B10G10R10_SNORM_PACK32,
         Vf::Unorm8x4Bgra => vk::Format::B8G8R8A8_UNORM,
     }
 }
