@@ -2164,16 +2164,14 @@ impl Texture {
         Ok(view)
     }
 
-    pub fn create_view(
-        self: &Arc<Self>,
-        desc: &TextureViewDescriptor,
-    ) -> (Arc<TextureView>, Option<CreateTextureViewError>) {
+    pub fn create_view(self: &Arc<Self>, desc: &TextureViewDescriptor) -> Arc<TextureView> {
         profiling::scope!("Texture::create_view");
 
-        let (view, error) = match self.create_view_inner(desc) {
-            Ok(view) => (view, None),
-            Err(e) => (TextureView::invalid(&self.device, self, desc), Some(e)),
-        };
+        let view = self.create_view_inner(desc).unwrap_or_else(|err| {
+            self.device
+                .handle_error(err, desc.label.as_deref(), "Texture::create_view failed");
+            TextureView::invalid(&self.device, self, desc)
+        });
 
         api_log!(
             "Texture::create_view({:?}) -> {:?}",
@@ -2192,7 +2190,7 @@ impl Texture {
             });
         }
 
-        (view, error)
+        view
     }
 
     pub fn descriptor(&self) -> &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>> {

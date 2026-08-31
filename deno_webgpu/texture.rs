@@ -8,6 +8,7 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
+use wgpu_core::resource::ParentDevice;
 use wgpu_types::AstcBlock;
 use wgpu_types::AstcChannel;
 use wgpu_types::Extent3d;
@@ -16,6 +17,7 @@ use wgpu_types::TextureDimension;
 use wgpu_types::TextureFormat;
 use wgpu_types::TextureViewDimension;
 
+use crate::error::fmt_err;
 use crate::error::GPUGenericError;
 use crate::webidl::GPUTextureUsageFlags;
 
@@ -41,8 +43,6 @@ pub(crate) struct GPUTextureDescriptor {
 }
 
 pub struct GPUTexture {
-  pub error_handler: super::error::ErrorHandler,
-
   pub wgpu_texture: Arc<wgpu_core::resource::Texture>,
   pub default_view: OnceLock<Arc<wgpu_core::resource::TextureView>>,
 
@@ -60,23 +60,7 @@ impl GPUTexture {
   pub(crate) fn default_view(&self) -> Arc<wgpu_core::resource::TextureView> {
     self
       .default_view
-      .get_or_init(|| {
-        let (wgpu_texture_view, err) =
-          self.wgpu_texture.create_view(&Default::default());
-        if let Some(err) = err {
-          use wgpu_types::error::WebGpuError;
-          assert_ne!(
-            err.webgpu_error_type(),
-            wgpu_types::error::ErrorType::Validation,
-            concat!(
-              "getting default view for a texture ",
-              "caused a validation error (!?)"
-            )
-          );
-          self.error_handler.push_error(Some(err));
-        }
-        wgpu_texture_view
-      })
+      .get_or_init(|| self.wgpu_texture.create_view(&Default::default()))
       .clone()
   }
 }
@@ -170,10 +154,18 @@ impl GPUTexture {
       swizzle: crate::map_texture_component_swizzle(&descriptor.swizzle)?,
     };
 
-    let (wgpu_texture_view, err) =
-      self.wgpu_texture.create_view(&wgpu_descriptor);
+    if let Some(format) = wgpu_descriptor.format {
+      self
+        .wgpu_texture
+        .device()
+        .require_features(format.required_features())
+        .map_err(|err| {
+          let err = fmt_err(&err);
+          JsErrorBox::type_error(err)
+        })?;
+    }
 
-    self.error_handler.push_error(err);
+    let wgpu_texture_view = self.wgpu_texture.create_view(&wgpu_descriptor);
 
     Ok(GPUTextureView {
       wgpu_texture_view,
