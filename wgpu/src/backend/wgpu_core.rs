@@ -338,6 +338,20 @@ pub struct CoreBindGroupLayout {
     pub(crate) wgpu_bind_group_layout: Arc<wgc::binding_model::BindGroupLayout>,
 }
 
+impl CoreBindGroupLayout {
+    pub(crate) fn from_core(
+        core_bind_group_layout: Arc<wgc::binding_model::BindGroupLayout>,
+    ) -> Self {
+        Self {
+            wgpu_bind_group_layout: core_bind_group_layout,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::binding_model::BindGroupLayout> {
+        self.wgpu_bind_group_layout.clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CoreBindGroup {
     pub(crate) wgpu_bind_group: Arc<wgc::binding_model::BindGroup>,
