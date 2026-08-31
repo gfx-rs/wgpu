@@ -298,6 +298,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Fixed some cases where `Adapter::get_texture_format_features` and `TextureFormat::guaranteed_format_features` did not match the validation applied by `create_texture`. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 - `STORAGE_BINDING` usage is no longer allowed for multi-planar textures. It was previously accepted, but was untested, and likely broken. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
 - Make `wgpu-core` build with `--no-default-features` by fixing the logic in `wgpu_core::lock`. By @jimblandy in [#10972](https://github.com/gfx-rs/wgpu/pull/10972).
+- Fix the start state of a texture subresource that a pass uses for the first time in a command buffer that already uses other subresources of the same texture. If the pass used the subresource in two ways, the subresource began the submission in the wrong state. By @cwfitzgerald in [#10212](https://github.com/gfx-rs/wgpu/pull/10212).
 
 #### naga
 
