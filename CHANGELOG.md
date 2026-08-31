@@ -82,17 +82,6 @@ By @beicause in [#9553](https://github.com/gfx-rs/wgpu/pull/9553).
 
 By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
-#### `Device::create_render_bundle_encoder` now returns error
-
-Error is raised if for provided texture formats required features are not enabled on the device as per spec.
-
-```diff
-- device.create_render_bundle_encoder(&RenderBundleEncoderDescriptor::default())
-+ device.create_render_bundle_encoder(&RenderBundleEncoderDescriptor::default()).unwrap()
-```
-
-By @sagudev in [#10115](https://github.com/gfx-rs/wgpu/pull/10115).
-
 ### Added/New Features
 
 #### General

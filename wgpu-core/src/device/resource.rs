@@ -423,7 +423,8 @@ impl Device {
     pub(crate) fn raw(&self) -> &dyn hal::DynDevice {
         self.raw.as_ref()
     }
-    pub(crate) fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
+
+    pub fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
         if self.features.contains(feature) {
             Ok(())
         } else {
@@ -2864,22 +2865,19 @@ impl Device {
     pub fn create_render_bundle_encoder(
         self: &Arc<Self>,
         desc: &command::RenderBundleEncoderDescriptor,
-    ) -> Result<Box<command::RenderBundleEncoder>, MissingFeatures> {
+    ) -> Box<command::RenderBundleEncoder> {
         profiling::scope!("Device::create_render_bundle_encoder");
         api_log!("Device::create_render_bundle_encoder");
-        command::RenderBundleEncoder::new(self, desc)
-            .or_else(|err| match err {
-                command::CreateRenderBundleError::MissingFeatures(missing) => Err(missing),
-                err => {
-                    self.handle_error(
-                        err,
-                        desc.label.as_ref().map(|l| l.as_ref()),
-                        "Device::create_render_bundle_encoder",
-                    );
-                    Ok(command::RenderBundleEncoder::dummy(self))
-                }
-            })
-            .map(Box::new)
+        Box::new(
+            command::RenderBundleEncoder::new(self, desc).unwrap_or_else(|err| {
+                self.handle_error(
+                    err,
+                    desc.label.as_deref(),
+                    "Device::create_render_bundle_encoder",
+                );
+                command::RenderBundleEncoder::dummy(self)
+            }),
+        )
     }
 
     /// Generate information about late-validated buffer bindings for pipelines.

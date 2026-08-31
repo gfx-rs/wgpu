@@ -1511,7 +1511,7 @@ impl dispatch::DeviceInterface for CoreDevice {
     fn create_render_bundle_encoder(
         &self,
         desc: &crate::RenderBundleEncoderDescriptor<'_>,
-    ) -> Result<dispatch::DispatchRenderBundleEncoder, crate::CreateRenderBundleEncoderError> {
+    ) -> dispatch::DispatchRenderBundleEncoder {
         let descriptor = wgc::command::RenderBundleEncoderDescriptor {
             label: desc.label.map(Borrowed),
             color_formats: Borrowed(desc.color_formats),
@@ -1519,12 +1519,9 @@ impl dispatch::DeviceInterface for CoreDevice {
             sample_count: desc.sample_count,
             multiview: desc.multiview,
         };
-        let encoder = self
-            .wgpu_device
-            .create_render_bundle_encoder(&descriptor)
-            .map_err(|e| crate::CreateRenderBundleEncoderError::new(e.to_string()))?;
+        let encoder = self.wgpu_device.create_render_bundle_encoder(&descriptor);
 
-        Ok(CoreRenderBundleEncoder { encoder }.into())
+        CoreRenderBundleEncoder { encoder }.into()
     }
 
     fn set_device_lost_callback(&self, device_lost_callback: dispatch::BoxDeviceLostCallback) {

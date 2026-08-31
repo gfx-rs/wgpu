@@ -1,29 +1,7 @@
-use alloc::string::String;
-use core::error::Error;
-use core::fmt::Display;
 use core::{marker::PhantomData, num::NonZeroU32, ops::Range};
 
 use crate::dispatch::RenderBundleEncoderInterface;
 use crate::*;
-
-/// Error type for [`Device::create_render_bundle_encoder`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CreateRenderBundleEncoderError(String);
-
-impl CreateRenderBundleEncoderError {
-    /// Creates a new `CreateRenderBundleEncoderError` with the given message.
-    pub fn new(msg: String) -> Self {
-        Self(msg)
-    }
-}
-
-impl Display for CreateRenderBundleEncoderError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
-        write!(f, "Error while creating render bundle encoder: {}", self.0)
-    }
-}
-
-impl Error for CreateRenderBundleEncoderError {}
 
 /// Encodes a series of GPU operations into a reusable "render bundle".
 ///
