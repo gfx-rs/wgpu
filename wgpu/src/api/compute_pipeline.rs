@@ -35,6 +35,28 @@ impl ComputePipeline {
     }
 }
 
+#[cfg(wgpu_core)]
+impl ComputePipeline {
+    /// Create a new compute pipeline of wgpu from a wgpu-core compute pipeline.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_compute_pipeline` - wgpu-core compute pipeline.
+    pub fn from_core(
+        core_compute_pipeline: alloc::sync::Arc<wgc::pipeline::ComputePipeline>,
+    ) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreComputePipeline::from_core(core_compute_pipeline)
+                .into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core compute pipeline if this `ComputePipeline` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::pipeline::ComputePipeline>> {
+        self.inner.as_core_opt().map(|cp| cp.as_core())
+    }
+}
+
 /// Describes a compute pipeline.
 ///
 /// For use with [`Device::create_compute_pipeline`].
