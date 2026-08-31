@@ -186,7 +186,7 @@ impl Player {
                 unimplemented!()
             }
             Action::CreateBindGroupLayout(id, desc) => {
-                let (bind_group_layout, _error) = device.create_bind_group_layout(&desc);
+                let bind_group_layout = device.create_bind_group_layout(&desc);
                 self.bind_group_layouts.insert(id, bind_group_layout);
             }
             Action::GetRenderPipelineBindGroupLayout {

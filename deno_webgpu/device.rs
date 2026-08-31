@@ -332,9 +332,11 @@ impl GPUDevice {
           multisampled: texture.multisampled,
         }
       } else if let Some(storage_texture) = entry.storage_texture {
+        let format = storage_texture.format.into();
+        self.validate_texture_format_required_feature(format)?;
         BindingType::StorageTexture {
           access: storage_texture.access.into(),
-          format: storage_texture.format.into(),
+          format,
           view_dimension: storage_texture.view_dimension.into(),
         }
       } else if entry.external_texture.is_some() {
@@ -356,10 +358,8 @@ impl GPUDevice {
       entries: Cow::Owned(entries),
     };
 
-    let (wgpu_bind_group_layout, err) =
+    let wgpu_bind_group_layout =
       self.wgpu_device.create_bind_group_layout(&wgpu_descriptor);
-
-    self.error_handler.push_error(err);
 
     Ok(GPUBindGroupLayout {
       wgpu_bind_group_layout,
