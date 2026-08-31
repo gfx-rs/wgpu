@@ -7,7 +7,7 @@ use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
-    vec.extend([VERTEX_FORMATS_ALL, VERTEX_FORMATS_10_10_10_2]);
+    vec.extend([VERTEX_FORMATS_ALL, VERTEX_FORMATS_SNORM10_10_10_2]);
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -18,6 +18,7 @@ enum TestCase {
     SintsBig,
     Floats,
     Unorm1010102,
+    Snorm1010102,
     SingleSmallNormsAndInts,
     Unorm8x4Bgra,
 }
@@ -75,6 +76,10 @@ async fn vertex_formats_all(ctx: TestingContext) {
         4 => Float16x2,
         5 => Float16x4,
         6 => Float16,
+    ];
+
+    let attributes_block_5 = &wgpu::vertex_attr_array![
+        0 => Unorm10_10_10_2,
     ];
 
     let attributes_block_6 = &wgpu::vertex_attr_array![
@@ -175,6 +180,21 @@ async fn vertex_formats_all(ctx: TestingContext) {
             checksums: &[0.0, 0.0, 0.0, 0.0, 2.5, 16.0],
         },
         Test {
+            case: TestCase::Unorm1010102,
+            entry_point: "vertex_block_5",
+            attributes: attributes_block_5,
+            input: &[
+                // We are aiming for rgba of (0.5, 0.5, 0.5, 0.66)
+                // Packing   AA BB BBBB BBBB GGGG GGGG GG RR RRRR RRRR
+                // Binary    10 10 0000 0000 1000 0000 00 10 0000 0000
+                // Hex               A0        08         02        00
+                // Decimal          160         8          2         0
+                // unorm   0.66          0.5          0.5          0.5 = 2.16
+                0u8, 2u8, 8u8, 160u8, // Unorm10_10_10_2
+            ],
+            checksums: &[0.0, 0.0, 2.16, 0.0, 0.0, 0.0],
+        },
+        Test {
             case: TestCase::SingleSmallNormsAndInts,
             entry_point: "vertex_block_6",
             attributes: attributes_block_6,
@@ -204,25 +224,25 @@ async fn vertex_formats_all(ctx: TestingContext) {
     vertex_formats_common(ctx, &tests).await;
 }
 
-async fn vertex_formats_10_10_10_2(ctx: TestingContext) {
-    let attributes_block_5 = &wgpu::vertex_attr_array![
-        0 => Unorm10_10_10_2,
+async fn vertex_formats_snorm10_10_10_2(ctx: TestingContext) {
+    let attributes_block_8 = &wgpu::vertex_attr_array![
+        0 => Snorm10_10_10_2,
     ];
 
     let tests = vec![Test {
-        case: TestCase::Unorm1010102,
-        entry_point: "vertex_block_5",
-        attributes: attributes_block_5,
+        case: TestCase::Snorm1010102,
+        entry_point: "vertex_block_8",
+        attributes: attributes_block_8,
         input: &[
-            // We are aiming for rgba of (0.5, 0.5, 0.5, 0.66)
-            // Packing   AA BB BBBB BBBB GGGG GGGG GG RR RRRR RRRR
-            // Binary    10 10 0000 0000 1000 0000 00 10 0000 0000
-            // Hex               A0        08         02        00
-            // Decimal          160         8          2         0
-            // unorm   0.66          0.5          0.5          0.5 = 2.16
-            0u8, 2u8, 8u8, 160u8, // Unorm10_10_10_2
+            // Signed components (r, g, b, a) of (243, -123, 342, -2), packed as
+            // AA BBBBBBBBBB GGGGGGGGGG RRRRRRRRRR = 0x956e14f3.
+            //
+            // Each 10-bit component divided by 511 gives (0.4755, -0.2407, 0.6693).
+            // The 2-bit alpha divided by 1 gives -2.0, which is clamped to -1.0, so
+            // the sum is -0.0959 rather than -1.0959.
+            243u8, 20u8, 110u8, 149u8, // Snorm10_10_10_2
         ],
-        checksums: &[0.0, 0.0, 2.16, 0.0, 0.0, 0.0],
+        checksums: &[0.0, 0.0, 0.0, -0.0959, 0.0, 0.0],
     }];
 
     vertex_formats_common(ctx, &tests).await;
@@ -427,10 +447,8 @@ static VERTEX_FORMATS_ALL: GpuTestConfiguration = GpuTestConfiguration::new()
     )
     .run_async(vertex_formats_all);
 
-// Some backends can handle Unorm-10-10-2, but GL backends seem to throw this error:
-// Validation Error: GL_INVALID_ENUM in glVertexAttribFormat(type = GL_UNSIGNED_INT_10_10_10_2)
 #[apply(gpu_test!)]
-static VERTEX_FORMATS_10_10_10_2: GpuTestConfiguration = GpuTestConfiguration::new()
+static VERTEX_FORMATS_SNORM10_10_10_2: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
@@ -439,6 +457,13 @@ static VERTEX_FORMATS_10_10_10_2: GpuTestConfiguration = GpuTestConfiguration::n
             .expect_fail(
                 wgpu_test::FailureCase::molten_vk()
                     .validation_error("vertexAttributeAccessBeyondStride"),
-            ),
+            )
+            // https://github.com/gfx-rs/wgpu/issues/10216
+            .expect_fail(wgpu_test::FailureCase {
+                backends: Some(wgpu::Backends::DX12),
+                reasons: vec![wgpu_test::FailureReason::panic()
+                    .with_message("HLSL: snorm-10-10-10-2 vertex format is not supported")],
+                ..Default::default()
+            }),
     )
-    .run_async(vertex_formats_10_10_10_2);
+    .run_async(vertex_formats_snorm10_10_10_2);
