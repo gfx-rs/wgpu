@@ -64,7 +64,7 @@ impl Global {
         device_id: DeviceId,
         desc: &BufferDescriptor,
         id_in: id::BufferId,
-    ) -> (id::BufferId, Option<CreateBufferError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             buffers, devices, ..
@@ -72,11 +72,9 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (buffer, error) = device.create_buffer(desc);
+        let buffer = device.create_buffer(desc);
 
-        let id = buffers.assign(id_in, buffer);
-
-        (id, error)
+        buffers.assign(id_in, buffer);
     }
 
     /// Assign `id_in` an error with the given `label`.

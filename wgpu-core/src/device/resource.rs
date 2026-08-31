@@ -1429,16 +1429,13 @@ impl Device {
         Ok(buffer)
     }
 
-    pub fn create_buffer(
-        self: &Arc<Self>,
-        desc: &resource::BufferDescriptor,
-    ) -> (Arc<Buffer>, Option<resource::CreateBufferError>) {
+    pub fn create_buffer(self: &Arc<Self>, desc: &resource::BufferDescriptor) -> Arc<Buffer> {
         profiling::scope!("Device::create_buffer");
 
-        let (buffer, error) = match self.create_buffer_inner(desc) {
-            Ok(buffer) => (buffer, None),
-            Err(e) => (Buffer::invalid(Arc::clone(self), desc), Some(e)),
-        };
+        let buffer = self.create_buffer_inner(desc).unwrap_or_else(|err| {
+            self.handle_error(err, desc.label.as_deref(), "Device::create_buffer");
+            Buffer::invalid(Arc::clone(self), desc)
+        });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use trace::IntoTrace;
@@ -1459,7 +1456,7 @@ impl Device {
             },
             Arc::as_ptr(&buffer)
         );
-        (buffer, error)
+        buffer
     }
 
     #[cfg(feature = "replay")]

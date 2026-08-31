@@ -1320,13 +1320,9 @@ impl dispatch::DeviceInterface for CoreDevice {
     }
 
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> dispatch::DispatchBuffer {
-        let (wgpu_buffer, error) = self
+        let wgpu_buffer = self
             .wgpu_device
             .create_buffer(&desc.map_label(|l| l.map(Borrowed)));
-        if let Some(cause) = error {
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_buffer");
-        }
 
         CoreBuffer { wgpu_buffer }.into()
     }
