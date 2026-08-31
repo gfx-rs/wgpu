@@ -498,6 +498,8 @@ pub(crate) enum GPUVertexFormat {
   Unorm1010102,
   #[webidl(rename = "unorm8x4-bgra")]
   Unorm8x4Bgra,
+  #[webidl(rename = "snorm10-10-10-2")]
+  Snorm1010102,
 }
 
 impl From<GPUVertexFormat> for wgpu_types::VertexFormat {
@@ -544,6 +546,7 @@ impl From<GPUVertexFormat> for wgpu_types::VertexFormat {
       GPUVertexFormat::Sint32x4 => Self::Sint32x4,
       GPUVertexFormat::Unorm1010102 => Self::Unorm10_10_10_2,
       GPUVertexFormat::Unorm8x4Bgra => Self::Unorm8x4Bgra,
+      GPUVertexFormat::Snorm1010102 => Self::Snorm10_10_10_2,
     }
   }
 }

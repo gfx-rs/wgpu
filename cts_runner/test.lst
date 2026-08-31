@@ -63,9 +63,9 @@ webgpu:api,operation,texture_view,texture_component_swizzle:*
 webgpu:api,operation,uncapturederror:iff_uncaptured:*
 //FAIL: webgpu:api,operation,uncapturederror:onuncapturederror_order_wrt_addEventListener
 // There are also two unimplemented SKIPs in uncapturederror not enumerated here.
-fails-if(vulkan) webgpu:api,operation,vertex_state,correctness:array_stride_zero:*
-webgpu:api,operation,vertex_state,correctness:non_zero_array_stride_and_attribute_offset:*
-webgpu:api,operation,vertex_state,correctness:setVertexBuffer_offset_and_attribute_offset:*
+fails-if(vulkan,dx12) webgpu:api,operation,vertex_state,correctness:array_stride_zero:*
+fails-if(dx12) webgpu:api,operation,vertex_state,correctness:non_zero_array_stride_and_attribute_offset:*
+fails-if(dx12) webgpu:api,operation,vertex_state,correctness:setVertexBuffer_offset_and_attribute_offset:*
 
 webgpu:api,validation,buffer,create:createBuffer_invalid_and_oom,*
 webgpu:api,validation,buffer,create:limit,*
@@ -297,7 +297,7 @@ webgpu:api,validation,render_pipeline,vertex_state:many_attributes_overlapping:*
 webgpu:api,validation,render_pipeline,vertex_state:max_vertex_attribute_limit:*
 webgpu:api,validation,render_pipeline,vertex_state:max_vertex_buffer_array_stride_limit:*
 webgpu:api,validation,render_pipeline,vertex_state:max_vertex_buffer_limit:*
-fails-if(metal) webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_contained_in_stride:*
+fails-if(dx12,metal) webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_contained_in_stride:*
 fails-if(metal) webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_offset_alignment:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_shaderLocation_limit:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_shaderLocation_unique:*
