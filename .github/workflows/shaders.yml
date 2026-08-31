@@ -55,7 +55,7 @@ jobs:
         shell: powershell
 
       - name: Setup DXC
-        uses: ./.github/actions/install-dxc
+        uses: $/.github/actions/install-dxc
 
       - name: Validate
         shell: bash
@@ -111,7 +111,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Vulkan SDK
-        uses: ./.github/actions/install-vulkan-sdk
+        uses: $/.github/actions/install-vulkan-sdk
 
       - name: Install Graphviz
         run: sudo apt-get install graphviz
