@@ -83,6 +83,10 @@ impl ContextWgpuCore {
     ) -> Arc<wgc::instance::Adapter> {
         unsafe { self.0.create_adapter_from_hal(hal_adapter.into()) }
     }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::instance::Instance> {
+        self.0.clone()
+    }
 }
 
 fn map_buffer_copy_view(
