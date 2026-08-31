@@ -279,6 +279,16 @@ impl CoreDevice {
         use wgc::resource::ParentDevice as _;
         texture.wgpu_texture.same_device(&self.wgpu_device).is_ok()
     }
+
+    pub(crate) fn from_core(core_device: Arc<wgc::device::Device>) -> Self {
+        Self {
+            wgpu_device: core_device,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::device::Device> {
+        self.wgpu_device.clone()
+    }
 }
 
 #[derive(Debug, Clone)]

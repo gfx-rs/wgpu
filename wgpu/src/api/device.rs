@@ -924,6 +924,25 @@ impl Device {
     }
 }
 
+#[cfg(wgpu_core)]
+impl Device {
+    /// Create a new device of wgpu from a wgpu-core device.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_device` - wgpu-core device.
+    pub fn from_core(core_device: alloc::sync::Arc<wgc::device::Device>) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreDevice::from_core(core_device).into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core device if this `Device` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::device::Device>> {
+        self.inner.as_core_opt().map(|cd| cd.as_core())
+    }
+}
+
 /// The operation requires the GLES backend on WebGL, but this [`Device`] is
 /// using a different backend.
 ///
