@@ -396,3 +396,22 @@ impl Queue {
         }
     }
 }
+
+#[cfg(wgpu_core)]
+impl Queue {
+    /// Create a new queue of wgpu from a wgpu-core queue.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_queue` - wgpu-core queue.
+    pub fn from_core(core_queue: alloc::sync::Arc<wgc::device::queue::Queue>) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreQueue::from_core(core_queue).into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core queue if this `Queue` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::device::queue::Queue>> {
+        self.inner.as_core_opt().map(|cq| cq.as_core())
+    }
+}
