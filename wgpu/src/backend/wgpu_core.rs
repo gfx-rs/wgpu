@@ -432,6 +432,18 @@ pub struct CoreSampler {
     pub(crate) wgpu_sampler: Arc<wgc::resource::Sampler>,
 }
 
+impl CoreSampler {
+    pub(crate) fn from_core(core_sampler: Arc<wgc::resource::Sampler>) -> Self {
+        Self {
+            wgpu_sampler: core_sampler,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::resource::Sampler> {
+        self.wgpu_sampler.clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CoreQuerySet {
     pub(crate) wgpu_query_set: Arc<wgc::resource::QuerySet>,
