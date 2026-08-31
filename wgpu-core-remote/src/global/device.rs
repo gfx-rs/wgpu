@@ -777,7 +777,7 @@ impl Global {
         device_id: DeviceId,
         desc: &QuerySetDescriptor,
         id_in: id::QuerySetId,
-    ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             query_sets,
@@ -787,11 +787,9 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (query_set, error) = device.create_query_set(desc);
+        let query_set = device.create_query_set(desc);
 
-        let id = query_sets.assign(id_in, query_set);
-
-        (id, error)
+        query_sets.assign(id_in, query_set);
     }
 
     pub fn query_set_destroy(&self, query_set_id: id::QuerySetId) {

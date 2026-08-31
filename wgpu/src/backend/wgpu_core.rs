@@ -1401,13 +1401,9 @@ impl dispatch::DeviceInterface for CoreDevice {
     }
 
     fn create_query_set(&self, desc: &crate::QuerySetDescriptor<'_>) -> dispatch::DispatchQuerySet {
-        let (wgpu_query_set, error) = self
+        let wgpu_query_set = self
             .wgpu_device
             .create_query_set(&desc.map_label(|l| l.map(Borrowed)));
-        if let Some(cause) = error {
-            self.wgpu_device
-                .handle_error_nolabel(cause, "Device::create_query_set");
-        }
         CoreQuerySet { wgpu_query_set }.into()
     }
 

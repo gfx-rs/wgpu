@@ -73,6 +73,7 @@ webgpu:api,validation,buffer,create:size,*
 webgpu:api,validation,buffer,create:usage,*
 webgpu:api,validation,buffer,destroy:*
 webgpu:api,validation,capability_checks,features,clip_distances:*
+webgpu:api,validation,capability_checks,features,query_types:createQuerySet:*
 webgpu:api,validation,capability_checks,features,texture_component_swizzle:*
 webgpu:api,validation,capability_checks,features,texture_formats:render_bundle_encoder_descriptor_depth_stencil_format:*
 webgpu:api,validation,capability_checks,features,texture_formats:texture_descriptor_view_formats:*

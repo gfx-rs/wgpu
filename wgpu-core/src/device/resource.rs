@@ -5619,12 +5619,12 @@ impl Device {
     pub fn create_query_set(
         self: &Arc<Self>,
         desc: &resource::QuerySetDescriptor,
-    ) -> (Arc<QuerySet>, Option<resource::CreateQuerySetError>) {
+    ) -> Arc<QuerySet> {
         profiling::scope!("Device::create_query_set");
-        let (query_set, error) = match self.create_query_set_inner(desc) {
-            Ok(query_set) => (query_set, None),
-            Err(e) => (QuerySet::invalid(Arc::clone(self), desc), Some(e)),
-        };
+        let query_set = self.create_query_set_inner(desc).unwrap_or_else(|err| {
+            self.handle_error(err, desc.label.as_deref(), "Device::create_query_set");
+            QuerySet::invalid(Arc::clone(self), desc)
+        });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use trace::IntoTrace;
@@ -5634,7 +5634,7 @@ impl Device {
             });
         }
         api_log!("Device::create_query_set -> {:?}", Arc::as_ptr(&query_set));
-        (query_set, error)
+        query_set
     }
 
     pub(crate) fn create_query_set_inner(
