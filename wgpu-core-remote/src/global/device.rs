@@ -11,7 +11,7 @@ use wgpu_core_remote_types::{
 use wgpu_core::{
     binding_model::{self},
     command,
-    device::{DeviceLostClosure, MissingFeatures, WaitIdleError},
+    device::{DeviceLostClosure, WaitIdleError},
     error::EmptyErrorScopeStack,
     pipeline::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
@@ -64,7 +64,7 @@ impl Global {
         device_id: DeviceId,
         desc: &BufferDescriptor,
         id_in: id::BufferId,
-    ) -> (id::BufferId, Option<CreateBufferError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             buffers, devices, ..
@@ -72,11 +72,9 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (buffer, error) = device.create_buffer(desc);
+        let buffer = device.create_buffer(desc);
 
-        let id = buffers.assign(id_in, buffer);
-
-        (id, error)
+        buffers.assign(id_in, buffer);
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -223,7 +221,7 @@ impl Global {
         device_id: DeviceId,
         desc: &TextureDescriptor,
         id_in: id::TextureId,
-    ) -> (id::TextureId, Option<resource::CreateTextureError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
 
         let Hub {
@@ -232,11 +230,9 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (texture, error) = device.create_texture(desc);
+        let texture = device.create_texture(desc);
 
-        let id = textures.assign(id_in, texture);
-
-        (id, error)
+        textures.assign(id_in, texture);
     }
 
     pub fn device_validate_texture_descriptor(
@@ -322,12 +318,23 @@ impl Global {
         hub.textures.remove(texture_id)
     }
 
+    /// # Safety
+    ///
+    /// The entire contents of the texture must already be initialized.
+    pub unsafe fn texture_mark_externally_initialized(&self, texture_id: id::TextureId) {
+        let hub = &self.hub.borrow();
+
+        let texture = hub.textures.get(texture_id);
+
+        unsafe { texture.mark_externally_initialized() };
+    }
+
     pub fn texture_create_view(
         &self,
         texture_id: id::TextureId,
         desc: &TextureViewDescriptor,
         id_in: id::TextureViewId,
-    ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             textures,
@@ -346,11 +353,9 @@ impl Global {
             swizzle: desc.swizzle,
         };
 
-        let (view, error) = texture.create_view(&desc);
+        let view = texture.create_view(&desc);
 
-        let id = texture_views.assign(id_in, view);
-
-        (id, error)
+        texture_views.assign(id_in, view);
     }
 
     pub fn texture_view_remove(
@@ -448,9 +453,6 @@ impl Global {
         device_id: DeviceId,
         desc: &BindGroupLayoutDescriptor,
         id_in: id::BindGroupLayoutId,
-    ) -> (
-        id::BindGroupLayoutId,
-        Option<binding_model::CreateBindGroupLayoutError>,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -466,11 +468,9 @@ impl Global {
             entries: Cow::Borrowed(&desc.entries),
         };
 
-        let (bgl, error) = device.create_bind_group_layout(&desc);
+        let bgl = device.create_bind_group_layout(&desc);
 
-        let id = bind_group_layouts.assign(id_in, bgl);
-
-        (id, error)
+        bind_group_layouts.assign(id_in, bgl);
     }
 
     pub fn bind_group_layout_remove(
@@ -706,7 +706,7 @@ impl Global {
         device_id: DeviceId,
         desc: &RenderBundleEncoderDescriptor,
         id_in: id::RenderBundleEncoderId,
-    ) -> Result<(), MissingFeatures> {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_bundle_encoders,
@@ -724,11 +724,9 @@ impl Global {
             multiview: None,
         };
 
-        let render_bundle_encoder = device.create_render_bundle_encoder(&desc)?;
+        let render_bundle_encoder = device.create_render_bundle_encoder(&desc);
 
         render_bundle_encoders.assign(id_in, *render_bundle_encoder);
-
-        Ok(())
     }
 
     pub fn render_bundle_encoder_finish(
@@ -774,7 +772,7 @@ impl Global {
         device_id: DeviceId,
         desc: &QuerySetDescriptor,
         id_in: id::QuerySetId,
-    ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             query_sets,
@@ -784,11 +782,9 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (query_set, error) = device.create_query_set(desc);
+        let query_set = device.create_query_set(desc);
 
-        let id = query_sets.assign(id_in, query_set);
-
-        (id, error)
+        query_sets.assign(id_in, query_set);
     }
 
     pub fn query_set_destroy(&self, query_set_id: id::QuerySetId) {

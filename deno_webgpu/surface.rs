@@ -147,7 +147,6 @@ impl GPUCanvasContext {
     match output.status {
       SurfaceStatus::Good | SurfaceStatus::Suboptimal => {
         let texture = GPUTexture {
-          error_handler: config.device.error_handler.clone(),
           wgpu_texture: output.texture.unwrap(),
           default_view: Default::default(),
           label: "".to_string(),
