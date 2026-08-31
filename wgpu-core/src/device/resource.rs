@@ -3402,6 +3402,9 @@ impl Device {
             bb.offset..bb.offset + visible_size
         };
 
+        // Once a buffer is initialized, nothing can cause the contents to revert to an
+        // unknown state, so we do not record an init action in the bind group when that is
+        // the case. (The same is not true of textures.)
         buffer_init_actions.extend(buffer.initialization_status.read().create_action(
             buffer,
             init_range,
@@ -3483,6 +3486,10 @@ impl Device {
 
         let texture = &view.parent;
 
+        // Unlike buffers, textures contents can revert to being undefined if used as a
+        // render attachment with `StoreOp::Discard`. Therefore, we must always register
+        // the init action in the bind group, and check the initialization state every
+        // time the binding is used.
         texture_init_actions.push(TextureInitTrackerAction {
             texture: texture.clone(),
             range: TextureInitRange {
