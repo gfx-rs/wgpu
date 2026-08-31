@@ -223,7 +223,7 @@ impl Global {
         device_id: DeviceId,
         desc: &TextureDescriptor,
         id_in: id::TextureId,
-    ) -> (id::TextureId, Option<resource::CreateTextureError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
 
         let Hub {
@@ -232,11 +232,9 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (texture, error) = device.create_texture(desc);
+        let texture = device.create_texture(desc);
 
-        let id = textures.assign(id_in, texture);
-
-        (id, error)
+        textures.assign(id_in, texture);
     }
 
     pub fn device_validate_texture_descriptor(

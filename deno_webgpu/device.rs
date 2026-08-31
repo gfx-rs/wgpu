@@ -236,12 +236,18 @@ impl GPUDevice {
         .view_formats
         .into_iter()
         .map(Into::into)
-        .collect(),
+        .collect::<Vec<_>>(),
     };
 
-    let (wgpu_texture, err) = self.wgpu_device.create_texture(&wgpu_descriptor);
+    // 2. ? Validate texture format required features of descriptor.format with this.[[device]].
+    self.validate_texture_format_required_feature(wgpu_descriptor.format)?;
 
-    self.error_handler.push_error(err);
+    // 3. Validate texture format required features of each element of descriptor.viewFormats with this.[[device]].
+    for format in &wgpu_descriptor.view_formats {
+      self.validate_texture_format_required_feature(*format)?;
+    }
+
+    let wgpu_texture = self.wgpu_device.create_texture(&wgpu_descriptor);
 
     Ok(GPUTexture {
       error_handler: self.error_handler.clone(),

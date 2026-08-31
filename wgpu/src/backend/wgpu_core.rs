@@ -1392,11 +1392,7 @@ impl dispatch::DeviceInterface for CoreDevice {
 
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> dispatch::DispatchTexture {
         let wgt_desc = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
-        let (wgpu_texture, error) = self.wgpu_device.create_texture(&wgt_desc);
-        if let Some(cause) = error {
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_texture");
-        }
+        let wgpu_texture = self.wgpu_device.create_texture(&wgt_desc);
 
         CoreTexture {
             context: self.context.clone(),
