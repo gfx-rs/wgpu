@@ -809,7 +809,6 @@ impl DeviceTextureTracker {
         unsafe {
             update(
                 &texture.full_range,
-                None,
                 &mut self.current_state_set,
                 index,
                 start_state_provider,
@@ -849,7 +848,6 @@ impl DeviceTextureTracker {
                 );
                 update(
                     texture_selector,
-                    None,
                     &mut self.current_state_set,
                     index,
                     end_state_provider,
@@ -889,7 +887,6 @@ impl DeviceTextureTracker {
                 );
                 update(
                     texture_selector,
-                    None,
                     &mut self.current_state_set,
                     index,
                     start_state_provider,
@@ -1066,6 +1063,8 @@ unsafe fn insert_or_merge(
 /// If the resource is tracked
 /// - Inserts barriers from the state in `current_states`
 ///   to the state provided by `start_state_provider`.
+/// - Uses the `start_state_provider` to populate `start_states`
+///   for the subresources that `current_states` does not know yet.
 /// - Updates the `current_states` with either the state from
 ///   `end_state_provider` or `start_state_provider`.
 ///
@@ -1112,20 +1111,112 @@ unsafe fn insert_or_barrier_update(
             texture_selector,
             current_state_set,
             index,
-            start_state_provider,
+            start_state_provider.clone(),
             barriers,
             ordered_uses_mask,
         )
     };
+    if let Some(start_state) = start_state {
+        unsafe {
+            backfill_start_state(
+                texture_selector,
+                start_state,
+                current_state_set,
+                index,
+                start_state_provider,
+            )
+        };
+    }
     unsafe {
         update(
             texture_selector,
-            start_state,
             current_state_set,
             index,
             update_state_provider,
         )
     };
+}
+
+/// Records the first use of the subresources that the tracker learns about in
+/// this operation.
+///
+/// A subresource is new to the tracker if `current_state_set` holds `UNKNOWN`
+/// for it. The state to record comes from `start_state_provider`, which must be
+/// the first use of the incoming operation, not its last use.
+///
+/// Must run before [`update`], because `current_state_set` must still hold the
+/// state from before the incoming operation.
+///
+/// # Safety
+///
+/// The `index` must be in bounds of every set passed in, either directly or via
+/// the provider struct.
+#[inline(always)]
+unsafe fn backfill_start_state(
+    texture_selector: &TextureSelector,
+    start_state_set: &mut TextureStateSet,
+    current_state_set: &TextureStateSet,
+    index: usize,
+    start_state_provider: TextureStateProvider<'_>,
+) {
+    // Only a complex state can hold UNKNOWN. A simple state means the tracker
+    // already knows a state for every subresource.
+    let SingleOrManyStates::Many(current_complex) =
+        (unsafe { current_state_set.get_unchecked(index) })
+    else {
+        return;
+    };
+    let SingleOrManyStates::Many(start_complex) =
+        (unsafe { start_state_set.get_mut_unchecked(index) })
+    else {
+        return;
+    };
+
+    let mut record = |mip_id: usize, layers: &core::ops::Range<u32>, state: TextureUses| {
+        strict_assert!(mip_id < start_complex.mips.len());
+
+        let start_mip = unsafe { start_complex.mips.get_unchecked_mut(mip_id) };
+
+        for &mut (_, ref mut start_state) in start_mip.isolate(layers, TextureUses::UNKNOWN) {
+            strict_assert_eq!(*start_state, TextureUses::UNKNOWN);
+            *start_state = state;
+        }
+
+        start_mip.coalesce();
+    };
+
+    match unsafe { start_state_provider.get_state(Some(texture_selector), index) } {
+        SingleOrManyStates::Single(new_state) => {
+            for (mip_id, mip) in current_complex.mips.iter().enumerate() {
+                for &(ref layers, current_layer_state) in mip.iter() {
+                    if current_layer_state == TextureUses::UNKNOWN {
+                        record(mip_id, layers, new_state);
+                    }
+                }
+            }
+        }
+        SingleOrManyStates::Many(state_iter) => {
+            for (selector, new_state) in state_iter {
+                if new_state == TextureUses::UNKNOWN {
+                    // We know nothing new.
+                    continue;
+                }
+
+                for mip_id in selector.mips {
+                    let mip_id = mip_id as usize;
+                    strict_assert!(mip_id < current_complex.mips.len());
+
+                    let mip = unsafe { current_complex.mips.get_unchecked(mip_id) };
+
+                    for (layers, &current_layer_state) in mip.iter_filter(&selector.layers) {
+                        if current_layer_state == TextureUses::UNKNOWN {
+                            record(mip_id, &layers, new_state);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[inline(always)]
@@ -1459,21 +1550,10 @@ unsafe fn barrier(
 #[inline(always)]
 unsafe fn update(
     texture_selector: &TextureSelector,
-    start_state_set: Option<&mut TextureStateSet>,
     current_state_set: &mut TextureStateSet,
     index: usize,
     state_provider: TextureStateProvider<'_>,
 ) {
-    // We only ever need to update the start state here if the state is complex.
-    //
-    // If the state is simple, the first insert to the tracker would cover it.
-    let mut start_complex = start_state_set.and_then(|start_state_set| {
-        match unsafe { start_state_set.get_mut_unchecked(index) } {
-            SingleOrManyStates::Single(_) => None,
-            SingleOrManyStates::Many(complex) => Some(complex),
-        }
-    });
-
     let current_state = unsafe { current_state_set.get_mut_unchecked(index) };
 
     let new_state = unsafe { state_provider.get_state(Some(texture_selector), index) };
@@ -1512,29 +1592,7 @@ unsafe fn update(
 
             unsafe { current_state_set.make_complex_unchecked(index, new_complex) };
         }
-        (SingleOrManyStates::Many(current_complex), SingleOrManyStates::Single(new_single)) => {
-            for (mip_id, mip) in current_complex.mips.iter().enumerate() {
-                for &(ref layers, current_layer_state) in mip.iter() {
-                    // If this state is unknown, that means that the start is _also_ unknown.
-                    if current_layer_state == TextureUses::UNKNOWN {
-                        if let Some(&mut ref mut start_complex) = start_complex {
-                            strict_assert!(mip_id < start_complex.mips.len());
-
-                            let start_mip = unsafe { start_complex.mips.get_unchecked_mut(mip_id) };
-
-                            for &mut (_, ref mut current_start_state) in
-                                start_mip.isolate(layers, TextureUses::UNKNOWN)
-                            {
-                                strict_assert_eq!(*current_start_state, TextureUses::UNKNOWN);
-                                *current_start_state = new_single;
-                            }
-
-                            start_mip.coalesce();
-                        }
-                    }
-                }
-            }
-
+        (SingleOrManyStates::Many(_), SingleOrManyStates::Single(new_single)) => {
             unsafe { current_state_set.make_simple_unchecked(index, new_single) };
         }
         (SingleOrManyStates::Many(current_complex), SingleOrManyStates::Many(new_many)) => {
@@ -1550,37 +1608,9 @@ unsafe fn update(
 
                     let mip = unsafe { current_complex.mips.get_unchecked_mut(mip_id) };
 
-                    for &mut (ref layers, ref mut current_layer_state) in
+                    for &mut (_, ref mut current_layer_state) in
                         mip.isolate(&selector.layers, TextureUses::UNKNOWN)
                     {
-                        if *current_layer_state == TextureUses::UNKNOWN
-                            && new_state != TextureUses::UNKNOWN
-                        {
-                            // We now know something about this subresource that
-                            // we didn't before so we should go back and update
-                            // the start state.
-                            //
-                            // We know we must have starter state be complex,
-                            // otherwise we would know about this state.
-                            strict_assert!(start_complex.is_some());
-
-                            let start_complex =
-                                unsafe { start_complex.as_deref_mut().unwrap_unchecked() };
-
-                            strict_assert!(mip_id < start_complex.mips.len());
-
-                            let start_mip = unsafe { start_complex.mips.get_unchecked_mut(mip_id) };
-
-                            for &mut (_, ref mut current_start_state) in
-                                start_mip.isolate(layers, TextureUses::UNKNOWN)
-                            {
-                                strict_assert_eq!(*current_start_state, TextureUses::UNKNOWN);
-                                *current_start_state = new_state;
-                            }
-
-                            start_mip.coalesce();
-                        }
-
                         *current_layer_state = new_state;
                     }
 
