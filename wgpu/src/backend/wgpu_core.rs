@@ -560,6 +560,18 @@ pub struct CoreRenderPipeline {
     pub(crate) wgpu_render_pipeline: Arc<wgc::pipeline::RenderPipeline>,
 }
 
+impl CoreRenderPipeline {
+    pub(crate) fn from_core(core_render_pipeline: Arc<wgc::pipeline::RenderPipeline>) -> Self {
+        Self {
+            wgpu_render_pipeline: core_render_pipeline,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::pipeline::RenderPipeline> {
+        self.wgpu_render_pipeline.clone()
+    }
+}
+
 #[derive(Debug)]
 pub struct CoreComputePass {
     pass: wgc::command::ComputePass,
