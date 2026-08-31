@@ -327,6 +327,16 @@ impl CoreTexture {
     pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::Texture>> {
         unsafe { self.wgpu_texture.clone().as_hal::<A>() }
     }
+
+    pub(crate) fn from_core(core_texture: Arc<wgc::resource::Texture>) -> Self {
+        Self {
+            wgpu_texture: core_texture,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::resource::Texture> {
+        self.wgpu_texture.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
