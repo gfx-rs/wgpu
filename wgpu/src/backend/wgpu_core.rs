@@ -342,6 +342,17 @@ pub struct CoreBindGroupLayout {
 pub struct CoreBindGroup {
     pub(crate) wgpu_bind_group: Arc<wgc::binding_model::BindGroup>,
 }
+impl CoreBindGroup {
+    pub(crate) fn from_core(core_bind_group: Arc<wgc::binding_model::BindGroup>) -> Self {
+        Self {
+            wgpu_bind_group: core_bind_group,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::binding_model::BindGroup> {
+        self.wgpu_bind_group.clone()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct CoreTexture {
