@@ -2091,6 +2091,7 @@ impl Device {
                                     base_array_layer: array_layer,
                                     array_layer_count: Some(1),
                                 },
+                                swizzle: wgt::TextureComponentSwizzle::default(),
                             };
                             clear_views.push(ManuallyDrop::new(
                                 unsafe {
@@ -4100,6 +4101,12 @@ impl Device {
                     return Err(Error::InvalidStorageTextureMipLevelCount {
                         binding,
                         mip_level_count,
+                    });
+                }
+
+                if view.desc.swizzle != wgt::TextureComponentSwizzle::default() {
+                    return Err(Error::InvalidStorageTextureSwizzle {
+                        swizzle: view.desc.swizzle,
                     });
                 }
 

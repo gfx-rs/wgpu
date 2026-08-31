@@ -504,9 +504,10 @@ impl Device {
         };
 
         // SAFETY: `hal_texture` was created on this device's raw handle
-        // respecting `desc` just above, and carries no initial state.
+        // respecting `desc` just above, carries no initial state, and WebGL
+        // guarantees that observable texture contents are initialized.
         Ok(unsafe {
-            self.create_texture_from_hal::<Gles>(hal_texture, desc, wgt::TextureUses::empty())
+            self.create_texture_from_hal::<Gles>(hal_texture, desc, wgt::TextureUses::empty(), true)
         })
     }
 
