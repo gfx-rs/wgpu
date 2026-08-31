@@ -300,6 +300,16 @@ impl CoreBuffer {
     pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::Buffer>> {
         unsafe { self.wgpu_buffer.clone().as_hal::<A>() }
     }
+
+    pub(crate) fn from_core(core_buffer: Arc<wgc::resource::Buffer>) -> Self {
+        Self {
+            wgpu_buffer: core_buffer,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::resource::Buffer> {
+        self.wgpu_buffer.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
