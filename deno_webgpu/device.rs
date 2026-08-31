@@ -187,9 +187,7 @@ impl GPUDevice {
       mapped_at_creation: descriptor.mapped_at_creation,
     };
 
-    let (wgpu_buffer, err) = self.wgpu_device.create_buffer(&wgpu_descriptor);
-
-    self.error_handler.push_error(err);
+    let wgpu_buffer = self.wgpu_device.create_buffer(&wgpu_descriptor);
 
     Ok(GPUBuffer {
       error_handler: self.error_handler.clone(),

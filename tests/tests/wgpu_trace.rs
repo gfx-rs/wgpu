@@ -37,13 +37,14 @@ fn trace_test(test_type: TestType) {
         })
         .unwrap();
 
-    let (buffer, error) = device.create_buffer(&wgt::BufferDescriptor {
+    device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let buffer = device.create_buffer(&wgt::BufferDescriptor {
         label: None,
         size: 1024,
         usage: wgt::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    assert!(error.is_none());
+    assert!(matches!(device.pop_error_scope(), Ok(None)));
 
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let encoder = device.create_command_encoder(&wgt::CommandEncoderDescriptor::default());
