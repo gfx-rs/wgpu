@@ -519,6 +519,18 @@ pub struct CoreComputePipeline {
     pub(crate) wgpu_compute_pipeline: Arc<wgc::pipeline::ComputePipeline>,
 }
 
+impl CoreComputePipeline {
+    pub(crate) fn from_core(core_compute_pipeline: Arc<wgc::pipeline::ComputePipeline>) -> Self {
+        Self {
+            wgpu_compute_pipeline: core_compute_pipeline,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::pipeline::ComputePipeline> {
+        self.wgpu_compute_pipeline.clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CoreRenderPipeline {
     pub(crate) wgpu_render_pipeline: Arc<wgc::pipeline::RenderPipeline>,
