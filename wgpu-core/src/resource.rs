@@ -2604,6 +2604,10 @@ impl TextureView {
             label: desc.label.to_string(),
         })
     }
+
+    pub fn texture(&self) -> &Arc<Texture> {
+        &self.parent
+    }
 }
 
 #[derive(Clone, Debug, Error)]
