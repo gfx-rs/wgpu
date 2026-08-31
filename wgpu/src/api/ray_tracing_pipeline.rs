@@ -2,7 +2,7 @@ use crate::*;
 
 /// Handle to a ray tracing pipeline.
 ///
-/// A `RayTracingPipeline` object represents a ray traing pipeline and its stages.
+/// A `RayTracingPipeline` object represents a ray tracing pipeline and its stages.
 /// It can be created with [`Device::create_ray_tracing_pipeline`].
 #[derive(Debug, Clone)]
 pub struct RayTracingPipeline {

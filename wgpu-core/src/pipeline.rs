@@ -1296,7 +1296,7 @@ pub struct RayTracingPipelineDescriptor<
 }
 
 /// Metal's shader binding data is opaque, but Vulkan's and DX12's has opaque data
-/// but a non-opaque storage mechanism, so each require seperate codepaths.
+/// but a non-opaque storage mechanism, so each require separate codepaths.
 /// Therefore, this is a semi-opaque structure because if metal gets ray tracing pipelines,
 /// this will need to turn into an enum so it shouldn't have other code
 /// tangled with it.
