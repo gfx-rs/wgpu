@@ -206,6 +206,16 @@ impl CoreAdapter {
         let queue = CoreQueue { wgpu_queue: queue };
         Ok((device, queue))
     }
+
+    pub(crate) fn from_core(core_adapter: Arc<wgc::instance::Adapter>) -> Self {
+        Self {
+            wgpu_adapter: core_adapter,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::instance::Adapter> {
+        self.wgpu_adapter.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
