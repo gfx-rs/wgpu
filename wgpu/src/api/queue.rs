@@ -280,7 +280,7 @@ impl Queue {
     pub fn submit<I: IntoIterator<Item = CommandBuffer>>(
         &self,
         command_buffers: I,
-    ) -> SubmissionIndex {
+    ) -> Option<SubmissionIndex> {
         // As submit drains the iterator (even on error), collect deferred actions
         // from each CommandBuffer along the way.
         let mut actions = DeferredCommandBufferActions::default();
@@ -294,7 +294,7 @@ impl Queue {
         // Execute all deferred actions after submit.
         actions.execute(&self.inner);
 
-        SubmissionIndex { index }
+        index.map(|index| SubmissionIndex { index })
     }
 
     /// Gets the amount of nanoseconds each tick of a timestamp query represents.
