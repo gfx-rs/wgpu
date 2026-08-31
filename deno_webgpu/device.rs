@@ -694,24 +694,31 @@ impl GPUDevice {
   fn create_query_set(
     &self,
     #[webidl] descriptor: crate::query_set::GPUQuerySetDescriptor,
-  ) -> GPUQuerySet {
+  ) -> Result<GPUQuerySet, JsErrorBox> {
     let wgpu_descriptor = wgpu_core::resource::QuerySetDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
       ty: descriptor.r#type.clone().into(),
       count: descriptor.count,
     };
 
-    let (wgpu_query_set, err) =
-      self.wgpu_device.create_query_set(&wgpu_descriptor);
+    if matches!(wgpu_descriptor.ty, wgpu_types::QueryType::Timestamp) {
+      self
+        .wgpu_device
+        .require_features(wgpu_types::Features::TIMESTAMP_QUERY)
+        .map_err(|err| {
+          let err = fmt_err(&err);
+          JsErrorBox::type_error(err)
+        })?;
+    }
 
-    self.error_handler.push_error(err);
+    let wgpu_query_set = self.wgpu_device.create_query_set(&wgpu_descriptor);
 
-    GPUQuerySet {
+    Ok(GPUQuerySet {
       wgpu_query_set,
       r#type: descriptor.r#type,
       count: descriptor.count,
       label: descriptor.label,
-    }
+    })
   }
 
   #[getter]
