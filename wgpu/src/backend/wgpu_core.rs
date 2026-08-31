@@ -449,6 +449,18 @@ pub struct CoreQuerySet {
     pub(crate) wgpu_query_set: Arc<wgc::resource::QuerySet>,
 }
 
+impl CoreQuerySet {
+    pub(crate) fn from_core(core_query_set: Arc<wgc::resource::QuerySet>) -> Self {
+        Self {
+            wgpu_query_set: core_query_set,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::resource::QuerySet> {
+        self.wgpu_query_set.clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CorePipelineLayout {
     pub(crate) wgpu_pipeline_layout: Arc<wgc::binding_model::PipelineLayout>,
