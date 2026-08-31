@@ -2920,16 +2920,20 @@ impl Device {
     pub fn create_bind_group_layout(
         self: &Arc<Self>,
         desc: &binding_model::BindGroupLayoutDescriptor,
-    ) -> (Arc<BindGroupLayout>, Option<CreateBindGroupLayoutError>) {
+    ) -> Arc<BindGroupLayout> {
         profiling::scope!("Device::create_bind_group_layout");
 
-        let (bgl, error) = match self.create_bind_group_layout_inner(desc) {
-            Ok(layout) => (layout, None),
-            Err(e) => (
-                BindGroupLayout::invalid(self, desc.label.to_string()),
-                Some(e),
-            ),
-        };
+        let bgl = self
+            .create_bind_group_layout_inner(desc)
+            .unwrap_or_else(|err| {
+                self.handle_error(
+                    err,
+                    desc.label.as_deref(),
+                    "Device::create_bind_group_layout",
+                );
+                BindGroupLayout::invalid(self, desc.label.to_string())
+            });
+
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace::IntoTrace;
@@ -2943,7 +2947,7 @@ impl Device {
             "Device::create_bind_group_layout -> {:?}",
             Arc::as_ptr(&bgl)
         );
-        (bgl, error)
+        bgl
     }
 
     fn create_bind_group_layout_inner(

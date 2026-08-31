@@ -453,9 +453,6 @@ impl Global {
         device_id: DeviceId,
         desc: &BindGroupLayoutDescriptor,
         id_in: id::BindGroupLayoutId,
-    ) -> (
-        id::BindGroupLayoutId,
-        Option<binding_model::CreateBindGroupLayoutError>,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -471,11 +468,9 @@ impl Global {
             entries: Cow::Borrowed(&desc.entries),
         };
 
-        let (bgl, error) = device.create_bind_group_layout(&desc);
+        let bgl = device.create_bind_group_layout(&desc);
 
-        let id = bind_group_layouts.assign(id_in, bgl);
-
-        (id, error)
+        bind_group_layouts.assign(id_in, bgl);
     }
 
     pub fn bind_group_layout_remove(

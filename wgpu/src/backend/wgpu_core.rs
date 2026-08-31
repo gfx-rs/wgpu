@@ -883,12 +883,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             label: desc.label.map(Borrowed),
             entries: Borrowed(desc.entries),
         };
-        let (wgpu_bind_group_layout, error) =
-            self.wgpu_device.create_bind_group_layout(&descriptor);
-        if let Some(cause) = error {
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_bind_group_layout");
-        }
+        let wgpu_bind_group_layout = self.wgpu_device.create_bind_group_layout(&descriptor);
         CoreBindGroupLayout {
             wgpu_bind_group_layout,
         }
