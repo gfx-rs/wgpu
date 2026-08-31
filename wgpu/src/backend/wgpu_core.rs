@@ -1788,12 +1788,7 @@ impl dispatch::TextureInterface for CoreTexture {
             },
             swizzle: desc.swizzle,
         };
-        let (wgpu_texture_view, error) = self.wgpu_texture.create_view(&descriptor);
-        if let Some(cause) = error {
-            self.wgpu_texture
-                .device()
-                .handle_error(cause, desc.label, "Texture::create_view");
-        }
+        let wgpu_texture_view = self.wgpu_texture.create_view(&descriptor);
         CoreTextureView { wgpu_texture_view }.into()
     }
 

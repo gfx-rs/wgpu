@@ -250,7 +250,6 @@ impl GPUDevice {
     let wgpu_texture = self.wgpu_device.create_texture(&wgpu_descriptor);
 
     Ok(GPUTexture {
-      error_handler: self.error_handler.clone(),
       wgpu_texture,
       default_view: Default::default(),
       label: descriptor.label,

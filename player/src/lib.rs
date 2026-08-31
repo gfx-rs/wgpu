@@ -147,7 +147,7 @@ impl Player {
             }
             Action::CreateTextureView { id, parent, desc } => {
                 let parent_texture = self.resolve_texture_id(parent);
-                let (texture_view, _error) = parent_texture.create_view(&desc);
+                let texture_view = parent_texture.create_view(&desc);
                 self.texture_views.insert(id, texture_view);
             }
             Action::DropTextureView(id) => {

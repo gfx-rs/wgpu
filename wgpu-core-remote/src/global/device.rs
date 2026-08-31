@@ -325,7 +325,7 @@ impl Global {
         texture_id: id::TextureId,
         desc: &TextureViewDescriptor,
         id_in: id::TextureViewId,
-    ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             textures,
@@ -344,11 +344,9 @@ impl Global {
             swizzle: desc.swizzle,
         };
 
-        let (view, error) = texture.create_view(&desc);
+        let view = texture.create_view(&desc);
 
-        let id = texture_views.assign(id_in, view);
-
-        (id, error)
+        texture_views.assign(id_in, view);
     }
 
     pub fn texture_view_remove(
