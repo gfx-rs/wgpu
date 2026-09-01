@@ -6,7 +6,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
         COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE,
         COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX,
-        COMPUTE_PIPELINE_QUERY_SUBGROUP_SIZE,
+        COMPUTE_PIPELINE_QUERY_SUBGROUP_SIZE_SIMPLE,
+        COMPUTE_PIPELINE_QUERY_SUBGROUP_SIZE_VERIFY,
         RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE,
         RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX,
         NO_TARGETLESS_RENDER,
@@ -101,31 +102,140 @@ static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
             );
         });
 
+// Simply test that `ComputePipeline::get_subgroup_size` returns `Some(..)` on Metal and `None` otherwise.
+// For that we need a basic compute pipeline which makes up most of the code below.
 #[apply(gpu_test!)]
-static COMPUTE_PIPELINE_QUERY_SUBGROUP_SIZE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
-    .run_sync(|ctx| {
-        valid(&ctx.device, || {
-            let module = ctx.device.create_shader_module(TRIVIAL_COMPUTE_SHADER_DESC);
+static COMPUTE_PIPELINE_QUERY_SUBGROUP_SIZE_SIMPLE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().test_features_limits())
+        .run_sync(|ctx| {
+            valid(&ctx.device, || {
+                let module = ctx.device.create_shader_module(TRIVIAL_COMPUTE_SHADER_DESC);
 
-            let pipeline = ctx
-                .device
-                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                    label: Some("compute pipeline"),
-                    layout: None,
-                    module: &module,
-                    entry_point: Some("main"),
-                    compilation_options: Default::default(),
-                    cache: None,
-                });
+                let pipeline =
+                    ctx.device
+                        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                            label: Some("compute pipeline"),
+                            layout: None,
+                            module: &module,
+                            entry_point: Some("main"),
+                            compilation_options: Default::default(),
+                            cache: None,
+                        });
 
-            if ctx.adapter.get_info().backend == wgpu::Backend::Metal {
-                assert!(pipeline.get_subgroup_size().is_some())
-            } else {
-                assert!(pipeline.get_subgroup_size().is_none())
-            }
+                if ctx.adapter.get_info().backend == wgpu::Backend::Metal {
+                    assert!(pipeline.get_subgroup_size().is_some())
+                } else {
+                    assert!(pipeline.get_subgroup_size().is_none())
+                }
+            });
         });
-    });
+
+// Verify that `ComputePipeline::get_subgroup_size` returns the same value we get from the builtin `subgroup_size`.
+// For this we need "the whole thing":
+// setup and run a compute pass where we write the value of the builtin to a buffer, copy, readback, and compare.
+#[apply(gpu_test!)]
+static COMPUTE_PIPELINE_QUERY_SUBGROUP_SIZE_VERIFY: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().limits(wgpu::Limits::downlevel_defaults()))
+        .run_async(|ctx| async move {
+            if ctx.adapter.get_info().backend != wgpu::Backend::Metal {
+                return; // only works on metal
+            }
+
+            let (device, queue) = ctx
+                .adapter
+                .request_device(&Default::default())
+                .await
+                .unwrap();
+            let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+            let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[Some(&bgl)],
+                immediate_size: 0,
+            });
+
+            let shader = format!(
+                "
+            @group(0) @binding(0) var<storage, read_write> out: u32;
+            @compute @workgroup_size(1)
+            fn main(@builtin(subgroup_size) subgroup_size: u32) {{
+                out = subgroup_size;
+            }}"
+            );
+
+            let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(shader.into()),
+            });
+
+            let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&pl),
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                module: &module,
+                cache: None,
+            });
+
+            let subgroup_size = pipeline
+                .get_subgroup_size()
+                .expect("We should get something on Metal");
+
+            let out = device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: 4,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            });
+            let readback = device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: 4,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+
+            let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: None,
+                layout: &bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(out.as_entire_buffer_binding()),
+                }],
+            });
+
+            let mut encoder =
+                device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            {
+                let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+                pass.set_bind_group(0, &bg, &[]);
+                pass.set_pipeline(&pipeline);
+                pass.dispatch_workgroups(1, 1, 1);
+            }
+            encoder.copy_buffer_to_buffer(&out, 0, &readback, 0, 4);
+            queue.submit(Some(encoder.finish()));
+
+            readback.slice(..).map_async(wgpu::MapMode::Read, |_| ());
+            device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+
+            assert_eq!(
+                &*readback.slice(..).get_mapped_range().unwrap(),
+                &subgroup_size.to_le_bytes()
+            );
+        });
 
 #[apply(gpu_test!)]
 static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
