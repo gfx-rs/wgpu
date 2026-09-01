@@ -182,6 +182,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 #### Vulkan
 
+- Work around Arm proprietary drivers (observed on r54p2, Mali-G715 / Pixel 9 Pro) ignoring negative viewport heights, which flipped every render pass vertically: on those drivers Y is now flipped in the vertex shader epilogue with positive-height viewports and inverted front-face winding. By @lexoliu in [#10057](https://github.com/gfx-rs/wgpu/issues/10057).
 - Add OpenHarmony surface support via `VK_OHOS_surface`. Previously the Vulkan backend could not create a surface on OpenHarmony, leaving GLES as the only usable backend. By @ozongzi in [#9908](https://github.com/gfx-rs/wgpu/pull/9908).
 
 #### Metal
