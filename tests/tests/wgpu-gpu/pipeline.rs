@@ -168,14 +168,12 @@ static COMPUTE_PIPELINE_QUERY_SUBGROUP_SIZE_VERIFY: GpuTestConfiguration =
                 immediate_size: 0,
             });
 
-            let shader = format!(
-                "
+            let shader = "
             @group(0) @binding(0) var<storage, read_write> out: u32;
             @compute @workgroup_size(1)
-            fn main(@builtin(subgroup_size) subgroup_size: u32) {{
+            fn main(@builtin(subgroup_size) subgroup_size: u32) {
                 out = subgroup_size;
-            }}"
-            );
+            }";
 
             let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
