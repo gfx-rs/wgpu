@@ -28,6 +28,10 @@ impl ComputePipeline {
         BindGroupLayout { inner: bind_group }
     }
 
+    pub fn get_subgroup_size(&self) -> Option<usize> {
+        self.inner.get_subgroup_size()
+    }
+
     #[cfg(custom)]
     /// Returns custom implementation of ComputePipeline (if custom backend and is internally T)
     pub fn as_custom<T: custom::ComputePipelineInterface>(&self) -> Option<&T> {

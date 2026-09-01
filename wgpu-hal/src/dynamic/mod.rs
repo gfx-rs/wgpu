@@ -100,7 +100,11 @@ pub trait DynBindGroup: DynResource + fmt::Debug {}
 pub trait DynBindGroupLayout: DynResource + fmt::Debug {}
 pub trait DynBuffer: DynResource + fmt::Debug {}
 pub trait DynCommandBuffer: DynResource + fmt::Debug {}
-pub trait DynComputePipeline: DynResource + fmt::Debug {}
+pub trait DynComputePipeline: DynResource + fmt::Debug {
+    fn get_subgroup_size(&self) -> Option<usize> {
+        None
+    }
+}
 pub trait DynFence: DynResource + fmt::Debug {}
 pub trait DynPipelineCache: DynResource + fmt::Debug {}
 pub trait DynPipelineLayout: DynResource + fmt::Debug {}

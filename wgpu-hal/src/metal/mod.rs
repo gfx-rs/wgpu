@@ -1247,7 +1247,11 @@ pub struct ComputePipeline {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
 
-impl crate::DynComputePipeline for ComputePipeline {}
+impl crate::DynComputePipeline for ComputePipeline {
+    fn get_subgroup_size(&self) -> Option<usize> {
+        Some(self.raw.threadExecutionWidth())
+    }
+}
 
 #[derive(Debug)]
 pub struct RayTracingPipeline {}

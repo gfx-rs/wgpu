@@ -393,4 +393,7 @@ impl ComputePipelineInterface for CustomComputePipeline {
     fn get_bind_group_layout(&self, _index: u32) -> wgpu::custom::DispatchBindGroupLayout {
         unimplemented!()
     }
+    fn get_subgroup_size(&self) -> Option<usize> {
+        unimplemented!()
+    }
 }
