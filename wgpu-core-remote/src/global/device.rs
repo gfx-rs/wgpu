@@ -1135,7 +1135,7 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<SubmissionIndex, BufferAccessError> {
+    ) -> Option<SubmissionIndex> {
         let hub = self.hub.borrow();
 
         let buffer = hub.buffers.get(buffer_id);
