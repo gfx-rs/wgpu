@@ -2900,8 +2900,14 @@ impl crate::Device for super::Device {
                 .label
                 .unwrap_or("Unlabeled acceleration structure buffer");
 
-            let allocation = self
-                .mem_allocator
+            // Requesting compaction declares this structure a placeholder that will be
+            // replaced by its compacted copy and dropped, so back it with transient memory.
+            let allocator = if desc.allow_compaction {
+                &self.transient_mem_allocator
+            } else {
+                &self.mem_allocator
+            };
+            let allocation = allocator
                 .lock()
                 .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
                     name,
@@ -2970,6 +2976,7 @@ impl crate::Device for super::Device {
                 raw: raw_acceleration_structure,
                 buffer: raw_buffer,
                 allocation,
+                transient: desc.allow_compaction,
                 compacted_size_query: pool,
             })
         }
@@ -2993,10 +3000,12 @@ impl crate::Device for super::Device {
             self.shared
                 .raw
                 .destroy_buffer(acceleration_structure.buffer, None);
-            let result = self
-                .mem_allocator
-                .lock()
-                .free(acceleration_structure.allocation);
+            let allocator = if acceleration_structure.transient {
+                &self.transient_mem_allocator
+            } else {
+                &self.mem_allocator
+            };
+            let result = allocator.lock().free(acceleration_structure.allocation);
             if let Err(err) = result {
                 log::warn!("Failed to free buffer acceleration structure: {err}");
             }

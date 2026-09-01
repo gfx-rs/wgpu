@@ -902,6 +902,8 @@ pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
     allocation: gpu_allocator::vulkan::Allocation,
+    /// The allocation came from [`Device::transient_mem_allocator`].
+    transient: bool,
     compacted_size_query: Option<vk::QueryPool>,
 }
 
