@@ -2844,7 +2844,8 @@ static MARK_EXTERNALLY_INITIALIZED_SKIPS_LAZY_CLEAR: GpuTestConfiguration =
                     target_os = "windows",
                     target_os = "linux",
                     target_os = "android",
-                    target_os = "freebsd"
+                    target_os = "freebsd",
+                    target_os = "macos"
                 ))]
                 Backend::Vulkan => {
                     check_mark_externally_initialized::<hal::vulkan::Api>(&ctx).await;
