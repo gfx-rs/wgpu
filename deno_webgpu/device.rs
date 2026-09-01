@@ -63,6 +63,22 @@ pub struct GPUDevice {
   pub(crate) weak: std::sync::OnceLock<v8::Weak<v8::Object>>,
 }
 
+impl GPUDevice {
+  /// <https://www.w3.org/TR/webgpu/#abstract-opdef-validate-texture-format-required-features>
+  fn validate_texture_format_required_feature(
+    &self,
+    format: wgpu_types::TextureFormat,
+  ) -> Result<(), JsErrorBox> {
+    self
+      .wgpu_device
+      .require_features(format.required_features())
+      .map_err(|err| {
+        let err = fmt_err(&err);
+        JsErrorBox::type_error(err)
+      })
+  }
+}
+
 impl WebIdlInterfaceConverter for GPUDevice {
   const NAME: &'static str = "GPUDevice";
 }
@@ -171,9 +187,7 @@ impl GPUDevice {
       mapped_at_creation: descriptor.mapped_at_creation,
     };
 
-    let (wgpu_buffer, err) = self.wgpu_device.create_buffer(&wgpu_descriptor);
-
-    self.error_handler.push_error(err);
+    let wgpu_buffer = self.wgpu_device.create_buffer(&wgpu_descriptor);
 
     Ok(GPUBuffer {
       error_handler: self.error_handler.clone(),
@@ -220,15 +234,20 @@ impl GPUDevice {
         .view_formats
         .into_iter()
         .map(Into::into)
-        .collect(),
+        .collect::<Vec<_>>(),
     };
 
-    let (wgpu_texture, err) = self.wgpu_device.create_texture(&wgpu_descriptor);
+    // 2. ? Validate texture format required features of descriptor.format with this.[[device]].
+    self.validate_texture_format_required_feature(wgpu_descriptor.format)?;
 
-    self.error_handler.push_error(err);
+    // 3. Validate texture format required features of each element of descriptor.viewFormats with this.[[device]].
+    for format in &wgpu_descriptor.view_formats {
+      self.validate_texture_format_required_feature(*format)?;
+    }
+
+    let wgpu_texture = self.wgpu_device.create_texture(&wgpu_descriptor);
 
     Ok(GPUTexture {
-      error_handler: self.error_handler.clone(),
       wgpu_texture,
       default_view: Default::default(),
       label: descriptor.label,
@@ -313,9 +332,11 @@ impl GPUDevice {
           multisampled: texture.multisampled,
         }
       } else if let Some(storage_texture) = entry.storage_texture {
+        let format = storage_texture.format.into();
+        self.validate_texture_format_required_feature(format)?;
         BindingType::StorageTexture {
           access: storage_texture.access.into(),
-          format: storage_texture.format.into(),
+          format,
           view_dimension: storage_texture.view_dimension.into(),
         }
       } else if entry.external_texture.is_some() {
@@ -337,10 +358,8 @@ impl GPUDevice {
       entries: Cow::Owned(entries),
     };
 
-    let (wgpu_bind_group_layout, err) =
+    let wgpu_bind_group_layout =
       self.wgpu_device.create_bind_group_layout(&wgpu_descriptor);
-
-    self.error_handler.push_error(err);
 
     Ok(GPUBindGroupLayout {
       wgpu_bind_group_layout,
@@ -649,13 +668,20 @@ impl GPUDevice {
       multiview: None,
     };
 
+    // 1. Validate texture format required features of each non-null element of descriptor.colorFormats with this.[[device]].
+    for &format in wgpu_descriptor.color_formats.iter().flatten() {
+      self.validate_texture_format_required_feature(format)?;
+    }
+
+    // 2. If descriptor.depthStencilFormat is provided:
+    if let Some(ds) = wgpu_descriptor.depth_stencil {
+      // Validate texture format required features of descriptor.depthStencilFormat with this.[[device]].
+      self.validate_texture_format_required_feature(ds.format)?;
+    }
+
     let encoder = self
       .wgpu_device
-      .create_render_bundle_encoder(&wgpu_descriptor)
-      .map_err(|err| {
-        let err = fmt_err(&err);
-        JsErrorBox::type_error(err)
-      })?;
+      .create_render_bundle_encoder(&wgpu_descriptor);
 
     Ok(GPURenderBundleEncoder {
       encoder: RefCell::new(encoder),
@@ -668,24 +694,31 @@ impl GPUDevice {
   fn create_query_set(
     &self,
     #[webidl] descriptor: crate::query_set::GPUQuerySetDescriptor,
-  ) -> GPUQuerySet {
+  ) -> Result<GPUQuerySet, JsErrorBox> {
     let wgpu_descriptor = wgpu_core::resource::QuerySetDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
       ty: descriptor.r#type.clone().into(),
       count: descriptor.count,
     };
 
-    let (wgpu_query_set, err) =
-      self.wgpu_device.create_query_set(&wgpu_descriptor);
+    if matches!(wgpu_descriptor.ty, wgpu_types::QueryType::Timestamp) {
+      self
+        .wgpu_device
+        .require_features(wgpu_types::Features::TIMESTAMP_QUERY)
+        .map_err(|err| {
+          let err = fmt_err(&err);
+          JsErrorBox::type_error(err)
+        })?;
+    }
 
-    self.error_handler.push_error(err);
+    let wgpu_query_set = self.wgpu_device.create_query_set(&wgpu_descriptor);
 
-    GPUQuerySet {
+    Ok(GPUQuerySet {
       wgpu_query_set,
       r#type: descriptor.r#type,
       count: descriptor.count,
       label: descriptor.label,
-    }
+    })
   }
 
   #[getter]

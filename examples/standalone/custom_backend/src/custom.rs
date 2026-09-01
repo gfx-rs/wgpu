@@ -254,8 +254,7 @@ impl DeviceInterface for CustomDevice {
     fn create_render_bundle_encoder(
         &self,
         _desc: &wgpu::RenderBundleEncoderDescriptor<'_>,
-    ) -> Result<wgpu::custom::DispatchRenderBundleEncoder, wgpu::CreateRenderBundleEncoderError>
-    {
+    ) -> wgpu::custom::DispatchRenderBundleEncoder {
         unimplemented!()
     }
 

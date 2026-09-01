@@ -229,12 +229,12 @@ impl Device {
     pub fn create_render_bundle_encoder<'a>(
         &self,
         desc: &RenderBundleEncoderDescriptor<'_>,
-    ) -> Result<RenderBundleEncoder<'a>, CreateRenderBundleEncoderError> {
-        let encoder = self.inner.create_render_bundle_encoder(desc)?;
-        Ok(RenderBundleEncoder {
+    ) -> RenderBundleEncoder<'a> {
+        let encoder = self.inner.create_render_bundle_encoder(desc);
+        RenderBundleEncoder {
             inner: encoder,
             _p: PhantomData,
-        })
+        }
     }
 
     /// Creates a new [`BindGroup`].
@@ -374,13 +374,7 @@ impl Device {
     ) -> Texture {
         let texture = unsafe {
             let core_device = self.inner.as_core();
-            core_device.context.create_texture_from_hal::<A>(
-                hal_texture,
-                core_device,
-                desc,
-                initial_state,
-                cleared,
-            )
+            core_device.create_texture_from_hal::<A>(hal_texture, desc, initial_state, cleared)
         };
         Texture {
             inner: texture.into(),
@@ -530,10 +524,7 @@ impl Device {
         // not created on this device.
         let core_device = self.inner.as_core_opt()?;
         let core_texture = texture.inner.as_core_opt()?;
-        if !core_device
-            .context
-            .texture_belongs_to_device(core_texture, core_device)
-        {
+        if !core_device.texture_belongs_to_device(core_texture) {
             return None;
         }
 
@@ -636,9 +627,7 @@ impl Device {
 
         let buffer = unsafe {
             let core_device = self.inner.as_core();
-            core_device
-                .context
-                .create_buffer_from_hal::<A>(hal_buffer, core_device, desc)
+            core_device.create_buffer_from_hal::<A>(hal_buffer, desc)
         };
 
         Buffer {
@@ -830,7 +819,7 @@ impl Device {
         &self,
     ) -> Option<impl Deref<Target = A::Device> + WasmNotSendSync> {
         let device = self.inner.as_core_opt()?;
-        unsafe { device.context.device_as_hal::<A>(device) }
+        unsafe { device.as_hal::<A>() }
     }
 
     /// Destroy this device.

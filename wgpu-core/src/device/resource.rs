@@ -423,7 +423,8 @@ impl Device {
     pub(crate) fn raw(&self) -> &dyn hal::DynDevice {
         self.raw.as_ref()
     }
-    pub(crate) fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
+
+    pub fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
         if self.features.contains(feature) {
             Ok(())
         } else {
@@ -1431,16 +1432,13 @@ impl Device {
         Ok(buffer)
     }
 
-    pub fn create_buffer(
-        self: &Arc<Self>,
-        desc: &resource::BufferDescriptor,
-    ) -> (Arc<Buffer>, Option<resource::CreateBufferError>) {
+    pub fn create_buffer(self: &Arc<Self>, desc: &resource::BufferDescriptor) -> Arc<Buffer> {
         profiling::scope!("Device::create_buffer");
 
-        let (buffer, error) = match self.create_buffer_inner(desc) {
-            Ok(buffer) => (buffer, None),
-            Err(e) => (Buffer::invalid(Arc::clone(self), desc), Some(e)),
-        };
+        let buffer = self.create_buffer_inner(desc).unwrap_or_else(|err| {
+            self.handle_error(err, desc.label.as_deref(), "Device::create_buffer");
+            Buffer::invalid(Arc::clone(self), desc)
+        });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use trace::IntoTrace;
@@ -1461,7 +1459,7 @@ impl Device {
             },
             Arc::as_ptr(&buffer)
         );
-        (buffer, error)
+        buffer
     }
 
     #[cfg(feature = "replay")]
@@ -2017,6 +2015,8 @@ impl Device {
 
         let mut hal_view_formats = Vec::new();
         for format in desc.view_formats.iter() {
+            self.require_features(format.required_features())
+                .map_err(|error| CreateTextureError::MissingFeatures(*format, error))?;
             if desc.format == *format {
                 continue;
             }
@@ -2141,18 +2141,14 @@ impl Device {
         Ok(texture)
     }
 
-    pub fn create_texture(
-        self: &Arc<Self>,
-        desc: &resource::TextureDescriptor,
-    ) -> (Arc<Texture>, Option<resource::CreateTextureError>) {
+    /// <https://www.w3.org/TR/webgpu/#dom-gpudevice-createtexture>
+    pub fn create_texture(self: &Arc<Self>, desc: &resource::TextureDescriptor) -> Arc<Texture> {
         profiling::scope!("Device::create_texture");
-        let (texture, error) = match self.create_texture_inner(desc) {
-            Ok(texture) => (texture, None),
-            Err(e) => {
-                let texture = Texture::invalid(self, desc);
-                (texture, Some(e))
-            }
-        };
+
+        let texture = self.create_texture_inner(desc).unwrap_or_else(|err| {
+            self.handle_error(err, desc.label.as_deref(), "Device::create_texture");
+            Texture::invalid(self, desc)
+        });
         api_log!(
             "Device::create_texture({desc:?}) -> {:?}",
             Arc::as_ptr(&texture)
@@ -2167,7 +2163,7 @@ impl Device {
                 desc.clone(),
             ));
         }
-        (texture, error)
+        texture
     }
 
     /// Creates a texture that is guaranteed to be invalid
@@ -2867,22 +2863,19 @@ impl Device {
     pub fn create_render_bundle_encoder(
         self: &Arc<Self>,
         desc: &command::RenderBundleEncoderDescriptor,
-    ) -> Result<Box<command::RenderBundleEncoder>, MissingFeatures> {
+    ) -> Box<command::RenderBundleEncoder> {
         profiling::scope!("Device::create_render_bundle_encoder");
         api_log!("Device::create_render_bundle_encoder");
-        command::RenderBundleEncoder::new(self, desc)
-            .or_else(|err| match err {
-                command::CreateRenderBundleError::MissingFeatures(missing) => Err(missing),
-                err => {
-                    self.handle_error(
-                        err,
-                        desc.label.as_ref().map(|l| l.as_ref()),
-                        "Device::create_render_bundle_encoder",
-                    );
-                    Ok(command::RenderBundleEncoder::dummy(self))
-                }
-            })
-            .map(Box::new)
+        Box::new(
+            command::RenderBundleEncoder::new(self, desc).unwrap_or_else(|err| {
+                self.handle_error(
+                    err,
+                    desc.label.as_deref(),
+                    "Device::create_render_bundle_encoder",
+                );
+                command::RenderBundleEncoder::dummy(self)
+            }),
+        )
     }
 
     /// Generate information about late-validated buffer bindings for pipelines.
@@ -2930,16 +2923,20 @@ impl Device {
     pub fn create_bind_group_layout(
         self: &Arc<Self>,
         desc: &binding_model::BindGroupLayoutDescriptor,
-    ) -> (Arc<BindGroupLayout>, Option<CreateBindGroupLayoutError>) {
+    ) -> Arc<BindGroupLayout> {
         profiling::scope!("Device::create_bind_group_layout");
 
-        let (bgl, error) = match self.create_bind_group_layout_inner(desc) {
-            Ok(layout) => (layout, None),
-            Err(e) => (
-                BindGroupLayout::invalid(self, desc.label.to_string()),
-                Some(e),
-            ),
-        };
+        let bgl = self
+            .create_bind_group_layout_inner(desc)
+            .unwrap_or_else(|err| {
+                self.handle_error(
+                    err,
+                    desc.label.as_deref(),
+                    "Device::create_bind_group_layout",
+                );
+                BindGroupLayout::invalid(self, desc.label.to_string())
+            });
+
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace::IntoTrace;
@@ -2953,7 +2950,7 @@ impl Device {
             "Device::create_bind_group_layout -> {:?}",
             Arc::as_ptr(&bgl)
         );
-        (bgl, error)
+        bgl
     }
 
     fn create_bind_group_layout_inner(
@@ -5632,12 +5629,12 @@ impl Device {
     pub fn create_query_set(
         self: &Arc<Self>,
         desc: &resource::QuerySetDescriptor,
-    ) -> (Arc<QuerySet>, Option<resource::CreateQuerySetError>) {
+    ) -> Arc<QuerySet> {
         profiling::scope!("Device::create_query_set");
-        let (query_set, error) = match self.create_query_set_inner(desc) {
-            Ok(query_set) => (query_set, None),
-            Err(e) => (QuerySet::invalid(Arc::clone(self), desc), Some(e)),
-        };
+        let query_set = self.create_query_set_inner(desc).unwrap_or_else(|err| {
+            self.handle_error(err, desc.label.as_deref(), "Device::create_query_set");
+            QuerySet::invalid(Arc::clone(self), desc)
+        });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use trace::IntoTrace;
@@ -5647,7 +5644,7 @@ impl Device {
             });
         }
         api_log!("Device::create_query_set -> {:?}", Arc::as_ptr(&query_set));
-        (query_set, error)
+        query_set
     }
 
     pub(crate) fn create_query_set_inner(

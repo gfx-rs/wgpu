@@ -2164,16 +2164,14 @@ impl Texture {
         Ok(view)
     }
 
-    pub fn create_view(
-        self: &Arc<Self>,
-        desc: &TextureViewDescriptor,
-    ) -> (Arc<TextureView>, Option<CreateTextureViewError>) {
+    pub fn create_view(self: &Arc<Self>, desc: &TextureViewDescriptor) -> Arc<TextureView> {
         profiling::scope!("Texture::create_view");
 
-        let (view, error) = match self.create_view_inner(desc) {
-            Ok(view) => (view, None),
-            Err(e) => (TextureView::invalid(&self.device, self, desc), Some(e)),
-        };
+        let view = self.create_view_inner(desc).unwrap_or_else(|err| {
+            self.device
+                .handle_error(err, desc.label.as_deref(), "Texture::create_view failed");
+            TextureView::invalid(&self.device, self, desc)
+        });
 
         api_log!(
             "Texture::create_view({:?}) -> {:?}",
@@ -2192,11 +2190,24 @@ impl Texture {
             });
         }
 
-        (view, error)
+        view
     }
 
     pub fn descriptor(&self) -> &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>> {
         &self.desc
+    }
+
+    /// Marks the texture's entire contents as already initialized,
+    /// skipping wgpu-core's lazy zero-initialization of it.
+    ///
+    /// # Safety
+    ///
+    /// The entire contents of the texture must already be initialized.
+    pub unsafe fn mark_externally_initialized(&self) {
+        let mut initialization_status = self.initialization_status.write();
+        for mip_tracker in initialization_status.mips.iter_mut() {
+            mip_tracker.drain(0..self.desc.array_layer_count());
+        }
     }
 }
 
