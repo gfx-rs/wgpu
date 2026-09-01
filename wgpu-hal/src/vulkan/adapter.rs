@@ -3033,7 +3033,7 @@ impl super::Adapter {
 
         let buffer_device_address = enabled_extensions.contains(&khr::buffer_device_address::NAME);
 
-        let mem_allocator =
+        let new_allocator = || {
             gpu_allocator::vulkan::Allocator::new(&gpu_allocator::vulkan::AllocatorCreateDesc {
                 instance: self.instance.raw.clone(),
                 device: shared.raw.clone(),
@@ -3041,7 +3041,10 @@ impl super::Adapter {
                 debug_settings: Default::default(),
                 buffer_device_address,
                 allocation_sizes,
-            })?;
+            })
+        };
+        let mem_allocator = new_allocator()?;
+        let transient_mem_allocator = new_allocator()?;
 
         let desc_allocator = super::descriptor::DescriptorAllocator::new(
             if let Some(di) = self.phd_capabilities.descriptor_indexing {
@@ -3054,6 +3057,7 @@ impl super::Adapter {
         let device = super::Device {
             shared,
             mem_allocator: Mutex::new(mem_allocator),
+            transient_mem_allocator: Mutex::new(transient_mem_allocator),
             desc_allocator: Mutex::new(desc_allocator),
             valid_ash_memory_types,
             naga_options,

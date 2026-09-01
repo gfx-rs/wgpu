@@ -1039,8 +1039,13 @@ impl crate::Device for super::Device {
                 .max(self.shared.private_caps.scratch_buffer_alignment as u64);
         }
 
-        let allocation = self
-            .mem_allocator
+        let transient = desc.memory_flags.contains(crate::MemoryFlags::TRANSIENT);
+        let allocator = if transient {
+            &self.transient_mem_allocator
+        } else {
+            &self.mem_allocator
+        };
+        let allocation = allocator
             .lock()
             .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
                 name,
@@ -1073,11 +1078,14 @@ impl crate::Device for super::Device {
         self.counters.buffer_memory.add(allocation.size() as isize);
         self.counters.buffers.add(1);
 
+        let backing = if transient {
+            super::BufferMemoryBacking::ManagedTransient(allocation)
+        } else {
+            super::BufferMemoryBacking::Managed(allocation)
+        };
         Ok(super::Buffer {
             raw,
-            ownership: super::BufferOwnership::Managed(Mutex::new(
-                super::BufferMemoryBacking::Managed(allocation),
-            )),
+            ownership: super::BufferOwnership::Managed(Mutex::new(backing)),
         })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
@@ -1089,6 +1097,12 @@ impl crate::Device for super::Device {
                 match allocation {
                     super::BufferMemoryBacking::Managed(allocation) => {
                         let result = self.mem_allocator.lock().free(allocation);
+                        if let Err(err) = result {
+                            log::warn!("Failed to free buffer allocation: {err}");
+                        }
+                    }
+                    super::BufferMemoryBacking::ManagedTransient(allocation) => {
+                        let result = self.transient_mem_allocator.lock().free(allocation);
                         if let Err(err) = result {
                             log::warn!("Failed to free buffer allocation: {err}");
                         }
@@ -1123,7 +1137,9 @@ impl crate::Device for super::Device {
             crate::hal_usage_error("tried to map external buffer")
         };
         let mut allocation = allocation.lock();
-        let super::BufferMemoryBacking::Managed(ref mut allocation) = *allocation else {
+        let (super::BufferMemoryBacking::Managed(ref mut allocation)
+        | super::BufferMemoryBacking::ManagedTransient(ref mut allocation)) = *allocation
+        else {
             crate::hal_usage_error("tried to map externally created buffer")
         };
         let is_coherent = allocation
@@ -2999,35 +3015,37 @@ impl crate::Device for super::Device {
     }
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
-        let gpu_allocator::AllocatorReport {
-            allocations,
-            blocks,
-            total_allocated_bytes,
-            total_capacity_bytes,
-        } = self.mem_allocator.lock().generate_report();
+        let mut allocations = Vec::new();
+        let mut blocks = Vec::new();
+        let mut total_allocated_bytes = 0;
+        let mut total_reserved_bytes = 0;
 
-        let allocations = allocations
-            .into_iter()
-            .map(|alloc| wgt::AllocationReport {
-                name: alloc.name,
-                offset: alloc.offset,
-                size: alloc.size,
-            })
-            .collect();
+        for allocator in [&self.mem_allocator, &self.transient_mem_allocator] {
+            let report = allocator.lock().generate_report();
 
-        let blocks = blocks
-            .into_iter()
-            .map(|block| wgt::MemoryBlockReport {
+            // Each block's range indexes into its own report's allocation list.
+            let allocation_base = allocations.len();
+            allocations.extend(report.allocations.into_iter().map(|alloc| {
+                wgt::AllocationReport {
+                    name: alloc.name,
+                    offset: alloc.offset,
+                    size: alloc.size,
+                }
+            }));
+            blocks.extend(report.blocks.into_iter().map(|block| wgt::MemoryBlockReport {
                 size: block.size,
-                allocations: block.allocations.clone(),
-            })
-            .collect();
+                allocations: (block.allocations.start + allocation_base)
+                    ..(block.allocations.end + allocation_base),
+            }));
+            total_allocated_bytes += report.total_allocated_bytes;
+            total_reserved_bytes += report.total_capacity_bytes;
+        }
 
         Some(wgt::AllocatorReport {
             allocations,
             blocks,
             total_allocated_bytes,
-            total_reserved_bytes: total_capacity_bytes,
+            total_reserved_bytes,
         })
     }
 
