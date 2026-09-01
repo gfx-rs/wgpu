@@ -234,7 +234,6 @@ static PIPELINE_OUTPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(pipeline_output);
 
 fn pipeline_output(ctx: TestingContext) {
-
     let ray_gen_source = "
         enable wgpu_ray_tracing_pipeline;
 
@@ -326,10 +325,15 @@ fn pipeline_output(ctx: TestingContext) {
     encoder.copy_buffer_to_buffer(&out_buffer, 0, &readback, 0, out_buffer.size());
 
     ctx.queue.submit([encoder.finish()]);
-    
+
     let (send, recv) = mpsc::channel();
-    readback.map_async(wgpu::MapMode::Read, .., move |res| {res.unwrap(); send.send(()).unwrap()});
-    ctx.device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+    readback.map_async(wgpu::MapMode::Read, .., move |res| {
+        res.unwrap();
+        send.send(()).unwrap()
+    });
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 
     recv.recv().unwrap();
 

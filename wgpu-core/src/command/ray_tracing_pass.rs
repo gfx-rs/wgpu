@@ -9,12 +9,27 @@ use wgt::{
 };
 
 use crate::{
-    Label, api_log, binding_model::{BindError, BindGroup, ImmediateUploadError, LateMinBufferBindingSizeMismatch}, command::{
-        ArcCommand, BasePass, BindGroupStateChange, CommandEncoder, CommandEncoderError, DebugGroupError, EncoderStateError, EncodingState, InnerCommandEncoder, MapPassErr, PassErrorScope, PassStateError, StateChange, bind::{Binder, BinderError}, memory_init::{SurfacesInDiscardState, fixup_discarded_surfaces}, pass::{self, ImmediateState, flush_bindings_helper}, pass_base, pass_try, ray_tracing_pass_commands::ArcRayTracingCommand
-    }, device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures}, hal_label, id, impl_resource_type, pipeline::RayTracingPipeline, resource::{
+    api_log,
+    binding_model::{BindError, BindGroup, ImmediateUploadError, LateMinBufferBindingSizeMismatch},
+    command::{
+        bind::{Binder, BinderError},
+        memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
+        pass::{self, flush_bindings_helper, ImmediateState},
+        pass_base, pass_try,
+        ray_tracing_pass_commands::ArcRayTracingCommand,
+        ArcCommand, BasePass, BindGroupStateChange, CommandEncoder, CommandEncoderError,
+        DebugGroupError, EncoderStateError, EncodingState, InnerCommandEncoder, MapPassErr,
+        PassErrorScope, PassStateError, StateChange,
+    },
+    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
+    hal_label, id, impl_resource_type,
+    pipeline::RayTracingPipeline,
+    resource::{
         DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError, Labeled,
         MissingBufferUsageError, ParentDevice,
-    }, track::{ResourceUsageCompatibilityError, Tracker}
+    },
+    track::{ResourceUsageCompatibilityError, Tracker},
+    Label,
 };
 
 pub type RayTracingBasePass = BasePass<ArcRayTracingCommand, RayTracingPassError>;
@@ -355,7 +370,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
     /// # Differences between render and compute (from which ray tracing passes inherit functionality) passes
     ///
     /// Ray tracing pipelines behave the same as compute pipelines.
-    /// 
+    ///
     /// There are differences between the `flush_bindings` implementations for
     /// render and compute passes, because render passes have a single usage
     /// scope for the entire pass, and compute passes have a separate usage
