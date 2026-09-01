@@ -190,7 +190,6 @@ impl GPUDevice {
     let wgpu_buffer = self.wgpu_device.create_buffer(&wgpu_descriptor);
 
     Ok(GPUBuffer {
-      error_handler: self.error_handler.clone(),
       wgpu_buffer,
       wgpu_device: self.wgpu_device.clone(),
       label: descriptor.label,

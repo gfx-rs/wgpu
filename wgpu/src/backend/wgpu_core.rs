@@ -1704,16 +1704,8 @@ impl dispatch::BufferInterface for CoreBuffer {
             })),
         };
 
-        match self
-            .wgpu_buffer
-            .map_async(range.start, Some(range.end - range.start), operation)
-        {
-            Ok(_) => (),
-            Err(cause) => self
-                .wgpu_buffer
-                .device()
-                .handle_error_nolabel(cause, "Buffer::map_async"),
-        }
+        self.wgpu_buffer
+            .map_async(range.start, Some(range.end - range.start), operation);
     }
 
     fn get_mapped_range(
