@@ -1396,6 +1396,22 @@ impl ShaderBindingData {
             let mut writes = queue.pending_writes.lock();
             let encoder = writes.activate();
             unsafe {
+                encoder.transition_buffers(&[
+                    hal::BufferBarrier {
+                        buffer: staging_buf.raw(),
+                        usage: hal::StateTransition {
+                            from: wgt::BufferUses::MAP_WRITE,
+                            to: wgt::BufferUses::COPY_SRC,
+                        },
+                    },
+                    hal::BufferBarrier {
+                        buffer: sbd.raw.as_ref(),
+                        usage: hal::StateTransition {
+                            from: wgt::BufferUses::empty(),
+                            to: wgt::BufferUses::COPY_DST,
+                        },
+                    },
+                ]);
                 encoder.copy_buffer_to_buffer(
                     staging_buf.raw(),
                     sbd.raw.as_ref(),
@@ -1405,7 +1421,14 @@ impl ShaderBindingData {
                         size: NonZeroU64::new(base_data.len() as _)
                             .expect("Already checked size isn't zero."),
                     }],
-                )
+                );
+                encoder.transition_buffers(&[hal::BufferBarrier {
+                    buffer: sbd.raw.as_ref(),
+                    usage: hal::StateTransition {
+                        from: wgt::BufferUses::COPY_DST,
+                        to: wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA,
+                    },
+                }]);
             };
 
             writes.consume(staging_buf);
