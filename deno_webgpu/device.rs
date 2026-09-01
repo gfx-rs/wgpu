@@ -152,6 +152,7 @@ impl GPUDevice {
     self.wgpu_device.destroy();
   }
 
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   fn create_buffer(
@@ -210,6 +211,7 @@ impl GPUDevice {
     })
   }
 
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   fn create_texture(
@@ -260,6 +262,7 @@ impl GPUDevice {
     })
   }
 
+  #[reentrant]
   #[cppgc]
   fn create_sampler(
     &self,
@@ -290,6 +293,7 @@ impl GPUDevice {
     })
   }
 
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   fn create_bind_group_layout(
@@ -367,6 +371,7 @@ impl GPUDevice {
     })
   }
 
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   fn create_pipeline_layout(
@@ -398,6 +403,7 @@ impl GPUDevice {
     }
   }
 
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   fn create_bind_group(
@@ -456,6 +462,7 @@ impl GPUDevice {
     }
   }
 
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   fn create_shader_module(
@@ -488,6 +495,7 @@ impl GPUDevice {
     }
   }
 
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   fn create_compute_pipeline(
@@ -504,6 +512,7 @@ impl GPUDevice {
     }
   }
 
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   fn create_render_pipeline(
@@ -516,6 +525,7 @@ impl GPUDevice {
   }
 
   #[async_method(fake)]
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   #[global]
@@ -555,6 +565,7 @@ impl GPUDevice {
   }
 
   #[async_method(fake)]
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   #[global]
@@ -641,6 +652,7 @@ impl GPUDevice {
     obj
   }
 
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   fn create_render_bundle_encoder(
@@ -689,6 +701,7 @@ impl GPUDevice {
     })
   }
 
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   fn create_query_set(
