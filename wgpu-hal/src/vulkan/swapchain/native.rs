@@ -404,6 +404,31 @@ impl Drop for NativeSwapchain {
     }
 }
 
+/// Destroy the swapchain semaphores that are no longer referenced by a live
+/// surface texture. A still-referenced semaphore is skipped, as the texture
+/// may still submit work using it.
+///
+/// The vectors are drained.
+fn destroy_swapchain_semaphores(
+    acquire_semaphores: &mut Vec<Arc<Mutex<SwapchainAcquireSemaphore>>>,
+    present_semaphores: &mut Vec<Arc<Mutex<SwapchainPresentSemaphores>>>,
+    device: &crate::vulkan::Device,
+) {
+    for semaphore in acquire_semaphores.drain(..) {
+        if let Some(mutex_removed) = Arc::into_inner(semaphore) {
+            let semaphore_removed = mutex_removed.into_inner();
+            unsafe { semaphore_removed.destroy(&device.shared.raw) };
+        }
+    }
+
+    for semaphore in present_semaphores.drain(..) {
+        if let Some(mutex_removed) = Arc::into_inner(semaphore) {
+            let semaphore_removed = mutex_removed.into_inner();
+            unsafe { semaphore_removed.destroy(&device.shared.raw) };
+        }
+    }
+}
+
 impl Swapchain for NativeSwapchain {
     unsafe fn release_resources(&mut self, device: &crate::vulkan::Device) {
         profiling::scope!("Swapchain::release_resources");
@@ -424,24 +449,11 @@ impl Swapchain for NativeSwapchain {
             unsafe { device.shared.raw.destroy_fence(fence, None) }
         }
 
-        // We cannot take this by value, as the function returns `self`.
-        for semaphore in self.acquire_semaphores.drain(..) {
-            let arc_removed = Arc::into_inner(semaphore).expect(
-                "Trying to destroy a SwapchainAcquireSemaphore that is still in use by a SurfaceTexture",
-            );
-            let mutex_removed = arc_removed.into_inner();
-
-            unsafe { mutex_removed.destroy(&device.shared.raw) };
-        }
-
-        for semaphore in self.present_semaphores.drain(..) {
-            let arc_removed = Arc::into_inner(semaphore).expect(
-                "Trying to destroy a SwapchainPresentSemaphores that is still in use by a SurfaceTexture",
-            );
-            let mutex_removed = arc_removed.into_inner();
-
-            unsafe { mutex_removed.destroy(&device.shared.raw) };
-        }
+        destroy_swapchain_semaphores(
+            &mut self.acquire_semaphores,
+            &mut self.present_semaphores,
+            device,
+        );
     }
 
     unsafe fn acquire(
@@ -975,5 +987,78 @@ impl<'a> SwapchainSubmissionSemaphoreGuard for NativeSwapchainSubmissionSemaphor
         self.present_semaphores_guard
             .get_submit_signal_semaphore(device)
             .map(SemaphoreType::Binary)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Adapter as _, Instance as _};
+
+    /// Regression test for <https://github.com/gfx-rs/wgpu/issues/9277>:
+    /// unconfiguring a swapchain used to panic while the acquired texture,
+    /// which holds an `Arc` to each swapchain semaphore, was still alive.
+    #[test]
+    fn destroy_swapchain_semaphores_with_live_texture_reference() {
+        let Some(device) = open_test_device() else {
+            eprintln!(
+                "skipping destroy_swapchain_semaphores_with_live_texture_reference: no Vulkan device"
+            );
+            return;
+        };
+
+        // A semaphore still referenced by a "live texture" must be skipped, not
+        // destroyed (and not panicked on).
+        let acquire = Arc::new(Mutex::new(
+            SwapchainAcquireSemaphore::new(&device.shared, 0).expect("create acquire semaphore"),
+        ));
+        let present = Arc::new(Mutex::new(SwapchainPresentSemaphores::new(0)));
+        let live_texture_references = (acquire.clone(), present.clone());
+        // Keep handles to destroy the skipped semaphores afterward, so the
+        // device can be dropped without live child objects.
+        let (cleanup_acquire, cleanup_present) = (acquire.clone(), present.clone());
+        let mut acquire_semaphores = vec![acquire];
+        let mut present_semaphores = vec![present];
+        destroy_swapchain_semaphores(&mut acquire_semaphores, &mut present_semaphores, &device);
+        // The semaphores were skipped (still referenced). Destroy them now so
+        // nothing leaks into the device drop.
+        drop(live_texture_references);
+        unsafe {
+            cleanup_acquire.lock().destroy(&device.shared.raw);
+            cleanup_present.lock().destroy(&device.shared.raw);
+        }
+
+        // A semaphore with no other references is destroyed.
+        let acquire = Arc::new(Mutex::new(
+            SwapchainAcquireSemaphore::new(&device.shared, 1).expect("create acquire semaphore"),
+        ));
+        let mut acquire_semaphores = vec![acquire];
+        let mut present_semaphores = Vec::new();
+        destroy_swapchain_semaphores(&mut acquire_semaphores, &mut present_semaphores, &device);
+    }
+
+    fn open_test_device() -> Option<crate::vulkan::Device> {
+        let descriptor = crate::InstanceDescriptor {
+            name: "wgpu-hal swapchain test",
+            flags: wgt::InstanceFlags::default(),
+            memory_budget_thresholds: wgt::MemoryBudgetThresholds::default(),
+            backend_options: wgt::BackendOptions::default(),
+            telemetry: None,
+            display: None,
+        };
+        let instance =
+            unsafe { crate::vulkan::Instance::init_with_callback(&descriptor, None) }.ok()?;
+        let exposed = unsafe { instance.enumerate_adapters(None) }
+            .into_iter()
+            .next()?;
+        unsafe {
+            exposed.adapter.open(
+                wgt::Features::empty(),
+                &wgt::Limits::default(),
+                &wgt::MemoryHints::default(),
+            )
+        }
+        .ok()
+        .map(|open| open.device)
     }
 }
