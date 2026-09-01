@@ -354,6 +354,8 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
     ///
     /// # Differences between render and compute (from which ray tracing passes inherit functionality) passes
     ///
+    /// Ray tracing pipelines behave the same as compute pipelines.
+    /// 
     /// There are differences between the `flush_bindings` implementations for
     /// render and compute passes, because render passes have a single usage
     /// scope for the entire pass, and compute passes have a separate usage
