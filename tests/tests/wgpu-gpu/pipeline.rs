@@ -137,7 +137,11 @@ static COMPUTE_PIPELINE_QUERY_SUBGROUP_SIZE_SIMPLE: GpuTestConfiguration =
 #[apply(gpu_test!)]
 static COMPUTE_PIPELINE_QUERY_SUBGROUP_SIZE_VERIFY: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default().limits(wgpu::Limits::downlevel_defaults()))
+        .parameters(
+            TestParameters::default()
+                .limits(wgpu::Limits::downlevel_defaults())
+                .features(wgpu::Features::SUBGROUP),
+        )
         .run_async(|ctx| async move {
             if ctx.adapter.get_info().backend != wgpu::Backend::Metal {
                 return; // only works on metal
