@@ -794,7 +794,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 17] = [
+static FEATURES_MAPPING: &'static [(wgt::Features, webgpu_sys::GpuFeatureName)] = &[
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
         webgpu_sys::GpuFeatureName::DepthClipControl,
@@ -868,8 +868,8 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 17] = [
 fn map_wgt_features(supported_features: webgpu_sys::GpuSupportedFeatures) -> wgt::Features {
     let mut features = wgt::Features::empty();
     for (wgpu_feat, web_feat) in FEATURES_MAPPING {
-        match wasm_bindgen::JsValue::from(web_feat).as_string() {
-            Some(value) if supported_features.has(&value) => features |= wgpu_feat,
+        match wasm_bindgen::JsValue::from(*web_feat).as_string() {
+            Some(value) if supported_features.has(&value) => features |= *wgpu_feat,
             _ => {}
         }
     }
