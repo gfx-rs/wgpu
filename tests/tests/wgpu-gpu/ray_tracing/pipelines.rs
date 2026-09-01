@@ -1,7 +1,10 @@
 use std::sync::mpsc;
 
 use wgpu::{
-    BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, CommandEncoderDescriptor, Features, Limits, PipelineLayoutDescriptor, RayTracingIntersectionDescriptor, RayTracingPassDescriptor, RayTracingPipelineDescriptor, RayTracingStage, ShaderModuleDescriptor, ShaderStages
+    BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
+    CommandEncoderDescriptor, Features, Limits, PipelineLayoutDescriptor,
+    RayTracingIntersectionDescriptor, RayTracingPassDescriptor, RayTracingPipelineDescriptor,
+    RayTracingStage, ShaderModuleDescriptor, ShaderStages,
 };
 use wgpu_test::{
     apply, fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
@@ -439,25 +442,27 @@ fn pipeline_swap(ctx: TestingContext) {
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(ray_miss_source)),
     });
 
-    let bgl = ctx.device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[
-            BindGroupLayoutEntry {
+    let bgl = ctx
+        .device
+        .create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[BindGroupLayoutEntry {
                 binding: 0,
                 visibility: ShaderStages::RAY_GENERATION,
-                ty: wgpu::BindingType::AccelerationStructure { vertex_return: false },
+                ty: wgpu::BindingType::AccelerationStructure {
+                    vertex_return: false,
+                },
                 count: None,
-            },
-        ],
-    });
+            }],
+        });
 
-    let pipeline_layout = ctx.device.create_pipeline_layout(&PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[
-            Some(&bgl),
-        ],
-        immediate_size: 0,
-    });
+    let pipeline_layout = ctx
+        .device
+        .create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(&bgl)],
+            immediate_size: 0,
+        });
 
     let pipeline = ctx
         .device
