@@ -30,7 +30,7 @@ fn return_vec2f32_const_ai() -> vec2<f32> {
     return vec2(1f);
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     let _e0 = return_i32_ai();
     let _e1 = return_u32_ai();

@@ -14,7 +14,7 @@ fn main_1() {
     return;
 }
 
-@fragment 
+@fragment
 fn main() -> FragmentOutput {
     main_1();
     let _e1 = output0_;
