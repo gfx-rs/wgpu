@@ -367,7 +367,7 @@ pub(crate) enum AsAction {
     /// A [`Tlas`] has been bound and used by any pass. The [`Blas`]es it
     /// was built with must be validated to have not been built after the
     /// [`Tlas`] as backends have undefined behaviour on this (it would
-    /// cause AABBs to be incorrect, ect.)
+    /// cause AABBs to be incorrect, etc.)
     BindTlas(Arc<Tlas>),
     /// A [`RayTracingPipeline`] has had a `dispatch_rays` call on it.
     /// This [`Tlas`] has been put in a bindgroup, and so the validation
