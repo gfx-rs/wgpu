@@ -801,26 +801,11 @@ impl Global {
         hub.query_sets.remove(query_set_id)
     }
 
-    pub fn device_create_render_pipeline(
-        &self,
-        device_id: DeviceId,
-        desc: &RenderPipelineDescriptor,
-        id_in: id::RenderPipelineId,
-    ) -> (
-        id::RenderPipelineId,
-        Option<pipeline::CreateRenderPipelineError>,
-    ) {
-        let mut hub = self.hub.borrow_mut();
-        let Hub {
-            render_pipelines,
-            devices,
-            shader_modules,
-            pipeline_layouts,
-            ..
-        } = &mut *hub;
-
-        let device = devices.get(device_id);
-
+    fn resolve_render_pipeline_descriptor<'a>(
+        shader_modules: &mut Registry<Arc<pipeline::ShaderModule>>,
+        pipeline_layouts: &mut Registry<Arc<binding_model::PipelineLayout>>,
+        desc: &'a RenderPipelineDescriptor,
+    ) -> ResolvedGeneralRenderPipelineDescriptor<'a> {
         let layout = desc.layout.map(|layout| pipeline_layouts.get(layout));
 
         let vertex = {
@@ -865,7 +850,7 @@ impl Global {
             None
         };
 
-        let desc = ResolvedGeneralRenderPipelineDescriptor {
+        ResolvedGeneralRenderPipelineDescriptor {
             label: desc.label.clone(),
             layout,
             vertex,
@@ -875,13 +860,65 @@ impl Global {
             fragment,
             multiview_mask: None,
             cache: None,
-        };
+        }
+    }
 
-        let (pipeline, error) = device.create_render_pipeline(desc);
+    pub fn device_create_render_pipeline(
+        &self,
+        device_id: DeviceId,
+        desc: &RenderPipelineDescriptor,
+        id_in: id::RenderPipelineId,
+    ) {
+        let mut hub = self.hub.borrow_mut();
 
-        let id = render_pipelines.assign(id_in, pipeline);
+        let Hub {
+            shader_modules,
+            pipeline_layouts,
+            render_pipelines,
+            devices,
+            ..
+        } = &mut *hub;
 
-        (id, error)
+        let device = devices.get(device_id);
+
+        let desc = Self::resolve_render_pipeline_descriptor(shader_modules, pipeline_layouts, desc);
+
+        let pipeline = device.create_render_pipeline(desc);
+
+        render_pipelines.assign(id_in, pipeline);
+    }
+
+    /// Error-returning version of `device_create_render_pipeline` to implement
+    /// [GPUDevice.createRenderPipelineAsync](https://gpuweb.github.io/gpuweb/#dom-gpudevice-createrenderpipelineasync).
+    /// Returns an error if the pipeline creation fails instead of handling error in device.
+    ///
+    /// Id is assigned to the pipeline only if the creation succeeds.
+    pub fn create_render_pipeline_or_error(
+        &self,
+        device_id: DeviceId,
+        desc: &RenderPipelineDescriptor,
+        id_in: id::RenderPipelineId,
+    ) -> Result<(), pipeline::CreateRenderPipelineError> {
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            render_pipelines,
+            devices,
+            shader_modules,
+            pipeline_layouts,
+            ..
+        } = &mut *hub;
+
+        let device = devices.get(device_id);
+
+        let desc = Self::resolve_render_pipeline_descriptor(shader_modules, pipeline_layouts, desc);
+
+        match device.create_render_pipeline_or_error(desc) {
+            Ok(pipeline) => {
+                render_pipelines.assign(id_in, pipeline);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
