@@ -654,8 +654,6 @@ impl Drop for DeviceShared {
 )]
 pub struct Device {
     mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
-    /// Separate pool for [`crate::MemoryFlags::TRANSIENT`] allocations, so short-lived
-    /// allocations never pin memory blocks that also hold long-lived ones.
     transient_mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
     desc_allocator: Mutex<descriptor::DescriptorAllocator>,
     valid_ash_memory_types: u32,
@@ -792,7 +790,7 @@ impl Drop for Queue {
 #[derive(Debug)]
 enum BufferMemoryBacking {
     Managed(gpu_allocator::vulkan::Allocation),
-    /// Like [`Self::Managed`], but sub-allocated from [`Device::transient_mem_allocator`].
+    /// Like [`Self::Managed`], but from [`Device::transient_mem_allocator`].
     ManagedTransient(gpu_allocator::vulkan::Allocation),
     VulkanMemory {
         memory: vk::DeviceMemory,
