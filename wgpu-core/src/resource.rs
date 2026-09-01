@@ -996,16 +996,14 @@ impl Buffer {
     }
 
     // Note: This must not be called while holding a lock.
-    pub fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
+    pub fn unmap(self: &Arc<Self>) {
         profiling::scope!("unmap", "Buffer");
         api_log!("Buffer::unmap {:?}", Arc::as_ptr(self));
-        if let Some((mut operation, status)) = self.unmap_inner()? {
+        if let Ok(Some((mut operation, status))) = self.unmap_inner() {
             if let Some(callback) = operation.callback.take() {
                 callback(status);
             }
         }
-
-        Ok(())
     }
 
     fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
@@ -1127,7 +1125,7 @@ impl Buffer {
             return;
         };
 
-        let _ = self.unmap();
+        self.unmap();
 
         let temp = {
             let mut snatch_guard = device.snatchable_lock.write();

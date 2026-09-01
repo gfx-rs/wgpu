@@ -126,7 +126,7 @@ impl Player {
             }
             Action::DropBuffer(id) => {
                 let buffer = self.buffers.remove(&id).expect("invalid buffer");
-                let _ = buffer.unmap();
+                buffer.unmap();
             }
             Action::CreateTexture(id, desc) => {
                 let texture = device.create_texture(&desc);
