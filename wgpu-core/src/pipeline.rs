@@ -1315,7 +1315,7 @@ impl ShaderBindingData {
         device: Arc<Device>,
         pipeline: &dyn hal::DynRayTracingPipeline,
         num_intersection_groups: usize,
-    ) -> Result<Self, CreateRayTracingPipelineError> {
+    ) -> Result<Arc<Self>, CreateRayTracingPipelineError> {
         let mut base_data = Vec::new();
 
         let ray_generation_data = unsafe {
@@ -1371,6 +1371,14 @@ impl ShaderBindingData {
         }
         .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
 
+        let sbd = Arc::new(Self {
+            raw: ManuallyDrop::new(buffer),
+            device: device.clone(),
+            num_intersection_groups: u32::try_from(num_intersection_groups).unwrap(),
+            miss_offset: padded_miss_offset,
+            intersection_offset: padded_intersection_offset,
+        });
+
         // If there is no queue anymore, the ray tracing pipeline can't be accessed, so we don't have to worry about UB from uninitialized values
         if let Some(queue) = device.get_queue() {
             let mut staging = crate::resource::StagingBuffer::new(
@@ -1390,7 +1398,7 @@ impl ShaderBindingData {
             unsafe {
                 encoder.copy_buffer_to_buffer(
                     staging_buf.raw(),
-                    buffer.as_ref(),
+                    sbd.raw.as_ref(),
                     &[hal::BufferCopy {
                         src_offset: 0,
                         dst_offset: 0,
@@ -1401,15 +1409,10 @@ impl ShaderBindingData {
             };
 
             writes.consume(staging_buf);
+            writes.use_shader_binding_data(&sbd);
         }
 
-        Ok(Self {
-            raw: ManuallyDrop::new(buffer),
-            device,
-            num_intersection_groups: u32::try_from(num_intersection_groups).unwrap(),
-            miss_offset: padded_miss_offset,
-            intersection_offset: padded_intersection_offset,
-        })
+        Ok(sbd)
     }
 }
 
@@ -1427,7 +1430,7 @@ impl Drop for ShaderBindingData {
 pub(crate) struct RayTracingPipelineState {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynRayTracingPipeline>>,
     pub(crate) layout: Arc<PipelineLayout>,
-    pub(crate) shader_binding_data: ShaderBindingData,
+    pub(crate) shader_binding_data: Arc<ShaderBindingData>,
     pub(crate) _shader_modules: Vec<Arc<ShaderModule>>,
 }
 
