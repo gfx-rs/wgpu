@@ -3025,18 +3025,26 @@ impl crate::Device for super::Device {
 
             // Each block's range indexes into its own report's allocation list.
             let allocation_base = allocations.len();
-            allocations.extend(report.allocations.into_iter().map(|alloc| {
-                wgt::AllocationReport {
-                    name: alloc.name,
-                    offset: alloc.offset,
-                    size: alloc.size,
-                }
-            }));
-            blocks.extend(report.blocks.into_iter().map(|block| wgt::MemoryBlockReport {
-                size: block.size,
-                allocations: (block.allocations.start + allocation_base)
-                    ..(block.allocations.end + allocation_base),
-            }));
+            allocations.extend(
+                report
+                    .allocations
+                    .into_iter()
+                    .map(|alloc| wgt::AllocationReport {
+                        name: alloc.name,
+                        offset: alloc.offset,
+                        size: alloc.size,
+                    }),
+            );
+            blocks.extend(
+                report
+                    .blocks
+                    .into_iter()
+                    .map(|block| wgt::MemoryBlockReport {
+                        size: block.size,
+                        allocations: (block.allocations.start + allocation_base)
+                            ..(block.allocations.end + allocation_base),
+                    }),
+            );
             total_allocated_bytes += report.total_allocated_bytes;
             total_reserved_bytes += report.total_capacity_bytes;
         }
