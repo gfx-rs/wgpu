@@ -1,9 +1,12 @@
-use wgpu_test::{apply, fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{
+    apply, fail, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
         COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE,
         COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX,
+        COMPUTE_PIPELINE_QUERY_SUBGROUP_SIZE,
         RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE,
         RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX,
         NO_TARGETLESS_RENDER,
@@ -97,6 +100,32 @@ static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
                 Some("Bind group layout index 4294967295 is greater than the device's configured `max_bind_groups` limit"),
             );
         });
+
+#[apply(gpu_test!)]
+static COMPUTE_PIPELINE_QUERY_SUBGROUP_SIZE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_sync(|ctx| {
+        valid(&ctx.device, || {
+            let module = ctx.device.create_shader_module(TRIVIAL_COMPUTE_SHADER_DESC);
+
+            let pipeline = ctx
+                .device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("compute pipeline"),
+                    layout: None,
+                    module: &module,
+                    entry_point: Some("main"),
+                    compilation_options: Default::default(),
+                    cache: None,
+                });
+
+            if ctx.adapter.get_info().backend == wgpu::Backend::Metal {
+                assert!(pipeline.get_subgroup_size().is_some())
+            } else {
+                assert!(pipeline.get_subgroup_size().is_none())
+            }
+        });
+    });
 
 #[apply(gpu_test!)]
 static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
