@@ -4535,21 +4535,22 @@ impl Device {
         Ok(pipeline)
     }
 
+    /// Creates a render pipeline. If the creation fails,
+    /// it will handle error in device and return an invalid render pipeline.
+    ///
+    /// Corresponds to [GPUDevice.createRenderPipeline](https://www.w3.org/TR/webgpu/#dom-gpudevice-createrenderpipeline)
     pub fn create_render_pipeline(
         self: &Arc<Self>,
         desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
-    ) -> (
-        Arc<pipeline::RenderPipeline>,
-        Option<pipeline::CreateRenderPipelineError>,
-    ) {
+    ) -> Arc<pipeline::RenderPipeline> {
         profiling::scope!("Device::create_render_pipeline");
-        let (render_pipeline, error) = match self.create_render_pipeline_inner(desc.clone()) {
-            Ok(pipeline) => (pipeline, None),
-            Err(e) => (
-                pipeline::RenderPipeline::invalid(self.clone(), desc.label.to_string()),
-                Some(e),
-            ),
-        };
+
+        let render_pipeline = self
+            .create_render_pipeline_or_error(desc.clone())
+            .unwrap_or_else(|err| {
+                self.handle_error(err, desc.label.as_deref(), "Device::create_render_pipeline");
+                pipeline::RenderPipeline::invalid(self.clone(), desc.label.to_string())
+            });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace::IntoTrace;
@@ -4562,10 +4563,13 @@ impl Device {
             "Device::create_render_pipeline -> {:?}",
             Arc::as_ptr(&render_pipeline)
         );
-        (render_pipeline, error)
+        render_pipeline
     }
 
-    pub fn create_render_pipeline_inner(
+    /// Creates a render pipeline without raising any error to device.
+    ///
+    /// Corresponds to [GPUDevice.createRenderPipelineAsync](https://www.w3.org/TR/webgpu/#dom-gpudevice-createrenderpipelineasync)
+    pub fn create_render_pipeline_or_error(
         self: &Arc<Self>,
         desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
     ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreateRenderPipelineError> {
