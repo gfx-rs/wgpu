@@ -211,7 +211,6 @@ where
 /// for an unlimited number (i.e. it doesn't depend on them).
 pub(super) fn flush_bindings_helper(
     state: &mut PassState,
-    tlas_intersection_offset_cap: Option<u32>,
 ) -> Result<(), InvalidOrDestroyedResourceError> {
     let start = state.binder.take_rebind_start_index();
     let entries = state.binder.list_valid_with_start(start);
@@ -240,9 +239,7 @@ pub(super) fn flush_bindings_helper(
             .used
             .acceleration_structures
             .into_iter()
-            .map(|tlas| {
-                crate::ray_tracing::AsAction::UseTlas(tlas.clone(), tlas_intersection_offset_cap)
-            });
+            .map(|tlas| crate::ray_tracing::AsAction::BindTlas(tlas.clone()));
 
         state.base.as_actions.extend(used_resource);
 

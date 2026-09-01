@@ -394,7 +394,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
                 .remove_usage(buffer, wgt::BufferUses::INDIRECT);
         }
 
-        flush_bindings_helper(&mut self.pass, None)?;
+        flush_bindings_helper(&mut self.pass)?;
 
         CommandEncoder::drain_barriers(
             self.pass.base.raw_encoder,

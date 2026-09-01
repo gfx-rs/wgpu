@@ -577,7 +577,7 @@ impl CommandBufferMutable {
                             tlas_build.max_intersection_idx;
                     }
                 }
-                AsAction::UseTlas(tlas, max_intersection_idx) => {
+                AsAction::BindTlas(tlas) => {
                     let tlas_build_index = tlas.built_index.read();
                     let dependencies = tlas.dependencies.read();
 
@@ -600,17 +600,16 @@ impl CommandBufferMutable {
                         }
                         blas.try_raw(snatch_guard)?;
                     }
-
+                }
+                AsAction::TraceTlas(tlas, max_intersection_idx) => {
                     let current_max = tlas.max_intersection_index.read();
 
-                    if let &Some(max_intersection_idx) = max_intersection_idx {
-                        if *current_max > max_intersection_idx {
-                            return Err(ValidateAsActionsError::TlasIntersectionInvalid(
-                                tlas.error_ident(),
-                                *current_max,
-                                max_intersection_idx,
-                            ));
-                        }
+                    if *current_max > *max_intersection_idx {
+                        return Err(ValidateAsActionsError::TlasIntersectionInvalid(
+                            tlas.error_ident(),
+                            *current_max,
+                            *max_intersection_idx,
+                        ));
                     }
                 }
             }
@@ -624,7 +623,7 @@ impl CommandBufferMutable {
             .as_actions
             .iter()
             .filter_map(|action| {
-                if let AsAction::UseTlas(tlas, _) = action {
+                if let AsAction::BindTlas(tlas) = action {
                     Some(tlas.dependencies.read())
                 } else {
                     None
@@ -644,7 +643,7 @@ impl CommandBufferMutable {
                         }
                     }
                 }
-                AsAction::UseTlas(_tlas, _) => {
+                AsAction::BindTlas(_tlas) => {
                     let tlas_dependencies = tlas_dependencies_lock_iter.next().unwrap(); // _tlas.dependencies.read();
                     for dependency in tlas_dependencies.iter() {
                         if let Some(dependency) = dependency.raw(snatch_guard) {
@@ -652,6 +651,8 @@ impl CommandBufferMutable {
                         }
                     }
                 }
+                // We only need the dependencies on a bind, not on a use
+                AsAction::TraceTlas(_, _) => {}
             }
         }
         if !dependencies.is_empty() {

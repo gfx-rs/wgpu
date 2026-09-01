@@ -24,6 +24,7 @@ use crate::{
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     hal_label, id, impl_resource_type,
     pipeline::RayTracingPipeline,
+    ray_tracing::AsAction,
     resource::{
         DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError, Labeled,
         MissingBufferUsageError, ParentDevice,
@@ -396,21 +397,26 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         // dropping `UsageScope`s is significant (even with the pool), we
         // add and then remove usage from a single usage scope.
 
+        let max_intersection_index = self
+            .pipeline
+            .as_ref()
+            .unwrap()
+            .shader_binding_data()?
+            .num_intersection_groups;
+
         for bind_group in self.pass.binder.list_active() {
             self.intermediate_trackers
                 .set_and_remove_from_usage_scope_sparse(&mut self.pass.scope, &bind_group.used);
+
+            for tlas in bind_group.used.acceleration_structures.into_iter() {
+                self.pass
+                    .base
+                    .as_actions
+                    .push(AsAction::TraceTlas(tlas.clone(), max_intersection_index));
+            }
         }
 
-        flush_bindings_helper(
-            &mut self.pass,
-            Some(
-                self.pipeline
-                    .as_ref()
-                    .unwrap()
-                    .shader_binding_data()?
-                    .num_intersection_groups,
-            ),
-        )?;
+        flush_bindings_helper(&mut self.pass)?;
 
         CommandEncoder::drain_barriers(
             self.pass.base.raw_encoder,
