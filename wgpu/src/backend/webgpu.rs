@@ -3336,6 +3336,9 @@ impl dispatch::ComputePipelineInterface for WebComputePipeline {
         }
         .into()
     }
+    fn get_subgroup_size(&self) -> Option<usize> {
+        None // only available on Metal
+    }
 }
 impl Drop for WebComputePipeline {
     fn drop(&mut self) {

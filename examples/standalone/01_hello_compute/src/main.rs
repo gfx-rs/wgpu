@@ -182,6 +182,7 @@ fn main() {
         compilation_options: wgpu::PipelineCompilationOptions::default(),
         cache: None,
     });
+    println!("{:?}", pipeline.get_subgroup_size());
 
     // The command encoder allows us to record commands that we will later submit to the GPU.
     let mut encoder =
