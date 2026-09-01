@@ -641,6 +641,9 @@ impl Device {
     }
 
     /// Set a callback which will be called for all errors that are not handled in error scopes.
+    ///
+    /// Detailed shader creation errors will not be provided to handler;
+    /// they can be inspected via [`ShaderModule::get_compilation_info`].
     pub fn on_uncaptured_error(&self, handler: Arc<dyn UncapturedErrorHandler>) {
         self.inner.on_uncaptured_error(handler)
     }
@@ -1061,6 +1064,9 @@ impl ErrorScopeGuard {
     ///
     /// Returns a future which resolves to the error captured by this scope, if any.
     /// The pop takes effect immediately; the future does not need to be awaited before doing work that is outside of this error scope.
+    ///
+    /// Detailed shader creation errors are not returned via this function;
+    /// they can be inspected via [`ShaderModule::get_compilation_info`].
     pub fn pop(mut self) -> impl Future<Output = Option<Error>> + WasmNotSend {
         self.popped = true;
         self.device.pop_error_scope(self.index)

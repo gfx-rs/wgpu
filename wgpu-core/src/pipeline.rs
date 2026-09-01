@@ -199,21 +199,26 @@ fn finalize_passthrough_entry_point_name(
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateShaderModuleError {
+    // These variants deliberately don't forward to `ShaderError`'s `Display`,
+    // which would include the shader source text and detailed compiler messages:
+    // per the WebGPU specification <https://gpuweb.github.io/gpuweb/#dom-gpudevice-createshadermodule>,
+    // the message of the validation error raised by `createShaderModule` should not include those details,
+    // since they are accessible via `getCompilationInfo()`.
     #[cfg(feature = "wgsl")]
-    #[error(transparent)]
-    Parsing(#[from] ShaderError<naga::front::wgsl::ParseError>),
+    #[error("Shader '{label}' parsing error. Concrete error is available via `get_compilation_info`", label = _0.label.as_deref().unwrap_or_default())]
+    Parsing(ShaderError<naga::front::wgsl::ParseError>),
     #[cfg(feature = "glsl")]
-    #[error(transparent)]
-    ParsingGlsl(#[from] ShaderError<naga::front::glsl::ParseErrors>),
+    #[error("Shader '{label}' parsing error. Concrete error is available via `get_compilation_info`", label = _0.label.as_deref().unwrap_or_default())]
+    ParsingGlsl(ShaderError<naga::front::glsl::ParseErrors>),
     #[cfg(feature = "spirv")]
-    #[error(transparent)]
-    ParsingSpirV(#[from] ShaderError<naga::front::spv::Error>),
+    #[error("Shader '{label}' parsing error. Concrete error is available via `get_compilation_info`", label = _0.label.as_deref().unwrap_or_default())]
+    ParsingSpirV(ShaderError<naga::front::spv::Error>),
     #[error("Failed to generate the backend-specific code")]
     Generation,
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error(transparent)]
-    Validation(#[from] ShaderError<naga::WithSpan<naga::valid::ValidationError>>),
+    #[error("Shader '{label}' validation error. Concrete error is available via `get_compilation_info`", label = _0.label.as_deref().unwrap_or_default())]
+    Validation(ShaderError<naga::WithSpan<naga::valid::ValidationError>>),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(
