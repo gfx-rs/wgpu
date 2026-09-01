@@ -9,27 +9,12 @@ use wgt::{
 };
 
 use crate::{
-    api_log,
-    binding_model::{BindError, BindGroup, ImmediateUploadError, LateMinBufferBindingSizeMismatch},
-    command::{
-        bind::{Binder, BinderError},
-        memory_init::SurfacesInDiscardState,
-        pass::{self, flush_bindings_helper, ImmediateState},
-        pass_base, pass_try,
-        ray_tracing_pass_commands::ArcRayTracingCommand,
-        ArcCommand, BasePass, BindGroupStateChange, CommandEncoder, CommandEncoderError,
-        DebugGroupError, EncoderStateError, EncodingState, InnerCommandEncoder, MapPassErr,
-        PassErrorScope, PassStateError, StateChange,
-    },
-    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
-    hal_label, id, impl_resource_type,
-    pipeline::RayTracingPipeline,
-    resource::{
+    Label, api_log, binding_model::{BindError, BindGroup, ImmediateUploadError, LateMinBufferBindingSizeMismatch}, command::{
+        ArcCommand, BasePass, BindGroupStateChange, CommandEncoder, CommandEncoderError, DebugGroupError, EncoderStateError, EncodingState, InnerCommandEncoder, MapPassErr, PassErrorScope, PassStateError, StateChange, bind::{Binder, BinderError}, memory_init::{SurfacesInDiscardState, fixup_discarded_surfaces}, pass::{self, ImmediateState, flush_bindings_helper}, pass_base, pass_try, ray_tracing_pass_commands::ArcRayTracingCommand
+    }, device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures}, hal_label, id, impl_resource_type, pipeline::RayTracingPipeline, resource::{
         DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError, Labeled,
         MissingBufferUsageError, ParentDevice,
-    },
-    track::{ResourceUsageCompatibilityError, Tracker},
-    Label,
+    }, track::{ResourceUsageCompatibilityError, Tracker}
 };
 
 pub type RayTracingBasePass = BasePass<ArcRayTracingCommand, RayTracingPassError>;
@@ -804,6 +789,60 @@ pub(super) fn encode_ray_tracing_pass(
             }
         }
     }
+
+    if *state.pass.base.debug_scope_depth > 0 {
+        Err(
+            RayTracingPassErrorInner::DebugGroupError(DebugGroupError::MissingPop)
+                .map_pass_err(pass_scope),
+        )?;
+    }
+
+    unsafe {
+        state.pass.base.raw_encoder.end_ray_tracing_pass();
+    }
+
+    let State {
+        pass: pass::PassState {
+            pending_discard_init_fixups,
+            ..
+        },
+        intermediate_trackers,
+        ..
+    } = state;
+
+    // Stop the current command encoder.
+    parent_state.raw_encoder.close().map_pass_err(pass_scope)?;
+
+    // Create a new command encoder, which we will insert _before_ the body of the ray tracing pass.
+    //
+    // Use that buffer to insert barriers and clear discarded images.
+    let transit = parent_state
+        .raw_encoder
+        .open_pass(hal_label(
+            Some("(wgpu internal) Pre Pass"),
+            device.instance_flags,
+        ))
+        .map_pass_err(pass_scope)?;
+    // If the ray tracing pass reads any surfaces that were discarded by a previous
+    // render pass in the same command buffer, initialize them.
+    fixup_discarded_surfaces(
+        pending_discard_init_fixups.into_iter(),
+        transit,
+        &mut parent_state.tracker.textures,
+        device,
+        parent_state.snatch_guard,
+    );
+    CommandEncoder::insert_barriers_from_tracker(
+        transit,
+        parent_state.tracker,
+        &intermediate_trackers,
+        parent_state.snatch_guard,
+    );
+    // Close the command encoder, and swap it with the previous.
+    parent_state
+        .raw_encoder
+        .close_and_swap()
+        .map_pass_err(pass_scope)?;
 
     Ok(())
 }
