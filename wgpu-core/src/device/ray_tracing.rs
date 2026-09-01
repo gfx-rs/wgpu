@@ -744,11 +744,18 @@ impl Device {
         };
 
         // Won't panic because `desc.intersections` is required to be below 2^24 - 1 (see `CreateRayTracingPipelineError::TooManyIntersectionGroups`)
-        let shader_binding_data = pipeline::ShaderBindingData::from_raw_pipeline(
+        let shader_binding_data = match pipeline::ShaderBindingData::from_raw_pipeline(
             self.clone(),
             raw.as_ref(),
             desc.intersections.len(),
-        )?;
+        ){
+            Ok(sbd) => sbd,
+            Err(e) => {
+                // We need to destroy the raw ray tracing pipeline first.
+                unsafe { self.raw().destroy_ray_tracing_pipeline(raw) };
+                return Err(e)
+            }
+        };
 
         let naga::valid::ImmediateUsage::Valid {
             slots: immediate_slots_required,
