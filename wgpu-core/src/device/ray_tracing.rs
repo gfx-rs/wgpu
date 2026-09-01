@@ -748,12 +748,12 @@ impl Device {
             self.clone(),
             raw.as_ref(),
             desc.intersections.len(),
-        ){
+        ) {
             Ok(sbd) => sbd,
             Err(e) => {
                 // We need to destroy the raw ray tracing pipeline first.
                 unsafe { self.raw().destroy_ray_tracing_pipeline(raw) };
-                return Err(e)
+                return Err(e);
             }
         };
 

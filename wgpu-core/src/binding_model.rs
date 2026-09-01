@@ -386,6 +386,10 @@ pub(crate) struct PerStageBindingTypeCounter {
     vertex: Saturating<u32>,
     fragment: Saturating<u32>,
     compute: Saturating<u32>,
+    ray_generation: Saturating<u32>,
+    miss: Saturating<u32>,
+    any_hit: Saturating<u32>,
+    closest_hit: Saturating<u32>,
 }
 
 impl PerStageBindingTypeCounter {
@@ -399,10 +403,29 @@ impl PerStageBindingTypeCounter {
         if stage.contains(wgt::ShaderStages::COMPUTE) {
             self.compute += count;
         }
+        if stage.contains(wgt::ShaderStages::RAY_GENERATION) {
+            self.ray_generation += count;
+        }
+        if stage.contains(wgt::ShaderStages::MISS) {
+            self.miss += count;
+        }
+        if stage.contains(wgt::ShaderStages::ANY_HIT) {
+            self.any_hit += count;
+        }
+        if stage.contains(wgt::ShaderStages::CLOSEST_HIT) {
+            self.closest_hit += count;
+        }
     }
 
     pub(crate) fn max(&self) -> (BindingZone, u32) {
-        let max_value = self.vertex.max(self.fragment.max(self.compute));
+        let max_value = self.vertex.max(
+            self.fragment.max(
+                self.compute.max(
+                    self.ray_generation
+                        .max(self.miss.max(self.any_hit.max(self.closest_hit))),
+                ),
+            ),
+        );
         let mut stage = wgt::ShaderStages::NONE;
         if max_value == self.vertex {
             stage |= wgt::ShaderStages::VERTEX
@@ -412,6 +435,18 @@ impl PerStageBindingTypeCounter {
         }
         if max_value == self.compute {
             stage |= wgt::ShaderStages::COMPUTE
+        }
+        if max_value == self.ray_generation {
+            stage |= wgt::ShaderStages::RAY_GENERATION
+        }
+        if max_value == self.miss {
+            stage |= wgt::ShaderStages::MISS
+        }
+        if max_value == self.any_hit {
+            stage |= wgt::ShaderStages::ANY_HIT
+        }
+        if max_value == self.closest_hit {
+            stage |= wgt::ShaderStages::CLOSEST_HIT
         }
         (BindingZone::Stage(stage), max_value.0)
     }
