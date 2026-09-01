@@ -131,18 +131,32 @@ fn pipeline_create_use(ctx: TestingContext) {
                 entry_point: None,
                 compilation_options: Default::default(),
             },
-            intersection_descs: &[RayTracingIntersectionDescriptor::Triangle {
-                closest_hit: RayTracingStage {
-                    module: &ray_closest,
-                    entry_point: None,
-                    compilation_options: Default::default(),
+            intersection_descs: &[
+                RayTracingIntersectionDescriptor::Triangle {
+                    closest_hit: RayTracingStage {
+                        module: &ray_closest,
+                        entry_point: None,
+                        compilation_options: Default::default(),
+                    },
+                    any_hit: Some(RayTracingStage {
+                        module: &ray_any,
+                        entry_point: None,
+                        compilation_options: Default::default(),
+                    }),
                 },
-                any_hit: Some(RayTracingStage {
-                    module: &ray_any,
-                    entry_point: None,
-                    compilation_options: Default::default(),
-                }),
-            }],
+                RayTracingIntersectionDescriptor::Triangle {
+                    closest_hit: RayTracingStage {
+                        module: &ray_closest,
+                        entry_point: None,
+                        compilation_options: Default::default(),
+                    },
+                    any_hit: Some(RayTracingStage {
+                        module: &ray_any,
+                        entry_point: None,
+                        compilation_options: Default::default(),
+                    }),
+                },
+            ],
             max_recursion_depth: 1,
             cache: None,
         });
