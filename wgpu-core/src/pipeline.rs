@@ -593,7 +593,7 @@ impl ComputePipeline {
     }
 
     // TODO: this probably doesn't need tracing?
-    pub fn get_subgroup_size(self: &Arc<Self>) -> Option<usize> {
+    pub fn get_subgroup_size(self: &Arc<Self>) -> Option<u32> {
         self.raw()
             // TODO:
             // not sure if this is useful
