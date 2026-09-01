@@ -149,7 +149,10 @@ static COMPUTE_PIPELINE_QUERY_SUBGROUP_SIZE_VERIFY: GpuTestConfiguration =
 
             let (device, queue) = ctx
                 .adapter
-                .request_device(&Default::default())
+                .request_device(&wgpu::DeviceDescriptor {
+                    required_features: wgpu::Features::SUBGROUP,
+                    ..Default::default()
+                })
                 .await
                 .unwrap();
             let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
