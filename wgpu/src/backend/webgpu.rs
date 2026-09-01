@@ -794,7 +794,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-static FEATURES_MAPPING: &'static [(wgt::Features, webgpu_sys::GpuFeatureName)] = &[
+static FEATURES_MAPPING: &[(wgt::Features, webgpu_sys::GpuFeatureName)] = &[
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
         webgpu_sys::GpuFeatureName::DepthClipControl,
