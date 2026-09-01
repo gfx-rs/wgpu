@@ -3336,7 +3336,7 @@ impl dispatch::ComputePipelineInterface for WebComputePipeline {
         }
         .into()
     }
-    fn get_subgroup_size(&self) -> Option<usize> {
+    fn get_subgroup_size(&self) -> Option<u32> {
         None // only available on Metal
     }
 }
