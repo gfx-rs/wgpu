@@ -601,11 +601,9 @@ impl ComputePipeline {
             .map_err(|err| {
                 self.device
                     .handle_error_nolabel(err, "ComputePipeline::get_subgroup_size");
-                ()
             })
             .ok()
-            .map(hal::DynComputePipeline::get_subgroup_size)
-            .flatten()
+            .and_then(hal::DynComputePipeline::get_subgroup_size)
     }
 }
 
