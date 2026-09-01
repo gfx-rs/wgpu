@@ -270,7 +270,7 @@ pub enum ValidateAsActionsError {
     #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
     BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),
 
-    #[error("Tlas {0:?} has an intersection index {1:?} greater than {2:?}")]
+    #[error("Tlas {0:?} has an intersection index {1:?} out of bounds of the length of the intersection array {2:?}")]
     TlasIntersectionInvalid(ResourceErrorIdent, u32, u32),
 }
 

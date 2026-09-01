@@ -601,14 +601,14 @@ impl CommandBufferMutable {
                         blas.try_raw(snatch_guard)?;
                     }
                 }
-                AsAction::TraceTlas(tlas, max_intersection_idx) => {
+                AsAction::TraceTlas(tlas, intersection_len) => {
                     let current_max = tlas.max_intersection_index.read();
 
-                    if *current_max > *max_intersection_idx {
+                    if *current_max >= *intersection_len {
                         return Err(ValidateAsActionsError::TlasIntersectionInvalid(
                             tlas.error_ident(),
                             *current_max,
-                            *max_intersection_idx,
+                            *intersection_len,
                         ));
                     }
                 }
