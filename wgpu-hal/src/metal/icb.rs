@@ -229,9 +229,26 @@ pub(super) struct IcbExecutionResources {
     _argument_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
 }
 
+impl super::AdapterShared {
+    /// Whether this device actually executes GPU-generated render ICBs.
+    ///
+    /// Apple's feature tables do not predict this (see the notes on
+    /// `PrivateCapabilities::indirect_command_buffers_rendering`), so it is
+    /// established by running a one-draw ICB and reading the pixel back. The
+    /// probe runs once, the first time a multi-draw could use an ICB, so
+    /// adapters that never multi-draw never pay for it.
+    pub(super) fn render_icb_executes(&self) -> bool {
+        let mut probe = self.render_icb_probe.lock();
+        *probe.get_or_insert_with(|| {
+            super::icb_probe::supports_render_icb(&self.device, self.private_caps.msl_version)
+        })
+    }
+}
+
 impl super::CommandEncoder {
     fn supports_icb_multi_draw(&self) -> bool {
         self.shared.private_caps.indirect_command_buffers_rendering
+            && self.shared.render_icb_executes()
     }
 
     fn get_icb_command_pipelines(&self) -> Result<IcbCommandPipelines, crate::DeviceError> {
@@ -390,7 +407,7 @@ impl super::CommandEncoder {
         };
         // Label the ICB so GPU captures and profilers attribute the executed
         // draws to wgpu's multi-draw lowering rather than an anonymous ICB.
-        icb.setLabel(Some(&NSString::from_str(label)));
+        icb.setLabel(self.shared.hal_label(label).as_deref());
 
         // Encode the ICB handle into a fresh argument buffer for the
         // generation kernel.
@@ -400,7 +417,11 @@ impl super::CommandEncoder {
         ) else {
             return false;
         };
-        argument_buffer.setLabel(Some(&NSString::from_str("wgpu ICB generation arguments")));
+        argument_buffer.setLabel(
+            self.shared
+                .hal_label("wgpu ICB generation arguments")
+                .as_deref(),
+        );
         unsafe {
             argument_encoder
                 .encoder
@@ -495,7 +516,11 @@ impl super::CommandEncoder {
         // captures/profilers one legible "ICB generation" node per pass.
         let raw = self.raw_cmd_buf.as_ref().unwrap();
         let compute = raw.computeCommandEncoder().unwrap();
-        compute.setLabel(Some(&NSString::from_str("wgpu multi-draw ICB generation")));
+        compute.setLabel(
+            self.shared
+                .hal_label("wgpu multi-draw ICB generation")
+                .as_deref(),
+        );
         for request in &self.deferred_multi_draws {
             let pipeline = match request.kind {
                 IcbDrawKind::Draw => &pipelines.draw,

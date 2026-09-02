@@ -740,40 +740,23 @@ impl super::CapabilitiesQuery {
 
         let is_virtual = device.name().to_string().to_lowercase().contains("virtual");
 
-        // Full render-ICB lowering has passed readback validation on:
-        // - macOS 26: Apple M4 Max (Apple9)
-        // - iOS 18: iPhone XS / A12 (Apple5)
-        // - tvOS 18: first-generation Apple TV 4K / A10X (Apple3)
-        // - watchOS 11.6: Apple Watch SE 2 / S8 (Apple5)
-        // iOS/iPadOS/tvOS 17.x failed equivalent readback validation. Because
-        // Apple's feature tables do not predict those results, every physical
-        // device is tested by executing and reading back a tiny render ICB.
-        // Apple's paravirtual device is excluded before the probe because its
-        // driver aborts the process instead of reporting an execution failure.
-        //
-        // The `available!` floor below is the API availability of the two
-        // selectors this path depends on -- hazard-tracked `useResource:` and
+        // Static preconditions for lowering multi-draws to render ICBs. The
+        // `available!` floor is the API availability of the two selectors the
+        // path depends on -- hazard-tracked `useResource:` and
         // `inheritPipelineState` -- not a hardware claim:
         // <https://developer.apple.com/documentation/metal/mtlindirectcommandbufferdescriptor/inheritpipelinestate>
         //
-        // Because the tables under-predict real behavior here, support is
-        // established empirically. Explicitly verified by rendering a
-        // GPU-generated 1600-draw meshlet workload through the ICB path and
-        // CPU-reading back the presented surface (0 per-draw-loop fallbacks,
-        // pixels verified) on:
+        // Whether a device actually executes GPU-generated render ICBs is not
+        // something Apple's feature tables predict: iOS/iPadOS/tvOS 17.x fail
+        // where the same hardware on 18 passes, and A10X only works with
+        // command generation hoisted out of the render pass. The real gate is
+        // therefore a runtime probe that executes a one-draw ICB and reads the
+        // pixel back, `AdapterShared::render_icb_executes`. It runs on the
+        // first multi-draw that could use an ICB rather than at adapter
+        // creation, so adapters that never multi-draw never pay for it.
         //
-        // - macOS 26, M4 Max (Metal3 / Apple9), 1200x1600
-        // - iOS 18.7.9, iPhone XS Max, A12 (Apple5), 1125x2436
-        // - tvOS 18.3, Apple TV 4K gen 1, A10X (Apple3), 3840x2160
-        // - tvOS 26.6, Apple TV 4K gen 3, A15 (Apple8), 3840x2160
-        // - watchOS 11.6, Apple Watch SE 2, S4 (Apple5), 160x160
-        //
-        // A10X is the load-bearing data point: render-ICB execution has
-        // historically been fragile on it (it does not work at all on an iPad
-        // Pro A10X running that device's last iPadOS release), and it passes
-        // here only because command generation is hoisted out of the render
-        // pass. That is why the runtime probe below, rather than a family or
-        // OS-version check alone, is what actually gates this.
+        // Apple's paravirtual device is excluded up front because its driver
+        // aborts the process instead of failing the probe.
         let indirect_command_buffers_rendering = !is_virtual
             && available!(
                 macos = 10.15,
@@ -785,14 +768,11 @@ impl super::CapabilitiesQuery {
             && device_class_responds_to(
                 device,
                 sel!(newIndirectCommandBufferWithDescriptor:maxCommandCount:options:),
-            )
-            && super::icb_probe::supports_render_icb(device, msl_version);
-        // Mesh ICBs are gated far more conservatively than render ICBs on
-        // purpose: the empirical matrix above covers render ICBs on five
-        // device classes, but mesh-ICB execution has only been verified by
-        // readback on macOS 26 / M4 Max (Apple9). Every other combination is
-        // unverified, so it takes the non-ICB path until someone can run the
-        // same readback test on it.
+            );
+        // Mesh ICBs are gated far more conservatively: their execution has
+        // only been verified by readback on macOS 26 / Apple9. Every other
+        // combination takes the per-draw path until it can be verified the
+        // same way.
         let indirect_command_buffers_mesh = indirect_command_buffers_rendering
             && os_type == super::OsType::Macos
             && available!(macos = 26.0)

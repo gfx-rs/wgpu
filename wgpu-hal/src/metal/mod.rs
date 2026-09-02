@@ -45,7 +45,7 @@ use objc2::{
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
 };
-use objc2_foundation::ns_string;
+use objc2_foundation::{ns_string, NSString};
 use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLArgumentBuffersTier,
     MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandQueue,
@@ -409,6 +409,10 @@ struct AdapterShared {
     settings: Settings,
     presentation_timer: time::PresentationTimer,
     icb_command_pipelines: Mutex<Option<Result<icb::IcbCommandPipelines, crate::DeviceError>>>,
+    /// Result of the render-ICB execution probe, filled in by
+    /// [`AdapterShared::render_icb_executes`] the first time it is needed.
+    render_icb_probe: Mutex<Option<bool>>,
+    instance_flags: wgt::InstanceFlags,
 }
 
 #[cfg(send_sync)]
@@ -418,6 +422,7 @@ impl AdapterShared {
     fn new(
         device: Retained<ProtocolObject<dyn MTLDevice>>,
         capabilities_query: &CapabilitiesQuery,
+        instance_flags: wgt::InstanceFlags,
     ) -> Self {
         let private_caps = capabilities_query.private_capabilities();
         let private_texture_format_caps = capabilities_query.private_texture_format_capabilities();
@@ -432,7 +437,20 @@ impl AdapterShared {
             settings: Settings::default(),
             presentation_timer: time::PresentationTimer::new(),
             icb_command_pipelines: Mutex::new(None),
+            render_icb_probe: Mutex::new(None),
+            instance_flags,
         }
+    }
+
+    /// Label for a Metal object this backend creates on its own behalf.
+    /// wgpu-core already drops the labels it hands down under
+    /// [`wgt::InstanceFlags::DISCARD_HAL_LABELS`]; this applies the same flag
+    /// to the backend's own.
+    fn hal_label(&self, label: &str) -> Option<Retained<NSString>> {
+        (!self
+            .instance_flags
+            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS))
+        .then(|| NSString::from_str(label))
     }
 
     fn expose(
@@ -442,7 +460,7 @@ impl AdapterShared {
         autoreleasepool(|_| {
             let name = device.name().to_string();
             let capabilities_query = CapabilitiesQuery::new(&device);
-            let shared = AdapterShared::new(device, &capabilities_query);
+            let shared = AdapterShared::new(device, &capabilities_query, instance_flags);
             let features = capabilities_query.features();
             let capabilities = capabilities_query.capabilities(instance_flags);
             crate::ExposedAdapter {

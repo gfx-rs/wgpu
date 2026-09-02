@@ -438,7 +438,10 @@ impl super::Device {
         limits: &wgt::Limits,
     ) -> super::Device {
         let capabilities_query = super::CapabilitiesQuery::new(&raw);
-        let shared = super::AdapterShared::new(raw, &capabilities_query);
+        // A device wrapped from a raw handle has no instance behind it, so no
+        // instance flags apply.
+        let shared =
+            super::AdapterShared::new(raw, &capabilities_query, wgt::InstanceFlags::empty());
         super::Device {
             shared: Arc::new(shared),
             features,
