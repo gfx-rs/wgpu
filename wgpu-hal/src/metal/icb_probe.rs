@@ -146,7 +146,11 @@ pub(super) fn supports_render_icb(
         compute.setBuffer_offset_atIndex(Some(&argument_buffer), 0, 0);
         compute.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Write);
     }
-    compute.dispatchThreads_threadsPerThreadgroup(
+    // Uniform threadgroups, like the generation kernels themselves:
+    // `dispatchThreads:` (non-uniform threadgroup sizes) is an Apple4+ API,
+    // and on Apple3 Metal raises an exception for it rather than returning
+    // an error, which would abort the process instead of failing the probe.
+    compute.dispatchThreadgroups_threadsPerThreadgroup(
         MTLSize {
             width: 1,
             height: 1,
