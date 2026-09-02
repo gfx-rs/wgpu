@@ -678,6 +678,17 @@ impl VaryingContext<'_> {
                 blend_src,
                 per_primitive,
             } => {
+                match ep.stage {
+                    nt::ShaderStage::Compute | nt::ShaderStage::Mesh | nt::ShaderStage::Task => {
+                        return Err(VaryingError::InvalidAttributeInStage("location", ep.stage));
+                    }
+                    nt::ShaderStage::Vertex
+                    | nt::ShaderStage::Fragment
+                    | nt::ShaderStage::RayGeneration
+                    | nt::ShaderStage::Miss
+                    | nt::ShaderStage::AnyHit
+                    | nt::ShaderStage::ClosestHit => {}
+                }
                 if per_primitive && !self.capabilities.contains(Capabilities::MESH_SHADER) {
                     return Err(VaryingError::UnsupportedCapability(
                         Capabilities::MESH_SHADER,
@@ -1387,36 +1398,6 @@ impl super::Validator {
             };
             ctx.validate(ep, fa.ty, fa.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Argument(index as u32, e).with_span())?;
-            match ep.stage {
-                nt::ShaderStage::Compute | nt::ShaderStage::Mesh | nt::ShaderStage::Task => {
-                    let reject_location_binding = |binding| {
-                        if let Some(&crate::ir::Binding::Location { .. }) = binding {
-                            return Err(EntryPointError::Argument(
-                                index as u32,
-                                VaryingError::InvalidAttributeInStage("location", ep.stage),
-                            )
-                            .with_span());
-                        }
-                        Ok(())
-                    };
-                    reject_location_binding(fa.binding.as_ref())?;
-
-                    if let &crate::TypeInner::Struct { ref members, .. } =
-                        &module.types[fa.ty].inner
-                    {
-                        members
-                            .iter()
-                            .map(|m| m.binding.as_ref())
-                            .try_for_each(reject_location_binding)?;
-                    }
-                }
-                nt::ShaderStage::Vertex
-                | nt::ShaderStage::Fragment
-                | nt::ShaderStage::RayGeneration
-                | nt::ShaderStage::Miss
-                | nt::ShaderStage::AnyHit
-                | nt::ShaderStage::ClosestHit => {}
-            }
         }
 
         self.location_mask.make_empty();
@@ -1435,18 +1416,23 @@ impl super::Validator {
                 mesh_output_type: MeshOutputType::None,
                 has_task_payload: ep.task_payload.is_some(),
             };
-            ctx.validate(ep, fr.ty, fr.binding.as_ref())
-                .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
+            let mut validate_result = || {
+                ctx.validate(ep, fr.ty, fr.binding.as_ref())
+                    .map_err_inner(|e| EntryPointError::Result(e).with_span())
+            };
             match ep.stage {
                 nt::ShaderStage::Vertex => {
+                    validate_result()?;
                     if !result_built_ins.contains(&crate::BuiltIn::Position { invariant: false }) {
                         return Err(EntryPointError::MissingVertexOutputPosition.with_span());
                     }
                 }
                 nt::ShaderStage::Mesh => {
-                    return Err(EntryPointError::UnexpectedMeshShaderEntryResult.with_span())
+                    let _ = validate_result();
+                    return Err(EntryPointError::UnexpectedMeshShaderEntryResult.with_span());
                 }
                 nt::ShaderStage::Task => {
+                    validate_result()?;
                     let ok = module.types[fr.ty].inner
                         == crate::TypeInner::Vector {
                             size: crate::VectorSize::Tri,
@@ -1457,13 +1443,14 @@ impl super::Validator {
                     }
                 }
                 nt::ShaderStage::Compute => {
-                    return Err(EntryPointError::UnexpectedComputeShaderEntryResult.with_span())
+                    let _ = validate_result();
+                    return Err(EntryPointError::UnexpectedComputeShaderEntryResult.with_span());
                 }
                 nt::ShaderStage::Fragment
                 | nt::ShaderStage::RayGeneration
                 | nt::ShaderStage::Miss
                 | nt::ShaderStage::AnyHit
-                | nt::ShaderStage::ClosestHit => {}
+                | nt::ShaderStage::ClosestHit => validate_result()?,
             }
         } else {
             match ep.stage {
