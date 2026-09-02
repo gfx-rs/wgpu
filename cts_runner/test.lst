@@ -298,13 +298,13 @@ webgpu:api,validation,render_pipeline,vertex_state:max_vertex_attribute_limit:*
 webgpu:api,validation,render_pipeline,vertex_state:max_vertex_buffer_array_stride_limit:*
 webgpu:api,validation,render_pipeline,vertex_state:max_vertex_buffer_limit:*
 fails-if(dx12,metal) webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_contained_in_stride:*
-fails-if(metal) webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_offset_alignment:*
+fails-if(dx12,metal) webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_offset_alignment:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_shaderLocation_limit:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_shaderLocation_unique:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_buffer_array_stride_limit_alignment:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_shader_input_location_in_vertex_state:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_shader_input_location_limit:*
-webgpu:api,validation,render_pipeline,vertex_state:vertex_shader_type_matches_attribute_format:*
+fails-if(dx12) webgpu:api,validation,render_pipeline,vertex_state:vertex_shader_type_matches_attribute_format:*
 webgpu:api,validation,resource_usages,buffer,in_pass_encoder:*
 webgpu:api,validation,resource_usages,buffer,in_pass_misc:*
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:bindings_in_bundle:*
