@@ -235,7 +235,7 @@ fn loop_switch_omit_continue_variable_checks(x_2: i32, y_1: i32, z_1: i32, w: i3
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     control_flow();
     switch_default_break(1i);

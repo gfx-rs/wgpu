@@ -19,12 +19,12 @@ use objc2_metal::{
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
     MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
     MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor, MTLStorageMode,
-    MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode, MTLVertexDescriptor,
-    MTLVertexStepFunction,
+    MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTextureUsage, MTLTriangleFillMode,
+    MTLVertexDescriptor, MTLVertexStepFunction,
 };
 use wgpu_sync::{Condvar, CondvarMutex, RwLock};
 
-use super::{adapter::MAX_BUFFERS, conv, PassthroughShader, ShaderModuleSource};
+use super::{adapter::MAX_BUFFERS, conv, AttachmentInfo, PassthroughShader, ShaderModuleSource};
 use crate::{auxil::map_naga_stage, DropCallback, DropGuard, TlasInstance};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
@@ -654,9 +654,47 @@ impl crate::Device for super::Device {
             desc.range
                 .is_full_resource(desc.format, texture.mip_levels, texture.array_layers);
 
-        let raw = if format_equal && type_equal && range_full_resource {
+        const R001_SWIZZLE: wgt::TextureComponentSwizzle = wgt::TextureComponentSwizzle {
+            r: wgt::ComponentSwizzle::R,
+            g: wgt::ComponentSwizzle::Zero,
+            b: wgt::ComponentSwizzle::Zero,
+            a: wgt::ComponentSwizzle::One,
+        };
+        let swizzle = 'b: {
+            if !self.shared.private_caps.texture_component_swizzle {
+                break 'b None;
+            }
+            if texture.format.is_depth_stencil_format() {
+                // Use r001 swizzle to make g,b,a channels well-defined.
+                break 'b Some(R001_SWIZZLE.compose(desc.swizzle));
+            }
+            if desc.swizzle != wgt::TextureComponentSwizzle::default() {
+                break 'b Some(desc.swizzle);
+            }
+            None
+        }
+        .map(conv::map_texture_component_swizzle);
+        let has_shader_usage = texture
+            .raw
+            .usage()
+            .intersects(MTLTextureUsage::ShaderRead | MTLTextureUsage::ShaderWrite);
+        let needs_texture_view = 'b: {
+            if !format_equal {
+                break 'b true;
+            }
             // Some images are marked as framebuffer-only, and we can't create aliases of them.
             // Also helps working around Metal bugs with aliased array textures.
+            if !has_shader_usage {
+                break 'b false;
+            }
+            // Subresource doesn't need a texture view as we use `setLevel` and `setSlice` of `MTLRenderPassDescriptor`.
+            if !type_equal || !range_full_resource || swizzle.is_some() {
+                break 'b true;
+            }
+            false
+        };
+
+        let raw = if !needs_texture_view {
             texture.raw.to_owned()
         } else {
             let mip_level_count = desc
@@ -678,15 +716,28 @@ impl crate::Device for super::Device {
                     length: array_layer_count as _,
                 };
                 let raw = unsafe {
-                    texture
-                        .raw
-                        .newTextureViewWithPixelFormat_textureType_levels_slices(
-                            raw_format,
-                            raw_type,
-                            level_range,
-                            slice_range,
-                        )
-                        .unwrap()
+                    if let Some(swizzle) = swizzle {
+                        texture
+                            .raw
+                            .newTextureViewWithPixelFormat_textureType_levels_slices_swizzle(
+                                raw_format,
+                                raw_type,
+                                level_range,
+                                slice_range,
+                                swizzle,
+                            )
+                            .unwrap()
+                    } else {
+                        texture
+                            .raw
+                            .newTextureViewWithPixelFormat_textureType_levels_slices(
+                                raw_format,
+                                raw_type,
+                                level_range,
+                                slice_range,
+                            )
+                            .unwrap()
+                    }
                 };
                 if let Some(label) = desc.label {
                     raw.setLabel(Some(&NSString::from_str(label)));
@@ -697,7 +748,27 @@ impl crate::Device for super::Device {
 
         self.counters.texture_views.add(1);
 
-        Ok(super::TextureView { raw, aspects })
+        Ok(super::TextureView {
+            // Texture view with swizzle isn't renderable but depth-stencil texture view uses r001 swizzle.
+            // This is a problem if depth-stencil texture has both `RENDER_ATTACHMENT` and `TEXTURE_BINDING`,
+            // so if the formats match, we use the original texture + `setLevel` and `setSlice` of `MTLRenderPassDescriptor`
+            // to avoid using the r001 view.
+            attachment: if format_equal {
+                AttachmentInfo {
+                    texture: texture.raw.clone(),
+                    base_mip_level: desc.range.base_mip_level,
+                    base_array_layer: desc.range.base_array_layer,
+                }
+            } else {
+                AttachmentInfo {
+                    texture: raw.clone(),
+                    base_mip_level: 0,
+                    base_array_layer: 0,
+                }
+            },
+            raw,
+            aspects,
+        })
     }
 
     unsafe fn destroy_texture_view(&self, _view: super::TextureView) {
@@ -2159,7 +2230,7 @@ impl crate::Device for super::Device {
         // self.counters.acceleration_structures.sub(1);
     }
 
-    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {
         let temp = MTLIndirectAccelerationStructureInstanceDescriptor {
             transformationMatrix: MTLPackedFloat4x3 {
                 columns: [
@@ -2194,7 +2265,7 @@ impl crate::Device for super::Device {
 
         wgt::bytemuck_wrapper!(unsafe struct Desc(MTLIndirectAccelerationStructureInstanceDescriptor));
 
-        bytemuck::bytes_of(&Desc::wrap(temp)).to_vec()
+        to_extend.extend_from_slice(bytemuck::bytes_of(&Desc::wrap(temp)))
     }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {

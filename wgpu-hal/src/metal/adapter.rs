@@ -10,8 +10,7 @@ use objc2_metal::{
 use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
-use core::sync::atomic;
-use wgpu_sync::{Mutex, OnceCell};
+use wgpu_sync::{atomic, Mutex, OnceCell};
 
 use crate::metal::QueueShared;
 
@@ -504,7 +503,8 @@ impl crate::Adapter for super::Adapter {
     fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
         wgt::TextureUses::INCLUSIVE
             | wgt::TextureUses::COLOR_TARGET
-            | wgt::TextureUses::DEPTH_STENCIL_WRITE
+            | wgt::TextureUses::DEPTH_WRITE
+            | wgt::TextureUses::STENCIL_WRITE
     }
 }
 
@@ -1246,6 +1246,10 @@ impl super::CapabilitiesQuery {
                 tvos = 16.0,
                 visionos = 1.0
             ),
+            texture_component_swizzle: family_check
+                && (metal3
+                    || device.supportsFamily(MTLGPUFamily::Mac2)
+                    || device.supportsFamily(MTLGPUFamily::Apple2)),
         }
     }
 
@@ -1267,6 +1271,7 @@ impl super::CapabilitiesQuery {
             | F::PASSTHROUGH_SHADERS
             | F::EXTERNAL_TEXTURE;
 
+        features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
         features.set(F::FLOAT32_BLENDABLE, true);
         features.set(F::INDIRECT_FIRST_INSTANCE, self.indirect_draw_dispatch);
@@ -1636,6 +1641,7 @@ impl super::CapabilitiesQuery {
             indirect_command_buffers_rendering: self.indirect_command_buffers_rendering,
             indirect_command_buffers_mesh: self.indirect_command_buffers_mesh,
             indirect_command_buffers_optimize: self.indirect_command_buffers_optimize,
+            texture_component_swizzle: self.texture_component_swizzle,
         }
     }
 

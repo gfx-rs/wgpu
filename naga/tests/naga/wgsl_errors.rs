@@ -1596,6 +1596,22 @@ fn int16_in_immediate() {
 }
 
 #[test]
+fn array_in_immediate() {
+    check_validation! {
+        "var<immediate> input: array<u32, 4>;",
+        "var<immediate> input: array<u32>;",
+        "struct S { a: array<u32, 4> }; var<immediate> input: S;":
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::InvalidImmediateType(
+                naga::valid::ImmediateError::InvalidArray
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::IMMEDIATES
+    }
+}
+
+#[test]
 fn float16_in_atomic() {
     check_validation! {
         "enable f16; var<storage> a: atomic<f16>;":
@@ -5747,4 +5763,71 @@ fn user_locations_not_accepted_in_compute_entry_point_arguments() {
             },
         )
     }
+}
+
+#[test]
+fn ray_query_store() {
+    // ray queries cannot be stored to despite them being a `var`
+    check_validation! {
+        r#"
+            enable wgpu_ray_query;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                var rq: ray_query;
+                var rq_2: ray_query;
+                rq = rq_2;
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Compute,
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::RayQueryStore(_)
+            ),
+            ..
+        }),
+        Capabilities::RAY_QUERY
+    }
+}
+
+#[test]
+fn ray_query_initializer() {
+    // ray queries cannot have initializers
+    check_validation! {
+        r#"
+            enable wgpu_ray_query;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                var rq: ray_query = ray_query();
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Compute,
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::LocalVariable {
+                    source: naga::valid::LocalVariableError::RayQueryWithInitializeExpression,
+                    ..
+                },
+            ),
+            ..
+        }),
+        Capabilities::RAY_QUERY
+    }
+}
+
+#[test]
+fn ray_query_let() {
+    check_error_matches(
+        "
+            enable wgpu_ray_query;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                var rq: ray_query;
+                let _rq_1 = rq;
+            }
+        ",
+        "Ray query with initialize",
+    );
 }

@@ -1860,6 +1860,18 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ctx.named_expressions
                         .insert(initializer, (l.name.name.to_string(), l.name.span));
 
+                    if matches!(
+                        ctx.module.types[ty].inner,
+                        crate::TypeInner::RayQuery { .. }
+                    ) {
+                        // If a `let` variable is a ray query, it must be invalid as a `let`
+                        // must have an initializer (it is also pretty useless as all other
+                        // operations are disallowed, or require write-able variables).
+                        return Err(Box::new(Error::RayQueryWithInitializer(
+                            ctx.function.expressions.get_span(initializer),
+                        )));
+                    }
+
                     return Ok(());
                 }
                 ast::LocalDecl::Var(ref v) => {
@@ -1916,27 +1928,59 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let handle = ctx
                         .as_expression(block, &mut emitter)
                         .interrupt_emitter(ir::Expression::LocalVariable(var), Span::UNDEFINED)?;
-                    let initializer = if is_inside_loop {
-                        match initializer {
-                            Some(initializer) => Some(initializer),
-                            None => Some(
-                                ctx.as_expression(block, &mut emitter)
-                                    .append_expression(ir::Expression::ZeroValue(ty), stmt.span)?,
-                            ),
-                        }
-                    } else {
-                        initializer
-                    };
+
                     block.extend(emitter.finish(&ctx.function.expressions));
                     ctx.local_table
                         .insert(v.handle, Declared::Runtime(Typed::Reference(handle)));
 
-                    match initializer {
-                        Some(initializer) => ir::Statement::Store {
-                            pointer: handle,
-                            value: initializer,
-                        },
-                        None => return Ok(()),
+                    match ctx.module.types[ty].inner {
+                        crate::TypeInner::RayQuery { .. } => {
+                            // Initializers are disallowed for ray queries as any store is disallowed.
+                            // However, in loops ray queries need to be reset using a special piece of
+                            // IR.
+
+                            // Because we have a special case for ray queries, and initializers are always
+                            // disallowed for ray queries, we remove them here. This prevents having to
+                            // special-case them and then just emitting invalid IR anyway and gives a
+                            // clearer error message.
+                            if let Some(expr) = initializer {
+                                return Err(Box::new(Error::RayQueryWithInitializer(
+                                    ctx.function.expressions.get_span(expr),
+                                )));
+                            }
+
+                            if is_inside_loop {
+                                ir::Statement::RayQuery {
+                                    query: handle,
+                                    fun: ir::RayQueryFunction::Begin,
+                                }
+                            } else {
+                                return Ok(());
+                            }
+                        }
+                        _ => {
+                            let initializer = if is_inside_loop {
+                                match initializer {
+                                    Some(initializer) => Some(initializer),
+                                    None => Some(
+                                        ctx.as_expression(block, &mut emitter).append_expression(
+                                            ir::Expression::ZeroValue(ty),
+                                            stmt.span,
+                                        )?,
+                                    ),
+                                }
+                            } else {
+                                initializer
+                            };
+
+                            match initializer {
+                                Some(initializer) => ir::Statement::Store {
+                                    pointer: handle,
+                                    value: initializer,
+                                },
+                                None => return Ok(()),
+                            }
+                        }
                     }
                 }
                 ast::LocalDecl::Const(ref c) => {

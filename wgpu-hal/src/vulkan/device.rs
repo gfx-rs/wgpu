@@ -85,6 +85,8 @@ impl super::DeviceShared {
                     ref depth_stencil,
                     sample_count,
                     multiview_mask,
+                    depth_read_only,
+                    stencil_read_only,
                 } = *e.key();
 
                 let mut vk_attachments = Vec::new();
@@ -169,8 +171,22 @@ impl super::DeviceShared {
                         attachment: vk_attachments.len() as u32,
                         layout,
                     });
-                    let (load_op, store_op) = conv::map_attachment_ops(ops);
-                    let (stencil_load_op, stencil_store_op) = conv::map_attachment_ops(stencil_ops);
+                    let (load_op, mut store_op) = conv::map_attachment_ops(ops);
+                    let (stencil_load_op, mut stencil_store_op) =
+                        conv::map_attachment_ops(stencil_ops);
+
+                    let store_op_for_read_only = if self.private_caps.store_op_none {
+                        vk::AttachmentStoreOp::NONE
+                    } else {
+                        vk::AttachmentStoreOp::STORE
+                    };
+                    if depth_read_only {
+                        store_op = store_op_for_read_only;
+                    }
+                    if stencil_read_only {
+                        stencil_store_op = store_op_for_read_only;
+                    }
+
                     let vk_attachment = vk::AttachmentDescription::default()
                         .format(format)
                         .samples(samples)
@@ -1201,8 +1217,6 @@ impl crate::Device for super::Device {
                 unsafe { self.shared.raw.destroy_image(image.raw, None) };
             })?;
 
-        self.counters.texture_memory.add(allocation.size() as isize);
-
         unsafe {
             self.shared
                 .raw
@@ -1212,6 +1226,9 @@ impl crate::Device for super::Device {
         .inspect_err(|_| {
             unsafe { self.shared.raw.destroy_image(image.raw, None) };
         })?;
+
+        self.counters.texture_memory.add(allocation.size() as isize);
+        self.counters.textures.add(1);
 
         Ok(unsafe {
             self.texture_from_raw(
@@ -1254,6 +1271,30 @@ impl crate::Device for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
+        let mut swizzle = desc.swizzle;
+
+        // https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#textures-component-swizzle
+        // If the image view has a depth/stencil format and the VkComponentSwizzle is VK_COMPONENT_SWIZZLE_ONE,
+        // and VkPhysicalDeviceMaintenance5Properties::depthStencilSwizzleOneSupport is not VK_TRUE,
+        // the value of the texel after swizzle is undefined.
+        //
+        // We convert `One` to `A` which should sample as 1.0,
+        // according to https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#images-component-substitution
+        if texture.format.is_depth_stencil_format()
+            && !self.shared.private_caps.depth_stencil_swizzle_one_support
+        {
+            for component in [
+                &mut swizzle.r,
+                &mut swizzle.g,
+                &mut swizzle.b,
+                &mut swizzle.a,
+            ] {
+                if *component == wgt::ComponentSwizzle::One {
+                    *component = wgt::ComponentSwizzle::A;
+                }
+            }
+        }
+
         let subresource_range = conv::map_subresource_range(&desc.range, texture.format);
         let raw_format = self.shared.private_caps.map_texture_format(desc.format);
         let mut vk_info = vk::ImageViewCreateInfo::default()
@@ -1261,7 +1302,8 @@ impl crate::Device for super::Device {
             .image(texture.raw)
             .view_type(conv::map_view_dimension(desc.dimension))
             .format(raw_format)
-            .subresource_range(subresource_range);
+            .subresource_range(subresource_range)
+            .components(conv::map_texture_component_swizzle(swizzle));
         let layers =
             NonZeroU32::new(subresource_range.layer_count).expect("Unexpected zero layer count");
 
@@ -2045,11 +2087,22 @@ impl crate::Device for super::Device {
 
         let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::default();
         if let Some(ref ds) = desc.depth_stencil {
+            (
+                compatible_rp_key.depth_read_only,
+                compatible_rp_key.stencil_read_only,
+            ) = (
+                ds.is_depth_read_only(),
+                ds.is_stencil_read_only(desc.primitive.cull_mode),
+            );
             let vk_format = self.shared.private_caps.map_texture_format(ds.format);
-            let vk_layout = if ds.is_read_only(desc.primitive.cull_mode) {
-                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
-            } else {
-                vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            let vk_layout = match (
+                compatible_rp_key.depth_read_only,
+                compatible_rp_key.stencil_read_only,
+            ) {
+                (true, true) => vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                (true, false) => vk::ImageLayout::DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL,
+                (false, true) => vk::ImageLayout::DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
+                (false, false) => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             };
             compatible_rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
                 base: super::AttachmentKey::compatible(vk_format, vk_layout),
@@ -2978,7 +3031,7 @@ impl crate::Device for super::Device {
         })
     }
 
-    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {
         const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
         let temp = RawTlasInstance {
             transform: instance.transform,
@@ -2989,7 +3042,7 @@ impl crate::Device for super::Device {
                 & MAX_U24),
             acceleration_structure_reference: instance.blas_address,
         };
-        bytemuck::bytes_of(&temp).to_vec()
+        to_extend.extend_from_slice(bytemuck::bytes_of(&temp))
     }
 
     fn check_if_oom(&self) -> Result<(), crate::DeviceError> {
@@ -3030,7 +3083,13 @@ impl super::DeviceShared {
                 .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
                 .map_err(super::map_host_device_oom_err)?;
 
-            self.set_object_name(semaphore, name);
+            if !self
+                .instance
+                .flags
+                .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+            {
+                self.set_object_name(semaphore, name);
+            }
 
             Ok(semaphore)
         }

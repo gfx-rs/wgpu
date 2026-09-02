@@ -54,6 +54,7 @@ impl GPUQueue {
     // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
   }
 
+  #[reentrant]
   #[required(1)]
   #[undefined]
   fn submit(
@@ -134,6 +135,7 @@ impl GPUQueue {
     Ok(())
   }
 
+  #[reentrant]
   #[required(4)]
   #[undefined]
   fn write_texture(

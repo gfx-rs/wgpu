@@ -35,7 +35,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
+use core::{fmt, iter, ops, ptr::NonNull};
 
 use bitflags::bitflags;
 use hashbrown::HashMap;
@@ -57,7 +57,7 @@ use objc2_metal::{
     MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
-use wgpu_sync::{Condvar, Mutex, OnceCell, RwLock};
+use wgpu_sync::{atomic, Condvar, Mutex, OnceCell, RwLock};
 
 #[derive(Clone, Debug)]
 pub struct Api;
@@ -337,6 +337,7 @@ struct CapabilitiesQuery {
     indirect_command_buffers_mesh: bool,
     /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
     indirect_command_buffers_optimize: bool,
+    texture_component_swizzle: bool,
 }
 
 #[derive(Debug)]
@@ -355,6 +356,7 @@ struct PrivateCapabilities {
     indirect_command_buffers_mesh: bool,
     /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
     indirect_command_buffers_optimize: bool,
+    texture_component_swizzle: bool,
 }
 
 #[derive(Debug)]
@@ -927,7 +929,15 @@ unsafe impl Send for Texture {}
 unsafe impl Sync for Texture {}
 
 #[derive(Debug)]
+struct AttachmentInfo {
+    texture: Retained<ProtocolObject<dyn MTLTexture>>,
+    base_mip_level: u32,
+    base_array_layer: u32,
+}
+
+#[derive(Debug)]
 pub struct TextureView {
+    attachment: AttachmentInfo,
     raw: Retained<ProtocolObject<dyn MTLTexture>>,
     aspects: crate::FormatAspects,
 }

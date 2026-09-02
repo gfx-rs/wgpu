@@ -24,9 +24,9 @@ Additionally, [WebGPU Fundamentals] is a tutorial for WebGPU which is very simil
 [Learn Wgpu]: https://sotrh.github.io/learn-wgpu/
 [WebGPU Fundamentals]: https://webgpufundamentals.org/
 
-### Wiki
+### Documentation Guides
 
-We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) which has information on useful architecture patterns, debugging tips, and more getting started information.
+We ship a set of [documentation modules](https://docs.rs/wgpu/latest/wgpu/documentation/index.html) with information on useful architecture patterns, debugging tips, and more getting started information.
 
 ### Need Help? Want to Contribute?
 
@@ -75,7 +75,7 @@ Contributors are welcome! See [CONTRIBUTING.md][contrib] for more information.
 
 ✅ = First Class Support  
 🆗 = Downlevel/Best Effort Support  
-📐 = Requires the [ANGLE](https://github.com/gfx-rs/wgpu/wiki/Running-on-ANGLE) translation layer (GL ES 3.0 only). On macOS/iOS, use the `angle` feature. On Windows, `gles` uses WGL by default; build with `cfg(windows_angle)` to use ANGLE instead.
+📐 = Requires the [ANGLE](https://docs.rs/wgpu/latest/wgpu/documentation/platforms/angle/index.html) translation layer (GL ES 3.0 only). On macOS/iOS, use the `angle` feature. On Windows, `gles` uses WGL by default; build with `cfg(windows_angle)` to use ANGLE instead.
 🌋 = Requires the [MoltenVK](https://vulkan.lunarg.com/sdk/home#mac) translation layer  
 🛠️ = Unsupported, though open to contributions
 
@@ -93,7 +93,7 @@ When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU
 
 ## Repo Overview
 
-For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./docs/big-picture.png).
+For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./wgpu/src/documentation/images/big-picture.webp).
 
 ## MSRV policy
 
