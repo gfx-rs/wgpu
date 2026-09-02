@@ -376,6 +376,7 @@ const BUCKET_M1: Bucket = Bucket {
         .union(Features::TEXTURE_COMPRESSION_ASTC)
         .union(Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
         .union(Features::TEXTURE_COMPRESSION_ETC2)
+        .union(Features::TEXTURE_COMPRESSION_UNALIGNED)
         .union(Features::SHADER_F16)
         .union(Features::CLIP_DISTANCES),
 };
@@ -494,7 +495,8 @@ const BUCKET_LLVMPIPE: Bucket = Bucket {
     features: UPLEVEL
         .features
         .union(Features::SHADER_F16)
-        .union(Features::CLIP_DISTANCES),
+        .union(Features::CLIP_DISTANCES)
+        .union(Features::TEXTURE_COMPRESSION_UNALIGNED),
 };
 
 // a.k.a. Microsoft Basic Render Driver
@@ -563,7 +565,8 @@ mod tests {
                 //.union(Features::TEXTURE_FORMATS_TIER2) not implemented
                 .union(Features::PRIMITIVE_INDEX)
                 .union(Features::TEXTURE_COMPONENT_SWIZZLE)
-                .union(Features::IMMEDIATES),
+                .union(Features::IMMEDIATES)
+                .union(Features::TEXTURE_COMPRESSION_UNALIGNED),
         );
         assert!(
             difference.is_empty(),
