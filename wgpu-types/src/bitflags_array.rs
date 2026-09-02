@@ -104,8 +104,8 @@ macro_rules! bitflags_array {
             }
 
             impl $name {
-                /// If the argument is a single [`Features`] flag, returns the corresponding
-                /// `kebab-case` feature name, otherwise `None`.
+                #[doc = concat!("If the argument is a single [`", stringify!($name), "`] flag,")]
+                /// returns the corresponding `kebab-case` flag name, otherwise `None`.
                 #[must_use]
                 pub fn as_str(&self) -> Option<&'static str> {
                     Some(match *self {
@@ -149,7 +149,7 @@ macro_rules! bitflags_array {
                 )*
             }
 
-            /// Bits from `Features` in array form
+            #[doc = concat!("Bits from [`", stringify!($name), "`] in array form")]
             #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
             #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
             pub struct $name_bits(pub [$T; $Len]);
@@ -415,8 +415,8 @@ macro_rules! bitflags_array {
                     $(self.$lower_inner_name.toggle(other.$lower_inner_name);)*
                 }
 
-                /// Takes in [`FeatureBits`] and returns None if there are invalid bits or otherwise Self with
-                /// those bits set
+                #[doc = concat!("Takes in [`", stringify!($name_bits), "`] and returns")]
+                /// None if there are invalid bits or otherwise Self with those bits set
                 pub const fn from_bits(bits: $name_bits) -> Option<Self> {
                     let [$($lower_inner_name,)*] = bits.0;
                     // The ? operator does not work in a const context.
@@ -430,14 +430,13 @@ macro_rules! bitflags_array {
                     })
                 }
 
-                /// Takes in [`FeatureBits`] and returns Self with only valid bits (all other bits removed)
+                #[doc = concat!("Takes in [`", stringify!($name_bits), "`] and returns Self with only valid bits (all other bits removed)")]
                 pub const fn from_bits_truncate(bits: $name_bits) -> Self {
                     let [$($lower_inner_name,)*] = bits.0;
                     Self { $($lower_inner_name: $inner_name::from_bits_truncate($lower_inner_name),)* }
                 }
 
-                /// Takes in [`FeatureBits`] and returns Self with all bits that were set without removing
-                /// invalid bits
+                #[doc = concat!("Takes in [`", stringify!($name_bits), "`] and returns Self with all bits that were set without removing invalid bits")]
                 pub const fn from_bits_retain(bits: $name_bits) -> Self {
                     let [$($lower_inner_name,)*] = bits.0;
                     Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
@@ -460,7 +459,7 @@ macro_rules! bitflags_array {
                     }
                 }
 
-                /// Combines the features from the internal flags into the entire features struct
+                /// Combines the flags from the internal flags into the entire flags struct
                 pub fn from_internal_flags($($lower_inner_name: $inner_name,)*) -> Self {
                     Self {
                         $($lower_inner_name,)*
