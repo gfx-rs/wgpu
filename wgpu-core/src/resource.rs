@@ -999,20 +999,32 @@ impl Buffer {
     pub fn unmap(self: &Arc<Self>) {
         profiling::scope!("unmap", "Buffer");
         api_log!("Buffer::unmap {:?}", Arc::as_ptr(self));
-        if let Ok(Some((mut operation, status))) = self.unmap_inner() {
+        if let Some((mut operation, status)) = self.unmap_inner() {
             if let Some(callback) = operation.callback.take() {
                 callback(status);
             }
         }
     }
 
-    fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
+    /// Per the WebGPU spec, unmap does not raise any errors
+    /// it just resolves any pending map_async calls with a MapAborted error.
+    /// It is okay to ignore errors because:
+    /// - if the buffer or device was invalid from the start it couldn't have been mapped via `map_async` anyway (no callback to resolve)
+    /// - if the device becomes invalid it calls the callback in `poll`/`maintain`
+    /// - if the buffer was destroyed (via `Buffer::destroy`) it was first unmapped
+    ///
+    /// <https://gpuweb.github.io/gpuweb/#dom-gpubuffer-unmap>
+    fn unmap_inner(self: &Arc<Self>) -> Option<BufferMapPendingClosure> {
         let device = &self.device;
-        self.check_is_valid()?;
-        self.device.check_is_valid()?;
+        // We can stop here if the device is invalid because:
+        // - if the device was invalid from the start it couldn't have been mapped via `map_async` anyway
+        // - if the device becomes invalid it calls the callback in `poll`/`maintain`
+        self.device.check_is_valid().ok()?;
         let snatch_guard = device.snatchable_lock.read();
-        self.check_destroyed(&snatch_guard)?;
-        let raw_buf = self.try_raw(&snatch_guard)?;
+        // We can stop here if the buffer is invalid or destroyed because:
+        // - if the device was invalid from the start it couldn't have been mapped via `map_async` anyway
+        // - if the buffer was destroyed (via `Buffer::destroy`) it was first unmapped
+        let raw_buf = self.try_raw(&snatch_guard).ok()?;
         let map_state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
         match map_state {
             BufferMapState::Init { staging_buffer } => {
@@ -1070,12 +1082,11 @@ impl Buffer {
                     pending_writes.consume(staging_buffer);
                     pending_writes.insert_buffer(self);
                 }
+                None
             }
-            BufferMapState::Idle => {
-                return Err(BufferAccessError::NotMapped);
-            }
+            BufferMapState::Idle => None,
             BufferMapState::Waiting(pending) => {
-                return Ok(Some((pending.op, Err(BufferAccessError::MapAborted))));
+                Some((pending.op, Err(BufferAccessError::MapAborted)))
             }
             BufferMapState::Active {
                 mapping,
@@ -1104,9 +1115,9 @@ impl Buffer {
                     }
                 }
                 unsafe { device.raw().unmap_buffer(raw_buf) };
+                None
             }
         }
-        Ok(None)
     }
 
     pub fn destroy(self: &Arc<Self>) {
