@@ -335,6 +335,8 @@ struct CapabilitiesQuery {
     supports_multisample_array: bool,
     indirect_command_buffers_rendering: bool,
     indirect_command_buffers_mesh: bool,
+    /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
+    indirect_command_buffers_optimize: bool,
 }
 
 #[derive(Debug)]
@@ -351,6 +353,8 @@ struct PrivateCapabilities {
     /// fixed-count multi-draws even when the count feature isn't exposed.
     indirect_command_buffers_rendering: bool,
     indirect_command_buffers_mesh: bool,
+    /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
+    indirect_command_buffers_optimize: bool,
 }
 
 #[derive(Debug)]
@@ -413,6 +417,8 @@ struct AdapterShared {
     /// [`AdapterShared::render_icb_executes`] the first time it is needed.
     render_icb_probe: Mutex<Option<bool>>,
     instance_flags: wgt::InstanceFlags,
+    /// Indirect command buffers awaiting reuse; see [`icb::PooledIcb`].
+    icb_pool: Mutex<Vec<icb::PooledIcb>>,
 }
 
 #[cfg(send_sync)]
@@ -439,6 +445,7 @@ impl AdapterShared {
             icb_command_pipelines: Mutex::new(None),
             render_icb_probe: Mutex::new(None),
             instance_flags,
+            icb_pool: Mutex::new(Vec::new()),
         }
     }
 

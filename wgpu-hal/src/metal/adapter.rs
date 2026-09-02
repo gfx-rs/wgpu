@@ -783,6 +783,12 @@ impl super::CapabilitiesQuery {
             && os_type == super::OsType::Macos
             && available!(macos = 26.0)
             && device.supportsFamily(MTLGPUFamily::Apple9);
+        // `optimizeIndirectCommandBuffer` halves ICB execution time on Apple3
+        // (A10X) and costs 5-10% of a frame on every Apple4-or-later GPU
+        // measured (A12, A14, A18 Pro, M4 Max), so it is kept only where it has
+        // not been measured to lose: Apple3 and GPUs outside the Apple families.
+        let indirect_command_buffers_optimize =
+            !(family_check && device.supportsFamily(MTLGPUFamily::Apple4));
 
         let mesh_shaders = family_check
                 && (device.supportsFamily(MTLGPUFamily::Metal3)
@@ -810,6 +816,7 @@ impl super::CapabilitiesQuery {
             indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT),
             indirect_command_buffers_rendering,
             indirect_command_buffers_mesh,
+            indirect_command_buffers_optimize,
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
@@ -1628,6 +1635,7 @@ impl super::CapabilitiesQuery {
             mesh_shaders: self.mesh_shaders,
             indirect_command_buffers_rendering: self.indirect_command_buffers_rendering,
             indirect_command_buffers_mesh: self.indirect_command_buffers_mesh,
+            indirect_command_buffers_optimize: self.indirect_command_buffers_optimize,
         }
     }
 

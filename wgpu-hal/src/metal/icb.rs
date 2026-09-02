@@ -7,6 +7,7 @@
 //!
 //! [`encode_deferred_icb_generation`]: super::CommandEncoder::encode_deferred_icb_generation
 
+use alloc::sync::Arc;
 use core::ptr::NonNull;
 
 use objc2::{rc::Retained, runtime::ProtocolObject};
@@ -33,6 +34,11 @@ const ICB_MIN_DRAW_COUNT: u32 = 8;
 /// size is declared anyway because driver validation of the interaction with
 /// `inheritBuffers` has proven underdocumented across OS generations.
 const ICB_MAX_INHERITED_BUFFER_BIND_COUNT: usize = 31;
+
+/// Bounds on the per-adapter pool of indirect command buffers: entries kept,
+/// and the total command capacity they may hold (256K commands).
+const ICB_POOL_MAX_ENTRIES: usize = 8;
+const ICB_POOL_MAX_COMMANDS: u32 = 1 << 18;
 
 // Primitive-topology tags passed to the ICB generation kernels.
 // `render_command` in MSL needs the topology per draw, and `MTLPrimitiveType`
@@ -214,14 +220,100 @@ pub(super) struct IcbGenerationRequest {
     draw_count: u32,
     /// One of the `ICB_PRIMITIVE_*` values; unused for mesh draws.
     primitive_type_value: u32,
+    kind_tag: u8,
+    /// Command capacity the ICB was created with; at least `draw_count`.
+    capacity: u32,
 }
 
-/// Objects a submitted command buffer must keep alive; see
-/// [`super::CommandBuffer::_icb_resources`].
+impl IcbDrawKind {
+    /// Which ICB descriptor (command type and bind counts) a draw kind needs;
+    /// ICBs are only ever reused for the same tag.
+    fn tag(&self) -> u8 {
+        match self {
+            IcbDrawKind::Draw => 0,
+            IcbDrawKind::DrawIndexed { .. } => 1,
+            IcbDrawKind::DrawMeshTasks { .. } => 2,
+        }
+    }
+}
+
+/// An indirect command buffer and the argument buffer through which the
+/// generation kernels address it, kept for reuse once the command buffer that
+/// executed it has completed.
+///
+/// Creating an ICB is the dominant CPU cost of the whole lowering (hundreds of
+/// microseconds for a few thousand commands, growing with the count), so ICBs
+/// are recycled: a multi-draw takes the smallest pooled ICB of its kind that
+/// holds its draws, and the command buffer that executes it puts it back when
+/// it completes.
 #[derive(Debug)]
+pub(super) struct PooledIcb {
+    kind_tag: u8,
+    capacity: u32,
+    icb: Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>,
+    argument_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+}
+
+#[cfg(send_sync)]
+unsafe impl Send for PooledIcb {}
+#[cfg(send_sync)]
+unsafe impl Sync for PooledIcb {}
+
+/// Objects a submitted command buffer must keep alive; see
+/// [`super::CommandBuffer::_icb_resources`]. Dropped when that command buffer
+/// has completed, which is when the ICB can safely return to the pool.
 pub(super) struct IcbExecutionResources {
-    _icb: Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>,
-    _argument_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+    shared: Arc<super::AdapterShared>,
+    kind_tag: u8,
+    capacity: u32,
+    icb: Option<Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>>,
+    argument_buffer: Option<Retained<ProtocolObject<dyn MTLBuffer>>>,
+}
+
+impl core::fmt::Debug for IcbExecutionResources {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("IcbExecutionResources")
+            .field("kind_tag", &self.kind_tag)
+            .field("capacity", &self.capacity)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Drop for IcbExecutionResources {
+    fn drop(&mut self) {
+        let (Some(icb), Some(argument_buffer)) = (self.icb.take(), self.argument_buffer.take())
+        else {
+            return;
+        };
+        if self.capacity > ICB_POOL_MAX_COMMANDS {
+            return;
+        }
+        let mut pool = self.shared.icb_pool.lock();
+        let mut total: u32 = pool.iter().map(|entry| entry.capacity).sum();
+        while pool.len() >= ICB_POOL_MAX_ENTRIES || total + self.capacity > ICB_POOL_MAX_COMMANDS {
+            // Make room by evicting the smallest entry, unless this one is
+            // smaller still: large ICBs are the expensive ones to recreate.
+            let Some((index, smallest)) = pool
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, entry)| entry.capacity)
+                .map(|(index, entry)| (index, entry.capacity))
+            else {
+                break;
+            };
+            if smallest >= self.capacity {
+                return;
+            }
+            total -= smallest;
+            pool.swap_remove(index);
+        }
+        pool.push(PooledIcb {
+            kind_tag: self.kind_tag,
+            capacity: self.capacity,
+            icb,
+            argument_buffer,
+        });
+    }
 }
 
 impl super::AdapterShared {
@@ -365,66 +457,90 @@ impl super::CommandEncoder {
             },
         };
 
-        let descriptor = MTLIndirectCommandBufferDescriptor::new();
-        descriptor.setInheritPipelineState(true);
-        descriptor.setInheritBuffers(true);
-        match kind {
-            IcbDrawKind::Draw => {
-                descriptor.setCommandTypes(MTLIndirectCommandType::Draw);
-                descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
-                descriptor.setMaxFragmentBufferBindCount(0);
-            }
-            IcbDrawKind::DrawIndexed { .. } => {
-                descriptor.setCommandTypes(MTLIndirectCommandType::DrawIndexed);
-                descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
-                descriptor.setMaxFragmentBufferBindCount(0);
-            }
-            IcbDrawKind::DrawMeshTasks { .. } => {
-                descriptor.setCommandTypes(MTLIndirectCommandType::DrawMeshThreadgroups);
-                descriptor.setMaxFragmentBufferBindCount(0);
-                unsafe {
-                    descriptor.setMaxObjectBufferBindCount(0);
-                    descriptor.setMaxMeshBufferBindCount(0);
+        let kind_tag = kind.tag();
+        let pooled = {
+            let mut pool = self.shared.icb_pool.lock();
+            let mut best: Option<usize> = None;
+            for (index, entry) in pool.iter().enumerate() {
+                if entry.kind_tag == kind_tag
+                    && entry.capacity >= draw_count
+                    && best.is_none_or(|b| pool[b].capacity > entry.capacity)
+                {
+                    best = Some(index);
                 }
             }
-        }
-
-        let Some(icb) = (unsafe {
-            self.shared
-                .device
-                .newIndirectCommandBufferWithDescriptor_maxCommandCount_options(
-                    &descriptor,
-                    draw_count as usize,
-                    MTLResourceOptions::StorageModePrivate,
-                )
-        }) else {
-            return false;
+            best.map(|index| pool.swap_remove(index))
         };
-        // Label the ICB so GPU captures and profilers attribute the executed
-        // draws to wgpu's multi-draw lowering rather than an anonymous ICB.
-        icb.setLabel(self.shared.hal_label(label).as_deref());
+        let (icb, argument_buffer, capacity) = match pooled {
+            Some(entry) => (entry.icb, entry.argument_buffer, entry.capacity),
+            None => {
+                let descriptor = MTLIndirectCommandBufferDescriptor::new();
+                descriptor.setInheritPipelineState(true);
+                descriptor.setInheritBuffers(true);
+                match kind {
+                    IcbDrawKind::Draw => {
+                        descriptor.setCommandTypes(MTLIndirectCommandType::Draw);
+                        descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
+                        descriptor.setMaxFragmentBufferBindCount(0);
+                    }
+                    IcbDrawKind::DrawIndexed { .. } => {
+                        descriptor.setCommandTypes(MTLIndirectCommandType::DrawIndexed);
+                        descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
+                        descriptor.setMaxFragmentBufferBindCount(0);
+                    }
+                    IcbDrawKind::DrawMeshTasks { .. } => {
+                        descriptor.setCommandTypes(MTLIndirectCommandType::DrawMeshThreadgroups);
+                        descriptor.setMaxFragmentBufferBindCount(0);
+                        unsafe {
+                            descriptor.setMaxObjectBufferBindCount(0);
+                            descriptor.setMaxMeshBufferBindCount(0);
+                        }
+                    }
+                }
+                // Power-of-two capacities keep the pool reusable across
+                // nearby draw counts; only the first `draw_count` commands are
+                // ever generated or executed.
+                let capacity = draw_count.next_power_of_two();
+                let Some(icb) = (unsafe {
+                    self.shared
+                        .device
+                        .newIndirectCommandBufferWithDescriptor_maxCommandCount_options(
+                            &descriptor,
+                            capacity as usize,
+                            MTLResourceOptions::StorageModePrivate,
+                        )
+                }) else {
+                    return false;
+                };
+                // Label the ICB so GPU captures and profilers attribute the
+                // executed draws to wgpu's multi-draw lowering rather than an
+                // anonymous ICB.
+                icb.setLabel(self.shared.hal_label(label).as_deref());
 
-        // Encode the ICB handle into a fresh argument buffer for the
-        // generation kernel.
-        let Some(argument_buffer) = self.shared.device.newBufferWithLength_options(
-            argument_encoder.encoded_length,
-            MTLResourceOptions::StorageModeShared,
-        ) else {
-            return false;
+                // Encode the ICB handle into an argument buffer for the
+                // generation kernel; it stays valid for the ICB's whole life.
+                let Some(argument_buffer) = self.shared.device.newBufferWithLength_options(
+                    argument_encoder.encoded_length,
+                    MTLResourceOptions::StorageModeShared,
+                ) else {
+                    return false;
+                };
+                argument_buffer.setLabel(
+                    self.shared
+                        .hal_label("wgpu ICB generation arguments")
+                        .as_deref(),
+                );
+                unsafe {
+                    argument_encoder
+                        .encoder
+                        .setArgumentBuffer_offset(Some(&argument_buffer), 0);
+                    argument_encoder
+                        .encoder
+                        .setIndirectCommandBuffer_atIndex(Some(&icb), 0);
+                }
+                (icb, argument_buffer, capacity)
+            }
         };
-        argument_buffer.setLabel(
-            self.shared
-                .hal_label("wgpu ICB generation arguments")
-                .as_deref(),
-        );
-        unsafe {
-            argument_encoder
-                .encoder
-                .setArgumentBuffer_offset(Some(&argument_buffer), 0);
-            argument_encoder
-                .encoder
-                .setIndirectCommandBuffer_atIndex(Some(&icb), 0);
-        }
 
         // Record execution into the render pass now; the ICB contents become
         // defined when the deferred generation runs, in a command buffer the
@@ -461,6 +577,8 @@ impl super::CommandEncoder {
         encoder.setRenderPipelineState(pipeline);
 
         self.deferred_multi_draws.push(IcbGenerationRequest {
+            kind_tag,
+            capacity,
             kind,
             icb,
             argument_buffer,
@@ -487,24 +605,9 @@ impl super::CommandEncoder {
             .any(|request| matches!(request.kind, IcbDrawKind::DrawMeshTasks { .. }))
             .then(|| self.get_icb_mesh_command_pipeline().unwrap());
 
-        // Every target range must be reset before generation writes it.
-        {
-            let blit = self.enter_blit();
-            blit.pushDebugGroup(&NSString::from_str("wgpu reset multi-draw ICBs"));
-            for request in &self.deferred_multi_draws {
-                unsafe {
-                    blit.resetCommandsInBuffer_withRange(
-                        &request.icb,
-                        NSRange {
-                            location: 0,
-                            length: request.draw_count as usize,
-                        },
-                    );
-                }
-            }
-            blit.popDebugGroup();
-        }
-        self.leave_blit();
+        // No reset pass: the generation kernels write every command in the
+        // executed range, calling `reset()` on the slots whose draw is empty,
+        // so a reset blit would only repeat that work.
 
         // A single labeled compute encoder holds every generation dispatch
         // for the pass, which keeps encoder switches minimal and gives GPU
@@ -598,7 +701,9 @@ impl super::CommandEncoder {
         compute.endEncoding();
 
         // Let Metal strip inherited state the generated commands don't need.
-        {
+        // This halves ICB execution time on Apple3 and costs 5-10% on every
+        // later Apple GPU measured, so it runs only where it pays.
+        if self.shared.private_caps.indirect_command_buffers_optimize {
             let blit = self.enter_blit();
             blit.pushDebugGroup(&NSString::from_str("wgpu optimize multi-draw ICBs"));
             for request in &self.deferred_multi_draws {
@@ -623,8 +728,11 @@ impl super::CommandEncoder {
                 self.deferred_multi_draws
                     .drain(..)
                     .map(|request| IcbExecutionResources {
-                        _icb: request.icb,
-                        _argument_buffer: request.argument_buffer,
+                        shared: self.shared.clone(),
+                        kind_tag: request.kind_tag,
+                        capacity: request.capacity,
+                        icb: Some(request.icb),
+                        argument_buffer: Some(request.argument_buffer),
                     }),
             );
     }
