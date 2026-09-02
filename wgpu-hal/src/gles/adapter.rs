@@ -619,6 +619,8 @@ impl super::Adapter {
             );
         }
 
+        features.set(wgt::Features::TEXTURE_COMPRESSION_UNALIGNED, true);
+
         downlevel_flags.set(
             wgt::DownlevelFlags::TEXTURE_COMPRESSION,
             features.contains(wgt::Features::TEXTURE_COMPRESSION_BC)

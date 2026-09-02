@@ -92,6 +92,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Added `TextureDescriptor::theoretical_memory_footprint` to estimate memory footprint of a texture. By @sagudev in [#10032](https://github.com/gfx-rs/wgpu/pull/10032).
 - `wgpu::WriteOnly<[_]>` now implements `Send`. By @kpreid in [#10163](https://github.com/gfx-rs/wgpu/pull/10163).
 - Added `Texture::mark_externally_initialized()` to stop a texture from being lazily cleared if it was written to externally (e.g. via `as_hal`). By @R-Cramer4 in [#10075](https://github.com/gfx-rs/wgpu/pull/10075).
+- Added `Features::TEXTURE_COMPRESSION_UNALIGNED` (WebGPU's `texture-compression-unaligned`), which allows creating block-compressed textures whose size is not a multiple of the texel block dimensions. Supported on all backends, except on DX12 it requires `UnalignedBlockTexturesSupported` from `D3D12_FEATURE_DATA_D3D12_OPTIONS8`. By @castano in [#0000](https://github.com/gfx-rs/wgpu/pull/0000).
 
 #### Hal
 
