@@ -3,9 +3,9 @@ description: "Install Vulkan SDK"
 inputs:
   # Sourced from https://vulkan.lunarg.com/sdk/home#linux
   version:
-    default: "1.4.328"
+    default: "1.4.357"
   full-version:
-    default: "1.4.328.1"
+    default: "1.4.357.0"
 runs:
   using: "composite"
   steps:

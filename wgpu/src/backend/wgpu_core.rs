@@ -1143,15 +1143,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
         };
 
-        let (wgpu_render_pipeline, error) = self.wgpu_device.create_render_pipeline(descriptor);
-        if let Some(cause) = error {
-            if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
-                log::error!("Shader translation error for stage {stage:?}: {error}");
-                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
-            }
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_render_pipeline");
-        }
+        let wgpu_render_pipeline = self.wgpu_device.create_render_pipeline(descriptor);
         CoreRenderPipeline {
             wgpu_render_pipeline,
         }
@@ -1234,16 +1226,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
         };
 
-        let (wgpu_render_pipeline, error) =
-            self.wgpu_device.create_render_pipeline(descriptor.into());
-        if let Some(cause) = error {
-            if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
-                log::error!("Shader translation error for stage {stage:?}: {error}");
-                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
-            }
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_render_pipeline");
-        }
+        let wgpu_render_pipeline = self.wgpu_device.create_render_pipeline(descriptor.into());
         CoreRenderPipeline {
             wgpu_render_pipeline,
         }
@@ -1704,16 +1687,8 @@ impl dispatch::BufferInterface for CoreBuffer {
             })),
         };
 
-        match self
-            .wgpu_buffer
-            .map_async(range.start, Some(range.end - range.start), operation)
-        {
-            Ok(_) => (),
-            Err(cause) => self
-                .wgpu_buffer
-                .device()
-                .handle_error_nolabel(cause, "Buffer::map_async"),
-        }
+        self.wgpu_buffer
+            .map_async(range.start, Some(range.end - range.start), operation);
     }
 
     fn get_mapped_range(

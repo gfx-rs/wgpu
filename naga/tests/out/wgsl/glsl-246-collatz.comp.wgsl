@@ -2,7 +2,7 @@ struct PrimeIndices {
     indices: array<u32>,
 }
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage, read_write> global: PrimeIndices;
 var<private> gl_GlobalInvocationID_1: vec3<u32>;
 
@@ -51,7 +51,7 @@ fn main_1() {
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main(@builtin(global_invocation_id) gl_GlobalInvocationID: vec3<u32>) {
     gl_GlobalInvocationID_1 = gl_GlobalInvocationID;
     main_1();

@@ -134,6 +134,7 @@ impl GPUTexture {
     self.wgpu_texture.destroy();
   }
 
+  #[reentrant]
   #[cppgc]
   fn create_view(
     &self,

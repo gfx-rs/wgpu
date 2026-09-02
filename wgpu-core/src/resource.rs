@@ -674,7 +674,7 @@ impl Buffer {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<SubmissionIndex, BufferAccessError> {
+    ) -> Option<SubmissionIndex> {
         profiling::scope!("Buffer::map_async");
         api_log!(
             "Buffer::map_async {:?} offset {offset:?} size {size:?} op: {op:?}",
@@ -683,11 +683,13 @@ impl Buffer {
 
         self.try_map_async(offset, size, op)
             .map_err(|(mut operation, err)| {
+                self.device
+                    .handle_error(err.clone(), Some(&self.label), "Buffer::map_async");
                 if let Some(callback) = operation.callback.take() {
-                    callback(Err(err.clone()));
+                    callback(Err(err));
                 }
-                err
             })
+            .ok()
     }
 
     /// Try to schedule buffer mapping.
