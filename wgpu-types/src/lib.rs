@@ -30,6 +30,7 @@ mod adapter;
 pub mod assertions;
 mod backend;
 mod binding;
+mod bitflags_array;
 mod buffer;
 mod cast_utils;
 mod counters;
@@ -79,6 +80,8 @@ pub use tokens::*;
 pub use transfers::*;
 pub use vertex::*;
 pub use write_only::*;
+
+pub(crate) use bitflags_array::*;
 
 pub(crate) use macros::ConstDefault;
 pub(crate) use naga_types::{link_to_wgc_docs, link_to_wgpu_docs, link_to_wgpu_item};

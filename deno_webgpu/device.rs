@@ -175,11 +175,10 @@ impl GPUDevice {
       ));
     }
 
-    // Validation of the usage needs to happen on the device timeline, so
-    // don't raise an error immediately if it isn't valid. wgpu will
-    // reject `BufferUsages::empty()`.
-    let usage = wgpu_types::BufferUsages::from_bits(descriptor.usage)
-      .unwrap_or(wgpu_types::BufferUsages::empty());
+    let usage = wgpu_types::BufferUsages::from_internal_flags(
+      wgpu_types::BufferUsagesWebGPU::from_bits_retain(descriptor.usage),
+      wgpu_types::BufferUsagesWGPU::empty(),
+    );
 
     let wgpu_descriptor = wgpu_core::resource::BufferDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
