@@ -462,12 +462,11 @@ impl super::CommandEncoder {
         if self.deferred_multi_draws.is_empty() {
             return;
         }
-        let requests = core::mem::take(&mut self.deferred_multi_draws);
-
         // The pipelines were resolved when each request was queued and the
         // adapter-level cache is never cleared, so these lookups cannot fail.
         let pipelines = self.get_icb_command_pipelines().unwrap();
-        let mesh_pipeline = requests
+        let mesh_pipeline = self
+            .deferred_multi_draws
             .iter()
             .any(|request| matches!(request.kind, IcbDrawKind::DrawMeshTasks { .. }))
             .then(|| self.get_icb_mesh_command_pipeline().unwrap());
@@ -476,7 +475,7 @@ impl super::CommandEncoder {
         {
             let blit = self.enter_blit();
             blit.pushDebugGroup(&NSString::from_str("wgpu reset multi-draw ICBs"));
-            for request in &requests {
+            for request in &self.deferred_multi_draws {
                 unsafe {
                     blit.resetCommandsInBuffer_withRange(
                         &request.icb,
@@ -497,7 +496,7 @@ impl super::CommandEncoder {
         let raw = self.raw_cmd_buf.as_ref().unwrap();
         let compute = raw.computeCommandEncoder().unwrap();
         compute.setLabel(Some(&NSString::from_str("wgpu multi-draw ICB generation")));
-        for request in &requests {
+        for request in &self.deferred_multi_draws {
             let pipeline = match request.kind {
                 IcbDrawKind::Draw => &pipelines.draw,
                 IcbDrawKind::DrawIndexed { raw_index_type, .. } => {
@@ -582,7 +581,7 @@ impl super::CommandEncoder {
         {
             let blit = self.enter_blit();
             blit.pushDebugGroup(&NSString::from_str("wgpu optimize multi-draw ICBs"));
-            for request in &requests {
+            for request in &self.deferred_multi_draws {
                 unsafe {
                     blit.optimizeIndirectCommandBuffer_withRange(
                         &request.icb,
@@ -597,10 +596,16 @@ impl super::CommandEncoder {
         }
         self.leave_blit();
 
+        // Drain rather than take so the request vector keeps its allocation
+        // for the next pass.
         self.deferred_multi_draw_resources
-            .extend(requests.into_iter().map(|request| IcbExecutionResources {
-                _icb: request.icb,
-                _argument_buffer: request.argument_buffer,
-            }));
+            .extend(
+                self.deferred_multi_draws
+                    .drain(..)
+                    .map(|request| IcbExecutionResources {
+                        _icb: request.icb,
+                        _argument_buffer: request.argument_buffer,
+                    }),
+            );
     }
 }
