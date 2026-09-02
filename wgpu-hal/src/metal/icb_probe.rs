@@ -193,7 +193,7 @@ pub(super) fn supports_render_icb(
         return false;
     };
     render.setRenderPipelineState(&pipeline);
-    #[allow(deprecated)]
+    #[expect(deprecated)]
     render.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
     unsafe {
         render.executeCommandsInBuffer_withRange(

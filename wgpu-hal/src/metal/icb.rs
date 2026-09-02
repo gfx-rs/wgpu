@@ -260,9 +260,9 @@ impl super::CommandEncoder {
         }
     }
 
-    /// One threadgroup dimensioning for every generation dispatch: uniform
-    /// `threadExecutionWidth`-wide threadgroups, enough of them to cover
-    /// `draw_count`; the kernels bounds-check against `draw_count`.
+    /// Dispatch size for a generation kernel: one thread per draw, in
+    /// threadgroups of `threadExecutionWidth` threads, rounded up so every
+    /// draw is covered. The kernels ignore threads past `draw_count`.
     fn icb_generation_threadgroups(
         pipeline: &ProtocolObject<dyn MTLComputePipelineState>,
         draw_count: u32,
@@ -417,7 +417,7 @@ impl super::CommandEncoder {
         let icb_pipeline = self.state.render_pipeline_icb.as_ref().unwrap();
         let encoder = self.state.render.as_ref().unwrap();
         encoder.setRenderPipelineState(icb_pipeline);
-        #[allow(deprecated)]
+        #[expect(deprecated)]
         unsafe {
             encoder.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
             if let IcbDrawKind::DrawIndexed {
