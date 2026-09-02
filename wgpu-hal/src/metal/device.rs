@@ -158,6 +158,24 @@ const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> nt::VertexF
     }
 }
 
+/// Compile MSL source with the options this backend uses for every library
+/// it builds itself, whether naga-generated or hand-written.
+pub(super) fn compile_msl_library(
+    device: &ProtocolObject<dyn MTLDevice>,
+    msl_version: MTLLanguageVersion,
+    source: &str,
+) -> Result<Retained<ProtocolObject<dyn MTLLibrary>>, Retained<NSError>> {
+    let options = MTLCompileOptions::new();
+    options.setLanguageVersion(msl_version);
+
+    // https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance
+    if available!(macos = 11.0, ios = 13.0, tvos = 14.0, visionos = 1.0) {
+        options.setPreserveInvariance(true);
+    }
+
+    device.newLibraryWithSource_options_error(&NSString::from_str(source), Some(&options))
+}
+
 impl super::Device {
     fn load_shader(
         &self,
@@ -269,25 +287,15 @@ impl super::Device {
                     &source
                 );
 
-                let options = MTLCompileOptions::new();
-                options.setLanguageVersion(self.shared.private_caps.msl_version);
-
-                // https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance
-                if available!(macos = 11.0, ios = 13.0, tvos = 14.0, visionos = 1.0) {
-                    options.setPreserveInvariance(true);
-                }
-
-                let library = self
-                    .shared
-                    .device
-                    .newLibraryWithSource_options_error(
-                        &NSString::from_str(&source),
-                        Some(&options),
-                    )
-                    .map_err(|err| {
-                        log::debug!("Naga generated shader:\n{source}");
-                        crate::PipelineError::Linkage(stage_bit, format!("Metal: {err}"))
-                    })?;
+                let library = compile_msl_library(
+                    &self.shared.device,
+                    self.shared.private_caps.msl_version,
+                    &source,
+                )
+                .map_err(|err| {
+                    log::debug!("Naga generated shader:\n{source}");
+                    crate::PipelineError::Linkage(stage_bit, format!("Metal: {err}"))
+                })?;
 
                 let ep_index = module
                     .entry_points

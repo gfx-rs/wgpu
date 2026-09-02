@@ -4,12 +4,11 @@ use objc2::runtime::ProtocolObject;
 use objc2_foundation::{NSRange, NSString};
 use objc2_metal::{
     MTLArgumentEncoder, MTLBlitCommandEncoder, MTLBuffer, MTLClearColor, MTLCommandBuffer,
-    MTLCommandBufferStatus, MTLCommandEncoder, MTLCommandQueue, MTLCompileOptions,
-    MTLComputeCommandEncoder, MTLDevice, MTLFunction, MTLIndirectCommandBufferDescriptor,
-    MTLIndirectCommandType, MTLLanguageVersion, MTLLibrary, MTLLoadAction, MTLPixelFormat,
-    MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLRenderPipelineDescriptor,
-    MTLResourceOptions, MTLResourceUsage, MTLSize, MTLStorageMode, MTLStoreAction,
-    MTLTextureDescriptor, MTLTextureUsage,
+    MTLCommandBufferStatus, MTLCommandEncoder, MTLCommandQueue, MTLComputeCommandEncoder,
+    MTLDevice, MTLFunction, MTLIndirectCommandBufferDescriptor, MTLIndirectCommandType,
+    MTLLanguageVersion, MTLLibrary, MTLLoadAction, MTLPixelFormat, MTLRenderCommandEncoder,
+    MTLRenderPassDescriptor, MTLRenderPipelineDescriptor, MTLResourceOptions, MTLResourceUsage,
+    MTLSize, MTLStorageMode, MTLStoreAction, MTLTextureDescriptor, MTLTextureUsage,
 };
 
 const PROBE_SHADER: &str = include_str!("./shaders/icb_probe.metal");
@@ -18,10 +17,7 @@ pub(super) fn supports_render_icb(
     device: &ProtocolObject<dyn MTLDevice>,
     msl_version: MTLLanguageVersion,
 ) -> bool {
-    let source = NSString::from_str(PROBE_SHADER);
-    let options = MTLCompileOptions::new();
-    options.setLanguageVersion(msl_version);
-    let library = match device.newLibraryWithSource_options_error(&source, Some(&options)) {
+    let library = match super::device::compile_msl_library(device, msl_version, PROBE_SHADER) {
         Ok(library) => library,
         Err(error) => {
             log::debug!("Metal render ICB probe shader compilation failed: {error}");

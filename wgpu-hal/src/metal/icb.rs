@@ -13,10 +13,10 @@ use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_foundation::{NSRange, NSString};
 use objc2_metal::{
     MTLArgumentEncoder, MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandEncoder,
-    MTLCompileOptions, MTLComputeCommandEncoder, MTLComputePipelineState, MTLDevice, MTLFunction,
-    MTLIndexType, MTLIndirectCommandBuffer, MTLIndirectCommandBufferDescriptor,
-    MTLIndirectCommandType, MTLLibrary, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderStages,
-    MTLResource, MTLResourceOptions, MTLResourceUsage, MTLSize,
+    MTLComputeCommandEncoder, MTLComputePipelineState, MTLDevice, MTLFunction, MTLIndexType,
+    MTLIndirectCommandBuffer, MTLIndirectCommandBufferDescriptor, MTLIndirectCommandType,
+    MTLLibrary, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderStages, MTLResource,
+    MTLResourceOptions, MTLResourceUsage, MTLSize,
 };
 
 /// Minimum `draw_count` for which lowering a fixed-count multi-draw to an
@@ -143,12 +143,7 @@ impl IcbCommandPipelines {
         shared: &super::AdapterShared,
         source: &str,
     ) -> Result<Retained<ProtocolObject<dyn MTLLibrary>>, crate::DeviceError> {
-        let options = MTLCompileOptions::new();
-        options.setLanguageVersion(shared.private_caps.msl_version);
-
-        shared
-            .device
-            .newLibraryWithSource_options_error(&NSString::from_str(source), Some(&options))
+        super::device::compile_msl_library(&shared.device, shared.private_caps.msl_version, source)
             .map_err(|err| {
                 log::error!("failed to compile Metal ICB generation shader: {err}");
                 crate::DeviceError::Unexpected
