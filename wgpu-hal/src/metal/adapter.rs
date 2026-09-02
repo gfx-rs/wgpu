@@ -769,14 +769,15 @@ impl super::CapabilitiesQuery {
                 device,
                 sel!(newIndirectCommandBufferWithDescriptor:maxCommandCount:options:),
             );
-        // Mesh ICBs are gated far more conservatively: their execution has
-        // only been verified by readback on macOS 26 / Apple9. Every other
-        // combination takes the per-draw path until it can be verified the
-        // same way.
-        let indirect_command_buffers_mesh = indirect_command_buffers_rendering
-            && os_type == super::OsType::Macos
-            && available!(macos = 26.0)
-            && device.supportsFamily(MTLGPUFamily::Apple9);
+        // Mesh ICBs are disabled. On the one combination they were enabled
+        // for (macOS 26, Apple9), GPU-generated mesh commands execute without
+        // drawing anything: the mesh multi-draw readback test passes through
+        // the per-draw path and fails through the ICB path, with correct
+        // kernel inputs, an ICB-capable pipeline that draws when used
+        // directly, and no validation diagnostics. The lowering is kept for
+        // when that is understood; until then mesh multi-draws take the
+        // per-draw path.
+        let indirect_command_buffers_mesh = false;
 
         let mesh_shaders = family_check
                 && (device.supportsFamily(MTLGPUFamily::Metal3)
