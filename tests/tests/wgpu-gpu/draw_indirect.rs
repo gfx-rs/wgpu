@@ -596,7 +596,7 @@ fn create_draw_indexed_indirect_buffer(
 /// Kept in sync with `ICB_MIN_DRAW_COUNT` in `wgpu-hal/src/metal/command.rs`
 /// so these tests exercise Metal's indirect-command-buffer lowering rather
 /// than the small-count per-draw loop.
-const ICB_MULTI_DRAW_TEST_COUNT: usize = 8;
+const ICB_MULTI_DRAW_TEST_COUNT: usize = 512;
 
 async fn run_multi_draw_indirect_over_icb_workgroup(ctx: TestingContext) {
     let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline(&ctx, false);

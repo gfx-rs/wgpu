@@ -21,18 +21,26 @@ use objc2_metal::{
 };
 
 /// Minimum `draw_count` for which lowering a fixed-count multi-draw to an
-/// indirect command buffer pays off. The ICB path costs an ICB allocation
-/// plus reset/generate/optimize GPU work in the pre-pass, so below this
-/// threshold the plain per-draw indirect loop is faster. Chosen empirically
-/// on A12 through M4 hardware.
-const ICB_MIN_DRAW_COUNT: u32 = 8;
+/// indirect command buffer pays off.
+///
+/// Measured with a paced frame loop (three frames in flight, ICBs from the
+/// pool) on A10X, A12, A14, A18 Pro and M4 Max: below this the per-draw
+/// indirect loop is cheaper on both the CPU and the GPU on every one of them,
+/// and from here the ICB path's CPU cost stays flat while the loop's grows
+/// with every draw. The CPU crossover sits between 256 and 1024 draws
+/// depending on the device.
+const ICB_MIN_DRAW_COUNT: u32 = 512;
 
-/// Value declared for `maxVertexBufferBindCount` on ICB descriptors. The
-/// generated commands never set buffers themselves (all bindings are
-/// inherited from the encoder), so per Metal's documentation these counts
-/// only size command-side binding storage; the full 31-slot argument-table
-/// size is declared anyway because driver validation of the interaction with
-/// `inheritBuffers` has proven underdocumented across OS generations.
+/// `maxVertexBufferBindCount` for ICB descriptors that inherit the encoder's
+/// buffers.
+///
+/// Metal's documentation makes the count irrelevant when buffers are
+/// inherited, and Apple3, Apple7 and Apple9 GPUs do accept 0. An A12 (Apple5,
+/// iOS 18.7) does not: an ICB whose count leaves out a vertex-buffer slot the
+/// inherited pipeline reads faults the GPU on execution -- no error, no
+/// validation-layer assertion, Metal just stops executing every later command
+/// buffer. wgpu binds vertex buffers from the top of the 31-slot argument
+/// table, so only the full table covers every layout.
 const ICB_MAX_INHERITED_BUFFER_BIND_COUNT: usize = 31;
 
 /// Bounds on the per-adapter pool of indirect command buffers: entries kept,

@@ -285,7 +285,8 @@ async fn mesh_multi_draw_indirect_color_readback(ctx: TestingContext) {
         cache: None,
     });
 
-    let indirect_args = [wgpu::util::DispatchIndirectArgs { x: 1, y: 1, z: 1 }; 8];
+    // Enough draws to take Metal's ICB path (`ICB_MIN_DRAW_COUNT`).
+    let indirect_args = [wgpu::util::DispatchIndirectArgs { x: 1, y: 1, z: 1 }; 512];
     let indirect_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: None,
         usage: wgpu::BufferUsages::INDIRECT,
