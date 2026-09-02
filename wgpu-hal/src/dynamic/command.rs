@@ -824,6 +824,8 @@ impl<'a> DepthStencilAttachment<'a, dyn DynTextureView> {
             depth_ops: self.depth_ops,
             stencil_ops: self.stencil_ops,
             clear_value: self.clear_value,
+            depth_read_only: self.depth_read_only,
+            stencil_read_only: self.stencil_read_only,
         }
     }
 }

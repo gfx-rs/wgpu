@@ -43,18 +43,12 @@ webgpu:api,operation,compute_pipeline,overrides:*
 //FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
 webgpu:api,operation,compute,basic:memcpy:*
 webgpu:api,operation,device,lost:*
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth16unorm";*
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth24plus";*
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth24plus-stencil8";depthReadOnly=false;stencilReadOnly=false
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth24plus-stencil8";depthReadOnly=true;stencilReadOnly=true
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float";*
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=false;stencilReadOnly=false
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=true;stencilReadOnly=true
-webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="stencil8";*
+webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:*
 
 webgpu:api,operation,render_pass,*
 webgpu:api,operation,render_pipeline,overrides:*
 webgpu:api,operation,render_pipeline,pipeline_output_targets:color,component_count,blend:*
+webgpu:api,operation,rendering,3d_texture_slices:*
 webgpu:api,operation,rendering,basic:clear:*
 webgpu:api,operation,rendering,basic:fullscreen_quad:*
 //FAIL: webgpu:api,operation,rendering,basic:large_draw:*
@@ -65,6 +59,7 @@ webgpu:api,operation,rendering,depth:*
 webgpu:api,operation,rendering,draw:*
 fails-if(dx12,vulkan) webgpu:api,operation,sampling,*
 webgpu:api,operation,shader_module,compilation_info:*
+webgpu:api,operation,texture_view,texture_component_swizzle:*
 webgpu:api,operation,uncapturederror:iff_uncaptured:*
 //FAIL: webgpu:api,operation,uncapturederror:onuncapturederror_order_wrt_addEventListener
 // There are also two unimplemented SKIPs in uncapturederror not enumerated here.
@@ -78,6 +73,15 @@ webgpu:api,validation,buffer,create:size,*
 webgpu:api,validation,buffer,create:usage,*
 webgpu:api,validation,buffer,destroy:*
 webgpu:api,validation,capability_checks,features,clip_distances:*
+webgpu:api,validation,capability_checks,features,query_types:createQuerySet:*
+webgpu:api,validation,capability_checks,features,texture_component_swizzle:*
+webgpu:api,validation,capability_checks,features,texture_formats:color_target_state:*
+webgpu:api,validation,capability_checks,features,texture_formats:depth_stencil_state:*
+webgpu:api,validation,capability_checks,features,texture_formats:render_bundle_encoder_descriptor_depth_stencil_format:*
+webgpu:api,validation,capability_checks,features,texture_formats:storage_texture_binding_layout:*
+webgpu:api,validation,capability_checks,features,texture_formats:texture_descriptor_view_formats:*
+webgpu:api,validation,capability_checks,features,texture_formats:texture_descriptor:*
+webgpu:api,validation,capability_checks,features,texture_formats:texture_view_descriptor:*
 webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
 webgpu:api,validation,capability_checks,limits,maxBindingsPerBindGroup:validate,*
 webgpu:api,validation,capability_checks,limits,maxBufferSize:*
@@ -310,12 +314,7 @@ webgpu:api,validation,resource_usages,texture,in_pass_encoder:shader_stages_and_
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:subresources_and_binding_types_combination_for_aspect:*
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:subresources_and_binding_types_combination_for_color:compute=false;type0="render-target";type1="render-target"
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:unused_bindings_in_pipeline:*
-webgpu:api,validation,resource_usages,texture,in_render_common:subresources,color_attachment_and_bind_group:*
-webgpu:api,validation,resource_usages,texture,in_render_common:subresources,color_attachments:*
-// FAIL: webgpu:api,validation,resource_usages,texture,in_render_common:subresources,depth_stencil_attachment_and_bind_group:*
-// https://github.com/gfx-rs/wgpu/issues/8705
-webgpu:api,validation,resource_usages,texture,in_render_common:subresources,depth_stencil_texture_in_bind_groups:*
-webgpu:api,validation,resource_usages,texture,in_render_common:subresources,multiple_bind_groups:*
+webgpu:api,validation,resource_usages,texture,in_render_common:subresources,*
 webgpu:api,validation,resource_usages,texture,in_render_misc:*
 webgpu:api,validation,shader_module,*
 webgpu:api,validation,texture,bgra8unorm_storage:*
@@ -386,8 +385,7 @@ webgpu:shader,validation,decl,immediate:binding_attributes:*
 webgpu:shader,validation,decl,immediate:entry_point_interface:*
 webgpu:shader,validation,decl,immediate:pointers:*
 webgpu:shader,validation,decl,immediate:scope:*
-//FAIL: Fixed array should be disallowed in immediates
-// webgpu:shader,validation,decl,immediate:store_type,invalid:*
+webgpu:shader,validation,decl,immediate:store_type,invalid:*
 webgpu:shader,validation,decl,immediate:store_type,valid:*
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_neg"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_one"

@@ -19,8 +19,6 @@ use crate::webidl::GPUColorWriteFlags;
 use crate::webidl::GPUPipelineLayoutOrGPUAutoLayoutMode;
 
 pub struct GPURenderPipeline {
-  pub error_handler: super::error::ErrorHandler,
-
   pub wgpu_render_pipeline: Arc<wgpu_core::pipeline::RenderPipeline>,
   pub label: String,
 }
@@ -56,10 +54,8 @@ impl GPURenderPipeline {
 
   #[cppgc]
   fn get_bind_group_layout(&self, #[webidl] index: u32) -> GPUBindGroupLayout {
-    let (wgpu_bind_group_layout, err) =
+    let wgpu_bind_group_layout =
       self.wgpu_render_pipeline.get_bind_group_layout(index);
-
-    self.error_handler.push_error(err);
 
     // TODO(wgpu): needs to add a way to retrieve the label
     GPUBindGroupLayout {

@@ -1,36 +1,18 @@
 use alloc::borrow::Cow;
-use core::num::NonZeroU32;
 use wgpu_core_remote_types::encoders::{
-    BindingCommand, DebugCommand, RenderCommand, RenderPassEncoderCommand,
+    BindingCommand, DebugCommand, RenderCommand, RenderPassDescriptor, RenderPassEncoderCommand,
 };
 
 use wgpu_core::command::{
-    PassTimestampWrites, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
+    PassTimestampWrites, RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
     ResolvedRenderPassDescriptor,
 };
-use wgpu_core::Label;
+use wgpu_core_remote_types::ffi::FfiOption;
 use wgt::{BufferAddress, BufferSize, Color, DynamicOffset, IndexFormat};
 
 use crate::global::Global;
 use crate::hub::Hub;
 use crate::id;
-
-/// Describes the attachments of a render pass.
-#[derive(Clone, Debug, Default, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct RenderPassDescriptor<'a> {
-    pub label: Label<'a>,
-    /// The color attachments of the render pass.
-    pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment<id::TextureViewId>>]>,
-    /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<id::TextureViewId>>,
-    /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<PassTimestampWrites<id::QuerySetId>>,
-    /// Defines where the occlusion query results will be stored for this pass.
-    pub occlusion_query_set: Option<id::QuerySetId>,
-    /// The multiview array layers that will be used
-    pub multiview_mask: Option<NonZeroU32>,
-}
 
 impl Global {
     /// Creates a render pass.
@@ -40,9 +22,7 @@ impl Global {
     /// ultimately be generated when the parent encoder is finished, and it is
     /// not possible to run any commands from the invalid pass.
     ///
-    /// If successful, puts the encoder into the [`Locked`] state.
-    ///
-    /// [`Locked`]: crate::command::CommandEncoderStatus::Locked
+    /// If successful, puts the encoder into the `Locked` state.
     pub fn command_encoder_begin_render_pass<'a>(
         &self,
         encoder_id: id::CommandEncoderId,
@@ -68,12 +48,12 @@ impl Global {
                     .map(|at| {
                         at.as_ref().map(|at| RenderPassColorAttachment {
                             view: texture_views.get(at.view),
-                            depth_slice: at.depth_slice,
+                            depth_slice: at.depth_slice.to_std(),
                             resolve_target: at
                                 .resolve_target
                                 .as_ref()
                                 .map(|rt| texture_views.get(*rt)),
-                            load_op: at.load_op,
+                            load_op: at.load_op.to_wgt(),
                             store_op: at.store_op,
                         })
                     })
@@ -82,8 +62,24 @@ impl Global {
             depth_stencil_attachment: desc.depth_stencil_attachment.as_ref().map(|at| {
                 RenderPassDepthStencilAttachment {
                     view: texture_views.get(at.view),
-                    depth: at.depth.clone(),
-                    stencil: at.stencil.clone(),
+                    depth: wgpu_core::command::PassChannel {
+                        load_op: at
+                            .depth
+                            .load_op
+                            .to_std()
+                            .map(|x| x.map_clear_value(FfiOption::to_std).to_wgt()),
+                        store_op: at.depth.store_op.to_std(),
+                        read_only: at.depth.read_only,
+                    },
+                    stencil: wgpu_core::command::PassChannel {
+                        load_op: at
+                            .stencil
+                            .load_op
+                            .to_std()
+                            .map(|x| x.map_clear_value(FfiOption::to_std).to_wgt()),
+                        store_op: at.stencil.store_op.to_std(),
+                        read_only: at.stencil.read_only,
+                    },
                 }
             }),
             timestamp_writes: desc
@@ -91,14 +87,14 @@ impl Global {
                 .as_ref()
                 .map(|tw| PassTimestampWrites {
                     query_set: query_sets.get(tw.query_set),
-                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index.to_std(),
+                    end_of_pass_write_index: tw.end_of_pass_write_index.to_std(),
                 }),
             occlusion_query_set: desc
                 .occlusion_query_set
                 .as_ref()
                 .map(|query_set| query_sets.get(*query_set)),
-            multiview_mask: desc.multiview_mask,
+            multiview_mask: None,
         };
 
         let render_pass = cmd_enc.begin_render_pass(desc);
@@ -112,9 +108,9 @@ impl Global {
         pass.end()
     }
 
-    pub fn render_pass_drop(&self, pass: id::RenderPassEncoderId) {
+    pub fn render_pass_remove(&self, pass: id::RenderPassEncoderId) -> RenderPass {
         let mut hub = self.hub.borrow_mut();
-        hub.render_passes.remove(pass);
+        hub.render_passes.remove(pass)
     }
 }
 

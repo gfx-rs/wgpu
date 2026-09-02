@@ -242,10 +242,23 @@ fn validate_render_bundle_encoder_descriptor(
 
 impl RenderBundleEncoder {
     /// Create a new `RenderBundleEncoder`.
+    ///
+    /// <https://www.w3.org/TR/webgpu/#dom-gpudevice-createrenderbundleencoder>
     pub fn new(
         device: &Arc<Device>,
         desc: &RenderBundleEncoderDescriptor,
     ) -> Result<Self, CreateRenderBundleError> {
+        // 1. Validate texture format required features of each non-null element of descriptor.colorFormats with this.[[device]].
+        for &format in desc.color_formats.iter().flatten() {
+            device.require_features(format.required_features())?;
+        }
+
+        // 2. If descriptor.depthStencilFormat is provided:
+        if let Some(ds) = desc.depth_stencil {
+            // Validate texture format required features of descriptor.depthStencilFormat with this.[[device]].
+            device.require_features(ds.format.required_features())?;
+        }
+
         device.check_is_valid()?;
         let (is_depth_read_only, is_stencil_read_only) =
             validate_render_bundle_encoder_descriptor(desc, device)?;

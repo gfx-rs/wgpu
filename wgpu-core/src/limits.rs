@@ -562,8 +562,7 @@ mod tests {
                 //.union(Features::TEXTURE_FORMATS_TIER1) not implemented
                 //.union(Features::TEXTURE_FORMATS_TIER2) not implemented
                 .union(Features::PRIMITIVE_INDEX)
-                //.union(Features::TEXTURE_COMPONENT_SWIZZLE) not implemented
-                // Standard-track features not in official spec
+                .union(Features::TEXTURE_COMPONENT_SWIZZLE)
                 .union(Features::IMMEDIATES),
         );
         assert!(

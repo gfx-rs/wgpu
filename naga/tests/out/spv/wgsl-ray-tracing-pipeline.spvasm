@@ -1,16 +1,17 @@
 ; SPIR-V
-; Version: 1.1
+; Version: 1.4
 ; Generator: rspirv
-; Bound: 170
+; Bound: 179
 OpCapability Shader
 OpCapability RayTracingKHR
 OpExtension "SPV_KHR_ray_tracing"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint RayGenerationKHR %23 "ray_gen_main" %18 %21
+OpEntryPoint RayGenerationKHR %23 "ray_gen_main" %18 %21 %11 %13
 OpEntryPoint MissKHR %138 "miss" %130 %133 %135
-OpEntryPoint AnyHitKHR %150 "any_hit_main" %141 %144 %146 %148
+OpEntryPoint AnyHitKHR %150 "any_hit_main" %141 %144 %146 %148 %15
 OpEntryPoint ClosestHitKHR %168 "closest_hit_main" %159 %161 %163 %166
+OpEntryPoint ClosestHitKHR %175 "closest_hit_triangle" %171 %173 %15
 OpMemberDecorate %4 0 Offset 0
 OpMemberDecorate %4 1 Offset 4
 OpMemberDecorate %9 0 Offset 0
@@ -34,6 +35,8 @@ OpDecorate %159 BuiltIn ObjectRayOriginKHR
 OpDecorate %161 BuiltIn ObjectRayDirectionKHR
 OpDecorate %163 BuiltIn ObjectToWorldKHR
 OpDecorate %166 BuiltIn WorldToObjectKHR
+OpDecorate %171 BuiltIn InstanceId
+OpDecorate %173 BuiltIn PrimitiveId
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 0
 %4 = OpTypeStruct %3 %3
@@ -91,6 +94,8 @@ OpDecorate %166 BuiltIn WorldToObjectKHR
 %164 = OpTypePointer Input %10
 %163 = OpVariable  %164  Input
 %166 = OpVariable  %164  Input
+%171 = OpVariable  %142  Input
+%173 = OpVariable  %142  Input
 %49 = OpFunction  %2  None %48
 %50 = OpFunctionParameter  %5
 %51 = OpFunctionParameter  %9
@@ -222,5 +227,17 @@ OpFunctionEnd
 %167 = OpLoad  %10  %166
 OpBranch %169
 %169 = OpLabel
+OpReturn
+OpFunctionEnd
+%175 = OpFunction  %2  None %24
+%170 = OpLabel
+%172 = OpLoad  %3  %171
+%174 = OpLoad  %3  %173
+OpBranch %176
+%176 = OpLabel
+%177 = OpAccessChain  %152  %15 %31
+OpStore %177 %174
+%178 = OpAccessChain  %152  %15 %31
+OpStore %178 %172
 OpReturn
 OpFunctionEnd

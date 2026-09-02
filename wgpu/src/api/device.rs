@@ -95,11 +95,10 @@ impl Device {
 
     /// Check for resource cleanups and mapping callbacks. Will block if [`PollType::Wait`] is passed.
     ///
-    /// Return `true` if the queue is empty, or `false` if there are more queue
-    /// submissions still in flight. (Note that, unless access to the [`Queue`] is
-    /// coordinated somehow, this information could be out of date by the time
-    /// the caller receives it. `Queue`s can be shared between threads, so
-    /// other threads could submit new work at any time.)
+    /// (Note that, unless access to the [`Queue`] is coordinated somehow,
+    /// the returned [`PollStatus`] could be out of date by the time the caller
+    /// receives it. `Queue`s can be shared between threads, so other threads
+    /// could submit new work at any time.)
     ///
     /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
     pub fn poll(&self, poll_type: PollType) -> Result<crate::PollStatus, crate::PollError> {
@@ -225,7 +224,6 @@ impl Device {
     }
 
     /// Creates an empty [`RenderBundleEncoder`].
-    #[must_use]
     pub fn create_render_bundle_encoder<'a>(
         &self,
         desc: &RenderBundleEncoderDescriptor<'_>,
@@ -329,6 +327,20 @@ impl Device {
     /// may be discarded), `initial_state` may be set to
     /// `TextureUses::UNINITIALIZED`.
     ///
+    /// # `cleared`
+    ///
+    /// Whether the wrapped resource's contents are already valid/defined.
+    /// This drives wgpu's lazy-clear tracking, which otherwise clears a
+    /// texture's subresources on first use to avoid exposing undefined
+    /// memory. Set `cleared` to `true` if the contents are already valid
+    /// (e.g. just cleared or written to on the driver side), or `false` if
+    /// they're undefined, so wgpu clears them before they are read. Falsely
+    /// passing `true` skips that clear and exposes uninitialized/stale GPU
+    /// memory to subsequent reads.
+    ///
+    /// This is unrelated to `initial_state`, which only describes the
+    /// tracker's usage state, not the validity of the contents.
+    ///
     /// # Safety
     ///
     /// - `hal_texture` must be created from this device internal handle
@@ -337,6 +349,8 @@ impl Device {
     /// - `initial_state`, if it is not `TextureUses::UNINITIALIZED`, must
     ///   match the actual driver-side layout/state of the wrapped resource at
     ///   the moment of wrap.
+    /// - `cleared` must not be `true` unless the resource's contents are
+    ///   actually valid/defined
     #[cfg(wgpu_core)]
     #[must_use]
     pub unsafe fn create_texture_from_hal<A: hal::Api>(
@@ -344,15 +358,11 @@ impl Device {
         hal_texture: A::Texture,
         desc: &TextureDescriptor<'_>,
         initial_state: wgt::TextureUses,
+        cleared: bool,
     ) -> Texture {
         let texture = unsafe {
             let core_device = self.inner.as_core();
-            core_device.context.create_texture_from_hal::<A>(
-                hal_texture,
-                core_device,
-                desc,
-                initial_state,
-            )
+            core_device.create_texture_from_hal::<A>(hal_texture, desc, initial_state, cleared)
         };
         Texture {
             inner: texture.into(),
@@ -416,7 +426,127 @@ impl Device {
         self.inner.as_webgpu_opt().map(|wd| &wd.inner)
     }
 
-    /// Creates a new [`ExternalTexture`].
+    /// Wrap an existing `web_sys::WebGlTexture` as a [`Texture`], without
+    /// copying. WebGL counterpart of
+    /// [`Self::create_texture_from_webgpu_handle`].
+    ///
+    /// `view_dimension` names the WebGL texture type of `texture` ([`D2`] →
+    /// `TEXTURE_2D`, [`D2Array`] → `TEXTURE_2D_ARRAY`, [`Cube`] →
+    /// `TEXTURE_CUBE_MAP`, [`D3`] → `TEXTURE_3D`); it cannot be inferred from
+    /// `desc`.
+    ///
+    /// Fails with [`NotWebGlBackendError`] if this device is not using the
+    /// GLES backend on WebGL.
+    ///
+    /// `texture` must have been created by the `WebGl2RenderingContext`
+    /// backing this device, match `desc` and `view_dimension`, and stay valid
+    /// until wgpu is done with it (or until `drop_callback` fires, if one is
+    /// supplied). Violations yield GL errors rather than memory unsafety,
+    /// which is why this method is not `unsafe`.
+    ///
+    /// The handle is always externally owned — wgpu never deletes it — and
+    /// `drop_callback` is purely a notification. To delete the texture once
+    /// wgpu is done with it, do so in the callback.
+    ///
+    /// [`D2`]: wgt::TextureViewDimension::D2
+    /// [`D2Array`]: wgt::TextureViewDimension::D2Array
+    /// [`Cube`]: wgt::TextureViewDimension::Cube
+    /// [`D3`]: wgt::TextureViewDimension::D3
+    #[cfg(webgl)]
+    pub fn create_texture_from_webgl_handle(
+        &self,
+        texture: web_sys::WebGlTexture,
+        desc: &TextureDescriptor<'_>,
+        view_dimension: wgt::TextureViewDimension,
+        drop_callback: Option<hal::DropCallback>,
+    ) -> Result<Texture, NotWebGlBackendError> {
+        use hal::api::Gles;
+
+        // `texture_from_webgl_handle` reads only format / dimension / size / mip
+        // from the hal descriptor; `usage` / `memory_flags` are placeholders
+        // (the real usage flows through `create_texture_from_hal`'s frontend
+        // `desc`).
+        let hal_desc = hal::TextureDescriptor {
+            label: desc.label,
+            size: desc.size,
+            mip_level_count: desc.mip_level_count,
+            sample_count: desc.sample_count,
+            dimension: desc.dimension,
+            format: desc.format,
+            usage: wgt::TextureUses::empty(),
+            memory_flags: hal::MemoryFlags::empty(),
+            view_formats: desc.view_formats.to_vec(),
+        };
+
+        let hal_texture = {
+            // SAFETY: the raw device is only borrowed to register the handle,
+            // never destroyed through the guard.
+            let hal_device = unsafe { self.as_hal::<Gles>() }.ok_or(NotWebGlBackendError)?;
+            hal_device.texture_from_webgl_handle(texture, &hal_desc, view_dimension, drop_callback)
+        };
+
+        // SAFETY: `hal_texture` was created on this device's raw handle
+        // respecting `desc` just above, carries no initial state, and WebGL
+        // guarantees that observable texture contents are initialized.
+        Ok(unsafe {
+            self.create_texture_from_hal::<Gles>(hal_texture, desc, wgt::TextureUses::empty(), true)
+        })
+    }
+
+    /// Borrow the underlying `web_sys::WebGlTexture` for a texture on the GLES
+    /// backend (WebGL platform), or `None` on other backends / non-GL textures
+    /// / textures that were not created on this device.
+    ///
+    /// WebGL counterpart of [`Texture::as_webgpu`]. Unlike WebGPU — where the
+    /// texture directly holds the JS handle — a GLES texture holds a glow
+    /// resource key, so resolving it to a `WebGlTexture` needs this device's
+    /// glow context. Hence this lives on [`Device`] and takes the texture,
+    /// rather than being a `&self` method on [`Texture`].
+    #[cfg(webgl)]
+    pub fn as_webgl_texture(&self, texture: &Texture) -> Option<web_sys::WebGlTexture> {
+        use hal::api::Gles;
+
+        // A glow resource key is only meaningful inside the glow context that
+        // issued it: a foreign texture's key could resolve to an unrelated
+        // `WebGlTexture` in this device's tracker, so reject textures that were
+        // not created on this device.
+        let core_device = self.inner.as_core_opt()?;
+        let core_texture = texture.inner.as_core_opt()?;
+        if !core_device.texture_belongs_to_device(core_texture) {
+            return None;
+        }
+
+        let hal_device = unsafe { self.as_hal::<Gles>() }?;
+        let hal_texture = unsafe { texture.as_hal::<Gles>() }?;
+        hal_device.webgl_texture_handle(&hal_texture)
+    }
+
+    /// Returns the underlying `web_sys::WebGl2RenderingContext` if this `Device`
+    /// is on the GLES backend (WebGL platform), otherwise `None`.
+    ///
+    /// WebGL counterpart of [`Self::as_webgpu`]. Unlike WebGPU — where the
+    /// device directly holds its JS `GPUDevice` — a GLES device holds a glow
+    /// context, so this reflects the `WebGl2RenderingContext` backing it: the
+    /// handle to `Object.is`-compare against a foreign context when deciding
+    /// whether a `WebGlTexture` can be wrapped same-context.
+    #[cfg(webgl)]
+    pub fn as_webgl_context(&self) -> Option<web_sys::WebGl2RenderingContext> {
+        use hal::api::Gles;
+        let hal_device = unsafe { self.as_hal::<Gles>() }?;
+        Some(hal_device.context().webgl2_context.clone())
+    }
+
+    /// Creates a new [`ExternalTexture`] from plane textures the caller
+    /// already has.
+    ///
+    /// The planes and the [`ExternalTextureDescriptor`]'s conversion
+    /// parameters (YCbCr matrix, gamut and transfer functions) are supplied by
+    /// the caller, and wgpu performs the conversion when the texture is
+    /// sampled. Works on every backend.
+    ///
+    /// Use this when the video data already lives in wgpu textures, e.g.
+    /// frames you decoded yourself. To bind a web media source directly on the
+    /// WebGPU backend, use `Device::import_external_texture` instead.
     #[must_use]
     pub fn create_external_texture(
         &self,
@@ -428,6 +558,33 @@ impl Device {
         ExternalTexture {
             inner: external_texture,
         }
+    }
+
+    /// Imports a video source as an [`ExternalTexture`] on the WebGPU backend,
+    /// without a copy.
+    ///
+    /// Unlike [`Self::create_external_texture`] — where the caller supplies
+    /// plane textures and conversion parameters — this hands `source` to the
+    /// browser's `importExternalTexture`, which performs the color conversion
+    /// internally. Use it whenever the frames come from a web media source
+    /// rather than from data you decoded yourself.
+    ///
+    /// The result is valid only while `source` is: a `VideoFrame` until it is
+    /// closed, an `HTMLVideoElement` for the current task.
+    /// [`ExternalTexture::destroy`] is a no-op.
+    ///
+    /// Returns an error if this device is not on the WebGPU backend.
+    #[cfg(webgpu)]
+    pub fn import_external_texture(
+        &self,
+        source: &webgpu::ExternalTextureSource,
+    ) -> Result<ExternalTexture, NotWebGpuBackendError> {
+        let inner = self
+            .inner
+            .as_webgpu_opt()
+            .ok_or(NotWebGpuBackendError)?
+            .import_external_texture(source);
+        Ok(ExternalTexture { inner })
     }
 
     /// Creates a [`Buffer`] from a wgpu-hal Buffer.
@@ -458,9 +615,7 @@ impl Device {
 
         let buffer = unsafe {
             let core_device = self.inner.as_core();
-            core_device
-                .context
-                .create_buffer_from_hal::<A>(hal_buffer, core_device, desc)
+            core_device.create_buffer_from_hal::<A>(hal_buffer, desc)
         };
 
         Buffer {
@@ -652,7 +807,7 @@ impl Device {
         &self,
     ) -> Option<impl Deref<Target = A::Device> + WasmNotSendSync> {
         let device = self.inner.as_core_opt()?;
-        unsafe { device.context.device_as_hal::<A>(device) }
+        unsafe { device.as_hal::<A>() }
     }
 
     /// Destroy this device.
@@ -767,6 +922,41 @@ impl Device {
         }
     }
 }
+
+/// The operation requires the GLES backend on WebGL, but this [`Device`] is
+/// using a different backend.
+///
+/// Returned by [`Device::create_texture_from_webgl_handle`]. With both the
+/// `webgpu` and `webgl` features enabled, the backend is chosen at runtime.
+#[cfg(webgl)]
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct NotWebGlBackendError;
+
+#[cfg(webgl)]
+impl fmt::Display for NotWebGlBackendError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "this device is not using the WebGL (GLES) backend")
+    }
+}
+
+#[cfg(webgl)]
+impl error::Error for NotWebGlBackendError {}
+/// The [`Device`] is not on the WebGPU backend.
+#[cfg(webgpu)]
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct NotWebGpuBackendError;
+
+#[cfg(webgpu)]
+impl fmt::Display for NotWebGpuBackendError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "this device is not using the WebGPU backend")
+    }
+}
+
+#[cfg(webgpu)]
+impl error::Error for NotWebGpuBackendError {}
 
 /// Requesting a device from an [`Adapter`] failed.
 #[derive(Clone, Debug)]

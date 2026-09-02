@@ -90,6 +90,7 @@ impl GPURenderPassEncoder {
       .set_scissor_rect(x, y, width, height);
   }
 
+  #[reentrant]
   #[required(1)]
   #[undefined]
   fn set_blend_constant(&self, #[webidl] color: GPUColor) {
@@ -129,6 +130,7 @@ impl GPURenderPassEncoder {
     self.render_pass.borrow_mut().end_occlusion_query();
   }
 
+  #[reentrant]
   #[required(1)]
   #[undefined]
   fn execute_bundles(&self, #[webidl] bundles: Vec<Ptr<GPURenderBundle>>) {

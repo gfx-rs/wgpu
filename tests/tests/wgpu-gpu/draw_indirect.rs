@@ -5,7 +5,8 @@ use wgpu::{
     vertex_attr_array,
 };
 use wgpu_test::{
-    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -540,68 +541,19 @@ fn create_rgba8_render_target(
     (texture, view)
 }
 
-async fn submit_and_read_rgba8_texture(
+/// Submits `encoder` and checks that every texel of `texture` is opaque white.
+async fn assert_all_white(
     ctx: &TestingContext,
     mut encoder: wgpu::CommandEncoder,
     texture: &wgpu::Texture,
-    width: u32,
-    height: u32,
-) -> Vec<u8> {
-    let bytes_per_row = width * 4;
-    assert_eq!(bytes_per_row % wgpu::COPY_BYTES_PER_ROW_ALIGNMENT, 0);
-    let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: None,
-        size: u64::from(bytes_per_row * height),
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
-
-    encoder.copy_texture_to_buffer(
-        wgpu::TexelCopyTextureInfo {
-            texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        wgpu::TexelCopyBufferInfo {
-            buffer: &readback_buffer,
-            layout: wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(bytes_per_row),
-                rows_per_image: None,
-            },
-        },
-        wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-    );
-
+) {
+    let readback = ReadbackBuffers::new(&ctx.device, texture);
+    readback.copy_from(&ctx.device, &mut encoder, texture);
     ctx.queue.submit([encoder.finish()]);
-
-    let slice = readback_buffer.slice(..);
-    slice.map_async(wgpu::MapMode::Read, |_| ());
-    ctx.async_poll(wgpu::PollType::wait_indefinitely())
-        .await
-        .unwrap();
-
-    let mapped = slice.get_mapped_range().unwrap();
-    let data = mapped.to_vec();
-    drop(mapped);
-    readback_buffer.unmap();
-    data
-}
-
-fn assert_all_pixels_rgba8(data: &[u8], expected: [u8; 4]) {
-    let first_bad_pixel = data.chunks_exact(4).position(|rgba| rgba != expected);
-    if let Some(first_bad_pixel) = first_bad_pixel {
-        eprintln!(
-            "first_bad_pixel={first_bad_pixel} rgba={:?}",
-            &data[first_bad_pixel * 4..first_bad_pixel * 4 + 4]
-        );
-    }
-    assert_eq!(first_bad_pixel, None);
+    let byte_count = (texture.width() * texture.height() * 4) as usize;
+    readback
+        .assert_buffer_contents(ctx, &vec![u8::MAX; byte_count])
+        .await;
 }
 
 fn draw_indirect_bytes(args: &[wgpu::util::DrawIndirectArgs]) -> Vec<u8> {
@@ -645,7 +597,7 @@ fn create_draw_indexed_indirect_buffer(
 /// Kept in sync with `ICB_MIN_DRAW_COUNT` in `wgpu-hal/src/metal/command.rs`
 /// so these tests exercise Metal's indirect-command-buffer lowering rather
 /// than the small-count per-draw loop.
-const ICB_MULTI_DRAW_TEST_COUNT: usize = 8;
+const ICB_MULTI_DRAW_TEST_COUNT: usize = 512;
 
 async fn run_multi_draw_indirect_over_icb_workgroup(ctx: TestingContext) {
     let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline(&ctx, false);
@@ -693,8 +645,7 @@ async fn run_multi_draw_indirect_over_icb_workgroup(ctx: TestingContext) {
         rpass.multi_draw_indirect(&indirect_buffer, 0, args.len() as u32);
     }
 
-    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
-    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+    assert_all_white(&ctx, encoder, &out_texture).await;
 }
 
 async fn run_multi_draw_indirect_first_vertex_and_instance(ctx: TestingContext) {
@@ -817,8 +768,7 @@ async fn run_multi_draw_indirect_first_vertex_and_instance(ctx: TestingContext) 
         rpass.multi_draw_indirect(&indirect_buffer, 0, ICB_MULTI_DRAW_TEST_COUNT as u32);
     }
 
-    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
-    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+    assert_all_white(&ctx, encoder, &out_texture).await;
 }
 
 async fn run_multi_draw_indirect_mixed_sequence(ctx: TestingContext) {
@@ -876,8 +826,7 @@ async fn run_multi_draw_indirect_mixed_sequence(ctx: TestingContext) {
         );
     }
 
-    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
-    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+    assert_all_white(&ctx, encoder, &out_texture).await;
 }
 
 /// Multi-draw with an active bind group; on Metal's ICB path the bind-group
@@ -1011,8 +960,7 @@ async fn run_multi_draw_indirect_with_bind_groups(ctx: TestingContext) {
         rpass.multi_draw_indirect(&indirect_buffer, 0, ICB_MULTI_DRAW_TEST_COUNT as u32);
     }
 
-    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
-    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+    assert_all_white(&ctx, encoder, &out_texture).await;
 }
 
 fn create_custom_vertex_buffer(ctx: &TestingContext, vertices: &[f32]) -> wgpu::Buffer {
@@ -1083,8 +1031,7 @@ async fn run_multi_draw_indexed_indirect_u16(ctx: TestingContext) {
         rpass.multi_draw_indexed_indirect(&indirect_buffer, 0, ICB_MULTI_DRAW_TEST_COUNT as u32);
     }
 
-    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
-    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+    assert_all_white(&ctx, encoder, &out_texture).await;
 }
 
 async fn run_multi_draw_indexed_indirect_base_vertex(ctx: TestingContext, base_vertex: i32) {
@@ -1162,8 +1109,7 @@ async fn run_multi_draw_indexed_indirect_base_vertex(ctx: TestingContext, base_v
         rpass.multi_draw_indexed_indirect(&indirect_buffer, 0, ICB_MULTI_DRAW_TEST_COUNT as u32);
     }
 
-    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
-    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+    assert_all_white(&ctx, encoder, &out_texture).await;
 }
 
 async fn run_multi_draw_indirect_count_readback(ctx: TestingContext, indexed: bool) {
@@ -1259,8 +1205,7 @@ async fn run_multi_draw_indirect_count_readback(ctx: TestingContext, indexed: bo
         }
     }
 
-    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
-    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+    assert_all_white(&ctx, encoder, &out_texture).await;
 }
 
 #[apply(gpu_test!)]
@@ -1501,8 +1446,7 @@ async fn run_multi_draw_indirect_count_sampled_texture(ctx: TestingContext) {
         rpass.multi_draw_indirect_count(&indirect_buffer, 0, &count_buffer, 0, max_draw_count);
     }
 
-    let data = submit_and_read_rgba8_texture(&ctx, encoder, &out_texture, 256, 256).await;
-    assert_all_pixels_rgba8(&data, [u8::MAX; 4]);
+    assert_all_white(&ctx, encoder, &out_texture).await;
 }
 
 #[apply(gpu_test!)]

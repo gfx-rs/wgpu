@@ -1,6 +1,7 @@
 use wgpu::util::DeviceExt;
 use wgpu_test::{
-    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters, TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
@@ -284,7 +285,8 @@ async fn mesh_multi_draw_indirect_color_readback(ctx: TestingContext) {
         cache: None,
     });
 
-    let indirect_args = [wgpu::util::DispatchIndirectArgs { x: 1, y: 1, z: 1 }; 8];
+    // Enough draws to take Metal's ICB path (`ICB_MIN_DRAW_COUNT`).
+    let indirect_args = [wgpu::util::DispatchIndirectArgs { x: 1, y: 1, z: 1 }; 512];
     let indirect_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: None,
         usage: wgpu::BufferUsages::INDIRECT,
@@ -307,12 +309,7 @@ async fn mesh_multi_draw_indirect_color_readback(ctx: TestingContext) {
         view_formats: &[],
     });
     let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let readback = device.create_buffer(&wgpu::BufferDescriptor {
-        label: None,
-        size: u64::from(texture_size.width * texture_size.height * 4),
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
+    let readback = ReadbackBuffers::new(device, &texture);
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     {
@@ -323,7 +320,9 @@ async fn mesh_multi_draw_indirect_color_readback(ctx: TestingContext) {
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    // Transparent black, so an untouched target reads back as
+                    // all zeros and the assertion below cannot pass vacuously.
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -336,44 +335,31 @@ async fn mesh_multi_draw_indirect_color_readback(ctx: TestingContext) {
         pass.multi_draw_mesh_tasks_indirect(&indirect_buffer, 0, indirect_args.len() as u32);
     }
 
-    encoder.copy_texture_to_buffer(
-        wgpu::TexelCopyTextureInfo {
-            texture: &texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        wgpu::TexelCopyBufferInfo {
-            buffer: &readback,
-            layout: wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(texture_size.width * 4),
-                rows_per_image: None,
-            },
-        },
-        texture_size,
-    );
+    readback.copy_from(device, &mut encoder, &texture);
     ctx.queue.submit([encoder.finish()]);
 
-    let slice = readback.slice(..);
-    slice.map_async(wgpu::MapMode::Read, |_| ());
-    ctx.async_poll(wgpu::PollType::wait_indefinitely())
-        .await
-        .unwrap();
-    let data = slice.get_mapped_range().unwrap();
-    let non_black_pixels = data
-        .chunks_exact(4)
-        .filter(|pixel| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0 || pixel[3] != 0)
-        .count();
     assert!(
-        non_black_pixels > 0,
-        "multi_draw_mesh_tasks_indirect should render non-black pixels"
+        !readback.are_zero(&ctx).await,
+        "multi_draw_mesh_tasks_indirect should render something over the transparent clear"
     );
 }
 
 fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
+    let params = TestParameters::default();
+    // Metal's shader validation layer (MTL_SHADER_VALIDATION=1, which the
+    // harness enables) makes GPU-generated mesh commands in indirect command
+    // buffers execute without drawing anything on macOS 26 / Apple9, while the
+    // same commands draw correctly without it. The multi-draw variants can be
+    // lowered to ICBs on Metal, so they run without shader validation, as the
+    // ray-tracing tests already do.
+    let params = match draw_type {
+        DrawType::MultiIndirect | DrawType::MultiIndirectCount => {
+            params.disable_mtl_shader_validation()
+        }
+        DrawType::Standard | DrawType::Indirect => params,
+    };
     GpuTestConfiguration::new().parameters(
-        TestParameters::default()
+        params
             .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(
                 wgpu::Features::EXPERIMENTAL_MESH_SHADER
