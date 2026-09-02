@@ -1,8 +1,8 @@
 //! Tests for the TEXTURE_COMPRESSION_UNALIGNED feature.
 
 use wgpu_test::{
-    apply, fail, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
-    TestParameters,
+    apply, fail, gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration,
+    GpuTestInitializer, TestParameters,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -74,9 +74,15 @@ static UNALIGNED_SIZE_WITH_FEATURE: GpuTestConfiguration = GpuTestConfiguration:
 
 #[apply(gpu_test!)]
 static UNALIGNED_WRITE_READBACK: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(
-        wgpu::Features::TEXTURE_COMPRESSION_BC | wgpu::Features::TEXTURE_COMPRESSION_UNALIGNED,
-    ))
+    .parameters(
+        TestParameters::default()
+            .features(
+                wgpu::Features::TEXTURE_COMPRESSION_BC
+                    | wgpu::Features::TEXTURE_COMPRESSION_UNALIGNED,
+            )
+            // compressed texture copy to buffer not yet implemented in the GL backend
+            .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
+    )
     .run_async(|ctx| async move {
         // A 5x5 BC1 texture has a physical size of 8x8: 2x2 blocks of 8 bytes each.
         // Copies address whole blocks, so writing and reading back the full physical
