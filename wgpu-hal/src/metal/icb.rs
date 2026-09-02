@@ -56,9 +56,9 @@ pub(super) struct IcbCommandPipelines {
     draw: IcbCommandPipeline,
     indexed_u16: IcbCommandPipeline,
     indexed_u32: IcbCommandPipeline,
-    /// Compiled on first use: mesh commands in ICBs need a newer OS baseline
-    /// than plain draws. Failures are cached.
-    mesh: Option<Result<IcbCommandPipeline, crate::DeviceError>>,
+    /// Present when the adapter reports mesh ICB support and the kernel
+    /// compiled; see `PrivateCapabilities::indirect_command_buffers_mesh`.
+    mesh: Option<IcbCommandPipeline>,
 }
 
 #[derive(Clone, Debug)]
@@ -158,6 +158,19 @@ impl IcbCommandPipelines {
     fn new(shared: &super::AdapterShared) -> Result<Self, crate::DeviceError> {
         let library = Self::make_library(shared, ICB_GENERATION_SHADER)?;
 
+        // The mesh kernel is built alongside the draw kernels whenever the
+        // adapter reports mesh ICB support. If it fails only the mesh path is
+        // lost (the helpers have logged why); the draw kernels stay usable.
+        let mesh = if shared.private_caps.indirect_command_buffers_mesh {
+            Self::make_library(shared, ICB_MESH_GENERATION_SHADER)
+                .and_then(|library| {
+                    Self::make_pipeline_from_library(shared, &library, "wgpu_generate_mesh_mdi_icb")
+                })
+                .ok()
+        } else {
+            None
+        };
+
         Ok(Self {
             draw: Self::make_pipeline_from_library(shared, &library, "wgpu_generate_mdi_icb")?,
             indexed_u16: Self::make_pipeline_from_library(
@@ -170,22 +183,8 @@ impl IcbCommandPipelines {
                 &library,
                 "wgpu_generate_indexed_mdi_icb_u32",
             )?,
-            mesh: None,
+            mesh,
         })
-    }
-
-    fn mesh(
-        &mut self,
-        shared: &super::AdapterShared,
-    ) -> Result<IcbCommandPipeline, crate::DeviceError> {
-        // Failures are cached too, so a driver that rejects the mesh kernel
-        // doesn't recompile it on every mesh multi-draw.
-        self.mesh
-            .get_or_insert_with(|| {
-                let library = Self::make_library(shared, ICB_MESH_GENERATION_SHADER)?;
-                Self::make_pipeline_from_library(shared, &library, "wgpu_generate_mesh_mdi_icb")
-            })
-            .clone()
     }
 }
 
@@ -244,13 +243,8 @@ impl super::CommandEncoder {
             .clone()
     }
 
-    fn get_icb_mesh_command_pipeline(&self) -> Result<IcbCommandPipeline, crate::DeviceError> {
-        let mut pipelines = self.shared.icb_command_pipelines.lock();
-        pipelines
-            .get_or_insert_with(|| IcbCommandPipelines::new(&self.shared))
-            .as_mut()
-            .map_err(|err| err.clone())?
-            .mesh(&self.shared)
+    fn get_icb_mesh_command_pipeline(&self) -> Option<IcbCommandPipeline> {
+        self.get_icb_command_pipelines().ok()?.mesh
     }
 
     fn icb_primitive_type_value(
@@ -341,7 +335,7 @@ impl super::CommandEncoder {
                 (state, "wgpu multi_draw_indexed_indirect ICB")
             }
             IcbDrawKind::DrawMeshTasks { .. } => {
-                let Ok(pipeline) = self.get_icb_mesh_command_pipeline() else {
+                let Some(pipeline) = self.get_icb_mesh_command_pipeline() else {
                     return false;
                 };
                 (
