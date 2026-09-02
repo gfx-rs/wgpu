@@ -251,7 +251,7 @@ static WAIT_ON_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
 
         let index = ctx.queue.submit(Some(cmd_buf));
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index),
+            submission_index: index,
             timeout: None,
         })
         .await
@@ -266,7 +266,7 @@ static WAIT_ON_SUBMISSION_WITH_TIMEOUT: GpuTestConfiguration = GpuTestConfigurat
 
         let index = ctx.queue.submit(Some(cmd_buf));
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index),
+            submission_index: index,
             timeout: Some(Duration::from_secs(1)),
         })
         .await
@@ -281,7 +281,7 @@ static WAIT_ON_SUBMISSION_WITH_TIMEOUT_MAX: GpuTestConfiguration = GpuTestConfig
 
         let index = ctx.queue.submit(Some(cmd_buf));
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index),
+            submission_index: index,
             timeout: Some(Duration::MAX),
         })
         .await
@@ -296,13 +296,13 @@ static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::n
 
         let index = ctx.queue.submit(Some(cmd_buf));
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index.clone()),
+            submission_index: index.clone(),
             timeout: None,
         })
         .await
         .unwrap();
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index),
+            submission_index: index,
             timeout: None,
         })
         .await
@@ -319,13 +319,13 @@ static WAIT_OUT_OF_ORDER: GpuTestConfiguration = GpuTestConfiguration::new()
         let index1 = ctx.queue.submit(Some(cmd_buf1));
         let index2 = ctx.queue.submit(Some(cmd_buf2));
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index2),
+            submission_index: index2,
             timeout: None,
         })
         .await
         .unwrap();
         ctx.async_poll(PollType::Wait {
-            submission_index: Some(index1),
+            submission_index: index1,
             timeout: None,
         })
         .await
@@ -383,34 +383,73 @@ async fn wait_after_bad_submission(ctx: TestingContext) {
 /// > operation you have already presented to the device is going to store in
 /// > `fence`.
 ///
+/// `wgpu::Queue::submit` returns `None` for a failed submission, so the hole
+/// index cannot be observed through the `wgpu` API. This test therefore drives
+/// wgpu-core directly, where a submission index is a plain `u64` we can
+/// construct ourselves.
+///
 /// Regression test for <https://github.com/gfx-rs/wgpu/issues/9498>.
+///
+/// Skipped under WebGL, where an adapter is a view onto a canvas's WebGL2
+/// context and so cannot be enumerated without a surface, leaving this test no
+/// way to build its own `wgpu-core` instance.
 #[apply(gpu_test!)]
 static WAIT_ON_FAILED_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(wgpu_test::TestParameters::default())
-    .run_async(wait_on_failed_submission);
+    .parameters(TestParameters::default().skip(FailureCase::webgl2()))
+    .run_sync(wait_on_failed_submission);
 
-async fn wait_on_failed_submission(ctx: TestingContext) {
-    // Create an alternate device; we will produce a failed submission by
-    // submitting a command buffer to the wrong device.
-    let (device2, queue2) =
-        wgpu_test::initialize_device(&ctx.adapter, ctx.device_features, ctx.device_limits.clone())
-            .await;
+fn wait_on_failed_submission(ctx: TestingContext) {
+    use wgpu_core as wgc;
+    use wgpu_types as wgt;
+
+    let backends = Backends::from(ctx.adapter_info.backend);
+    let instance = wgc::instance::Instance::new(
+        "wait_on_failed_submission",
+        wgt::InstanceDescriptor {
+            backends,
+            ..wgt::InstanceDescriptor::new_without_display_handle()
+        },
+        None,
+    );
+    // Pick out the same adapter the harness selected, so that this test covers
+    // every adapter it is run against rather than just the preferred one.
+    let wanted = &ctx.adapter_info;
+    let adapter = instance
+        .enumerate_adapters(backends, false)
+        .into_iter()
+        .find(|adapter| {
+            let info = adapter.get_info();
+            (info.name, info.vendor, info.device)
+                == (wanted.name.clone(), wanted.vendor, wanted.device)
+        })
+        .expect("could not find the adapter under test");
+
+    let device_desc = wgc::device::DeviceDescriptor {
+        label: None,
+        required_limits: adapter.limits(),
+        ..Default::default()
+    };
+    // A second device, used only to produce a command buffer that `queue`
+    // must reject.
+    let (other_device, _other_queue) = adapter.request_device(&device_desc).unwrap();
+    let (device, queue) = adapter.request_device(&device_desc).unwrap();
 
     // 1. Successful empty submit. Advances `last_successful_submission_index`.
-    let _idx_before = queue2.submit([]);
+    let idx_before = queue.submit(&[]).expect("empty submission should succeed");
 
     // 2. Failed submit (cross-device cmd buffer). Burns an index but does not
-    //    advance `last_successful_submission_index`. Capture the returned
-    //    index using an error scope so the validation error is not fatal.
-    let command_buffer_wrong_device = ctx
-        .device
-        .create_command_encoder(&CommandEncoderDescriptor::default())
-        .finish();
-    let scope = device2.push_error_scope(wgpu::ErrorFilter::Validation);
-    let bad_index = queue2.submit([command_buffer_wrong_device]);
-    let scope_error = scope.pop().await;
+    //    advance `last_successful_submission_index`. The error scope keeps the
+    //    validation error from being fatal.
+    let command_buffer_wrong_device = other_device
+        .create_command_encoder(&wgt::CommandEncoderDescriptor { label: None })
+        .finish(&wgt::CommandBufferDescriptor { label: None });
+    device.push_error_scope(wgt::error::ErrorFilter::Validation);
     assert!(
-        scope_error.is_some(),
+        queue.submit(&[command_buffer_wrong_device]).is_none(),
+        "expected the cross-device submission to fail"
+    );
+    assert!(
+        device.pop_error_scope().unwrap().is_some(),
         "expected the cross-device submission to produce a validation error"
     );
 
@@ -425,31 +464,38 @@ async fn wait_on_failed_submission(ctx: TestingContext) {
     //    want to exercise — the pending-fence search where the only
     //    candidate fence has a value strictly greater than `wait_value`.
     let big_size = 64 * 1024 * 1024;
-    let src = device2.create_buffer(&BufferDescriptor {
-        label: Some("src"),
+    let src = device.create_buffer(&wgt::BufferDescriptor {
+        label: Some("src".into()),
         size: big_size,
-        usage: BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+        usage: wgt::BufferUsages::COPY_SRC | wgt::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    let dst = device2.create_buffer(&BufferDescriptor {
-        label: Some("dst"),
+    let dst = device.create_buffer(&wgt::BufferDescriptor {
+        label: Some("dst".into()),
         size: big_size,
-        usage: BufferUsages::COPY_DST,
+        usage: wgt::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    let mut encoder = device2.create_command_encoder(&CommandEncoderDescriptor::default());
+    let encoder = device.create_command_encoder(&wgt::CommandEncoderDescriptor { label: None });
     // Stack several copies to extend the GPU work duration.
     for _ in 0..16 {
-        encoder.copy_buffer_to_buffer(&src, 0, &dst, 0, Some(big_size));
+        encoder.copy_buffer_to_buffer(src.clone(), 0, dst.clone(), 0, Some(big_size));
     }
-    let _idx_after = queue2.submit([encoder.finish()]);
+    let idx_after = queue
+        .submit(&[encoder.finish(&wgt::CommandBufferDescriptor { label: None })])
+        .expect("submission should succeed");
+
+    // Each submission attempt consumes exactly one index, so the failed one
+    // sits between the two successful ones.
+    let bad_index = idx_after - 1;
+    assert!(idx_before < bad_index);
 
     // 4. The interesting wait: pass the hole index to `poll(Wait)`. The
     //    wgpu-core guard sees `bad_index <= last_successful_submission_index`
     //    and lets it through to the HAL `wait`, which is being asked to wait
     //    on a fence value no operation actually presented. Must not panic or
     //    hang.
-    let result = device2.poll(wgpu::PollType::Wait {
+    let result = device.poll(wgt::PollType::Wait {
         submission_index: Some(bad_index),
         timeout: Some(Duration::from_secs(5)),
     });

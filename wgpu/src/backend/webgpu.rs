@@ -2946,7 +2946,7 @@ impl dispatch::QueueInterface for WebQueue {
     fn submit(
         &self,
         command_buffers: &mut dyn Iterator<Item = dispatch::DispatchCommandBuffer>,
-    ) -> u64 {
+    ) -> Option<u64> {
         let temp_command_buffers = command_buffers.collect::<Vec<_>>();
 
         let array = temp_command_buffers
@@ -2956,7 +2956,7 @@ impl dispatch::QueueInterface for WebQueue {
 
         self.inner.submit(&array);
 
-        0
+        Some(0)
     }
 
     fn get_timestamp_period(&self) -> f32 {
