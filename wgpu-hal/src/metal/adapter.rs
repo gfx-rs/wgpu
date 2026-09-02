@@ -773,6 +773,12 @@ impl super::CapabilitiesQuery {
         // only been verified by readback on macOS 26 / Apple9. Every other
         // combination takes the per-draw path until it can be verified the
         // same way.
+        //
+        // Metal's shader validation layer (MTL_SHADER_VALIDATION=1) makes
+        // GPU-generated mesh commands execute without drawing anything on
+        // that combination while the API debug layer is off; the same
+        // commands draw correctly without it. Keep that in mind before
+        // blaming this path for an empty attachment under a debugger.
         let indirect_command_buffers_mesh = indirect_command_buffers_rendering
             && os_type == super::OsType::Macos
             && available!(macos = 26.0)

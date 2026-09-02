@@ -344,8 +344,21 @@ async fn mesh_multi_draw_indirect_color_readback(ctx: TestingContext) {
 }
 
 fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
+    let params = TestParameters::default();
+    // Metal's shader validation layer (MTL_SHADER_VALIDATION=1, which the
+    // harness enables) makes GPU-generated mesh commands in indirect command
+    // buffers execute without drawing anything on macOS 26 / Apple9, while the
+    // same commands draw correctly without it. The multi-draw variants can be
+    // lowered to ICBs on Metal, so they run without shader validation, as the
+    // ray-tracing tests already do.
+    let params = match draw_type {
+        DrawType::MultiIndirect | DrawType::MultiIndirectCount => {
+            params.disable_mtl_shader_validation()
+        }
+        DrawType::Standard | DrawType::Indirect => params,
+    };
     GpuTestConfiguration::new().parameters(
-        TestParameters::default()
+        params
             .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(
                 wgpu::Features::EXPERIMENTAL_MESH_SHADER
