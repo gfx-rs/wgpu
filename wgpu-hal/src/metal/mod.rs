@@ -24,6 +24,7 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+mod icb;
 mod icb_probe;
 mod library_from_metallib;
 mod surface;
@@ -407,7 +408,7 @@ struct AdapterShared {
     private_texture_format_caps: PrivateTextureFormatCapabilities,
     settings: Settings,
     presentation_timer: time::PresentationTimer,
-    icb_command_pipelines: Mutex<Option<Result<command::IcbCommandPipelines, crate::DeviceError>>>,
+    icb_command_pipelines: Mutex<Option<Result<icb::IcbCommandPipelines, crate::DeviceError>>>,
 }
 
 #[cfg(send_sync)]
@@ -1323,7 +1324,7 @@ struct IndexState {
 #[derive(Default)]
 struct Temp {
     binding_sizes: Vec<u32>,
-    icb_argument_encoders: command::IcbArgumentEncoderCache,
+    icb_argument_encoders: icb::IcbArgumentEncoderCache,
 }
 
 // Any state in this struct that may be dirty after an abandoned encoding must
@@ -1382,12 +1383,12 @@ pub struct CommandEncoder {
     /// during render-pass recording, encoded (into the command buffer wgpu-core
     /// schedules before the pass) by
     /// [`encode_deferred_multi_draws`](crate::CommandEncoder::encode_deferred_multi_draws).
-    deferred_multi_draws: Vec<command::IcbGenerationRequest>,
+    deferred_multi_draws: Vec<icb::IcbGenerationRequest>,
     /// Objects that must stay alive until the command buffers recorded by this
     /// encoder finish executing; drained into the next finished
     /// [`CommandBuffer`] so submission keep-alive doesn't depend on
     /// [`Settings::retain_command_buffer_references`].
-    deferred_multi_draw_resources: Vec<command::IcbExecutionResources>,
+    deferred_multi_draw_resources: Vec<icb::IcbExecutionResources>,
 }
 
 impl fmt::Debug for CommandEncoder {
@@ -1407,7 +1408,7 @@ pub struct CommandBuffer {
     queue_shared: Arc<QueueShared>,
     /// Keeps ICBs and their argument buffers alive for the lifetime of this
     /// command buffer even when Metal is not retaining encoded references.
-    _icb_resources: Vec<command::IcbExecutionResources>,
+    _icb_resources: Vec<icb::IcbExecutionResources>,
 }
 
 impl crate::DynCommandBuffer for CommandBuffer {}
