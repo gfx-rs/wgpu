@@ -79,7 +79,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 #### Metal
 
 - Fix Naga's Metal backend crashing when a storage texture was used as a function argument. By @ErichDonGubler in [#9867](https://github.com/gfx-rs/wgpu/pull/9867).
-- Metal now lowers fixed-count `multi_draw_indirect` / `multi_draw_indexed_indirect` with 8 or more draws to GPU-generated indirect command buffers. The generation compute runs in the internal pre-pass command buffer that already carries indirect-draw validation, so the render pass is never interrupted. By @matthargett in [#9640](https://github.com/gfx-rs/wgpu/pull/9640).
+- Metal now lowers fixed-count `multi_draw_indirect` / `multi_draw_indexed_indirect` (and their mesh-task counterpart) with 8 or more draws to GPU-generated indirect command buffers. The generation compute runs in the internal pre-pass command buffer that already carries indirect-draw validation, so the render pass is never interrupted. By @matthargett in [#9640](https://github.com/gfx-rs/wgpu/pull/9640).
 - Fix `max_task_workgroup_count` being misreported on pre-Apple7 devices. By @inner-daemons in [#10065](https://github.com/gfx-rs/wgpu/pull/10065).
 
 #### GLES
