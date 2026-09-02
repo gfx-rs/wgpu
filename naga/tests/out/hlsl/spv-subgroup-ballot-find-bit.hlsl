@@ -12,8 +12,16 @@ void function()
 {
     uint _e3 = global;
     const uint4 _e5 = WaveActiveBallot((_e3 != 0u));
-    const uint _e6 = (_e5.x != 0u ? firstbitlow(_e5.x) : (_e5.y != 0u ? firstbitlow(_e5.y) + 32u : (_e5.z != 0u ? firstbitlow(_e5.z) + 64u : firstbitlow(_e5.w) + 96u)));
-    const uint _e7 = (_e5.w != 0u ? firstbithigh(_e5.w) + 96u : (_e5.z != 0u ? firstbithigh(_e5.z) + 64u : (_e5.y != 0u ? firstbithigh(_e5.y) + 32u : firstbithigh(_e5.x))));
+    const uint unnamed = _e5.x;
+    const uint unnamed_1 = _e5.y;
+    const uint unnamed_2 = _e5.z;
+    const uint unnamed_3 = _e5.w;
+    const uint _e6 = (unnamed != 0u ? firstbitlow(unnamed) : (unnamed_1 != 0u ? firstbitlow(unnamed_1) + 32u : (unnamed_2 != 0u ? firstbitlow(unnamed_2) + 64u : firstbitlow(unnamed_3) + 96u)));
+    const uint unnamed_4 = _e5.x;
+    const uint unnamed_5 = _e5.y;
+    const uint unnamed_6 = _e5.z;
+    const uint unnamed_7 = _e5.w;
+    const uint _e7 = (unnamed_7 != 0u ? firstbithigh(unnamed_7) + 96u : (unnamed_6 != 0u ? firstbithigh(unnamed_6) + 64u : (unnamed_5 != 0u ? firstbithigh(unnamed_5) + 32u : firstbithigh(unnamed_4))));
     global_1.Store(0, asuint((_e6 + _e7)));
     return;
 }

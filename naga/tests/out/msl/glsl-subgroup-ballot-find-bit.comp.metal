@@ -10,19 +10,29 @@ struct Output {
 
 void main_1(
     device Output& global,
-    thread metal::uint3& gl_GlobalInvocationID_1
+    thread uint& gl_SubgroupInvocationID_1,
+    thread uint& gl_SubgroupSize_1
 ) {
     metal::uint4 mask = {};
     uint lsb = {};
     uint msb = {};
-    metal::uint3 _e3 = gl_GlobalInvocationID_1;
-    mask = metal::uint4(_e3.x, 2u, 3u, 4u);
+    uint _e4 = gl_SubgroupInvocationID_1;
+    uint _e5 = gl_SubgroupSize_1;
+    mask = metal::uint4(_e4, _e5, 3u, 4u);
     metal::uint4 _e10 = mask;
-    uint unnamed = (_e10.x != 0u ? (((metal::ctz(_e10.x) + 1) % 33) - 1) : (_e10.y != 0u ? (((metal::ctz(_e10.y) + 1) % 33) - 1) + 32u : (_e10.z != 0u ? (((metal::ctz(_e10.z) + 1) % 33) - 1) + 64u : (((metal::ctz(_e10.w) + 1) % 33) - 1) + 96u)));
-    lsb = unnamed;
+    uint unnamed = _e10.x;
+    uint unnamed_1 = _e10.y;
+    uint unnamed_2 = _e10.z;
+    uint unnamed_3 = _e10.w;
+    uint unnamed_4 = (unnamed != 0u ? (((metal::ctz(unnamed) + 1) % 33) - 1) : (unnamed_1 != 0u ? (((metal::ctz(unnamed_1) + 1) % 33) - 1) + 32u : (unnamed_2 != 0u ? (((metal::ctz(unnamed_2) + 1) % 33) - 1) + 64u : (((metal::ctz(unnamed_3) + 1) % 33) - 1) + 96u)));
+    lsb = unnamed_4;
     metal::uint4 _e13 = mask;
-    uint unnamed_1 = (_e13.w != 0u ? metal::select(31 - metal::clz(_e13.w), uint(-1), _e13.w == 0) + 96u : (_e13.z != 0u ? metal::select(31 - metal::clz(_e13.z), uint(-1), _e13.z == 0) + 64u : (_e13.y != 0u ? metal::select(31 - metal::clz(_e13.y), uint(-1), _e13.y == 0) + 32u : metal::select(31 - metal::clz(_e13.x), uint(-1), _e13.x == 0))));
-    msb = unnamed_1;
+    uint unnamed_5 = _e13.x;
+    uint unnamed_6 = _e13.y;
+    uint unnamed_7 = _e13.z;
+    uint unnamed_8 = _e13.w;
+    uint unnamed_9 = (unnamed_8 != 0u ? metal::select(31 - metal::clz(unnamed_8), uint(-1), unnamed_8 == 0) + 96u : (unnamed_7 != 0u ? metal::select(31 - metal::clz(unnamed_7), uint(-1), unnamed_7 == 0) + 64u : (unnamed_6 != 0u ? metal::select(31 - metal::clz(unnamed_6), uint(-1), unnamed_6 == 0) + 32u : metal::select(31 - metal::clz(unnamed_5), uint(-1), unnamed_5 == 0))));
+    msb = unnamed_9;
     uint _e16 = lsb;
     uint _e17 = msb;
     global.result = _e16 + _e17;
@@ -32,11 +42,14 @@ void main_1(
 struct main_Input {
 };
 [[max_total_threads_per_threadgroup(1)]] kernel void main_(
-  metal::uint3 gl_GlobalInvocationID [[thread_position_in_grid]]
+  uint gl_SubgroupInvocationID [[thread_index_in_simdgroup]]
+, uint gl_SubgroupSize [[threads_per_simdgroup]]
 , device Output& global [[user(fake0)]]
 ) {
-    metal::uint3 gl_GlobalInvocationID_1 = {};
-    gl_GlobalInvocationID_1 = gl_GlobalInvocationID;
-    main_1(global, gl_GlobalInvocationID_1);
+    uint gl_SubgroupInvocationID_1 = {};
+    uint gl_SubgroupSize_1 = {};
+    gl_SubgroupInvocationID_1 = gl_SubgroupInvocationID;
+    gl_SubgroupSize_1 = gl_SubgroupSize;
+    main_1(global, gl_SubgroupInvocationID_1, gl_SubgroupSize_1);
     return;
 }

@@ -3,7 +3,11 @@ struct Output {
 };
 
 RWByteAddressBuffer global : register(u0);
-static uint3 gl_GlobalInvocationID_1 = (uint3)0;
+static uint gl_SubgroupInvocationID_1 = (uint)0;
+static uint gl_SubgroupSize_1 = (uint)0;
+
+struct ComputeInput_main {
+};
 
 void main_1()
 {
@@ -11,13 +15,22 @@ void main_1()
     uint lsb = (uint)0;
     uint msb = (uint)0;
 
-    uint3 _e3 = gl_GlobalInvocationID_1;
-    mask = uint4(_e3.x, 2u, 3u, 4u);
+    uint _e4 = gl_SubgroupInvocationID_1;
+    uint _e5 = gl_SubgroupSize_1;
+    mask = uint4(_e4, _e5, 3u, 4u);
     uint4 _e10 = mask;
-    const uint _e11 = (_e10.x != 0u ? firstbitlow(_e10.x) : (_e10.y != 0u ? firstbitlow(_e10.y) + 32u : (_e10.z != 0u ? firstbitlow(_e10.z) + 64u : firstbitlow(_e10.w) + 96u)));
+    const uint unnamed = _e10.x;
+    const uint unnamed_1 = _e10.y;
+    const uint unnamed_2 = _e10.z;
+    const uint unnamed_3 = _e10.w;
+    const uint _e11 = (unnamed != 0u ? firstbitlow(unnamed) : (unnamed_1 != 0u ? firstbitlow(unnamed_1) + 32u : (unnamed_2 != 0u ? firstbitlow(unnamed_2) + 64u : firstbitlow(unnamed_3) + 96u)));
     lsb = _e11;
     uint4 _e13 = mask;
-    const uint _e14 = (_e13.w != 0u ? firstbithigh(_e13.w) + 96u : (_e13.z != 0u ? firstbithigh(_e13.z) + 64u : (_e13.y != 0u ? firstbithigh(_e13.y) + 32u : firstbithigh(_e13.x))));
+    const uint unnamed_4 = _e13.x;
+    const uint unnamed_5 = _e13.y;
+    const uint unnamed_6 = _e13.z;
+    const uint unnamed_7 = _e13.w;
+    const uint _e14 = (unnamed_7 != 0u ? firstbithigh(unnamed_7) + 96u : (unnamed_6 != 0u ? firstbithigh(unnamed_6) + 64u : (unnamed_5 != 0u ? firstbithigh(unnamed_5) + 32u : firstbithigh(unnamed_4))));
     msb = _e14;
     uint _e16 = lsb;
     uint _e17 = msb;
@@ -26,9 +39,12 @@ void main_1()
 }
 
 [numthreads(1, 1, 1)]
-void main(uint3 gl_GlobalInvocationID : SV_DispatchThreadID)
+void main(ComputeInput_main computeinput_main)
 {
-    gl_GlobalInvocationID_1 = gl_GlobalInvocationID;
+    uint gl_SubgroupInvocationID = WaveGetLaneIndex();
+    uint gl_SubgroupSize = WaveGetLaneCount();
+    gl_SubgroupInvocationID_1 = gl_SubgroupInvocationID;
+    gl_SubgroupSize_1 = gl_SubgroupSize;
     main_1();
     return;
 }

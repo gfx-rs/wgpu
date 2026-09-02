@@ -1,4 +1,5 @@
 #version 450
+#extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_ballot : require
 
 layout(local_size_x = 1) in;
@@ -8,7 +9,7 @@ layout(std430, binding = 0) buffer Output {
 };
 
 void main() {
-    uvec4 mask = uvec4(gl_GlobalInvocationID.x, 2u, 3u, 4u);
+    uvec4 mask = uvec4(gl_SubgroupInvocationID, gl_SubgroupSize, 3u, 4u);
     uint lsb = subgroupBallotFindLSB(mask);
     uint msb = subgroupBallotFindMSB(mask);
     result = lsb + msb;

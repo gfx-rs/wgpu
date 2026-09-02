@@ -9,8 +9,16 @@ var<storage, read_write> global_1: type_1;
 fn function_() {
     let _e3 = global;
     let _e5 = subgroupBallot((_e3 != 0u));
-    let _e6 = select(select(select(firstTrailingBit(_e5.w) + 96u, firstTrailingBit(_e5.z) + 64u, _e5.z != 0u), firstTrailingBit(_e5.y) + 32u, _e5.y != 0u), firstTrailingBit(_e5.x), _e5.x != 0u);
-    let _e7 = select(select(select(firstLeadingBit(_e5.x), firstLeadingBit(_e5.y) + 32u, _e5.y != 0u), firstLeadingBit(_e5.z) + 64u, _e5.z != 0u), firstLeadingBit(_e5.w) + 96u, _e5.w != 0u);
+    let unnamed = _e5.x;
+    let unnamed_1 = _e5.y;
+    let unnamed_2 = _e5.z;
+    let unnamed_3 = _e5.w;
+    let _e6 = select(select(select(firstTrailingBit(unnamed_3) + 96u, firstTrailingBit(unnamed_2) + 64u, unnamed_2 != 0u), firstTrailingBit(unnamed_1) + 32u, unnamed_1 != 0u), firstTrailingBit(unnamed), unnamed != 0u);
+    let unnamed_4 = _e5.x;
+    let unnamed_5 = _e5.y;
+    let unnamed_6 = _e5.z;
+    let unnamed_7 = _e5.w;
+    let _e7 = select(select(select(firstLeadingBit(unnamed_4), firstLeadingBit(unnamed_5) + 32u, unnamed_5 != 0u), firstLeadingBit(unnamed_6) + 64u, unnamed_6 != 0u), firstLeadingBit(unnamed_7) + 96u, unnamed_7 != 0u);
     global_1.member = (_e6 + _e7);
     return;
 }

@@ -1,5 +1,6 @@
 #version 460
 #extension GL_KHR_shader_subgroup_ballot : require
+#extension GL_KHR_shader_subgroup_basic : require
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 struct _4
@@ -7,27 +8,29 @@ struct _4
     uint _m0;
 };
 
-layout(set = 0, binding = 0, std430) buffer _8_7
+layout(set = 0, binding = 0, std430) buffer _7_6
 {
     _4 _m0;
-} _7;
+} _6;
 
-uvec3 _10 = uvec3(0u);
+uint _9 = 0u;
+uint _12 = 0u;
 
 void _14()
 {
-    uvec4 _22 = uvec4(0u);
-    uint _25 = 0u;
-    uint _28 = 0u;
-    _22 = uvec4(_10.x, 2u, 3u, 4u);
-    _25 = subgroupBallotFindLSB(_22);
-    _28 = subgroupBallotFindMSB(_22);
-    _7._m0._m0 = _25 + _28;
+    uvec4 _21 = uvec4(0u);
+    uint _24 = 0u;
+    uint _27 = 0u;
+    _21 = uvec4(_9, _12, 3u, 4u);
+    _24 = subgroupBallotFindLSB(_21);
+    _27 = subgroupBallotFindMSB(_21);
+    _6._m0._m0 = _24 + _27;
 }
 
 void main()
 {
-    _10 = gl_GlobalInvocationID;
+    _9 = gl_SubgroupInvocationID;
+    _12 = gl_SubgroupSize;
     _14();
 }
 

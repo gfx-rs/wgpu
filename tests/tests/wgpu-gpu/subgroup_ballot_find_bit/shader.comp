@@ -1,0 +1,62 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_ballot : require
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer Output {
+    uint pass_mask[64];
+};
+
+void main() {
+    uint id = gl_LocalInvocationID.x;
+
+    // `subgroupBallotFindLSB`/`subgroupBallotFindMSB` only have to consider
+    // bits that correspond to a real invocation, i.e. bits `0..gl_SubgroupSize`
+    // (see the GL_KHR_shader_subgroup_ballot spec); bits beyond that are
+    // undefined, so every bit this test sets must stay within that range. The
+    // two bit positions below therefore cycle through `0..gl_SubgroupSize`
+    // (not a fixed range), so that every branch of the
+    // `subgroupBallotFindLSB`/`subgroupBallotFindMSB` lowering (both native
+    // and polyfilled) gets exercised as far as the actual subgroup size
+    // allows.
+    uint size = clamp(gl_SubgroupSize, 1u, 128u);
+    uint pos_a = id % size;
+    uint pos_b = (id / size) % size;
+
+    uint word_a = pos_a / 32u;
+    uint word_b = pos_b / 32u;
+    uint bit_a = 1u << (pos_a % 32u);
+    uint bit_b = 1u << (pos_b % 32u);
+
+    uvec4 mask = uvec4(0u);
+    mask.x = (word_a == 0u ? bit_a : 0u) | (word_b == 0u ? bit_b : 0u);
+    mask.y = (word_a == 1u ? bit_a : 0u) | (word_b == 1u ? bit_b : 0u);
+    mask.z = (word_a == 2u ? bit_a : 0u) | (word_b == 2u ? bit_b : 0u);
+    mask.w = (word_a == 3u ? bit_a : 0u) | (word_b == 3u ? bit_b : 0u);
+
+    uint actual_lsb = subgroupBallotFindLSB(mask);
+    uint actual_msb = subgroupBallotFindMSB(mask);
+
+    // Independent oracle: a plain scalar bit scan, using no subgroup
+    // operations at all, so it can't share a bug with the code under test.
+    uint expected_lsb = 0xFFFFFFFFu;
+    uint expected_msb = 0xFFFFFFFFu;
+    for (uint word = 0u; word < 4u; word++) {
+        uint value = mask[word];
+        if (value != 0u) {
+            for (uint bit = 0u; bit < 32u; bit++) {
+                if ((value & (1u << bit)) != 0u) {
+                    uint global_bit = word * 32u + bit;
+                    if (expected_lsb == 0xFFFFFFFFu) {
+                        expected_lsb = global_bit;
+                    }
+                    expected_msb = global_bit;
+                }
+            }
+        }
+    }
+
+    bool ok = (actual_lsb == expected_lsb) && (actual_msb == expected_msb);
+    pass_mask[id] = ok ? 1u : 0u;
+}
