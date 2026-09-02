@@ -3,13 +3,17 @@
 //! Texture trackers are significantly more complicated than
 //! the buffer trackers because textures can be in a "complex"
 //! state where each individual subresource can potentially be
-//! in a different state from every other subtresource. These
+//! in a different state from every other subresource. These
 //! complex states are stored separately from the simple states
-//! because they are signifignatly more difficult to track and
+//! because they are significantly more difficult to track and
 //! most resources spend the vast majority of their lives in
 //! simple states.
 //!
-//! There are two special texture usages: `UNKNOWN` and `UNINITIALIZED`.
+//! There are three special texture usages: `COMPLEX`, `UNKNOWN`, and
+//! `UNINITIALIZED`.
+//! - `COMPLEX` is stored as the simple state of a texture whose subresources
+//!   are in different states. It directs every lookup of that texture's state
+//!   to the complex state map.
 //! - `UNKNOWN` is only used in complex states and is used to signify
 //!   that the complex state does not know anything about those subresources.
 //!   It cannot leak into transitions, it is invalid to transition into UNKNOWN
@@ -96,7 +100,7 @@ impl ComplexTextureState {
     /// Creates complex texture state for the given sizes.
     ///
     /// This state will be initialized with the UNKNOWN state, a special state
-    /// which means the trakcer knows nothing about the state.
+    /// which means the tracker knows nothing about the state.
     fn new(mip_level_count: u32, array_layer_count: u32) -> Self {
         Self {
             mips: iter::repeat_with(|| {
@@ -178,7 +182,7 @@ impl TextureViewBindGroupState {
         Self { views: Vec::new() }
     }
 
-    /// Optimize the texture bind group state by sorting it by ID.
+    /// Optimize the texture bind group state by sorting it by tracker index.
     ///
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant ascending order.
@@ -322,7 +326,7 @@ impl TextureUsageScope {
 
     /// Sets the size of all the vectors inside the tracker.
     ///
-    /// Must be called with the highest possible Texture ID before
+    /// Must be called with the highest possible texture tracker index before
     /// all unsafe functions are called.
     pub fn set_size(&mut self, size: usize) {
         self.set.set_size(size);
@@ -345,7 +349,7 @@ impl TextureUsageScope {
     /// If any of the resulting states is invalid, stops the merge and returns a usage
     /// conflict with the details of the invalid state.
     ///
-    /// If the given tracker uses IDs higher than the length of internal vectors,
+    /// If the given tracker uses tracker indices higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn merge_usage_scope(
         &mut self,
@@ -389,8 +393,8 @@ impl TextureUsageScope {
     ///
     /// # Safety
     ///
-    /// [`Self::set_size`] must be called with the maximum possible Buffer ID before this
-    /// method is called.
+    /// [`Self::set_size`] must be called with the maximum possible texture tracker
+    /// index before this method is called.
     pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &TextureViewBindGroupState,
@@ -413,8 +417,8 @@ impl TextureUsageScope {
     /// called where there is already other unsafe tracking functions active,
     /// so we can prove this unsafe "for free".
     ///
-    /// [`Self::set_size`] must be called with the maximum possible Buffer ID before this
-    /// method is called.
+    /// [`Self::set_size`] must be called with the maximum possible texture tracker
+    /// index before this method is called.
     pub unsafe fn merge_single(
         &mut self,
         texture: &Arc<Texture>,
@@ -484,7 +488,7 @@ impl TextureTracker {
 
     /// Sets the size of all the vectors inside the tracker.
     ///
-    /// Must be called with the highest possible Texture ID before
+    /// Must be called with the highest possible texture tracker index before
     /// all unsafe functions are called.
     pub fn set_size(&mut self, size: usize) {
         self.start_set.set_size(size);
@@ -531,7 +535,7 @@ impl TextureTracker {
     /// If a transition is needed to get the texture into the given state, that transition
     /// is returned.
     ///
-    /// If the ID is higher than the length of internal vectors,
+    /// If the tracker index is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_single(
         &mut self,
@@ -572,7 +576,7 @@ impl TextureTracker {
     /// those transitions are stored within the tracker. A subsequent
     /// call to [`Self::drain_transitions`] is needed to get those transitions.
     ///
-    /// If the ID is higher than the length of internal vectors,
+    /// If the tracker index is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_from_tracker(&mut self, tracker: &Self) {
         let incoming_size = tracker.start_set.size();
@@ -613,7 +617,7 @@ impl TextureTracker {
     /// those transitions are stored within the tracker. A subsequent
     /// call to [`Self::drain_transitions`] is needed to get those transitions.
     ///
-    /// If the ID is higher than the length of internal vectors,
+    /// If the tracker index is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_from_usage_scope(&mut self, scope: &TextureUsageScope) {
         let incoming_size = scope.set.size();
@@ -654,13 +658,10 @@ impl TextureTracker {
     ///
     /// This is a really funky method used by Compute Passes to generate
     /// barriers after a call to dispatch without needing to iterate
-    /// over all elements in the usage scope. We use each the
-    /// bind group as a source of which IDs to look at. The bind groups
-    /// must have first been added to the usage scope.
-    ///
-    /// # Panics
-    ///
-    /// If a resource in `bind_group_state` is not found in the usage scope.
+    /// over all elements in the usage scope. We use each
+    /// bind group as a source of which tracker indices to look at. The bind groups
+    /// must have first been added to the usage scope. A resource that is
+    /// missing from the scope is skipped silently.
     pub fn set_and_remove_from_usage_scope_sparse(
         &mut self,
         scope: &mut TextureUsageScope,

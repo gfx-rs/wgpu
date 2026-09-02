@@ -5,11 +5,11 @@ use alloc::vec::Vec;
 use bit_vec::BitVec;
 use wgt::strict_assert;
 
-/// A set of resources, holding a `Arc<T>` and epoch for each member.
+/// A set of resources, holding a `T` for each member.
 ///
 /// Testing for membership is fast, and iterating over members is
 /// reasonably fast in practice. Storage consumption is proportional
-/// to the largest id index of any member, not to the number of
+/// to the largest tracker index of any member, not to the number of
 /// members, but a bit vector tracks occupancy, so iteration touches
 /// only occupied elements.
 #[derive(Debug)]
@@ -40,7 +40,7 @@ impl<T: Clone> ResourceMetadata<T> {
     }
 
     /// Ensures a given index is in bounds for all arrays and does
-    /// sanity checks of the presence of a refcount.
+    /// sanity checks that a member has a stored `T`.
     ///
     /// In release mode this function is completely empty and is removed.
     pub(super) fn tracker_assert_in_bounds(&self, index: usize) {
@@ -78,8 +78,7 @@ impl<T: Clone> ResourceMetadata<T> {
 
     /// Insert a resource into the set.
     ///
-    /// Add the resource with the given index, epoch, and reference count to the
-    /// set.
+    /// Add the resource with the given index to the set.
     ///
     /// Returns a reference to the newly inserted resource.
     /// (This allows avoiding a clone/reference count increase in many cases.)
@@ -131,6 +130,11 @@ impl<T: Clone> ResourceMetadata<T> {
     }
 
     /// Remove the resource with the given index from the set.
+    ///
+    /// # Safety
+    ///
+    /// The given `index` must be in bounds for this `ResourceMetadata`'s
+    /// existing tables. See `tracker_assert_in_bounds`.
     pub(super) unsafe fn remove(&mut self, index: usize) {
         unsafe {
             *self.resources.get_unchecked_mut(index) = None;

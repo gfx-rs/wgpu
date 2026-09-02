@@ -340,7 +340,7 @@ impl CommandEncoder {
     /// Build bottom and top level acceleration structures.
     ///
     /// Builds the BLASes then the TLASes, but does ***not*** build the BLASes into the TLASes,
-    /// that must be done by setting a TLAS instance in the TLAS package to one that contains the BLAS (and with an appropriate transform)
+    /// that must be done by setting a TLAS instance in the TLAS to one that contains the BLAS (and with an appropriate transform)
     ///
     /// # Validation
     ///
@@ -351,10 +351,9 @@ impl CommandEncoder {
     ///   - Same flags
     ///   - Less or equal number of vertices
     ///   - Less or equal number of indices (if applicable)
-    /// - tlas: iterator of top level acceleration structure packages to build
+    /// - tlas: iterator of top level acceleration structures to build
     ///   For each entry:
     ///   - Each BLAS in each TLAS instance must have been being built in the current call or in a previous call to `build_acceleration_structures` or `build_acceleration_structures_unsafe_tlas`
-    ///   - The number of TLAS instances must be less than or equal to the max number of tlas instances when creating (if creating a package with `TlasPackage::new()` this is already satisfied)
     ///
     /// If the device the command encoder is created from does not have [Features::EXPERIMENTAL_RAY_QUERY] enabled then a validation error is generated
     ///

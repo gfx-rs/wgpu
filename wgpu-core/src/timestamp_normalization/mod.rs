@@ -20,12 +20,12 @@
 //! To evaluate this function, we have two helper operations (both in common.wgsl).
 //!
 //! 1. `u64_mul_u32` multiplies a u64 by a u32 and returns a u96.
-//! 2. `shift_right_u96` shifts a u96 right by a given amount, returning a u96.
+//! 2. `shift_right_96` shifts a u96 right by a given amount, returning a u96.
 //!
 //! See their implementations for more details.
 //!
 //! We then multiply the timestamp by the numerator, and shift it right by the
-//! denominator. This gives us the normalized timestamp.
+//! base-2 logarithm of the denominator. This gives us the normalized timestamp.
 
 use core::num::NonZeroU64;
 
@@ -77,12 +77,15 @@ pub struct TimestampNormalizer {
 impl TimestampNormalizer {
     /// Creates a new timestamp normalizer.
     ///
-    /// If the device cannot support automatic timestamp normalization,
-    /// this will return a normalizer that does nothing.
+    /// This returns a normalizer that does nothing if the
+    /// `AUTOMATIC_TIMESTAMP_NORMALIZATION` instance flag is not set, if the
+    /// device does not support compute shaders, or if `timestamp_period` is
+    /// already 1.0.
     ///
     /// # Errors
     ///
-    /// If any resources are invalid, this will return an error.
+    /// If creating any of the normalizer's own resources fails, this returns
+    /// the matching [`TimestampNormalizerInitError`] variant.
     pub fn new(
         device: &Device,
         timestamp_period: f32,

@@ -4,7 +4,7 @@ use crate::{
 };
 use alloc::sync::Arc;
 
-/// A tracker that holds tracks QuerySets.
+/// A tracker that tracks QuerySets.
 ///
 /// This is mostly a safe shell around [`ResourceMetadata`]
 #[derive(Debug)]
@@ -38,7 +38,7 @@ impl QuerySetTracker {
 
     /// Sets the size of all the vectors inside the tracker.
     ///
-    /// Must be called with the highest possible Texture ID before
+    /// Must be called with the highest possible query set tracker index before
     /// all unsafe functions are called.
     pub fn set_size(&mut self, size: usize) {
         self.size = size;

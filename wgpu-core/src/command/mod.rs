@@ -1,12 +1,23 @@
 //! # Command Encoding
 //!
-//! TODO: High-level description of command encoding.
+//! Recording happens in two phases. The `CommandEncoder` and pass methods do
+//! not call into `wgpu-hal`; they append [`Command`] values to a list on
+//! [`CommandBufferMutable`]. `CommandEncoder::finish` then walks that list and
+//! encodes it into the raw `wgpu-hal` encoder held by [`InnerCommandEncoder`],
+//! producing a [`CommandBuffer`]. `command_encoder_as_hal_mut` is the
+//! exception: it hands the raw encoder to the caller to record into directly.
 //!
-//! The convention in this module is that functions accepting a [`&mut dyn
-//! hal::DynCommandEncoder`] are low-level helpers and may assume the encoder is
-//! in the open state, ready to encode commands. Encoders that are not open
-//! should be nested within some other container that provides additional
-//! state tracking, like [`InnerCommandEncoder`].
+//! The split exists so that all `wgpu-hal` recording happens under one snatch
+//! guard. On some backends, destroying a resource that a raw command buffer
+//! already refers to is undefined behavior. `encode_commands` therefore holds a
+//! read guard on the device's `snatchable_lock` until the last command is
+//! encoded, which blocks `destroy` for that whole span.
+//!
+//! The convention in this module is that functions accepting a
+//! `&mut dyn hal::DynCommandEncoder` are low-level helpers and may assume the
+//! encoder is in the open state, ready to encode commands. Encoders that are
+//! not open should be nested within some other container that provides
+//! additional state tracking, like [`InnerCommandEncoder`].
 
 mod allocator;
 mod bind;
@@ -1432,11 +1443,13 @@ crate::impl_storage_item!(CommandBuffer);
 /// like dynamic offsets for [`SetBindGroup`] or string data for
 /// [`InsertDebugMarker`].
 ///
-/// Render passes use `BasePass<RenderCommand>`, whereas compute
-/// passes use `BasePass<ComputeCommand>`.
+/// `C` is the command type: a render command for render passes, a compute
+/// command for compute passes. `E` is the error type that can invalidate the
+/// pass, or [`Infallible`] where the pass cannot be invalid.
 ///
 /// [`SetBindGroup`]: RenderCommand::SetBindGroup
 /// [`InsertDebugMarker`]: RenderCommand::InsertDebugMarker
+/// [`Infallible`]: core::convert::Infallible
 #[doc(hidden)]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

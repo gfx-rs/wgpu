@@ -46,7 +46,7 @@ pub struct WriteOnly<'a, T: ?Sized> {
     /// The data which this write-only reference allows **writing** to.
     ///
     /// This field is not `&mut T`, because if it were, it would assert to the compiler
-    /// that spurious reads may be inserted, and is is unclear whether those spurious reads
+    /// that spurious reads may be inserted, and it is unclear whether those spurious reads
     /// are acceptable.
     ptr: NonNull<T>,
 

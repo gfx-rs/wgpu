@@ -31,14 +31,15 @@
 //!   not mappable: as the buffer creator, the user should already know if they
 //!   can map it.
 //!
-//! - We use *static dispatch*. The traits are not
-//!   generally object-safe. You must select a specific backend type
+//! - We support *static and dynamic dispatch*. The main traits are not
+//!   object-safe. For static dispatch, you must select a specific backend type
 //!   like [`vulkan::Api`] or [`metal::Api`], and then use that
-//!   according to the main traits, or call backend-specific methods.
+//!   according to the main traits, or call backend-specific methods. For
+//!   dynamic dispatch, each main trait has an object-safe `Dyn` counterpart,
+//!   like [`DynDevice`], which `wgpu-core` uses.
 //!
 //! - We use *idiomatic Rust parameter passing*,
-//!   taking objects by reference, returning them by value, and so on,
-//!   unlike `wgpu-core`, which refers to objects by ID.
+//!   taking objects by reference, returning them by value, and so on.
 //!
 //! - We map buffer contents *persistently*. This means that the buffer can
 //!   remain mapped on the CPU while the GPU reads or writes to it. You must
@@ -80,13 +81,13 @@
 //! - Vulkan, available on Linux, Android, and Windows, using the [`ash`] crate's
 //!   Vulkan bindings. It's also available on macOS, if you install [MoltenVK].
 //!
-//! - Metal on macOS, using the [`metal`] crate's bindings.
+//! - Metal on macOS, using the [`objc2-metal`] crate's bindings.
 //!
 //! - Direct3D 12 on Windows, using the [`windows`] crate's bindings.
 //!
 //! [`ash`]: https://crates.io/crates/ash
 //! [MoltenVK]: https://github.com/KhronosGroup/MoltenVK
-//! [`metal`]: https://crates.io/crates/metal
+//! [`objc2-metal`]: https://crates.io/crates/objc2-metal
 //! [`windows`]: https://crates.io/crates/windows
 //!
 //! ## Secondary backends
@@ -108,13 +109,19 @@
 //!
 //! [tdc]: wgt::DownlevelCapabilities
 //!
+//! ## Dummy backend
+//!
+//! The `wgpu-hal` crate always provides the [`noop`] backend, which accepts
+//! every operation and does no graphics work.
+//!
 //! ## Traits
 //!
 //! The `wgpu-hal` crate defines a handful of traits that together
 //! represent a cross-platform abstraction for modern GPU APIs.
 //!
 //! - The [`Api`] trait represents a `wgpu-hal` backend. It has no methods of its
-//!   own, only a collection of associated types.
+//!   own, only a collection of associated types and the [`Api::VARIANT`]
+//!   constant that names the backend.
 //!
 //! - [`Api::Instance`] implements the [`Instance`] trait. [`Instance::init`]
 //!   creates an instance value, which you can use to enumerate the adapters
@@ -219,7 +226,7 @@
     clippy::single_match,
     // Push commands are more regular than macros.
     clippy::vec_init_then_push,
-    // TODO!
+    // See <https://github.com/gfx-rs/wgpu/issues/4098>.
     clippy::missing_safety_doc,
     // It gets in the way a lot and does not prevent bugs in practice.
     clippy::pattern_type_mismatch,
@@ -840,13 +847,13 @@ pub trait Adapter: WasmNotSendSync {
     /// [`PresentationTimestamp`]: wgt::PresentationTimestamp
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 
-    /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
+    /// The combination of all usages that are guaranteed to be ordered by the hardware.
     /// If a usage is ordered, then if the buffer state doesn't change between draw calls,
     /// there are no barriers needed for synchronization.
     fn get_ordered_buffer_usages(&self) -> wgt::BufferUses;
 
-    /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
-    /// If a usage is ordered, then if the buffer state doesn't change between draw calls,
+    /// The combination of all usages that are guaranteed to be ordered by the hardware.
+    /// If a usage is ordered, then if the texture state doesn't change between draw calls,
     /// there are no barriers needed for synchronization.
     fn get_ordered_texture_usages(&self) -> wgt::TextureUses;
 }
@@ -2317,8 +2324,9 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 /// ## Accessible region
 ///
 /// `wgpu_hal` guarantees that shaders compiled with
-/// [`ShaderModuleDescriptor::runtime_checks`] set to `true` cannot read or
-/// write data via this binding outside the *accessible region* of a buffer:
+/// [`ShaderModuleDescriptor::runtime_checks`]'s [`bounds_checks`] set to `true`
+/// cannot read or write data via this binding outside the *accessible region*
+/// of a buffer:
 ///
 /// - The accessible region starts at [`offset`].
 ///
@@ -2351,6 +2359,7 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 /// logic is needed somewhere to handle this properly. See
 /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
 ///
+/// [`bounds_checks`]: wgt::ShaderRuntimeChecks::bounds_checks
 /// [`offset`]: BufferBinding::offset
 /// [`size`]: BufferBinding::size
 /// [`Storage`]: wgt::BufferBindingType::Storage
@@ -2377,8 +2386,9 @@ pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     /// The size of the region bound, in bytes.
     ///
     /// If `None`, the region extends from `offset` to the end of the
-    /// buffer. Given the restrictions on `offset`, this means that
-    /// the size is always greater than zero.
+    /// buffer. Because `offset` may equal the size of the buffer, such a
+    /// region may be zero-length. See the "Zero-length bindings" section
+    /// above.
     pub size: Option<wgt::BufferSize>,
 }
 
@@ -2431,8 +2441,10 @@ impl<'a, B: DynBuffer + ?Sized> BufferBinding<'a, B> {
     /// It is more difficult to provide a validating constructor here, due to
     /// not having direct access to the size of a `DynBuffer`.
     ///
-    /// SAFETY: The caller is responsible for ensuring that a binding of `size`
-    /// bytes starting at `offset` is contained within the buffer.
+    /// # Safety
+    ///
+    /// The caller must ensure that a binding of `size` bytes starting at
+    /// `offset` is fully contained within the buffer.
     ///
     /// The `S` type parameter is a temporary convenience to allow callers to
     /// pass a zero size. When the zero-size binding issue is resolved, the

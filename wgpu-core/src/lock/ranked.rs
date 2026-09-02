@@ -1,6 +1,6 @@
 //! Lock types that enforce well-ranked lock acquisition order.
 //!
-//! This module's [`Mutex`] and [`RwLock` types are instrumented to check that
+//! This module's [`Mutex`] and [`RwLock`] types are instrumented to check that
 //! `wgpu-core` acquires locks according to their rank, to prevent deadlocks. To
 //! use it, put `--cfg wgpu_validate_locks` in `RUSTFLAGS`.
 //!

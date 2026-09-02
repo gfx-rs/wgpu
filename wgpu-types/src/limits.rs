@@ -119,9 +119,9 @@ macro_rules! with_limits {
 /// you need.
 ///
 /// Limits "better" than the default must be supported by the adapter and requested when requesting
-/// a device. If limits "better" than the adapter supports are requested, requesting a device will
-/// panic. Once a device is requested, you may only use resources up to the limits requested _even_
-/// if the adapter supports "better" limits.
+/// a device. If limits "better" than the adapter supports are requested, requesting a device
+/// returns an error. Once a device is requested, you may only use resources up to the limits
+/// requested _even_ if the adapter supports "better" limits.
 ///
 /// Requesting limits that are "better" than you need may cause performance to decrease because the
 /// implementation needs to support more than is needed. You should ideally only request exactly
@@ -221,7 +221,7 @@ pub struct Limits {
     /// when creating a `BindGroup`, or for `set_bind_group` `dynamicOffsets`.
     /// Defaults to 256. Lower is "better".
     pub min_storage_buffer_offset_alignment: u32,
-    /// The maximum allowed number of color attachments.
+    /// The maximum allowed number of color attachments. Defaults to 8. Higher is "better".
     pub max_color_attachments: u32,
     /// The maximum number of bytes necessary to hold one sample (pixel or subpixel) of render
     /// pipeline output data, across all color attachments as described by [`TextureFormat::target_pixel_byte_cost`]
@@ -1143,7 +1143,9 @@ bitflags::bitflags! {
         /// WebGPU, the implementation is allowed to completely ignore aniso clamp. This flag is
         /// here for native backends so they can communicate to the user of aniso is enabled.
         ///
-        /// All backends and all devices support anisotropic filtering.
+        /// Metal and DX12 always support anisotropic filtering. Vulkan requires the
+        /// `samplerAnisotropy` device feature, and GLES requires
+        /// `GL_EXT_texture_filter_anisotropic` with a maximum anisotropy of at least 16.
         const ANISOTROPIC_FILTERING = 1 << 10;
 
         /// Supports storage buffers in fragment shaders.

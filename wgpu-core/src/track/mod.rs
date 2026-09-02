@@ -1,7 +1,7 @@
 /*! Resource State and Lifetime Trackers
 
 These structures are responsible for keeping track of resource state,
-generating barriers where needednd making sure resources are kept
+generating barriers where needed, and making sure resources are kept
 alive until the trackers die.
 
 ## General Architecture
@@ -16,10 +16,10 @@ is a corresponding debug assert the checks if that access is valid. This helps
 get bugs caught fast, while still letting users not need to pay for the bounds
 checks.
 
-In wgpu, each resource ID includes a bitfield holding an index.
-Indices are allocated and re-used, so they will always be as low as
-reasonably possible. This allows us to use IDs to index into an array
-of tracking information.
+In wgpu, each tracked resource carries a tracker index, given by
+[`Trackable::tracker_index`]. Tracker indices are allocated and re-used, so
+they will always be as low as reasonably possible. This allows us to use
+tracker indices to index into an array of tracking information.
 
 ## Statefulness
 
@@ -30,12 +30,13 @@ resource state attached to them which needs to be used to generate
 automatic synchronization. Because of the different requirements of
 buffers and textures, they have two separate tracking structures.
 
-Stateless trackers only store metadata and own the given resource.
+Stateless trackers only hold strong references to the given resources, to
+keep them alive.
 
 ## Use Case
 
-Within each type of tracker, the trackers are further split into 3 different
-use cases, Bind Group, Usage Scopend a full Tracker.
+Within each type of tracker, the trackers are further split into 4 different
+use cases, Bind Group, Usage Scope, a full Tracker, and a device Tracker.
 
 Bind Group trackers are just a list of different resources, their refcount,
 and how they are used. Textures are used via a selector and a usage type.
@@ -47,11 +48,16 @@ it is merged with all other uses of that resource in that scope. If there
 is a usage conflict, merging will fail and an error will be reported.
 
 Full trackers represent a before and after state of a resource. These
-are used for tracking on the device and on command buffers. The before
-state represents the state the resource is first used as in the command buffer,
+are used for tracking on command buffers. The before state represents the
+state the resource is first used as in the command buffer,
 the after state is the state the command buffer leaves the resource in.
 These double ended buffers can then be used to generate the needed transitions
 between command buffers.
+
+Device trackers ([`DeviceTracker`], [`DeviceBufferTracker`], and
+[`DeviceTextureTracker`]) are only for stateful resources. They record a single
+state per resource, not a before and after state, and they hold `Weak`
+references, so tracking a resource on the device does not keep it alive.
 
 ## Dense Datastructure with Sparse Data
 
@@ -60,7 +66,7 @@ not always contain every resource. Some resources (or even most resources) go
 unused in any given command buffer. So to help speed up the process of iterating
 through possibly thousands of resources, we use a bit vector to represent if
 a resource is in the buffer or not. This allows us extremely efficient memory
-utilizations well as being able to bail out of whole blocks of 32-64 resources
+utilization, as well as being able to bail out of whole blocks of 32-64 resources
 with a single usize comparison with zero. In practice this means that merging
 partially resident buffers is extremely quick.
 
@@ -145,11 +151,7 @@ impl TrackerIndex {
 
 /// wgpu-core internally use some array-like storage for tracking resources.
 /// To that end, there needs to be a uniquely assigned index for each live resource
-/// of a certain type. This index is separate from the resource ID for various reasons:
-/// - There can be multiple resource IDs pointing the the same resource.
-/// - IDs of dead handles can be recycled while resources are internally held alive (and tracked).
-/// - The plan is to remove IDs in the long run
-///   ([#5121](https://github.com/gfx-rs/wgpu/issues/5121)).
+/// of a certain type.
 ///
 /// In order to produce these tracker indices, there is a shared TrackerIndexAllocator
 /// per resource type. Indices have the same lifetime as the internal resource they
@@ -431,7 +433,7 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
 /// All the usages that a bind group contains. The uses are not deduplicated in any way
 /// and may include conflicting uses. This is fully compliant by the WebGPU spec.
 ///
-/// All bind group states are sorted by their ID so that when adding to a tracker,
+/// All bind group states are sorted by their tracker index so that when adding to a tracker,
 /// they are added in the most efficient order possible (ascending order).
 #[derive(Debug)]
 pub(crate) struct BindGroupStates {
@@ -453,7 +455,7 @@ impl BindGroupStates {
         }
     }
 
-    /// Optimize the bind group states by sorting them by ID.
+    /// Optimize the bind group states by sorting them by tracker index.
     ///
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant ascending order.
@@ -480,7 +482,7 @@ pub(crate) struct RenderBundleScope {
 }
 
 impl RenderBundleScope {
-    /// Create the render bundle scope and pull the maximum IDs from the hubs.
+    /// Create an empty render bundle scope.
     pub fn new() -> Self {
         Self {
             buffers: BufferUsageScope::default(),
@@ -492,13 +494,18 @@ impl RenderBundleScope {
 
     /// Merge the inner contents of a bind group into the render bundle tracker.
     ///
-    /// Only stateful things are merged in herell other resources are owned
+    /// Only stateful things are merged in here, all other resources are owned
     /// indirectly by the bind group.
     ///
     /// # Safety
     ///
-    /// The maximum ID given by each bind group resource must be less than the
-    /// length of the storage given at the call to `new`.
+    /// `set_size` must have been called on both [`buffers`] and [`textures`]
+    /// with a size greater than the maximum tracker index of any resource in
+    /// `bind_group`.
+    ///
+    /// [`buffers`]: Self::buffers
+    /// [`textures`]: Self::textures
+    /// [`RenderBundleEncoder::finish`]: crate::command::RenderBundleEncoder::finish
     pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &BindGroupStates,
@@ -561,13 +568,17 @@ impl UsageScope<'static> {
 impl<'a> UsageScope<'a> {
     /// Merge the inner contents of a bind group into the usage scope.
     ///
-    /// Only stateful things are merged in herell other resources are owned
+    /// Only stateful things are merged in here, all other resources are owned
     /// indirectly by the bind group.
     ///
     /// # Safety
     ///
-    /// The maximum ID given by each bind group resource must be less than the
-    /// length of the storage given at the call to `new`.
+    /// `set_size` must have been called on both [`buffers`] and [`textures`]
+    /// with a size greater than the maximum tracker index of any resource in
+    /// `bind_group`.
+    ///
+    /// [`buffers`]: Self::buffers
+    /// [`textures`]: Self::textures
     pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &BindGroupStates,
@@ -582,14 +593,10 @@ impl<'a> UsageScope<'a> {
 
     /// Merge the inner contents of a bind group into the usage scope.
     ///
-    /// Only stateful things are merged in herell other resources are owned
+    /// Only stateful things are merged in here, all other resources are owned
     /// indirectly by a bind group or are merged directly into the command buffer tracker.
     ///
-    /// # Safety
-    ///
-    /// The maximum ID given by each bind group resource must be less than the
-    /// length of the storage given at the call to `new`.
-    pub unsafe fn merge_render_bundle(
+    pub fn merge_render_bundle(
         &mut self,
         render_bundle: &RenderBundleScope,
     ) -> Result<(), ResourceUsageCompatibilityError> {
@@ -682,16 +689,13 @@ impl Tracker {
     ///
     /// This is a really funky method used by Compute Passes to generate
     /// barriers after a call to dispatch without needing to iterate
-    /// over all elements in the usage scope. We use each the
-    /// bind group as a source of which IDs to look at. The bind groups
-    /// must have first been added to the usage scope.
+    /// over all elements in the usage scope. We use each
+    /// bind group as a source of which tracker indices to look at. The bind groups
+    /// must have first been added to the usage scope. A resource that is
+    /// missing from the scope is skipped silently.
     ///
     /// Only stateful things are merged in here, all other resources are owned
     /// indirectly by the bind group.
-    ///
-    /// # Panics
-    ///
-    /// If a resource in the `bind_group` is not found in the usage scope.
     pub fn set_and_remove_from_usage_scope_sparse(
         &mut self,
         scope: &mut UsageScope,

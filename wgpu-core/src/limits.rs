@@ -240,7 +240,7 @@ pub fn apply_limit_buckets(mut raw: hal::DynExposedAdapter) -> Option<hal::DynEx
 /// situation only until external texture support is universally available.
 ///
 /// Note that while NV12 and P010 can be hidden from content by excluding them from WebIDL,
-/// TEXTURE_FORMATS_16BIT_NORM will eventually be replaced with TEXTURE_FORMATS_TIER1, and
+/// TEXTURE_FORMAT_16BIT_NORM will eventually be replaced with TEXTURE_FORMATS_TIER1, and
 /// at that point neither excluding the tier1 formats from WebIDL entirely nor allowing
 /// content to use them on a device that doesn't have the feature enabled will be
 /// acceptable. See <https://github.com/gfx-rs/wgpu/issues/8122>.

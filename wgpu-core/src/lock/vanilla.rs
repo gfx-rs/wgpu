@@ -1,7 +1,7 @@
 //! Plain, uninstrumented wrappers around [`wgpu_sync`] lock types.
 //!
-//! These definitions are used when no particular lock instrumentation
-//! Cargo feature is selected.
+//! These definitions are used when neither the `wgpu_validate_locks` config
+//! nor the `observe_locks` feature is selected.
 
 use core::{fmt, ops};
 

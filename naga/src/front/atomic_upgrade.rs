@@ -25,7 +25,7 @@
 //! [`Atomic`]: TypeInner::Atomic
 //! [`Scalar`]: TypeInner::Scalar
 //! [`Storage`]: crate::AddressSpace::Storage
-//! [`WorkGroup`]: crate::AddressSpace::WorkGroup
+//! [`Workgroup`]: crate::AddressSpace::WorkGroup
 //! [`Array`]: TypeInner::Array
 //! [`Struct`]: TypeInner::Struct
 //! [`Load`]: crate::Expression::Load
@@ -38,10 +38,6 @@ use crate::{GlobalVariable, Handle, Module, Type, TypeInner};
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
-    #[error("encountered an unsupported expression")]
-    Unsupported,
-    #[error("unexpected end of struct field access indices")]
-    UnexpectedEndOfIndices,
     #[error("encountered unsupported global initializer in an atomic variable")]
     GlobalInitUnsupported,
     #[error("expected to find a global variable")]
@@ -253,7 +249,8 @@ impl UpgradeState<'_> {
 }
 
 impl Module {
-    /// Upgrade `global_var_handles` to have [`Atomic`] leaf types.
+    /// Upgrade the globals and struct fields named by `upgrades` to have
+    /// [`Atomic`] leaf types.
     ///
     /// [`Atomic`]: TypeInner::Atomic
     pub(crate) fn upgrade_atomics(&mut self, upgrades: &Upgrades) -> Result<(), Error> {
