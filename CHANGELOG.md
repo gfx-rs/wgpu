@@ -131,6 +131,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Remove the never-constructed `CreateBlasError::InvalidAabbStride` variant. `create_blas` takes no stride, so it could never be produced; AABB stride is validated at build time as `BuildAccelerationStructureError::InvalidAabbStride`. By @mstampfli in [#9935](https://github.com/gfx-rs/wgpu/pull/9935).
 
 - Added `DownlevelFlags::LINEAR_INTERPOLATION`, indicating that the adapter supports `@interpolate(linear)`. It is absent on GLES/WebGL2, since GLSL ES has no `noperspective` qualifier. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
+- `BufferUsages` is now composed of `BufferUsagesWebGPU` and `BufferUsagesWGPU`, similarly to `Features`. By @sagudev in [#10195](https://github.com/gfx-rs/wgpu/pull/10195).
 
 #### naga
 
