@@ -224,8 +224,6 @@ impl DeferredBufferMapPendingClosures {
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 pub struct Device {
-    raw: Box<dyn hal::DynDevice>,
-    pub(crate) adapter: Arc<Adapter>,
     pub(crate) queue: OnceCell<Weak<Queue>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     pub(crate) empty_bgl: ManuallyDrop<Box<dyn hal::DynBindGroupLayout>>,
@@ -302,7 +300,17 @@ pub struct Device {
     /// binding point will be rendered correctly. Intended to be used as the
     /// [`hal::ExternalTextureBinding::params`] field.
     pub(crate) default_external_texture_params_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
-    // needs to be dropped last
+
+    // Drop order matters!
+    //
+    //  - Any member whose drop might destroy hal resources needs to be dropped
+    //    before the device. Most hal resources are handled manually in
+    //    `Device::drop`, but this applies to `command_allocator`.
+    //  - The device must be dropped before the adapter.
+    //  - Any member whose drop might write into the trace must be dropped
+    //    before the trace.
+    raw: Box<dyn hal::DynDevice>,
+    pub(crate) adapter: Arc<Adapter>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<Box<dyn trace::Trace + Send + Sync + 'static>>>,
 }
