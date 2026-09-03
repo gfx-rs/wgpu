@@ -248,9 +248,6 @@ impl GPUDevice {
     Ok(GPUTexture {
       wgpu_texture,
       default_view: Default::default(),
-      size: wgpu_descriptor.size,
-      mip_level_count: wgpu_descriptor.mip_level_count,
-      sample_count: wgpu_descriptor.sample_count,
       dimension: descriptor.dimension,
       format: descriptor.format,
       usage: GPUTextureUsageFlags(usage),
