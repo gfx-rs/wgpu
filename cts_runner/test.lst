@@ -432,10 +432,16 @@ webgpu:shader,validation,expression,call,builtin,distance:values:stage="constant
 webgpu:shader,validation,expression,call,builtin,dot:*
 webgpu:shader,validation,expression,call,builtin,exp:*
 webgpu:shader,validation,expression,call,builtin,exp2:*
+webgpu:shader,validation,expression,call,builtin,extractBits:must_use:*
+webgpu:shader,validation,expression,call,builtin,extractBits:typed_arguments:*
+webgpu:shader,validation,expression,call,builtin,extractBits:values:*
 webgpu:shader,validation,expression,call,builtin,firstLeadingBit:*
 webgpu:shader,validation,expression,call,builtin,firstTrailingBit:*
 webgpu:shader,validation,expression,call,builtin,floor:*
 webgpu:shader,validation,expression,call,builtin,fract:*
+webgpu:shader,validation,expression,call,builtin,insertBits:must_use:*
+webgpu:shader,validation,expression,call,builtin,insertBits:typed_arguments:*
+webgpu:shader,validation,expression,call,builtin,insertBits:values:*
 webgpu:shader,validation,expression,call,builtin,length:*
 webgpu:shader,validation,expression,call,builtin,log:*
 webgpu:shader,validation,expression,call,builtin,log2:*

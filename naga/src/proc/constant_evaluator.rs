@@ -886,6 +886,16 @@ pub enum ConstantEvaluatorError {
     InvalidMathArgCount(crate::MathFunction, usize, usize),
     #[error("{0} built-in function argument is out of valid range")]
     InvalidMathArgValue(String),
+    #[error(
+        "`offset` + `count` must be at most {width}, the bit width of the operand of the \
+         {builtin} built-in function, but {offset} + {count} is greater"
+    )]
+    BitfieldRangeTooLarge {
+        builtin: &'static str,
+        offset: u32,
+        count: u32,
+        width: u32,
+    },
     #[error("Cannot apply relational function to type")]
     InvalidRelationalArg(RelationalFunction),
     #[error("value of `low` is greater than `high` for clamp built-in function")]
@@ -1813,6 +1823,40 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::ReverseBits => {
                 component_wise_concrete_int!(self, span, [arg], |e| { Ok([e.reverse_bits()]) })
             }
+            crate::MathFunction::ExtractBits => {
+                // https://www.w3.org/TR/WGSL/#extractBits-signed-builtin
+                let (offset, count) = self.bitfield_range(arg1.unwrap(), arg2.unwrap(), span)?;
+                let e = self.extract_vec(arg, true)?;
+
+                let result = match_literal_vector!(match e => LiteralVector {
+                    I16 => |e| { extract_bits(e, offset, count)? },
+                    U16 => |e| { extract_bits(e, offset, count)? },
+                    I32 => |e| { extract_bits(e, offset, count)? },
+                    U32 => |e| { extract_bits(e, offset, count)? },
+                    I64 => |e| { extract_bits(e, offset, count)? },
+                    U64 => |e| { extract_bits(e, offset, count)? },
+                })?;
+                result.register_as_evaluated_expr(self, span)
+            }
+            crate::MathFunction::InsertBits => {
+                // https://www.w3.org/TR/WGSL/#insertBits-builtin
+                let (offset, count) = self.bitfield_range(arg2.unwrap(), arg3.unwrap(), span)?;
+                let e = self.extract_vec(arg, true)?;
+                let newbits = self.extract_vec(arg1.unwrap(), true)?;
+                if e.len() != newbits.len() {
+                    return Err(ConstantEvaluatorError::InvalidMathArg);
+                }
+
+                let result = match_literal_vector!(match (e, newbits) => LiteralVector {
+                    I16 => |e, n| { insert_bits(e, n, offset, count)? },
+                    U16 => |e, n| { insert_bits(e, n, offset, count)? },
+                    I32 => |e, n| { insert_bits(e, n, offset, count)? },
+                    U32 => |e, n| { insert_bits(e, n, offset, count)? },
+                    I64 => |e, n| { insert_bits(e, n, offset, count)? },
+                    U64 => |e, n| { insert_bits(e, n, offset, count)? },
+                })?;
+                result.register_as_evaluated_expr(self, span)
+            }
             crate::MathFunction::FirstTrailingBit => {
                 component_wise_concrete_int(self, span, [arg], |ci| Ok(first_trailing_bit(ci)))
             }
@@ -1976,8 +2020,6 @@ impl<'a> ConstantEvaluator<'a> {
             | crate::MathFunction::Transpose
             | crate::MathFunction::Determinant
             | crate::MathFunction::QuantizeToF16
-            | crate::MathFunction::ExtractBits
-            | crate::MathFunction::InsertBits
             | crate::MathFunction::Pack4x8snorm
             | crate::MathFunction::Pack4x8unorm
             | crate::MathFunction::Pack2x16snorm
@@ -2165,6 +2207,26 @@ impl<'a> ConstantEvaluator<'a> {
                 }
                 LiteralVector::from_literal_vec(components_out)
             }
+            _ => Err(ConstantEvaluatorError::InvalidMathArg),
+        }
+    }
+
+    /// Extract the `offset` and `count` arguments shared by the `extractBits`
+    /// and `insertBits` built ins, both of which are `u32` scalars.
+    fn bitfield_range(
+        &mut self,
+        offset: Handle<Expression>,
+        count: Handle<Expression>,
+        span: Span,
+    ) -> Result<(u32, u32), ConstantEvaluatorError> {
+        let offset = self.eval_zero_value_and_splat(offset, span)?;
+        let count = self.eval_zero_value_and_splat(count, span)?;
+
+        match (&self.expressions[offset], &self.expressions[count]) {
+            (
+                &Expression::Literal(Literal::U32(offset)),
+                &Expression::Literal(Literal::U32(count)),
+            ) => Ok((offset, count)),
             _ => Err(ConstantEvaluatorError::InvalidMathArg),
         }
     }
@@ -3693,6 +3755,176 @@ impl<'a> ConstantEvaluator<'a> {
             _ => Err(ConstantEvaluatorError::SelectAcceptRejectTypeMismatch),
         }
     }
+}
+
+/// Return a u32 according to the number of bits in `T`, the `w` of the
+/// `extractBits` and `insertBits` specifications.
+const fn bit_width<T>() -> u32 {
+    size_of::<T>() as u32 * 8
+}
+
+/// Reject the `offset` and `count` arguments of `extractBits` and `insertBits`
+/// if they select bits outside an operand `width` bits wide.
+///
+/// The WGSL specification says that this is a shader creation error if `offset`
+/// and `count` are const expressions, *even if the operand is not*, so the WGSL
+/// front end will fail immediately if it sees both are const.
+pub fn check_bitfield_range(
+    builtin: &'static str,
+    offset: u32,
+    count: u32,
+    width: u32,
+) -> Result<(), ConstantEvaluatorError> {
+    if u64::from(offset) + u64::from(count) > u64::from(width) {
+        return Err(ConstantEvaluatorError::BitfieldRangeTooLarge {
+            builtin,
+            offset,
+            count,
+            width,
+        });
+    }
+    Ok(())
+}
+
+fn extract_bits<T>(
+    e: &[T],
+    offset: u32,
+    count: u32,
+) -> Result<ArrayVec<T, { crate::VectorSize::MAX }>, ConstantEvaluatorError>
+where
+    T: num_traits::PrimInt,
+{
+    check_bitfield_range("extractBits", offset, count, bit_width::<T>())?;
+    let w = bit_width::<T>();
+
+    let mut out = ArrayVec::new();
+    for &e in e {
+        out.push(if count == 0 {
+            T::zero()
+        } else {
+            // Shift field up then shift back down.
+            // - if signed, the empty space fills with the field's top bit
+            // - if unsigned, the empty space will fill with zeroes
+            // count is never zero here
+            (e << (w - offset - count) as usize) >> (w - count) as usize
+        });
+    }
+    Ok(out)
+}
+
+fn insert_bits<T>(
+    e: &[T],
+    newbits: &[T],
+    offset: u32,
+    count: u32,
+) -> Result<ArrayVec<T, { crate::VectorSize::MAX }>, ConstantEvaluatorError>
+where
+    T: num_traits::PrimInt,
+{
+    check_bitfield_range("insertBits", offset, count, bit_width::<T>())?;
+    let w = bit_width::<T>();
+
+    let mut out = ArrayVec::new();
+    for (&e, &newbits) in e.iter().zip(newbits) {
+        out.push(if count == 0 {
+            e
+        } else {
+            let mask = (!T::zero()).unsigned_shr(w - count) << offset as usize;
+            (e & !mask) | ((newbits << offset as usize) & mask)
+        });
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+fn extract_bits_scalar<T: num_traits::PrimInt>(e: T, offset: u32, count: u32) -> T {
+    extract_bits(&[e], offset, count).unwrap()[0]
+}
+
+#[cfg(test)]
+fn insert_bits_scalar<T: num_traits::PrimInt>(e: T, newbits: T, offset: u32, count: u32) -> T {
+    insert_bits(&[e], &[newbits], offset, count).unwrap()[0]
+}
+
+#[test]
+fn extract_bits_smoke() {
+    // `count` of zero always yields zero, whatever `offset` selects.
+    assert_eq!(extract_bits_scalar(0xffffffff_u32, 0, 0), 0);
+    assert_eq!(extract_bits_scalar(-1_i32, 32, 0), 0);
+
+    // Selecting the whole width is the identity.
+    assert_eq!(extract_bits_scalar(0x12345678_u32, 0, 32), 0x12345678);
+    assert_eq!(extract_bits_scalar(i32::MIN, 0, 32), i32::MIN);
+
+    // Unsigned extraction fills the bits above the field with zero.
+    assert_eq!(extract_bits_scalar(0x12345678_u32, 8, 8), 0x56);
+    assert_eq!(extract_bits_scalar(0xf0000000_u32, 28, 4), 0xf);
+    assert_eq!(extract_bits_scalar(0x12345678_u32, 31, 1), 0);
+
+    // Signed extraction fills them from the top bit of the field instead.
+    assert_eq!(extract_bits_scalar(0x12345678_i32, 8, 8), 0x56);
+    assert_eq!(extract_bits_scalar(0x8_i32, 3, 1), -1);
+    assert_eq!(extract_bits_scalar(0xf0000000_u32 as i32, 28, 4), -1);
+    assert_eq!(extract_bits_scalar(0x70000000_i32, 28, 4), 7);
+
+    // Widths other than 32 use their own `w`.
+    assert_eq!(extract_bits_scalar(0x1234_u16, 4, 8), 0x23);
+    assert_eq!(extract_bits_scalar(-1_i16, 0, 16), -1);
+    assert_eq!(
+        extract_bits_scalar(0x123456789abcdef0_u64, 32, 32),
+        0x12345678
+    );
+    assert_eq!(extract_bits_scalar(-1_i64, 63, 1), -1);
+
+    // `offset + count` past the end of the type is a shader creation error.
+    assert!(extract_bits(&[0_u32], 30, 8).is_err());
+    assert!(extract_bits(&[0_u32], 33, 0).is_err());
+    assert!(extract_bits(&[0_u16], 8, 16).is_err());
+    assert!(extract_bits(&[0_u32], u32::MAX, u32::MAX).is_err());
+    assert!(extract_bits(&[0_u32], 32, 0).is_ok());
+}
+
+#[test]
+fn insert_bits_smoke() {
+    // `count` of zero leaves `e` untouched.
+    assert_eq!(
+        insert_bits_scalar(0x12345678_u32, 0xffffffff, 0, 0),
+        0x12345678
+    );
+    assert_eq!(insert_bits_scalar(-1_i32, 0, 32, 0), -1);
+
+    // Covering the whole width will replace `e` entirely.
+    assert_eq!(
+        insert_bits_scalar(0x12345678_u32, 0xdeadbeef, 0, 32),
+        0xdeadbeef
+    );
+    assert_eq!(insert_bits_scalar(0_i32, i32::MIN, 0, 32), i32::MIN);
+
+    // Only bits `offset..offset + count` are taken from `newbits`, and only its
+    // low `count` bits are used.
+    assert_eq!(insert_bits_scalar(0x12345678_u32, 0xff, 8, 8), 0x1234ff78);
+    assert_eq!(insert_bits_scalar(0x12345678_u32, 0xabcd, 8, 8), 0x1234cd78);
+    assert_eq!(insert_bits_scalar(0_u32, 0xf, 28, 4), 0xf0000000);
+    assert_eq!(insert_bits_scalar(0_u32, 1, 31, 1), 0x80000000);
+
+    // Signed operands set the sign bit like any other.
+    assert_eq!(insert_bits_scalar(0_i32, -1, 31, 1), i32::MIN);
+    assert_eq!(insert_bits_scalar(-1_i32, 0, 0, 31), i32::MIN);
+
+    // Widths other than 32 use their own `w`.
+    assert_eq!(insert_bits_scalar(0x1234_u16, 0xf, 4, 4), 0x12f4);
+    assert_eq!(insert_bits_scalar(0_i16, -1, 15, 1), i16::MIN);
+    assert_eq!(
+        insert_bits_scalar(0_u64, 0xffffffff, 32, 32),
+        0xffffffff00000000
+    );
+
+    // `offset + count` past the end of the type is a shader creation error.
+    assert!(insert_bits(&[0_u32], &[0], 30, 8).is_err());
+    assert!(insert_bits(&[0_u32], &[0], 33, 0).is_err());
+    assert!(insert_bits(&[0_u16], &[0], 8, 16).is_err());
+    assert!(insert_bits(&[0_u32], &[0], u32::MAX, u32::MAX).is_err());
+    assert!(insert_bits(&[0_u32], &[0], 32, 0).is_ok());
 }
 
 fn first_trailing_bit(concrete_int: ConcreteInt<1>) -> ConcreteInt<1> {

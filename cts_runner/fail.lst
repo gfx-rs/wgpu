@@ -77,11 +77,11 @@ webgpu:shader,validation,expression,call,builtin,determinant:* // 71%, abstract 
 webgpu:shader,validation,expression,call,builtin,distance:* // 66%, scalar distance uses wrong formula (sqrt instead of abs)
 webgpu:shader,validation,expression,call,builtin,dot4I8Packed:* // 91%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,dot4U8Packed:* // 91%, missing const eval (#4507)
-webgpu:shader,validation,expression,call,builtin,extractBits:* // 62%, const eval issues
+webgpu:shader,validation,expression,call,builtin,extractBits:count_offset:* // 67%, `offset` + `count` out of range is not a pipeline creation error when they are override expressions
 webgpu:shader,validation,expression,call,builtin,faceForward:* // 68%, const eval overflow for abstract/f16
 webgpu:shader,validation,expression,call,builtin,fma:* // 85%, const eval issues
 webgpu:shader,validation,expression,call,builtin,frexp:* // 39%, const/override eval not supported
-webgpu:shader,validation,expression,call,builtin,insertBits:* // 76%, missing const eval support
+webgpu:shader,validation,expression,call,builtin,insertBits:count_offset:* // 67%, `offset` + `count` out of range is not a pipeline creation error when they are override expressions
 webgpu:shader,validation,expression,call,builtin,inverseSqrt:* // 61%, const eval overflow for abstract/f16
 webgpu:shader,validation,expression,call,builtin,ldexp:* // 43%, const eval not implemented
 webgpu:shader,validation,expression,call,builtin,mix:* // 66%, const eval issues
