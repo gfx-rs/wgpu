@@ -1274,6 +1274,8 @@ impl Adapter {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
 
+        normalize_max_resource_per_shader_stage_limits(&mut desc.required_limits);
+
         Ok(())
     }
 
@@ -1430,7 +1432,9 @@ fn filter_features_and_limits(
         *features &= wgt::Features::all_webgpu_mask() | limits::EXEMPT_FEATURES;
         limits.zero_native_only();
     }
+}
 
+fn normalize_max_resource_per_shader_stage_limits(limits: &mut wgt::Limits) {
     // The next steps are from <https://www.w3.org/TR/webgpu/#a-new-device>.
 
     // > 7. Set `limits.maxStorageBuffersPerShaderStage` to
