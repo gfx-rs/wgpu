@@ -78,7 +78,7 @@ webgpu:shader,validation,expression,call,builtin,distance:* // 66%, scalar dista
 webgpu:shader,validation,expression,call,builtin,dot4I8Packed:* // 91%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,dot4U8Packed:* // 91%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,extractBits:count_offset:* // 67%, `offset` + `count` out of range is not a pipeline creation error when they are override expressions
-webgpu:shader,validation,expression,call,builtin,faceForward:* // 68%, const eval overflow for abstract/f16
+webgpu:shader,validation,expression,call,builtin,faceForward:values:* // 67%, abstract-float operands are concretized to f32 rather than kept abstract, https://github.com/gfx-rs/wgpu/issues/7405
 webgpu:shader,validation,expression,call,builtin,fma:* // 85%, const eval issues
 webgpu:shader,validation,expression,call,builtin,frexp:* // 39%, const/override eval not supported
 webgpu:shader,validation,expression,call,builtin,insertBits:count_offset:* // 67%, `offset` + `count` out of range is not a pipeline creation error when they are override expressions
@@ -96,8 +96,8 @@ webgpu:shader,validation,expression,call,builtin,pack4xI8Clamp:* // 74%, missing
 webgpu:shader,validation,expression,call,builtin,pack4xU8:* // 74%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,pack4xU8Clamp:* // 74%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,quantizeToF16:* // 77%, overflow validation issues
-webgpu:shader,validation,expression,call,builtin,reflect:* // 39%, const eval not implemented
-webgpu:shader,validation,expression,call,builtin,refract:* // 44%, const eval not implemented
+webgpu:shader,validation,expression,call,builtin,reflect:values:* // 67%, abstract-float operands are concretized to f32 rather than kept abstract, https://github.com/gfx-rs/wgpu/issues/7405
+webgpu:shader,validation,expression,call,builtin,refract:values:* // 67%, abstract-float operands are concretized to f32 rather than kept abstract, https://github.com/gfx-rs/wgpu/issues/7405
 webgpu:shader,validation,expression,call,builtin,smoothstep:* // 69%, const eval issues
 webgpu:shader,validation,expression,call,builtin,textureDimensions:* // >99%, no external texture in deno
 webgpu:shader,validation,expression,call,builtin,textureGather:* // 99%, https://github.com/gfx-rs/wgpu/issues/8876

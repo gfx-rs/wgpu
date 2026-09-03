@@ -4395,6 +4395,58 @@ fn const_eval_insert_bits() {
     );
 }
 
+/// Constant evaluation of `faceForward`, `reflect` and `refract`.
+///
+/// The values below are chosen so that every `f32` result doesn't round.
+#[test]
+fn const_eval_geometry() {
+    check_success(
+        "
+        // faceForward returns `e1` when `dot(e2, e3)` is negative and `-e1`
+        // otherwise, including when the dot product is exactly zero.
+        const_assert all(faceForward(vec2(1.0, 2.0), vec2(-1.0, 0.0), vec2(1.0, 0.0)) == vec2(1.0, 2.0));
+        const_assert all(faceForward(vec2(1.0, 2.0), vec2(1.0, 0.0), vec2(1.0, 0.0)) == vec2(-1.0, -2.0));
+        const_assert all(faceForward(vec2(1.0, 2.0), vec2(0.0, 1.0), vec2(1.0, 0.0)) == vec2(-1.0, -2.0));
+        const_assert all(faceForward(vec3(1.0, 2.0, 3.0), vec3(-1.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0)) == vec3(1.0, 2.0, 3.0));
+
+        // reflect is `e1 - 2 * dot(e2, e1) * e2`. A surface parallel to the
+        // incident vector leaves it alone.
+        const_assert all(reflect(vec2(1.0, -1.0), vec2(0.0, 1.0)) == vec2(1.0, 1.0));
+        const_assert all(reflect(vec2(1.0, 0.0), vec2(1.0, 0.0)) == vec2(-1.0, 0.0));
+        const_assert all(reflect(vec2(1.0, 0.0), vec2(0.0, 1.0)) == vec2(1.0, 0.0));
+        const_assert all(reflect(vec3(1.0, -1.0, 0.0), vec3(0.0, 1.0, 0.0)) == vec3(1.0, 1.0, 0.0));
+
+        // refract transmits the vector when `k` is non-negative.
+        const_assert all(refract(vec2(0.0, -1.0), vec2(0.0, 1.0), 1.0) == vec2(0.0, -1.0));
+        const_assert all(refract(vec2(0.5, -0.5), vec2(0.0, 1.0), 1.0) == vec2(0.5, -0.5));
+        const_assert all(refract(vec2(0.5, -0.5), vec2(0.0, -1.0), 1.0) == vec2(0.5, 0.5));
+        const_assert all(refract(vec2(0.0, -1.0), vec2(0.0, 1.0), 0.5) == vec2(0.0, -1.0));
+
+        // Under total internal reflection it returns the zero vector instead.
+        const_assert all(refract(vec2(0.8, -0.6), vec2(0.0, 1.0), 2.0) == vec2(0.0, 0.0));
+        const_assert all(refract(vec3(0.8, -0.6, 0.0), vec3(0.0, 1.0, 0.0), 2.0) == vec3(0.0, 0.0, 0.0));
+        ",
+    );
+}
+
+/// A dot product that overflows will cause a shader creation error.
+/// No resulting to infinity.
+#[test]
+fn const_eval_geometry_overflow() {
+    for expr in [
+        "faceForward(vec2(1.0, 0.0), vec2(3.4e38, 0.0), vec2(3.4e38, 0.0))",
+        "reflect(vec2(1.0, 0.0), vec2(3.4e38, 0.0))",
+        "refract(vec2(1.0, 0.0), vec2(3.4e38, 0.0), 1.0)",
+    ] {
+        let input = format!("const x = {expr};");
+        let result = naga::front::wgsl::parse_str(&input);
+        assert!(
+            result.is_err(),
+            "expected `{expr}` to overflow, got {result:#?}"
+        );
+    }
+}
+
 /// offset + count  past the width of the operand is an error w shader creation
 /// when both are const expressions.
 #[test]

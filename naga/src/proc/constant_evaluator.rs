@@ -632,6 +632,19 @@ where
     }
 }
 
+/// The dot product of `a` and `b`.  Return `None` if it is not finite.
+fn float_dot<F>(a: &[F], b: &[F]) -> Option<F>
+where
+    F: num_traits::Float,
+{
+    let result = a
+        .iter()
+        .zip(b.iter())
+        .map(|(&aa, &bb)| aa * bb)
+        .fold(F::zero(), |acc, x| acc + x);
+    result.is_finite().then_some(result)
+}
+
 #[derive(Debug)]
 enum Behavior<'a> {
     Wgsl(WgslRestrictions<'a>),
@@ -1880,22 +1893,6 @@ impl<'a> ConstantEvaluator<'a> {
                     return Err(ConstantEvaluatorError::InvalidMathArg);
                 }
 
-                fn float_dot_checked<P>(a: &[P], b: &[P]) -> Result<P, ConstantEvaluatorError>
-                where
-                    P: num_traits::Float,
-                {
-                    let result = a
-                        .iter()
-                        .zip(b.iter())
-                        .map(|(&aa, &bb)| aa * bb)
-                        .fold(P::zero(), |acc, x| acc + x);
-                    if result.is_finite() {
-                        Ok(result)
-                    } else {
-                        Err(ConstantEvaluatorError::Overflow("in dot built-in".into()))
-                    }
-                }
-
                 fn int_dot_checked<P>(a: &[P], b: &[P]) -> Result<P, ConstantEvaluatorError>
                 where
                     P: num_traits::PrimInt + num_traits::CheckedAdd + num_traits::CheckedMul,
@@ -1926,7 +1923,11 @@ impl<'a> ConstantEvaluator<'a> {
                 }
 
                 let result = match_literal_vector!(match (e1, e2) => Literal {
-                    Float => |e1, e2| { float_dot_checked(e1, e2)? },
+                    Float => |e1, e2| {
+                        float_dot(e1, e2).ok_or_else(|| {
+                            ConstantEvaluatorError::Overflow("in mathfunction::dot".into())
+                        })?
+                    },
                     AbstractInt => |e1, e2 | { int_dot_checked(e1, e2)? },
                     I32 => |e1, e2| { int_dot_wrapping(e1, e2) },
                     U32 => |e1, e2| { int_dot_wrapping(e1, e2) },
@@ -2005,15 +2006,65 @@ impl<'a> ConstantEvaluator<'a> {
                 })?;
                 result.register_as_evaluated_expr(self, span)
             }
+            crate::MathFunction::FaceForward => {
+                // https://www.w3.org/TR/WGSL/#faceForward-builtin
+                let e1 = self.extract_vec(arg, false)?;
+                let e2 = self.extract_vec(arg1.unwrap(), false)?;
+                let e3 = self.extract_vec(arg2.unwrap(), false)?;
+                if e1.len() != e2.len() || e1.len() != e3.len() {
+                    return Err(ConstantEvaluatorError::InvalidMathArg);
+                }
+
+                let result = match_literal_vector!(match (e1, e2, e3) => LiteralVector {
+                    Float => |e1, e2, e3| {
+                        float_face_forward(e1, e2, e3).ok_or_else(|| {
+                            ConstantEvaluatorError::Overflow("in mathfunction::faceforward".into())
+                        })?
+                    },
+                })?;
+                result.register_as_evaluated_expr(self, span)
+            }
+            crate::MathFunction::Reflect => {
+                // https://www.w3.org/TR/WGSL/#reflect-builtin
+                let e1 = self.extract_vec(arg, false)?;
+                let e2 = self.extract_vec(arg1.unwrap(), false)?;
+                if e1.len() != e2.len() {
+                    return Err(ConstantEvaluatorError::InvalidMathArg);
+                }
+
+                let result = match_literal_vector!(match (e1, e2) => LiteralVector {
+                    Float => |e1, e2| {
+                        float_reflect(e1, e2)
+                            .ok_or_else(|| ConstantEvaluatorError::Overflow("in mathfunction::reflect".into()))?
+                    },
+                })?;
+                result.register_as_evaluated_expr(self, span)
+            }
+            crate::MathFunction::Refract => {
+                // https://www.w3.org/TR/WGSL/#refract-builtin
+                let e1 = self.extract_vec(arg, false)?;
+                let e2 = self.extract_vec(arg1.unwrap(), false)?;
+                // `e3` is the scalar ratio of indices of refraction, extracted
+                // as a LiteralVector like `e1` and `e2`.
+                let e3 = self.extract_vec(arg2.unwrap(), true)?;
+                if e1.len() != e2.len() || e3.len() != 1 {
+                    return Err(ConstantEvaluatorError::InvalidMathArg);
+                }
+
+                let result = match_literal_vector!(match (e1, e2, e3) => LiteralVector {
+                    Float => |e1, e2, e3| {
+                        float_refract(e1, e2, e3[0])
+                            .ok_or_else(|| ConstantEvaluatorError::Overflow("in mathfunction::refract".into()))?
+                    },
+                })?;
+                result.register_as_evaluated_expr(self, span)
+            }
 
             // unimplemented
             crate::MathFunction::Modf
             | crate::MathFunction::Frexp
             | crate::MathFunction::Ldexp
             | crate::MathFunction::Outer
-            | crate::MathFunction::FaceForward
-            | crate::MathFunction::Reflect
-            | crate::MathFunction::Refract
             | crate::MathFunction::Mix
             | crate::MathFunction::SmoothStep
             | crate::MathFunction::Inverse
@@ -3755,6 +3806,150 @@ impl<'a> ConstantEvaluator<'a> {
             _ => Err(ConstantEvaluatorError::SelectAcceptRejectTypeMismatch),
         }
     }
+}
+
+/// If `dot(e2, e3)` is negative, `e1` returns, otherwise `-e1`.
+fn float_face_forward<F>(
+    e1: &[F],
+    e2: &[F],
+    e3: &[F],
+) -> Option<ArrayVec<F, { crate::VectorSize::MAX }>>
+where
+    F: num_traits::Float,
+{
+    let d = float_dot(e2, e3)?;
+
+    let mut out = ArrayVec::new();
+    for &e in e1 {
+        out.push(if d < F::zero() { e } else { -e });
+    }
+    Some(out)
+}
+
+/// The reflection of incident vector `e1` off a surface oriented `e2`,
+/// `e1 - 2 * dot(e2, e1) * e2`.
+fn float_reflect<F>(e1: &[F], e2: &[F]) -> Option<ArrayVec<F, { crate::VectorSize::MAX }>>
+where
+    F: num_traits::Float,
+{
+    let d = float_dot(e2, e1)?;
+    let two = F::one() + F::one();
+
+    let mut out = ArrayVec::new();
+    for (&a, &b) in e1.iter().zip(e2) {
+        let r = a - two * d * b;
+        if !r.is_finite() {
+            return None;
+        }
+        out.push(r);
+    }
+    Some(out)
+}
+
+/// The refraction of incident vector `e1` through a surface with normal `e2`,
+/// for a ratio of indices of refraction `e3`.
+fn float_refract<F>(e1: &[F], e2: &[F], e3: F) -> Option<ArrayVec<F, { crate::VectorSize::MAX }>>
+where
+    F: num_traits::Float,
+{
+    let d = float_dot(e2, e1)?;
+    let one = F::one();
+
+    let k = one - e3 * e3 * (one - d * d);
+    if !k.is_finite() {
+        return None;
+    }
+
+    let mut out = ArrayVec::new();
+
+    // If there is total internal reflection, returns zero vector.
+    if k < F::zero() {
+        for _ in e1 {
+            out.push(F::zero());
+        }
+        return Some(out);
+    }
+
+    let scale = e3 * d + k.sqrt();
+    for (&a, &b) in e1.iter().zip(e2) {
+        let r = e3 * a - scale * b;
+        if !r.is_finite() {
+            return None;
+        }
+        out.push(r);
+    }
+    Some(out)
+}
+
+#[test]
+fn face_forward_smoke() {
+    #[track_caller]
+    fn ff(e1: &[f32], e2: &[f32], e3: &[f32]) -> Vec<f32> {
+        float_face_forward(e1, e2, e3).unwrap().to_vec()
+    }
+
+    // If `dot(e2, e3)` is negative, return `e1`, otherwise return `-e1`.
+    assert_eq!(ff(&[1.0, 2.0], &[-1.0, 0.0], &[1.0, 0.0]), [1.0, 2.0]);
+    assert_eq!(ff(&[1.0, 2.0], &[1.0, 0.0], &[1.0, 0.0]), [-1.0, -2.0]);
+
+    // Zero = flip `e1`.
+    assert_eq!(ff(&[1.0, 2.0], &[0.0, 1.0], &[1.0, 0.0]), [-1.0, -2.0]);
+
+    assert_eq!(
+        ff(&[1.0, 2.0, 3.0], &[-1.0, 0.0, 0.0], &[1.0, 0.0, 0.0]),
+        [1.0, 2.0, 3.0]
+    );
+
+    // Return None if `dot(e2, e3)` is too big to compute.
+    assert!(float_face_forward(&[1.0f32, 0.0], &[f32::MAX, 0.0], &[f32::MAX, 0.0]).is_none());
+}
+
+#[test]
+fn reflect_smoke() {
+    #[track_caller]
+    fn rf(e1: &[f32], e2: &[f32]) -> Vec<f32> {
+        float_reflect(e1, e2).unwrap().to_vec()
+    }
+
+    // Bouncing off a floor flips the component along the normal.
+    assert_eq!(rf(&[1.0, -1.0], &[0.0, 1.0]), [1.0, 1.0]);
+    assert_eq!(rf(&[1.0, -1.0, 0.0], &[0.0, 1.0, 0.0]), [1.0, 1.0, 0.0]);
+
+    // Head-on reverses the vector entirely.
+    assert_eq!(rf(&[1.0, 0.0], &[1.0, 0.0]), [-1.0, 0.0]);
+
+    // A surface parallel to the incident vector leaves it alone.
+    assert_eq!(rf(&[1.0, 0.0], &[0.0, 1.0]), [1.0, 0.0]);
+
+    assert!(float_reflect(&[1.0f32, 0.0], &[f32::MAX, 0.0]).is_none());
+}
+
+#[test]
+fn refract_smoke() {
+    #[track_caller]
+    fn rr(e1: &[f32], e2: &[f32], e3: f32) -> Vec<f32> {
+        float_refract(e1, e2, e3).unwrap().to_vec()
+    }
+
+    // No change if blending ratio is 1 and a straight surface collision.
+    assert_eq!(rr(&[0.0, -1.0], &[0.0, 1.0], 1.0), [0.0, -1.0]);
+    assert_eq!(rr(&[0.5, -0.5], &[0.0, 1.0], 1.0), [0.5, -0.5]);
+
+    // A normal facing the opposite way will bend vector to other side.
+    assert_eq!(rr(&[0.5, -0.5], &[0.0, -1.0], 1.0), [0.5, 0.5]);
+
+    // Ratios below 1 shorten the transmitted vector.
+    assert_eq!(rr(&[0.0, -1.0], &[0.0, 1.0], 0.5), [0.0, -1.0]);
+
+    // ‘no refraction possible’ means k goes negative and result is zero.
+    assert_eq!(rr(&[0.8, -0.6], &[0.0, 1.0], 2.0), [0.0, 0.0]);
+    assert_eq!(
+        rr(&[0.8, -0.6, 0.0], &[0.0, 1.0, 0.0], 2.0),
+        [0.0, 0.0, 0.0]
+    );
+
+    assert!(float_refract(&[1.0f32, 0.0], &[f32::MAX, 0.0], 1.0).is_none());
+    assert!(float_refract(&[1.0f32, 0.0], &[0.0, 1.0], f32::MAX).is_none());
 }
 
 /// Return a u32 according to the number of bits in `T`, the `w` of the

@@ -4161,14 +4161,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         })
     }
 
-    /// Check the `offset` and `count` arguments of a call to [`ExtractBits`] 
+    /// Check the `offset` and `count` arguments of a call to [`ExtractBits`]
     /// or [`InsertBits`] to make sure it fits inside the number's `width`.
     ///
     /// If `offset` and `count` are fixed numbers and they pick bits outside
     /// the range, shader DIES.  No thinking.  Shader creation error.
     ///
     /// If the pipeline overrides the numbers, we do not check them here.
-    /// [`get_const_val`] reports them as non-const, so they fall through 
+    /// [`get_const_val`] reports them as non-const, so they fall through
     /// this check.
     ///
     /// [`ExtractBits`]: ir::MathFunction::ExtractBits
