@@ -117,7 +117,7 @@ impl Player {
                 panic!("Unexpected Surface action: winit feature is not enabled")
             }
             Action::CreateBuffer(id, desc) => {
-                let (buffer, _error) = device.create_buffer(&desc);
+                let buffer = device.create_buffer(&desc);
                 self.buffers.insert(id, buffer);
             }
             Action::DestroyBuffer(id) => {
@@ -126,10 +126,10 @@ impl Player {
             }
             Action::DropBuffer(id) => {
                 let buffer = self.buffers.remove(&id).expect("invalid buffer");
-                let _ = buffer.unmap();
+                buffer.unmap();
             }
             Action::CreateTexture(id, desc) => {
-                let (texture, _) = device.create_texture(&desc);
+                let texture = device.create_texture(&desc);
 
                 self.textures.insert(id, texture);
             }
@@ -147,7 +147,7 @@ impl Player {
             }
             Action::CreateTextureView { id, parent, desc } => {
                 let parent_texture = self.resolve_texture_id(parent);
-                let (texture_view, _error) = parent_texture.create_view(&desc);
+                let texture_view = parent_texture.create_view(&desc);
                 self.texture_views.insert(id, texture_view);
             }
             Action::DropTextureView(id) => {
@@ -186,7 +186,7 @@ impl Player {
                 unimplemented!()
             }
             Action::CreateBindGroupLayout(id, desc) => {
-                let (bind_group_layout, _error) = device.create_bind_group_layout(&desc);
+                let bind_group_layout = device.create_bind_group_layout(&desc);
                 self.bind_group_layouts.insert(id, bind_group_layout);
             }
             Action::GetRenderPipelineBindGroupLayout {
@@ -339,7 +339,7 @@ impl Player {
                 // pipeline descriptor that can represent either a conventional
                 // pipeline or a mesh shading pipeline.
                 let resolved_desc = self.resolve_render_pipeline_descriptor(desc);
-                let (pipeline, _error) = device.create_render_pipeline(resolved_desc);
+                let pipeline = device.create_render_pipeline(resolved_desc);
                 self.render_pipelines.insert(id, pipeline);
             }
             Action::DropRenderPipeline(id) => {
@@ -365,7 +365,7 @@ impl Player {
                     .expect("invalid render bundle");
             }
             Action::CreateQuerySet { id, desc } => {
-                let (query_set, _error) = device.create_query_set(&desc);
+                let query_set = device.create_query_set(&desc);
                 self.query_sets.insert(id, query_set);
             }
             Action::DestroyQuerySet(id) => {

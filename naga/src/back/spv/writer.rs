@@ -3210,7 +3210,12 @@ impl Writer {
                         )?;
                         BuiltIn::CullDistance
                     }
-                    Bi::InstanceIndex => BuiltIn::InstanceIndex,
+                    Bi::InstanceIndex => match stage {
+                        crate::ShaderStage::AnyHit | crate::ShaderStage::ClosestHit => {
+                            BuiltIn::InstanceId
+                        }
+                        _ => BuiltIn::InstanceIndex,
+                    },
                     Bi::PointSize => BuiltIn::PointSize,
                     Bi::VertexIndex => BuiltIn::VertexIndex,
                     Bi::DrawIndex => {
@@ -3226,14 +3231,34 @@ impl Writer {
                     Bi::PointCoord => BuiltIn::PointCoord,
                     Bi::FrontFacing => BuiltIn::FrontFacing,
                     Bi::PrimitiveIndex => {
-                        // Geometry shader capability is required for primitive index
-                        self.require_any(
-                            "`primitive_index` built-in",
-                            &[spirv::Capability::Geometry],
-                        )?;
+                        // `PrimitiveId` is enabled by any of `Geometry`, `Tessellation`,
+                        // `RayTracingKHR` or `MeshShadingEXT`. `require_any` picks the first one the target
+                        // allows.
+                        //
+                        // SPEC: https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#:~:text=PrimitiveId
+                        let enabled_by: &[spirv::Capability] = match stage {
+                            // The stage itself already requires `RayTracingKHR`.
+                            crate::ShaderStage::AnyHit | crate::ShaderStage::ClosestHit => &[],
+                            // The stage itself already requires `MeshShadingEXT`.
+                            crate::ShaderStage::Mesh => &[],
+                            // A fragment shader can be fed primitive IDs by a geometry,
+                            // tessellation or mesh pipeline.
+                            crate::ShaderStage::Fragment => &[
+                                spirv::Capability::Geometry,
+                                spirv::Capability::Tessellation,
+                                spirv::Capability::MeshShadingEXT,
+                            ],
+                            // `PrimitiveId` isn't permitted in these execution models.
+                            _ => return Err(Error::Validation(
+                                "`primitive_index` built-in is not allowed in this shader stage",
+                            )),
+                        };
+                        self.require_any("`primitive_index` built-in", enabled_by)?;
+
                         if stage == crate::ShaderStage::Mesh {
                             others.push(Decoration::PerPrimitiveEXT);
                         }
+
                         BuiltIn::PrimitiveId
                     }
                     Bi::Barycentric { perspective } => {

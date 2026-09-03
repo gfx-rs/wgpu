@@ -674,7 +674,7 @@ impl Buffer {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<SubmissionIndex, BufferAccessError> {
+    ) -> Option<SubmissionIndex> {
         profiling::scope!("Buffer::map_async");
         api_log!(
             "Buffer::map_async {:?} offset {offset:?} size {size:?} op: {op:?}",
@@ -683,11 +683,13 @@ impl Buffer {
 
         self.try_map_async(offset, size, op)
             .map_err(|(mut operation, err)| {
+                self.device
+                    .handle_error(err.clone(), Some(&self.label), "Buffer::map_async");
                 if let Some(callback) = operation.callback.take() {
-                    callback(Err(err.clone()));
+                    callback(Err(err));
                 }
-                err
             })
+            .ok()
     }
 
     /// Try to schedule buffer mapping.
@@ -1011,25 +1013,35 @@ impl Buffer {
     }
 
     // Note: This must not be called while holding a lock.
-    pub fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
+    pub fn unmap(self: &Arc<Self>) {
         profiling::scope!("unmap", "Buffer");
         api_log!("Buffer::unmap {:?}", Arc::as_ptr(self));
-        if let Some((mut operation, status)) = self.unmap_inner()? {
+        if let Some((mut operation, status)) = self.unmap_inner() {
             if let Some(callback) = operation.callback.take() {
                 callback(status);
             }
         }
-
-        Ok(())
     }
 
-    fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
+    /// Per the WebGPU spec, unmap does not raise any errors
+    /// it just resolves any pending map_async calls with a MapAborted error.
+    /// It is okay to ignore errors because:
+    /// - if the buffer or device was invalid from the start it couldn't have been mapped via `map_async` anyway (no callback to resolve)
+    /// - if the device becomes invalid it calls the callback in `poll`/`maintain`
+    /// - if the buffer was destroyed (via `Buffer::destroy`) it was first unmapped
+    ///
+    /// <https://gpuweb.github.io/gpuweb/#dom-gpubuffer-unmap>
+    fn unmap_inner(self: &Arc<Self>) -> Option<BufferMapPendingClosure> {
         let device = &self.device;
-        self.check_is_valid()?;
-        self.device.check_is_valid()?;
+        // We can stop here if the device is invalid because:
+        // - if the device was invalid from the start it couldn't have been mapped via `map_async` anyway
+        // - if the device becomes invalid it calls the callback in `poll`/`maintain`
+        self.device.check_is_valid().ok()?;
         let snatch_guard = device.snatchable_lock.read();
-        self.check_destroyed(&snatch_guard)?;
-        let raw_buf = self.try_raw(&snatch_guard)?;
+        // We can stop here if the buffer is invalid or destroyed because:
+        // - if the device was invalid from the start it couldn't have been mapped via `map_async` anyway
+        // - if the buffer was destroyed (via `Buffer::destroy`) it was first unmapped
+        let raw_buf = self.try_raw(&snatch_guard).ok()?;
         let map_state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
         match map_state {
             BufferMapState::Init { staging_buffer } => {
@@ -1087,12 +1099,11 @@ impl Buffer {
                     pending_writes.consume(staging_buffer);
                     pending_writes.insert_buffer(self);
                 }
+                None
             }
-            BufferMapState::Idle => {
-                return Err(BufferAccessError::NotMapped);
-            }
+            BufferMapState::Idle => None,
             BufferMapState::Waiting(pending) => {
-                return Ok(Some((pending.op, Err(BufferAccessError::MapAborted))));
+                Some((pending.op, Err(BufferAccessError::MapAborted)))
             }
             BufferMapState::Active {
                 mapping,
@@ -1121,9 +1132,9 @@ impl Buffer {
                     }
                 }
                 unsafe { device.raw().unmap_buffer(raw_buf) };
+                None
             }
         }
-        Ok(None)
     }
 
     pub fn destroy(self: &Arc<Self>) {
@@ -1142,7 +1153,7 @@ impl Buffer {
             return;
         };
 
-        let _ = self.unmap();
+        self.unmap();
 
         let temp = {
             let mut snatch_guard = device.snatchable_lock.write();
@@ -1805,6 +1816,11 @@ impl Texture {
         let device = &self.device;
         device.check_is_valid()?;
 
+        if desc.swizzle != wgt::TextureComponentSwizzle::default() {
+            self.device
+                .require_features(wgt::Features::TEXTURE_COMPONENT_SWIZZLE)?;
+        }
+
         let snatch_guard = device.snatchable_lock.read();
 
         let texture_raw = self.try_inner(&snatch_guard)?.raw();
@@ -2076,6 +2092,10 @@ impl Texture {
                 break 'error Err(TextureViewNotRenderableReason::Aspects(aspects));
             }
 
+            if desc.swizzle != wgt::TextureComponentSwizzle::default() {
+                break 'error Err(TextureViewNotRenderableReason::Swizzle(desc.swizzle));
+            }
+
             Ok(self
                 .desc
                 .compute_render_extent(desc.range.base_mip_level, desc.range.aspect.to_plane()))
@@ -2130,6 +2150,7 @@ impl Texture {
             dimension: resolved_dimension,
             usage,
             range: resolved_range,
+            swizzle: desc.swizzle,
         };
 
         let raw = unsafe { device.raw().create_texture_view(texture_raw, &hal_desc) }
@@ -2153,6 +2174,7 @@ impl Texture {
                 dimension: resolved_dimension,
                 usage: resolved_usage,
                 range: resolved_range,
+                swizzle: desc.swizzle,
             },
             format_features: self.format_features,
             samples: self.desc.sample_count,
@@ -2170,16 +2192,14 @@ impl Texture {
         Ok(view)
     }
 
-    pub fn create_view(
-        self: &Arc<Self>,
-        desc: &TextureViewDescriptor,
-    ) -> (Arc<TextureView>, Option<CreateTextureViewError>) {
+    pub fn create_view(self: &Arc<Self>, desc: &TextureViewDescriptor) -> Arc<TextureView> {
         profiling::scope!("Texture::create_view");
 
-        let (view, error) = match self.create_view_inner(desc) {
-            Ok(view) => (view, None),
-            Err(e) => (TextureView::invalid(&self.device, self, desc), Some(e)),
-        };
+        let view = self.create_view_inner(desc).unwrap_or_else(|err| {
+            self.device
+                .handle_error(err, desc.label.as_deref(), "Texture::create_view failed");
+            TextureView::invalid(&self.device, self, desc)
+        });
 
         api_log!(
             "Texture::create_view({:?}) -> {:?}",
@@ -2198,11 +2218,24 @@ impl Texture {
             });
         }
 
-        (view, error)
+        view
     }
 
     pub fn descriptor(&self) -> &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>> {
         &self.desc
+    }
+
+    /// Marks the texture's entire contents as already initialized,
+    /// skipping wgpu-core's lazy zero-initialization of it.
+    ///
+    /// # Safety
+    ///
+    /// The entire contents of the texture must already be initialized.
+    pub unsafe fn mark_externally_initialized(&self) {
+        let mut initialization_status = self.initialization_status.write();
+        for mip_tracker in initialization_status.mips.iter_mut() {
+            mip_tracker.drain(0..self.desc.array_layer_count());
+        }
     }
 }
 
@@ -2432,6 +2465,10 @@ pub struct TextureViewDescriptor<'a> {
     pub usage: Option<wgt::TextureUsages>,
     /// Range within the texture that is accessible via this view.
     pub range: wgt::ImageSubresourceRange,
+    /// Texture component swizzle.
+    /// When the texture view is accessed by a shader, the red/green/blue/alpha channels are replaced
+    /// by the value corresponding to the component specified in [`wgt::TextureComponentSwizzle`].
+    pub swizzle: wgt::TextureComponentSwizzle,
 }
 
 #[derive(Debug)]
@@ -2441,6 +2478,7 @@ pub(crate) struct HalTextureViewDescriptor {
     pub usage: wgt::TextureUsages,
     pub dimension: wgt::TextureViewDimension,
     pub range: wgt::ImageSubresourceRange,
+    pub swizzle: wgt::TextureComponentSwizzle,
 }
 
 impl HalTextureViewDescriptor {
@@ -2463,6 +2501,8 @@ pub enum TextureViewNotRenderableReason {
         "The aspects of this texture view are a subset of the aspects in the original texture. Aspects: {0:?}"
     )]
     Aspects(hal::FormatAspects),
+    #[error("The texture view swizzle must be identity. View swizzle: {0:?}")]
+    Swizzle(wgt::TextureComponentSwizzle),
 }
 
 #[derive(Debug)]
@@ -2579,6 +2619,7 @@ impl TextureView {
                     wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
                 }),
                 range: desc.range,
+                swizzle: desc.swizzle,
             },
             format_features: texture.format_features,
             samples: texture.desc.sample_count,

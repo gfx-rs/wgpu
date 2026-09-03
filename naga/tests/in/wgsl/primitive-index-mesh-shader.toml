@@ -1,0 +1,13 @@
+capabilities = "MESH_SHADER | PRIMITIVE_INDEX"
+targets = "WGSL | SPIRV | HLSL | METAL"
+
+[spv]
+version = [1, 4]
+separate_entry_points = true
+capabilities = ["MeshShadingEXT"]
+
+[msl]
+lang_version = [3, 0]
+
+[hlsl]
+shader_model = "V6_5"

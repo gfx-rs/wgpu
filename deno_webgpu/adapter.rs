@@ -118,6 +118,7 @@ impl GPUAdapter {
   }
 
   #[async_method(fake)]
+  #[reentrant]
   #[global]
   fn request_device(
     &self,

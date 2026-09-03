@@ -10,8 +10,7 @@ use objc2_metal::{
 use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
-use core::sync::atomic;
-use wgpu_sync::{Mutex, OnceCell};
+use wgpu_sync::{atomic, Mutex, OnceCell};
 
 use crate::metal::QueueShared;
 
@@ -1180,6 +1179,10 @@ impl super::CapabilitiesQuery {
                 tvos = 16.0,
                 visionos = 1.0
             ),
+            texture_component_swizzle: family_check
+                && (metal3
+                    || device.supportsFamily(MTLGPUFamily::Mac2)
+                    || device.supportsFamily(MTLGPUFamily::Apple2)),
         }
     }
 
@@ -1201,6 +1204,7 @@ impl super::CapabilitiesQuery {
             | F::PASSTHROUGH_SHADERS
             | F::EXTERNAL_TEXTURE;
 
+        features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
         features.set(F::FLOAT32_BLENDABLE, true);
         features.set(F::INDIRECT_FIRST_INSTANCE, self.indirect_draw_dispatch);
@@ -1567,6 +1571,7 @@ impl super::CapabilitiesQuery {
             timestamp_query_support: self.timestamp_query_support,
             supports_memoryless_storage: self.supports_memoryless_storage,
             mesh_shaders: self.mesh_shaders,
+            texture_component_swizzle: self.texture_component_swizzle,
         }
     }
 

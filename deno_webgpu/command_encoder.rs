@@ -60,6 +60,7 @@ impl GPUCommandEncoder {
     // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
   }
 
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   fn begin_render_pass(
@@ -139,6 +140,7 @@ impl GPUCommandEncoder {
     })
   }
 
+  #[reentrant]
   #[cppgc]
   fn begin_compute_pass(
     &self,
@@ -253,6 +255,7 @@ impl GPUCommandEncoder {
     Ok(())
   }
 
+  #[reentrant]
   #[required(3)]
   #[undefined]
   fn copy_buffer_to_texture(
@@ -283,6 +286,7 @@ impl GPUCommandEncoder {
     );
   }
 
+  #[reentrant]
   #[required(3)]
   #[undefined]
   fn copy_texture_to_buffer(
@@ -313,6 +317,7 @@ impl GPUCommandEncoder {
     );
   }
 
+  #[reentrant]
   #[required(3)]
   #[undefined]
   fn copy_texture_to_texture(
@@ -375,6 +380,7 @@ impl GPUCommandEncoder {
     );
   }
 
+  #[reentrant]
   #[cppgc]
   fn finish(
     &self,

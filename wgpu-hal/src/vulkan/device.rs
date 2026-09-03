@@ -1217,8 +1217,6 @@ impl crate::Device for super::Device {
                 unsafe { self.shared.raw.destroy_image(image.raw, None) };
             })?;
 
-        self.counters.texture_memory.add(allocation.size() as isize);
-
         unsafe {
             self.shared
                 .raw
@@ -1228,6 +1226,9 @@ impl crate::Device for super::Device {
         .inspect_err(|_| {
             unsafe { self.shared.raw.destroy_image(image.raw, None) };
         })?;
+
+        self.counters.texture_memory.add(allocation.size() as isize);
+        self.counters.textures.add(1);
 
         Ok(unsafe {
             self.texture_from_raw(
@@ -1270,6 +1271,30 @@ impl crate::Device for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
+        let mut swizzle = desc.swizzle;
+
+        // https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#textures-component-swizzle
+        // If the image view has a depth/stencil format and the VkComponentSwizzle is VK_COMPONENT_SWIZZLE_ONE,
+        // and VkPhysicalDeviceMaintenance5Properties::depthStencilSwizzleOneSupport is not VK_TRUE,
+        // the value of the texel after swizzle is undefined.
+        //
+        // We convert `One` to `A` which should sample as 1.0,
+        // according to https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#images-component-substitution
+        if texture.format.is_depth_stencil_format()
+            && !self.shared.private_caps.depth_stencil_swizzle_one_support
+        {
+            for component in [
+                &mut swizzle.r,
+                &mut swizzle.g,
+                &mut swizzle.b,
+                &mut swizzle.a,
+            ] {
+                if *component == wgt::ComponentSwizzle::One {
+                    *component = wgt::ComponentSwizzle::A;
+                }
+            }
+        }
+
         let subresource_range = conv::map_subresource_range(&desc.range, texture.format);
         let raw_format = self.shared.private_caps.map_texture_format(desc.format);
         let mut vk_info = vk::ImageViewCreateInfo::default()
@@ -1277,7 +1302,8 @@ impl crate::Device for super::Device {
             .image(texture.raw)
             .view_type(conv::map_view_dimension(desc.dimension))
             .format(raw_format)
-            .subresource_range(subresource_range);
+            .subresource_range(subresource_range)
+            .components(conv::map_texture_component_swizzle(swizzle));
         let layers =
             NonZeroU32::new(subresource_range.layer_count).expect("Unexpected zero layer count");
 
@@ -3005,7 +3031,7 @@ impl crate::Device for super::Device {
         })
     }
 
-    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {
         const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
         let temp = RawTlasInstance {
             transform: instance.transform,
@@ -3016,7 +3042,7 @@ impl crate::Device for super::Device {
                 & MAX_U24),
             acceleration_structure_reference: instance.blas_address,
         };
-        bytemuck::bytes_of(&temp).to_vec()
+        to_extend.extend_from_slice(bytemuck::bytes_of(&temp))
     }
 
     fn check_if_oom(&self) -> Result<(), crate::DeviceError> {

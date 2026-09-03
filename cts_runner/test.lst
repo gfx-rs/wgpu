@@ -59,6 +59,7 @@ webgpu:api,operation,rendering,depth:*
 webgpu:api,operation,rendering,draw:*
 fails-if(dx12,vulkan) webgpu:api,operation,sampling,*
 webgpu:api,operation,shader_module,compilation_info:*
+webgpu:api,operation,texture_view,texture_component_swizzle:*
 webgpu:api,operation,uncapturederror:iff_uncaptured:*
 //FAIL: webgpu:api,operation,uncapturederror:onuncapturederror_order_wrt_addEventListener
 // There are also two unimplemented SKIPs in uncapturederror not enumerated here.
@@ -72,7 +73,15 @@ webgpu:api,validation,buffer,create:size,*
 webgpu:api,validation,buffer,create:usage,*
 webgpu:api,validation,buffer,destroy:*
 webgpu:api,validation,capability_checks,features,clip_distances:*
+webgpu:api,validation,capability_checks,features,query_types:createQuerySet:*
+webgpu:api,validation,capability_checks,features,texture_component_swizzle:*
+webgpu:api,validation,capability_checks,features,texture_formats:color_target_state:*
+webgpu:api,validation,capability_checks,features,texture_formats:depth_stencil_state:*
 webgpu:api,validation,capability_checks,features,texture_formats:render_bundle_encoder_descriptor_depth_stencil_format:*
+webgpu:api,validation,capability_checks,features,texture_formats:storage_texture_binding_layout:*
+webgpu:api,validation,capability_checks,features,texture_formats:texture_descriptor_view_formats:*
+webgpu:api,validation,capability_checks,features,texture_formats:texture_descriptor:*
+webgpu:api,validation,capability_checks,features,texture_formats:texture_view_descriptor:*
 webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
 webgpu:api,validation,capability_checks,limits,maxBindingsPerBindGroup:validate,*
 webgpu:api,validation,capability_checks,limits,maxBufferSize:*
@@ -376,8 +385,7 @@ webgpu:shader,validation,decl,immediate:binding_attributes:*
 webgpu:shader,validation,decl,immediate:entry_point_interface:*
 webgpu:shader,validation,decl,immediate:pointers:*
 webgpu:shader,validation,decl,immediate:scope:*
-//FAIL: Fixed array should be disallowed in immediates
-// webgpu:shader,validation,decl,immediate:store_type,invalid:*
+webgpu:shader,validation,decl,immediate:store_type,invalid:*
 webgpu:shader,validation,decl,immediate:store_type,valid:*
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_neg"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_one"

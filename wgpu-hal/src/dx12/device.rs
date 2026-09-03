@@ -820,7 +820,9 @@ impl crate::Device for super::Device {
             MipLODBias: 0f32,
             MaxAnisotropy: desc.anisotropy_clamp as u32,
 
-            ComparisonFunc: conv::map_comparison(desc.compare.unwrap_or_default()),
+            ComparisonFunc: desc
+                .compare
+                .map_or(Direct3D12::D3D12_COMPARISON_FUNC_NONE, conv::map_comparison),
             BorderColor: border_color,
             MinLOD: desc.lod_clamp.start,
             MaxLOD: desc.lod_clamp.end,
@@ -2690,7 +2692,7 @@ impl crate::Device for super::Device {
         Some(self.mem_allocator.generate_report())
     }
 
-    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {
         const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
         let temp = Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC {
             Transform: instance.transform,
@@ -2701,7 +2703,7 @@ impl crate::Device for super::Device {
 
         wgt::bytemuck_wrapper!(unsafe struct Desc(Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC));
 
-        bytemuck::bytes_of(&Desc::wrap(temp)).to_vec()
+        to_extend.extend_from_slice(bytemuck::bytes_of(&Desc::wrap(temp)))
     }
 
     fn check_if_oom(&self) -> Result<(), crate::DeviceError> {
