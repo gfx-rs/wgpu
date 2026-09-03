@@ -256,7 +256,7 @@ impl GPUBuffer {
       ab.detach(None);
     }
 
-    self.wgpu_buffer.unmap().map_err(BufferError::Access)?;
+    self.wgpu_buffer.unmap();
 
     *self.map_state.borrow_mut() = "unmapped";
 

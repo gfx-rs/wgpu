@@ -1709,13 +1709,7 @@ impl dispatch::BufferInterface for CoreBuffer {
     }
 
     fn unmap(&self) {
-        match self.wgpu_buffer.unmap() {
-            Ok(()) => (),
-            Err(cause) => self
-                .wgpu_buffer
-                .device()
-                .handle_error_nolabel(cause, "Buffer::buffer_unmap"),
-        }
+        self.wgpu_buffer.unmap();
     }
 
     fn destroy(&self) {

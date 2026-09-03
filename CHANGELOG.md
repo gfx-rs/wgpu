@@ -132,6 +132,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Remove the never-constructed `CreateBlasError::InvalidAabbStride` variant. `create_blas` takes no stride, so it could never be produced; AABB stride is validated at build time as `BuildAccelerationStructureError::InvalidAabbStride`. By @mstampfli in [#9935](https://github.com/gfx-rs/wgpu/pull/9935).
 
 - Added `DownlevelFlags::LINEAR_INTERPOLATION`, indicating that the adapter supports `@interpolate(linear)`. It is absent on GLES/WebGL2, since GLSL ES has no `noperspective` qualifier. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
+- `Buffer::unmap` will not raise any validation errors anymore per specification. By @sagudev in [#10242](https://github.com/gfx-rs/wgpu/pull/10242).
 
 #### naga
 
@@ -168,6 +169,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Reject bind group layout entries with `RAY_GENERATION`, `ANY_HIT`, `CLOSEST_HIT`, or `MISS` visibility unless `Features::EXPERIMENTAL_RAY_TRACING_PIPELINES` is enabled. By @teoxoy in [#10042](https://github.com/gfx-rs/wgpu/issues/10042).
 - Numeric types must now match exactly on inter-stage interfaces. Previously, the receiving type was only required to be a subtype of the originating type. By @andyleiserson in [#9999](https://github.com/gfx-rs/wgpu/pull/9999).
 - Relaxed requirement that the pipeline scalar type for a color output be at least as wide as the shader output type. Now, only the scalar kind must match. By @andyleiserson in [#9999](https://github.com/gfx-rs/wgpu/pull/9999).
+- Disallow array types in `var<immediate>`. By @beicause in [#10081](https://github.com/gfx-rs/wgpu/pull/10081).
 
 #### Naga
 
@@ -216,6 +218,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 #### General
 
 - Fix the `BlasAabbGeometry` docs to refer to the `stride` field instead of a nonexistent `size.stride`, and document the packed AABB buffer layout (each primitive a minimum then a maximum corner, two consecutive `vec3<f32>`). By @mstampfli in [#9934](https://github.com/gfx-rs/wgpu/pull/9934).
+- Fix stale `poll()` docs that described a boolean return value instead of `PollStatus`/`PollError`. By @helgev-in-arcana in [#10151](https://github.com/gfx-rs/wgpu/pull/10151).
 
 ### Dependency Updates
 
