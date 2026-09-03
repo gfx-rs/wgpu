@@ -268,7 +268,7 @@ fn unmap_while_visible() {
 /// [#9959]: https://github.com/gfx-rs/wgpu/pull/9959
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
-fn unmap_racing_map_never_spuriously_fails() {
+fn concurrent_mapping_and_unmapping() {
     use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
