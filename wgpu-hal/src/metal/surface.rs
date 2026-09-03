@@ -226,9 +226,11 @@ static COLOR_SPACES: Lazy<Result<ColorSpaces, crate::SurfaceError>> = Lazy::new(
         lib: &libloading::Library,
         name: &core::ffi::CStr,
     ) -> Result<&'static CFString, crate::SurfaceError> {
-        let sym = unsafe { lib.get(name.to_bytes_with_nul()) }
+        // The symbol is the address of the global holding the `CFString`
+        // pointer, so an extra dereference is needed to read it.
+        let sym = unsafe { lib.get::<*const &'static CFString>(name.to_bytes_with_nul()) }
             .map_err(|_| crate::SurfaceError::Other("error resolving symbol in CoreGraphics"))?;
-        Ok(*sym)
+        Ok(unsafe { **sym })
     }
     let extended_display_p3 = lookup(&lib, c"kCGColorSpaceExtendedDisplayP3")?;
     let itur_bt2100_pq = lookup(&lib, c"kCGColorSpaceITUR_2100_PQ")?;
@@ -267,7 +269,7 @@ impl crate::Surface for super::Surface {
         match config.composite_alpha_mode {
             wgt::CompositeAlphaMode::Opaque => render_layer.setOpaque(true),
             wgt::CompositeAlphaMode::PreMultiplied => render_layer.setOpaque(false),
-            _ => (),
+            m => unreachable!("Unsupported alpha mode: {m:?}"),
         }
 
         let device_raw = &device.shared.device;

@@ -3,7 +3,7 @@ struct OurVertexShaderOutput {
     @location(0) texcoord: vec2<f32>,
 }
 
-@vertex 
+@vertex
 fn vs(@location(0) xy: vec2<f32>) -> OurVertexShaderOutput {
     var vsOutput: OurVertexShaderOutput;
 
@@ -12,7 +12,7 @@ fn vs(@location(0) xy: vec2<f32>) -> OurVertexShaderOutput {
     return _e6;
 }
 
-@fragment 
+@fragment
 fn fs() -> @location(0) vec4<f32> {
     return vec4<f32>(1f, 0f, 0f, 1f);
 }

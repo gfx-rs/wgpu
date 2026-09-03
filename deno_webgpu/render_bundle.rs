@@ -52,6 +52,7 @@ impl GPURenderBundleEncoder {
     // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
   }
 
+  #[reentrant]
   #[cppgc]
   fn finish(
     &self,

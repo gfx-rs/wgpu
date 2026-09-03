@@ -21,7 +21,7 @@ fn function_() {
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main(@builtin(local_invocation_index) param: u32) {
     global = param;
     function_();

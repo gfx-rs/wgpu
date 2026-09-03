@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "cts_runner",
     "deno_webgpu",
@@ -49,6 +49,8 @@ default-members = [
     "tests",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
+    "wgpu-core-remote",
+    "wgpu-core-remote-types",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
@@ -93,10 +95,10 @@ wgpu = { version = "30.0.0", path = "./wgpu", default-features = false, features
     "angle",
     "static-dxc",
 ] }
-wgpu-core = { version = "30.0.0", path = "./wgpu-core" }
+wgpu-core = { version = "30.0.0", path = "./wgpu-core", default-features = false }
 wgpu-core-remote = { version = "30.0.0", path = "./wgpu-core-remote" }
 wgpu-core-remote-types = { version = "30.0.0", path = "./wgpu-core-remote-types" }
-wgpu-hal = { version = "30.0.0", path = "./wgpu-hal" }
+wgpu-hal = { version = "30.0.0", path = "./wgpu-hal", default-features = false }
 wgpu-naga-bridge = { version = "30.0.0", path = "./wgpu-naga-bridge" }
 wgpu-sync = { version = "30.0.0", path = "./wgpu-sync", default-features = false }
 wgpu-test = { version = "30.0.0", path = "./tests" }
@@ -199,6 +201,7 @@ ron = "0.12"
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
 rustc-hash = { version = "1.1", default-features = false }
+scopeguard = { version = "1.2", default-features = false }
 serde_json = "1.0.143"
 serde = { version = "1.0.225", default-features = false }
 shell-words = "1"

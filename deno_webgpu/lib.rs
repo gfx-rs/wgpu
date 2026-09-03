@@ -175,6 +175,7 @@ impl GPU {
   }
 
   #[async_method]
+  #[reentrant]
   #[cppgc]
   async fn request_adapter(
     &self,
@@ -323,6 +324,43 @@ fn transform_label<'a>(label: String) -> Option<std::borrow::Cow<'a, str>> {
     None
   } else {
     Some(std::borrow::Cow::Owned(label))
+  }
+}
+
+fn map_texture_component_swizzle(
+  swizzle: &str,
+) -> Result<wgpu_types::TextureComponentSwizzle, deno_error::JsErrorBox> {
+  if swizzle.len() != 4 {
+    return Err(deno_error::JsErrorBox::type_error(
+          "`TextureViewDescriptor::swizzle` must be exactly a four-character string",
+        ));
+  }
+  let mut c = swizzle.chars();
+  let r = map_component_swizzle(c.next())?;
+  let g = map_component_swizzle(c.next())?;
+  let b = map_component_swizzle(c.next())?;
+  let a = map_component_swizzle(c.next())?;
+
+  Ok(wgpu_types::TextureComponentSwizzle { r, g, b, a })
+}
+
+fn map_component_swizzle(
+  swizzle: Option<char>,
+) -> Result<wgpu_types::ComponentSwizzle, deno_error::JsErrorBox> {
+  match swizzle {
+    Some('0') => Ok(wgpu_types::ComponentSwizzle::Zero),
+    Some('1') => Ok(wgpu_types::ComponentSwizzle::One),
+    Some('r') => Ok(wgpu_types::ComponentSwizzle::R),
+    Some('g') => Ok(wgpu_types::ComponentSwizzle::G),
+    Some('b') => Ok(wgpu_types::ComponentSwizzle::B),
+    Some('a') => Ok(wgpu_types::ComponentSwizzle::A),
+    None => Err(deno_error::JsErrorBox::type_error(
+      "`TextureViewDescriptor::swizzle` \
+      must be exactly a four-character string",
+    )),
+    Some(_) => Err(deno_error::JsErrorBox::type_error(
+      "Invalid character for texture component swizzle",
+    )),
   }
 }
 

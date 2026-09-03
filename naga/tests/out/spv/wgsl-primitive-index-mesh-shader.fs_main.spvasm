@@ -1,0 +1,51 @@
+; SPIR-V
+; Version: 1.4
+; Generator: rspirv
+; Bound: 26
+OpCapability Shader
+OpCapability MeshShadingEXT
+OpExtension "SPV_EXT_mesh_shader"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %20 "fs_main" %15 %18
+OpExecutionMode %20 OriginUpperLeft
+OpMemberDecorate %5 0 Offset 0
+OpMemberDecorate %8 0 Offset 0
+OpMemberDecorate %8 1 Offset 12
+OpDecorate %9 ArrayStride 16
+OpDecorate %11 ArrayStride 16
+OpMemberDecorate %13 0 Offset 0
+OpMemberDecorate %13 1 Offset 48
+OpMemberDecorate %13 2 Offset 64
+OpMemberDecorate %13 3 Offset 68
+OpDecorate %15 BuiltIn PrimitiveId
+OpDecorate %15 Flat
+OpDecorate %18 Location 0
+%2 = OpTypeVoid
+%4 = OpTypeFloat 32
+%3 = OpTypeVector %4 4
+%5 = OpTypeStruct %3
+%6 = OpTypeInt 32 0
+%7 = OpTypeVector %6 3
+%8 = OpTypeStruct %7 %6
+%10 = OpConstant  %6  3
+%9 = OpTypeArray %5 %10
+%12 = OpConstant  %6  1
+%11 = OpTypeArray %8 %12
+%13 = OpTypeStruct %9 %11 %6 %6
+%16 = OpTypePointer Input %6
+%15 = OpVariable  %16  Input
+%19 = OpTypePointer Output %3
+%18 = OpVariable  %19  Output
+%21 = OpTypeFunction %2
+%22 = OpConstant  %4  1
+%20 = OpFunction  %2  None %21
+%14 = OpLabel
+%17 = OpLoad  %6  %15
+OpBranch %23
+%23 = OpLabel
+%24 = OpConvertUToF  %4  %17
+%25 = OpCompositeConstruct  %3  %24 %22 %22 %22
+OpStore %18 %25
+OpReturn
+OpFunctionEnd
