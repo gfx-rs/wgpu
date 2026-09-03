@@ -1028,7 +1028,12 @@ impl Drop for Surface {
         profiling::scope!("Surface::drop");
 
         api_log!("Surface::drop {:?}", self as *const _);
-        if let Some(present) = self.presentation.lock().take() {
+        if let Some(mut present) = self.presentation.lock().take() {
+            // `present` can still retain the HAL acquire semaphore after a
+            // failed `Surface::present` on a lost device. Release it before
+            // unconfiguring the swapchain.
+            drop(present.acquired_texture.take());
+
             for (&backend, surface) in &self.surface_per_backend {
                 if backend == present.device.backend() {
                     unsafe { surface.unconfigure(present.device.raw()) };
