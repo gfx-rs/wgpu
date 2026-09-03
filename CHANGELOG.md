@@ -92,6 +92,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Added `TextureDescriptor::theoretical_memory_footprint` to estimate memory footprint of a texture. By @sagudev in [#10032](https://github.com/gfx-rs/wgpu/pull/10032).
 - `wgpu::WriteOnly<[_]>` now implements `Send`. By @kpreid in [#10163](https://github.com/gfx-rs/wgpu/pull/10163).
 - Added `Texture::mark_externally_initialized()` to stop a texture from being lazily cleared if it was written to externally (e.g. via `as_hal`). By @R-Cramer4 in [#10075](https://github.com/gfx-rs/wgpu/pull/10075).
+- Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
 
 #### Hal
 

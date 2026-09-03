@@ -464,6 +464,41 @@ impl Buffer {
     }
 }
 
+#[cfg(wgpu_core)]
+impl Buffer {
+    /// Create a new buffer of wgpu from a wgpu-core buffer.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_buffer` - wgpu-core buffer.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the current state of the wgpu-core buffer is compatible with the provided `mapped_range`.
+    /// Changes to the wgpu-core buffer's state after this call may lead to undefined behavior if they are not compatible with the provided `mapped_range`.
+    pub unsafe fn from_core(
+        core_buffer: alloc::sync::Arc<wgc::resource::Buffer>,
+        mapped_range: Option<Range<BufferAddress>>,
+    ) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreBuffer::from_core(core_buffer).into(),
+            map_context: Arc::new(Mutex::new(MapContext::new(mapped_range))),
+        }
+    }
+
+    /// Returns the underlying wgpu-core buffer if this `Buffer` is on the wgpu-core backend, otherwise `None`.
+    ///
+    /// # Safety
+    ///
+    /// Returning the underlying wgpu-core buffer allows for direct manipulation of the buffer's state,
+    /// which can lead to undefined behavior if not done carefully.
+    /// The caller must ensure that any operations performed on the returned buffer are compatible with the current state of the `Buffer` and its mapping context
+    /// or not use this buffer after calling this function.
+    pub unsafe fn as_core(&self) -> Option<alloc::sync::Arc<wgc::resource::Buffer>> {
+        self.inner.as_core_opt().map(|cd| cd.as_core())
+    }
+}
+
 /// A slice of a [`Buffer`], to be mapped, used for vertex or index data, or the like.
 ///
 /// You can create a `BufferSlice` by calling [`Buffer::slice`]:

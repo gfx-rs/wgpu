@@ -92,6 +92,27 @@ impl TextureView {
     }
 }
 
+#[cfg(wgpu_core)]
+impl TextureView {
+    /// Create a new texture view of wgpu from a wgpu-core texture view.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_texture_view` - wgpu-core texture view.
+    pub fn from_core(core_texture_view: alloc::sync::Arc<wgc::resource::TextureView>) -> Self {
+        let texture = Texture::from_core(core_texture_view.texture().clone());
+        Self {
+            inner: crate::backend::wgpu_core::CoreTextureView::from_core(core_texture_view).into(),
+            texture,
+        }
+    }
+
+    /// Returns the underlying wgpu-core device if this `Device` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::resource::TextureView>> {
+        self.inner.as_core_opt().map(|cd| cd.as_core())
+    }
+}
+
 /// Describes a [`TextureView`].
 ///
 /// For use with [`Texture::create_view`].
