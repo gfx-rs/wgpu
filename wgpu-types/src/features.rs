@@ -1856,7 +1856,7 @@ bitflags_array! {
         /// Supported Platforms:
         /// - Vulkan
         /// - Metal
-        /// - OpenGL
+        /// - OpenGL (native only; WebGL requires block-aligned BC textures)
         /// - DX12 (only when `UnalignedBlockTexturesSupported` is true in
         ///   `D3D12_FEATURE_DATA_D3D12_OPTIONS8`)
         ///
