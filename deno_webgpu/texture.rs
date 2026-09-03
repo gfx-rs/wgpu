@@ -8,6 +8,7 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
+use wgpu_core::resource::Labeled;
 use wgpu_core::resource::ParentDevice;
 use wgpu_types::AstcBlock;
 use wgpu_types::AstcChannel;
@@ -45,8 +46,6 @@ pub(crate) struct GPUTextureDescriptor {
 pub struct GPUTexture {
   pub wgpu_texture: Arc<wgpu_core::resource::Texture>,
   pub default_view: OnceLock<Arc<wgpu_core::resource::TextureView>>,
-
-  pub label: String,
 
   pub size: Extent3d,
   pub mip_level_count: u32,
@@ -86,7 +85,7 @@ impl GPUTexture {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_texture.label().to_string()
   }
   #[setter]
   #[string]
@@ -168,10 +167,7 @@ impl GPUTexture {
 
     let wgpu_texture_view = self.wgpu_texture.create_view(&wgpu_descriptor);
 
-    Ok(GPUTextureView {
-      wgpu_texture_view,
-      label: descriptor.label,
-    })
+    Ok(GPUTextureView { wgpu_texture_view })
   }
 }
 
@@ -251,7 +247,6 @@ impl From<GPUTextureAspect> for TextureAspect {
 
 pub struct GPUTextureView {
   pub wgpu_texture_view: Arc<wgpu_core::resource::TextureView>,
-  pub label: String,
 }
 
 impl WebIdlInterfaceConverter for GPUTextureView {
@@ -276,7 +271,7 @@ impl GPUTextureView {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_texture_view.label().to_string()
   }
   #[setter]
   #[string]

@@ -13,6 +13,7 @@ use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 use wgpu_core::device::HostMap as MapMode;
+use wgpu_core::resource::Labeled as _;
 
 use crate::error::GPUGenericError;
 
@@ -63,8 +64,6 @@ pub struct GPUBuffer {
   pub wgpu_buffer: Arc<wgpu_core::resource::Buffer>,
   pub wgpu_device: Arc<wgpu_core::device::Device>,
 
-  pub label: String,
-
   pub size: u64,
   pub usage: u32,
 
@@ -95,7 +94,7 @@ impl GPUBuffer {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_buffer.label().to_string()
   }
   #[setter]
   #[string]
