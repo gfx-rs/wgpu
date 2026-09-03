@@ -192,7 +192,6 @@ impl GPUDevice {
     Ok(GPUBuffer {
       wgpu_buffer,
       wgpu_device: self.wgpu_device.clone(),
-      size: descriptor.size,
       usage: descriptor.usage,
       map_state: RefCell::new(if descriptor.mapped_at_creation {
         "mapped"
@@ -420,7 +419,7 @@ impl GPUDevice {
             BindingResource::Buffer(wgpu_core::binding_model::BufferBinding {
               buffer: buffer.wgpu_buffer.clone(),
               offset: 0,
-              size: Some(buffer.size),
+              size: Some(buffer.wgpu_buffer.size()),
             })
           }
           GPUBindingResource::BufferBinding(buffer_binding) => {

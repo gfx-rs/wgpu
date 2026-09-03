@@ -64,7 +64,6 @@ pub struct GPUBuffer {
   pub wgpu_buffer: Arc<wgpu_core::resource::Buffer>,
   pub wgpu_device: Arc<wgpu_core::device::Device>,
 
-  pub size: u64,
   pub usage: u32,
 
   pub map_state: RefCell<&'static str>,
@@ -105,7 +104,7 @@ impl GPUBuffer {
   #[getter]
   #[number]
   fn size(&self) -> u64 {
-    self.size
+    self.wgpu_buffer.size()
   }
   #[getter]
   fn usage(&self) -> u32 {
