@@ -178,28 +178,28 @@ pub struct Limits {
     /// Amount of storage buffers visible in a vertex shader stage. Defaults to 8. Higher is "better".
     ///
     /// Outside of compat mode (which is not implemented, see
-    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is clamped to the value
-    /// of `max_storage_buffers_per_shader_stage`.
+    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is set to the value of
+    /// `max_storage_buffers_per_shader_stage`.
     pub max_storage_buffers_in_vertex_stage: u32,
     /// Amount of storage buffers visible in a fragment shader stage. Defaults to 8. Higher is "better".
     ///
     /// Outside of compat mode (which is not implemented, see
-    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is clamped to the value
-    /// of `max_storage_buffers_per_shader_stage`.
+    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is set to the value of
+    /// `max_storage_buffers_per_shader_stage`.
     pub max_storage_buffers_in_fragment_stage: u32,
     /// Amount of storage textures visible in a single shader stage. Defaults to 4. Higher is "better".
     pub max_storage_textures_per_shader_stage: u32,
     /// Amount of storage textures visible in a vertex shader stage. Defaults to 4. Higher is "better".
     ///
     /// Outside of compat mode (which is not implemented, see
-    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is clamped to the value
-    /// of `max_storage_textures_per_shader_stage`.
+    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is set to the value of
+    /// `max_storage_textures_per_shader_stage`.
     pub max_storage_textures_in_vertex_stage: u32,
     /// Amount of storage textures visible in a fragment shader stage. Defaults to 4. Higher is "better".
     ///
     /// Outside of compat mode (which is not implemented, see
-    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is clamped to the value
-    /// of `max_storage_textures_per_shader_stage`.
+    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is set to the value of
+    /// `max_storage_textures_per_shader_stage`.
     pub max_storage_textures_in_fragment_stage: u32,
     /// Amount of uniform buffers visible in a single shader stage. Defaults to 12. Higher is "better".
     pub max_uniform_buffers_per_shader_stage: u32,

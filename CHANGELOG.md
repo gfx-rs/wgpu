@@ -92,6 +92,16 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Added `TextureDescriptor::theoretical_memory_footprint` to estimate memory footprint of a texture. By @sagudev in [#10032](https://github.com/gfx-rs/wgpu/pull/10032).
 - `wgpu::WriteOnly<[_]>` now implements `Send`. By @kpreid in [#10163](https://github.com/gfx-rs/wgpu/pull/10163).
 - Added `Texture::mark_externally_initialized()` to stop a texture from being lazily cleared if it was written to externally (e.g. via `as_hal`). By @R-Cramer4 in [#10075](https://github.com/gfx-rs/wgpu/pull/10075).
+- Added the following members to `Limits`:
+
+    - `Limits::max_storage_buffers_in_vertex_stage`
+    - `Limits::max_storage_buffers_in_fragment_stage`
+    - `Limits::max_storage_textures_in_vertex_stage`
+    - `Limits::max_storage_textures_in_fragment_stage`
+
+    These match the limits that were added to WebGPU. Otherwise, they are not meaningfully distinct from `Limits::max_storage_{buffers,textures}_per_shader_stage`, because [compatibility mode](https://www.w3.org/TR/webgpu/#feature-level-string-compatibility) is not yet implemented (see [#8124](https://github.com/gfx-rs/wgpu/issues/8124)).
+
+    By @ErichDonGubler in [#8764](https://github.com/gfx-rs/wgpu/pull/8764)
 
 #### Hal
 

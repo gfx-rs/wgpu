@@ -168,13 +168,22 @@ pub(crate) fn adjust_raw_limits(mut limits: wgt::Limits) -> wgt::Limits {
     );
     // TODO: Remove this when compat mode is implemented, see
     // <https://github.com/gfx-rs/wgpu/issues/8124>.
-    for (per_shader_stage, in_stage) in [(
-        limits.max_storage_buffers_per_shader_stage,
-        [
-            &mut limits.max_storage_buffers_in_vertex_stage,
-            &mut limits.max_storage_buffers_in_fragment_stage,
-        ],
-    )] {
+    for (per_shader_stage, in_stage) in [
+        (
+            limits.max_storage_buffers_per_shader_stage,
+            [
+                &mut limits.max_storage_buffers_in_vertex_stage,
+                &mut limits.max_storage_buffers_in_fragment_stage,
+            ],
+        ),
+        (
+            limits.max_storage_textures_per_shader_stage,
+            [
+                &mut limits.max_storage_textures_in_vertex_stage,
+                &mut limits.max_storage_textures_in_fragment_stage,
+            ],
+        ),
+    ] {
         for stage in in_stage {
             assert_eq!(
                 *stage, 0,
