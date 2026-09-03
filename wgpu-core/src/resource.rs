@@ -943,19 +943,14 @@ impl Buffer {
     /// Other errors are returned within `BufferMapPendingClosure`.
     #[must_use]
     pub(crate) fn map(&self, snatch_guard: &SnatchGuard) -> Option<BufferMapPendingClosure> {
-        // Hold `map_state` for the whole function, deliberately.
+        // Hold the lock on `map_state` until we have updated it with the
+        // outcome of the mapping, to prevent concurrent activity from
+        // observing an intermediate state.
         //
-        // Taking it as a temporary left the state observably `Idle` for the
-        // duration of the HAL map below, so a concurrent `Buffer::unmap` saw
-        // `Idle` and failed with `NotMapped` for a buffer that was merely
-        // mid-map. Holding the guard makes that window unobservable: the unmap
-        // blocks here, then unmaps the `Active` mapping this call installs.
-        //
-        // The re-lock that previously required a temporary guard is gone; the
-        // stores below reuse this one, so there is nothing left to deadlock on.
-        //
-        // This also holds the guard across `crate::device::map_buffer`, which
-        // writes `initialization_status` — hence the new lock-rank edge.
+        // Unfortunately this does mean that we hold the guard across
+        // `crate::device::map_buffer` and the associated call to
+        // `handle_hal_error`, which may invoke a device loss callback.
+        // See <https://github.com/gfx-rs/wgpu/issues/10031>.
         let mut map_state = self.map_state.lock();
         let pending_mapping = match mem::replace(&mut *map_state, BufferMapState::Idle) {
             BufferMapState::Waiting(pending_mapping) => pending_mapping,
