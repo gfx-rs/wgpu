@@ -13,8 +13,6 @@ use crate::error::GPUGenericError;
 
 pub struct GPUQuerySet {
   pub wgpu_query_set: Arc<wgpu_core::resource::QuerySet>,
-  pub r#type: GPUQueryType,
-  pub count: u32,
 }
 
 impl WebIdlInterfaceConverter for GPUQuerySet {
@@ -56,13 +54,13 @@ impl GPUQuerySet {
   #[getter]
   #[string]
   #[rename("type")]
-  fn r#type(&self) -> &'static str {
-    self.r#type.as_str()
+  fn r#type(&self) -> String {
+    self.wgpu_query_set.descriptor().ty.to_string()
   }
 
   #[getter]
   fn count(&self) -> u32 {
-    self.count
+    self.wgpu_query_set.descriptor().count
   }
 }
 
