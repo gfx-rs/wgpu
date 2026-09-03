@@ -9,12 +9,12 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use wgpu_core::pipeline;
+use wgpu_core::resource::Labeled;
 
 use crate::error::GPUGenericError;
 
 pub struct GPUShaderModule {
   pub wgpu_shader_module: Arc<wgpu_core::pipeline::ShaderModule>,
-  pub label: String,
   pub compilation_info: v8::Global<v8::Object>,
 }
 
@@ -39,7 +39,7 @@ impl GPUShaderModule {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_shader_module.label().to_string()
   }
   #[setter]
   #[string]

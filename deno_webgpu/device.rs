@@ -15,6 +15,7 @@ use deno_error::JsErrorBox;
 use wgpu_core::binding_model::BindingResource;
 use wgpu_core::error::EmptyErrorScopeStack;
 use wgpu_core::pipeline::ProgrammableStageDescriptor;
+use wgpu_core::resource::Labeled;
 use wgpu_types::BindingType;
 
 use super::bind_group::GPUBindGroup;
@@ -47,8 +48,6 @@ pub(crate) const DEVICE_EXTERNAL_MEMORY_SIZE: i64 = 1 << 24; // 16 MB
 pub struct GPUDevice {
   pub wgpu_device: Arc<wgpu_core::device::Device>,
   pub wgpu_adapter: Arc<wgpu_core::instance::Adapter>,
-
-  pub label: String,
 
   pub features: SameObject<GPUSupportedFeatures>,
   pub limits: SameObject<GPUSupportedLimits>,
@@ -101,7 +100,7 @@ impl GPUDevice {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_device.label().to_string()
   }
   #[setter]
   #[string]
@@ -193,8 +192,6 @@ impl GPUDevice {
     Ok(GPUBuffer {
       wgpu_buffer,
       wgpu_device: self.wgpu_device.clone(),
-      label: descriptor.label,
-      size: descriptor.size,
       usage: descriptor.usage,
       map_state: RefCell::new(if descriptor.mapped_at_creation {
         "mapped"
@@ -251,10 +248,6 @@ impl GPUDevice {
     Ok(GPUTexture {
       wgpu_texture,
       default_view: Default::default(),
-      label: descriptor.label,
-      size: wgpu_descriptor.size,
-      mip_level_count: wgpu_descriptor.mip_level_count,
-      sample_count: wgpu_descriptor.sample_count,
       dimension: descriptor.dimension,
       format: descriptor.format,
       usage: GPUTextureUsageFlags(usage),
@@ -286,10 +279,7 @@ impl GPUDevice {
 
     let wgpu_sampler = self.wgpu_device.create_sampler(&wgpu_descriptor);
 
-    Ok(GPUSampler {
-      wgpu_sampler,
-      label: descriptor.label,
-    })
+    Ok(GPUSampler { wgpu_sampler })
   }
 
   #[reentrant]
@@ -366,7 +356,6 @@ impl GPUDevice {
 
     Ok(GPUBindGroupLayout {
       wgpu_bind_group_layout,
-      label: descriptor.label,
     })
   }
 
@@ -398,7 +387,6 @@ impl GPUDevice {
 
     GPUPipelineLayout {
       wgpu_pipeline_layout,
-      label: descriptor.label,
     }
   }
 
@@ -428,7 +416,7 @@ impl GPUDevice {
             BindingResource::Buffer(wgpu_core::binding_model::BufferBinding {
               buffer: buffer.wgpu_buffer.clone(),
               offset: 0,
-              size: Some(buffer.size),
+              size: Some(buffer.wgpu_buffer.size()),
             })
           }
           GPUBindingResource::BufferBinding(buffer_binding) => {
@@ -455,10 +443,7 @@ impl GPUDevice {
 
     let wgpu_bind_group = self.wgpu_device.create_bind_group(&wgpu_descriptor);
 
-    GPUBindGroup {
-      wgpu_bind_group,
-      label: descriptor.label,
-    }
+    GPUBindGroup { wgpu_bind_group }
   }
 
   #[reentrant]
@@ -489,7 +474,7 @@ impl GPUDevice {
 
     GPUShaderModule {
       wgpu_shader_module,
-      label: descriptor.label,
+
       compilation_info,
     }
   }
@@ -501,13 +486,11 @@ impl GPUDevice {
     &self,
     #[webidl] descriptor: super::compute_pipeline::GPUComputePipelineDescriptor,
   ) -> GPUComputePipeline {
-    let label = descriptor.label.clone();
     let wgpu_descriptor = transform_compute_pipeline_descriptor(descriptor);
     let wgpu_compute_pipeline =
       self.wgpu_device.create_compute_pipeline(wgpu_descriptor);
     GPUComputePipeline {
       wgpu_compute_pipeline,
-      label,
     }
   }
 
@@ -518,14 +501,12 @@ impl GPUDevice {
     &self,
     #[webidl] descriptor: super::render_pipeline::GPURenderPipelineDescriptor,
   ) -> Result<GPURenderPipeline, JsErrorBox> {
-    let label = descriptor.label.clone();
     let wgpu_descriptor =
       self.transform_render_pipeline_descriptor(descriptor)?;
     let wgpu_render_pipeline =
       self.wgpu_device.create_render_pipeline(wgpu_descriptor);
     Ok(GPURenderPipeline {
       wgpu_render_pipeline,
-      label,
     })
   }
 
@@ -542,7 +523,6 @@ impl GPUDevice {
     let resolver = v8::PromiseResolver::new(scope).unwrap();
     let promise = resolver.get_promise(scope);
 
-    let label = descriptor.label.clone();
     let wgpu_descriptor = transform_compute_pipeline_descriptor(descriptor);
     match self
       .wgpu_device
@@ -551,7 +531,6 @@ impl GPUDevice {
       Ok(wgpu_compute_pipeline) => {
         let pipeline = GPUComputePipeline {
           wgpu_compute_pipeline,
-          label,
         };
         let val = make_cppgc_object(scope, pipeline).into();
         resolver.resolve(scope, val);
@@ -579,8 +558,6 @@ impl GPUDevice {
     scope: &mut v8::HandleScope,
     #[webidl] descriptor: super::render_pipeline::GPURenderPipelineDescriptor,
   ) -> Result<v8::Global<v8::Promise>, JsErrorBox> {
-    let label = descriptor.label.clone();
-
     let wgpu_descriptor =
       self.transform_render_pipeline_descriptor(descriptor)?;
 
@@ -594,7 +571,6 @@ impl GPUDevice {
       Ok(wgpu_render_pipeline) => {
         let render_pipeline = GPURenderPipeline {
           wgpu_render_pipeline,
-          label,
         };
         let val = make_cppgc_object(scope, render_pipeline).into();
         resolver.resolve(scope, val);
@@ -640,7 +616,6 @@ impl GPUDevice {
 
     let encoder = GPUCommandEncoder {
       wgpu_command_encoder,
-      label,
       #[cfg(target_vendor = "apple")]
       weak: std::sync::OnceLock::new(),
     };
@@ -745,12 +720,7 @@ impl GPUDevice {
 
     let wgpu_query_set = self.wgpu_device.create_query_set(&wgpu_descriptor);
 
-    Ok(GPUQuerySet {
-      wgpu_query_set,
-      r#type: descriptor.r#type,
-      count: descriptor.count,
-      label: descriptor.label,
-    })
+    Ok(GPUQuerySet { wgpu_query_set })
   }
 
   #[getter]

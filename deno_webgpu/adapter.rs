@@ -223,7 +223,6 @@ impl GPUAdapter {
     let queue_obj = deno_core::cppgc::make_cppgc_object(
       scope,
       GPUQueue {
-        label: descriptor.label.clone(),
         wgpu_queue: queue,
         wgpu_device: wgpu_device.clone(),
       },
@@ -232,7 +231,6 @@ impl GPUAdapter {
 
     let device = GPUDevice {
       wgpu_device: wgpu_device.clone(),
-      label: descriptor.label,
       queue_obj,
       adapter_info: self.info.clone(),
       error_handler,

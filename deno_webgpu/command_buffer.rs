@@ -5,12 +5,12 @@ use std::sync::Arc;
 use deno_core::op2;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
+use wgpu_core::resource::Labeled as _;
 
 use crate::error::GPUGenericError;
 
 pub struct GPUCommandBuffer {
   pub wgpu_command_buffer: Arc<wgpu_core::command::CommandBuffer>,
-  pub label: String,
 }
 
 impl deno_core::webidl::WebIdlInterfaceConverter for GPUCommandBuffer {
@@ -34,7 +34,7 @@ impl GPUCommandBuffer {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_command_buffer.label().to_string()
   }
   #[setter]
   #[string]
