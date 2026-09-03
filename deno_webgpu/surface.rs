@@ -150,7 +150,6 @@ impl GPUCanvasContext {
         let texture = GPUTexture {
           wgpu_texture: output.texture.unwrap(),
           default_view: Default::default(),
-          label: "".to_string(),
           size: wgpu_types::Extent3d {
             width: *self.width.borrow(),
             height: *self.height.borrow(),

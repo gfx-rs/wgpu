@@ -9,6 +9,7 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use indexmap::IndexMap;
+use wgpu_core::resource::Labeled;
 
 use crate::bind_group_layout::GPUBindGroupLayout;
 use crate::error::GPUGenericError;
@@ -20,7 +21,6 @@ use crate::webidl::GPUPipelineLayoutOrGPUAutoLayoutMode;
 
 pub struct GPURenderPipeline {
   pub wgpu_render_pipeline: Arc<wgpu_core::pipeline::RenderPipeline>,
-  pub label: String,
 }
 
 impl WebIdlInterfaceConverter for GPURenderPipeline {
@@ -44,7 +44,7 @@ impl GPURenderPipeline {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_render_pipeline.label().to_string()
   }
   #[setter]
   #[string]
@@ -57,10 +57,8 @@ impl GPURenderPipeline {
     let wgpu_bind_group_layout =
       self.wgpu_render_pipeline.get_bind_group_layout(index);
 
-    // TODO(wgpu): needs to add a way to retrieve the label
     GPUBindGroupLayout {
       wgpu_bind_group_layout,
-      label: "".to_string(),
     }
   }
 }

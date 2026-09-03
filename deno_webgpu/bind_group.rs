@@ -14,6 +14,7 @@ use deno_core::webidl::WebIdlError;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
+use wgpu_core::resource::Labeled;
 
 use crate::buffer::GPUBuffer;
 use crate::error::GPUGenericError;
@@ -24,7 +25,6 @@ use crate::texture::GPUTextureView;
 
 pub struct GPUBindGroup {
   pub wgpu_bind_group: Arc<wgpu_core::binding_model::BindGroup>,
-  pub label: String,
 }
 
 impl WebIdlInterfaceConverter for GPUBindGroup {
@@ -48,7 +48,7 @@ impl GPUBindGroup {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_bind_group.label().to_string()
   }
   #[setter]
   #[string]
