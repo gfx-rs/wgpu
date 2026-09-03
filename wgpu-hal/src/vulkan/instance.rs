@@ -30,21 +30,6 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     let cd = unsafe { &*callback_data_ptr };
     let user_data = unsafe { &*user_data.cast::<super::DebugUtilsMessengerUserData>() };
 
-    const VUID_VKCMDENDDEBUGUTILSLABELEXT_COMMANDBUFFER_01912: i32 = 0x56146426;
-    if cd.message_id_number == VUID_VKCMDENDDEBUGUTILSLABELEXT_COMMANDBUFFER_01912 {
-        // https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/5671
-        // Versions 1.3.240 through 1.3.250 return a spurious error here if
-        // the debug range start and end appear in different command buffers.
-        if let Some(layer_properties) = user_data.validation_layer_properties.as_ref() {
-            if layer_properties.layer_description.as_ref() == c"Khronos Validation Layer"
-                && layer_properties.layer_spec_version >= vk::make_api_version(0, 1, 3, 240)
-                && layer_properties.layer_spec_version <= vk::make_api_version(0, 1, 3, 250)
-            {
-                return vk::FALSE;
-            }
-        }
-    }
-
     // Silence Vulkan Validation error "VUID-VkSwapchainCreateInfoKHR-pNext-07781"
     // This happens when a surface is configured with a size outside the allowed extent.
     // It's a false positive due to the inherent racy-ness of surface resizing.
@@ -53,30 +38,9 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         return vk::FALSE;
     }
 
-    // Silence Vulkan Validation error "VUID-VkRenderPassBeginInfo-framebuffer-04627"
-    // if the OBS layer is enabled. This is a bug in the OBS layer. As the OBS layer
-    // does not have a version number they increment, there is no way to qualify the
-    // suppression of the error to a specific version of the OBS layer.
-    //
-    // See https://github.com/obsproject/obs-studio/issues/9353
-    const VUID_VKRENDERPASSBEGININFO_FRAMEBUFFER_04627: i32 = 0x45125641;
-    if cd.message_id_number == VUID_VKRENDERPASSBEGININFO_FRAMEBUFFER_04627
-        && user_data.has_obs_layer
-    {
-        return vk::FALSE;
-    }
-
-    // Silence Vulkan Validation error "VUID-vkCmdCopyImageToBuffer-pRegions-00184".
-    // While we aren't sure yet, we suspect this is probably a VVL issue.
-    // https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/9276
-    const VUID_VKCMDCOPYIMAGETOBUFFER_PREGIONS_00184: i32 = 0x45ef177c;
-    if cd.message_id_number == VUID_VKCMDCOPYIMAGETOBUFFER_PREGIONS_00184 {
-        return vk::FALSE;
-    }
-
     // Silence Vulkan Validation error "VUID-StandaloneSpirv-None-10684".
     //
-    // This is a bug. To prevent massive noise in the tests, lets suppress it for now.
+    // This is our bug. To prevent massive noise in the tests, let's suppress it for now.
     // https://github.com/gfx-rs/wgpu/issues/7696
     const VUID_STANDALONESPIRV_NONE_10684: i32 = 0xb210f7c2_u32 as i32;
     if cd.message_id_number == VUID_STANDALONESPIRV_NONE_10684 {
@@ -85,7 +49,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
 
     let level = match message_severity {
         // We intentionally suppress info messages down to debug
-        // so that users are not innundated with info messages from the runtime.
+        // so that users are not inundated with info messages from the runtime.
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::Level::Trace,
         vk::DebugUtilsMessageSeverityFlagsEXT::INFO => log::Level::Debug,
         vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => log::Level::Warn,
