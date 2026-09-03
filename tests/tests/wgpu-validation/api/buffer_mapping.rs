@@ -263,7 +263,8 @@ fn unmap_while_visible() {
 ///
 /// At the time of writing, unmodified trunk failed this test on every run,
 /// with ~700 spurious failures per 25 000 iterations and the first one inside
-/// the first dozen iterations. The full test takes ~0.25 s in a debug build.
+/// the first dozen iterations. The full test takes ~0.25 s to 2 s, depending on machine.
+/// Failure rate is machine-dependent too, so lowering the iterations risks false negatives.
 ///
 /// [#9959]: https://github.com/gfx-rs/wgpu/pull/9959
 #[test]
