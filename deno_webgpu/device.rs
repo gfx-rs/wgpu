@@ -723,11 +723,7 @@ impl GPUDevice {
 
     let wgpu_query_set = self.wgpu_device.create_query_set(&wgpu_descriptor);
 
-    Ok(GPUQuerySet {
-      wgpu_query_set,
-      r#type: descriptor.r#type,
-      count: descriptor.count,
-    })
+    Ok(GPUQuerySet { wgpu_query_set })
   }
 
   #[getter]

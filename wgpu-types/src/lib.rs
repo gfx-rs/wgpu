@@ -510,6 +510,16 @@ pub enum QueryType {
     PipelineStatistics(PipelineStatisticsTypes),
 }
 
+impl fmt::Display for QueryType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Occlusion => f.write_str("occlusion"),
+            Self::Timestamp => f.write_str("timestamp"),
+            Self::PipelineStatistics(_) => f.write_str("pipeline-statistics"),
+        }
+    }
+}
+
 bitflags::bitflags! {
     /// Flags for which pipeline data should be recorded in a query.
     ///
