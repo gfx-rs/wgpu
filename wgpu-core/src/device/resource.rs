@@ -3680,7 +3680,6 @@ impl Device {
             }
         }
 
-        // TODO: arrayvec/smallvec, or re-use allocations
         // Record binding info for dynamic offset validation
         let mut dynamic_binding_info = Vec::new();
         // Map of binding -> shader reflected size
@@ -3692,13 +3691,13 @@ impl Device {
 
         let mut buffer_init_actions = Vec::new();
         let mut texture_init_actions = Vec::new();
-        let mut hal_entries = Vec::with_capacity(desc.entries.len());
-        let mut hal_buffers = Vec::new();
-        let mut hal_samplers = Vec::new();
-        let mut hal_textures = Vec::new();
-        let mut hal_tlas_s = Vec::new();
-        let mut hal_external_textures = Vec::new();
         let snatch_guard = self.snatchable_lock.read();
+        let mut hal_entries = SmallVec::<[_; 4]>::with_capacity(desc.entries.len());
+        let mut hal_buffers = SmallVec::<[_; 1]>::new();
+        let mut hal_samplers = SmallVec::<[_; 1]>::new();
+        let mut hal_textures = SmallVec::<[_; 8]>::new();
+        let mut hal_tlas_s = SmallVec::<[_; 1]>::new();
+        let mut hal_external_textures = SmallVec::<[_; 1]>::new();
         for entry in desc.entries.iter() {
             let binding = entry.binding;
             // Find the corresponding declaration in the layout
