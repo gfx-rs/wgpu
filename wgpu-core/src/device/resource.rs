@@ -19,8 +19,8 @@ use smallvec::SmallVec;
 use wgpu_sync::atomic::{AtomicBool, Ordering};
 use wgpu_sync::OnceCell;
 use wgt::{
-    math::align_to, ColorWrites, DeviceLostReason, TextureFormat, TextureSampleType,
-    TextureViewDimension,
+    error::WebGpuError, math::align_to, ColorWrites, DeviceLostReason, TextureFormat,
+    TextureSampleType, TextureViewDimension,
 };
 
 #[cfg(feature = "trace")]
@@ -4326,7 +4326,7 @@ impl Device {
     ) -> Arc<pipeline::ComputePipeline> {
         profiling::scope!("Device::create_compute_pipeline");
         let compute_pipeline = self
-            .create_compute_pipeline_or_error(desc.clone())
+            .create_compute_pipeline_or_error_inner(desc.clone())
             .unwrap_or_else(|err| {
                 if let pipeline::CreateComputePipelineError::Internal(ref error) = err {
                     log::error!(
@@ -4361,9 +4361,24 @@ impl Device {
     }
 
     /// Creates a compute pipeline without raising any error to device.
+    /// Device lost errors will be mapped to invalid compute pipeline
+    /// as required by specification.
     ///
     /// Corresponds to [GPUDevice.createComputePipelineAsync](https://www.w3.org/TR/webgpu/#dom-gpudevice-createcomputepipelineasync)
     pub fn create_compute_pipeline_or_error(
+        self: &Arc<Self>,
+        desc: pipeline::ComputePipelineDescriptor,
+    ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
+        let label = desc.label.to_string();
+        match self.create_compute_pipeline_or_error_inner(desc) {
+            Err(err) if err.webgpu_error_type() == wgt::error::ErrorType::DeviceLost => {
+                Ok(pipeline::ComputePipeline::invalid(self.clone(), label))
+            }
+            result => result,
+        }
+    }
+
+    fn create_compute_pipeline_or_error_inner(
         self: &Arc<Self>,
         desc: pipeline::ComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
@@ -4523,7 +4538,7 @@ impl Device {
         profiling::scope!("Device::create_render_pipeline");
 
         let render_pipeline = self
-            .create_render_pipeline_or_error(desc.clone())
+            .create_render_pipeline_or_error_inner(desc.clone())
             .unwrap_or_else(|err| {
                 if let pipeline::CreateRenderPipelineError::Internal { stage, ref error } = err {
                     log::error!("Shader translation error for stage {stage:?}: {error}");
@@ -4548,9 +4563,24 @@ impl Device {
     }
 
     /// Creates a render pipeline without raising any error to device.
+    /// Device lost errors will be mapped to invalid render pipeline
+    /// as required by specification.
     ///
     /// Corresponds to [GPUDevice.createRenderPipelineAsync](https://www.w3.org/TR/webgpu/#dom-gpudevice-createrenderpipelineasync)
     pub fn create_render_pipeline_or_error(
+        self: &Arc<Self>,
+        desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
+    ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreateRenderPipelineError> {
+        let label = desc.label.to_string();
+        match self.create_render_pipeline_or_error_inner(desc) {
+            Err(e) if e.webgpu_error_type() == wgt::error::ErrorType::DeviceLost => Ok(
+                pipeline::RenderPipeline::invalid(self.clone(), label.to_string()),
+            ),
+            result => result,
+        }
+    }
+
+    fn create_render_pipeline_or_error_inner(
         self: &Arc<Self>,
         desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
     ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreateRenderPipelineError> {
