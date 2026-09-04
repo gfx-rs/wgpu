@@ -335,9 +335,13 @@ impl<'a, T> RwLockReadGuard<'a, T> {
     // Equivalent to std::mem::forget, but preserves the information about the lock
     // rank.
     pub fn forget(this: Self) -> RankData {
+        // Skip `Drop` for both the actual lock guard (`this.inner`) and the
+        // rank-checking state guard (`this.saved`)
+        let saved = core::mem::ManuallyDrop::new(this.saved);
         core::mem::forget(this.inner);
 
-        this.saved.0
+        // Return the `RankData` so the caller can pass it to `force_unlock_read`.
+        saved.0
     }
 }
 

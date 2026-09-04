@@ -121,11 +121,13 @@ define_lock_ranks! {
     }
     rank DEVICE_SNATCHABLE_LOCK "Device::snatchable_lock" followed by {
         BUFFER_MAP_STATE,
+        COMMAND_BUFFER_DATA,
         DEVICE_COMMAND_INDICES,
         QUEUE_PENDING_WRITES,
         DEVICE_TRACKERS,
         QUEUE_LIFE_TRACKER,
         BLAS_COMPACTION_STATE,
+        COMMAND_ALLOCATOR_FREE_ENCODERS,
         BUFFER_BIND_GROUPS,
         BUFFER_INITIALIZATION_STATUS,
         BUFFER_POOL,
