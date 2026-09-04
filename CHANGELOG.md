@@ -110,6 +110,10 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Fix Naga's Metal backend crashing when a storage texture was used as a function argument. By @ErichDonGubler in [#9867](https://github.com/gfx-rs/wgpu/pull/9867).
 - Fix `max_task_workgroup_count` being misreported on pre-Apple7 devices. By @inner-daemons in [#10065](https://github.com/gfx-rs/wgpu/pull/10065).
 
+#### Metal
+
+- Fixed the MSL backend re-evaluating a loop's `break if` condition after the hoisted `continuing` block had already updated the variables it reads. Loops with a conditional backedge computed in the loop body (`OpBranchConditional` in SPIR-V, e.g. rust-gpu `while` loops) exited one iteration early or looped forever. Such conditions are now captured into a `bool` where they are computed; conditions reading state written by the `continuing` block keep the previous behavior. By @haixuanTao in [#9815](https://github.com/gfx-rs/wgpu/pull/9815).
+
 #### GLES
 
 - Add ANGLE as an opt-in OpenGL backend on Windows via `cfg(windows_angle)`, while keeping the `angle` feature for ANGLE on macOS/iOS. By @csmoe in [#9422](https://github.com/gfx-rs/wgpu/pull/9422).
