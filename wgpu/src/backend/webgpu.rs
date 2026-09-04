@@ -790,82 +790,16 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 16] = [
-    (
-        wgt::Features::DEPTH_CLIP_CONTROL,
-        webgpu_sys::GpuFeatureName::DepthClipControl,
-    ),
-    (
-        wgt::Features::DEPTH32FLOAT_STENCIL8,
-        webgpu_sys::GpuFeatureName::Depth32floatStencil8,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_BC,
-        webgpu_sys::GpuFeatureName::TextureCompressionBc,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
-        webgpu_sys::GpuFeatureName::TextureCompressionBcSliced3d,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_ETC2,
-        webgpu_sys::GpuFeatureName::TextureCompressionEtc2,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_ASTC,
-        webgpu_sys::GpuFeatureName::TextureCompressionAstc,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
-        webgpu_sys::GpuFeatureName::TextureCompressionAstcSliced3d,
-    ),
-    (
-        wgt::Features::TIMESTAMP_QUERY,
-        webgpu_sys::GpuFeatureName::TimestampQuery,
-    ),
-    (
-        wgt::Features::INDIRECT_FIRST_INSTANCE,
-        webgpu_sys::GpuFeatureName::IndirectFirstInstance,
-    ),
-    (
-        wgt::Features::SHADER_F16,
-        webgpu_sys::GpuFeatureName::ShaderF16,
-    ),
-    (
-        wgt::Features::RG11B10UFLOAT_RENDERABLE,
-        webgpu_sys::GpuFeatureName::Rg11b10ufloatRenderable,
-    ),
-    (
-        wgt::Features::BGRA8UNORM_STORAGE,
-        webgpu_sys::GpuFeatureName::Bgra8unormStorage,
-    ),
-    (
-        wgt::Features::FLOAT32_FILTERABLE,
-        webgpu_sys::GpuFeatureName::Float32Filterable,
-    ),
-    (
-        wgt::Features::FLOAT32_BLENDABLE,
-        webgpu_sys::GpuFeatureName::Float32Blendable,
-    ),
-    (
-        wgt::Features::DUAL_SOURCE_BLENDING,
-        webgpu_sys::GpuFeatureName::DualSourceBlending,
-    ),
-    (
-        wgt::Features::CLIP_DISTANCES,
-        webgpu_sys::GpuFeatureName::ClipDistances,
-    ),
-];
-
 fn map_wgt_features(supported_features: webgpu_sys::GpuSupportedFeatures) -> wgt::Features {
-    let mut features = wgt::Features::empty();
-    for (wgpu_feat, web_feat) in FEATURES_MAPPING {
-        match wasm_bindgen::JsValue::from(web_feat).as_string() {
-            Some(value) if supported_features.has(&value) => features |= wgpu_feat,
-            _ => {}
-        }
+    let mut wgpu_features = wgt::Features::default();
+    for feature in supported_features.values().into_iter() {
+        let feature = feature.expect("`GpuSupportedFeatures` elements should be valid");
+        let feature = feature
+            .as_string()
+            .expect("`GpuSupportedFeatures` should be string set");
+        wgpu_features |= feature.parse::<wgt::Features>().unwrap_or_default();
     }
-    features
+    wgpu_features
 }
 
 fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
@@ -1832,19 +1766,13 @@ impl dispatch::AdapterInterface for WebAdapter {
         let required_limits = map_js_sys_limits(&desc.required_limits);
         mapped_desc.set_required_limits(&required_limits);
 
-        let required_features = FEATURES_MAPPING
+        let required_features = desc
+            .required_features
             .iter()
-            .copied()
-            .flat_map(|(flag, value)| {
-                if desc.required_features.contains(flag) {
-                    Some(
-                        wasm_bindgen::JsValue::from(value)
-                            .dyn_into::<js_sys::JsString>()
-                            .unwrap(),
-                    )
-                } else {
-                    None
-                }
+            .map(|feat| {
+                wasm_bindgen::JsValue::from(feat.as_str())
+                    .dyn_into::<js_sys::JsString>()
+                    .unwrap()
             })
             .collect::<Vec<js_sys::JsString>>();
         mapped_desc.set_required_features(&required_features);
