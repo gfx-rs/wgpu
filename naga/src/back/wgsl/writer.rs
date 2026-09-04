@@ -1208,6 +1208,33 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::SubgroupBallotFindBit {
+                order,
+                argument,
+                result,
+            } => {
+                // Evaluate each ballot word once into a local, rather than
+                // repeatedly writing `argument.x`/`.y`/`.z`/`.w` in the select
+                // chain below.
+                const COMPONENTS: [char; 4] = ['x', 'y', 'z', 'w'];
+                let mut words: [String; 4] = core::array::from_fn(|_| String::new());
+                for (word, &component) in words.iter_mut().zip(&COMPONENTS) {
+                    write!(self.out, "{level}")?;
+                    let name = self.namer.call("");
+                    write!(self.out, "let {name} = ")?;
+                    self.write_expr(module, argument, func_ctx)?;
+                    writeln!(self.out, ".{component};")?;
+                    *word = name;
+                }
+
+                write!(self.out, "{level}")?;
+                let res_name = Baked(result).to_string();
+                self.start_named_expr(module, result, func_ctx, &res_name)?;
+                self.named_expressions.insert(result, res_name);
+
+                self.write_ballot_find_bit(&words, order, 3)?;
+                writeln!(self.out, ";")?;
+            }
             Statement::CooperativeStore { target, ref data } => {
                 let suffix = if data.row_major { "T" } else { "" };
                 write!(self.out, "{level}coopStore{suffix}(")?;
@@ -1313,6 +1340,65 @@ impl<W: Write> Writer<W> {
         }
 
         write!(self.out, " = ")?;
+        Ok(())
+    }
+
+    /// Write a polyfill for [`Statement::SubgroupBallotFindBit`], since WGSL has no
+    /// built-in for it: a chain of `select`s over the already-evaluated ballot
+    /// `words` (`words[0..4]` is `x, y, z, w`). `priority` counts up from 0 (the
+    /// lowest-priority word, used as the fallback base case) to 3 (the
+    /// highest-priority word, checked first: `x` for LSB, `w` for MSB), each
+    /// overriding the lower-priority result when that word has any bit set.
+    ///
+    /// [`Statement::SubgroupBallotFindBit`]: crate::Statement::SubgroupBallotFindBit
+    fn write_ballot_find_bit(
+        &mut self,
+        words: &[String; 4],
+        order: crate::BallotFindBitOrder,
+        priority: u32,
+    ) -> BackendResult {
+        let (word_index, base) = match (order, priority) {
+            (crate::BallotFindBitOrder::Lsb, 0) => (3, 96),
+            (crate::BallotFindBitOrder::Lsb, 1) => (2, 64),
+            (crate::BallotFindBitOrder::Lsb, 2) => (1, 32),
+            (crate::BallotFindBitOrder::Lsb, 3) => (0, 0),
+            (crate::BallotFindBitOrder::Msb, 0) => (0, 0),
+            (crate::BallotFindBitOrder::Msb, 1) => (1, 32),
+            (crate::BallotFindBitOrder::Msb, 2) => (2, 64),
+            (crate::BallotFindBitOrder::Msb, 3) => (3, 96),
+            (_, _) => unreachable!(),
+        };
+        let word = &words[word_index];
+
+        if priority == 0 {
+            self.write_ballot_find_bit_value(order, word, base)?;
+        } else {
+            write!(self.out, "select(")?;
+            self.write_ballot_find_bit(words, order, priority - 1)?;
+            write!(self.out, ", ")?;
+            self.write_ballot_find_bit_value(order, word, base)?;
+            write!(self.out, ", {word} != 0u)")?;
+        }
+        Ok(())
+    }
+
+    /// Write `firstTrailingBit`/`firstLeadingBit` applied to an already-evaluated
+    /// ballot word, offset by that word's base invocation index. Used by
+    /// [`Self::write_ballot_find_bit`].
+    fn write_ballot_find_bit_value(
+        &mut self,
+        order: crate::BallotFindBitOrder,
+        word: &str,
+        base: u32,
+    ) -> BackendResult {
+        let math_fn = match order {
+            crate::BallotFindBitOrder::Lsb => "firstTrailingBit",
+            crate::BallotFindBitOrder::Msb => "firstLeadingBit",
+        };
+        write!(self.out, "{math_fn}({word})")?;
+        if base != 0 {
+            write!(self.out, " + {base}u")?;
+        }
         Ok(())
     }
 

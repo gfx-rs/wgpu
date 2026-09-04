@@ -1540,6 +1540,20 @@ pub enum CollectiveOperation {
     ExclusiveScan = 2,
 }
 
+/// The specific bit a [`SubgroupBallotFindBit`] statement is looking for.
+///
+/// [`SubgroupBallotFindBit`]: Statement::SubgroupBallotFindBit
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum BallotFindBitOrder {
+    /// Find the least significant set bit (the lowest invocation index).
+    Lsb = 0,
+    /// Find the most significant set bit (the highest invocation index).
+    Msb = 1,
+}
+
 bitflags::bitflags! {
     /// Memory barrier flags.
     #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -2371,6 +2385,19 @@ pub enum Statement {
         /// How to combine the results
         collective_op: CollectiveOperation,
         /// The value to compute over
+        argument: Handle<Expression>,
+        /// The [`SubgroupOperationResult`] expression representing this load's result.
+        ///
+        /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
+        result: Handle<Expression>,
+    },
+    /// Find the invocation index of a set bit in a subgroup ballot.
+    SubgroupBallotFindBit {
+        /// Which set bit to find.
+        order: BallotFindBitOrder,
+        /// The ballot to search, a `vec4<u32>`, usually a [`SubgroupBallotResult`] expression.
+        ///
+        /// [`SubgroupBallotResult`]: Expression::SubgroupBallotResult
         argument: Handle<Expression>,
         /// The [`SubgroupOperationResult`] expression representing this load's result.
         ///

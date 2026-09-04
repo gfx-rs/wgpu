@@ -782,6 +782,43 @@ impl super::Validator {
         }
         Ok(())
     }
+    fn validate_subgroup_ballot_find_bit(
+        &mut self,
+        argument: Handle<crate::Expression>,
+        result: Handle<crate::Expression>,
+        context: &BlockContext,
+    ) -> Result<(), WithSpan<FunctionError>> {
+        let argument_inner = context.resolve_type_inner(argument, &self.valid_expression_set)?;
+        if !matches!(
+            *argument_inner,
+            crate::TypeInner::Vector {
+                size: crate::VectorSize::Quad,
+                scalar: crate::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    width: 4,
+                },
+            }
+        ) {
+            log::error!(
+                "Subgroup ballot find-bit operand type {argument_inner:?}, expected vec4<u32>"
+            );
+            return Err(SubgroupError::InvalidOperand(argument)
+                .with_span_handle(argument, context.expressions)
+                .into_other());
+        }
+
+        self.emit_expression(result, context)?;
+        match context.expressions[result] {
+            crate::Expression::SubgroupOperationResult { ty }
+                if context.types[ty].inner == crate::TypeInner::Scalar(crate::Scalar::U32) => {}
+            _ => {
+                return Err(SubgroupError::ResultTypeMismatch(result)
+                    .with_span_handle(result, context.expressions)
+                    .into_other())
+            }
+        }
+        Ok(())
+    }
 
     #[allow(clippy::large_stack_frames)] // TODO(https://github.com/gfx-rs/wgpu/issues/9456)
     fn validate_block_impl(
@@ -1669,6 +1706,31 @@ impl super::Validator {
                         .with_span_static(span, "support for this operation is not present"));
                     }
                     self.validate_subgroup_gather(mode, argument, result, context)?;
+                }
+                S::SubgroupBallotFindBit {
+                    order: _,
+                    argument,
+                    result,
+                } => {
+                    stages &= self.subgroup_stages;
+                    if !self.capabilities.contains(super::Capabilities::SUBGROUP) {
+                        return Err(FunctionError::MissingCapability(
+                            super::Capabilities::SUBGROUP,
+                        )
+                        .with_span_static(span, "missing capability for this operation"));
+                    }
+                    if !self
+                        .subgroup_operations
+                        .contains(super::SubgroupOperationSet::BALLOT)
+                    {
+                        return Err(FunctionError::InvalidSubgroup(
+                            SubgroupError::UnsupportedOperation(
+                                super::SubgroupOperationSet::BALLOT,
+                            ),
+                        )
+                        .with_span_static(span, "support for this operation is not present"));
+                    }
+                    self.validate_subgroup_ballot_find_bit(argument, result, context)?;
                 }
                 S::CooperativeStore { target, ref data } => {
                     stages &= super::ShaderStages::COMPUTE;
