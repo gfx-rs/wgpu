@@ -11,7 +11,7 @@ struct VertexOutput {
     @builtin(position) gl_Position: vec4<f32>,
 }
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<uniform> global: Globals;
 var<immediate> global_1: VertexPushConstants;
 var<private> position_1: vec2<f32>;
@@ -32,7 +32,7 @@ fn main_1() {
     return;
 }
 
-@vertex 
+@vertex
 fn main(@location(0) position: vec2<f32>, @location(1) color: vec4<f32>) -> VertexOutput {
     position_1 = position;
     color_1 = color;

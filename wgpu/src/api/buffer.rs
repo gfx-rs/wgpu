@@ -289,7 +289,7 @@ impl Buffer {
         &self,
     ) -> Option<impl core::ops::Deref<Target = A::Buffer> + WasmNotSendSync> {
         let buffer = self.inner.as_core_opt()?;
-        unsafe { buffer.context.buffer_as_hal::<A>(buffer) }
+        unsafe { buffer.as_hal::<A>() }
     }
 
     /// Returns a [`BufferSlice`] referring to the portion of `self`'s contents

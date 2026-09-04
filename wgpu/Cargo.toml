@@ -198,7 +198,7 @@ exhaust = ["wgpu-types/exhaust"]
 
 [dependencies]
 naga = { workspace = true, optional = true, features = ["termcolor"] }
-wgpu-sync = { workspace = true, default-features = false }
+wgpu-sync = { workspace = true, default-features = false, features = ["portable-atomic"] }
 wgpu-types.workspace = true
 
 # Needed for both wgpu-core and webgpu
@@ -227,7 +227,7 @@ wgpu-core = { workspace = true, default-features = true, features = [
     "wgsl", # needed for indirect draw/dispatch validation
     "portable-atomic",
 ] }
-wgpu-hal = { workspace = true, default-features = true }
+wgpu-hal = { workspace = true, default-features = true, features = ["portable-atomic"] }
 
 smallvec.workspace = true
 
@@ -245,7 +245,7 @@ web-sys = { workspace = true, optional = true, features = [
 
 # Needed for only wgpu-core backend. Optional as webgl is optional on WebAssembly.
 wgpu-core = { workspace = true, optional = true, default-features = true }
-wgpu-hal = { workspace = true, optional = true, default-features = true }
+wgpu-hal = { workspace = true, optional = true, default-features = true, features = ["portable-atomic"] }
 
 smallvec = { workspace = true, optional = true }
 
@@ -257,12 +257,9 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 ##############
 [target.'cfg(target_os = "emscripten")'.dependencies]
 wgpu-core = { workspace = true, default-features = true }
-wgpu-hal = { workspace = true, default-features = true }
+wgpu-hal = { workspace = true, default-features = true, features = ["portable-atomic"] }
 
 smallvec.workspace = true
-
-[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
-portable-atomic.workspace = true
 
 [dev-dependencies]
 # Used in doc-tests

@@ -121,7 +121,7 @@ std = ["wgpu-sync/std"]
 static-dxc = ["wgpu-hal/static-dxc"]
 
 ## Enable portable atomics on platforms that do not support 64bit atomics.
-portable-atomic = ["dep:portable-atomic", "wgpu-hal/portable-atomic"]
+portable-atomic = ["wgpu-sync/portable-atomic", "wgpu-hal/portable-atomic"]
 
 #! ### Target Conditional Features
 # --------------------------------------------------------------------
@@ -204,12 +204,10 @@ profiling = { workspace = true, default-features = false }
 raw-window-handle.workspace = true
 ron = { workspace = true, optional = true }
 rustc-hash.workspace = true
+scopeguard.workspace = true
 serde = { workspace = true, features = ["derive"], default-features = false, optional = true }
 smallvec.workspace = true
 thiserror.workspace = true
-
-[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
-portable-atomic = { workspace = true, optional = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 proptest.workspace = true

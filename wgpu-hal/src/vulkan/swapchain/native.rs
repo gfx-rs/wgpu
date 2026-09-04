@@ -12,7 +12,7 @@ use crate::vulkan::{
     swapchain::{
         Surface, SurfaceTextureMetadata, Swapchain, SwapchainSubmissionSemaphoreGuard, WindowHandle,
     },
-    DeviceShared, InstanceShared,
+    DeviceShared, InstanceShared, PnextChain,
 };
 
 pub(crate) struct NativeSurface {
@@ -23,6 +23,12 @@ pub(crate) struct NativeSurface {
     /// query; `None` for non-Win32 surfaces.
     #[cfg(windows)]
     hdr_source: Option<crate::auxil::dxgi::hdr::DxgiHdrSource>,
+    /// A caller-provided `pNext` chain to attach to the [`vk::SwapchainCreateInfoKHR`]
+    /// of the next swapchain created for this surface.
+    ///
+    /// Set only through
+    /// [`Surface::set_next_swapchain_create_chain()`](crate::vulkan::Surface::set_next_swapchain_create_chain).
+    next_swapchain_create_chain: Mutex<Option<PnextChain>>,
 }
 
 impl NativeSurface {
@@ -40,11 +46,19 @@ impl NativeSurface {
             instance: Arc::clone(&instance.shared),
             #[cfg(windows)]
             hdr_source: hwnd.map(|wh| crate::auxil::dxgi::hdr::DxgiHdrSource::new(wh.0)),
+            next_swapchain_create_chain: Mutex::new(None),
         }
     }
 
     pub fn as_raw(&self) -> vk::SurfaceKHR {
         self.raw
+    }
+
+    /// # Safety
+    ///
+    /// See [`Surface::set_next_swapchain_create_chain()`](crate::vulkan::Surface::set_next_swapchain_create_chain).
+    pub unsafe fn set_next_swapchain_create_chain(&self, chain: *mut core::ffi::c_void) {
+        *self.next_swapchain_create_chain.lock() = Some(PnextChain::new(chain));
     }
 }
 
@@ -233,6 +247,13 @@ impl Surface for NativeSurface {
             info = info.push_next(&mut format_list_info);
         }
 
+        let create_chain = self.next_swapchain_create_chain.lock().take();
+        if let Some(chain) = create_chain {
+            // SAFETY: The contract on `Surface::set_next_swapchain_create_chain()` keeps
+            // the chain valid and unaliased until this swapchain creation returns.
+            info.p_next = unsafe { chain.splice_into(info.p_next) };
+        }
+
         let result = {
             profiling::scope!("vkCreateSwapchainKHR");
             unsafe { functor.create_swapchain(&info, None) }
@@ -370,21 +391,10 @@ pub(crate) struct NativeSwapchain {
     /// A caller-provided `pNext` chain to attach to the [`vk::PresentInfoKHR`] of the next
     /// call to [`present()`](crate::Queue::present()).
     ///
-    /// # Safety
-    ///
     /// Set only through
-    /// [`Surface::set_next_present_chain()`](crate::vulkan::Surface::set_next_present_chain),
-    /// whose contract keeps the chain valid and unaliased until the next present.
-    next_present_chain: Option<PresentChain>,
+    /// [`Surface::set_next_present_chain()`](crate::vulkan::Surface::set_next_present_chain).
+    next_present_chain: Option<PnextChain>,
 }
-
-/// See [`NativeSwapchain::next_present_chain`].
-struct PresentChain(*mut vk::BaseOutStructure<'static>);
-
-// SAFETY: The pointer is only dereferenced during the next present, and the contract on
-// `Surface::set_next_present_chain()` keeps the chain valid and unaliased until then.
-unsafe impl Send for PresentChain {}
-unsafe impl Sync for PresentChain {}
 
 impl Drop for NativeSwapchain {
     fn drop(&mut self) {
@@ -629,18 +639,10 @@ impl Swapchain for NativeSwapchain {
             vk_info
         };
 
-        if let Some(PresentChain(chain)) = self.next_present_chain.take() {
-            // Splice the caller's chain in front of anything already chained onto `vk_info`.
+        if let Some(chain) = self.next_present_chain.take() {
             // SAFETY: The contract on `Surface::set_next_present_chain()` keeps the chain
             // valid and unaliased until this present completes.
-            unsafe {
-                let mut tail = chain;
-                while !(*tail).p_next.is_null() {
-                    tail = (*tail).p_next;
-                }
-                (*tail).p_next = vk_info.p_next.cast_mut().cast();
-                vk_info.p_next = chain.cast();
-            }
+            vk_info.p_next = unsafe { chain.splice_into(vk_info.p_next) };
         }
 
         let suboptimal = {
@@ -700,7 +702,7 @@ impl NativeSwapchain {
     ///
     /// See [`Surface::set_next_present_chain()`](crate::vulkan::Surface::set_next_present_chain).
     pub unsafe fn set_next_present_chain(&mut self, chain: *mut core::ffi::c_void) {
-        self.next_present_chain = Some(PresentChain(chain.cast()));
+        self.next_present_chain = Some(PnextChain::new(chain));
     }
 
     /// Mark the current frame finished, advancing to the next acquire semaphore.

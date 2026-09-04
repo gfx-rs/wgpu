@@ -215,9 +215,13 @@ jobs:
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install toolchain (repo MSRV - tier 1 or 2)
         if: matrix.tier == 1 || matrix.tier == 2
@@ -255,7 +259,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -416,9 +420,13 @@ jobs:
     name: wgpu MSRV Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install core MSRV toolchain
         run: |
@@ -437,7 +445,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: wgpu-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -490,9 +498,13 @@ jobs:
     name: Core MSRV Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install core MSRV toolchain
         run: |
@@ -511,7 +523,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: core-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -548,9 +560,13 @@ jobs:
       # Also, allow unexpected_cfgs because it is very common and spammy when using old deps.
       RUSTFLAGS: -A unexpected_cfgs
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install toolchain
         run: |
@@ -589,9 +605,13 @@ jobs:
     name: Test WebAssembly
     runs-on: ubuntu-latest
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install repo MSRV toolchain
         run: |
@@ -611,7 +631,7 @@ jobs:
         run: cargo +stable install wasm-bindgen-cli --version=$WASM_BINDGEN_VERSION
 
       - name: Install `cargo-nextest`
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2.83.2
         with:
           tool: cargo-nextest
 
@@ -642,9 +662,13 @@ jobs:
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install repo MSRV toolchain
         run: |
@@ -652,7 +676,7 @@ jobs:
           cargo -V
 
       - name: Install `cargo-nextest` and `cargo-llvm-cov`
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2.83.2
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
@@ -669,7 +693,7 @@ jobs:
         # Cache step must go before warp and mesa install on windows as they write into the
         # target directory, and rust-cache will overwrite the entirety of the target directory.
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -679,37 +703,37 @@ jobs:
 
       - name: (Windows) Install DXC
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-dxc
+        uses: $/.github/actions/install-dxc
 
       - name: (Windows) Install WARP
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-warp
+        uses: $/.github/actions/install-warp
         with:
           target-dir: "target/llvm-cov-target/debug"
 
       - name: (Windows) Install Agility SDK
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-agility-sdk
+        uses: $/.github/actions/install-agility-sdk
 
       - name: (Windows) Install Mesa
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-mesa
+        uses: $/.github/actions/install-mesa
 
       - name: (Windows) Install Vulkan SDK
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-vulkan-sdk
+        uses: $/.github/actions/install-vulkan-sdk
 
       - name: (Mac) Install Vulkan SDK
         if: matrix.os == 'macos-14'
-        uses: ./.github/actions/install-vulkan-sdk
+        uses: $/.github/actions/install-vulkan-sdk
 
       - name: (Linux) Install Vulkan SDK
         if: matrix.os == 'ubuntu-24.04'
-        uses: ./.github/actions/install-vulkan-sdk
+        uses: $/.github/actions/install-vulkan-sdk
 
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
-        uses: ./.github/actions/install-mesa
+        uses: $/.github/actions/install-mesa
 
       - name: Delete Naga snapshots
         shell: bash
@@ -730,7 +754,7 @@ jobs:
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
         run: git add . && git diff --exit-code HEAD naga/tests/out
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         name: Upload comparison images
         if: always() # We want artifacts even if the tests fail.
         with:
@@ -758,7 +782,7 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
@@ -771,9 +795,13 @@ jobs:
     name: Doctest
     runs-on: ubuntu-latest
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install repo MSRV toolchain
         run: |
@@ -782,7 +810,7 @@ jobs:
           cargo -V
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: doctests-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -802,9 +830,13 @@ jobs:
     name: Miri (limited scope)
     runs-on: ubuntu-latest
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # Miri is *only* available on nightly.
       - name: Install nightly toolchain
@@ -815,7 +847,7 @@ jobs:
           cargo -V
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: miri-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -837,9 +869,12 @@ jobs:
 
     name: Format & Typos
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install repo MSRV toolchain
         run: |
@@ -857,7 +892,7 @@ jobs:
           cargo --locked fmt -- --check
 
       - name: Install Tombi
-        uses: tombi-toml/setup-tombi@v1.2.0
+        uses: tombi-toml/setup-tombi@fa8fb98ef9af2d3b9da565edc15935d523bca7e9 # v1.2.0
         with:
           version: "1.1.3"
 
@@ -865,7 +900,7 @@ jobs:
         run: tombi format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.49.0
+        uses: crate-ci/typos@8a48f81b6c64dcfea44b3633223084c4be58ac5f # v1.49.0
 
   check-cts-runner:
     # runtime is normally 2 minutes
@@ -873,9 +908,12 @@ jobs:
 
     name: Clippy cts_runner
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install MSRV toolchain
         run: |
@@ -894,7 +932,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: cts-runner-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -913,12 +951,15 @@ jobs:
 
     name: "cargo-deny advisories"
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Run `cargo deny check`
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           command: check advisories
           arguments: --all-features --workspace
@@ -931,14 +972,32 @@ jobs:
 
     name: "cargo-deny"
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Run `cargo deny check`
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           command: check bans licenses sources
           arguments: --all-features --workspace
           command-arguments: -Dwarnings -Aunmatched-organization
           rust-version: ${{ env.REPO_MSRV }}
+
+  zizmor:
+    name: "Zizmor"
+    runs-on: ubuntu-latest
+    permissions:
+      # `zizmor-action` uploads its findings to GitHub code scanning as SARIF.
+      security-events: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run `zizmor`
+        uses: zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99 # v0.6.3

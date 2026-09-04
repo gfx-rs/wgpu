@@ -72,7 +72,7 @@ impl Tlas {
         &mut self,
     ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
         let tlas = self.inner.as_core_opt()?;
-        unsafe { tlas.context.tlas_as_hal::<A>(tlas) }
+        unsafe { tlas.as_hal::<A>() }
     }
 
     /// Returns custom implementation of Tlas (if custom backend and is internally T)

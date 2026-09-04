@@ -174,7 +174,7 @@ pub trait DynDevice: DynResource {
         &self,
         acceleration_structure: Box<dyn DynAccelerationStructure>,
     );
-    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8>;
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>);
 
     fn get_internal_counters(&self) -> wgt::HalCounters;
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport>;
@@ -604,8 +604,8 @@ impl<D: Device + DynResource> DynDevice for D {
         unsafe { D::destroy_acceleration_structure(self, acceleration_structure.unbox()) }
     }
 
-    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
-        D::tlas_instance_to_bytes(self, instance)
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {
+        D::tlas_instance_to_bytes(self, instance, to_extend)
     }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {

@@ -610,8 +610,8 @@ impl crate::framework::Example for Example {
 
         // A render bundle to draw the terrain.
         let terrain_bundle = {
-            let mut encoder = device
-                .create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+            let mut encoder =
+                device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                     label: None,
                     color_formats: &[Some(config.view_formats[0])],
                     depth_stencil: Some(wgpu::RenderBundleDepthStencil {
@@ -621,8 +621,7 @@ impl crate::framework::Example for Example {
                     }),
                     sample_count: 1,
                     multiview: None,
-                })
-                .unwrap();
+                });
             encoder.set_pipeline(&terrain_pipeline);
             encoder.set_bind_group(0, &terrain_flipped_bind_group, &[]);
             encoder.set_vertex_buffer(0, terrain_vertex_buf.slice(..));
@@ -728,7 +727,7 @@ impl crate::framework::Example for Example {
         // First pass: render the reflection.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
+                label: Some("reflection"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &self.reflect_view,
                     depth_slice: None,
@@ -759,7 +758,7 @@ impl crate::framework::Example for Example {
         // depth values, so we must use StoreOp::Store.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
+                label: Some("terrain"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
                     depth_slice: None,
@@ -790,7 +789,7 @@ impl crate::framework::Example for Example {
         // to it, so it cannot be in the same render pass.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
+                label: Some("water"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
                     depth_slice: None,
@@ -833,15 +832,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     height: 768,
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default()
-        .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
-        // To be fixed in <https://github.com/gfx-rs/wgpu/issues/5231>.
-        .expect_fail(wgpu_test::FailureCase {
-            backends: Some(wgpu::Backends::VULKAN),
-            reasons: vec![wgpu_test::FailureReason::validation_error()
-                .with_message("WRITE_AFTER_WRITE hazard detected.")],
-            behavior: wgpu_test::FailureBehavior::AssertFailure,
-            ..Default::default()
-        }),
+        .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.018)], // Bounded by Apple A9
     _phantom: std::marker::PhantomData::<Example>,
 };

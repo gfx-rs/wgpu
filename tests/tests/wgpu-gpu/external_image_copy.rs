@@ -76,6 +76,20 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
             .draw_image_with_image_bitmap(&image_bitmap, 0.0, 0.0)
             .unwrap();
 
+        // Also draw the image onto an OffscreenCanvas to cover the
+        // OffscreenCanvas source path (on GLES it rides the same upload code
+        // as HtmlCanvasElement via a type-erased `TexImageSource`).
+        let offscreen_canvas = web_sys::OffscreenCanvas::new(3, 3).unwrap();
+        let offscreen_context: web_sys::OffscreenCanvasRenderingContext2d = offscreen_canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .dyn_into()
+            .unwrap();
+        offscreen_context
+            .draw_image_with_image_bitmap(&image_bitmap, 0.0, 0.0)
+            .unwrap();
+
         // Decode it cpu side
         let raw_image = image::load_from_memory_with_format(image_encoded, image::ImageFormat::Png)
             .unwrap()
@@ -117,6 +131,7 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
         let sources = [
             ExternalImageSource::ImageBitmap(image_bitmap),
             ExternalImageSource::HTMLCanvasElement(canvas),
+            ExternalImageSource::OffscreenCanvas(offscreen_canvas),
         ];
         let cases = [
             TestCase::Normal,
