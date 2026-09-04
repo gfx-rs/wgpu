@@ -160,7 +160,7 @@ impl<A: hal::Api> Example<A> {
             view_formats: vec![],
         };
         unsafe {
-            surface.configure(&device, &surface_config).unwrap();
+            surface.configure(&device, &surface_config, None).unwrap();
         };
 
         let naga_shader = {

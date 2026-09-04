@@ -1,4 +1,4 @@
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{ffi, mem::ManuallyDrop, ptr, time::Duration};
 
 use glow::HasContext;
@@ -1255,6 +1255,7 @@ impl crate::Surface for Surface {
         &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
+        _raw_config: Option<Box<dyn crate::RawSurfaceConfiguration>>,
     ) -> Result<(), crate::SurfaceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
 

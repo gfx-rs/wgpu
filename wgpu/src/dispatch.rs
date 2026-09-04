@@ -638,6 +638,14 @@ pub trait SurfaceInterface: CommonTraits {
     }
 
     fn configure(&self, device: &DispatchDevice, config: &crate::SurfaceConfiguration);
+
+    unsafe fn configure_ext(
+        &self,
+        device: &DispatchDevice,
+        config: &crate::SurfaceConfiguration,
+        raw_config: Option<Box<dyn wgpu_hal::RawSurfaceConfiguration>>,
+    );
+
     fn get_current_texture(
         &self,
         desc: Option<crate::TextureDescriptor<'static>>,

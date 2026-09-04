@@ -718,6 +718,10 @@ pub trait Surface: WasmNotSendSync {
 
     /// Configure `self` to use `device`.
     ///
+    /// Normally, this method would take a concrete type for `raw_config`, but surfaces
+    /// are special because Vulkan has an additional layer to dispatch to either a native
+    /// or DXGI swapchain, so we defer downcasting to within the backend.
+    ///
     /// # Safety
     ///
     /// - All GPU work using `self` must have been completed.
@@ -728,6 +732,7 @@ pub trait Surface: WasmNotSendSync {
         &self,
         device: &<Self::A as Api>::Device,
         config: &SurfaceConfiguration,
+        raw_config: Option<Box<dyn RawSurfaceConfiguration>>,
     ) -> Result<(), SurfaceError>;
 
     /// Unconfigure `self` on `device`.
@@ -2779,7 +2784,7 @@ pub struct RayTracingPipelineDescriptor<
     pub cache: Option<&'a Pc>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct SurfaceConfiguration {
     /// Maximum number of queued frames. Must be in
     /// `SurfaceCapabilities::maximum_frame_latency` range.
@@ -2805,6 +2810,8 @@ pub struct SurfaceConfiguration {
     /// than the texture does.
     pub view_formats: Vec<wgt::TextureFormat>,
 }
+
+pub trait RawSurfaceConfiguration: fmt::Debug + core::any::Any + Send + Sync { }
 
 #[derive(Debug, Clone)]
 pub struct Rect<T> {

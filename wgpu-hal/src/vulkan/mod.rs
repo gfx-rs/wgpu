@@ -323,6 +323,8 @@ impl Surface {
         unsafe { swapchain.set_next_present_chain(chain) };
     }
 
+    // TODO: relocate any portion of this comment that is still relevant.
+    //
     /// Set a `pNext` chain of extension structs to attach to the
     /// [`vk::SwapchainCreateInfoKHR`] used by the next configuration of this surface.
     ///
@@ -351,15 +353,19 @@ impl Surface {
     ///
     /// [VK_NV_low_latency2]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_low_latency2.html
     #[track_caller]
-    pub unsafe fn set_next_swapchain_create_chain(&self, chain: *mut c_void) {
-        let surface = self
-            .inner
-            .as_any()
-            .downcast_ref::<swapchain::NativeSurface>()
-            .expect("Surface should be a native Vulkan surface");
-        unsafe { surface.set_next_swapchain_create_chain(chain) };
+    pub unsafe fn set_next_swapchain_create_chain(&self, _chain: *mut c_void) {
+        unimplemented!()
     }
 }
+
+#[derive(Debug)]
+pub struct VulkanSurfaceConfiguration {
+    /// A caller-provided `pNext` chain to attach to the [`vk::SwapchainCreateInfoKHR`]
+    /// of the swapchain created for this surface.
+    pub swapchain_create_chain: Option<PnextChain>,
+}
+
+impl crate::RawSurfaceConfiguration for VulkanSurfaceConfiguration { }
 
 #[derive(Debug)]
 pub struct SurfaceTexture {
