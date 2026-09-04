@@ -685,6 +685,24 @@ pub trait Instance: Sized + WasmNotSendSync {
         &self,
         surface_hint: Option<&<Self::A as Api>::Surface>,
     ) -> Vec<ExposedAdapter<Self::A>>;
+
+    /// Expose the single adapter that best matches `power_preference` and
+    /// `force_fallback_adapter`, exposing as few adapters as possible.
+    ///
+    /// The default `None` means no lazy selection is available and the caller
+    /// falls back to [`Self::enumerate_adapters`]. Overrides must select
+    /// consistently with how callers rank a full enumeration
+    /// (`force_fallback_adapter` restricts the choice to
+    /// [`wgt::DeviceType::Cpu`]). The caller re-validates the result, so
+    /// `surface_hint` may be ignored.
+    unsafe fn request_adapter(
+        &self,
+        _power_preference: wgt::PowerPreference,
+        _force_fallback_adapter: bool,
+        _surface_hint: Option<&<Self::A as Api>::Surface>,
+    ) -> Option<ExposedAdapter<Self::A>> {
+        None
+    }
 }
 
 pub trait Surface: WasmNotSendSync {
