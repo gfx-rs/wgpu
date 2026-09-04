@@ -571,7 +571,16 @@ const BGR10A2_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
-/// "Indirect draw & dispatch arguments" in the Metal feature set tables
+/// "Indirect draw & dispatch arguments" in the Metal feature set tables.
+///
+/// The live tables at
+/// <https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf> are
+/// revised in place and current revisions are organized by `MTLGPUFamily`, so
+/// they no longer carry the per-`MTLFeatureSet` rows these constants encode.
+/// For an auditable source of the values below, use the archived revision that
+/// still lists them:
+/// <https://web.archive.org/web/20210421214844/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf>
+/// - "Indirect draw & dispatch arguments": iOS GPUFamily3 v1, tvOS GPUFamily2 v1, macOS GPUFamily1 v1
 const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
@@ -581,6 +590,11 @@ const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
 /// "Base vertex/instance drawing" in the Metal feature set tables
 ///
 /// in our terms, `base_vertex` and `first_instance` must be 0
+///
+/// Same table as [`INDIRECT_DRAW_DISPATCH_SUPPORT`]; the
+/// "Base vertex/instance drawing" row lists the identical feature sets
+/// (iOS GPUFamily3 v1, tvOS GPUFamily2 v1, macOS GPUFamily1 v1), which is why
+/// this aliases that constant rather than repeating it.
 const BASE_VERTEX_FIRST_INSTANCE_SUPPORT: &[MTLFeatureSet] = INDIRECT_DRAW_DISPATCH_SUPPORT;
 
 const TEXTURE_CUBE_ARRAY_SUPPORT: &[MTLFeatureSet] = &[
@@ -698,15 +712,6 @@ impl super::CapabilitiesQuery {
         let argument_buffers = available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0)
             .then(|| device.argumentBuffersSupport());
 
-        let is_virtual = device.name().to_string().to_lowercase().contains("virtual");
-
-        let mesh_shaders = family_check
-                && (device.supportsFamily(MTLGPUFamily::Metal3)
-                    || device.supportsFamily(MTLGPUFamily::Apple7)
-                    || device.supportsFamily(MTLGPUFamily::Mac2))
-                    // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
-                && !is_virtual;
-
         let msl_version = if available!(macos = 26.0, ios = 26.0, tvos = 26.0, visionos = 26.0) {
             MTLLanguageVersion::Version4_0
         } else if available!(macos = 15.0, ios = 18.0, tvos = 18.0, visionos = 2.0) {
@@ -733,6 +738,65 @@ impl super::CapabilitiesQuery {
             MTLLanguageVersion::Version1_0
         };
 
+        let is_virtual = device.name().to_string().to_lowercase().contains("virtual");
+
+        // Static preconditions for lowering multi-draws to render ICBs. The
+        // `available!` floor is the API availability of the two selectors the
+        // path depends on -- hazard-tracked `useResource:` and
+        // `inheritPipelineState` -- not a hardware claim:
+        // <https://developer.apple.com/documentation/metal/mtlindirectcommandbufferdescriptor/inheritpipelinestate>
+        //
+        // Whether a device actually executes GPU-generated render ICBs is not
+        // something Apple's feature tables predict: iOS/iPadOS/tvOS 17.x fail
+        // where the same hardware on 18 passes, and A10X only works with
+        // command generation hoisted out of the render pass. The real gate is
+        // therefore a runtime probe that executes a one-draw ICB and reads the
+        // pixel back, `AdapterShared::render_icb_executes`. It runs on the
+        // first multi-draw that could use an ICB rather than at adapter
+        // creation, so adapters that never multi-draw never pay for it.
+        //
+        // Apple's paravirtual device is excluded up front because its driver
+        // aborts the process instead of failing the probe.
+        let indirect_command_buffers_rendering = !is_virtual
+            && available!(
+                macos = 10.15,
+                ios = 13.0,
+                tvos = 13.0,
+                watchos = 6.0,
+                visionos = 1.0
+            )
+            && device_class_responds_to(
+                device,
+                sel!(newIndirectCommandBufferWithDescriptor:maxCommandCount:options:),
+            );
+        // Mesh ICBs are gated far more conservatively: their execution has
+        // only been verified by readback on macOS 26 / Apple9. Every other
+        // combination takes the per-draw path until it can be verified the
+        // same way.
+        //
+        // Metal's shader validation layer (MTL_SHADER_VALIDATION=1) makes
+        // GPU-generated mesh commands execute without drawing anything on
+        // that combination while the API debug layer is off; the same
+        // commands draw correctly without it. Keep that in mind before
+        // blaming this path for an empty attachment under a debugger.
+        let indirect_command_buffers_mesh = indirect_command_buffers_rendering
+            && os_type == super::OsType::Macos
+            && available!(macos = 26.0)
+            && device.supportsFamily(MTLGPUFamily::Apple9);
+        // `optimizeIndirectCommandBuffer` halves ICB execution time on Apple3
+        // (A10X) and costs 5-10% of a frame on every Apple4-or-later GPU
+        // measured (A12, A14, A18 Pro, M4 Max), so it is kept only where it has
+        // not been measured to lose: Apple3 and GPUs outside the Apple families.
+        let indirect_command_buffers_optimize =
+            !(family_check && device.supportsFamily(MTLGPUFamily::Apple4));
+
+        let mesh_shaders = family_check
+                && (device.supportsFamily(MTLGPUFamily::Metal3)
+                    || device.supportsFamily(MTLGPUFamily::Apple7)
+                    || device.supportsFamily(MTLGPUFamily::Mac2))
+                    // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
+                && !is_virtual;
+
         Self {
             msl_version,
             // macOS 10.11 doesn't support read-write resources
@@ -750,6 +814,9 @@ impl super::CapabilitiesQuery {
             ),
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
             indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT),
+            indirect_command_buffers_rendering,
+            indirect_command_buffers_mesh,
+            indirect_command_buffers_optimize,
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
@@ -1320,6 +1387,10 @@ impl super::CapabilitiesQuery {
             F::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
             self.supported_vertex_amplification_factor > 1 && self.mesh_shaders,
         );
+        features.set(
+            F::MULTI_DRAW_INDIRECT_COUNT,
+            self.indirect_command_buffers_rendering,
+        );
 
         // Cooperative matrix (simdgroup matrix) requires MSL 2.3+
         features.set(
@@ -1571,6 +1642,9 @@ impl super::CapabilitiesQuery {
             timestamp_query_support: self.timestamp_query_support,
             supports_memoryless_storage: self.supports_memoryless_storage,
             mesh_shaders: self.mesh_shaders,
+            indirect_command_buffers_rendering: self.indirect_command_buffers_rendering,
+            indirect_command_buffers_mesh: self.indirect_command_buffers_mesh,
+            indirect_command_buffers_optimize: self.indirect_command_buffers_optimize,
             texture_component_swizzle: self.texture_component_swizzle,
         }
     }

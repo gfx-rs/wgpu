@@ -158,6 +158,24 @@ const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> nt::VertexF
     }
 }
 
+/// Compile MSL source with the options this backend uses for every library
+/// it builds itself, whether naga-generated or hand-written.
+pub(super) fn compile_msl_library(
+    device: &ProtocolObject<dyn MTLDevice>,
+    msl_version: MTLLanguageVersion,
+    source: &str,
+) -> Result<Retained<ProtocolObject<dyn MTLLibrary>>, Retained<NSError>> {
+    let options = MTLCompileOptions::new();
+    options.setLanguageVersion(msl_version);
+
+    // https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance
+    if available!(macos = 11.0, ios = 13.0, tvos = 14.0, visionos = 1.0) {
+        options.setPreserveInvariance(true);
+    }
+
+    device.newLibraryWithSource_options_error(&NSString::from_str(source), Some(&options))
+}
+
 impl super::Device {
     fn load_shader(
         &self,
@@ -269,25 +287,15 @@ impl super::Device {
                     &source
                 );
 
-                let options = MTLCompileOptions::new();
-                options.setLanguageVersion(self.shared.private_caps.msl_version);
-
-                // https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance
-                if available!(macos = 11.0, ios = 13.0, tvos = 14.0, visionos = 1.0) {
-                    options.setPreserveInvariance(true);
-                }
-
-                let library = self
-                    .shared
-                    .device
-                    .newLibraryWithSource_options_error(
-                        &NSString::from_str(&source),
-                        Some(&options),
-                    )
-                    .map_err(|err| {
-                        log::debug!("Naga generated shader:\n{source}");
-                        crate::PipelineError::Linkage(stage_bit, format!("Metal: {err}"))
-                    })?;
+                let library = compile_msl_library(
+                    &self.shared.device,
+                    self.shared.private_caps.msl_version,
+                    &source,
+                )
+                .map_err(|err| {
+                    log::debug!("Naga generated shader:\n{source}");
+                    crate::PipelineError::Linkage(stage_bit, format!("Metal: {err}"))
+                })?;
 
                 let ep_index = module
                     .entry_points
@@ -438,7 +446,10 @@ impl super::Device {
         limits: &wgt::Limits,
     ) -> super::Device {
         let capabilities_query = super::CapabilitiesQuery::new(&raw);
-        let shared = super::AdapterShared::new(raw, &capabilities_query);
+        // A device wrapped from a raw handle has no instance behind it, so no
+        // instance flags apply.
+        let shared =
+            super::AdapterShared::new(raw, &capabilities_query, wgt::InstanceFlags::empty());
         super::Device {
             shared: Arc::new(shared),
             features,
@@ -847,6 +858,8 @@ impl crate::Device for super::Device {
             state: super::CommandState::default(),
             temp: super::Temp::default(),
             counters: Arc::clone(&self.counters),
+            deferred_multi_draws: Vec::new(),
+            deferred_multi_draw_resources: Vec::new(),
         })
     }
 
@@ -1449,6 +1462,9 @@ impl crate::Device for super::Device {
                 unsafe fn setMaxVertexAmplificationCount(&self, count: NSUInteger) {
                     unsafe { descriptor_fn!(self.setMaxVertexAmplificationCount(count)) }
                 }
+                fn setSupportIndirectCommandBuffers(&self, enabled: bool) {
+                    descriptor_fn!(self.setSupportIndirectCommandBuffers(enabled));
+                }
             }
 
             // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
@@ -1813,33 +1829,56 @@ impl crate::Device for super::Device {
                     descriptor.setMaxVertexAmplificationCount(mv.get().count_ones() as usize)
                 };
             }
-
+            // Keep the ordinary pipeline state for direct draws. On some
+            // drivers, using an ICB-capable pipeline directly changes render
+            // behavior. Multiview pipelines also fail with the ICB flag.
+            let request_icb_support = self.shared.private_caps.indirect_command_buffers_rendering
+                && match descriptor {
+                    MetalGenericRenderPipelineDescriptor::Standard(_) => {
+                        desc.multiview_mask.is_none()
+                    }
+                    MetalGenericRenderPipelineDescriptor::Mesh(_) => {
+                        self.shared.private_caps.indirect_command_buffers_mesh
+                    }
+                };
             // Create the pipeline from descriptor
-            let raw = match descriptor {
+            let create = |descriptor: &MetalGenericRenderPipelineDescriptor| match descriptor {
                 MetalGenericRenderPipelineDescriptor::Standard(d) => self
                     .shared
                     .device
-                    .newRenderPipelineStateWithDescriptor_error(&d),
+                    .newRenderPipelineStateWithDescriptor_error(d),
                 MetalGenericRenderPipelineDescriptor::Mesh(d) => self
                     .shared
                     .device
                     .newRenderPipelineStateWithMeshDescriptor_options_reflection_error(
-                        &d,
+                        d,
                         MTLPipelineOption::empty(),
                         None,
                     ),
-            }
-            .map_err(|e| {
+            };
+            let raw = create(&descriptor).map_err(|e| {
                 crate::PipelineError::Linkage(
                     wgt::ShaderStages::VERTEX | wgt::ShaderStages::FRAGMENT,
                     format!("new_render_pipeline_state: {e:?}"),
                 )
             })?;
+            let icb_raw = request_icb_support.then(|| {
+                descriptor.setSupportIndirectCommandBuffers(true);
+                create(&descriptor).map_err(|e| {
+                    log::debug!(
+                        "could not create ICB-capable render pipeline {:?}; \
+                         multi-draws recorded with it won't use ICBs: {e:?}",
+                        desc.label,
+                    );
+                })
+            });
+            let icb_raw = icb_raw.and_then(Result::ok);
 
             self.counters.render_pipelines.add(1);
 
             Ok(super::RenderPipeline {
                 raw,
+                icb_raw,
                 vs_info,
                 fs_info,
                 ts_info,
