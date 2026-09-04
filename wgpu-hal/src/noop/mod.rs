@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use alloc::{string::String, sync::Arc, vec, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
 use core::{ptr, sync::atomic::Ordering, time::Duration};
 
 use wgpu_sync::atomic::AtomicU64;
@@ -215,6 +215,7 @@ impl crate::Surface for Context {
         &self,
         device: &Context,
         config: &crate::SurfaceConfiguration,
+        _raw_config: Option<Box<dyn crate::RawSurfaceConfiguration>>,
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }

@@ -3,6 +3,7 @@ use core::{
     fmt,
     sync::atomic::{AtomicBool, Ordering},
 };
+use hal::RawSurfaceConfiguration;
 
 use hashbrown::HashMap;
 use thiserror::Error;
@@ -965,6 +966,28 @@ impl Surface {
         device: &Arc<Device>,
         config: &wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
     ) -> Result<(), ConfigureSurfaceError> {
+        unsafe {
+            // SAFETY: Passing `None` for `raw_config` is safe.
+            self.configure_ext(device, config, None)
+        }
+    }
+
+    /// Configure the surface, passing platform-specific configuration.
+    ///
+    /// # Safety
+    ///
+    /// - If `raw_config` is `Some`, it must satisfy any safety requirements
+    ///   applicable to its type. Passing `None` for `raw_config` is safe.
+    ///
+    /// # Panics
+    ///
+    /// - If `raw_config` does not have the correct type for this adapter.
+    pub unsafe fn configure_ext(
+        self: &Arc<Self>,
+        device: &Arc<Device>,
+        config: &wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
+        raw_config: Option<Box<dyn RawSurfaceConfiguration>>,
+    ) -> Result<(), ConfigureSurfaceError> {
         use ConfigureSurfaceError as E;
         profiling::scope!("Surface::configure");
 
@@ -1044,7 +1067,7 @@ impl Surface {
             user_callbacks = self.unconfigure_inner(&mut presentation);
 
             let surface_raw = self.raw(device.backend()).unwrap();
-            match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
+            match unsafe { surface_raw.configure(device.raw(), &hal_config, raw_config) } {
                 Ok(()) => {
                     *presentation = Some(Presentation {
                         device: Arc::clone(device),
