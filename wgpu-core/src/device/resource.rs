@@ -224,8 +224,6 @@ impl DeferredBufferMapPendingClosures {
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 pub struct Device {
-    raw: Box<dyn hal::DynDevice>,
-    pub(crate) adapter: Arc<Adapter>,
     pub(crate) queue: OnceCell<Weak<Queue>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     pub(crate) empty_bgl: ManuallyDrop<Box<dyn hal::DynBindGroupLayout>>,
@@ -302,7 +300,17 @@ pub struct Device {
     /// binding point will be rendered correctly. Intended to be used as the
     /// [`hal::ExternalTextureBinding::params`] field.
     pub(crate) default_external_texture_params_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
-    // needs to be dropped last
+
+    // Drop order matters!
+    //
+    //  - Any member whose drop might destroy hal resources needs to be dropped
+    //    before the device. Most hal resources are handled manually in
+    //    `Device::drop`, but this applies to `command_allocator`.
+    //  - The device must be dropped before the adapter.
+    //  - Any member whose drop might write into the trace must be dropped
+    //    before the trace.
+    raw: Box<dyn hal::DynDevice>,
+    pub(crate) adapter: Arc<Adapter>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<Box<dyn trace::Trace + Send + Sync + 'static>>>,
 }
@@ -871,8 +879,6 @@ impl Device {
     }
 
     /// Check device for freeable resources and completed buffer mappings.
-    ///
-    /// Return `queue_empty` indicating whether there are more queue submissions still in flight.
     pub fn poll(
         &self,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
@@ -916,14 +922,9 @@ impl Device {
     /// This will process _all_ completed submissions, even if the caller only asked
     /// us to poll to a given submission index.
     ///
-    /// Return a pair `(closures, result)`, where:
-    ///
-    /// - `closures` is a list of callbacks that need to be invoked informing the user
-    ///   about various things occurring. These happen and should be handled even if
-    ///   this function returns an error, hence they are outside of the result.
-    ///
-    /// - `results` is a boolean indicating the result of the wait operation, including
-    ///   if there was a timeout or a validation error.
+    /// The returned [`UserClosures`] contains callbacks that need to be invoked informing
+    /// the user about various things occurring. These happen and should be handled even
+    /// if this function returns an error, hence they are outside of the result.
     pub(crate) fn maintain<'this>(
         &'this self,
         poll_type: wgt::PollType<crate::SubmissionIndex>,

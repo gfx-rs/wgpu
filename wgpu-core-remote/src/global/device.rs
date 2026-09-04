@@ -17,9 +17,7 @@ use wgpu_core::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
         ResolvedGeneralRenderPipelineDescriptor,
     },
-    resource::{
-        self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
-    },
+    resource::{self, BufferAccessError, BufferMapOperation, CreateBufferError},
     Label, LabelHelpers, SubmissionIndex,
 };
 
@@ -1072,8 +1070,6 @@ impl Global {
     }
 
     /// Check `device_id` for freeable resources and completed buffer mappings.
-    ///
-    /// Return `queue_empty` indicating whether there are more queue submissions still in flight.
     pub fn device_poll(
         &self,
         device_id: DeviceId,
@@ -1193,12 +1189,12 @@ impl Global {
         buffer.get_mapped_range(offset, size)
     }
 
-    pub fn buffer_unmap(&self, buffer_id: id::BufferId) -> BufferAccessResult {
+    pub fn buffer_unmap(&self, buffer_id: id::BufferId) {
         let hub = self.hub.borrow();
 
         let buffer = hub.buffers.get(buffer_id);
 
-        buffer.unmap()
+        buffer.unmap();
     }
 
     pub fn device_on_uncaptured_error(
