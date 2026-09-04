@@ -199,7 +199,9 @@ impl Surface for NativeSurface {
         let color_space = conv::map_surface_color_space(config.color_space);
 
         let original_format = device.shared.private_caps.map_texture_format(config.format);
-        let mut raw_flags = vk::SwapchainCreateFlagsKHR::empty();
+        let mut raw_flags = raw_config
+            .as_ref()
+            .map_or(vk::SwapchainCreateFlagsKHR::empty(), |raw| raw.swapchain_create_flags);
         let mut raw_view_formats: Vec<vk::Format> = vec![];
         if !config.view_formats.is_empty() {
             raw_flags |= vk::SwapchainCreateFlagsKHR::MUTABLE_FORMAT;
