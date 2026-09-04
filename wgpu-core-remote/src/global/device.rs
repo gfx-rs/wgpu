@@ -627,9 +627,6 @@ impl Global {
         device_id: DeviceId,
         desc: &ShaderModuleDescriptor,
         id_in: id::ShaderModuleId,
-    ) -> (
-        id::ShaderModuleId,
-        Option<pipeline::CreateShaderModuleError>,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -647,11 +644,18 @@ impl Global {
             runtime_checks: wgt::ShaderRuntimeChecks::checked(),
         };
 
-        let (shader, error) = device.create_shader_module(&desc, code);
+        let shader = device.create_shader_module(&desc, code);
 
-        let id = shader_modules.assign(id_in, shader);
+        shader_modules.assign(id_in, shader);
+    }
 
-        (id, error)
+    pub fn shader_module_compilation_info(
+        &self,
+        shader_module_id: id::ShaderModuleId,
+    ) -> wgt::CompilationInfo {
+        let hub = self.hub.borrow();
+        let shader_module = hub.shader_modules.get(shader_module_id);
+        shader_module.compilation_info().clone()
     }
 
     pub fn shader_module_remove(
