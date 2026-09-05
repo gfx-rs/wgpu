@@ -5824,6 +5824,29 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, Some(VectorSize::Quad), Scalar::F32))
             }
+            Snorm10_10_10_2 => {
+                let name = self.namer.call("unpackSnorm10_10_10_2");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(uint b0, \
+                                          uint b1, \
+                                          uint b2, \
+                                          uint b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    // Sign-extend by shifting to the top of the word and back.
+                    "{}uint v = (b3 << 24 | b2 << 16 | b1 << 8 | b0); \
+                       return metal::max(metal::float4(float(as_type<int>(v << 22) >> 22) / 511.0f, \
+                                                       float(as_type<int>(v << 12) >> 22) / 511.0f, \
+                                                       float(as_type<int>(v << 2) >> 22) / 511.0f, \
+                                                       float(as_type<int>(v) >> 30)), \
+                                         metal::float4(-1.0f));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, Some(VectorSize::Quad), Scalar::F32))
+            }
             Unorm8x4Bgra => {
                 let name = self.namer.call("unpackUnorm8x4Bgra");
                 writeln!(
