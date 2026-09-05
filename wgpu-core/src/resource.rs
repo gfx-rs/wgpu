@@ -25,7 +25,7 @@ use crate::{
     },
     hal_label,
     init_tracker::{BufferInitTracker, TextureInitTracker},
-    lock::{rank, Mutex, RwLock},
+    lock::{rank, Mutex, MutexGuard, RwLock},
     ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -3444,10 +3444,11 @@ impl Blas {
         };
 
         let submit_index = if let Some(queue) = device.get_queue() {
+            drop(state);
             queue.lock_life().prepare_compact(self).unwrap_or(0) // '0' means no wait is necessary
         } else {
             // We can safely unwrap below since we just set the `compacted_state` to `BlasCompactState::Waiting`.
-            let (mut callback, status) = self.read_back_compact_size().unwrap();
+            let (mut callback, status) = self.read_back_compact_size(state).unwrap();
             if let Some(callback) = callback.take() {
                 callback(status);
             }
@@ -3459,8 +3460,10 @@ impl Blas {
 
     /// This function returns [`None`] only if [`Self::compacted_state`] is not [`BlasCompactState::Waiting`].
     #[must_use]
-    pub(crate) fn read_back_compact_size(&self) -> Option<BlasCompactReadyPendingClosure> {
-        let mut state = self.compacted_state.lock();
+    pub(crate) fn read_back_compact_size(
+        &self,
+        mut state: MutexGuard<'_, BlasCompactState>,
+    ) -> Option<BlasCompactReadyPendingClosure> {
         let pending_compact = match mem::replace(&mut *state, BlasCompactState::Idle) {
             BlasCompactState::Waiting(pending_mapping) => pending_mapping,
             // Compaction cancelled e.g. by rebuild

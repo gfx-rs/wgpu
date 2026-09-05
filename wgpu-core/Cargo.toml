@@ -30,7 +30,10 @@ ignored = ["cfg_aliases"]
 
 [lints.rust]
 missing_debug_implementations = "warn"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(wgpu_validate_locks)',
+    'cfg(wgpu_validate_locks_debug)',
+] }
 
 [lib]
 

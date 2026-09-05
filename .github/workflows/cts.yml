@@ -19,7 +19,7 @@ env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
-  RUSTFLAGS: -D warnings
+  RUSTFLAGS: -D warnings --cfg wgpu_validate_locks_debug
   RUSTDOCFLAGS: -D warnings
 
   #
