@@ -2136,6 +2136,14 @@ impl crate::Device for super::Device {
                         }
                     };
                     for attribute in vbuf.attributes {
+                        if attribute.format == nt::VertexFormat::Snorm10_10_10_2 {
+                            // Avoid `map_vertex_format` panic.
+                            // https://github.com/gfx-rs/wgpu/issues/10216
+                            return Err(crate::PipelineError::Linkage(
+                                wgt::ShaderStages::VERTEX,
+                                "HLSL: snorm-10-10-10-2 vertex format is not supported".into(),
+                            ));
+                        }
                         input_element_descs.push(Direct3D12::D3D12_INPUT_ELEMENT_DESC {
                             SemanticName: windows::core::PCSTR(NAGA_LOCATION_SEMANTIC.as_ptr()),
                             SemanticIndex: attribute.shader_location,

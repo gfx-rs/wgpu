@@ -17,6 +17,7 @@ webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_t
 webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=false;stencilReadOnly=true // https://github.com/gfx-rs/wgpu/issues/8705
 webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:format="depth32float-stencil8";depthReadOnly=true;stencilReadOnly=false // https://github.com/gfx-rs/wgpu/issues/8705
 webgpu:api,operation,rendering,3d_texture_slices:* // https://github.com/gfx-rs/wgpu/issues/9455
+webgpu:api,operation,vertex_state,correctness:* // Vulkan (https://github.com/gfx-rs/wgpu/issues/1105) and dx12 (https://github.com/gfx-rs/wgpu/issues/10216)
 
 webgpu:api,validation,buffer,create:new_usages,* // 0%, deno_webgpu declares the GPU*Usage constants as static getters, which are non-enumerable, so the test sees no legal usage bits, https://github.com/denoland/deno/issues/33846
 webgpu:api,validation,buffer,mapping:* // crash
@@ -51,8 +52,9 @@ webgpu:api,validation,render_pipeline,inter_stage:* // 15%, inter-stage type val
 webgpu:api,validation,render_pipeline,misc:external_texture:* // 0%, no external texture in deno
 webgpu:api,validation,render_pipeline,multisample_state:* // 60%, https://github.com/gfx-rs/wgpu/issues/8779
 webgpu:api,validation,render_pipeline,overrides:* // 17%, missing validation: invalid pipeline constant identifiers silently ignored
-webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_contained_in_stride:* // fails on metal in CI https://github.com/gfx-rs/wgpu/issues/8312
-webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_offset_alignment:* // fails on metal in CI
+webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_contained_in_stride:* // metal (CI only, https://github.com/gfx-rs/wgpu/issues/8312), dx12 (https://github.com/gfx-rs/wgpu/issues/10216)
+webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_offset_alignment:* // metal (CI only, https://github.com/gfx-rs/wgpu/issues/8312), dx12 (https://github.com/gfx-rs/wgpu/issues/10216)
+webgpu:api,validation,render_pipeline,vertex_state:vertex_shader_type_matches_attribute_format:* // dx12 (https://github.com/gfx-rs/wgpu/issues/10216)
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:subresources_and_binding_types_combination_for_color:* // 92%, https://github.com/gfx-rs/wgpu/issues/3126
 webgpu:api,validation,state,device_lost,destroy:* // crash
 webgpu:api,validation,texture,destroy:submit_a_destroyed_texture_as_attachment:* // 44%, https://github.com/gfx-rs/wgpu/issues/8714
