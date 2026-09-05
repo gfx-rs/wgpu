@@ -1521,7 +1521,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let init = ectx
                     .try_automatic_conversions(init, &ty_res, name.span)
                     .map_err(|error| match *error {
+                        // Both of these mean the same thing to the reader of a
+                        // `var`/`let` declaration: the initializer's type isn't
+                        // the declared one.
                         Error::AutoConversion(e) => Box::new(Error::InitializationTypeMismatch {
+                            name: name.span,
+                            expected: e.dest_type,
+                            got: e.source_type,
+                        }),
+                        Error::TypeMismatch(e) => Box::new(Error::InitializationTypeMismatch {
                             name: name.span,
                             expected: e.dest_type,
                             got: e.source_type,
@@ -1529,17 +1537,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         _ => error,
                     })?;
 
-                let init_ty = ectx.register_type(init)?;
-                if !ectx.module.compare_types(
-                    &proc::TypeResolution::Handle(explicit_ty),
-                    &proc::TypeResolution::Handle(init_ty),
-                ) {
-                    return Err(Box::new(Error::InitializationTypeMismatch {
-                        name: name.span,
-                        expected: ectx.type_to_string(explicit_ty),
-                        got: ectx.type_to_string(init_ty),
-                    }));
-                }
                 ty = explicit_ty;
                 initializer = Some(init);
             }
@@ -2148,6 +2145,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                 let value;
                 if let Some(ast_expr) = ast_value {
+                    let value_span = ctx.ast_expressions.get_span(ast_expr);
                     let result_ty = ctx.function.result.as_ref().map(|r| r.ty);
                     let mut ectx = ctx.as_expression(block, &mut emitter);
                     let expr = self.expression_for_abstract(ast_expr, &mut ectx)?;
@@ -2156,7 +2154,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         let mut ectx = ctx.as_expression(block, &mut emitter);
                         let resolution = proc::TypeResolution::Handle(result_ty);
                         let converted =
-                            ectx.try_automatic_conversions(expr, &resolution, Span::default())?;
+                            ectx.try_automatic_conversions(expr, &resolution, value_span)?;
                         value = Some(converted);
                     } else {
                         value = Some(expr);

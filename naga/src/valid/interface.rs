@@ -640,6 +640,23 @@ impl VaryingContext<'_> {
                         },
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
+                    Bi::HitBarycentrics => (
+                        match self.stage {
+                            St::RayGeneration
+                            | St::Miss
+                            | St::Vertex
+                            | St::Fragment
+                            | St::Compute
+                            | St::Mesh
+                            | St::Task => false,
+                            St::AnyHit | St::ClosestHit => !self.output,
+                        },
+                        *ty_inner
+                            == Ti::Vector {
+                                size: Vs::Bi,
+                                scalar: crate::Scalar::F32,
+                            },
+                    ),
                     // Validated elsewhere, shouldn't be here
                     Bi::VertexCount | Bi::PrimitiveCount | Bi::Vertices | Bi::Primitives => {
                         (false, true)

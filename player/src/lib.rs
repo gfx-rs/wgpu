@@ -255,10 +255,7 @@ impl Player {
                         data.kind()
                     );
                 };
-                let (shader, error) = device.create_shader_module(&desc, source);
-                if let Some(e) = error {
-                    panic!("shader compilation error:\n---{code}\n---\n{e}");
-                }
+                let shader = device.create_shader_module(&desc, source);
                 self.shader_modules.insert(id, shader);
             }
             Action::CreateShaderModulePassthrough {
@@ -313,10 +310,7 @@ impl Player {
                     glsl,
                     wgsl,
                 };
-                let (shader, error) = unsafe { device.create_shader_module_passthrough(&desc) };
-                if let Some(e) = error {
-                    panic!("shader compilation error:\n{e}");
-                }
+                let shader = unsafe { device.create_shader_module_passthrough(&desc) };
                 self.shader_modules.insert(id, shader);
             }
             Action::DropShaderModule(id) => {
