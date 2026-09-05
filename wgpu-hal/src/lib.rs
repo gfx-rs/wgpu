@@ -2030,6 +2030,7 @@ impl From<wgt::TextureFormat> for FormatAspects {
 bitflags!(
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct MemoryFlags: u32 {
+        /// The resource is short-lived and may be placed in a separate memory pool.
         const TRANSIENT = 1 << 0;
         const PREFER_COHERENT = 1 << 1;
     }
