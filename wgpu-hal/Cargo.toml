@@ -73,6 +73,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 metal = [
     # Metal is only available on Apple platforms, therefore request MSL output also only if we target an Apple platform.
     "naga/msl-out",
+    "wgpu-sync/std", # Required for send/sync
     "dep:arrayvec",
     "dep:block2",
     "dep:bytemuck",
@@ -83,13 +84,13 @@ metal = [
     "dep:objc2-foundation",
     "dep:objc2-metal",
     "dep:objc2-quartz-core",
-    "dep:parking_lot",
     "dep:profiling",
     "dep:smallvec",
     "dep:raw-window-metal",
 ]
 vulkan = [
     "naga/spv-out",
+    "wgpu-sync/std", # Required for send/sync
     "dep:android_system_properties",
     "dep:arrayvec",
     "dep:ash",
@@ -97,7 +98,6 @@ vulkan = [
     "dep:libc",
     "dep:libloading",
     "dep:ordered-float",
-    "dep:parking_lot",
     "dep:profiling",
     "dep:raw-window-metal",
     "dep:smallvec",
@@ -121,13 +121,13 @@ gles = [
     "dep:libloading",
     "dep:ndk-sys",
     "dep:objc2",
-    "dep:parking_lot",
     "dep:profiling",
     "dep:wasm-bindgen",
     "dep:wayland-sys",
     "dep:web-sys",
     "dep:windows-result",
     "naga/glsl-out",
+    "wgpu-sync/std", # Required for send/sync
     "wgpu-types/web",
     "windows-result/std", # Need to enable this for the `Error` impl on `windows_result::Error` to work.
     "windows/Win32_Graphics_Gdi",
@@ -142,15 +142,13 @@ dx12 = [
     "dep:bytemuck",
     "dep:gpu-allocator",
     "dep:libloading",
-    "dep:once_cell",
     "dep:ordered-float",
-    "dep:parking_lot",
     "dep:profiling",
     "dep:range-alloc",
     "dep:windows-core",
     "gpu-allocator/d3d12",
     "naga/hlsl-out",
-    "once_cell/std",
+    "wgpu-sync/std", # Required for send/sync
     "windows/Win32_Devices_DeviceAndDriverInstallation",
     "windows/Win32_Devices_Display",
     "windows/Win32_Graphics_Direct3D_Dxc",
@@ -177,7 +175,7 @@ renderdoc = ["dep:libloading", "dep:renderdoc-sys"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
-portable-atomic = ["dep:portable-atomic", "dep:portable-atomic-util"]
+portable-atomic = ["wgpu-sync/portable-atomic"]
 
 ###################################
 ### Internal Debugging Features ###
@@ -193,7 +191,9 @@ device_lost_panic = []
 # backends.
 internal_error_panic = []
 # Tracks validation errors in a `VALIDATION_CANARY` static.
-validation_canary = ["dep:parking_lot"]
+validation_canary = [
+    "wgpu-sync/std", # Required for send/sync
+]
 
 [[example]]
 name = "halmark"
@@ -210,13 +210,13 @@ required-features = ["gles"]
 naga.workspace = true
 wgpu-naga-bridge.workspace = true
 naga-types = { workspace = true }
+wgpu-sync = { workspace = true, default-features = false }
 wgpu-types = { workspace = true, default-features = false }
 
 # Dependencies in the lib and empty backend
 bitflags.workspace = true
 cfg-if.workspace = true
 log = { workspace = true }
-parking_lot = { workspace = true, optional = true }
 raw-window-handle.workspace = true
 thiserror.workspace = true
 
@@ -276,7 +276,6 @@ windows-result = { workspace = true, optional = true }
 # Backend: Dx12
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
-once_cell = { workspace = true, optional = true }
 # backend: GLES
 glutin_wgl_sys = { workspace = true, optional = true }
 
@@ -343,14 +342,6 @@ khronos-egl = { workspace = true, optional = true, features = [
 ] }
 # Note: it's unused by emscripten, but we keep it to have single code base in egl.rs
 libloading = { workspace = true, optional = true }
-
-[target.'cfg(any(not(target_has_atomic = "64"), not(target_has_atomic = "ptr")))'.dependencies]
-portable-atomic = { workspace = true, optional = true }
-
-[target.'cfg(not(target_has_atomic = "ptr"))'.dependencies]
-portable-atomic-util = { workspace = true, features = [
-    "alloc",
-], optional = true }
 
 ### Platform: Windows + MacOS + Linux for "raw-gles" example ###
 [target.'cfg(not(any(target_family = "wasm", target_os = "ios", target_os = "visionos", target_env = "ohos")))'.dev-dependencies]

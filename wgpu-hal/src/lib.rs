@@ -196,11 +196,11 @@
 //!
 //! ## Debugging
 //!
-//! Most of the information on the wiki [Debugging wgpu Applications][wiki-debug]
-//! page still applies to this API, with the exception of API tracing/replay
-//! functionality, which is only available in `wgpu-core`.
+//! Most of the information in the [Debugging wgpu Applications][debug-docs]
+//! documentation still applies to this API, with the exception of API
+//! tracing/replay functionality, which is only available in `wgpu-core`.
 //!
-//! [wiki-debug]: https://github.com/gfx-rs/wgpu/wiki/Debugging-wgpu-Applications
+//! [debug-docs]: https://docs.rs/wgpu/latest/wgpu/documentation/debugging/debugging_applications/index.html
 
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -308,15 +308,8 @@ use core::{
 use bitflags::bitflags;
 use raw_window_handle::DisplayHandle;
 use thiserror::Error;
+use wgpu_sync::Arc;
 use wgt::WasmNotSendSync;
-
-cfg_if::cfg_if! {
-    if #[cfg(supports_ptr_atomics)] {
-        use alloc::sync::Arc;
-    } else if #[cfg(feature = "portable-atomic")] {
-        use portable_atomic_util::Arc;
-    }
-}
 
 // - Vertex + Fragment
 // - Compute
@@ -334,26 +327,50 @@ pub const QUERY_SIZE: wgt::BufferAddress = 8;
 pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
-#[cfg(supports_64bit_atomics)]
-pub type AtomicFenceValue = core::sync::atomic::AtomicU64;
-#[cfg(not(supports_64bit_atomics))]
-pub type AtomicFenceValue = portable_atomic::AtomicU64;
+pub type AtomicFenceValue = wgpu_sync::atomic::AtomicU64;
 
 /// A callback to signal that wgpu is no longer using a resource.
-#[cfg(any(gles, vulkan, metal))]
+#[cfg(all(any(gles, vulkan, metal), not(webgl)))]
 pub type DropCallback = Box<dyn FnOnce() + Send + Sync + 'static>;
+
+/// A callback to signal that wgpu is no longer using a resource.
+///
+/// On WebGL the callback is not required to be `Send + Sync`, so it can
+/// capture JS handles — e.g. to `gl.deleteTexture` an imported
+/// `web_sys::WebGlTexture` once wgpu is done with it.
+#[cfg(webgl)]
+pub type DropCallback = Box<dyn FnOnce() + 'static>;
 
 #[cfg(any(gles, vulkan, metal))]
 pub struct DropGuard {
     callback: Option<DropCallback>,
 }
 
-#[cfg(all(any(gles, vulkan, metal), any(native, Emscripten)))]
+// SAFETY: On WebGL the callback may capture JS values, which are neither
+// `Send` nor `Sync`. Claiming both under the `send_sync` cfg follows the
+// `fragile-send-sync-non-atomic-wasm` contract: that feature promises the
+// program runs on a single thread (wasm without atomics).
+#[cfg(all(webgl, send_sync))]
+unsafe impl Send for DropGuard {}
+#[cfg(all(webgl, send_sync))]
+unsafe impl Sync for DropGuard {}
+
+#[cfg(any(gles, vulkan, metal))]
 impl DropGuard {
+    #[cfg(any(native, Emscripten))]
     fn from_option(callback: Option<DropCallback>) -> Option<Self> {
         callback.map(Self::new)
     }
 
+    /// A guard that may carry no callback, for resources that are externally
+    /// owned regardless of whether the caller wants a notification: the
+    /// guard's presence is what marks the resource as never-deleted-by-wgpu.
+    #[cfg(webgl)]
+    fn external(callback: Option<DropCallback>) -> Self {
+        Self { callback }
+    }
+
+    #[cfg(any(native, Emscripten))]
     fn new(callback: DropCallback) -> Self {
         Self {
             callback: Some(callback),
@@ -570,7 +587,7 @@ impl InstanceError {
     #[allow(dead_code, reason = "may be unused on some platforms")]
     pub(crate) fn with_source(message: String, source: impl Error + Send + Sync + 'static) -> Self {
         cfg_if::cfg_if! {
-            if #[cfg(supports_ptr_atomics)] {
+            if #[cfg(target_has_atomic = "ptr")] {
                 let source = Arc::new(source);
             } else {
                 // TODO(https://github.com/rust-lang/rust/issues/18598): avoid indirection via Box once arbitrary types support unsized coercion
@@ -1203,7 +1220,10 @@ pub trait Device: WasmNotSendSync {
         &self,
         acceleration_structure: <Self::A as Api>::AccelerationStructure,
     );
-    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8>;
+    /// Converts the `TlasInstance` into a implementation defined format, appending it to
+    /// `to_extend`. The vector must be have a length exactly the old length plus
+    /// `Alignments::raw_tlas_instance_size`
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>);
 
     fn get_internal_counters(&self) -> wgt::HalCounters;
 
@@ -2245,6 +2265,7 @@ pub struct TextureViewDescriptor<'a> {
     pub dimension: wgt::TextureViewDimension,
     pub usage: wgt::TextureUses,
     pub range: wgt::ImageSubresourceRange,
+    pub swizzle: wgt::TextureComponentSwizzle,
 }
 
 #[derive(Clone, Debug)]
@@ -2767,11 +2788,78 @@ pub struct BufferBarrier<'a, B: DynBuffer + ?Sized> {
     pub usage: StateTransition<wgt::BufferUses>,
 }
 
-#[derive(Debug, Clone)]
+/// One side of a [`QueueFamilyOwnershipTransfer`].
+///
+/// The named variants stand for the queue families that Vulkan reserves for
+/// resources shared outside the current device; [`Explicit`] carries an
+/// ordinary queue family index, such as the one returned by
+/// `vulkan::Device::queue_family_index`.
+///
+/// [`Explicit`]: QueueFamily::Explicit
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueFamily {
+    /// A specific queue family, identified by its index.
+    Explicit(u32),
+
+    /// The queue family of an external, non-Vulkan API
+    /// (`VK_QUEUE_FAMILY_EXTERNAL`).
+    External,
+
+    /// The queue family of a foreign consumer of the memory, such as a
+    /// different device or the kernel (`VK_QUEUE_FAMILY_FOREIGN_EXT`).
+    ///
+    /// Requires the `VK_EXT_queue_family_foreign` extension.
+    Foreign,
+}
+
+/// A queue family ownership transfer to perform as part of a [`TextureBarrier`].
+///
+/// This is only honored by the Vulkan backend; every other backend ignores it.
+/// It exists so that textures imported from external memory (for example via
+/// `VK_KHR_external_memory`) can have their backing image transferred between
+/// wgpu's queue family and a queue family outside of wgpu's control when the
+/// image is acquired for use and released afterwards.
+///
+/// `src` becomes `VkImageMemoryBarrier::srcQueueFamilyIndex` and `dst` becomes
+/// `VkImageMemoryBarrier::dstQueueFamilyIndex`. To acquire an externally owned
+/// image, set `src` to [`QueueFamily::External`] or [`QueueFamily::Foreign`]
+/// and `dst` to [`QueueFamily::Explicit`] with wgpu's own family, obtained from
+/// `vulkan::Device::queue_family_index`. To release it again, swap the two.
+///
+/// A queue family ownership transfer requires a matching barrier to be recorded
+/// on *both* queues; wgpu-hal only records the barrier on its own queue, so the
+/// owner of the other queue is responsible for recording the complementary one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QueueFamilyOwnershipTransfer {
+    /// The queue family that currently owns the image (`srcQueueFamilyIndex`).
+    pub src: QueueFamily,
+    /// The queue family that should own the image afterwards (`dstQueueFamilyIndex`).
+    pub dst: QueueFamily,
+}
+
+#[derive(Debug)]
 pub struct TextureBarrier<'a, T: DynTexture + ?Sized> {
     pub texture: &'a T,
     pub range: wgt::ImageSubresourceRange,
     pub usage: StateTransition<wgt::TextureUses>,
+    /// An optional Vulkan queue family ownership transfer to perform alongside
+    /// the layout/access transition described by `usage`.
+    ///
+    /// This is honored only by the Vulkan backend; all other backends ignore
+    /// it. Leave it as `None` for the common case where no ownership transfer
+    /// is required. See [`QueueFamilyOwnershipTransfer`] for details.
+    pub queue_family_ownership_transfer: Option<QueueFamilyOwnershipTransfer>,
+}
+
+impl<'a, T: DynTexture + ?Sized> Clone for TextureBarrier<'a, T> {
+    fn clone(&self) -> Self {
+        Self {
+            texture: self.texture,
+            range: self.range,
+            queue_family_ownership_transfer: self.queue_family_ownership_transfer,
+            usage: self.usage.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2864,6 +2952,8 @@ pub struct DepthStencilAttachment<'a, T: DynTextureView + ?Sized> {
     pub target: Attachment<'a, T>,
     pub depth_ops: AttachmentOps,
     pub stencil_ops: AttachmentOps,
+    pub depth_read_only: bool,
+    pub stencil_read_only: bool,
     pub clear_value: (f32, u32),
 }
 

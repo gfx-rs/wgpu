@@ -9,7 +9,7 @@ use std::thread;
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
-use parking_lot::RwLock;
+use wgpu_sync::RwLock;
 
 /// Name of the `VK_OHOS_surface` extension. Used with [`super::Instance::create_surface_ohos`].
 #[cfg(target_env = "ohos")]
@@ -162,10 +162,17 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         crate::VALIDATION_CANARY.add(message.to_string());
     }
 
-    #[cfg(all(debug_assertions, feature = "internal_error_panic"))]
+    // We disable this on Apple because there are numerous issues, some of
+    // which raise generic errors that we can't match by VUID. See
+    // <https://github.com/gfx-rs/wgpu/issues/9184> and
+    // <https://github.com/gfx-rs/wgpu/issues/9187>.
+    #[cfg(all(
+        debug_assertions,
+        feature = "internal_error_panic",
+        not(target_vendor = "apple")
+    ))]
     if level == log::Level::Error
         && message_type.contains(vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION)
-        && !error_is_waived(cd.message_id_number)
         && !cts_error_is_waived(cd.message_id_number)
     {
         use alloc::string::ToString as _;
@@ -175,32 +182,19 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     vk::FALSE
 }
 
-/// Validation errors known to fire, not just in the CTS.
-///
-/// These never panic.
-#[cfg(feature = "internal_error_panic")]
-fn error_is_waived(message_id_number: i32) -> bool {
-    const WAIVED_MESSAGE_IDS: &[i32] = &[
-        // SYNC-HAZARD-WRITE-AFTER-WRITE
-        // e.g. webgpu:api,operation,memory_sync,texture,readonly_depth_stencil:sampling_while_testing:*
-        // https://github.com/gfx-rs/wgpu/issues/5231
-        // https://github.com/gfx-rs/wgpu/issues/8705
-        0x5c0ec5d6_u32 as i32,
-    ];
-
-    WAIVED_MESSAGE_IDS.contains(&message_id_number)
-}
-
 /// Validation errors known to fire when running the CTS.
 ///
 /// These waivers are keyed off the `WGPU_CTS_XTASK` environment variable, which
 /// is set in `xtask/src/cts.rs`.
-#[cfg(feature = "internal_error_panic")]
+#[cfg(all(
+    debug_assertions,
+    feature = "internal_error_panic",
+    not(target_vendor = "apple")
+))]
 fn cts_error_is_waived(message_id_number: i32) -> bool {
-    use std::sync::LazyLock;
+    use wgpu_sync::Lazy;
 
-    static WGPU_CTS_XTASK: LazyLock<bool> =
-        LazyLock::new(|| std::env::var_os("WGPU_CTS_XTASK").is_some());
+    static WGPU_CTS_XTASK: Lazy<bool> = Lazy::new(|| std::env::var_os("WGPU_CTS_XTASK").is_some());
 
     if !*WGPU_CTS_XTASK {
         return false;

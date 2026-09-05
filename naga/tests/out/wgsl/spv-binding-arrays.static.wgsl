@@ -1,8 +1,8 @@
 enable wgpu_binding_array;
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var global: binding_array<texture_2d<f32>, 256>;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var global_1: binding_array<sampler, 256>;
 var<private> global_2: vec4<f32>;
 
@@ -12,7 +12,7 @@ fn function_() {
     return;
 }
 
-@fragment 
+@fragment
 fn main() -> @location(0) vec4<f32> {
     function_();
     let _e1 = global_2;

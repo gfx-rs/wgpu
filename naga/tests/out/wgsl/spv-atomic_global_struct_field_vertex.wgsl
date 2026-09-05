@@ -8,7 +8,7 @@ struct type_6 {
     member: type_5,
 }
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage, read_write> global: type_6;
 var<private> global_1: vec4<f32> = vec4<f32>(0f, 0f, 0f, 1f);
 
@@ -21,7 +21,7 @@ fn function_() {
     return;
 }
 
-@vertex 
+@vertex
 fn global_field_vertex() -> @builtin(position) vec4<f32> {
     function_();
     let _e1 = global_1;

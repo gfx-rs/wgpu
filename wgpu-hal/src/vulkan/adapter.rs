@@ -2,7 +2,7 @@ use alloc::{borrow::ToOwned as _, boxed::Box, collections::BTreeMap, sync::Arc, 
 use core::{ffi::CStr, marker::PhantomData};
 
 use ash::{ext, google, khr, vk};
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 
 use crate::{vulkan::semaphore_list::SemaphoreList, AllocationSizes};
 
@@ -601,11 +601,14 @@ impl PhysicalDeviceFeatures {
                 None
             },
             portability_subset: if enabled_extensions.contains(&khr::portability_subset::NAME) {
+                let image_view_format_swizzle_needed =
+                    requested_features.intersects(wgt::Features::TEXTURE_COMPONENT_SWIZZLE);
                 let multisample_array_needed =
                     requested_features.intersects(wgt::Features::MULTISAMPLE_ARRAY);
 
                 Some(
                     vk::PhysicalDevicePortabilitySubsetFeaturesKHR::default()
+                        .image_view_format_swizzle(image_view_format_swizzle_needed)
                         .multisample_array_image(multisample_array_needed),
                 )
             } else {
@@ -683,7 +686,6 @@ impl PhysicalDeviceFeatures {
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
-            | Df::READ_ONLY_DEPTH_STENCIL
             | Df::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | Df::COMPARISON_SAMPLERS
             | Df::VERTEX_STORAGE
@@ -696,7 +698,17 @@ impl PhysicalDeviceFeatures {
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
             | Df::NONBLOCKING_QUERY_RESOLVE
             | Df::SHADER_F16_IN_F32
-            | Df::MSL2_1;
+            | Df::MSL2_1
+            | Df::LINEAR_INTERPOLATION;
+
+        // `VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL`
+        // and `VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL`
+        // is required for separate read-only depth stencil.
+        dl_flags.set(
+            Df::READ_ONLY_DEPTH_STENCIL,
+            caps.device_api_version >= vk::API_VERSION_1_1
+                || caps.supports_extension(khr::maintenance2::NAME),
+        );
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
@@ -1081,11 +1093,18 @@ impl PhysicalDeviceFeatures {
 
         // Not supported by default by `VK_KHR_portability_subset`, which we use on apple platforms.
         features.set(
+            F::TEXTURE_COMPONENT_SWIZZLE,
+            self.portability_subset
+                .map(|p| p.image_view_format_swizzle == vk::TRUE)
+                .unwrap_or(true),
+        );
+        features.set(
             F::MULTISAMPLE_ARRAY,
             self.portability_subset
                 .map(|p| p.multisample_array_image == vk::TRUE)
                 .unwrap_or(true),
         );
+
         // Enable cooperative matrix if any configuration is supported. The SPIR-V
         // we emit for it uses `Device`-scope atomics under the Vulkan memory model,
         // so the device must also support `vulkanMemoryModelDeviceScope`, otherwise
@@ -1147,6 +1166,10 @@ pub struct PhysicalDeviceProperties {
     /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_KHR_maintenance4` extension, promoted to Vulkan 1.3.
     maintenance_4: Option<vk::PhysicalDeviceMaintenance4Properties<'static>>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_KHR_maintenance5` extension, promoted to Vulkan 1.4.
+    maintenance_5: Option<vk::PhysicalDeviceMaintenance5PropertiesKHR<'static>>,
 
     /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_EXT_descriptor_indexing` extension, promoted to Vulkan 1.2.
@@ -1296,7 +1319,11 @@ impl PhysicalDeviceProperties {
                 extensions.push(khr::shader_float16_int8::NAME);
             }
 
-            if requested_features.intersects(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
+            // `SPV_EXT_mesh_shader` and `SPV_KHR_ray_tracing` both require SPIR-V 1.4.
+            if requested_features.intersects(
+                wgt::Features::EXPERIMENTAL_MESH_SHADER
+                    | wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES,
+            ) {
                 extensions.push(khr::spirv_1_4::NAME);
             }
 
@@ -1323,6 +1350,34 @@ impl PhysicalDeviceProperties {
             // Optional `VK_KHR_shader_integer_dot_product`
             if self.supports_extension(khr::shader_integer_dot_product::NAME) {
                 extensions.push(khr::shader_integer_dot_product::NAME);
+            }
+
+            // Optional `VK_KHR_dynamic_rendering`.
+            // Depends on:
+            // - `VK_KHR_get_physical_device_properties2` or Vulkan 1.1, and `VK_KHR_depth_stencil_resolve`
+            // - or Vulkan 1.2
+            //
+            // We only check Vulkan 1.2 for now, as `VK_KHR_depth_stencil_resolve`
+            // also depends a bunch of extensions.
+            if self.device_api_version >= vk::API_VERSION_1_2
+                && self.supports_extension(khr::dynamic_rendering::NAME)
+            {
+                extensions.push(khr::dynamic_rendering::NAME);
+            }
+
+            // Optional `VK_KHR_load_store_op_none`
+            if self.supports_extension(khr::load_store_op_none::NAME) {
+                extensions.push(khr::load_store_op_none::NAME);
+            }
+
+            // Optional `VK_QCOM_render_pass_store_ops`
+            if self.supports_extension(ash::qcom::render_pass_store_ops::NAME) {
+                extensions.push(ash::qcom::render_pass_store_ops::NAME);
+            }
+
+            // Optional `VK_EXT_load_store_op_none`
+            if self.supports_extension(ext::load_store_op_none::NAME) {
+                extensions.push(ext::load_store_op_none::NAME);
             }
         }
 
@@ -1869,6 +1924,9 @@ impl super::InstanceShared {
                     || capabilities.supports_extension(khr::maintenance3::NAME);
                 let supports_maintenance4 = capabilities.device_api_version >= vk::API_VERSION_1_3
                     || capabilities.supports_extension(khr::maintenance4::NAME);
+                let supports_maintenance5 = capabilities.device_api_version
+                    >= vk::make_api_version(0, 1, 4, 0) // TODO: Use `vk::API_VERSION_1_4` after `ash` is updated.
+                    || capabilities.supports_extension(khr::maintenance5::NAME);
                 let supports_descriptor_indexing = capabilities.device_api_version
                     >= vk::API_VERSION_1_2
                     || capabilities.supports_extension(ext::descriptor_indexing::NAME);
@@ -1902,6 +1960,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .maintenance_4
                         .insert(vk::PhysicalDeviceMaintenance4Properties::default());
+                    properties2 = properties2.push_next(next);
+                }
+
+                if supports_maintenance5 {
+                    let next = capabilities
+                        .maintenance_5
+                        .insert(vk::PhysicalDeviceMaintenance5PropertiesKHR::default());
                     properties2 = properties2.push_next(next);
                 }
 
@@ -2458,7 +2523,17 @@ impl super::Instance {
                 .map(|a| a.max_multiview_instance_index)
                 .unwrap_or(0),
             scratch_buffer_alignment: alignments.ray_tracing_scratch_buffer_alignment,
+            depth_stencil_swizzle_one_support: phd_capabilities
+                .maintenance_5
+                .map(|maintenance_5| maintenance_5.depth_stencil_swizzle_one_support == vk::TRUE)
+                .unwrap_or(false),
             ray_tracing_pipeline_group_data_size: alignments.ray_tracing_pipeline_group_data_size,
+            store_op_none: phd_capabilities.device_api_version >= vk::API_VERSION_1_3
+                || (phd_capabilities.device_api_version >= vk::API_VERSION_1_2
+                    && phd_capabilities.supports_extension(khr::dynamic_rendering::NAME))
+                || phd_capabilities.supports_extension(khr::load_store_op_none::NAME)
+                || phd_capabilities.supports_extension(ash::qcom::render_pass_store_ops::NAME)
+                || phd_capabilities.supports_extension(ext::load_store_op_none::NAME),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -2832,14 +2907,23 @@ impl super::Adapter {
                 capabilities.extend(&[spv::Capability::Int8]);
             }
             spv::Options {
-                lang_version: match self.phd_capabilities.device_api_version {
+                lang_version: {
                     // Use maximum supported SPIR-V version according to
                     // <https://github.com/KhronosGroup/Vulkan-Docs/blob/19b7651/appendices/spirvenv.adoc?plain=1#L21-L40>.
-                    vk::API_VERSION_1_0..vk::API_VERSION_1_1 => (1, 0),
-                    vk::API_VERSION_1_1..vk::API_VERSION_1_2 => (1, 3),
-                    vk::API_VERSION_1_2..vk::API_VERSION_1_3 => (1, 5),
-                    vk::API_VERSION_1_3.. => (1, 6),
-                    _ => unreachable!(),
+                    let version = match self.phd_capabilities.device_api_version {
+                        vk::API_VERSION_1_0..vk::API_VERSION_1_1 => (1, 0),
+                        vk::API_VERSION_1_1..vk::API_VERSION_1_2 => (1, 3),
+                        vk::API_VERSION_1_2..vk::API_VERSION_1_3 => (1, 5),
+                        vk::API_VERSION_1_3.. => (1, 6),
+                        _ => unreachable!(),
+                    };
+                    // `VK_KHR_spirv_1_4` raises that ceiling on pre-1.2 devices, which
+                    // both mesh shaders and ray tracing pipelines need it to do.
+                    if enabled_extensions.contains(&khr::spirv_1_4::NAME) {
+                        version.max((1, 4))
+                    } else {
+                        version
+                    }
                 },
                 flags,
                 capabilities: Some(capabilities.iter().cloned().collect()),
@@ -2955,6 +3039,7 @@ impl super::Adapter {
             relay_semaphores: Mutex::new(relay_semaphores),
             signal_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Signal)),
             wait_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Wait)),
+            next_submit_chain: Mutex::new(None),
         };
 
         let allocation_sizes = AllocationSizes::from_memory_hints(memory_hints).into();

@@ -4,7 +4,7 @@ struct Input {
     @builtin(draw_index) draw_index: u32,
 }
 
-@vertex 
+@vertex
 fn vertex(input: Input) -> @builtin(position) vec4<f32> {
     return vec4<f32>(f32(input.draw_index), 1f, 1f, 1f);
 }

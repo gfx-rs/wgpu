@@ -29,8 +29,6 @@ use crate::texture::GPUTextureView;
 use crate::webidl::GPUColor;
 
 pub struct GPURenderPassEncoder {
-  pub error_handler: super::error::ErrorHandler,
-
   pub render_pass: RefCell<wgpu_core::command::RenderPass>,
   pub label: String,
 }
@@ -71,12 +69,10 @@ impl GPURenderPassEncoder {
     #[webidl] min_depth: f32,
     #[webidl] max_depth: f32,
   ) {
-    let err = self
+    self
       .render_pass
       .borrow_mut()
-      .set_viewport(x, y, width, height, min_depth, max_depth)
-      .err();
-    self.error_handler.push_error(err);
+      .set_viewport(x, y, width, height, min_depth, max_depth);
   }
 
   #[required(4)]
@@ -88,23 +84,20 @@ impl GPURenderPassEncoder {
     #[webidl(options(enforce_range = true))] width: u32,
     #[webidl(options(enforce_range = true))] height: u32,
   ) {
-    let err = self
+    self
       .render_pass
       .borrow_mut()
-      .set_scissor_rect(x, y, width, height)
-      .err();
-    self.error_handler.push_error(err);
+      .set_scissor_rect(x, y, width, height);
   }
 
+  #[reentrant]
   #[required(1)]
   #[undefined]
   fn set_blend_constant(&self, #[webidl] color: GPUColor) {
-    let err = self
+    self
       .render_pass
       .borrow_mut()
-      .set_blend_constant(color.into())
-      .err();
-    self.error_handler.push_error(err);
+      .set_blend_constant(color.into());
   }
 
   #[required(1)]
@@ -113,12 +106,10 @@ impl GPURenderPassEncoder {
     &self,
     #[webidl(options(enforce_range = true))] reference: u32,
   ) {
-    let err = self
+    self
       .render_pass
       .borrow_mut()
-      .set_stencil_reference(reference)
-      .err();
-    self.error_handler.push_error(err);
+      .set_stencil_reference(reference);
   }
 
   #[required(1)]
@@ -127,75 +118,56 @@ impl GPURenderPassEncoder {
     &self,
     #[webidl(options(enforce_range = true))] query_index: u32,
   ) {
-    let err = self
+    self
       .render_pass
       .borrow_mut()
-      .begin_occlusion_query(query_index)
-      .err();
-    self.error_handler.push_error(err);
+      .begin_occlusion_query(query_index);
   }
 
   #[fast]
   #[undefined]
   fn end_occlusion_query(&self) {
-    let err = self.render_pass.borrow_mut().end_occlusion_query().err();
-    self.error_handler.push_error(err);
+    self.render_pass.borrow_mut().end_occlusion_query();
   }
 
+  #[reentrant]
   #[required(1)]
   #[undefined]
   fn execute_bundles(&self, #[webidl] bundles: Vec<Ptr<GPURenderBundle>>) {
-    let err = self
-      .render_pass
-      .borrow_mut()
-      .execute_bundles(
-        &bundles
-          .into_iter()
-          .map(|bundle| bundle.wgpu_render_bundle.clone())
-          .collect::<Vec<_>>(),
-      )
-      .err();
-    self.error_handler.push_error(err);
+    self.render_pass.borrow_mut().execute_bundles(
+      &bundles
+        .into_iter()
+        .map(|bundle| bundle.wgpu_render_bundle.clone())
+        .collect::<Vec<_>>(),
+    );
   }
 
   #[fast]
   #[undefined]
   fn end(&self) {
-    let err = self.render_pass.borrow_mut().end().err();
-    self.error_handler.push_error(err);
+    self.render_pass.borrow_mut().end();
   }
 
   #[undefined]
   fn push_debug_group(&self, #[webidl] group_label: String) {
-    let err = self
-      .render_pass
-      .borrow_mut()
-      .push_debug_group(
-        &group_label,
-        0, // wgpu#975
-      )
-      .err();
-    self.error_handler.push_error(err);
+    self.render_pass.borrow_mut().push_debug_group(
+      &group_label,
+      0, // wgpu#975
+    );
   }
 
   #[fast]
   #[undefined]
   fn pop_debug_group(&self) {
-    let err = self.render_pass.borrow_mut().pop_debug_group().err();
-    self.error_handler.push_error(err);
+    self.render_pass.borrow_mut().pop_debug_group();
   }
 
   #[undefined]
   fn insert_debug_marker(&self, #[webidl] marker_label: String) {
-    let err = self
-      .render_pass
-      .borrow_mut()
-      .insert_debug_marker(
-        &marker_label,
-        0, // wgpu#975
-      )
-      .err();
-    self.error_handler.push_error(err);
+    self.render_pass.borrow_mut().insert_debug_marker(
+      &marker_label,
+      0, // wgpu#975
+    );
   }
 
   #[undefined]
@@ -211,8 +183,7 @@ impl GPURenderPassEncoder {
     const PREFIX: &str =
       "Failed to execute 'setBindGroup' on 'GPUComputePassEncoder'";
 
-    let err = if let Ok(uint_32) = dynamic_offsets.try_cast::<v8::Uint32Array>()
-    {
+    if let Ok(uint_32) = dynamic_offsets.try_cast::<v8::Uint32Array>() {
       let start = u64::convert(
         scope,
         dynamic_offsets_data_start,
@@ -244,17 +215,13 @@ impl GPURenderPassEncoder {
 
       let offsets = &data[start..(start + len)];
 
-      self
-        .render_pass
-        .borrow_mut()
-        .set_bind_group(
-          index,
-          bind_group
-            .into_option()
-            .map(|bind_group| bind_group.wgpu_bind_group.clone()),
-          offsets,
-        )
-        .err()
+      self.render_pass.borrow_mut().set_bind_group(
+        index,
+        bind_group
+          .into_option()
+          .map(|bind_group| bind_group.wgpu_bind_group.clone()),
+        offsets,
+      )
     } else {
       let offsets = <Option<Vec<u32>>>::convert(
         scope,
@@ -268,20 +235,14 @@ impl GPURenderPassEncoder {
       )?
       .unwrap_or_default();
 
-      self
-        .render_pass
-        .borrow_mut()
-        .set_bind_group(
-          index,
-          bind_group
-            .into_option()
-            .map(|bind_group| bind_group.wgpu_bind_group.clone()),
-          &offsets,
-        )
-        .err()
+      self.render_pass.borrow_mut().set_bind_group(
+        index,
+        bind_group
+          .into_option()
+          .map(|bind_group| bind_group.wgpu_bind_group.clone()),
+        &offsets,
+      )
     };
-
-    self.error_handler.push_error(err);
 
     Ok(())
   }
@@ -291,12 +252,10 @@ impl GPURenderPassEncoder {
     &self,
     #[webidl] pipeline: Ptr<crate::render_pipeline::GPURenderPipeline>,
   ) {
-    let err = self
+    self
       .render_pass
       .borrow_mut()
-      .set_pipeline(pipeline.wgpu_render_pipeline.clone())
-      .err();
-    self.error_handler.push_error(err);
+      .set_pipeline(pipeline.wgpu_render_pipeline.clone());
   }
 
   #[required(2)]
@@ -308,17 +267,12 @@ impl GPURenderPassEncoder {
     #[webidl(default = 0, options(enforce_range = true))] offset: u64,
     #[webidl(options(enforce_range = true))] size: Option<u64>,
   ) {
-    let err = self
-      .render_pass
-      .borrow_mut()
-      .set_index_buffer(
-        buffer.wgpu_buffer.clone(),
-        index_format.into(),
-        offset,
-        size.and_then(NonZeroU64::new),
-      )
-      .err();
-    self.error_handler.push_error(err);
+    self.render_pass.borrow_mut().set_index_buffer(
+      buffer.wgpu_buffer.clone(),
+      index_format.into(),
+      offset,
+      size.and_then(NonZeroU64::new),
+    );
   }
 
   #[required(2)]
@@ -330,19 +284,14 @@ impl GPURenderPassEncoder {
     #[webidl(default = 0, options(enforce_range = true))] offset: u64,
     #[webidl(options(enforce_range = true))] size: Option<u64>,
   ) {
-    let err = self
-      .render_pass
-      .borrow_mut()
-      .set_vertex_buffer(
-        slot,
-        buffer
-          .into_option()
-          .map(|buffer| buffer.wgpu_buffer.clone()),
-        offset,
-        size.and_then(NonZeroU64::new),
-      )
-      .err();
-    self.error_handler.push_error(err);
+    self.render_pass.borrow_mut().set_vertex_buffer(
+      slot,
+      buffer
+        .into_option()
+        .map(|buffer| buffer.wgpu_buffer.clone()),
+      offset,
+      size.and_then(NonZeroU64::new),
+    );
   }
 
   #[required(1)]
@@ -354,12 +303,12 @@ impl GPURenderPassEncoder {
     #[webidl(default = 0, options(enforce_range = true))] first_vertex: u32,
     #[webidl(default = 0, options(enforce_range = true))] first_instance: u32,
   ) {
-    let err = self
-      .render_pass
-      .borrow_mut()
-      .draw(vertex_count, instance_count, first_vertex, first_instance)
-      .err();
-    self.error_handler.push_error(err);
+    self.render_pass.borrow_mut().draw(
+      vertex_count,
+      instance_count,
+      first_vertex,
+      first_instance,
+    );
   }
 
   #[required(1)]
@@ -372,18 +321,13 @@ impl GPURenderPassEncoder {
     #[webidl(default = 0, options(enforce_range = true))] base_vertex: i32,
     #[webidl(default = 0, options(enforce_range = true))] first_instance: u32,
   ) {
-    let err = self
-      .render_pass
-      .borrow_mut()
-      .draw_indexed(
-        index_count,
-        instance_count,
-        first_index,
-        base_vertex,
-        first_instance,
-      )
-      .err();
-    self.error_handler.push_error(err);
+    self.render_pass.borrow_mut().draw_indexed(
+      index_count,
+      instance_count,
+      first_index,
+      base_vertex,
+      first_instance,
+    );
   }
 
   #[required(2)]
@@ -393,12 +337,10 @@ impl GPURenderPassEncoder {
     #[webidl] indirect_buffer: Ptr<GPUBuffer>,
     #[webidl(options(enforce_range = true))] indirect_offset: u64,
   ) {
-    let err = self
+    self
       .render_pass
       .borrow_mut()
-      .draw_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset)
-      .err();
-    self.error_handler.push_error(err);
+      .draw_indirect(indirect_buffer.wgpu_buffer.clone(), indirect_offset);
   }
 
   #[required(2)]
@@ -408,15 +350,10 @@ impl GPURenderPassEncoder {
     #[webidl] indirect_buffer: Ptr<GPUBuffer>,
     #[webidl(options(enforce_range = true))] indirect_offset: u64,
   ) {
-    let err = self
-      .render_pass
-      .borrow_mut()
-      .draw_indexed_indirect(
-        indirect_buffer.wgpu_buffer.clone(),
-        indirect_offset,
-      )
-      .err();
-    self.error_handler.push_error(err);
+    self.render_pass.borrow_mut().draw_indexed_indirect(
+      indirect_buffer.wgpu_buffer.clone(),
+      indirect_offset,
+    );
   }
 
   #[required(2)]
@@ -431,12 +368,7 @@ impl GPURenderPassEncoder {
   ) -> Result<(), JsErrorBox> {
     let data = get_data_slice(scope, data_arg, data_offset, data_size)?;
 
-    let err = self
-      .render_pass
-      .borrow_mut()
-      .set_immediates(offset, data)
-      .err();
-    self.error_handler.push_error(err);
+    self.render_pass.borrow_mut().set_immediates(offset, data);
     Ok(())
   }
 }

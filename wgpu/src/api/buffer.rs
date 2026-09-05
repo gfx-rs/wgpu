@@ -222,8 +222,6 @@ use crate::*;
 pub struct Buffer {
     pub(crate) inner: dispatch::DispatchBuffer,
     pub(crate) map_context: Arc<Mutex<MapContext>>,
-    pub(crate) size: wgt::BufferAddress,
-    pub(crate) usage: BufferUsages,
     // Todo: missing map_state https://www.w3.org/TR/webgpu/#dom-gpubuffer-mapstate
 }
 #[cfg(send_sync)]
@@ -291,7 +289,7 @@ impl Buffer {
         &self,
     ) -> Option<impl core::ops::Deref<Target = A::Buffer> + WasmNotSendSync> {
         let buffer = self.inner.as_core_opt()?;
-        unsafe { buffer.context.buffer_as_hal::<A>(buffer) }
+        unsafe { buffer.as_hal::<A>() }
     }
 
     /// Returns a [`BufferSlice`] referring to the portion of `self`'s contents
@@ -312,8 +310,8 @@ impl Buffer {
     /// - If `bounds` is outside of the bounds of `self`.
     #[track_caller]
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {
-        let (offset, size) = range_to_offset_size(bounds, self.size);
-        check_buffer_bounds(self.size, offset, size);
+        let (offset, size) = range_to_offset_size(bounds, self.size());
+        check_buffer_bounds(self.size(), offset, size);
         BufferSlice {
             buffer: self,
             offset,
@@ -339,14 +337,14 @@ impl Buffer {
     ///
     /// This is always equal to the `size` that was specified when creating the buffer.
     pub fn size(&self) -> BufferAddress {
-        self.size
+        self.inner.size()
     }
 
     /// Returns the allowed usages for this `Buffer`.
     ///
     /// This is always equal to the `usage` that was specified when creating the buffer.
     pub fn usage(&self) -> BufferUsages {
-        self.usage
+        self.inner.usage()
     }
 
     /// Map the buffer to host (CPU) memory, making it available for reading or writing via

@@ -216,7 +216,7 @@ bitflags::bitflags! {
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[cfg_attr(feature = "serde", serde(transparent))]
-    pub struct TextureUses: u16 {
+    pub struct TextureUses: u32 {
         /// The texture is in unknown state.
         const UNINITIALIZED = 1 << 0;
         /// Ready to present image to the surface.
@@ -231,36 +231,45 @@ bitflags::bitflags! {
         const RESOURCE = 1 << 4;
         /// The color target of a renderpass.
         const COLOR_TARGET = 1 << 5;
-        /// Read-only depth stencil usage.
-        const DEPTH_STENCIL_READ = 1 << 6;
-        /// Read-write depth stencil usage
-        const DEPTH_STENCIL_WRITE = 1 << 7;
+        /// Read-only depth usage.
+        const DEPTH_READ = 1 << 6;
+        /// Read-write depth usage
+        const DEPTH_WRITE = 1 << 7;
+        /// Read-only stencil usage.
+        const STENCIL_READ = 1 << 8;
+        /// Read-write stencil usage
+        const STENCIL_WRITE = 1 << 9;
         /// Read-only storage texture usage. Corresponds to a UAV in d3d, so is exclusive, despite being read only.
         /// cbindgen:ignore
-        const STORAGE_READ_ONLY = 1 << 8;
+        const STORAGE_READ_ONLY = 1 << 10;
         /// Write-only storage texture usage.
         /// cbindgen:ignore
-        const STORAGE_WRITE_ONLY = 1 << 9;
+        const STORAGE_WRITE_ONLY = 1 << 11;
         /// Read-write storage texture usage.
         /// cbindgen:ignore
-        const STORAGE_READ_WRITE = 1 << 10;
+        const STORAGE_READ_WRITE = 1 << 12;
         /// Image atomic enabled storage.
         /// cbindgen:ignore
-        const STORAGE_ATOMIC = 1 << 11;
+        const STORAGE_ATOMIC = 1 << 13;
         /// Transient texture that may not have any backing memory. Not a resource state stored in the trackers, only used for passing down usages to create_texture.
-        const TRANSIENT = 1 << 12;
+        const TRANSIENT = 1 << 14;
         /// The combination of states that a texture may be in _at the same time_.
         /// cbindgen:ignore
-        const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits() | Self::STORAGE_READ_ONLY.bits();
+        const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_READ.bits()| Self::STENCIL_READ.bits() | Self::STORAGE_READ_ONLY.bits();
         /// The combination of states that a texture must exclusively be in.
         /// cbindgen:ignore
-        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
+        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
-        const COMPLEX = 1 << 13;
+        const COMPLEX = 1 << 15;
         /// Flag used by the wgpu-core texture tracker to say that the tracker does not know the state of the sub-resource.
         /// This is different from UNINITIALIZED as that says the tracker does know, but the texture has not been initialized.
-        const UNKNOWN = 1 << 14;
+        const UNKNOWN = 1 << 16;
+
+        /// Flag used by texture tracker to say the read-only depth aspect of texture is sampled.
+        const DEPTH_SAMPLED = 1 << 17;
+        /// Flag used by texture tracker to say the read-only stencil aspect of texture is sampled.
+        const STENCIL_SAMPLED = 1 << 18;
     }
 }
 
@@ -441,6 +450,89 @@ pub enum StorageTextureAccess {
     Atomic,
 }
 
+/// Specifies the component swizzle for a channel.
+///
+/// Used in [`TextureComponentSwizzle`]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ComponentSwizzle {
+    /// Force its value to 0.
+    Zero,
+    /// Force its value to 1.
+    One,
+    /// Take its value from the red channel of the texture.
+    R,
+    /// Take its value from the green channel of the texture.
+    G,
+    /// Take its value from the blue channel of the texture.
+    B,
+    /// Take its value from the alpha channel of the texture.
+    A,
+}
+
+/// Specifies the texture component swizzle for each channel.
+///
+/// Used in [`TextureViewDescriptor::swizzle`].
+///
+/// Example:
+/// ```rust
+/// # use wgpu_types::{TextureComponentSwizzle, ComponentSwizzle};
+/// // The swizzle maps `xgxr` to `rg01`, or maps `rgba` to `ag01`
+/// TextureComponentSwizzle {
+///     r: ComponentSwizzle::A,
+///     g: ComponentSwizzle::G,
+///     b: ComponentSwizzle::Zero,
+///     a: ComponentSwizzle::One,
+/// };
+/// ```
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct TextureComponentSwizzle {
+    /// Replace the red channel with the [`ComponentSwizzle`].
+    pub r: ComponentSwizzle,
+    /// Replace the green channel with the [`ComponentSwizzle`].
+    pub g: ComponentSwizzle,
+    /// Replace the blue channel with the [`ComponentSwizzle`].
+    pub b: ComponentSwizzle,
+    /// Replace the alpha channel with the [`ComponentSwizzle`].
+    pub a: ComponentSwizzle,
+}
+
+impl Default for TextureComponentSwizzle {
+    fn default() -> Self {
+        Self {
+            r: ComponentSwizzle::R,
+            g: ComponentSwizzle::G,
+            b: ComponentSwizzle::B,
+            a: ComponentSwizzle::A,
+        }
+    }
+}
+
+impl TextureComponentSwizzle {
+    fn select(&self, component: ComponentSwizzle) -> ComponentSwizzle {
+        match component {
+            ComponentSwizzle::Zero => ComponentSwizzle::Zero,
+            ComponentSwizzle::One => ComponentSwizzle::One,
+            ComponentSwizzle::R => self.r,
+            ComponentSwizzle::G => self.g,
+            ComponentSwizzle::B => self.b,
+            ComponentSwizzle::A => self.a,
+        }
+    }
+
+    /// Computes a swizzle that when applied, is equivalent to applying `self` then `other`,
+    /// like the order of WGSL swizzles (`value.rgba.rgba`).
+    pub fn compose(&self, other: Self) -> Self {
+        Self {
+            r: self.select(other.r),
+            g: self.select(other.g),
+            b: self.select(other.b),
+            a: self.select(other.a),
+        }
+    }
+}
+
 /// Describes a [`TextureView`].
 ///
 /// For use with [`Texture::create_view()`].
@@ -478,6 +570,12 @@ pub struct TextureViewDescriptor<L> {
     /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
     /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
     pub array_layer_count: Option<u32>,
+    /// Texture component swizzle.
+    /// When the texture view is accessed by a shader, the red/green/blue/alpha channels are replaced
+    /// by the value corresponding to the component specified in [`TextureComponentSwizzle`].
+    ///
+    /// This requires [`Features::TEXTURE_COMPONENT_SWIZZLE`] if it is not identity swizzle.
+    pub swizzle: TextureComponentSwizzle,
 }
 
 impl<L> TextureViewDescriptor<L> {
@@ -494,6 +592,7 @@ impl<L> TextureViewDescriptor<L> {
             mip_level_count: self.mip_level_count,
             base_array_layer: self.base_array_layer,
             array_layer_count: self.array_layer_count,
+            swizzle: self.swizzle,
         }
     }
 }
@@ -646,6 +745,21 @@ impl<L, V> TextureDescriptor<L, V> {
             TextureDimension::D1 | TextureDimension::D3 => 1,
             TextureDimension::D2 => self.size.depth_or_array_layers,
         }
+    }
+
+    /// Returns the theoretical memory footprint of a texture.
+    ///
+    /// Actual memory usage may greatly exceed this value due to alignment and padding.
+    #[must_use]
+    pub fn theoretical_memory_footprint(&self) -> u64 {
+        (0..self.mip_level_count).fold(0, |acc, level| {
+            acc.saturating_add(
+                self.format.theoretical_memory_footprint(
+                    self.mip_level_size(level)
+                        .expect("mipmap level should be inbounds"),
+                ),
+            )
+        })
     }
 }
 

@@ -391,6 +391,9 @@ impl TimestampNormalizationBindGroup {
 }
 
 fn compute_timestamp_period(input: f32) -> (u32, u32) {
+    #[cfg(not(feature = "std"))]
+    use num_traits::float::Float as _;
+
     let pow2 = input.log2().ceil() as i32;
     let clamped_pow2 = pow2.clamp(-32, 32).unsigned_abs();
     let shift = 32 - clamped_pow2;

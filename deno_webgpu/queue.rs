@@ -23,8 +23,6 @@ use crate::webidl::GPUExtent3D;
 use crate::webidl::GPUOrigin3D;
 
 pub struct GPUQueue {
-  pub error_handler: super::error::ErrorHandler,
-
   pub label: String,
 
   pub wgpu_queue: Arc<wgpu_core::device::queue::Queue>,
@@ -56,6 +54,7 @@ impl GPUQueue {
     // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
   }
 
+  #[reentrant]
   #[required(1)]
   #[undefined]
   fn submit(
@@ -67,11 +66,7 @@ impl GPUQueue {
       .map(|cb| cb.wgpu_command_buffer.clone())
       .collect::<Vec<_>>();
 
-    let err = self.wgpu_queue.submit(&ids).err();
-
-    if let Some((_, err)) = err {
-      self.error_handler.push_error(Some(err));
-    }
+    self.wgpu_queue.submit(&ids);
 
     Ok(())
   }
@@ -131,16 +126,16 @@ impl GPUQueue {
   ) -> Result<(), JsErrorBox> {
     let data = get_data_slice(scope, data_arg, data_offset, size)?;
 
-    let err = self
-      .wgpu_queue
-      .write_buffer(buffer.wgpu_buffer.clone(), buffer_offset, data)
-      .err();
-
-    self.error_handler.push_error(err);
+    self.wgpu_queue.write_buffer(
+      buffer.wgpu_buffer.clone(),
+      buffer_offset,
+      data,
+    );
 
     Ok(())
   }
 
+  #[reentrant]
   #[required(4)]
   #[undefined]
   fn write_texture(
@@ -163,12 +158,9 @@ impl GPUQueue {
       rows_per_image: data_layout.rows_per_image,
     };
 
-    let err = self
+    self
       .wgpu_queue
-      .write_texture(destination, buf, &data_layout, &size.into())
-      .err();
-
-    self.error_handler.push_error(err);
+      .write_texture(destination, buf, &data_layout, &size.into());
   }
 }
 

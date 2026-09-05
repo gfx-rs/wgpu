@@ -87,6 +87,89 @@ impl Drop for super::CommandEncoder {
 }
 
 impl super::CommandEncoder {
+    unsafe fn push_barrier<'a>(&mut self, barrier: crate::TextureBarrier<'a, super::Texture>) {
+        let s0 = conv::map_texture_usage_to_state(barrier.usage.from);
+        let s1 = conv::map_texture_usage_to_state(barrier.usage.to);
+        if s0 != s1 {
+            let mut raw = Direct3D12::D3D12_RESOURCE_BARRIER {
+                Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                Anonymous: Direct3D12::D3D12_RESOURCE_BARRIER_0 {
+                    Transition: mem::ManuallyDrop::new(
+                        Direct3D12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                            pResource: unsafe {
+                                borrow_interface_temporarily(&barrier.texture.resource)
+                            },
+                            Subresource: Direct3D12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                            StateBefore: s0,
+                            StateAfter: s1,
+                        },
+                    ),
+                },
+            };
+
+            let tex_mip_level_count = barrier.texture.mip_level_count;
+            let tex_array_layer_count = barrier.texture.array_layer_count();
+
+            if barrier.range.is_full_resource(
+                barrier.texture.format,
+                tex_mip_level_count,
+                tex_array_layer_count,
+            ) {
+                // Only one barrier if it affects the whole image.
+                self.temp.barriers.push(raw);
+            } else {
+                // Selected texture aspect is relevant if the texture format has both depth _and_ stencil aspects.
+                let planes = if barrier.texture.format.is_combined_depth_stencil_format() {
+                    match barrier.range.aspect {
+                        wgt::TextureAspect::All => 0..2,
+                        wgt::TextureAspect::DepthOnly => 0..1,
+                        wgt::TextureAspect::StencilOnly => 1..2,
+                        _ => unreachable!(),
+                    }
+                } else if let Some(planes) = barrier.texture.format.planes() {
+                    match barrier.range.aspect {
+                        wgt::TextureAspect::All => 0..planes,
+                        wgt::TextureAspect::Plane0 => 0..1,
+                        wgt::TextureAspect::Plane1 => 1..2,
+                        wgt::TextureAspect::Plane2 => 2..3,
+                        _ => unreachable!(),
+                    }
+                } else {
+                    match barrier.texture.format {
+                        wgt::TextureFormat::Stencil8 => 1..2,
+                        wgt::TextureFormat::Depth24Plus => 0..2, // TODO: investigate why tests fail if we set this to 0..1
+                        _ => 0..1,
+                    }
+                };
+
+                for mip_level in barrier.range.mip_range(tex_mip_level_count) {
+                    for array_layer in barrier.range.layer_range(tex_array_layer_count) {
+                        for plane in planes.clone() {
+                            unsafe { &mut *raw.Anonymous.Transition }.Subresource = barrier
+                                .texture
+                                .calc_subresource(mip_level, array_layer, plane);
+                            self.temp.barriers.push(raw.clone());
+                        }
+                    }
+                }
+            }
+        } else if barrier.usage.from == wgt::TextureUses::STORAGE_READ_WRITE {
+            let raw = Direct3D12::D3D12_RESOURCE_BARRIER {
+                Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
+                Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                Anonymous: Direct3D12::D3D12_RESOURCE_BARRIER_0 {
+                    UAV: mem::ManuallyDrop::new(Direct3D12::D3D12_RESOURCE_UAV_BARRIER {
+                        pResource: unsafe {
+                            borrow_interface_temporarily(&barrier.texture.resource)
+                        },
+                    }),
+                },
+            };
+            self.temp.barriers.push(raw);
+        }
+    }
+
     unsafe fn begin_pass(&mut self, kind: super::PassKind, label: crate::Label) {
         let list = self.list.as_ref().unwrap();
         self.pass.kind = kind;
@@ -312,6 +395,57 @@ impl super::CommandEncoder {
         }
     }
 
+    /// Zero the padding of `buffer`, which holds the linear footprint of `region`
+    /// starting at offset zero.
+    unsafe fn clear_buf_tex_padding(
+        &mut self,
+        buffer: &super::Buffer,
+        region: &crate::BufferTextureCopy,
+        tex_fmt: wgt::TextureFormat,
+    ) {
+        let info = region
+            .buffer_layout
+            .get_buffer_texture_copy_info(
+                tex_fmt,
+                region.texture_base.aspect.map(),
+                &region.size.into(),
+            )
+            .unwrap();
+
+        let has_row_padding = info.row_stride_bytes > info.row_bytes_dense;
+        for image in 0..info.depth_or_array_layers {
+            let image_base = info.offset + image * info.image_stride_bytes;
+
+            if has_row_padding {
+                for row in 0..info.image_rows_dense - 1 {
+                    let row_base = image_base + row * info.row_stride_bytes;
+                    let start = row_base + info.row_bytes_dense;
+                    let end = row_base + info.row_stride_bytes;
+                    unsafe { self.clear_buffer(buffer, start..end) };
+                }
+            }
+
+            // Everything between the end of the last row of the image and the start
+            // of the next image is padding.
+            if image < info.depth_or_array_layers - 1 {
+                let start = image_base + info.image_bytes_dense;
+                let end = image_base + info.image_stride_bytes;
+                unsafe { self.clear_buffer(buffer, start..end) };
+            }
+        }
+    }
+
+    /// Allocate a scratch buffer holding the linear footprint of `region` at offset
+    /// zero, and run `copy_op` with it while it is in the [`BufferUses::COPY_DST`]
+    /// state. On return, the buffer has been transitioned to [`BufferUses::COPY_SRC`].
+    ///
+    /// The contents of the buffer are *not* initialized, so `copy_op` must write
+    /// every byte that is subsequently read out of it. In particular, if the whole
+    /// footprint is copied somewhere the application can observe, `copy_op` has to
+    /// call [`Self::clear_buf_tex_padding`].
+    ///
+    /// [`BufferUses::COPY_DST`]: wgt::BufferUses::COPY_DST
+    /// [`BufferUses::COPY_SRC`]: wgt::BufferUses::COPY_SRC
     unsafe fn buf_tex_intermediate<T>(
         &mut self,
         region: crate::BufferTextureCopy,
@@ -511,85 +645,84 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.temp.barriers.clear();
 
         for barrier in barriers {
-            let s0 = conv::map_texture_usage_to_state(barrier.usage.from);
-            let s1 = conv::map_texture_usage_to_state(barrier.usage.to);
-            if s0 != s1 {
-                let mut raw = Direct3D12::D3D12_RESOURCE_BARRIER {
-                    Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-                    Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-                    Anonymous: Direct3D12::D3D12_RESOURCE_BARRIER_0 {
-                        Transition: mem::ManuallyDrop::new(
-                            Direct3D12::D3D12_RESOURCE_TRANSITION_BARRIER {
-                                pResource: unsafe {
-                                    borrow_interface_temporarily(&barrier.texture.resource)
-                                },
-                                Subresource: Direct3D12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                                StateBefore: s0,
-                                StateAfter: s1,
-                            },
-                        ),
-                    },
-                };
-
-                let tex_mip_level_count = barrier.texture.mip_level_count;
-                let tex_array_layer_count = barrier.texture.array_layer_count();
-
-                if barrier.range.is_full_resource(
-                    barrier.texture.format,
-                    tex_mip_level_count,
-                    tex_array_layer_count,
-                ) {
-                    // Only one barrier if it affects the whole image.
-                    self.temp.barriers.push(raw);
-                } else {
-                    // Selected texture aspect is relevant if the texture format has both depth _and_ stencil aspects.
-                    let planes = if barrier.texture.format.is_combined_depth_stencil_format() {
-                        match barrier.range.aspect {
-                            wgt::TextureAspect::All => 0..2,
-                            wgt::TextureAspect::DepthOnly => 0..1,
-                            wgt::TextureAspect::StencilOnly => 1..2,
-                            _ => unreachable!(),
-                        }
-                    } else if let Some(planes) = barrier.texture.format.planes() {
-                        match barrier.range.aspect {
-                            wgt::TextureAspect::All => 0..planes,
-                            wgt::TextureAspect::Plane0 => 0..1,
-                            wgt::TextureAspect::Plane1 => 1..2,
-                            wgt::TextureAspect::Plane2 => 2..3,
-                            _ => unreachable!(),
-                        }
-                    } else {
-                        match barrier.texture.format {
-                            wgt::TextureFormat::Stencil8 => 1..2,
-                            wgt::TextureFormat::Depth24Plus => 0..2, // TODO: investigate why tests fail if we set this to 0..1
-                            _ => 0..1,
-                        }
-                    };
-
-                    for mip_level in barrier.range.mip_range(tex_mip_level_count) {
-                        for array_layer in barrier.range.layer_range(tex_array_layer_count) {
-                            for plane in planes.clone() {
-                                unsafe { &mut *raw.Anonymous.Transition }.Subresource = barrier
-                                    .texture
-                                    .calc_subresource(mip_level, array_layer, plane);
-                                self.temp.barriers.push(raw.clone());
-                            }
-                        }
+            // For depth-stencil textures, we generated `TextureBarrier` with `TextureAspect::All`,
+            // but in DX12 depth and stencil are subresources and need to be transitioned separately
+            // to separate their resource states, otherwise the render pass is invalid.
+            if barrier.usage.from.intersects(
+                wgt::TextureUses::DEPTH_READ
+                    | wgt::TextureUses::DEPTH_WRITE
+                    | wgt::TextureUses::STENCIL_READ
+                    | wgt::TextureUses::STENCIL_WRITE,
+            ) || barrier.usage.to.intersects(
+                wgt::TextureUses::DEPTH_READ
+                    | wgt::TextureUses::DEPTH_WRITE
+                    | wgt::TextureUses::STENCIL_READ
+                    | wgt::TextureUses::STENCIL_WRITE,
+            ) {
+                if barrier.texture.format.has_stencil_aspect() {
+                    let mut barrier_stencil = barrier.clone();
+                    barrier_stencil.range.aspect = wgt::TextureAspect::StencilOnly;
+                    // Remove `TextureUses::RESOURCE`. It is used for the other readonly aspect, not this aspect.
+                    if barrier_stencil
+                        .usage
+                        .from
+                        .contains(wgt::TextureUses::STENCIL_WRITE | wgt::TextureUses::DEPTH_READ)
+                    {
+                        barrier_stencil
+                            .usage
+                            .from
+                            .remove(wgt::TextureUses::RESOURCE);
                     }
+                    if barrier_stencil
+                        .usage
+                        .to
+                        .contains(wgt::TextureUses::STENCIL_WRITE | wgt::TextureUses::DEPTH_READ)
+                    {
+                        barrier_stencil.usage.to.remove(wgt::TextureUses::RESOURCE);
+                    }
+                    // Remove the other aspect usage.
+                    barrier_stencil
+                        .usage
+                        .from
+                        .remove(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::DEPTH_WRITE);
+                    barrier_stencil
+                        .usage
+                        .to
+                        .remove(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::DEPTH_WRITE);
+                    unsafe { self.push_barrier(barrier_stencil) };
                 }
-            } else if barrier.usage.from == wgt::TextureUses::STORAGE_READ_WRITE {
-                let raw = Direct3D12::D3D12_RESOURCE_BARRIER {
-                    Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
-                    Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-                    Anonymous: Direct3D12::D3D12_RESOURCE_BARRIER_0 {
-                        UAV: mem::ManuallyDrop::new(Direct3D12::D3D12_RESOURCE_UAV_BARRIER {
-                            pResource: unsafe {
-                                borrow_interface_temporarily(&barrier.texture.resource)
-                            },
-                        }),
-                    },
-                };
-                self.temp.barriers.push(raw);
+
+                if barrier.texture.format.has_depth_aspect() {
+                    let mut barrier_depth = barrier;
+                    barrier_depth.range.aspect = wgt::TextureAspect::DepthOnly;
+                    // Remove `TextureUses::RESOURCE`. It is used for the other readonly aspect, not this aspect.
+                    if barrier_depth
+                        .usage
+                        .from
+                        .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
+                    {
+                        barrier_depth.usage.from.remove(wgt::TextureUses::RESOURCE);
+                    }
+                    if barrier_depth
+                        .usage
+                        .to
+                        .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
+                    {
+                        barrier_depth.usage.to.remove(wgt::TextureUses::RESOURCE);
+                    }
+                    // Remove the other aspect usage.
+                    barrier_depth
+                        .usage
+                        .from
+                        .remove(wgt::TextureUses::STENCIL_READ | wgt::TextureUses::STENCIL_WRITE);
+                    barrier_depth
+                        .usage
+                        .to
+                        .remove(wgt::TextureUses::STENCIL_READ | wgt::TextureUses::STENCIL_WRITE);
+                    unsafe { self.push_barrier(barrier_depth) };
+                }
+            } else {
+                unsafe { self.push_barrier(barrier) };
             }
         }
 
@@ -796,6 +929,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         r,
                         src.format,
                         |this, buf, size, intermediate_region| {
+                            this.clear_buf_tex_padding(buf, &intermediate_region, src.format);
                             copy_aligned(this, src, buf, intermediate_region);
                             crate::BufferCopy {
                                 src_offset: 0,
@@ -943,10 +1077,36 @@ impl crate::CommandEncoder for super::CommandEncoder {
         drop(rtv_pool);
 
         let ds_view = desc.depth_stencil_attachment.as_ref().map(|ds| {
-            if ds.target.usage == wgt::TextureUses::DEPTH_STENCIL_WRITE {
+            if ds
+                .target
+                .view
+                .aspects
+                .contains(crate::FormatAspects::DEPTH_STENCIL)
+                && ds
+                    .target
+                    .usage
+                    .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
+            {
+                ds.target.view.handle_dsv_wr.as_ref().unwrap().raw
+            } else if ds
+                .target
+                .view
+                .aspects
+                .contains(crate::FormatAspects::DEPTH_STENCIL)
+                && ds
+                    .target
+                    .usage
+                    .contains(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_WRITE)
+            {
                 ds.target.view.handle_dsv_rw.as_ref().unwrap().raw
+            } else if ds
+                .target
+                .usage
+                .intersects(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE)
+            {
+                ds.target.view.handle_dsv_ww.as_ref().unwrap().raw
             } else {
-                ds.target.view.handle_dsv_ro.as_ref().unwrap().raw
+                ds.target.view.handle_dsv_rr.as_ref().unwrap().raw
             }
         });
 

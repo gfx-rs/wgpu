@@ -3,10 +3,7 @@
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use core::{ptr, sync::atomic::Ordering, time::Duration};
 
-#[cfg(supports_64bit_atomics)]
-use core::sync::atomic::AtomicU64;
-#[cfg(not(supports_64bit_atomics))]
-use portable_atomic::AtomicU64;
+use wgpu_sync::atomic::AtomicU64;
 
 use crate::TlasInstance;
 
@@ -257,7 +254,8 @@ impl crate::Adapter for Context {
     fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
         wgt::TextureUses::INCLUSIVE
             | wgt::TextureUses::COLOR_TARGET
-            | wgt::TextureUses::DEPTH_STENCIL_WRITE
+            | wgt::TextureUses::DEPTH_WRITE
+            | wgt::TextureUses::STENCIL_WRITE
     }
 }
 
@@ -473,9 +471,7 @@ impl crate::Device for Context {
     }
     unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: Resource) {}
 
-    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
-        vec![]
-    }
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {}
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
         Default::default()

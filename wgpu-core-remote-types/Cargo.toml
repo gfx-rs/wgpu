@@ -1,0 +1,30 @@
+[package]
+name = "wgpu-core-remote-types"
+version.workspace = true
+edition.workspace = true
+description = "Types for remoting version of wgpu-core for browser implementing WebGPU"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+# Override the workspace's `rust-version` key. `wgpu-core-remote` and its dependencies
+# have a less strict MSRV, to allow firefox more leeway in updating their Rust toolchain.
+#
+# See the repo README for more information on MSRV policy.
+rust-version = "1.87"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "wasm32-unknown-unknown",
+]
+
+[dependencies]
+wgpu-types = { workspace = true, features = ["serde"] }
+serde = { workspace = true }
+hashbrown = { workspace = true }

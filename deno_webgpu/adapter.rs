@@ -3,20 +3,28 @@
 use std::ops::BitOr;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::Mutex;
 
+use deno_core::cppgc::make_cppgc_object;
 use deno_core::cppgc::SameObject;
 use deno_core::op2;
 use deno_core::v8;
 use deno_core::GarbageCollected;
+use deno_core::JsRuntime;
 use deno_core::OpState;
-use deno_core::V8TaskSpawner;
+use deno_core::V8CrossThreadTaskSpawner;
 use deno_core::WebIDL;
+use wgpu_types::DeviceLostReason;
 
 use super::device::GPUDevice;
 use super::device::DEVICE_EXTERNAL_MEMORY_SIZE;
 use super::queue::GPUQueue;
+use crate::device::GPUDeviceLostInfo;
+use crate::error::GPUError;
 use crate::error::GPUGenericError;
 use crate::webidl::GPUFeatureName;
+use crate::LostPromiseResolverHM;
+use crate::WeakDeviceHM;
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
@@ -37,6 +45,13 @@ pub(crate) enum GPUPowerPreference {
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
+struct GPUQueueDescriptor {
+  #[webidl(default = String::new())]
+  label: String,
+}
+
+#[derive(WebIDL)]
+#[webidl(dictionary)]
 struct GPUDeviceDescriptor {
   #[webidl(default = String::new())]
   label: String,
@@ -46,6 +61,8 @@ struct GPUDeviceDescriptor {
   #[webidl(default = Default::default())]
   #[options(enforce_range = true)]
   required_limits: indexmap::IndexMap<String, Option<u64>>,
+  #[webidl(default = GPUQueueDescriptor { label: String::new() })]
+  default_queue: GPUQueueDescriptor,
 }
 
 pub struct GPUAdapter {
@@ -101,6 +118,7 @@ impl GPUAdapter {
   }
 
   #[async_method(fake)]
+  #[reentrant]
   #[global]
   fn request_device(
     &self,
@@ -149,25 +167,55 @@ impl GPUAdapter {
       label: crate::transform_label(descriptor.label.clone()),
       required_features,
       required_limits,
+      default_queue: wgpu_types::QueueDescriptor {
+        label: crate::transform_label(descriptor.default_queue.label),
+      },
       experimental_features: wgpu_types::ExperimentalFeatures::disabled(),
       memory_hints: Default::default(),
       trace,
     };
 
-    let (device, queue) = self.wgpu_adapter.request_device(&wgpu_descriptor)?;
+    let (wgpu_device, queue) =
+      self.wgpu_adapter.request_device(&wgpu_descriptor)?;
 
     // Associate external memory with the device to encourage V8 to garbage
     // collect devices promptly.
     scope
       .adjust_amount_of_external_allocated_memory(DEVICE_EXTERNAL_MEMORY_SIZE);
 
-    let spawner = state.borrow::<V8TaskSpawner>().clone();
+    let error_handler =
+      Rc::new(super::error::DeviceErrorHandler::new(wgpu_device.clone()));
+
+    let wgpu_device_id = Arc::as_ptr(&wgpu_device) as usize;
+
     let lost_resolver = v8::PromiseResolver::new(scope).unwrap();
     let lost_promise = lost_resolver.get_promise(scope);
-    let error_handler = Rc::new(super::error::DeviceErrorHandler::new(
-      v8::Global::new(scope, lost_resolver),
-      spawner,
-    ));
+    let cross_thread_spawner =
+      state.borrow::<V8CrossThreadTaskSpawner>().clone();
+    state
+      .borrow_mut::<LostPromiseResolverHM>()
+      .insert(wgpu_device_id, v8::Global::new(scope, lost_resolver));
+    let wake = Arc::new(Mutex::new(move |reason: DeviceLostReason| {
+      cross_thread_spawner.spawn(move |scope| {
+        let lost_resolver = JsRuntime::op_state_from(scope)
+          .borrow_mut()
+          .borrow_mut::<LostPromiseResolverHM>()
+          .remove(&wgpu_device_id)
+          .unwrap();
+        let lost_resolver = v8::Local::new(scope, lost_resolver);
+        let info = make_cppgc_object(
+          scope,
+          GPUDeviceLostInfo {
+            reason: reason.into(),
+          },
+        );
+        let info = v8::Local::new(scope, info);
+        lost_resolver.resolve(scope, info.into());
+      });
+    }));
+    wgpu_device.set_device_lost_closure(Box::new(move |reason, _| {
+      wake.lock().unwrap()(reason);
+    }));
 
     // Create the queue object eagerly so that the wgpu-core queue resource
     // gets cleaned up when the device is garbage collected, even if JS code
@@ -175,16 +223,15 @@ impl GPUAdapter {
     let queue_obj = deno_core::cppgc::make_cppgc_object(
       scope,
       GPUQueue {
-        error_handler: error_handler.clone(),
         label: descriptor.label.clone(),
         wgpu_queue: queue,
-        wgpu_device: device.clone(),
+        wgpu_device: wgpu_device.clone(),
       },
     );
     let queue_obj = v8::Global::new(scope, queue_obj);
 
     let device = GPUDevice {
-      wgpu_device: device,
+      wgpu_device: wgpu_device.clone(),
       label: descriptor.label,
       queue_obj,
       adapter_info: self.info.clone(),
@@ -213,6 +260,14 @@ impl GPUAdapter {
         isolate.adjust_amount_of_external_allocated_memory(
           -DEVICE_EXTERNAL_MEMORY_SIZE,
         );
+        let op_state = JsRuntime::op_state_from(isolate);
+        let mut op_state = op_state.borrow_mut();
+        op_state
+          .borrow_mut::<LostPromiseResolverHM>()
+          .remove(&wgpu_device_id);
+        op_state
+          .borrow_mut::<WeakDeviceHM>()
+          .remove(&wgpu_device_id);
       }),
     );
 
@@ -222,7 +277,57 @@ impl GPUAdapter {
     let device_ref =
       deno_core::cppgc::try_unwrap_cppgc_object::<GPUDevice>(scope, device)
         .unwrap();
-    device_ref.error_handler.set_device(weak_device);
+
+    let cross_thread_spawner =
+      state.borrow::<V8CrossThreadTaskSpawner>().clone();
+    state
+      .borrow_mut::<WeakDeviceHM>()
+      .insert(wgpu_device_id, weak_device);
+    let wake = Arc::new(Mutex::new(move |error: wgpu_types::error::Error| {
+      cross_thread_spawner.spawn(move |scope| {
+        let state = JsRuntime::op_state_from(&*scope);
+        let state = state.borrow();
+        let weak_device =
+          state.borrow::<WeakDeviceHM>().get(&wgpu_device_id).unwrap();
+        let err: GPUError = error.into();
+        let weak_device = weak_device.clone();
+
+        let Some(device) = weak_device.to_local(scope) else {
+          // The device has already gone away, so we don't have
+          // anywhere to report the error.
+          return;
+        };
+        let key = v8::String::new(scope, "dispatchEvent").unwrap();
+        let val = device.get(scope, key.into()).unwrap();
+        let func =
+          v8::Global::new(scope, val.try_cast::<v8::Function>().unwrap());
+        let device = v8::Global::new(scope, device.cast::<v8::Value>());
+        let error_event_class =
+          state.borrow::<crate::ErrorEventClass>().0.clone();
+
+        let error = deno_core::error::to_v8_error(scope, &err);
+
+        let error_event_class =
+          v8::Local::new(scope, error_event_class.clone());
+        let constructor =
+          v8::Local::<v8::Function>::try_from(error_event_class).unwrap();
+        let kind = v8::String::new(scope, "uncapturederror").unwrap();
+
+        let obj = v8::Object::new(scope);
+        let key = v8::String::new(scope, "error").unwrap();
+        obj.set(scope, key.into(), error);
+
+        let event = constructor
+          .new_instance(scope, &[kind.into(), obj.into()])
+          .unwrap();
+
+        let recv = v8::Local::new(scope, device);
+        func.open(scope).call(scope, recv, &[event.into()]);
+      });
+    }));
+    wgpu_device.on_uncaptured_error(Arc::new(move |error| {
+      wake.lock().unwrap()(error);
+    }));
     device_ref.weak.set(finalizer).unwrap();
 
     Ok(v8::Global::new(scope, device))

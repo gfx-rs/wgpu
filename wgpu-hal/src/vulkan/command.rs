@@ -134,9 +134,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
         let raw = self.free.pop().unwrap();
 
-        // Set the name unconditionally, since there might be a
-        // previous name assigned to this.
-        unsafe { self.device.set_object_name(raw, label.unwrap_or_default()) };
+        if !self
+            .device
+            .instance
+            .flags
+            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+        {
+            // Set the name even if it is empty, since there might be a
+            // previous name assigned to the command buffer.
+            unsafe { self.device.set_object_name(raw, label.unwrap_or_default()) };
+        }
 
         // Reset some state in case the last renderpass was never ended.
         self.rpass_debug_marker_active = false;
@@ -249,14 +256,33 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 bar.texture.format,
                 &self.device.private_caps,
             );
-            let (src_stage, src_access) =
-                conv::map_texture_usage_to_barrier(bar.usage.from, self.device.queue_flags);
+            let (src_stage, src_access) = conv::map_texture_usage_to_barrier(
+                bar.usage.from,
+                self.device.queue_flags,
+                self.device.private_caps.store_op_none,
+            );
             let src_layout = conv::derive_image_layout(bar.usage.from, bar.texture.format);
             src_stages |= src_stage;
-            let (dst_stage, dst_access) =
-                conv::map_texture_usage_to_barrier(bar.usage.to, self.device.queue_flags);
+            let (dst_stage, dst_access) = conv::map_texture_usage_to_barrier(
+                bar.usage.to,
+                self.device.queue_flags,
+                self.device.private_caps.store_op_none,
+            );
             let dst_layout = conv::derive_image_layout(bar.usage.to, bar.texture.format);
             dst_stages |= dst_stage;
+
+            // Insert a queue family ownership transfer if the caller requested
+            // one (used for textures imported from external memory). When no
+            // transfer is requested, both indices are `QUEUE_FAMILY_IGNORED`,
+            // which the spec treats as "no transfer".
+            let (src_queue_family_index, dst_queue_family_index) =
+                match bar.queue_family_ownership_transfer {
+                    Some(transfer) => (
+                        conv::map_queue_family(transfer.src),
+                        conv::map_queue_family(transfer.dst),
+                    ),
+                    None => (vk::QUEUE_FAMILY_IGNORED, vk::QUEUE_FAMILY_IGNORED),
+                };
 
             vk_barriers.push(
                 vk::ImageMemoryBarrier::default()
@@ -265,7 +291,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .src_access_mask(src_access)
                     .dst_access_mask(dst_access)
                     .old_layout(src_layout)
-                    .new_layout(dst_layout),
+                    .new_layout(dst_layout)
+                    .src_queue_family_index(src_queue_family_index)
+                    .dst_queue_family_index(dst_queue_family_index),
             );
         }
 
@@ -796,6 +824,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             depth_stencil: None,
             sample_count: desc.sample_count,
             multiview_mask: desc.multiview_mask,
+            depth_read_only: false,
+            stencil_read_only: false,
         };
         let mut fb_key = super::FramebufferKey {
             raw_pass: vk::RenderPass::null(),
@@ -842,6 +872,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             }
         }
         if let Some(ref ds) = desc.depth_stencil_attachment {
+            rp_key.depth_read_only = ds.depth_read_only;
+            rp_key.stencil_read_only = ds.stencil_read_only;
             vk_clear_values.push(vk::ClearValue {
                 depth_stencil: vk::ClearDepthStencilValue {
                     depth: ds.clear_value.0,

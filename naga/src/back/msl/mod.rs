@@ -705,7 +705,8 @@ impl ResolvedBinding {
                     | Bi::RayTCurrentMax
                     | Bi::ObjectToWorld
                     | Bi::WorldToObject
-                    | Bi::HitKind => unreachable!(),
+                    | Bi::HitKind
+                    | Bi::HitBarycentrics => unreachable!(),
                 };
                 write!(out, "{name}")?;
             }
@@ -875,6 +876,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         // No DRAW_INDEX
         // No MEMORY_DECORATION_VOLATILE
         | Caps::MEMORY_DECORATION_COHERENT
+        | Caps::LINEAR_INTERPOLATION
 }
 
 #[test]

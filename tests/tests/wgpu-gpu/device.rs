@@ -18,7 +18,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
     #[cfg(not(wasm_test))]
     {
-        vec.extend([DEVICE_LIFETIME_CHECK, MULTIPLE_DEVICES]);
+        vec.push(MULTIPLE_DEVICES);
     }
 }
 
@@ -50,33 +50,6 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
         }
 
         ctx.async_poll(wgpu::PollType::Poll).await.unwrap();
-    });
-
-#[cfg(not(wasm_test))]
-#[apply(gpu_test!)]
-static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().enable_noop())
-    .run_sync(|ctx| {
-        ctx.instance.poll_all(false);
-
-        let pre_report = ctx.instance.generate_report().unwrap();
-
-        let TestingContext {
-            instance,
-            device,
-            queue,
-            ..
-        } = ctx;
-
-        drop(queue);
-        drop(device);
-
-        let post_report = instance.generate_report().unwrap();
-
-        assert_ne!(
-            pre_report, post_report,
-            "Queue and Device has not been dropped as expected"
-        );
     });
 
 #[cfg(not(wasm_test))]
@@ -589,6 +562,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
             mip_level_count: None,
             base_array_layer: 0,
             array_layer_count: None,
+            swizzle: wgpu::TextureComponentSwizzle::default(),
         });
 
         let my_sampler = ctx

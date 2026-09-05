@@ -3,9 +3,6 @@ name: cargo-generate
 on:
   push:
     branches-ignore: [
-        # Renovate branches are always PRs, so they will be covered
-        # by the pull_request event.
-        "renovate/**",
         # Branches with the `gh-readonly-queue` prefix are used by the
         # merge queue, so they are already covered by the `merge_group` event.
         "gh-readonly-queue/**",
@@ -30,26 +27,54 @@ concurrency:
   cancel-in-progress: ${{github.event_name == 'pull_request'}}
 
 jobs:
-  cargo-generate:
+  discover-standalone-examples:
+    permissions: {}
+
     timeout-minutes: 5
 
     runs-on: ubuntu-latest
 
+    name: "Discover Standalone Examples"
+
+    outputs:
+      matrix: ${{ steps.discover.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Find standalone examples
+        id: discover
+        run: |
+          matrix=$(jq -nc --args '{
+            include: [$ARGS.positional[] | rtrimstr("/") | {
+              path: .,
+              name: (split("/")[-1] | gsub("_"; "-"))
+            }]
+          }' examples/standalone/*/)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "$matrix"
+
+  cargo-generate:
+    permissions: {}
+
+    timeout-minutes: 5
+
+    runs-on: ubuntu-latest
+
+    needs: discover-standalone-examples
+
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: "01-hello-compute"
-            path: "examples/standalone/01_hello_compute"
-          - name: "02-hello-window"
-            path: "examples/standalone/02_hello_window"
-          - name: "custom_backend"
-            path: "examples/standalone/custom_backend"
+      matrix: ${{ fromJSON(needs.discover-standalone-examples.outputs.matrix) }}
 
     name: "${{ matrix.name }}"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # We can't rely on an override here, as that would only set
       # the toolchain for the current directory, not the newly generated project.
@@ -69,25 +94,30 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           key: cargo-generate-${{ matrix.name }}
           env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Install `cargo-generate`
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2.83.2
         with:
           tool: cargo-generate
 
       - name: Run `cargo-generate`
+        env:
+          MATRIX_NAME: ${{ matrix.name }}
+          MATRIX_PATH: ${{ matrix.path }}
         run: |
           cd ..
-          cargo generate --path wgpu --name ${{ matrix.name }} ${{ matrix.path }}
+          cargo generate --path wgpu --name ${MATRIX_NAME} ${MATRIX_PATH}
 
       - name: Check generated files
+        env:
+          MATRIX_NAME: ${{ matrix.name }}
         run: |
-          cd ../${{ matrix.name }}/
+          cd ../${MATRIX_NAME}/
           cat <<EOF >> Cargo.toml
             [patch.crates-io]
             wgpu = { path = "../wgpu/wgpu" }

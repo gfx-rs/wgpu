@@ -9,7 +9,7 @@ use crate::common::wgsl::TryToWgsl;
 use crate::diagnostic_filter::ConflictingDiagnosticRuleError;
 use crate::error::replace_control_chars;
 use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
-use crate::{Scalar, SourceLocation, Span};
+use crate::{Scalar, SourceLocation, Span, UnaryOperator};
 
 use super::parse::directive::enable_extension::{EnableExtension, UnimplementedEnableExtension};
 use super::parse::directive::language_extension::{
@@ -385,6 +385,12 @@ pub(crate) enum Error<'a> {
     },
     DeclMissingTypeAndInit(Span),
     MissingAttribute(&'static str, Span),
+    InvalidUnaryOperandType {
+        span: Span,
+        op: UnaryOperator,
+        operand_type: String,
+    },
+
     InvalidAddrOfOperand(Span),
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
@@ -597,6 +603,7 @@ pub(crate) enum Error<'a> {
     UnexpectedExprForTypeExpression(Span),
     MissingIncomingPayload(Span),
     UnterminatedBlockComment(Span),
+    RayQueryWithInitializer(Span),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -964,6 +971,7 @@ impl<'a> Error<'a> {
                 | Error::WrongArgumentCount { span, .. }
                 | Error::ConstantEvaluatorError(_, span)
                 | Error::EnableExtensionNotSupported { span, .. }
+                | Error::InvalidUnaryOperandType { span, .. }
                 | Error::MissingTemplateArg { span, .. } => {
                 let (message, label) = match self {
                     Error::BadMatrixScalarKind(_, scalar) => (
@@ -1023,6 +1031,20 @@ impl<'a> Error<'a> {
                         ),
                         "is missing a template argument"
                     ),
+                    Error::InvalidUnaryOperandType { op, operand_type, .. } => {
+                        let operator = match op {
+                            UnaryOperator::Negate => "-",
+                            UnaryOperator::LogicalNot => "!",
+                            UnaryOperator::BitwiseNot => "~",
+                        };
+                        (
+                            format!(
+                                "unary operator `{operator}` is not defined for operand type `{}`",
+                                operand_type
+                            ),
+                            "invalid operand type for this operator"
+                        )
+                    },
                     _ => unreachable!()
                 };
 
@@ -1660,7 +1682,15 @@ impl<'a> Error<'a> {
                 )],
                 message: "unterminated block comment".into(),
                 notes: vec![],
-            }
+            },
+            Error::RayQueryWithInitializer(span) => ParseError {
+                message: "Ray query with initialize".into(),
+                labels: vec![(
+                    *span,
+                    "variables with type `ray_query` are special and so cannot have initializers".into(),
+                )],
+                notes: vec![],
+            },
         }
     }
 }

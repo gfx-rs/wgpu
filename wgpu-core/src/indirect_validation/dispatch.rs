@@ -6,6 +6,7 @@ use crate::{
 };
 use alloc::{boxed::Box, format, string::ToString as _};
 use core::num::NonZeroU64;
+use scopeguard::{guard, ScopeGuard};
 
 /// This machinery requires the following limits:
 ///
@@ -129,6 +130,9 @@ impl Dispatch {
                     }
                 }
             })?;
+        let module = guard(module, |module| unsafe {
+            device.destroy_shader_module(module)
+        });
 
         let dst_bind_group_layout_desc = hal::BindGroupLayoutDescriptor {
             label: hal_label(
@@ -152,6 +156,9 @@ impl Dispatch {
                 .create_bind_group_layout(&dst_bind_group_layout_desc)
                 .map_err(DeviceError::from_hal)?
         };
+        let dst_bind_group_layout = guard(dst_bind_group_layout, |bgl| unsafe {
+            device.destroy_bind_group_layout(bgl)
+        });
 
         let src_bind_group_layout_desc = hal::BindGroupLayoutDescriptor {
             label: hal_label(
@@ -175,6 +182,9 @@ impl Dispatch {
                 .create_bind_group_layout(&src_bind_group_layout_desc)
                 .map_err(DeviceError::from_hal)?
         };
+        let src_bind_group_layout = guard(src_bind_group_layout, |bgl| unsafe {
+            device.destroy_bind_group_layout(bgl)
+        });
 
         let pipeline_layout_desc = hal::PipelineLayoutDescriptor {
             label: hal_label(
@@ -193,6 +203,9 @@ impl Dispatch {
                 .create_pipeline_layout(&pipeline_layout_desc)
                 .map_err(DeviceError::from_hal)?
         };
+        let pipeline_layout = guard(pipeline_layout, |pipeline_layout| unsafe {
+            device.destroy_pipeline_layout(pipeline_layout)
+        });
 
         let pipeline_desc = hal::ComputePipelineDescriptor {
             label: hal_label(
@@ -223,6 +236,9 @@ impl Dispatch {
                     CreateComputePipelineError::PipelineConstants(error)
                 }
             })?;
+        let pipeline = guard(pipeline, |pipeline| unsafe {
+            device.destroy_compute_pipeline(pipeline)
+        });
 
         let dst_buffer_desc = hal::BufferDescriptor {
             label: hal_label(
@@ -235,6 +251,9 @@ impl Dispatch {
         };
         let dst_buffer =
             unsafe { device.create_buffer(&dst_buffer_desc) }.map_err(DeviceError::from_hal)?;
+        let dst_buffer = guard(dst_buffer, |buffer| unsafe {
+            device.destroy_buffer(buffer)
+        });
 
         let dst_bind_group_desc = hal::BindGroupDescriptor {
             label: hal_label(
@@ -264,13 +283,15 @@ impl Dispatch {
                 .map_err(DeviceError::from_hal)
         }?;
 
+        // Error returns after we start consuming guards could bypass resource cleanup.
+        #[deny(clippy::question_mark_used)]
         Ok(Self {
-            module,
-            dst_bind_group_layout,
-            src_bind_group_layout,
-            pipeline_layout,
-            pipeline,
-            dst_buffer,
+            module: ScopeGuard::into_inner(module),
+            dst_bind_group_layout: ScopeGuard::into_inner(dst_bind_group_layout),
+            src_bind_group_layout: ScopeGuard::into_inner(src_bind_group_layout),
+            pipeline_layout: ScopeGuard::into_inner(pipeline_layout),
+            pipeline: ScopeGuard::into_inner(pipeline),
+            dst_buffer: ScopeGuard::into_inner(dst_buffer),
             dst_bind_group,
         })
     }

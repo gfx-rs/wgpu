@@ -1189,7 +1189,6 @@ bitflags::bitflags! {
         const VIEW_FORMATS = 1 << 19;
 
         /// With this feature not present, there are the following restrictions on `Queue::copy_external_image_to_texture`:
-        /// - The source must not be [`web_sys::OffscreenCanvas`]
         /// - [`CopyExternalImageSourceInfo::origin`] must be zero.
         /// - [`CopyExternalImageDestInfo::color_space`] must be srgb.
         /// - If the source is an [`web_sys::ImageBitmap`]:
@@ -1236,6 +1235,13 @@ bitflags::bitflags! {
         ///
         /// See <https://www.w3.org/TR/webgpu/#adapter-capability-guarantees>.
         const TEXTURE_COMPRESSION = 1 << 25;
+
+        /// Supports `@interpolate(linear)` (a.k.a. `noperspective`) on shader inter-stage
+        /// variables.
+        ///
+        /// GLSL ES has no `noperspective` qualifier, so the GLES backend only supports this
+        /// on desktop OpenGL, not on GLES/WebGL2.
+        const LINEAR_INTERPOLATION = 1 << 26;
     }
 }
 

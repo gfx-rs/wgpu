@@ -146,7 +146,24 @@ impl Surface<'_> {
     /// See the documentation of [`CurrentSurfaceTexture`] for how each possible result
     /// should be handled.
     pub fn get_current_texture(&self) -> CurrentSurfaceTexture {
-        let (texture, status, detail) = self.inner.get_current_texture();
+        let desc = {
+            let guard = self.config.lock();
+            guard.as_ref().map(|config| TextureDescriptor {
+                label: None,
+                size: Extent3d {
+                    width: config.width,
+                    height: config.height,
+                    depth_or_array_layers: 1,
+                },
+                format: config.format,
+                usage: config.usage,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                view_formats: &[],
+            })
+        };
+        let (texture, status, detail) = self.inner.get_current_texture(desc);
 
         let suboptimal = match status {
             SurfaceStatus::Good => false,
@@ -158,33 +175,10 @@ impl Surface<'_> {
             SurfaceStatus::Validation => return CurrentSurfaceTexture::Validation,
         };
 
-        let guard = self.config.lock();
-        let config = guard
-            .as_ref()
-            .expect("This surface has not been configured yet.");
-
-        let descriptor = TextureDescriptor {
-            label: None,
-            size: Extent3d {
-                width: config.width,
-                height: config.height,
-                depth_or_array_layers: 1,
-            },
-            format: config.format,
-            usage: config.usage,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            view_formats: &[],
-        };
-
         match texture {
             Some(texture) => {
                 let surface_texture = SurfaceTexture {
-                    texture: Texture {
-                        inner: texture,
-                        descriptor,
-                    },
+                    texture: Texture { inner: texture },
                     presented: false,
                     detail,
                 };
@@ -235,7 +229,7 @@ impl Surface<'_> {
     ) -> Option<impl Deref<Target = A::Surface> + WasmNotSendSync> {
         let core_surface = self.inner.as_core_opt()?;
 
-        unsafe { core_surface.context.surface_as_hal::<A>(core_surface) }
+        unsafe { core_surface.as_hal::<A>() }
     }
 
     #[cfg(custom)]

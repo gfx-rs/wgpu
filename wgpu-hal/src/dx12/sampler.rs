@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use hashbrown::{hash_map::Entry, HashMap};
 
 use ordered_float::OrderedFloat;
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 use windows::Win32::Graphics::Direct3D12::*;
 
 use crate::dx12::HResult;
