@@ -165,6 +165,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Fix a panic in the SPIR-V frontend when a subgroup collective operation (e.g. `OpGroupNonUniformUMin`) or `OpGroupNonUniformBallot` used an argument whose value needed to be spilled to a temporary variable, such as when the argument was computed inside a loop. By @nazar-pc in [#9957](https://github.com/gfx-rs/wgpu/issues/9957).
 - Lower `@builtin(instance_index)` in `@any_hit` and `@closest_hit` entry points to SPIR-V's `InstanceId` rather than `InstanceIndex`, which Vulkan only permits in the vertex stage. By @JMS55 in [10154](https://github.com/gfx-rs/wgpu/pull/10154).
 - Report WGSL type mismatches in `return` statements, function call arguments and composite constructors as WGSL errors naming both types, instead of IR validation errors that could only name the operands by handle index (such as "The \`return\` expression Some([1]) does not match the declared return type Some([1])"). By @emilk in [#9973](https://github.com/gfx-rs/wgpu/pull/9973).
+- Implement constant evaluation of the `extractBits`, `insertBits`, `faceForward`, `reflect`, and `refract` built-in functions.  Evaluates expression at compile time to report issues early like `offset` and `count` selecting bits beyond the width of the data.  By @MinerSheep in [#10258](https://github.com/gfx-rs/wgpu/pull/10258).
 
 #### Validation
 
