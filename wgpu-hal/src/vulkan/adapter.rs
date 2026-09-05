@@ -762,6 +762,7 @@ impl PhysicalDeviceFeatures {
             F::TEXTURE_COMPRESSION_BC_SLICED_3D,
             self.core.texture_compression_bc != 0, // BC guarantees Sliced 3D
         );
+        features.set(F::TEXTURE_COMPRESSION_UNALIGNED, true);
         features.set(
             F::PIPELINE_STATISTICS_QUERY,
             self.core.pipeline_statistics_query != 0,

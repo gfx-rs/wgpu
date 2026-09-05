@@ -619,6 +619,12 @@ impl super::Adapter {
             );
         }
 
+        // WebGL2's compressed texture extensions require mip level 0 to be
+        // block-aligned (e.g. WEBGL_compressed_texture_s3tc generates
+        // INVALID_OPERATION otherwise), so unaligned sizes are only supported
+        // on native GL.
+        features.set(wgt::Features::TEXTURE_COMPRESSION_UNALIGNED, cfg!(native));
+
         downlevel_flags.set(
             wgt::DownlevelFlags::TEXTURE_COMPRESSION,
             features.contains(wgt::Features::TEXTURE_COMPRESSION_BC)

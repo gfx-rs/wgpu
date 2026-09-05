@@ -91,6 +91,9 @@ mod webgpu_impl {
 
     #[doc(hidden)]
     pub const WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE: u64 = 1 << 18;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_UNALIGNED: u64 = 1 << 19;
 }
 
 macro_rules! bitflags_array_impl {
@@ -1845,6 +1848,21 @@ bitflags_array! {
         /// This is a web and native feature.
         #[name("texture-component-swizzle")]
         const TEXTURE_COMPONENT_SWIZZLE = WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE;
+
+        /// Allows the creation of textures with block-compressed formats whose width and
+        /// height are not multiples of the texel block dimensions, i.e. textures with
+        /// partial edge blocks in mip level 0.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - Metal
+        /// - OpenGL (native only; WebGL requires block-aligned BC textures)
+        /// - DX12 (only when `UnalignedBlockTexturesSupported` is true in
+        ///   `D3D12_FEATURE_DATA_D3D12_OPTIONS8`)
+        ///
+        /// This is a web and native feature.
+        #[name("texture-compression-unaligned")]
+        const TEXTURE_COMPRESSION_UNALIGNED = WEBGPU_FEATURE_TEXTURE_COMPRESSION_UNALIGNED;
     }
 }
 

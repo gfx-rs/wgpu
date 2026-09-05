@@ -1765,24 +1765,29 @@ impl Device {
         if desc.format.is_compressed() {
             let (block_width, block_height) = desc.format.block_dimensions();
 
-            if !desc.size.width.is_multiple_of(block_width) {
-                return Err(CreateTextureError::InvalidDimension(
-                    TextureDimensionError::NotMultipleOfBlockWidth {
-                        width: desc.size.width,
-                        block_width,
-                        format: desc.format,
-                    },
-                ));
-            }
+            if !self
+                .features
+                .contains(wgt::Features::TEXTURE_COMPRESSION_UNALIGNED)
+            {
+                if !desc.size.width.is_multiple_of(block_width) {
+                    return Err(CreateTextureError::InvalidDimension(
+                        TextureDimensionError::NotMultipleOfBlockWidth {
+                            width: desc.size.width,
+                            block_width,
+                            format: desc.format,
+                        },
+                    ));
+                }
 
-            if !desc.size.height.is_multiple_of(block_height) {
-                return Err(CreateTextureError::InvalidDimension(
-                    TextureDimensionError::NotMultipleOfBlockHeight {
-                        height: desc.size.height,
-                        block_height,
-                        format: desc.format,
-                    },
-                ));
+                if !desc.size.height.is_multiple_of(block_height) {
+                    return Err(CreateTextureError::InvalidDimension(
+                        TextureDimensionError::NotMultipleOfBlockHeight {
+                            height: desc.size.height,
+                            block_height,
+                            format: desc.format,
+                        },
+                    ));
+                }
             }
 
             if desc.dimension == wgt::TextureDimension::D3 {
@@ -1812,7 +1817,15 @@ impl Device {
         }
 
         {
-            let (mut width_multiple, mut height_multiple) = desc.format.size_multiple_requirement();
+            let (mut width_multiple, mut height_multiple) = if desc.format.is_compressed()
+                && self
+                    .features
+                    .contains(wgt::Features::TEXTURE_COMPRESSION_UNALIGNED)
+            {
+                (1, 1)
+            } else {
+                desc.format.size_multiple_requirement()
+            };
 
             if desc.format.is_multi_planar_format() {
                 // TODO(https://github.com/gfx-rs/wgpu/issues/8491): fix
