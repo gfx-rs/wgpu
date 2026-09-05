@@ -3402,7 +3402,7 @@ fn is_float32_blendable_supported(instance: &ash::Instance, phd: vk::PhysicalDev
     })
 }
 
-fn supports_format(
+pub(super) fn supports_format(
     instance: &ash::Instance,
     phd: vk::PhysicalDevice,
     format: vk::Format,

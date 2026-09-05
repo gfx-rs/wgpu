@@ -273,6 +273,17 @@ pub fn map_queue_family(family: crate::QueueFamily) -> u32 {
     }
 }
 
+/// Image usages of which an image must have at least one to be viewable, per
+/// `VUID-VkImageViewCreateInfo-image-04441`.
+pub const VIEWABLE_IMAGE_USAGES: vk::ImageUsageFlags = vk::ImageUsageFlags::from_raw(
+    vk::ImageUsageFlags::SAMPLED.as_raw()
+        | vk::ImageUsageFlags::STORAGE.as_raw()
+        | vk::ImageUsageFlags::COLOR_ATTACHMENT.as_raw()
+        | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT.as_raw()
+        | vk::ImageUsageFlags::INPUT_ATTACHMENT.as_raw()
+        | vk::ImageUsageFlags::TRANSIENT_ATTACHMENT.as_raw(),
+);
+
 pub fn map_texture_usage(usage: wgt::TextureUses) -> vk::ImageUsageFlags {
     let mut flags = vk::ImageUsageFlags::empty();
     if usage.contains(wgt::TextureUses::COPY_SRC) {
