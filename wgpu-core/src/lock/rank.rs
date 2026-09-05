@@ -200,6 +200,7 @@ define_lock_ranks! {
     rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
     rank TLAS_BUILT_INDEX "Tlas::built_index" followed by { }
     rank TLAS_DEPENDENCIES "Tlas::dependencies" followed by { }
+    rank TLAS_MAX_INTERSECTION_IDX "Tlas::max_intersection_index" followed by { }
 
     #[cfg(test)]
     rank PAWN "pawn" followed by { ROOK, BISHOP }

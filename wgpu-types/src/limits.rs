@@ -332,14 +332,10 @@ pub struct Limits {
     /// The maximum total number (`x*y*z`) of rays able to be dispatched by a trace rays call in a ray
     /// tracing pass. Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`]
     /// is enabled.
-    ///
-    /// Currently only affects wgpu-hal
     pub max_ray_dispatch_count: u32,
     /// The maximum number that one can pass into a ray tracing pipeline creation to be the maximum ray
     /// recursion depth. (the maximum of the max ray recursion depth) Requesting more than 0 during device
     /// creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`] is enabled.
-    ///
-    /// Currently only affects wgpu-hal
     pub max_ray_recursion_depth: u32,
 }
 

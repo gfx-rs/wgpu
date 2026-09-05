@@ -394,6 +394,11 @@ pub struct CoreRenderPipeline {
     pub(crate) wgpu_render_pipeline: Arc<wgc::pipeline::RenderPipeline>,
 }
 
+#[derive(Debug, Clone)]
+pub struct CoreRayTracingPipeline {
+    pub(crate) wgpu_ray_tracing_pipeline: Arc<wgc::pipeline::RayTracingPipeline>,
+}
+
 #[derive(Debug)]
 pub struct CoreComputePass {
     pass: wgc::command::ComputePass,
@@ -404,6 +409,13 @@ pub struct CoreComputePass {
 #[derive(Debug)]
 pub struct CoreRenderPass {
     pass: wgc::command::RenderPass,
+
+    id: crate::cmp::Identifier,
+}
+
+#[derive(Debug)]
+pub struct CoreRayTracingPass {
+    pass: wgc::command::RayTracingPass,
 
     id: crate::cmp::Identifier,
 }
@@ -518,10 +530,12 @@ crate::cmp::impl_eq_ord_hash_arc_address!(CoreQuerySet => .wgpu_query_set);
 crate::cmp::impl_eq_ord_hash_arc_address!(CorePipelineLayout => .wgpu_pipeline_layout);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreRenderPipeline => .wgpu_render_pipeline);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreComputePipeline => .wgpu_compute_pipeline);
+crate::cmp::impl_eq_ord_hash_arc_address!(CoreRayTracingPipeline => .wgpu_ray_tracing_pipeline);
 crate::cmp::impl_eq_ord_hash_arc_address!(CorePipelineCache => .wgpu_pipeline_cache);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreCommandEncoder => .wgpu_command_encoder);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreComputePass => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreRenderPass => .id);
+crate::cmp::impl_eq_ord_hash_proxy!(CoreRayTracingPass => .id);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreCommandBuffer => .wgpu_command_buffer);
 crate::cmp::impl_eq_ord_hash_box_address!(CoreRenderBundleEncoder => .encoder);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreRenderBundle => .wgpu_render_bundle);
@@ -1207,6 +1221,74 @@ impl dispatch::DeviceInterface for CoreDevice {
         .into()
     }
 
+    fn create_ray_tracing_pipeline(
+        &self,
+        desc: &crate::RayTracingPipelineDescriptor<'_>,
+    ) -> dispatch::DispatchRayTracingPipeline {
+        use wgc::pipeline as pipe;
+
+        fn downcast_rt_stage<'a>(
+            stage: &'a crate::RayTracingStage<'a>,
+        ) -> pipe::ProgrammableStageDescriptor<'a> {
+            pipe::ProgrammableStageDescriptor {
+                module: stage.module.inner.as_core().wgpu_shader_module.clone(),
+                entry_point: stage.entry_point.map(Borrowed),
+                constants: stage
+                    .compilation_options
+                    .constants
+                    .iter()
+                    .map(|&(key, value)| (String::from(key), value))
+                    .collect(),
+                zero_initialize_workgroup_memory: stage
+                    .compilation_options
+                    .zero_initialize_workgroup_memory,
+            }
+        }
+
+        let descriptor = pipe::RayTracingPipelineDescriptor {
+            label: desc.label.map(Borrowed),
+            layout: desc
+                .layout
+                .map(|pll| pll.inner.as_core().wgpu_pipeline_layout.clone()),
+            ray_generation: downcast_rt_stage(&desc.ray_generation),
+            miss: downcast_rt_stage(&desc.miss),
+            intersections: desc
+                .intersection_descs
+                .iter()
+                .map(|intersection_desc| match intersection_desc {
+                    crate::RayTracingIntersectionDescriptor::Triangle {
+                        closest_hit,
+                        any_hit,
+                    } => pipe::RayTracingIntersectionDescriptor::Triangle {
+                        closest_hit: downcast_rt_stage(closest_hit),
+                        any_hit: any_hit.as_ref().map(|stage| downcast_rt_stage(stage)),
+                    },
+                })
+                .collect::<Vec<_>>(),
+            max_recursion_depth: desc.max_recursion_depth,
+            cache: desc
+                .cache
+                .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
+        };
+
+        let (wgpu_ray_tracing_pipeline, error) =
+            self.wgpu_device.create_ray_tracing_pipeline(descriptor);
+        if let Some(cause) = error {
+            if let wgc::pipeline::CreateRayTracingPipelineError::Internal { stage, ref error } =
+                cause
+            {
+                log::error!("Shader translation error for stage {:?}: {}", stage, error);
+                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
+            }
+            self.wgpu_device
+                .handle_error(cause, desc.label, "Device::create_ray_tracing_pipeline");
+        }
+        CoreRayTracingPipeline {
+            wgpu_ray_tracing_pipeline,
+        }
+        .into()
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,
@@ -1776,6 +1858,22 @@ impl dispatch::RenderPipelineInterface for CoreRenderPipeline {
     }
 }
 
+impl dispatch::RayTracingPipelineInterface for CoreRayTracingPipeline {
+    fn get_bind_group_layout(&self, index: u32) -> dispatch::DispatchBindGroupLayout {
+        let (wgpu_bind_group_layout, error) =
+            self.wgpu_ray_tracing_pipeline.get_bind_group_layout(index);
+        if let Some(err) = error {
+            self.wgpu_ray_tracing_pipeline
+                .device()
+                .handle_error_nolabel(err, "RayTracingPipeline::get_bind_group_layout")
+        }
+        CoreBindGroupLayout {
+            wgpu_bind_group_layout,
+        }
+        .into()
+    }
+}
+
 impl dispatch::ComputePipelineInterface for CoreComputePipeline {
     fn get_bind_group_layout(&self, index: u32) -> dispatch::DispatchBindGroupLayout {
         let wgpu_bind_group_layout = self.wgpu_compute_pipeline.get_bind_group_layout(index);
@@ -1937,6 +2035,23 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         .into()
     }
 
+    fn begin_ray_tracing_pass(
+        &self,
+        desc: &crate::RayTracingPassDescriptor<'_>,
+    ) -> dispatch::DispatchRayTracingPass {
+        let pass = self.wgpu_command_encoder.begin_ray_tracing_pass(
+            &wgc::command::RayTracingPassDescriptor {
+                label: desc.label.map(Borrowed),
+            },
+        );
+
+        CoreRayTracingPass {
+            pass,
+            id: crate::cmp::Identifier::create(),
+        }
+        .into()
+    }
+
     fn finish(&mut self) -> dispatch::DispatchCommandBuffer {
         let descriptor = wgt::CommandBufferDescriptor::default();
         let wgpu_command_buffer = self.wgpu_command_encoder.finish(&descriptor);
@@ -2080,6 +2195,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                             transform: instance.transform,
                             custom_data: instance.custom_data,
                             mask: instance.mask,
+                            intersection_index: instance.intersection_index,
                         })
                 })
                 .collect();
@@ -2506,6 +2622,52 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
 }
 
 impl Drop for CoreRenderPass {
+    fn drop(&mut self) {
+        self.pass.end()
+    }
+}
+
+impl dispatch::RayTracingPassInterface for CoreRayTracingPass {
+    fn set_pipeline(&mut self, pipeline: &dispatch::DispatchRayTracingPipeline) {
+        let pipeline = pipeline.as_core();
+
+        self.pass
+            .set_pipeline(pipeline.wgpu_ray_tracing_pipeline.clone())
+    }
+
+    fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: Option<&dispatch::DispatchBindGroup>,
+        offsets: &[crate::DynamicOffset],
+    ) {
+        let bg = bind_group.map(|bg| bg.as_core().wgpu_bind_group.clone());
+
+        self.pass.set_bind_group(index, bg, offsets)
+    }
+
+    fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        self.pass.set_immediates(offset, data)
+    }
+
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.pass.insert_debug_marker(label, 0)
+    }
+
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.pass.push_debug_group(group_label, 0)
+    }
+
+    fn pop_debug_group(&mut self) {
+        self.pass.pop_debug_group()
+    }
+
+    fn trace_rays(&mut self, x: u32, y: u32, z: u32) {
+        self.pass.trace_rays(x, y, z)
+    }
+}
+
+impl Drop for CoreRayTracingPass {
     fn drop(&mut self) {
         self.pass.end()
     }

@@ -1489,6 +1489,12 @@ pub struct WebComputePipeline {
 }
 
 #[derive(Debug, Clone)]
+pub struct WebRayTracingPipeline {
+    /// Unique identifier for this RayTracingPipeline.
+    ident: crate::cmp::Identifier,
+} // no ray tracing pipelines on web
+
+#[derive(Debug, Clone)]
 pub struct WebPipelineCache {
     /// Unique identifier for this PipelineCache.
     ident: crate::cmp::Identifier,
@@ -1514,6 +1520,12 @@ pub struct WebRenderPassEncoder {
     /// Unique identifier for this RenderPassEncoder.
     ident: crate::cmp::Identifier,
 }
+
+#[derive(Debug, Clone)]
+pub struct WebRayTracingPassEncoder {
+    /// Unique identifier for this RayTracingPassEncoder.
+    ident: crate::cmp::Identifier,
+} // no ray tracing pipelines on web
 
 #[derive(Debug)]
 pub struct WebCommandBuffer {
@@ -1597,10 +1609,12 @@ impl_send_sync!(WebQuerySet);
 impl_send_sync!(WebPipelineLayout);
 impl_send_sync!(WebRenderPipeline);
 impl_send_sync!(WebComputePipeline);
+impl_send_sync!(WebRayTracingPipeline);
 impl_send_sync!(WebPipelineCache);
 impl_send_sync!(WebCommandEncoder);
 impl_send_sync!(WebComputePassEncoder);
 impl_send_sync!(WebRenderPassEncoder);
+impl_send_sync!(WebRayTracingPassEncoder);
 impl_send_sync!(WebCommandBuffer);
 impl_send_sync!(WebRenderBundleEncoder);
 impl_send_sync!(WebRenderBundle);
@@ -1627,11 +1641,13 @@ crate::cmp::impl_eq_ord_hash_proxy!(WebQuerySet => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebPipelineLayout => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebRenderPipeline => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebComputePipeline => .ident);
+crate::cmp::impl_eq_ord_hash_proxy!(WebRayTracingPipeline => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebPipelineCache => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebCommandEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebComputePassEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebRenderPassEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebCommandBuffer => .ident);
+crate::cmp::impl_eq_ord_hash_proxy!(WebRayTracingPassEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebRenderBundleEncoder => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebRenderBundle => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebSurface => .ident);
@@ -2596,6 +2612,13 @@ impl dispatch::DeviceInterface for WebDevice {
         .into()
     }
 
+    fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &crate::RayTracingPipelineDescriptor<'_>,
+    ) -> dispatch::DispatchRayTracingPipeline {
+        unreachable!("ray tracing is not web.")
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         _desc: &crate::PipelineCacheDescriptor<'_>,
@@ -3320,6 +3343,17 @@ impl Drop for WebComputePipeline {
     }
 }
 
+impl dispatch::RayTracingPipelineInterface for WebRayTracingPipeline {
+    fn get_bind_group_layout(&self, _index: u32) -> dispatch::DispatchBindGroupLayout {
+        unreachable!("ray tracing is not web.")
+    }
+}
+impl Drop for WebRayTracingPipeline {
+    fn drop(&mut self) {
+        // no-op
+    }
+}
+
 impl dispatch::CommandEncoderInterface for WebCommandEncoder {
     fn copy_buffer_to_buffer(
         &self,
@@ -3545,6 +3579,13 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
             ident: crate::cmp::Identifier::create(),
         }
         .into()
+    }
+
+    fn begin_ray_tracing_pass(
+        &self,
+        _desc: &crate::RayTracingPassDescriptor<'_>,
+    ) -> dispatch::DispatchRayTracingPass {
+        unreachable!("ray tracing is not web.")
     }
 
     fn finish(&mut self) -> dispatch::DispatchCommandBuffer {
@@ -4052,6 +4093,43 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
 impl Drop for WebRenderPassEncoder {
     fn drop(&mut self) {
         self.inner.end();
+    }
+}
+
+impl dispatch::RayTracingPassInterface for WebRayTracingPassEncoder {
+    fn set_pipeline(&mut self, _pipeline: &dispatch::DispatchRayTracingPipeline) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+    fn set_bind_group(
+        &mut self,
+        _index: u32,
+        _bind_group: Option<&dispatch::DispatchBindGroup>,
+        _offsets: &[crate::DynamicOffset],
+    ) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+
+    fn insert_debug_marker(&mut self, _label: &str) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+    fn push_debug_group(&mut self, _group_label: &str) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+    fn pop_debug_group(&mut self) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+
+    fn trace_rays(&mut self, _x: u32, _y: u32, _z: u32) {
+        unreachable!("Ray tracing pipelines are unavailable on the web.")
+    }
+}
+
+impl Drop for WebRayTracingPassEncoder {
+    fn drop(&mut self) {
+        // no-op
     }
 }
 

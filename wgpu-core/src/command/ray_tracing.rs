@@ -62,7 +62,11 @@ impl super::CommandEncoder {
             |cmd_buf_data| -> Result<(), BuildAccelerationStructureError> {
                 let device = &self.device;
                 device.check_is_valid()?;
-                device.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
+                device
+                    .require_features(Features::EXPERIMENTAL_RAY_QUERY)
+                    .or_else(|_| {
+                        device.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+                    })?;
 
                 let mut build_command = AsBuild::with_capacity(blases.len(), tlases.len());
 
@@ -78,6 +82,7 @@ impl super::CommandEncoder {
                     build_command.tlas_s_built.push(TlasBuild {
                         tlas,
                         dependencies: Vec::new(),
+                        max_intersection_idx: 0,
                     });
                 }
 
@@ -200,7 +205,12 @@ pub(crate) fn build_acceleration_structures(
     profiling::scope!("build_acceleration_structures");
     state
         .device
-        .require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
+        .require_features(Features::EXPERIMENTAL_RAY_QUERY)
+        .or_else(|_| {
+            state
+                .device
+                .require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+        })?;
 
     let mut build_command = AsBuild::with_capacity(blases.len(), tlases.len());
     let mut input_barriers = Vec::<hal::BufferBarrier<dyn hal::DynBuffer>>::new();
@@ -238,17 +248,55 @@ pub(crate) fn build_acceleration_structures(
         let mut seen_dependencies = FastHashSet::<TrackerIndex>::default();
 
         let mut instance_count = 0;
-        for instance in mem::take(&mut package.instances).into_iter().flatten() {
+
+        let mut max_intersection_idx = 0;
+        for (instance_idx, instance) in mem::take(&mut package.instances)
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
             if instance.custom_data >= (1u32 << 24u32) {
-                return Err(BuildAccelerationStructureError::TlasInvalidCustomIndex(
+                return Err(BuildAccelerationStructureError::TlasInvalidCustomData(
                     tlas.error_ident(),
+                    instance_idx,
                 ));
             }
+
+            max_intersection_idx = max_intersection_idx.max(instance.intersection_index);
+
             let blas = instance.blas;
             let is_new_dependency = seen_dependencies.insert(blas.tracker_index());
 
             if is_new_dependency {
                 state.tracker.blas_s.insert_single(blas.clone());
+            }
+
+            if instance.intersection_index >= (1u32 << 24u32) {
+                return Err(
+                    BuildAccelerationStructureError::TlasInvalidIntersectionIndex(
+                        tlas.error_ident(),
+                        instance_idx,
+                        instance.intersection_index,
+                    ),
+                );
+            } else if instance.intersection_index != 0 {
+                state
+                    .device
+                    .require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)?;
+            }
+
+            if instance.intersection_index >= (1u32 << 24u32) {
+                return Err(
+                    BuildAccelerationStructureError::TlasInvalidIntersectionIndex(
+                        tlas.error_ident(),
+                        instance_idx,
+                        instance.intersection_index,
+                    ),
+                );
+            } else if instance.intersection_index != 0 {
+                state
+                    .device
+                    .require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)?;
             }
 
             state.device.raw().tlas_instance_to_bytes(
@@ -257,7 +305,7 @@ pub(crate) fn build_acceleration_structures(
                     custom_data: instance.custom_data,
                     mask: instance.mask,
                     blas_address: blas.handle,
-                    pipeline_intersection_data_offset: 0,
+                    pipeline_intersection_data_offset: instance.intersection_index,
                 },
                 &mut instance_buffer_staging_source,
             );
@@ -287,6 +335,7 @@ pub(crate) fn build_acceleration_structures(
         build_command.tlas_s_built.push(TlasBuild {
             tlas: tlas.clone(),
             dependencies,
+            max_intersection_idx,
         });
 
         if instance_count > tlas.max_instance_count {
@@ -523,10 +572,12 @@ impl CommandBufferMutable {
                             .tlas
                             .dependencies
                             .write()
-                            .clone_from(&tlas_build.dependencies)
+                            .clone_from(&tlas_build.dependencies);
+                        *tlas_build.tlas.max_intersection_index.write() =
+                            tlas_build.max_intersection_idx;
                     }
                 }
-                AsAction::UseTlas(tlas) => {
+                AsAction::BindTlas(tlas) => {
                     let tlas_build_index = tlas.built_index.read();
                     let dependencies = tlas.dependencies.read();
 
@@ -550,6 +601,17 @@ impl CommandBufferMutable {
                         blas.try_raw(snatch_guard)?;
                     }
                 }
+                AsAction::TraceTlas(tlas, intersection_len) => {
+                    let current_max = tlas.max_intersection_index.read();
+
+                    if *current_max >= *intersection_len {
+                        return Err(ValidateAsActionsError::TlasIntersectionInvalid(
+                            tlas.error_ident(),
+                            *current_max,
+                            *intersection_len,
+                        ));
+                    }
+                }
             }
         }
         Ok(())
@@ -561,7 +623,7 @@ impl CommandBufferMutable {
             .as_actions
             .iter()
             .filter_map(|action| {
-                if let AsAction::UseTlas(tlas) = action {
+                if let AsAction::BindTlas(tlas) = action {
                     Some(tlas.dependencies.read())
                 } else {
                     None
@@ -581,7 +643,7 @@ impl CommandBufferMutable {
                         }
                     }
                 }
-                AsAction::UseTlas(_tlas) => {
+                AsAction::BindTlas(_tlas) => {
                     let tlas_dependencies = tlas_dependencies_lock_iter.next().unwrap(); // _tlas.dependencies.read();
                     for dependency in tlas_dependencies.iter() {
                         if let Some(dependency) = dependency.raw(snatch_guard) {
@@ -589,6 +651,8 @@ impl CommandBufferMutable {
                         }
                     }
                 }
+                // We only need the dependencies on a bind, not on a use
+                AsAction::TraceTlas(_, _) => {}
             }
         }
         if !dependencies.is_empty() {

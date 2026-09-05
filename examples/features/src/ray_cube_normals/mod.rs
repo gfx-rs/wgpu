@@ -333,6 +333,7 @@ impl crate::framework::Example for Example {
                     )),
                     0,
                     0xff,
+                    0,
                 ));
             }
         }
