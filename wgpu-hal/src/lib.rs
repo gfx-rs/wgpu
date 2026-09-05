@@ -1704,12 +1704,20 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         first_instance: u32,
         instance_count: u32,
     );
+    /// # Safety
+    ///
+    /// - If `draw_count > 1`, see the deferred-work obligation on
+    ///   [`encode_deferred_multi_draws`](CommandEncoder::encode_deferred_multi_draws).
     unsafe fn draw_indirect(
         &mut self,
         buffer: &<Self::A as Api>::Buffer,
         offset: wgt::BufferAddress,
         draw_count: u32,
     );
+    /// # Safety
+    ///
+    /// - If `draw_count > 1`, see the deferred-work obligation on
+    ///   [`encode_deferred_multi_draws`](CommandEncoder::encode_deferred_multi_draws).
     unsafe fn draw_indexed_indirect(
         &mut self,
         buffer: &<Self::A as Api>::Buffer,
@@ -1752,6 +1760,36 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     );
+
+    /// Record any deferred setup work for indirect multi-draws of the most
+    /// recently ended render pass into the current command buffer.
+    ///
+    /// Some backends lower [`draw_indirect`]-family calls with `draw_count > 1`
+    /// to GPU-generated command lists (e.g. Metal indirect command buffers).
+    /// The generation work must execute *before* the render pass that consumes
+    /// it, but the pass contents are only known once the pass has been
+    /// recorded, so such backends queue the generation work at draw-record time
+    /// and encode it when this method is called.
+    ///
+    /// The default implementation does nothing; backends that don't defer any
+    /// multi-draw work don't need to override it.
+    ///
+    /// # Safety
+    ///
+    /// - Must be called outside of a render, compute, or ray-tracing pass.
+    /// - Between the [`end_render_pass`] for a pass that recorded indirect
+    ///   multi-draws and the submission of that pass's command buffer, this
+    ///   method must be called exactly once on this [`CommandEncoder`], while
+    ///   recording a command buffer that the queue will execute *before* the
+    ///   pass's command buffer.
+    /// - Any indirect (or count) buffer passed to a [`draw_indirect`]-family
+    ///   call in that pass must not be written between that call and the
+    ///   execution of the command buffer recorded here, other than by wgpu's
+    ///   own indirect validation.
+    ///
+    /// [`draw_indirect`]: CommandEncoder::draw_indirect
+    /// [`end_render_pass`]: CommandEncoder::end_render_pass
+    unsafe fn encode_deferred_multi_draws(&mut self) {}
 
     // compute passes
 
