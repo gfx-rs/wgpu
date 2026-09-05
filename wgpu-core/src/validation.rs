@@ -225,6 +225,7 @@ enum BuiltIn {
     ObjectToWorld,
     WorldToObject,
     HitKind,
+    HitBarycentrics,
 }
 
 impl BuiltIn {
@@ -281,6 +282,7 @@ impl BuiltIn {
             Self::ObjectToWorld => naga::BuiltIn::ObjectToWorld,
             Self::WorldToObject => naga::BuiltIn::WorldToObject,
             Self::HitKind => naga::BuiltIn::HitKind,
+            Self::HitBarycentrics => naga::BuiltIn::HitBarycentrics,
         }
     }
 }
@@ -1327,6 +1329,7 @@ impl Interface {
                 naga::BuiltIn::ObjectToWorld => BuiltIn::ObjectToWorld,
                 naga::BuiltIn::WorldToObject => BuiltIn::WorldToObject,
                 naga::BuiltIn::HitKind => BuiltIn::HitKind,
+                naga::BuiltIn::HitBarycentrics => BuiltIn::HitBarycentrics,
             }),
             None => {
                 log::error!("Missing binding for a varying");
