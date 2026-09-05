@@ -13,6 +13,7 @@ mod terminator;
 mod type_methods;
 mod typifier;
 
+use arrayvec::ArrayVec;
 pub use constant_evaluator::{
     ConstantEvaluator, ConstantEvaluatorError, ExpressionKind, ExpressionKindTracker,
 };
@@ -608,82 +609,105 @@ impl crate::ArraySize {
     }
 }
 
-/// Return an iterator over the individual components assembled by a
-/// `Compose` expression.
+/// Item type for the iterator returned by [`flatten_compose`].
+#[derive(Clone, Copy, Debug)]
+pub enum FlattenedComponent {
+    Zero,
+    Expression(crate::Handle<crate::Expression>),
+}
+
+/// Flatten nested `Compose` expressions in valid vector constructors.
 ///
-/// Given `ty` and `components` from an `Expression::Compose`, return an
-/// iterator over the components of the resulting value.
+/// If `ty` is a vector, flattens any nested `Compose` expressions among
+/// `components` (e.g. `vec4(vec3(1.0), 1.0)`) and returns an iterator over
+/// `FlattenedComponent`s that are each either a scalar zero or the handle
+/// of a scalar expression.
 ///
-/// Normally, this would just be an iterator over `components`. However,
-/// `Compose` expressions can concatenate vectors, in which case the i'th
-/// value being composed is not generally the i'th element of `components`.
-/// This function consults `ty` to decide if this concatenation is occurring,
-/// and returns an iterator that produces the components of the result of
-/// the `Compose` expression in either case.
+/// If `ty` is not a vector, returns `None`.
+///
+/// If `ty` is a vector but `components` do not describe a legal `Compose`
+/// expression, may panic or return a partially-flattened result.
+///
+/// The scalar zero expression needed to flatten `ZeroValue` expressions may
+/// not be present in the arena, so this function returns an iterator over
+/// `FlattenedComponent`s, which hold either an actual expression handle,
+/// or the placeholder `FlattenedComponent::Zero`.
+//
+// When the constant evaluator uses this function, validity is ensured by the
+// compose expression check in [`ConstantEvaluator::register_evaluated_expr`].
+// This validity assumption would be violated if `Compose` expressions were
+// eagerly evaluated in the constant evaluator, rather than the current behavior
+// of evaluating them only when their flattened form is needed while evaluating
+// some larger expression.
 pub fn flatten_compose<'arenas>(
     ty: crate::Handle<crate::Type>,
     components: &'arenas [crate::Handle<crate::Expression>],
     expressions: &'arenas crate::Arena<crate::Expression>,
     types: &'arenas crate::UniqueArena<crate::Type>,
-) -> impl Iterator<Item = crate::Handle<crate::Expression>> + 'arenas {
-    // Returning `impl Iterator` is a bit tricky. We may or may not
-    // want to flatten the components, but we have to settle on a
-    // single concrete type to return. This function returns a single
-    // iterator chain that handles both the flattening and
-    // non-flattening cases.
-    let (size, is_vector) = if let crate::TypeInner::Vector { size, .. } = types[ty].inner {
-        (size as usize, true)
-    } else {
-        (components.len(), false)
-    };
-
-    /// Flatten `Compose` expressions if `is_vector` is true.
-    fn flatten_compose<'c>(
-        component: &'c crate::Handle<crate::Expression>,
-        is_vector: bool,
-        expressions: &'c crate::Arena<crate::Expression>,
-    ) -> &'c [crate::Handle<crate::Expression>] {
-        if is_vector {
-            if let crate::Expression::Compose {
-                ty: _,
-                components: ref subcomponents,
-            } = expressions[*component]
-            {
-                return subcomponents;
-            }
-        }
-        core::slice::from_ref(component)
-    }
-
-    /// Flatten `Splat` expressions if `is_vector` is true.
-    fn flatten_splat<'c>(
-        component: &'c crate::Handle<crate::Expression>,
-        is_vector: bool,
-        expressions: &'c crate::Arena<crate::Expression>,
-    ) -> impl Iterator<Item = crate::Handle<crate::Expression>> {
-        let mut expr = *component;
-        let mut count = 1;
-        if is_vector {
-            if let crate::Expression::Splat { size, value } = expressions[expr] {
-                expr = value;
-                count = size as usize;
-            }
-        }
-        core::iter::repeat_n(expr, count)
-    }
-
+) -> Option<impl Iterator<Item = FlattenedComponent> + 'static> {
     // Expressions like `vec4(vec3(vec2(6, 7), 8), 9)` require us to
     // flatten up to two levels of `Compose` expressions.
     //
     // Expressions like `vec4(vec3(1.0), 1.0)` require us to flatten
     // `Splat` expressions. Fortunately, the operand of a `Splat` must
     // be a scalar, so we can stop there.
-    components
-        .iter()
-        .flat_map(move |component| flatten_compose(component, is_vector, expressions))
-        .flat_map(move |component| flatten_compose(component, is_vector, expressions))
-        .flat_map(move |component| flatten_splat(component, is_vector, expressions))
-        .take(size)
+    fn flatten_compose_helper<'c>(
+        flattened: &mut ArrayVec<FlattenedComponent, 4>,
+        depth: usize,
+        expr: crate::Handle<crate::Expression>,
+        expressions: &'c crate::Arena<crate::Expression>,
+        types: &'c crate::UniqueArena<crate::Type>,
+    ) {
+        match expressions[expr] {
+            crate::Expression::Compose {
+                ty: _,
+                components: ref subcomponents,
+            } if depth < 2 => {
+                for &inner in subcomponents {
+                    flatten_compose_helper(flattened, depth + 1, inner, expressions, types)
+                }
+            }
+            crate::Expression::ZeroValue(ty) => {
+                if let crate::TypeInner::Vector { size, scalar: _ } = types[ty].inner {
+                    flattened.extend(core::iter::repeat_n(
+                        FlattenedComponent::Zero,
+                        size as usize,
+                    ))
+                } else {
+                    flattened.push(FlattenedComponent::Zero)
+                }
+            }
+            crate::Expression::Splat { size, value } => flattened.extend(core::iter::repeat_n(
+                FlattenedComponent::Expression(value),
+                size as usize,
+            )),
+            _ => flattened.push(FlattenedComponent::Expression(expr)),
+        }
+    }
+
+    let crate::TypeInner::Vector { size, .. } = types[ty].inner else {
+        return None;
+    };
+    let size = size as usize;
+    // This assert will catch simple invalid `Compose` expressions before
+    // `ArrayVec` panics, but it will not catch things like `vec4(vec2(),
+    // vec2(), vec2())`.
+    assert!(
+        components.len() <= size,
+        "expected at most {size} components before flattening, found {}",
+        components.len(),
+    );
+    let mut flattened = ArrayVec::<FlattenedComponent, 4>::new();
+    for &expr in components {
+        flatten_compose_helper(&mut flattened, 0, expr, expressions, types);
+    }
+    assert_eq!(
+        flattened.len(),
+        size,
+        "expected exactly {size} components after flattening, found {}",
+        flattened.len()
+    );
+    Some(flattened.into_iter())
 }
 
 #[test]
