@@ -479,7 +479,7 @@ impl super::CommandEncoder {
                     ));
             super::Buffer {
                 resource,
-                size: size.get(),
+                allocated_size: size.get(),
                 allocation,
             }
         };
@@ -1425,12 +1425,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: crate::BufferBinding<'a, super::Buffer>,
+        binding: crate::BufferBinding<'a, super::Buffer, wgt::BufferAddress>,
         format: wgt::IndexFormat,
     ) {
         let ibv = Direct3D12::D3D12_INDEX_BUFFER_VIEW {
             BufferLocation: binding.resolve_address(),
-            SizeInBytes: binding.resolve_size().try_into().unwrap(),
+            SizeInBytes: binding.size.try_into().unwrap(),
             Format: auxil::dxgi::conv::map_index_format(format),
         };
 
@@ -1439,11 +1439,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: crate::BufferBinding<'a, super::Buffer>,
+        binding: crate::BufferBinding<'a, super::Buffer, wgt::BufferAddress>,
     ) {
         let vb = &mut self.pass.vertex_buffers[index as usize];
         vb.BufferLocation = binding.resolve_address();
-        vb.SizeInBytes = binding.resolve_size().try_into().unwrap();
+        vb.SizeInBytes = binding.size.try_into().unwrap();
         self.pass.dirty_vertex_buffers |= 1 << index;
     }
 

@@ -491,7 +491,7 @@ impl super::Device {
     ) -> super::Buffer {
         super::Buffer {
             resource,
-            size,
+            allocated_size: size,
             allocation: suballocation::Allocation::none(
                 suballocation::AllocationType::Buffer,
                 size,
@@ -506,7 +506,7 @@ impl crate::Device for super::Device {
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,
-    ) -> Result<super::Buffer, crate::DeviceError> {
+    ) -> Result<(super::Buffer, wgt::BufferAddress), crate::DeviceError> {
         let mut desc = desc.clone();
 
         if desc.usage.contains(wgt::BufferUses::UNIFORM) {
@@ -520,11 +520,14 @@ impl crate::Device for super::Device {
 
         self.counters.buffers.add(1);
 
-        Ok(super::Buffer {
-            resource,
-            size: desc.size,
-            allocation,
-        })
+        Ok((
+            super::Buffer {
+                resource,
+                allocated_size: desc.size,
+                allocation,
+            },
+            desc.size,
+        ))
     }
 
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
@@ -1595,7 +1598,7 @@ impl crate::Device for super::Device {
                     let end = start + entry.count as usize;
                     for data in &desc.buffers[start..end] {
                         let gpu_address = data.resolve_address();
-                        let mut size = data.resolve_size().try_into().unwrap();
+                        let mut size = data.size.get().try_into().unwrap();
 
                         if has_dynamic_offset {
                             match ty {
@@ -1607,8 +1610,13 @@ impl crate::Device for super::Device {
                                     ));
                                     continue;
                                 }
+                                // TODO(https://github.com/gfx-rs/wgpu/issues/9865): There is not currently
+                                // any mechanism to check that shader accesses are within the valid range
+                                // of a dynamic offset binding, and while using the actual size of the buffer
+                                // here would be slightly closer to being correct, it isn't sufficient
+                                // (because the upper bound moves with the dynamic offset).
                                 wgt::BufferBindingType::Storage { .. } => {
-                                    size = (data.buffer.size - data.offset) as u32;
+                                    size = (data.buffer.allocated_size - data.offset) as u32;
                                     dynamic_buffers.push(super::DynamicBuffer::Storage);
                                 }
                             }
@@ -1789,7 +1797,7 @@ impl crate::Device for super::Device {
                         cpu_views.as_mut().unwrap().stage.push(plane_handle.raw);
                     }
                     let gpu_address = external_texture.params.resolve_address();
-                    let size = external_texture.params.resolve_size() as u32;
+                    let size = crate::EXTERNAL_TEXTURE_PARAMS_SIZE as u32;
                     let inner = cpu_views.as_mut().unwrap();
                     let cpu_index = inner.stage.len() as u32;
                     let params_handle = desc.layout.cpu_heap_views.as_ref().unwrap().at(cpu_index);

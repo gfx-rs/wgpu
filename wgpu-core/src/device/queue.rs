@@ -770,7 +770,7 @@ impl Queue {
 
         let staging_buffer = {
             profiling::scope!("copy");
-            staging_buffer.write(data);
+            staging_buffer.write_exact(data);
             staging_buffer.flush()
         };
 
@@ -1131,7 +1131,8 @@ impl Queue {
             // Fast path if the data is already being aligned optimally.
             let stage_size = wgt::BufferSize::new(required_bytes_in_copy).unwrap();
             let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?;
-            staging_buffer.write(&data[data_layout.offset as usize..]);
+            staging_buffer
+                .write_exact(&data[data_layout.offset as usize..][..stage_size.get() as usize]);
             staging_buffer
         } else {
             profiling::scope!("copy chunked");

@@ -457,12 +457,13 @@ impl super::CommandState {
                 .unwrap_or_default()
         }));
 
-        // Extend with the sizes of the mapped vertex buffers, in the order
-        // they were added to the map.
+        // Extend with the sizes of the mapped vertex buffers, in the order they were added
+        // to the map. Note that zeros in the sizes buffer can be for either an unused
+        // binding index (no entry in map) or a zero-size binding (map entry that is zero).
         result_sizes.extend(stage_info.vertex_buffer_mappings.iter().map(|vbm| {
             self.vertex_buffer_size_map
                 .get(&vbm.id)
-                .map(|size| u32::try_from(size.get()).unwrap_or(u32::MAX))
+                .map(|&size| u32::try_from(size).unwrap_or(u32::MAX))
                 .unwrap_or_default()
         }));
 
@@ -1408,7 +1409,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: crate::BufferBinding<'a, super::Buffer>,
+        binding: crate::BufferBinding<'a, super::Buffer, wgt::BufferAddress>,
         format: wgt::IndexFormat,
     ) {
         let (stride, raw_type) = conv::map_index_format(format);
@@ -1423,7 +1424,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: crate::BufferBinding<'a, super::Buffer>,
+        binding: crate::BufferBinding<'a, super::Buffer, wgt::BufferAddress>,
     ) {
         let buffer_index = MAX_BUFFERS - 1 - index;
         let encoder = self.state.render.as_ref().unwrap();
@@ -1435,15 +1436,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         };
 
-        let buffer_size = binding.resolve_size();
-        if buffer_size > 0 {
-            self.state.vertex_buffer_size_map.insert(
-                buffer_index,
-                core::num::NonZeroU64::new(buffer_size).unwrap(),
-            );
-        } else {
-            self.state.vertex_buffer_size_map.remove(&buffer_index);
-        }
+        self.state
+            .vertex_buffer_size_map
+            .insert(buffer_index, binding.size);
 
         if let Some((index, sizes)) = self
             .state

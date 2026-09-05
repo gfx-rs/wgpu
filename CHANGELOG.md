@@ -92,6 +92,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Added `TextureDescriptor::theoretical_memory_footprint` to estimate memory footprint of a texture. By @sagudev in [#10032](https://github.com/gfx-rs/wgpu/pull/10032).
 - `wgpu::WriteOnly<[_]>` now implements `Send`. By @kpreid in [#10163](https://github.com/gfx-rs/wgpu/pull/10163).
 - Added `Texture::mark_externally_initialized()` to stop a texture from being lazily cleared if it was written to externally (e.g. via `as_hal`). By @R-Cramer4 in [#10075](https://github.com/gfx-rs/wgpu/pull/10075).
+- Zero-size vertex and index buffer bindings are now accepted by `set_vertex_buffer` and `set_index_buffer`. By @andyleiserson in [#9848](https://github.com/gfx-rs/wgpu/pull/9848).
 
 #### Naga
 
@@ -143,6 +144,10 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - `naga::valid::ValidationError` is now always returned boxed, to avoid `clippy::large_result_err` warning. By @beicause in [#9612](https://github.com/gfx-rs/wgpu/pull/9612)
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
+
+#### Metal
+
+- Removed the `size` argument to `wgpu_hal::metal::Device::buffer_from_raw`. The passed size value was previously used only to resolve vertex buffer bindings without an explicit size, possibly incorrectly. Binding sizes are now resolved in `wgpu-core`. By @andyleiserson in [#9848](https://github.com/gfx-rs/wgpu/pull/9848).
 
 ### Bug Fixes
 
