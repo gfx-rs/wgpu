@@ -11,7 +11,6 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct Texture {
     pub(crate) inner: dispatch::DispatchTexture,
-    pub(crate) descriptor: TextureDescriptor<'static>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Texture: Send, Sync);
@@ -61,7 +60,7 @@ impl Texture {
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::Texture>> {
         let texture = self.inner.as_core_opt()?;
-        unsafe { texture.context.texture_as_hal::<A>(texture) }
+        unsafe { texture.as_hal::<A>() }
     }
 
     /// Returns the underlying [`webgpu::GpuTexture`] handle if this `Texture`
@@ -85,17 +84,9 @@ impl Texture {
 
     #[cfg(custom)]
     /// Creates a texture from already created custom implementation with the given description
-    pub fn from_custom<T: custom::TextureInterface>(
-        texture: T,
-        desc: &TextureDescriptor<'_>,
-    ) -> Self {
+    pub fn from_custom<T: custom::TextureInterface>(texture: T) -> Self {
         Self {
             inner: dispatch::DispatchTexture::custom(texture),
-            descriptor: TextureDescriptor {
-                label: None,
-                view_formats: &[],
-                ..desc.clone()
-            },
         }
     }
 
@@ -132,63 +123,77 @@ impl Texture {
     ///
     /// This is always equal to the `size` that was specified when creating the texture.
     pub fn size(&self) -> Extent3d {
-        self.descriptor.size
+        self.inner.size()
     }
 
     /// Returns the width of this `Texture`.
     ///
     /// This is always equal to the `size.width` that was specified when creating the texture.
     pub fn width(&self) -> u32 {
-        self.descriptor.size.width
+        self.inner.size().width
     }
 
     /// Returns the height of this `Texture`.
     ///
     /// This is always equal to the `size.height` that was specified when creating the texture.
     pub fn height(&self) -> u32 {
-        self.descriptor.size.height
+        self.inner.size().height
     }
 
     /// Returns the depth or layer count of this `Texture`.
     ///
     /// This is always equal to the `size.depth_or_array_layers` that was specified when creating the texture.
     pub fn depth_or_array_layers(&self) -> u32 {
-        self.descriptor.size.depth_or_array_layers
+        self.inner.size().depth_or_array_layers
     }
 
     /// Returns the mip_level_count of this `Texture`.
     ///
     /// This is always equal to the `mip_level_count` that was specified when creating the texture.
     pub fn mip_level_count(&self) -> u32 {
-        self.descriptor.mip_level_count
+        self.inner.mip_level_count()
     }
 
     /// Returns the sample_count of this `Texture`.
     ///
     /// This is always equal to the `sample_count` that was specified when creating the texture.
     pub fn sample_count(&self) -> u32 {
-        self.descriptor.sample_count
+        self.inner.sample_count()
     }
 
     /// Returns the dimension of this `Texture`.
     ///
     /// This is always equal to the `dimension` that was specified when creating the texture.
     pub fn dimension(&self) -> TextureDimension {
-        self.descriptor.dimension
+        self.inner.dimension()
     }
 
     /// Returns the format of this `Texture`.
     ///
     /// This is always equal to the `format` that was specified when creating the texture.
     pub fn format(&self) -> TextureFormat {
-        self.descriptor.format
+        self.inner.format()
     }
 
     /// Returns the allowed usages of this `Texture`.
     ///
     /// This is always equal to the `usage` that was specified when creating the texture.
     pub fn usage(&self) -> TextureUsages {
-        self.descriptor.usage
+        self.inner.usage()
+    }
+
+    /// Marks this texture's contents as already initialized, skipping wgpu's
+    /// lazy zero-initialization of it.
+    ///
+    /// This is a no-op on backends without a concept of lazy
+    /// zero-initialization, such as WebGPU.
+    ///
+    /// # Safety
+    ///
+    /// The entire contents of the texture must already be initialized, e.g. by
+    /// writing to it through the handle returned by [`Texture::as_hal`].
+    pub unsafe fn mark_externally_initialized(&self) {
+        unsafe { self.inner.mark_externally_initialized() }
     }
 }
 

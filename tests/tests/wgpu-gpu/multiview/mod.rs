@@ -54,7 +54,7 @@ static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration
                  right: None",
             ));
             // https://github.com/gfx-rs/wgpu/issues/9184 and https://github.com/gfx-rs/wgpu/issues/9187
-            failures.append(&mut FailureCase::mac_vulkan(|case| {
+            failures.extend(FailureCase::mac_vulkan().into_iter().map(|case| {
                 case.panic(
                     "assertion `left == right` failed: Expected 0\n  left: Some(255)\n right: None",
                 )
@@ -146,6 +146,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32) {
         mip_level_count: None,
         base_array_layer: 0,
         array_layer_count: Some(num_layers),
+        swizzle: wgpu::TextureComponentSwizzle::default(),
     };
     let entire_texture_view = texture.create_view(&texture_view_desc);
 

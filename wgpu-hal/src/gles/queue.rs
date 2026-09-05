@@ -5,7 +5,7 @@ use core::sync::atomic::Ordering;
 use arrayvec::ArrayVec;
 use glow::HasContext;
 
-use super::{conv::is_layered_target, lock, Command as C, PrivateCapabilities};
+use super::{conv::is_layered_target, Command as C, PrivateCapabilities};
 
 const DEBUG_ID: u32 = 0;
 
@@ -377,7 +377,7 @@ impl super::Queue {
                     }
                 }
                 None => {
-                    let mut map_state = lock(&dst.map_state);
+                    let mut map_state = dst.map_state.lock();
                     map_state.data.as_mut().unwrap().as_mut_slice()
                         [range.start as usize..range.end as usize]
                         .fill(0);
@@ -420,7 +420,7 @@ impl super::Queue {
                         };
                     }
                     (Some(src), None) => {
-                        let mut map_state = lock(&dst.map_state);
+                        let mut map_state = dst.map_state.lock();
                         let dst_data = &mut map_state.data.as_mut().unwrap().as_mut_slice()
                             [copy.dst_offset as usize..copy.dst_offset as usize + size];
 
@@ -435,7 +435,7 @@ impl super::Queue {
                         };
                     }
                     (None, Some(dst)) => {
-                        let map_state = lock(&src.map_state);
+                        let map_state = src.map_state.lock();
                         let src_data = &map_state.data.as_ref().unwrap().as_slice()
                             [copy.src_offset as usize..copy.src_offset as usize + size];
                         unsafe { gl.bind_buffer(copy_dst_target, Some(dst)) };
@@ -537,11 +537,6 @@ impl super::Queue {
                                 v,
                             );
                         },
-                        #[cfg(not(web_sys_unstable_apis))]
-                        wgt::ExternalImageSource::VideoFrame(_) => {
-                            unimplemented!("web_sys_unstable_apis is needed for glow")
-                        }
-                        #[cfg(web_sys_unstable_apis)]
                         wgt::ExternalImageSource::VideoFrame(ref v) => unsafe {
                             gl.tex_sub_image_3d_with_video_frame(
                                 dst_target,
@@ -587,7 +582,28 @@ impl super::Queue {
                                 c,
                             );
                         },
-                        wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
+                        wgt::ExternalImageSource::OffscreenCanvas(ref c) => unsafe {
+                            // WebGL2's `texSubImage3D` accepts any `TexImageSource`,
+                            // including `OffscreenCanvas`, but web-sys 0.3.x generates
+                            // no typed overload for it. Re-wrap the same JS object as
+                            // `HtmlCanvasElement` — a type-erased pass-through, not a
+                            // conversion; the browser dispatches on the real object.
+                            // Tracked in wasm-bindgen PR#5312.
+                            use wasm_bindgen::JsCast as _;
+                            gl.tex_sub_image_3d_with_html_canvas_element(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                z_offset as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                c.unchecked_ref(),
+                            );
+                        },
                     }
                 } else {
                     let dst_target = get_2d_target(dst_target, copy.dst_base.array_layer);
@@ -632,11 +648,6 @@ impl super::Queue {
                                 v,
                             )
                         },
-                        #[cfg(not(web_sys_unstable_apis))]
-                        wgt::ExternalImageSource::VideoFrame(_) => {
-                            unimplemented!("web_sys_unstable_apis is needed for glow")
-                        }
-                        #[cfg(web_sys_unstable_apis)]
                         wgt::ExternalImageSource::VideoFrame(ref v) => unsafe {
                             gl.tex_sub_image_2d_with_video_frame_and_width_and_height(
                                 dst_target,
@@ -676,7 +687,23 @@ impl super::Queue {
                                 c,
                             )
                         },
-                        wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
+                        wgt::ExternalImageSource::OffscreenCanvas(ref c) => unsafe {
+                            // Same `TexImageSource` pass-through as the 3D path above:
+                            // web-sys 0.3.x has no `OffscreenCanvas` overload, so the
+                            // handle rides the `HtmlCanvasElement` binding unchanged.
+                            use wasm_bindgen::JsCast as _;
+                            gl.tex_sub_image_2d_with_html_canvas_and_width_and_height(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                c.unchecked_ref(),
+                            )
+                        },
                     }
                 }
 
@@ -696,59 +723,63 @@ impl super::Queue {
                 dst_target,
                 ref copy,
             } => {
-                //TODO: handle 3D copies
                 unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
-                if is_layered_target(src_target) {
-                    //TODO: handle GLES without framebuffer_texture_3d
-                    unsafe {
-                        gl.framebuffer_texture_layer(
-                            glow::READ_FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            Some(src),
-                            copy.src_base.mip_level as i32,
-                            copy.src_base.array_layer as i32,
-                        )
-                    };
-                } else {
-                    unsafe {
-                        gl.framebuffer_texture_2d(
-                            glow::READ_FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            src_target,
-                            Some(src),
-                            copy.src_base.mip_level as i32,
-                        )
-                    };
-                }
-
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
-                if is_layered_target(dst_target) {
-                    unsafe {
-                        gl.copy_tex_sub_image_3d(
-                            dst_target,
-                            copy.dst_base.mip_level as i32,
-                            copy.dst_base.origin.x as i32,
-                            copy.dst_base.origin.y as i32,
-                            get_z_offset(dst_target, &copy.dst_base) as i32,
-                            copy.src_base.origin.x as i32,
-                            copy.src_base.origin.y as i32,
-                            copy.size.width as i32,
-                            copy.size.height as i32,
-                        )
-                    };
-                } else {
-                    unsafe {
-                        gl.copy_tex_sub_image_2d(
-                            get_2d_target(dst_target, copy.dst_base.array_layer),
-                            copy.dst_base.mip_level as i32,
-                            copy.dst_base.origin.x as i32,
-                            copy.dst_base.origin.y as i32,
-                            copy.src_base.origin.x as i32,
-                            copy.src_base.origin.y as i32,
-                            copy.size.width as i32,
-                            copy.size.height as i32,
-                        )
-                    };
+
+                // The read framebuffer holds a single 2D slice at a time, so a copy of
+                // depth > 1 is issued one slice per iteration.
+                for z in 0..copy.size.depth {
+                    if is_layered_target(src_target) {
+                        //TODO: handle GLES without framebuffer_texture_3d
+                        unsafe {
+                            gl.framebuffer_texture_layer(
+                                glow::READ_FRAMEBUFFER,
+                                glow::COLOR_ATTACHMENT0,
+                                Some(src),
+                                copy.src_base.mip_level as i32,
+                                (get_z_offset(src_target, &copy.src_base) + z) as i32,
+                            )
+                        };
+                    } else {
+                        unsafe {
+                            gl.framebuffer_texture_2d(
+                                glow::READ_FRAMEBUFFER,
+                                glow::COLOR_ATTACHMENT0,
+                                get_2d_target(src_target, copy.src_base.array_layer + z),
+                                Some(src),
+                                copy.src_base.mip_level as i32,
+                            )
+                        };
+                    }
+
+                    if is_layered_target(dst_target) {
+                        unsafe {
+                            gl.copy_tex_sub_image_3d(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                (get_z_offset(dst_target, &copy.dst_base) + z) as i32,
+                                copy.src_base.origin.x as i32,
+                                copy.src_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                            )
+                        };
+                    } else {
+                        unsafe {
+                            gl.copy_tex_sub_image_2d(
+                                get_2d_target(dst_target, copy.dst_base.array_layer + z),
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.src_base.origin.x as i32,
+                                copy.src_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                            )
+                        };
+                    }
                 }
             }
             C::CopyBufferToTexture {
@@ -784,7 +815,7 @@ impl super::Queue {
                             glow::PixelUnpackData::BufferOffset(copy.buffer_layout.offset as u32)
                         }
                         None => {
-                            map_state = lock(&src.map_state);
+                            map_state = src.map_state.lock();
                             let src_data = &map_state.data.as_ref().unwrap().as_slice()
                                 [copy.buffer_layout.offset as usize..];
                             glow::PixelUnpackData::Slice(Some(src_data))
@@ -848,7 +879,7 @@ impl super::Queue {
                             )
                         }
                         None => {
-                            map_state = lock(&src.map_state);
+                            map_state = src.map_state.lock();
                             let src_data = &map_state.data.as_ref().unwrap().as_slice()
                                 [(offset as usize)..(offset + bytes_in_upload) as usize];
                             glow::CompressedPixelUnpackData::Slice(src_data)
@@ -929,7 +960,7 @@ impl super::Queue {
                             glow::PixelPackData::BufferOffset(offset as u32)
                         }
                         None => {
-                            map_state = lock(&dst.map_state);
+                            map_state = dst.map_state.lock();
                             let dst_data = &mut map_state.data.as_mut().unwrap().as_mut_slice()
                                 [offset as usize..];
                             glow::PixelPackData::Slice(Some(dst_data))
@@ -1096,7 +1127,7 @@ impl super::Queue {
                             };
                         }
                         None => {
-                            let mut map_state = lock(&dst.map_state);
+                            let mut map_state = dst.map_state.lock();
                             let data = map_state.data.as_mut().unwrap();
                             let len = query_data.len().min(data.len());
                             data[..len].copy_from_slice(&query_data[..len]);
@@ -1313,8 +1344,10 @@ impl super::Queue {
                 }
                 if usage.intersects(
                     wgt::TextureUses::COLOR_TARGET
-                        | wgt::TextureUses::DEPTH_STENCIL_READ
-                        | wgt::TextureUses::DEPTH_STENCIL_WRITE,
+                        | wgt::TextureUses::DEPTH_READ
+                        | wgt::TextureUses::DEPTH_WRITE
+                        | wgt::TextureUses::STENCIL_READ
+                        | wgt::TextureUses::STENCIL_WRITE,
                 ) {
                     flags |= glow::FRAMEBUFFER_BARRIER_BIT;
                 }

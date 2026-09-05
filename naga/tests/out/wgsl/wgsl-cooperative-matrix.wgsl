@@ -2,10 +2,10 @@ enable wgpu_cooperative_matrix;
 
 var<private> a: coop_mat8x8<f32,A>;
 var<private> b: coop_mat8x8<f32,B>;
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage, read_write> ext: array<f32>;
 
-@compute @workgroup_size(8, 8, 1) 
+@compute @workgroup_size(8, 8, 1)
 fn main() {
     var c: coop_mat8x8<f32,C>;
     var d: coop_mat8x8<f32,C>;

@@ -23,8 +23,9 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::{ops::Range, ptr::NonNull, sync::atomic};
+use core::{ops::Range, ptr::NonNull};
 use smallvec::SmallVec;
+use wgpu_sync::atomic;
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
@@ -908,13 +909,18 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 if let Some(at) = at.as_ref() {
                     let at_descriptor =
                         unsafe { descriptor.colorAttachments().objectAtIndexedSubscript(i) };
-                    at_descriptor.setTexture(Some(&at.target.view.raw));
+                    at_descriptor.setTexture(Some(&at.target.view.attachment.texture));
+                    at_descriptor.setLevel(at.target.view.attachment.base_mip_level as _);
+                    at_descriptor.setSlice(at.target.view.attachment.base_array_layer as _);
+
                     if let Some(depth_slice) = at.depth_slice {
                         at_descriptor.setDepthPlane(depth_slice as usize);
                     }
                     if let Some(ref resolve) = at.resolve_target {
-                        //Note: the selection of levels and slices is already handled by `TextureView`
-                        at_descriptor.setResolveTexture(Some(&resolve.view.raw));
+                        at_descriptor.setResolveTexture(Some(&resolve.view.attachment.texture));
+                        at_descriptor.setResolveLevel(resolve.view.attachment.base_mip_level as _);
+                        at_descriptor
+                            .setResolveSlice(resolve.view.attachment.base_array_layer as _);
                     }
                     let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -938,7 +944,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             if let Some(ref at) = desc.depth_stencil_attachment {
                 if at.target.view.aspects.contains(crate::FormatAspects::DEPTH) {
                     let at_descriptor = descriptor.depthAttachment();
-                    at_descriptor.setTexture(Some(&at.target.view.raw));
+                    at_descriptor.setTexture(Some(&at.target.view.attachment.texture));
+                    at_descriptor.setLevel(at.target.view.attachment.base_mip_level as _);
+                    at_descriptor.setSlice(at.target.view.attachment.base_array_layer as _);
 
                     let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -965,7 +973,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .contains(crate::FormatAspects::STENCIL)
                 {
                     let at_descriptor = descriptor.stencilAttachment();
-                    at_descriptor.setTexture(Some(&at.target.view.raw));
+                    at_descriptor.setTexture(Some(&at.target.view.attachment.texture));
+                    at_descriptor.setLevel(at.target.view.attachment.base_mip_level as _);
+                    at_descriptor.setSlice(at.target.view.attachment.base_array_layer as _);
 
                     let load_action = if at.stencil_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -1109,8 +1119,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             );
             self.update_bind_group_state(
                 Encoder::Task(&encoder),
-                // All zeros, as ts comes first
-                super::ResourceData::default(),
+                // ts's resources come right after vs's
+                group.counters.vs.clone(),
                 bg_info,
                 dynamic_offsets,
                 group_index,
@@ -1118,7 +1128,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
             );
             self.update_bind_group_state(
                 Encoder::Mesh(&encoder),
-                group.counters.ts.clone(),
+                super::ResourceData {
+                    buffers: group.counters.vs.buffers + group.counters.ts.buffers,
+                    textures: group.counters.vs.textures + group.counters.ts.textures,
+                    samplers: group.counters.vs.samplers + group.counters.ts.samplers,
+                },
                 bg_info,
                 dynamic_offsets,
                 group_index,

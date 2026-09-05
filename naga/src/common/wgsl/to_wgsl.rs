@@ -208,6 +208,7 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::ObjectToWorld => "object_to_world",
             Bi::WorldToObject => "world_to_object",
             Bi::HitKind => "hit_kind",
+            Bi::HitBarycentrics => "hit_barycentrics",
 
             Bi::BaseInstance
             | Bi::BaseVertex

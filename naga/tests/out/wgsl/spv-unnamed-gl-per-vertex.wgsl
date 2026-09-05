@@ -14,7 +14,7 @@ fn function_() {
     return;
 }
 
-@vertex 
+@vertex
 fn main(@builtin(vertex_index) param: u32) -> @builtin(position) vec4<f32> {
     global_1 = i32(param);
     function_();

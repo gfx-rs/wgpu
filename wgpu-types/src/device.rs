@@ -1,7 +1,32 @@
 use core::ops::Range;
 
+use macro_rules_attribute::derive;
+
+use crate::ConstDefault;
+
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
+
+/// Describes a [`Queue`](../wgpu/struct.Queue.html).
+///
+/// Corresponds to [WebGPU `GPUQueueDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#gpuqueuedescriptor).
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct QueueDescriptor<L> {
+    /// Debug label for the queue.
+    pub label: L,
+}
+
+impl<L> QueueDescriptor<L> {
+    /// Takes a closure and maps the label of the queue descriptor into another.
+    #[must_use]
+    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> QueueDescriptor<K> {
+        QueueDescriptor {
+            label: fun(&self.label),
+        }
+    }
+}
 
 /// Describes a [`Device`](../wgpu/struct.Device.html).
 ///
@@ -24,6 +49,10 @@ pub struct DeviceDescriptor<L> {
     /// Exactly the specified limits, and no better or worse,
     /// will be allowed in validation of API calls on the resulting device.
     pub required_limits: crate::Limits,
+    /// Specifies the descriptor of the default queue for the device request.
+    ///
+    /// Corresponds to [WebGPU `GPUDeviceDescriptor.defaultQueue`](https://gpuweb.github.io/gpuweb/#dom-gpudevicedescriptor-defaultqueue).
+    pub default_queue: QueueDescriptor<L>,
     /// Specifies whether `self.required_features` is allowed to contain experimental features.
     #[cfg_attr(feature = "serde", serde(skip))]
     pub experimental_features: crate::ExperimentalFeatures,
@@ -35,13 +64,14 @@ pub struct DeviceDescriptor<L> {
 }
 
 impl<L> DeviceDescriptor<L> {
-    /// Takes a closure and maps the label of the device descriptor into another.
+    /// Takes a closure and maps the labels of the descriptors into another.
     #[must_use]
-    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> DeviceDescriptor<K> {
+    pub fn map_label<'a, K>(&'a self, fun: impl Fn(&'a L) -> K) -> DeviceDescriptor<K> {
         DeviceDescriptor {
             label: fun(&self.label),
             required_features: self.required_features,
             required_limits: self.required_limits.clone(),
+            default_queue: self.default_queue.map_label(fun),
             experimental_features: self.experimental_features,
             memory_hints: self.memory_hints.clone(),
             trace: self.trace.clone(),
@@ -52,11 +82,11 @@ impl<L> DeviceDescriptor<L> {
 /// Hints to the device about the memory allocation strategy.
 ///
 /// Some backends may ignore these hints.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, ConstDefault!)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum MemoryHints {
     /// Favor performance over memory usage (the default value).
-    #[default]
+    #[custom(default)]
     Performance,
     /// Favor memory usage over performance.
     MemoryUsage,
@@ -83,13 +113,13 @@ pub enum MemoryHints {
 }
 
 /// Controls API call tracing and specifies where the trace is written.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, ConstDefault!)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 // This enum must be non-exhaustive so that enabling the "trace" feature is not a semver break.
 #[non_exhaustive]
 pub enum Trace {
     /// Tracing disabled.
-    #[default]
+    #[custom(default)]
     Off,
 
     /// Write trace to disk.

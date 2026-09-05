@@ -26,8 +26,6 @@ use crate::render_pass::GPURenderPassEncoder;
 use crate::webidl::GPUExtent3D;
 
 pub struct GPUCommandEncoder {
-  pub error_handler: super::error::ErrorHandler,
-
   pub wgpu_command_encoder: Arc<wgpu_core::command::CommandEncoder>,
   pub label: String,
 
@@ -62,6 +60,7 @@ impl GPUCommandEncoder {
     // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
   }
 
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   fn begin_render_pass(
@@ -132,18 +131,16 @@ impl GPUCommandEncoder {
       multiview_mask: NonZero::new(descriptor.multiview_mask),
     };
 
-    let (render_pass, err) =
+    let render_pass =
       self.wgpu_command_encoder.begin_render_pass(wgpu_descriptor);
 
-    self.error_handler.push_error(err);
-
     Ok(GPURenderPassEncoder {
-      error_handler: self.error_handler.clone(),
       render_pass: RefCell::new(render_pass),
       label: descriptor.label,
     })
   }
 
+  #[reentrant]
   #[cppgc]
   fn begin_compute_pass(
     &self,
@@ -164,14 +161,11 @@ impl GPUCommandEncoder {
       timestamp_writes,
     };
 
-    let (compute_pass, err) = self
+    let compute_pass = self
       .wgpu_command_encoder
       .begin_compute_pass(&wgpu_descriptor);
 
-    self.error_handler.push_error(err);
-
     GPUComputePassEncoder {
-      error_handler: self.error_handler.clone(),
       compute_pass: RefCell::new(compute_pass),
       label: descriptor.label,
     }
@@ -250,22 +244,18 @@ impl GPUCommandEncoder {
       )?;
     }
 
-    let err = self
-      .wgpu_command_encoder
-      .copy_buffer_to_buffer(
-        source.wgpu_buffer.clone(),
-        source_offset,
-        destination.wgpu_buffer.clone(),
-        destination_offset,
-        size,
-      )
-      .err();
-
-    self.error_handler.push_error(err);
+    self.wgpu_command_encoder.copy_buffer_to_buffer(
+      source.wgpu_buffer.clone(),
+      source_offset,
+      destination.wgpu_buffer.clone(),
+      destination_offset,
+      size,
+    );
 
     Ok(())
   }
 
+  #[reentrant]
   #[required(3)]
   #[undefined]
   fn copy_buffer_to_texture(
@@ -289,14 +279,14 @@ impl GPUCommandEncoder {
       aspect: destination.aspect.into(),
     };
 
-    let err = self
-      .wgpu_command_encoder
-      .copy_buffer_to_texture(&source, &destination, &copy_size.into())
-      .err();
-
-    self.error_handler.push_error(err);
+    self.wgpu_command_encoder.copy_buffer_to_texture(
+      &source,
+      &destination,
+      &copy_size.into(),
+    );
   }
 
+  #[reentrant]
   #[required(3)]
   #[undefined]
   fn copy_texture_to_buffer(
@@ -320,14 +310,14 @@ impl GPUCommandEncoder {
       },
     };
 
-    let err = self
-      .wgpu_command_encoder
-      .copy_texture_to_buffer(&source, &destination, &copy_size.into())
-      .err();
-
-    self.error_handler.push_error(err);
+    self.wgpu_command_encoder.copy_texture_to_buffer(
+      &source,
+      &destination,
+      &copy_size.into(),
+    );
   }
 
+  #[reentrant]
   #[required(3)]
   #[undefined]
   fn copy_texture_to_texture(
@@ -349,12 +339,11 @@ impl GPUCommandEncoder {
       aspect: destination.aspect.into(),
     };
 
-    let err = self
-      .wgpu_command_encoder
-      .copy_texture_to_texture(&source, &destination, &copy_size.into())
-      .err();
-
-    self.error_handler.push_error(err);
+    self.wgpu_command_encoder.copy_texture_to_texture(
+      &source,
+      &destination,
+      &copy_size.into(),
+    );
   }
 
   #[required(1)]
@@ -365,11 +354,11 @@ impl GPUCommandEncoder {
     #[webidl(default = 0, options(enforce_range = true))] offset: u64,
     #[webidl(options(enforce_range = true))] size: Option<u64>,
   ) {
-    let err = self
-      .wgpu_command_encoder
-      .clear_buffer(buffer.wgpu_buffer.clone(), offset, size)
-      .err();
-    self.error_handler.push_error(err);
+    self.wgpu_command_encoder.clear_buffer(
+      buffer.wgpu_buffer.clone(),
+      offset,
+      size,
+    );
   }
 
   #[required(5)]
@@ -382,20 +371,16 @@ impl GPUCommandEncoder {
     #[webidl] destination: Ptr<GPUBuffer>,
     #[webidl(options(enforce_range = true))] destination_offset: u64,
   ) {
-    let err = self
-      .wgpu_command_encoder
-      .resolve_query_set(
-        query_set.wgpu_query_set.clone(),
-        first_query,
-        query_count,
-        destination.wgpu_buffer.clone(),
-        destination_offset,
-      )
-      .err();
-
-    self.error_handler.push_error(err);
+    self.wgpu_command_encoder.resolve_query_set(
+      query_set.wgpu_query_set.clone(),
+      first_query,
+      query_count,
+      destination.wgpu_buffer.clone(),
+      destination_offset,
+    );
   }
 
+  #[reentrant]
   #[cppgc]
   fn finish(
     &self,
@@ -405,12 +390,8 @@ impl GPUCommandEncoder {
       label: crate::transform_label(descriptor.label.clone()),
     };
 
-    let (wgpu_command_buffer, opt_label_and_err) =
+    let wgpu_command_buffer =
       self.wgpu_command_encoder.finish(&wgpu_descriptor);
-
-    self
-      .error_handler
-      .push_error(opt_label_and_err.map(|(_label, err)| err));
 
     GPUCommandBuffer {
       wgpu_command_buffer,
@@ -419,25 +400,16 @@ impl GPUCommandEncoder {
   }
 
   fn push_debug_group(&self, #[webidl] group_label: String) {
-    let err = self
-      .wgpu_command_encoder
-      .push_debug_group(&group_label)
-      .err();
-    self.error_handler.push_error(err);
+    self.wgpu_command_encoder.push_debug_group(&group_label);
   }
 
   #[fast]
   fn pop_debug_group(&self) {
-    let err = self.wgpu_command_encoder.pop_debug_group().err();
-    self.error_handler.push_error(err);
+    self.wgpu_command_encoder.pop_debug_group();
   }
 
   fn insert_debug_marker(&self, #[webidl] marker_label: String) {
-    let err = self
-      .wgpu_command_encoder
-      .insert_debug_marker(&marker_label)
-      .err();
-    self.error_handler.push_error(err);
+    self.wgpu_command_encoder.insert_debug_marker(&marker_label);
   }
 }
 

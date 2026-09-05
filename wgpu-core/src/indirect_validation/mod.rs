@@ -3,6 +3,7 @@ use crate::{
     pipeline::{CreateComputePipelineError, CreateShaderModuleError},
 };
 use alloc::boxed::Box;
+use scopeguard::{guard, ScopeGuard};
 use thiserror::Error;
 
 mod dispatch;
@@ -43,6 +44,8 @@ impl IndirectValidation {
                 return Err(DeviceError::Lost);
             }
         };
+        let dispatch = guard(dispatch, |dispatch| dispatch.dispose(device));
+
         let draw = match Draw::new(
             device,
             required_features,
@@ -56,7 +59,10 @@ impl IndirectValidation {
                 return Err(DeviceError::Lost);
             }
         };
-        Ok(Self { dispatch, draw })
+        Ok(Self {
+            dispatch: ScopeGuard::into_inner(dispatch),
+            draw,
+        })
     }
 
     pub(crate) fn dispose(self, device: &dyn hal::DynDevice) {

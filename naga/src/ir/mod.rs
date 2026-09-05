@@ -502,6 +502,10 @@ pub enum BuiltIn {
     /// the intersection function if any, otherwise this is 254 (0xFE) for a
     /// front facing triangle and 255 (0xFF) for a back facing triangle
     HitKind,
+    /// Read in closest hit and any hit shaders, the second and third barycentric
+    /// coordinates of the hit point on the triangle. The first can be computed as
+    /// `1.0 - x - y`. Only meaningful if the hit was a triangle.
+    HitBarycentrics,
 }
 
 /// Number of bytes per scalar.
@@ -2005,6 +2009,14 @@ pub enum RayQueryFunction {
     ConfirmIntersection,
 
     Terminate,
+
+    /// Resets a variable's to appear as though it was previously unused.
+    ///
+    /// For most types in variables which don't have initialisers, a zero store
+    /// is fine when resetting a variable in a loop (as functions always have
+    /// their variables outside all blocks while wgsl and others can have blocks
+    /// in loops) but ray queries cannot be stored to nor can be zero initialized.
+    Begin,
 }
 
 //TODO: consider removing `Clone`. It's not valid to clone `Statement::Emit` anyway.
@@ -2411,6 +2423,12 @@ pub struct FunctionResult {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct Function {
     /// Name of the function, if any.
+    ///
+    /// Unlike WGSL, Naga IR allows a module to have multiple functions with the
+    /// same name. Since functions are generally identified by handle, the name
+    /// is mostly needed for diagnostics and as a hint to [`Namer`].
+    ///
+    /// [`Namer`]: crate::proc::Namer
     pub name: Option<String>,
     /// Information about function argument.
     pub arguments: Vec<FunctionArgument>,
@@ -2502,7 +2520,9 @@ pub struct Function {
 pub struct EntryPoint {
     /// Name of this entry point, visible externally.
     ///
-    /// Entry point names for a given `stage` must be distinct within a module.
+    /// Unlike WGSL, Naga IR allows a module to have multiple entry points with
+    /// the same name, as long as they are for different shader stages. That is,
+    /// `(name, stage)` pairs must be distinct within a module.
     pub name: String,
     /// Shader stage.
     pub stage: ShaderStage,

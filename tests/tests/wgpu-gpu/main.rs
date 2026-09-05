@@ -11,6 +11,8 @@ mod regression {
     pub mod issue_6467;
     pub mod issue_6827;
     pub mod issue_9115;
+
+    pub mod issue_10038;
 }
 
 mod adapter;
@@ -41,7 +43,6 @@ mod image_atomics;
 mod immediates;
 mod instance;
 mod life_cycle;
-mod mem_leaks;
 mod mesh_shader;
 mod multiview;
 mod naga_capabilities;
@@ -117,7 +118,6 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     image_atomics::all_tests(&mut tests);
     instance::all_tests(&mut tests);
     life_cycle::all_tests(&mut tests);
-    mem_leaks::all_tests(&mut tests);
     mesh_shader::all_tests(&mut tests);
     multiview::all_tests(&mut tests);
     occlusion_query::all_tests(&mut tests);
@@ -148,6 +148,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     regression::issue_6467::all_tests(&mut tests);
     regression::issue_6827::all_tests(&mut tests);
     regression::issue_9115::all_tests(&mut tests);
+    regression::issue_10038::all_tests(&mut tests);
     render_pass_ownership::all_tests(&mut tests);
     render_target::all_tests(&mut tests);
     resource_descriptor_accessor::all_tests(&mut tests);

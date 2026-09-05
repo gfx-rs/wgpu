@@ -1,8 +1,10 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 #![cfg(not(target_arch = "wasm32"))]
 #![warn(unsafe_op_in_unsafe_fn)]
+#![allow(clippy::disallowed_types)]
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -114,6 +116,10 @@ deno_core::extension!(
   lazy_loaded_esm = ["01_webgpu.js"],
 );
 
+pub(crate) type WeakDeviceHM = HashMap<usize, v8::Weak<v8::Object>>;
+pub(crate) type LostPromiseResolverHM =
+  HashMap<usize, v8::Global<v8::PromiseResolver>>;
+
 #[op2]
 #[cppgc]
 pub fn op_create_gpu(
@@ -124,6 +130,8 @@ pub fn op_create_gpu(
   uncaptured_error_event_class: v8::Local<v8::Value>,
   pipeline_error_class: v8::Local<v8::Value>,
 ) -> GPU {
+  state.put(WeakDeviceHM::new());
+  state.put(LostPromiseResolverHM::new());
   state.put(EventTargetSetup {
     brand: v8::Global::new(scope, webidl_brand),
     set_event_target_data: v8::Global::new(scope, set_event_target_data),
@@ -167,6 +175,7 @@ impl GPU {
   }
 
   #[async_method]
+  #[reentrant]
   #[cppgc]
   async fn request_adapter(
     &self,
@@ -193,7 +202,7 @@ impl GPU {
       if strict_compliance {
         flags |= wgpu_types::InstanceFlags::STRICT_WEBGPU_COMPLIANCE;
       }
-      state.put(Arc::new(wgpu_core::instance::Instance::new(
+      state.put(wgpu_core::instance::Instance::new(
         "webgpu",
         wgpu_types::InstanceDescriptor {
           backends,
@@ -214,7 +223,7 @@ impl GPU {
           display: None,
         },
         None,
-      )));
+      ));
       state.borrow::<Instance>()
     };
 
@@ -315,6 +324,43 @@ fn transform_label<'a>(label: String) -> Option<std::borrow::Cow<'a, str>> {
     None
   } else {
     Some(std::borrow::Cow::Owned(label))
+  }
+}
+
+fn map_texture_component_swizzle(
+  swizzle: &str,
+) -> Result<wgpu_types::TextureComponentSwizzle, deno_error::JsErrorBox> {
+  if swizzle.len() != 4 {
+    return Err(deno_error::JsErrorBox::type_error(
+          "`TextureViewDescriptor::swizzle` must be exactly a four-character string",
+        ));
+  }
+  let mut c = swizzle.chars();
+  let r = map_component_swizzle(c.next())?;
+  let g = map_component_swizzle(c.next())?;
+  let b = map_component_swizzle(c.next())?;
+  let a = map_component_swizzle(c.next())?;
+
+  Ok(wgpu_types::TextureComponentSwizzle { r, g, b, a })
+}
+
+fn map_component_swizzle(
+  swizzle: Option<char>,
+) -> Result<wgpu_types::ComponentSwizzle, deno_error::JsErrorBox> {
+  match swizzle {
+    Some('0') => Ok(wgpu_types::ComponentSwizzle::Zero),
+    Some('1') => Ok(wgpu_types::ComponentSwizzle::One),
+    Some('r') => Ok(wgpu_types::ComponentSwizzle::R),
+    Some('g') => Ok(wgpu_types::ComponentSwizzle::G),
+    Some('b') => Ok(wgpu_types::ComponentSwizzle::B),
+    Some('a') => Ok(wgpu_types::ComponentSwizzle::A),
+    None => Err(deno_error::JsErrorBox::type_error(
+      "`TextureViewDescriptor::swizzle` \
+      must be exactly a four-character string",
+    )),
+    Some(_) => Err(deno_error::JsErrorBox::type_error(
+      "Invalid character for texture component swizzle",
+    )),
   }
 }
 
