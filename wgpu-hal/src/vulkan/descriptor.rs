@@ -169,46 +169,39 @@ impl DescriptorAllocator {
 
         let key = layout.bucket_key();
         let bucket = self.buckets.get_mut(&key).unwrap();
+        let capacity_hint = bucket.allocated_sets;
 
         // Prefer smaller/older/fuller pools for new allocations to prevent
         // fragmentation and possibly fragmentation of hardware resources
         // (VK_ERROR_FRAGMENTATION)
-        let pool = bucket
-            .pools
-            .iter_mut()
-            .enumerate()
-            .find(|(_, pool)| pool.available != 0);
-
-        let (pool_index, pool) = if let Some(pool) = pool {
-            pool
-        } else {
-            let capacity_hint = bucket.allocated_sets;
-            bucket.create_pool(device, &key, capacity_hint)?
+        let mut pool_index = match bucket.pools.iter().position(|pool| pool.available != 0) {
+            Some(index) => index,
+            None => bucket.create_pool(device, &key, capacity_hint)?.0,
         };
 
         let vk_info = vk::DescriptorSetAllocateInfo::default()
-            .descriptor_pool(pool.raw)
+            .descriptor_pool(bucket.pools[pool_index].raw)
             .set_layouts(core::slice::from_ref(&layout.raw));
 
         let raw = match unsafe { device.allocate_descriptor_sets(&vk_info) } {
-            Ok(sets) => Ok(sets[0]),
-            // We make sure not to exceed the size of the pool.
-            Err(vk::Result::ERROR_OUT_OF_POOL_MEMORY) => unreachable!(),
-            // We only allocate from a pool if the nr and type of descriptors
-            // used by a layout is the same as those specified at pool
-            // creation time.
-            //
-            // > Additionally, if all sets allocated from the pool since it was
-            // created or most recently reset use the same number of
-            // descriptors (of each type) and the requested allocation also
-            // uses that same number of descriptors (of each type),
-            // then fragmentation must not cause an allocation failure.
-            //
-            // from https://docs.vulkan.org/refpages/latest/refpages/source/VkDescriptorPoolCreateInfo.html#_description
-            Err(vk::Result::ERROR_FRAGMENTED_POOL) => unreachable!(),
-            Err(err) => Err(super::map_host_device_oom_err(err)),
-        }?;
+            Ok(sets) => sets[0],
+            // Some drivers (e.g. Adreno, Mali) report these errors despite the same-shape
+            // guarantee the spec grants our per-bucket pools, in particular for
+            // update-after-bind pools which cannot be defragmented. Recover by
+            // allocating from a fresh pool, as the spec prescribes, before failing.
+            // https://docs.vulkan.org/refpages/latest/refpages/source/VkDescriptorPoolCreateInfo.html#_description
+            Err(vk::Result::ERROR_FRAGMENTED_POOL | vk::Result::ERROR_OUT_OF_POOL_MEMORY) => {
+                pool_index = bucket.create_pool(device, &key, capacity_hint)?.0;
+                let retry_info = vk_info.descriptor_pool(bucket.pools[pool_index].raw);
+                match unsafe { device.allocate_descriptor_sets(&retry_info) } {
+                    Ok(sets) => sets[0],
+                    Err(err) => return Err(super::map_host_device_oom_err(err)),
+                }
+            }
+            Err(err) => return Err(super::map_host_device_oom_err(err)),
+        };
 
+        let pool = &mut bucket.pools[pool_index];
         pool.available -= 1;
         bucket.available_sets -= 1;
         bucket.allocated_sets += 1;
