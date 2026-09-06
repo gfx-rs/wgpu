@@ -187,4 +187,6 @@ extern "C" fn dealloc(this: &Object, _cmd: Sel) {
             unsafe { msg_send![class!(NSString), stringWithUTF8String: BOUNDS.as_ptr()] };
         let _: () = unsafe { msg_send![root_layer, removeObserver: this forKeyPath: key_path] };
     }
+
+    let _: () = unsafe { msg_send![super(this, class!(CAMetalLayer)), dealloc] };
 }
