@@ -4753,6 +4753,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 doc_comments.push(Some(
                     member.doc_comments.iter().map(|s| s.to_string()).collect(),
                 ));
+            } else {
+                doc_comments.push(None);
             }
             members.push(ir::StructMember {
                 name: Some(member.name.name.to_owned()),
