@@ -2,6 +2,7 @@
 
 mod defined_non_null_js_value;
 mod ext_bindings;
+mod web_error;
 #[allow(clippy::allow_attributes)]
 pub(crate) mod webgpu_sys;
 
@@ -34,6 +35,9 @@ use crate::{
 };
 
 use defined_non_null_js_value::DefinedNonNullJsValue;
+use web_error::{
+    web_internal_error, web_validation_error, PopErrorScopeError, WebBackendError, WebErrorSink,
+};
 
 // We need to mark various types as Send and Sync to satisfy the Rust type system.
 //
@@ -92,7 +96,10 @@ fn error_from_js(js_error: js_sys::Object) -> crate::Error {
             .as_string()
             .unwrap_or_default();
         let value = js_error.to_string().as_string().unwrap_or_default();
-        panic!("Unexpected error: constructor={constructor} value={value}");
+        web_internal_error(
+            "GPUDevice.onuncapturederror",
+            format!("unexpected browser error: constructor={constructor} value={value}"),
+        )
     }
 }
 
@@ -1074,16 +1081,19 @@ fn future_request_device(
             // `Surface::get_capabilities` can report `Rgba16Float` truthfully.
             rgba16float_probe::probe_rgba16float_canvas_support(&device);
 
+            let error_sink = WebErrorSink::new(&device, error_from_js);
+
             (
                 WebDevice {
                     inner: device,
                     ident: crate::cmp::Identifier::create(),
-                    error_scope_count: Rc::new(Cell::new(0)),
+                    error_sink: error_sink.clone(),
                 }
                 .into(),
                 WebQueue {
                     inner: queue,
                     ident: crate::cmp::Identifier::create(),
+                    error_sink,
                 }
                 .into(),
             )
@@ -1092,12 +1102,6 @@ fn future_request_device(
             // wasm-bindgen provides a reasonable error stringification via `Debug` impl
             inner: crate::RequestDeviceErrorKind::WebGpu(format!("{error_value:?}")),
         })
-}
-
-fn future_pop_error_scope(
-    result: Result<js_sys::JsNullable<webgpu_sys::GpuError>, wasm_bindgen::JsValue>,
-) -> Option<crate::Error> {
-    Some(error_from_js(result.ok()?.into_option()?.into()))
 }
 
 fn future_compilation_info(
@@ -1304,8 +1308,8 @@ pub struct WebDevice {
     pub(crate) inner: webgpu_sys::GpuDevice,
     /// Unique identifier for this Device.
     ident: crate::cmp::Identifier,
-    /// Current number of error scopes that have been pushed on the device.
-    error_scope_count: Rc<Cell<u32>>,
+    /// Error sink wrapper, allowing us to inject errors that aren't orignating from the WebGPU implementation itself.
+    error_sink: Rc<WebErrorSink>,
 }
 
 #[derive(Debug, Clone)]
@@ -1313,6 +1317,8 @@ pub struct WebQueue {
     pub(crate) inner: webgpu_sys::GpuQueue,
     /// Unique identifier for this Queue.
     ident: crate::cmp::Identifier,
+    /// Error sink wrapper, allowing us to inject errors that aren't orignating from the WebGPU implementation itself.
+    error_sink: Rc<WebErrorSink>,
 }
 
 #[derive(Debug, Clone)]
@@ -2813,24 +2819,11 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn on_uncaptured_error(&self, handler: Arc<dyn crate::UncapturedErrorHandler>) {
-        let f = Closure::wrap(Box::new(move |event: webgpu_sys::GpuUncapturedErrorEvent| {
-            let error = error_from_js(event.error().value_of());
-            handler(error);
-        }) as Box<dyn FnMut(_)>);
-        self.inner
-            .set_onuncapturederror(Some(f.as_ref().unchecked_ref()));
-        // Release memory management of this closure from Rust to the JS GC.
-        // TODO: This will leak if weak references is not supported.
-        f.forget();
+        self.error_sink.set_uncaptured_handler(handler);
     }
 
     fn push_error_scope(&self, filter: crate::ErrorFilter) -> u32 {
-        let index = self.error_scope_count.get();
-        self.error_scope_count.set(
-            index
-                .checked_add(1)
-                .expect("Greater than 2^32 nested error scopes"),
-        );
+        let index = self.error_sink.push_scope(filter);
         self.inner.push_error_scope(match filter {
             crate::ErrorFilter::OutOfMemory => webgpu_sys::GpuErrorFilter::OutOfMemory,
             crate::ErrorFilter::Validation => webgpu_sys::GpuErrorFilter::Validation,
@@ -2840,24 +2833,47 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn pop_error_scope(&self, index: u32) -> Pin<Box<dyn dispatch::PopErrorScopeFuture>> {
-        let current_scope_count = self.error_scope_count.get();
         let is_panicking = crate::util::is_panicking();
-        if current_scope_count == 0 && !is_panicking {
-            panic!("Mismatched pop_error_scope call: no error scope for this thread. Error scopes are thread-local.");
-        }
-        if index + 1 != current_scope_count && !is_panicking {
-            panic!(
-                "Mismatched pop_error_scope call: error scopes must be popped in reverse order."
-            );
-        }
-        // Decrement the error scope count. We've asserted that the current
-        // size is `index + 1` above.
-        self.error_scope_count.set(index);
+        let synthetic_error = match self.error_sink.pop_scope(index) {
+            Ok(error) => error,
+            Err(_) if is_panicking => None,
+            Err(PopErrorScopeError::Empty) => {
+                panic!("Mismatched pop_error_scope call: no error scope for this thread. Error scopes are thread-local.");
+            }
+            Err(PopErrorScopeError::NotTop) => {
+                panic!(
+                    "Mismatched pop_error_scope call: error scopes must be popped in reverse order."
+                );
+            }
+        };
+        let synthetic_error = RefCell::new(synthetic_error);
 
+        // Even if we have a synthetic error, we still have to pop the browser error scope and await its result.
         let error_promise = self.inner.pop_error_scope();
         Box::pin(MakeSendFuture::new(
             wasm_bindgen_futures::JsFuture::from(error_promise),
-            future_pop_error_scope,
+            move |result: Result<
+                js_sys::JsNullable<webgpu_sys::GpuError>,
+                wasm_bindgen::JsValue,
+            >| {
+                let browser_error = match result {
+                    Ok(error) => error,
+                    Err(error) => {
+                        log::error!("GPUDevice.popErrorScope promise rejected: {error:?}");
+                        return None;
+                    }
+                };
+
+                // WebGPU permits an implementation to return any error captured by a scope.
+                // Prefer the wgpu-authored error since these tend to be more fundamental and are likely to trigger browser errors down the line.
+                if let Some(synthetic_error) = synthetic_error.borrow_mut().take() {
+                    Some(synthetic_error)
+                } else {
+                    browser_error
+                        .into_option()
+                        .map(|error| error_from_js(error.into()))
+                }
+            },
         ))
     }
 
