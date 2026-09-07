@@ -93,6 +93,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - `wgpu::WriteOnly<[_]>` now implements `Send`. By @kpreid in [#10163](https://github.com/gfx-rs/wgpu/pull/10163).
 - Added `Texture::mark_externally_initialized()` to stop a texture from being lazily cleared if it was written to externally (e.g. via `as_hal`). By @R-Cramer4 in [#10075](https://github.com/gfx-rs/wgpu/pull/10075).
 - Added the following members to `Limits`:
+
   - `Limits::max_storage_buffers_in_vertex_stage`
   - `Limits::max_storage_buffers_in_fragment_stage`
   - `Limits::max_storage_textures_in_vertex_stage`
