@@ -48,8 +48,8 @@ use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLArgumentBuffersTier,
     MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandQueue,
     MTLComputeCommandEncoder, MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode,
-    MTLDepthClipMode, MTLDepthStencilState, MTLDevice, MTLDrawable, MTLFence, MTLIndexType,
-    MTLLanguageVersion, MTLLibrary, MTLPrimitiveType, MTLReadWriteTextureTier,
+    MTLDepthClipMode, MTLDepthStencilState, MTLDevice, MTLDrawable, MTLEvent, MTLFence,
+    MTLIndexType, MTLLanguageVersion, MTLLibrary, MTLPrimitiveType, MTLReadWriteTextureTier,
     MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages, MTLResource,
     MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture, MTLTextureType,
     MTLTriangleFillMode, MTLWinding,
@@ -466,6 +466,7 @@ impl Queue {
             shared: Arc::new(QueueShared {
                 raw,
                 command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
+                acceleration_structure_sync: Mutex::default(),
             }),
             timestamp_period,
         }
@@ -487,6 +488,47 @@ pub struct QueueShared {
     // to create command buffers for internal purposes. In those cases we always
     // commit the buffer immediately, so we don't adjust the counter for them.)
     command_buffer_created_not_submitted: atomic::AtomicUsize,
+    // Synchronization for acceleration structure command encoders. Metal does
+    // not order acceleration structure commands against each other, whether
+    // they share an encoder or not. Within one command buffer,
+    // `CommandEncoder` orders the encoders with an `MTLFence`. Across command
+    // buffers, `Queue::submit` links whole command buffers with the event in
+    // here, in commit order. See `AccelerationStructureSync`.
+    acceleration_structure_sync: Mutex<AccelerationStructureSync>,
+}
+
+/// Cross-command-buffer ordering of acceleration structure commands.
+///
+/// Metal orders a command buffer against the command buffers committed before
+/// it, but acceleration structure commands are exempt: a build in one command
+/// buffer can observe an acceleration structure mid-build of an earlier
+/// command buffer, even though the two are committed back to back. The
+/// exemption is not limited to acceleration structure work on either side: a
+/// build races *any* earlier command buffer, including one that encodes data
+/// the build consumes.
+///
+/// The pairing is decided at submit time, not encode time, because Metal
+/// defines it in terms of commits: once a submission contains acceleration
+/// structure commands, every command buffer of that submission, and of every
+/// later submission on the queue, waits, before it starts executing, on the
+/// value the previous chained command buffer signals when its commands
+/// complete, and signals a fresh value after its own commands. Chaining whole
+/// submissions closes the exemption against all earlier work; values are
+/// assigned and encoded under the enclosing mutex, which `submit` holds until
+/// the command buffers are committed, so every wait references a value whose
+/// command buffer has been or is being committed and therefore will signal. A
+/// command buffer dropped without submission never takes part, so no wait can
+/// outlive the command buffer that satisfies it.
+#[derive(Debug, Default)]
+struct AccelerationStructureSync {
+    /// The queue-wide event, created on first use. Acceleration structure
+    /// commands only exist on hardware and OS versions where `MTLEvent` is
+    /// available.
+    event: Option<Retained<ProtocolObject<dyn MTLEvent>>>,
+    /// The value the next chained command buffer must wait on; 0 means there
+    /// is no acceleration structure work on the queue yet, so no submission
+    /// is chained.
+    last_signaled_value: u64,
 }
 
 pub struct Device {
@@ -540,7 +582,62 @@ impl crate::Queue for Queue {
         _surface_textures: &[&SurfaceTexture],
         (signal_fence, signal_value): (&Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
-        autoreleasepool(|_| {
+        autoreleasepool(|_| -> Result<(), crate::DeviceError> {
+            // Link command buffers into the commit-order chain (see
+            // `AccelerationStructureSync`). The mutex is held until the
+            // command buffers are committed so that a concurrent submission
+            // cannot commit between this submission's value assignments and
+            // its commits.
+            let mut acceleration_structure_sync = self.shared.acceleration_structure_sync.lock();
+            // Metal exempts acceleration structure commands from the
+            // back-to-back execution of command buffers committed in order,
+            // so an acceleration structure build is not ordered against any
+            // earlier command buffer: not even against a copy in the same
+            // submission of data the build consumes (for example the
+            // instance buffer of a top level acceleration structure, which
+            // wgpu-core encodes onto an internal command buffer of the same
+            // submission). The event chain therefore serializes whole
+            // command buffers from the first submission that contains
+            // acceleration structure commands onward: every command buffer
+            // of such a submission waits on the value the previous chained
+            // command buffer signals at completion, which orders the
+            // acceleration structure commands against all earlier work on
+            // the queue, and signals a fresh value that later submissions
+            // wait on in turn.
+            let chain_entire_submission = acceleration_structure_sync.last_signaled_value > 0
+                || command_buffers
+                    .iter()
+                    .any(|cmd_buffer| cmd_buffer.contains_acceleration_structure_commands);
+            for cmd_buffer in command_buffers {
+                if !chain_entire_submission {
+                    continue;
+                }
+                let event = match acceleration_structure_sync.event.clone() {
+                    Some(event) => event,
+                    None => {
+                        let event = self
+                            .shared
+                            .raw
+                            .device()
+                            .newEvent()
+                            .ok_or(crate::DeviceError::OutOfMemory)?;
+                        acceleration_structure_sync.event = Some(event.clone());
+                        event
+                    }
+                };
+                if acceleration_structure_sync.last_signaled_value > 0 {
+                    cmd_buffer.raw.encodeWaitForEvent_value(
+                        event.as_ref(),
+                        acceleration_structure_sync.last_signaled_value,
+                    );
+                }
+                acceleration_structure_sync.last_signaled_value += 1;
+                cmd_buffer.raw.encodeSignalEvent_value(
+                    event.as_ref(),
+                    acceleration_structure_sync.last_signaled_value,
+                );
+            }
+
             let extra_command_buffer = {
                 let completed_value = Arc::clone(&signal_fence.completed_value);
                 let block = block2::RcBlock::new(move |_cmd_buf| {
@@ -592,8 +689,9 @@ impl crate::Queue for Queue {
             if let Some(raw) = extra_command_buffer {
                 raw.commit();
             }
-        });
-        Ok(())
+
+            Ok(())
+        })
     }
     unsafe fn present(
         &self,
@@ -1084,20 +1182,21 @@ struct CommandState {
     blit: Option<Retained<ProtocolObject<dyn MTLBlitCommandEncoder>>>,
     acceleration_structure_builder:
         Option<Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>>>,
-    /// Fence used to order acceleration structure encoders split by
-    /// `CommandEncoder::split_acceleration_structure_builder`. Created lazily
-    /// and kept alive for the lifetime of the encoder. Command buffers
-    /// created with unretained references do not retain this fence, so the
-    /// encoder (which owns it) must be kept alive until its submitted
-    /// command buffers have finished executing.
-    acceleration_structure_fence: Option<Retained<ProtocolObject<dyn MTLFence>>>,
-    /// Whether the next acceleration structure encoder must wait on
-    /// [`Self::acceleration_structure_fence`] before encoding any commands.
-    pending_acceleration_structure_fence_wait: bool,
+    /// Whether this command buffer has encoded any acceleration structure
+    /// commands. `Queue::submit` orders command buffers with acceleration
+    /// structure commands against each other based on this.
+    contains_acceleration_structure_commands: bool,
     /// Whether the current acceleration structure encoder has encoded any
-    /// builds, i.e. whether commands consuming their results must split the
-    /// encoder first.
-    acceleration_structure_builder_has_builds: bool,
+    /// acceleration structure commands, i.e. whether a later
+    /// `read_acceleration_structure_compact_size` must close the encoder
+    /// first. wgpu-core emits a barrier between all other pairs of
+    /// acceleration structure commands, which closes the encoder anyway.
+    acceleration_structure_builder_has_commands: bool,
+    /// Whether an earlier acceleration structure encoder in this command
+    /// buffer updated `CommandEncoder::acceleration_structure_fence` and no
+    /// encoder has waited on it yet. The next acceleration structure encoder
+    /// in this command buffer must wait before encoding commands.
+    acceleration_structure_fence_updated: bool,
     render: Option<Retained<ProtocolObject<dyn MTLRenderCommandEncoder>>>,
     compute: Option<Retained<ProtocolObject<dyn MTLComputeCommandEncoder>>>,
     raw_primitive_type: MTLPrimitiveType,
@@ -1137,6 +1236,13 @@ pub struct CommandEncoder {
     shared: Arc<AdapterShared>,
     queue_shared: Arc<QueueShared>,
     raw_cmd_buf: Option<Retained<ProtocolObject<dyn MTLCommandBuffer>>>,
+    /// Fence ordering the acceleration structure encoders of this command
+    /// buffer against each other. It is created on first use and belongs to
+    /// this command buffer alone: Metal requires the command buffer whose
+    /// pass updates a fence to be committed before the command buffer whose
+    /// pass waits on it, so a fence shared with other command buffers would
+    /// reintroduce an encode-order requirement that wgpu does not guarantee.
+    acceleration_structure_fence: Option<Retained<ProtocolObject<dyn MTLFence>>>,
     state: CommandState,
     temp: Temp,
     counters: Arc<wgt::HalCounters>,
@@ -1157,6 +1263,11 @@ unsafe impl Sync for CommandEncoder {}
 pub struct CommandBuffer {
     raw: Retained<ProtocolObject<dyn MTLCommandBuffer>>,
     queue_shared: Arc<QueueShared>,
+    /// Whether this command buffer encoded any acceleration structure
+    /// commands. A submission containing such a command buffer is chained
+    /// whole by `Queue::submit` based on this. See
+    /// `AccelerationStructureSync`.
+    contains_acceleration_structure_commands: bool,
 }
 
 impl crate::DynCommandBuffer for CommandBuffer {}
