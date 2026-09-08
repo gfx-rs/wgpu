@@ -1,0 +1,35 @@
+capabilities = "RAY_QUERY | ACCELERATION_STRUCTURE_BINDING_ARRAY"
+targets = "METAL | SPIRV"
+
+[msl]
+fake_missing_bindings = true
+lang_version = [2, 4]
+spirv_cross_compatibility = false
+zero_initialize_workgroup_memory = false
+
+[msl.per_entry_point_map.main]
+resources = [
+    { bind_target = { binding_array_size = 10, buffer = 0, mutable = false }, resource_binding = { group = 0, binding = 0 } },
+    { bind_target = { binding_array_size = 10, buffer = 1, mutable = false }, resource_binding = { group = 0, binding = 1 } },
+    { bind_target = { buffer = 2, mutable = false }, resource_binding = { group = 0, binding = 2 } },
+    { bind_target = { buffer = 3, mutable = false }, resource_binding = { group = 0, binding = 3 } },
+]
+
+[spv]
+version = [1, 4]
+
+[[spv.binding_map]]
+bind_target = { descriptor_set = 0, binding = 0, binding_array_size = 10 }
+resource_binding = { group = 0, binding = 0 }
+
+[[spv.binding_map]]
+bind_target = { descriptor_set = 0, binding = 1, binding_array_size = 10 }
+resource_binding = { group = 0, binding = 1 }
+
+[[spv.binding_map]]
+bind_target = { descriptor_set = 0, binding = 2 }
+resource_binding = { group = 0, binding = 2 }
+
+[[spv.binding_map]]
+bind_target = { descriptor_set = 0, binding = 3 }
+resource_binding = { group = 0, binding = 3 }

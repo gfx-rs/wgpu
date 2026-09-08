@@ -7503,6 +7503,15 @@ template <typename A>
                                         ));
                                     }
                                 },
+                                crate::TypeInner::AccelerationStructure { .. } => {
+                                    // Arrays of acceleration structures ride on ray
+                                    // tracing, which requires MSL 2.4.
+                                    if options.lang_version < (2, 4) {
+                                        return Err(Error::UnsupportedArrayOf(
+                                            "acceleration structures".to_string(),
+                                        ));
+                                    }
+                                }
                                 _ => {
                                     return Err(Error::UnsupportedArrayOfType(base));
                                 }

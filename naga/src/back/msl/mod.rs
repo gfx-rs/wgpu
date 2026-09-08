@@ -902,6 +902,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         // No EARLY_DEPTH_TEST
         | Caps::MULTISAMPLED_SHADING
         | Caps::RAY_QUERY
+        | Caps::ACCELERATION_STRUCTURE_BINDING_ARRAY
         | Caps::DUAL_SOURCE_BLENDING
         | Caps::CUBE_ARRAY_TEXTURES
         | Caps::SHADER_INT64
