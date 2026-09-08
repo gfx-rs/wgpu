@@ -1308,6 +1308,12 @@ bitflags_array! {
         /// Supported platforms:
         /// - Vulkan
         ///
+        /// Unsupported platforms:
+        /// - Metal (blocked upstream: MSL ray queries expose no intersection vertex
+        ///   position; the `metal::raytracing` API has no equivalent of
+        ///   `rayQueryGetIntersectionVertexPosition`)
+        /// - DX12
+        ///
         /// This is a native only feature
         ///
         /// [`AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`]: super::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN
@@ -1332,6 +1338,7 @@ bitflags_array! {
         /// Supported platforms
         /// - Vulkan
         /// - DX12
+        /// - Metal
         ///
         /// [BlasTriangleGeometrySizeDescriptor::vertex_format]: super::BlasTriangleGeometrySizeDescriptor
         #[name("wgpu-extended-acceleration-structure-vertex-formats")]

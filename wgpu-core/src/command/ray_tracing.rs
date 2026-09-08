@@ -648,16 +648,20 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                         ));
                     }
 
-                    if size_desc
-                        .vertex_format
-                        .min_acceleration_structure_vertex_stride()
-                        > mesh.vertex_stride
-                    {
+                    // While DirectX allows packed 6 byte strides for 4-component
+                    // 16-bit formats, Metal requires the stride to cover the full
+                    // attribute size, so the backend minimum diverges there.
+                    let min_vertex_stride = if state.device.backend() == wgt::Backend::Metal {
+                        size_desc.vertex_format.size()
+                    } else {
+                        size_desc
+                            .vertex_format
+                            .min_acceleration_structure_vertex_stride()
+                    };
+                    if min_vertex_stride > mesh.vertex_stride {
                         return Err(BuildAccelerationStructureError::VertexStrideTooSmall(
                             blas.error_ident(),
-                            size_desc
-                                .vertex_format
-                                .min_acceleration_structure_vertex_stride(),
+                            min_vertex_stride,
                             mesh.vertex_stride,
                         ));
                     }

@@ -15,6 +15,7 @@ mod as_aabb;
 mod as_build;
 mod as_create;
 mod as_use_after_free;
+mod extra_formats;
 mod limits;
 mod scene;
 mod semantics;
@@ -27,6 +28,7 @@ pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
     as_use_after_free::all_tests(tests);
     limits::all_tests(tests);
     scene::all_tests(tests);
+    extra_formats::all_tests(tests);
     semantics::all_tests(tests);
     shader::all_tests(tests);
 }

@@ -265,6 +265,9 @@ impl VertexFormat {
             // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#d3d12_raytracing_geometry_triangles_desc
             //
             // Vulkan does not express a minimum stride.
+            //
+            // Metal instead requires the stride to cover the full format size
+            // (8 bytes), and builds with smaller strides are rejected there.
             Self::Float16x4 | Self::Snorm16x4 => 6,
             _ => unreachable!(),
         }

@@ -759,7 +759,18 @@ static EXTRA_FORMAT_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
             )
             .enable_noop(),
     )
-    .run_sync(|ctx| test_as_build_format_stride(ctx, VertexFormat::Snorm16x4, 6, false));
+    .run_sync(|ctx| {
+        // Metal requires the stride to cover the full 8 byte format, so the
+        // DirectX-style packed 6 byte stride is rejected there.
+        let metal_packed_stride_rejected = ctx.adapter_info.backend == Backend::Metal;
+        test_as_build_format_stride(
+            &ctx,
+            VertexFormat::Snorm16x4,
+            6,
+            metal_packed_stride_rejected,
+        );
+        test_as_build_format_stride(&ctx, VertexFormat::Snorm16x4, 8, false);
+    });
 
 #[gpu_test]
 static MISALIGNED_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -771,7 +782,7 @@ static MISALIGNED_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
             .enable_noop(),
     )
     // Larger than the minimum size, but not aligned as required
-    .run_sync(|ctx| test_as_build_format_stride(ctx, VertexFormat::Float32x3, 13, true));
+    .run_sync(|ctx| test_as_build_format_stride(&ctx, VertexFormat::Float32x3, 13, true));
 
 #[gpu_test]
 static TOO_SMALL_STRIDE_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -783,17 +794,17 @@ static TOO_SMALL_STRIDE_BUILD: GpuTestConfiguration = GpuTestConfiguration::new(
             .enable_noop(),
     )
     // Aligned as required, but smaller than minimum size
-    .run_sync(|ctx| test_as_build_format_stride(ctx, VertexFormat::Float32x3, 8, true));
+    .run_sync(|ctx| test_as_build_format_stride(&ctx, VertexFormat::Float32x3, 8, true));
 
 fn test_as_build_format_stride(
-    ctx: TestingContext,
+    ctx: &TestingContext,
     format: VertexFormat,
     stride: BufferAddress,
     invalid_combination: bool,
 ) {
     let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
-        contents: &vec![0; (format.min_acceleration_structure_vertex_stride() * 3) as usize],
+        contents: &vec![0; (stride * 3) as usize],
         usage: BufferUsages::BLAS_INPUT,
     });
 
