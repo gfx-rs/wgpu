@@ -392,6 +392,11 @@ impl Device {
     /// - `hal_buffer` must be created respecting `desc`
     /// - `hal_buffer` must be initialized
     /// - `hal_buffer` must not have zero size
+    /// - On Metal, the buffer's resolved hazard tracking mode must be tracked,
+    ///   or the caller must independently synchronize all conflicting accesses,
+    ///   including compute/blit writes before acceleration-structure input reads.
+    ///   wgpu's resource-use declarations do not synchronize untracked imports,
+    ///   and its AS fence does not cover preceding non-AS producers.
     #[cfg(wgpu_core)]
     #[must_use]
     pub unsafe fn create_buffer_from_hal<A: hal::Api>(

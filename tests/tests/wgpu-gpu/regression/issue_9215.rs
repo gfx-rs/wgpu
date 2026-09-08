@@ -1,4 +1,4 @@
-use std::mem::size_of;
+use std::{mem::size_of, time::Duration};
 
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu_macros::gpu_test;
@@ -18,6 +18,9 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(COMPACTED_BLAS_IN_PENDING_WRITES);
     vec.push(ENCODER_DISCARDED_AFTER_PUBLISHED_CLOSE);
     vec.push(COMMAND_BUFFER_DROPPED_AFTER_PUBLISHED_CLOSE);
+    vec.push(RECORD_CONSUMER_BEFORE_PRODUCER);
+    vec.push(REJECT_CONSUMER_SUBMITTED_BEFORE_PRODUCER);
+    vec.push(FIRST_BUILD_AFTER_COMPUTE_UPLOAD);
 }
 
 // The failures are races, so a pass is evidence rather than proof. On the
@@ -96,7 +99,7 @@ fn create_trace_setup(ctx: &TestingContext, pipeline: &wgpu::ComputePipeline) ->
 
     let hit_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("hit kind"),
-        size: size_of::<u32>() as wgpu::BufferAddress,
+        size: 64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     });
@@ -177,13 +180,25 @@ fn record_tlas_trace_and_copy(
 async fn read_hit_kind(ctx: &TestingContext, setup: &TraceSetup) -> u32 {
     let slice = setup.read_back.slice(..);
     slice.map_async(wgpu::MapMode::Read, Result::unwrap);
-    ctx.async_poll(wgpu::PollType::wait_indefinitely())
-        .await
-        .unwrap();
+    ctx.async_poll(wgpu::PollType::Wait {
+        submission_index: None,
+        timeout: Some(Duration::from_secs(30)),
+    })
+    .await
+    .unwrap();
 
     let hit_kind = {
         let view = slice.get_mapped_range().unwrap();
-        u32::from_ne_bytes(view[..size_of::<u32>()].try_into().unwrap())
+        let words: &[u32] = bytemuck::cast_slice(&view);
+        assert_eq!(words[8], 0, "known-miss control");
+        if words[0] == TRIANGLE_HIT_KIND {
+            assert!((f32::from_bits(words[1]) - 1.0).abs() < 1e-5);
+            assert_eq!(&words[2..6], &[0, 0, 0, 0], "hit identifiers");
+            for &barycentric in &words[6..8] {
+                assert!((f32::from_bits(barycentric) - 0.25).abs() < 1e-5);
+            }
+        }
+        words[0]
     };
     setup.read_back.unmap();
     hit_kind
@@ -532,10 +547,13 @@ async fn run_iterations_with_compacted_blas_in_pending_writes(ctx: TestingContex
             res.unwrap();
             send.send(()).unwrap();
         });
-        ctx.async_poll(wgpu::PollType::wait_indefinitely())
-            .await
-            .unwrap();
-        recv.recv().unwrap();
+        ctx.async_poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: Some(Duration::from_secs(30)),
+        })
+        .await
+        .unwrap();
+        recv.recv_timeout(Duration::from_secs(30)).unwrap();
         assert!(setup.blas.ready_for_compaction());
 
         // Encodes the compaction copy onto the pending-writes encoder.
@@ -545,6 +563,25 @@ async fn run_iterations_with_compacted_blas_in_pending_writes(ctx: TestingContex
         // acceleration structure encoder the compaction copy left open.
         ctx.queue
             .write_buffer(&scratch, 0, bytemuck::cast_slice(&[0_u32; 4]));
+
+        // Exercise pending-writes-only retirement as well as same-submit consumption.
+        if i % 2 == 0 {
+            let submission = ctx.queue.submit([]);
+            if i % 4 == 2 {
+                let (send, recv) = std::sync::mpsc::channel();
+                ctx.queue
+                    .on_submitted_work_done(move || send.send(()).unwrap());
+                ctx.async_poll(wgpu::PollType::Wait {
+                    submission_index: Some(submission),
+                    timeout: Some(Duration::from_secs(30)),
+                })
+                .await
+                .unwrap();
+                recv.recv_timeout(Duration::from_secs(30)).unwrap();
+                setup.tlas[0] = None;
+                drop(std::mem::replace(&mut setup.blas, compacted.clone()));
+            }
+        }
 
         let mut tlas = ctx.device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: None,
@@ -707,3 +744,140 @@ static COMPACTED_BLAS_IN_PENDING_WRITES: GpuTestConfiguration = GpuTestConfigura
     .run_async(
         |ctx| async move { run_iterations_with_compacted_blas_in_pending_writes(ctx).await },
     );
+
+#[gpu_test]
+static RECORD_CONSUMER_BEFORE_PRODUCER: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .limits(acceleration_structure_limits())
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+    )
+    .run_async(|ctx| async move {
+        let pipeline = create_ray_query_pipeline(&ctx);
+        for separate_submits in [false, true] {
+            for abandon_finished in [false, true] {
+                let setup = create_trace_setup(&ctx, &pipeline);
+                let mut abandoned = ctx.device.create_command_encoder(&Default::default());
+                abandoned.build_acceleration_structures([&blas_build_entry(&setup)], []);
+                let mut consumer = ctx.device.create_command_encoder(&Default::default());
+                record_tlas_trace_and_copy(&setup, &pipeline, &mut consumer);
+                let consumer = consumer.finish();
+                if abandon_finished {
+                    drop(abandoned.finish());
+                } else {
+                    drop(abandoned);
+                }
+                let mut producer = ctx.device.create_command_encoder(&Default::default());
+                producer.build_acceleration_structures([&blas_build_entry(&setup)], []);
+                let producer = producer.finish();
+                if separate_submits {
+                    ctx.queue.submit([producer]);
+                    ctx.queue.submit([consumer]);
+                } else {
+                    ctx.queue.submit([producer, consumer]);
+                }
+                assert_eq!(read_hit_kind(&ctx, &setup).await, TRIANGLE_HIT_KIND);
+
+                // This submission consumes the AS but contains no build commands.
+                let mut query = ctx.device.create_command_encoder(&Default::default());
+                {
+                    let mut pass = query.begin_compute_pass(&Default::default());
+                    pass.set_pipeline(&pipeline);
+                    pass.set_bind_group(0, &setup.bind_group, &[]);
+                    pass.dispatch_workgroups(1, 1, 1);
+                }
+                query.copy_buffer_to_buffer(&setup.hit_buffer, 0, &setup.read_back, 0, 64);
+                ctx.queue.submit([query.finish()]);
+                assert_eq!(read_hit_kind(&ctx, &setup).await, TRIANGLE_HIT_KIND);
+            }
+        }
+    });
+
+#[gpu_test]
+static REJECT_CONSUMER_SUBMITTED_BEFORE_PRODUCER: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .limits(acceleration_structure_limits())
+                .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+        )
+        .run_sync(|ctx| {
+            let pipeline = create_ray_query_pipeline(&ctx);
+            for separate_submits in [false, true] {
+                let setup = create_trace_setup(&ctx, &pipeline);
+                let mut consumer = ctx.device.create_command_encoder(&Default::default());
+                consumer.build_acceleration_structures([], [&setup.tlas]);
+                let consumer = consumer.finish();
+                let mut producer = ctx.device.create_command_encoder(&Default::default());
+                producer.build_acceleration_structures([&blas_build_entry(&setup)], []);
+                let producer = producer.finish();
+                // Noop's zero scratch sizes omit build actions, so this needs a native backend.
+                wgpu_test::fail(
+                    &ctx.device,
+                    || {
+                        if separate_submits {
+                            ctx.queue.submit([consumer]);
+                            drop(producer);
+                        } else {
+                            ctx.queue.submit([consumer, producer]);
+                        }
+                    },
+                    Some("is used before it is built"),
+                );
+            }
+        });
+
+#[gpu_test]
+static FIRST_BUILD_AFTER_COMPUTE_UPLOAD: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .limits(acceleration_structure_limits())
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+    )
+    .run_async(|ctx| async move {
+        let pipeline = create_ray_query_pipeline(&ctx);
+        let mut setup = create_trace_setup(&ctx, &pipeline);
+        setup.vertex_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("compute generated AS vertices"),
+            size: 36,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::BLAS_INPUT,
+            mapped_at_creation: false,
+        });
+        let shader = ctx
+            .device
+            .create_shader_module(wgpu::include_wgsl!("issue_9215_fill.wgsl"));
+        let generate = ctx
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: None,
+                module: &shader,
+                entry_point: Some("generate_vertices"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+        let group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &generate.get_bind_group_layout(0),
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: setup.vertex_buffer.as_entire_binding(),
+            }],
+        });
+        let mut upload = ctx.device.create_command_encoder(&Default::default());
+        {
+            let mut pass = upload.begin_compute_pass(&Default::default());
+            pass.set_pipeline(&generate);
+            pass.set_bind_group(0, &group, &[]);
+            pass.dispatch_workgroups(1, 1, 1);
+        }
+        ctx.queue.submit([upload.finish()]);
+        let mut build = ctx.device.create_command_encoder(&Default::default());
+        build.build_acceleration_structures([&blas_build_entry(&setup)], []);
+        record_tlas_trace_and_copy(&setup, &pipeline, &mut build);
+        ctx.queue.submit([build.finish()]);
+        assert_eq!(read_hit_kind(&ctx, &setup).await, TRIANGLE_HIT_KIND);
+    });

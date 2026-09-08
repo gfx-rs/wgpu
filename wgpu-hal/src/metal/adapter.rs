@@ -45,6 +45,9 @@ fn device_class_responds_to(device: &ProtocolObject<dyn MTLDevice>, sel: Sel) ->
 ///
 /// [new command buffer]: https://developer.apple.com/documentation/metal/mtlcommandqueue/makecommandbuffer()?language=objc
 pub(super) const MAX_COMMAND_BUFFERS: usize = 4096;
+// Internal allocations are serialized through commit and need one native slot
+// even when all admitted user recordings remain unsubmitted.
+pub(super) const MAX_UNSUBMITTED_COMMAND_BUFFERS: usize = MAX_COMMAND_BUFFERS - 1;
 
 // Metal has a single buffer limit that we must split across 3 WebGPU limits:
 // The Metal limit is: 31 "Maximum number of entries in the buffer argument table, per graphics or kernel function".
@@ -124,7 +127,7 @@ impl crate::Adapter for super::Adapter {
                 queue: super::Queue {
                     shared: Arc::new(QueueShared {
                         raw: queue,
-                        command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
+                        command_buffer_created_not_submitted: Arc::new(atomic::AtomicUsize::new(0)),
                         acceleration_structure_sync: Mutex::default(),
                     }),
                     timestamp_period,

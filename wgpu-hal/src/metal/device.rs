@@ -1,7 +1,6 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::{ptr::NonNull, sync::atomic};
+use core::ptr::NonNull;
 use parking_lot::RwLock;
-use std::{thread, time};
 
 use bytemuck::TransparentWrapper;
 use objc2::{
@@ -415,6 +414,14 @@ impl super::Device {
         }
     }
 
+    /// # Safety
+    ///
+    /// `raw` must belong to the device using this buffer, and `size` must not
+    /// exceed its allocation. Its resolved hazard tracking mode must be tracked,
+    /// or the caller must independently synchronize all conflicting accesses,
+    /// including compute/blit writes before acceleration-structure input reads.
+    /// Resource-use declarations provide residency but do not synchronize an
+    /// untracked import; the AS fence does not cover preceding non-AS producers.
     pub unsafe fn buffer_from_raw(
         raw: Retained<ProtocolObject<dyn MTLBuffer>>,
         size: wgt::BufferAddress,
@@ -735,12 +742,22 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::CommandEncoderDescriptor<super::Queue>,
     ) -> Result<super::CommandEncoder, crate::DeviceError> {
+        if self
+            .features
+            .contains(wgt::Features::EXPERIMENTAL_RAY_QUERY)
+        {
+            desc.queue
+                .shared
+                .acceleration_structure_sync
+                .lock()
+                .initialize_fence(|| self.shared.device.newFence())?;
+        }
         self.counters.command_encoders.add(1);
         Ok(super::CommandEncoder {
             shared: Arc::clone(&self.shared),
             queue_shared: Arc::clone(&desc.queue.shared),
             raw_cmd_buf: None,
-            acceleration_structure_fence: None,
+            command_buffer_slot: None,
             state: super::CommandState::default(),
             temp: super::Temp::default(),
             counters: Arc::clone(&self.counters),
@@ -1887,7 +1904,7 @@ impl crate::Device for super::Device {
             None
         };
         Ok(super::Fence {
-            completed_value: Arc::new(atomic::AtomicU64::new(0)),
+            completed_value: Arc::new(super::completion::Completion::default()),
             pending_command_buffers: RwLock::new(Vec::new()),
             shared_event,
         })
@@ -1898,14 +1915,7 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
-        let mut max_value = fence.completed_value.load(atomic::Ordering::Acquire);
-        let pending_command_buffers = fence.pending_command_buffers.read();
-        for &(value, ref cmd_buf) in pending_command_buffers.iter() {
-            if cmd_buf.status() == MTLCommandBufferStatus::Completed {
-                max_value = value;
-            }
-        }
-        Ok(max_value)
+        Ok(fence.get_latest())
     }
     unsafe fn wait(
         &self,
@@ -1913,7 +1923,7 @@ impl crate::Device for super::Device {
         wait_value: crate::FenceValue,
         timeout: Option<core::time::Duration>,
     ) -> DeviceResult<bool> {
-        if wait_value <= fence.completed_value.load(atomic::Ordering::Acquire) {
+        if wait_value <= fence.completed_value.value() {
             return Ok(true);
         }
 
@@ -1925,6 +1935,11 @@ impl crate::Device for super::Device {
         {
             Some((_, cmd_buf)) => cmd_buf.clone(),
             None => {
+                drop(pending_command_buffers);
+                // Maintenance may have retired the buffer since the fast check.
+                if wait_value <= fence.completed_value.value() {
+                    return Ok(true);
+                }
                 log::error!("No active command buffers for fence value {wait_value}");
                 return Err(crate::DeviceError::Lost);
             }
@@ -1933,18 +1948,13 @@ impl crate::Device for super::Device {
         // Make sure that nothing is blocked during the actual wait.
         drop(pending_command_buffers);
 
-        let start = time::Instant::now();
-        loop {
-            if let MTLCommandBufferStatus::Completed = cmd_buf.status() {
-                return Ok(true);
-            }
-            if let Some(timeout) = timeout {
-                if start.elapsed() >= timeout {
-                    return Ok(false);
-                }
-            }
-            thread::sleep(core::time::Duration::from_millis(1));
-        }
+        fence
+            .completed_value
+            .wait(wait_value, timeout, || match cmd_buf.status() {
+                MTLCommandBufferStatus::Completed => Ok(true),
+                MTLCommandBufferStatus::Error => Err(crate::DeviceError::Lost),
+                _ => Ok(false),
+            })
     }
 
     unsafe fn start_graphics_debugger_capture(&self) -> bool {
