@@ -60,6 +60,8 @@ impl crate::Api for Api {
     type RenderPipeline = Resource;
     type RayTracingPipeline = Resource;
     type ComputePipeline = Resource;
+
+    type AdapterOptions = NoopAdapterOptions;
 }
 
 crate::impl_dyn_resource!(Buffer, CommandBuffer, Context, Fence, Resource);
@@ -88,6 +90,13 @@ impl core::borrow::Borrow<dyn crate::DynTexture> for Resource {
     }
 }
 
+crate::adapter_options! {
+    /// Options for enumerating Noop adapters.
+    #[backend(wgt::Backend::Noop)]
+    #[derive(Clone, Debug)]
+    pub struct NoopAdapterOptions;
+}
+
 impl crate::Instance for Context {
     type A = Api;
 
@@ -113,6 +122,7 @@ impl crate::Instance for Context {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&Context>,
+        _options: Option<&NoopAdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<Api>> {
         let device_type = self.options.device_type.unwrap_or(wgt::DeviceType::Other);
         let subgroup_min_size = self

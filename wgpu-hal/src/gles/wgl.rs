@@ -590,6 +590,7 @@ impl crate::Instance for Instance {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&Surface>,
+        _options: Option<&super::GlAdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<super::Api>> {
         unsafe {
             super::Adapter::expose(
