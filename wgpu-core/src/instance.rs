@@ -23,7 +23,7 @@ use crate::{
     DOWNLEVEL_WARNING_MESSAGE,
 };
 
-use wgt::{Backend, Backends, InstanceFlags, PowerPreference};
+use wgt::{Backend, BackendAdapterOptionsMap, Backends, InstanceFlags, PowerPreference};
 
 #[derive(Debug)]
 pub(crate) struct InstanceDevices(Mutex<WeakVec<Device>>);
@@ -439,11 +439,26 @@ impl Instance {
     /// Returns a list of adapters that match the given request options and are compatible with the specified backends.
     ///
     /// On success at least one compatible adapter will be returned in the resulting vector.
-    pub fn request_adapters(
+    ///
+    /// `backend_options` may contain options for any number of backends.
+    /// The available options structs depend on the enabled backends, and
+    /// can be found by looking for implementors of the parameterized trait
+    /// [`BackendMapValue<dyn BackendAdapterOptions>`][`wgt::BackendMapValue`].
+    ///
+    /// # Safety
+    ///
+    /// - If `backend_options` is `Some`, any safety requirements applicable
+    ///   to the options it contains must be upheld. Passing `None`, or an
+    ///   empty map, for `backend_options` is safe.
+    pub unsafe fn request_adapters(
         self: &Arc<Self>,
         desc: &wgt::RequestAdapterOptions<&Surface>,
         backends: Backends,
+        backend_options: Option<BackendAdapterOptionsMap>,
     ) -> Result<Vec<Arc<Adapter>>, wgt::RequestAdapterError> {
+        profiling::scope!("Instance::request_adapter");
+        api_log!("Instance::request_adapter");
+
         let mut adapters = Vec::new();
         let mut incompatible_surface_backends = Backends::empty();
         let mut no_fallback_backends = Backends::empty();
@@ -460,8 +475,9 @@ impl Instance {
                 .compatible_surface
                 .and_then(|surface| surface.raw(backend));
 
-            let mut backend_adapters =
-                unsafe { instance.enumerate_adapters(compatible_hal_surface) };
+            let mut backend_adapters = unsafe {
+                instance.enumerate_adapters(compatible_hal_surface, backend_options.as_ref())
+            };
             if backend_adapters.is_empty() {
                 log::debug!("enabled backend `{backend:?}` has no adapters");
                 no_adapter_backends |= Backends::from(backend);
