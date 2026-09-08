@@ -33,6 +33,7 @@ pub struct CompilationMessage {
 /// The type of a compilation message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[repr(u8)]
 pub enum CompilationMessageType {
     /// An error message.
     Error,
