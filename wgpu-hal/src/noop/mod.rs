@@ -97,6 +97,13 @@ crate::adapter_options! {
     pub struct NoopAdapterOptions;
 }
 
+crate::device_options! {
+    /// Options for opening Noop devices.
+    #[backend(wgt::Backend::Noop)]
+    #[derive(Clone, Debug)]
+    pub struct NoopDeviceOptions;
+}
+
 impl crate::Instance for Context {
     type A = Api;
 

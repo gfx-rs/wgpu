@@ -144,6 +144,13 @@ crate::adapter_options! {
     pub struct MetalAdapterOptions;
 }
 
+crate::device_options! {
+    /// Options for opening Metal devices.
+    #[backend(wgt::Backend::Metal)]
+    #[derive(Clone, Debug)]
+    pub struct MetalDeviceOptions;
+}
+
 #[derive(Debug)]
 pub struct Instance {
     flags: wgt::InstanceFlags,

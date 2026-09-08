@@ -76,6 +76,9 @@ pub trait BackendAdapterOptions {}
 /// enumerating adapters.
 pub type BackendAdapterOptionsMap = crate::BackendMap<dyn BackendAdapterOptions>;
 
+/// Backend-defined options for requesting (opening) a device.
+pub trait BackendDeviceOptions: core::any::Any {}
+
 /// Power Preference when choosing a physical adapter.
 ///
 /// Corresponds to [WebGPU `GPUPowerPreference`](

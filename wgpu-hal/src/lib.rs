@@ -701,6 +701,13 @@ backend_map_type!(
     AdapterOptionsTypeAssignment,
 );
 
+backend_type!(
+    device_options,
+    wgt::BackendDeviceOptions,
+    DeviceOptionsType,
+    DeviceOptionsTypeAssignment,
+);
+
 pub trait Instance: Sized + WasmNotSendSync {
     type A: Api;
 
