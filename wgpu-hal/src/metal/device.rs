@@ -677,27 +677,18 @@ impl crate::Device for super::Device {
                         )
                 }
                 .ok_or_else(|| {
-                    // Metal refuses *any* view of a memoryless texture, whatever
-                    // the view asks for: its validation layer reports "cannot
-                    // create View from Memoryless texture". `TRANSIENT_ATTACHMENT`
-                    // maps to `MTLStorageModeMemoryless`, so that is the case
-                    // reachable from WebGPU, and it is the one hit in practice.
-                    // See <https://github.com/gpuweb/gpuweb/issues/6876>.
-                    //
-                    // The selector reports nil without a reason, so name the
-                    // cause where we can recognise it and record the parent
-                    // texture, the requested view and the arguments Metal was
-                    // actually given, so a report carries everything needed to
-                    // act on it.
+                    // Metal refuses some views of memoryless textures. Ideally such cases
+                    // would be rejected by `wpgu-core` validation, but at least until that
+                    // is implemented, we log a verbose error message.
+                    // Related: <https://github.com/gpuweb/gpuweb/issues/6876>.
                     let storage_mode = texture.raw.storageMode();
-                    let cause = if storage_mode == MTLStorageMode::Memoryless {
-                        "Metal cannot create a view of a memoryless texture, which is \
-                         what TRANSIENT_ATTACHMENT usage selects"
+                    let memoryless = if storage_mode == MTLStorageMode::Memoryless {
+                        "This may be because the texture is memoryless (has TRANSIENT_ATTACHMENT usage). "
                     } else {
-                        "Metal did not report a reason"
+                        ""
                     };
                     log::error!(
-                        "Metal declined to create a texture view: {cause}. \
+                        "Error creating Metal texture view. {memoryless}\
                          Texture: {:?}, {:?}, {}x{}x{}, {} mip level(s), \
                          {} array layer(s), Metal usage {:?}, storage mode {:?}. \
                          Requested view: {:?}. \
