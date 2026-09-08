@@ -3210,7 +3210,8 @@ impl dispatch::QueueInterface for WebQueue {
         data: &[u8],
     ) {
         let buffer = buffer.as_webgpu();
-        self.inner
+        if let Err(error) = self
+            .inner
             .write_buffer_with_f64_and_u8_slice_and_f64_and_f64(
                 &buffer.inner,
                 offset as f64,
@@ -3218,7 +3219,12 @@ impl dispatch::QueueInterface for WebQueue {
                 0f64,
                 data.len() as f64,
             )
-            .unwrap();
+        {
+            self.error_sink.report_synthetic_error(web_validation_error(
+                "Queue::write_buffer",
+                format!("{error:?}"),
+            ));
+        }
     }
 
     fn create_staging_buffer(
@@ -3243,24 +3249,33 @@ impl dispatch::QueueInterface for WebQueue {
         let buffer = buffer.as_webgpu();
 
         let usage = wgt::BufferUsages::from_bits_truncate(buffer.inner.usage());
-        // TODO: actually send this down the error scope
-        if !usage.contains(wgt::BufferUsages::COPY_DST) {
-            log::error!("Destination buffer is missing the `COPY_DST` usage flag");
-            return None;
-        }
         let write_size = u64::from(size);
-        if !write_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
-            log::error!("Copy size {size} does not respect `COPY_BUFFER_ALIGNMENT`");
-            return None;
-        }
-        if !offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
-            log::error!(
+        let buffer_size = buffer.inner.size() as u64;
+        let error = if !usage.contains(wgt::BufferUsages::COPY_DST) {
+            Some(String::from(
+                "Destination buffer is missing the `COPY_DST` usage flag",
+            ))
+        } else if !write_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
+            Some(format!(
+                "Copy size {size} does not respect `COPY_BUFFER_ALIGNMENT`"
+            ))
+        } else if !offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
+            Some(format!(
                 "Buffer offset {offset} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`"
-            );
-            return None;
-        }
-        if write_size + offset > buffer.inner.size() as u64 {
-            log::error!("copy of {}..{} would end up overrunning the bounds of the destination buffer of size {}", offset, offset + write_size, buffer.inner.size());
+            ))
+        } else if offset
+            .checked_add(write_size)
+            .is_none_or(|end| end > buffer_size)
+        {
+            Some(format!(
+                "Copy of {write_size} bytes at offset {offset} would overrun the destination buffer of size {buffer_size}"
+            ))
+        } else {
+            None
+        };
+        if let Some(error) = error {
+            self.error_sink
+                .report_synthetic_error(web_validation_error("Queue::write_buffer_with", error));
             return None;
         }
         Some(())
@@ -3304,14 +3319,20 @@ impl dispatch::QueueInterface for WebQueue {
         if mapping_failed.get() {
             return;
         }
-        self.inner
+        if let Err(error) = self
+            .inner
             .write_texture_with_u8_slice_and_gpu_extent_3d_dict(
                 &mapped_texture,
                 data,
                 &mapped_data_layout,
                 &map_extent_3d(size),
             )
-            .unwrap();
+        {
+            self.error_sink.report_synthetic_error(web_validation_error(
+                "Queue::write_texture",
+                format!("{error:?}"),
+            ));
+        }
     }
 
     fn copy_external_image_to_texture(
@@ -3331,13 +3352,19 @@ impl dispatch::QueueInterface for WebQueue {
         if mapping_failed.get() {
             return;
         }
-        self.inner
+        if let Err(error) = self
+            .inner
             .copy_external_image_to_texture_with_gpu_extent_3d_dict(
                 &map_external_texture_copy_view(source),
                 &mapped_dest,
                 &map_extent_3d(size),
             )
-            .unwrap();
+        {
+            self.error_sink.report_synthetic_error(web_validation_error(
+                "Queue::copy_external_image_to_texture",
+                format!("{error:?}"),
+            ));
+        }
     }
 
     fn submit(
