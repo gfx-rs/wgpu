@@ -215,7 +215,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 #### naga
 
 - Fix SPIR-V ray-query helper caching so termination cannot replace the Boolean proceed function.
-- Reject non-uniform indexing of acceleration structure binding arrays unless the `ACCELERATION_STRUCTURE_BINDING_ARRAY` capability is enabled, instead of panicking.
+- Reject non-uniform indexing of acceleration structure binding arrays unless the `ACCELERATION_STRUCTURE_BINDING_ARRAY` capability is enabled, instead of panicking. By @acoliver in [#10288](https://github.com/gfx-rs/wgpu/pull/10288).
 - Fixed atomic load and store operations being incorrectly generated as non-atomic memory accesses in GLSL and HLSL. By @CldStlkr in [#9242](https://github.com/gfx-rs/wgpu/pull/9242).
 - Fixed overflow detection and argument domain validation for `acosh`, `length`, `normalize`, and `pow` in constant evaluation. By @ecoricemon in [#9249](https://github.com/gfx-rs/wgpu/pull/9249).
 - Naga no longer allows derivative operations on `f16`. WGSL does not currently allow this, although [it may be added in the future](https://github.com/gpuweb/gpuweb/issues/5482). By @andyleiserson in [#9154](https://github.com/gfx-rs/wgpu/pull/9154).
