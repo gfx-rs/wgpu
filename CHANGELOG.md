@@ -139,6 +139,7 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 - Unconditionally enable `Features::CLIP_DISTANCES`. By @ErichDonGubler in [#9270](https://github.com/gfx-rs/wgpu/pull/9270).
 - Added full support for mesh shaders, including in WGSL shaders. By @inner-daemons in [#8739](https://github.com/gfx-rs/wgpu/pull/8739).
 - Advertise `Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS`: Metal's geometry descriptors accept any `MTLAttributeFormat`, so `Float16x4`/`Snorm16x4`/`Float16x2`/`Snorm16x2`/`Float32x2` BLAS vertex formats work alongside `Float32x3`. Vertex strides are validated against the format size on Metal (which requires more than wgpu's cross-API minimum).
+- Advertise `Features::ACCELERATION_STRUCTURE_BINDING_ARRAY`: `binding_array<acceleration_structure>` is emitted as a `NagaArgumentBufferWrapper<instance_acceleration_structure>*` buffer binding and encoded through an `MTLArgumentEncoder` at bind group creation. `max_acceleration_structures_per_shader_stage` is now 8 (one buffer binding point each) and binding array limits are reported when ray tracing is supported.
 
 #### GLES
 

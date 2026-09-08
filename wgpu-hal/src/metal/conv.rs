@@ -365,6 +365,7 @@ pub fn map_resource_usage(ty: &wgt::BindingType) -> MTLResourceUsage {
             }
         },
         wgt::BindingType::Sampler(..) => MTLResourceUsage::empty(),
+        wgt::BindingType::AccelerationStructure { .. } => MTLResourceUsage::Read,
         _ => unreachable!(),
     }
 }

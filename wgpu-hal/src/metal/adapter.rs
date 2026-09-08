@@ -62,7 +62,7 @@ pub(super) const MAX_UNSUBMITTED_COMMAND_BUFFERS: usize = MAX_COMMAND_BUFFERS - 
 const MAX_STORAGE_BUFFERS_PER_SHADER_STAGE: u32 = 8;
 const MAX_UNIFORM_BUFFERS_PER_SHADER_STAGE: u32 = 12;
 const MAX_VERTEX_BUFFERS: u32 = 8;
-const MAX_ACCELERATION_STRUCTURES_PER_SHADER_STAGE: u32 = 1;
+const MAX_ACCELERATION_STRUCTURES_PER_SHADER_STAGE: u32 = 8;
 // Use the end of the range for vertex buffers.
 pub const VERTEX_BUFFER_SLOT_START: u32 = 31 - 8;
 
@@ -1284,7 +1284,10 @@ impl super::CapabilitiesQuery {
             F::EXPERIMENTAL_RAY_QUERY
                 // Metal's geometry descriptors accept any MTLAttributeFormat, so the
                 // extended BLAS vertex formats come along with ray query support.
-                | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
+                | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS
+                // Acceleration structures are passed as regular buffer bindings,
+                // so binding arrays of them ride on the same mechanism.
+                | F::ACCELERATION_STRUCTURE_BINDING_ARRAY,
             self.supports_raytracing,
         );
 
@@ -1388,7 +1391,13 @@ impl super::CapabilitiesQuery {
             max_binding_array_elements_per_shader_stage: self.max_binding_array_elements,
             max_binding_array_sampler_elements_per_shader_stage: self
                 .max_sampler_binding_array_elements,
-            max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
+            max_binding_array_acceleration_structure_elements_per_shader_stage: if self
+                .supports_raytracing
+            {
+                self.max_binding_array_elements
+            } else {
+                0
+            },
 
             // from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
             max_blas_primitive_count: 1 << 28,

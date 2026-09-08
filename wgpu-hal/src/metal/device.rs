@@ -8,14 +8,15 @@ use objc2::{
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
 };
-use objc2_foundation::{ns_string, NSError, NSRange, NSString, NSUInteger};
+use objc2_foundation::{ns_string, NSArray, NSError, NSRange, NSString, NSUInteger};
 use objc2_metal::{
-    MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLBuffer,
-    MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
-    MTLCompileOptions, MTLComputePipelineDescriptor, MTLComputePipelineState,
-    MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
-    MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
-    MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
+    MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLArgumentAccess,
+    MTLArgumentDescriptor, MTLArgumentEncoder, MTLBuffer, MTLCaptureManager, MTLCaptureScope,
+    MTLCommandBuffer, MTLCommandBufferStatus, MTLCompileOptions, MTLComputePipelineDescriptor,
+    MTLComputePipelineState, MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDataType,
+    MTLDepthClipMode, MTLDepthStencilDescriptor, MTLDevice, MTLFunction,
+    MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLLibrary,
+    MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
     MTLPipelineBufferDescriptorArray, MTLPipelineOption, MTLPixelFormat, MTLPrimitiveTopologyClass,
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
     MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
@@ -1043,11 +1044,38 @@ impl crate::Device for super::Device {
                                 let acceleration_structures =
                                     &desc.acceleration_structures[start..end];
 
-                                for (idx, &acceleration_structure) in
-                                    acceleration_structures.iter().enumerate()
-                                {
-                                    contents[idx] = acceleration_structure.raw.gpuResourceID();
+                                // Encode through a real argument encoder rather
+                                // than writing gpuResourceIDs directly, so the
+                                // handles the `constant
+                                // NagaArgumentBufferWrapper<AS>*` dereference
+                                // follow the argument-buffer ABI.
+                                let argument_descriptor = MTLArgumentDescriptor::new();
+                                argument_descriptor
+                                    .setDataType(MTLDataType::InstanceAccelerationStructure);
+                                argument_descriptor.setIndex(0);
+                                argument_descriptor.setArrayLength(count as usize);
+                                argument_descriptor.setAccess(MTLArgumentAccess::ReadOnly);
 
+                                let argument_encoder = self
+                                    .shared
+                                    .device
+                                    .newArgumentEncoderWithArguments(&NSArray::from_slice(&[
+                                        &*argument_descriptor,
+                                    ]))
+                                    .unwrap();
+                                unsafe {
+                                    argument_encoder.setArgumentBuffer_offset(Some(&buffer), 0);
+                                    for (idx, &acceleration_structure) in
+                                        acceleration_structures.iter().enumerate()
+                                    {
+                                        argument_encoder.setAccelerationStructure_atIndex(
+                                            Some(acceleration_structure.raw.as_ref()),
+                                            idx,
+                                        );
+                                    }
+                                }
+
+                                for &acceleration_structure in acceleration_structures.iter() {
                                     let use_info = bg
                                         .resources_to_use
                                         .entry(acceleration_structure.as_raw().cast())
@@ -1057,6 +1085,8 @@ impl crate::Device for super::Device {
                                     use_info.visible_in_compute |=
                                         layout.visibility.contains(wgt::ShaderStages::COMPUTE);
                                 }
+
+                                bg.uses_acceleration_structures = true;
                             }
                             _ => {
                                 unimplemented!();
