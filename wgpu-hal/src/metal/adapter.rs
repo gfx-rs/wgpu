@@ -631,7 +631,7 @@ impl super::CapabilitiesQuery {
         //
         // Along with the different OSes, there is also two other modes that
         // applications can run in: the Simulator, and Mac Catalyst. This can
-        // be detected using `cfg!(target_env = "sim")` or
+        // be detected using `cfg!(target_abi = "sim")` or
         // `cfg!(target_env = "macabi")`.
         //
         // Finally, iOS applications can be run on macOS and visionOS directly
@@ -749,7 +749,8 @@ impl super::CapabilitiesQuery {
                 MUTABLE_COMPARISON_SAMPLER_SUPPORT,
             ),
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
-            indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT),
+            indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT)
+                || cfg!(target_abi = "sim"),
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
@@ -887,10 +888,11 @@ impl super::CapabilitiesQuery {
                 64
             },
             // "Minimum constant buffer offset alignment"
-            constant_buffer_offset_alignment: if matches!(
-                os_type,
-                super::OsType::Macos | super::OsType::VisionOs
-            ) {
+            // The iOS Simulator requires 256-byte constant buffer offsets, like macOS
+            // (Apple: "Developing Metal apps that run in Simulator").
+            constant_buffer_offset_alignment: if cfg!(target_abi = "sim")
+                || matches!(os_type, super::OsType::Macos | super::OsType::VisionOs)
+            {
                 256
             } else if device.supportsFeatureSet(MTLFeatureSet::macOS_GPUFamily2_v1) {
                 32
