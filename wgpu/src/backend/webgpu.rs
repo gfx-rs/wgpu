@@ -31,13 +31,19 @@ use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{
     dispatch::{self, BlasCompactCallback},
-    Blas, SurfaceTargetUnsafe, Tlas, WriteOnly,
+    Blas, CreateSurfaceError, CreateSurfaceErrorKind, SurfaceTargetUnsafe, Tlas, WriteOnly,
 };
 
 use defined_non_null_js_value::DefinedNonNullJsValue;
 use web_error::{
     web_internal_error, web_validation_error, PopErrorScopeError, WebBackendError, WebErrorSink,
 };
+
+macro_rules! web_backend_err {
+    ($($arg:tt)*) => {
+        WebBackendError(format!($($arg)*))
+    };
+}
 
 // We need to mark various types as Send and Sync to satisfy the Rust type system.
 //
@@ -245,7 +251,38 @@ impl<F, M> MakeSendFuture<F, M> {
 #[cfg(send_sync)]
 unsafe impl<F, M> Send for MakeSendFuture<F, M> {}
 
-fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuTextureFormat {
+/// Utility struct for dealing with invalid enum mappings from wgpu to WebGPU.
+struct MappingContext<'a, T> {
+    error_sink: &'a WebErrorSink,
+    operation: &'static str,
+    failed: &'a Cell<bool>,
+    fallback: T,
+}
+
+impl<'a, T> MappingContext<'a, T> {
+    fn with_fallback<U>(&self, fallback: U) -> MappingContext<'a, U> {
+        MappingContext {
+            error_sink: self.error_sink,
+            operation: self.operation,
+            failed: self.failed,
+            fallback,
+        }
+    }
+}
+
+impl<T: Clone> MappingContext<'_, T> {
+    fn fail(&self, error: WebBackendError) -> T {
+        self.failed.set(true);
+        self.error_sink
+            .report_synthetic_error(web_validation_error(self.operation, error));
+        self.fallback.clone()
+    }
+}
+
+fn map_texture_format(
+    context: &MappingContext<'_, webgpu_sys::GpuTextureFormat>,
+    texture_format: wgt::TextureFormat,
+) -> webgpu_sys::GpuTextureFormat {
     use webgpu_sys::GpuTextureFormat as tf;
     use wgt::TextureFormat;
     match texture_format {
@@ -359,10 +396,16 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuText
                 wgt::AstcBlock::B12x12 => tf::Astc12x12UnormSrgb,
             },
             wgt::AstcChannel::Hdr => {
-                unimplemented!("Format {texture_format:?} has no WebGPU equivalent")
+                context.fail(web_backend_err!(
+                    "format {texture_format:?} has no WebGPU equivalent"
+                ))
             }
         },
-        _ => unimplemented!("Format {texture_format:?} has no WebGPU equivalent"),
+        _ => {
+            context.fail(web_backend_err!(
+                "format {texture_format:?} has no WebGPU equivalent"
+            ))
+        }
     }
 }
 
@@ -399,10 +442,12 @@ fn map_front_face(front_face: wgt::FrontFace) -> webgpu_sys::GpuFrontFace {
     }
 }
 
-fn map_primitive_state(primitive: &wgt::PrimitiveState) -> webgpu_sys::GpuPrimitiveState {
+fn map_primitive_state(
+    context: &MappingContext<'_, webgpu_sys::GpuPrimitiveState>,
+    primitive: &wgt::PrimitiveState,
+) -> webgpu_sys::GpuPrimitiveState {
     use webgpu_sys::GpuPrimitiveTopology as pt;
     use wgt::PrimitiveTopology;
-
     let mapped = webgpu_sys::GpuPrimitiveState::new();
     mapped.set_cull_mode(map_cull_mode(primitive.cull_mode));
     mapped.set_front_face(map_front_face(primitive.front_face));
@@ -423,14 +468,18 @@ fn map_primitive_state(primitive: &wgt::PrimitiveState) -> webgpu_sys::GpuPrimit
 
     match primitive.polygon_mode {
         wgt::PolygonMode::Fill => {}
-        wgt::PolygonMode::Line => panic!(
-            "{:?} is not enabled for this backend",
-            wgt::Features::POLYGON_MODE_LINE
-        ),
-        wgt::PolygonMode::Point => panic!(
-            "{:?} is not enabled for this backend",
-            wgt::Features::POLYGON_MODE_POINT
-        ),
+        wgt::PolygonMode::Line => {
+            return context.fail(web_backend_err!(
+                "{:?} is not supported on the WebGPU backend",
+                wgt::Features::POLYGON_MODE_LINE
+            ))
+        }
+        wgt::PolygonMode::Point => {
+            return context.fail(web_backend_err!(
+                "{:?} is not supported on the WebGPU backend",
+                wgt::Features::POLYGON_MODE_POINT
+            ))
+        }
     }
 
     mapped
@@ -475,8 +524,11 @@ fn map_stencil_state_face(desc: &wgt::StencilFaceState) -> webgpu_sys::GpuStenci
     mapped
 }
 
-fn map_depth_stencil_state(desc: &wgt::DepthStencilState) -> webgpu_sys::GpuDepthStencilState {
-    let mapped = webgpu_sys::GpuDepthStencilState::new(map_texture_format(desc.format));
+fn map_depth_stencil_state(
+    context: &MappingContext<'_, webgpu_sys::GpuTextureFormat>,
+    desc: &wgt::DepthStencilState,
+) -> webgpu_sys::GpuDepthStencilState {
+    let mapped = webgpu_sys::GpuDepthStencilState::new(map_texture_format(context, desc.format));
     if let Some(compare) = desc.depth_compare {
         mapped.set_depth_compare(map_compare_function(compare));
     }
@@ -546,7 +598,10 @@ fn map_index_format(format: wgt::IndexFormat) -> webgpu_sys::GpuIndexFormat {
     }
 }
 
-fn map_vertex_format(format: wgt::VertexFormat) -> webgpu_sys::GpuVertexFormat {
+fn map_vertex_format(
+    context: &MappingContext<'_, webgpu_sys::GpuVertexFormat>,
+    format: wgt::VertexFormat,
+) -> webgpu_sys::GpuVertexFormat {
     use webgpu_sys::GpuVertexFormat as vf;
     use wgt::VertexFormat;
     match format {
@@ -595,7 +650,9 @@ fn map_vertex_format(format: wgt::VertexFormat) -> webgpu_sys::GpuVertexFormat {
         | VertexFormat::Float64x2
         | VertexFormat::Float64x3
         | VertexFormat::Float64x4 => {
-            panic!("VERTEX_ATTRIBUTE_64BIT feature must be enabled to use Double formats")
+            context.fail(web_backend_err!(
+                "VERTEX_ATTRIBUTE_64BIT is not supported on the WebGPU backend"
+            ))
         }
     }
 }
@@ -671,24 +728,26 @@ fn map_buffer_copy_view(
 }
 
 fn map_texture_copy_view(
+    context: &MappingContext<'_, webgpu_sys::GpuTextureAspect>,
     view: crate::TexelCopyTextureInfo<'_>,
 ) -> webgpu_sys::GpuTexelCopyTextureInfo {
     let texture = view.texture.inner.as_webgpu();
     let mapped = webgpu_sys::GpuTexelCopyTextureInfo::new(&texture.inner);
     mapped.set_mip_level(view.mip_level);
     mapped.set_origin_gpu_origin_3d_dict(&map_origin_3d(view.origin));
-    mapped.set_aspect(map_texture_aspect(view.aspect));
+    mapped.set_aspect(map_texture_aspect(context, view.aspect));
     mapped
 }
 
 fn map_tagged_texture_copy_view(
+    context: &MappingContext<'_, webgpu_sys::GpuTextureAspect>,
     view: crate::CopyExternalImageDestInfo<&crate::api::Texture>,
 ) -> webgpu_sys::GpuCopyExternalImageDestInfo {
     let texture = view.texture.inner.as_webgpu();
     let mapped = webgpu_sys::GpuCopyExternalImageDestInfo::new(&texture.inner);
     mapped.set_mip_level(view.mip_level);
     mapped.set_origin_gpu_origin_3d_dict(&map_origin_3d(view.origin));
-    mapped.set_aspect(map_texture_aspect(view.aspect));
+    mapped.set_aspect(map_texture_aspect(context, view.aspect));
     // mapped.set_color_space(map_color_space(view.color_space));
     mapped.set_premultiplied_alpha(view.premultiplied_alpha);
     mapped
@@ -725,13 +784,18 @@ fn map_external_texture_copy_view(
     mapped
 }
 
-fn map_texture_aspect(aspect: wgt::TextureAspect) -> webgpu_sys::GpuTextureAspect {
+fn map_texture_aspect(
+    context: &MappingContext<'_, webgpu_sys::GpuTextureAspect>,
+    aspect: wgt::TextureAspect,
+) -> webgpu_sys::GpuTextureAspect {
     match aspect {
         wgt::TextureAspect::All => webgpu_sys::GpuTextureAspect::All,
         wgt::TextureAspect::StencilOnly => webgpu_sys::GpuTextureAspect::StencilOnly,
         wgt::TextureAspect::DepthOnly => webgpu_sys::GpuTextureAspect::DepthOnly,
         wgt::TextureAspect::Plane0 | wgt::TextureAspect::Plane1 | wgt::TextureAspect::Plane2 => {
-            panic!("multi-plane textures are not supported")
+            context.fail(web_backend_err!(
+                "multi-plane textures are not supported on the WebGPU backend"
+            ))
         }
     }
 }
@@ -770,12 +834,17 @@ fn map_mipmap_filter_mode(mode: wgt::MipmapFilterMode) -> webgpu_sys::GpuMipmapF
     }
 }
 
-fn map_address_mode(mode: wgt::AddressMode) -> webgpu_sys::GpuAddressMode {
+fn map_address_mode(
+    context: &MappingContext<'_, webgpu_sys::GpuAddressMode>,
+    mode: wgt::AddressMode,
+) -> webgpu_sys::GpuAddressMode {
     match mode {
         wgt::AddressMode::ClampToEdge => webgpu_sys::GpuAddressMode::ClampToEdge,
         wgt::AddressMode::Repeat => webgpu_sys::GpuAddressMode::Repeat,
         wgt::AddressMode::MirrorRepeat => webgpu_sys::GpuAddressMode::MirrorRepeat,
-        wgt::AddressMode::ClampToBorder => panic!("Clamp to border is not supported"),
+        wgt::AddressMode::ClampToBorder => context.fail(web_backend_err!(
+            "clamp-to-border samplers are not supported on the WebGPU backend"
+        )),
     }
 }
 
@@ -1161,16 +1230,24 @@ fn register_then_closures<F, T>(
     let rc_callback_clone2 = rc_callback.clone();
 
     let closure_success = wasm_bindgen::closure::Closure::once(move |_| {
-        let (success_closure, rejection_closure, callback) =
-            rc_callback_clone1.borrow_mut().take().unwrap();
+        let Some((success_closure, rejection_closure, callback)) =
+            rc_callback_clone1.borrow_mut().take()
+        else {
+            log::error!("Promise completion callback invoked more than once");
+            return Ok(());
+        };
         callback(success_value);
         // drop the closures, including ourselves, which will free any captured memory.
         drop((success_closure, rejection_closure));
         Ok(())
     });
     let closure_rejected = wasm_bindgen::closure::Closure::once(move |_| {
-        let (success_closure, rejection_closure, callback) =
-            rc_callback_clone2.borrow_mut().take().unwrap();
+        let Some((success_closure, rejection_closure, callback)) =
+            rc_callback_clone2.borrow_mut().take()
+        else {
+            log::error!("Promise completion callback invoked more than once");
+            return Ok(());
+        };
         callback(failure_value);
         // drop the closures, including ourselves, which will free any captured memory.
         drop((success_closure, rejection_closure));
@@ -1193,7 +1270,7 @@ impl ContextWebGpu {
         &self,
         canvas: Canvas,
         context_result: Result<Option<js_sys::Object>, wasm_bindgen::JsValue>,
-    ) -> Result<dispatch::DispatchSurface, crate::CreateSurfaceError> {
+    ) -> Result<dispatch::DispatchSurface, CreateSurfaceError> {
         let context: js_sys::Object = match context_result {
             Ok(Some(context)) => context,
             Ok(None) => {
@@ -1203,8 +1280,8 @@ impl ContextWebGpu {
                 // “not supported” could include “insufficient GPU resources” or “the GPU process
                 // previously crashed”. So, we must return it as an `Err` since it could occur
                 // for circumstances outside the application author's control.
-                return Err(crate::CreateSurfaceError {
-                    inner: crate::CreateSurfaceErrorKind::Web(
+                return Err(CreateSurfaceError {
+                    inner: CreateSurfaceErrorKind::Web(
                         String::from(
                             "canvas.getContext() returned null; webgpu not available or canvas already in use"
                         )
@@ -1214,8 +1291,8 @@ impl ContextWebGpu {
             Err(js_error) => {
                 // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext>
                 // A thrown exception indicates misuse of the canvas state.
-                return Err(crate::CreateSurfaceError {
-                    inner: crate::CreateSurfaceErrorKind::Web(format!(
+                return Err(CreateSurfaceError {
+                    inner: CreateSurfaceErrorKind::Web(format!(
                         "canvas.getContext() threw exception {js_error:?}",
                     )),
                 });
@@ -1235,6 +1312,7 @@ impl ContextWebGpu {
             context,
             canvas,
             configure_failed: Cell::new(false),
+            error_sink: RefCell::new(None),
             ident: crate::cmp::Identifier::create(),
         }
         .into())
@@ -1424,6 +1502,7 @@ impl WebBuffer {
 #[derive(Debug, Clone)]
 pub struct WebTexture {
     pub(crate) inner: webgpu_sys::GpuTexture,
+    error_sink: Rc<WebErrorSink>,
     /// Lifetime management for the underlying `GpuTexture`.
     ///
     /// - `None` means wgpu owns the handle: [`Self::destroy`] forwards to
@@ -1455,7 +1534,7 @@ pub enum ExternalTextureSource {
 
 #[derive(Debug, Clone)]
 pub struct WebExternalTexture {
-    pub(crate) inner: webgpu_sys::GpuExternalTexture,
+    pub(crate) inner: Option<webgpu_sys::GpuExternalTexture>,
     /// Unique identifier for this ExternalTexture.
     ident: crate::cmp::Identifier,
 }
@@ -1464,6 +1543,7 @@ pub struct WebExternalTexture {
 pub struct WebBlas {
     /// Unique identifier for this Blas.
     ident: crate::cmp::Identifier,
+    error_sink: Rc<WebErrorSink>,
 }
 
 #[derive(Debug, Clone)]
@@ -1506,6 +1586,7 @@ pub struct WebComputePipeline {
 pub struct WebPipelineCache {
     /// Unique identifier for this PipelineCache.
     ident: crate::cmp::Identifier,
+    error_sink: Rc<WebErrorSink>,
 }
 
 #[derive(Debug, Clone)]
@@ -1513,6 +1594,7 @@ pub struct WebCommandEncoder {
     pub(crate) inner: webgpu_sys::GpuCommandEncoder,
     /// Unique identifier for this CommandEncoder.
     ident: crate::cmp::Identifier,
+    error_sink: Rc<WebErrorSink>,
 }
 
 #[derive(Debug)]
@@ -1520,6 +1602,7 @@ pub struct WebComputePassEncoder {
     pub(crate) inner: webgpu_sys::GpuComputePassEncoder,
     /// Unique identifier for this ComputePassEncoder.
     ident: crate::cmp::Identifier,
+    error_sink: Rc<WebErrorSink>,
 }
 
 #[derive(Debug)]
@@ -1527,6 +1610,7 @@ pub struct WebRenderPassEncoder {
     pub(crate) inner: webgpu_sys::GpuRenderPassEncoder,
     /// Unique identifier for this RenderPassEncoder.
     ident: crate::cmp::Identifier,
+    error_sink: Rc<WebErrorSink>,
 }
 
 #[derive(Debug)]
@@ -1541,6 +1625,7 @@ pub struct WebRenderBundleEncoder {
     pub(crate) inner: webgpu_sys::GpuRenderBundleEncoder,
     /// Unique identifier for this RenderBundleEncoder.
     ident: crate::cmp::Identifier,
+    error_sink: Rc<WebErrorSink>,
 }
 
 #[derive(Debug, Clone)]
@@ -1555,6 +1640,10 @@ pub struct WebSurface {
     gpu: Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>,
     canvas: Canvas,
     context: webgpu_sys::GpuCanvasContext,
+    /// The configuring device's error sink. This is `None` until `configure`,
+    /// because surfaces are created before they are associated with a device.
+    /// Interior mutability is required because `configure` receives `&self`.
+    error_sink: RefCell<Option<Rc<WebErrorSink>>>,
     /// Set when the most recent [`configure`](Self::configure) call failed, e.g.
     /// because the browser rejected the requested canvas format. While set,
     /// `get_current_texture` reports [`SurfaceStatus::Lost`] instead of letting
@@ -1674,7 +1763,7 @@ impl dispatch::InstanceInterface for ContextWebGpu {
     unsafe fn create_surface(
         &self,
         target: crate::SurfaceTargetUnsafe,
-    ) -> Result<dispatch::DispatchSurface, crate::CreateSurfaceError> {
+    ) -> Result<dispatch::DispatchSurface, CreateSurfaceError> {
         match target {
             SurfaceTargetUnsafe::RawHandle {
                 raw_display_handle: _,
@@ -1682,7 +1771,7 @@ impl dispatch::InstanceInterface for ContextWebGpu {
             } => {
                 let canvas_element: web_sys::HtmlCanvasElement = match raw_window_handle {
                     raw_window_handle::RawWindowHandle::Web(handle) => {
-                        let canvas_node: wasm_bindgen::JsValue = web_sys::window()
+                        let Some(canvas_node) = web_sys::window()
                             .and_then(|win| win.document())
                             .and_then(|doc| {
                                 doc.query_selector_all(&format!(
@@ -1692,8 +1781,15 @@ impl dispatch::InstanceInterface for ContextWebGpu {
                                 .ok()
                             })
                             .and_then(|nodes| nodes.get(0))
-                            .expect("expected to find single canvas")
-                            .into();
+                        else {
+                            return Err(CreateSurfaceError {
+                                inner: CreateSurfaceErrorKind::Web(format!(
+                                    "no canvas found for raw web handle {}",
+                                    handle.id
+                                )),
+                            });
+                        };
+                        let canvas_node: wasm_bindgen::JsValue = canvas_node.into();
                         canvas_node.into()
                     }
                     raw_window_handle::RawWindowHandle::WebCanvas(handle) => {
@@ -1710,7 +1806,13 @@ impl dispatch::InstanceInterface for ContextWebGpu {
                             context_result,
                         );
                     }
-                    _ => panic!("expected valid handle for canvas"),
+                    _ => {
+                        return Err(CreateSurfaceError {
+                            inner: CreateSurfaceErrorKind::Web(
+                                "raw window handle is not a web canvas handle".into(),
+                            ),
+                        });
+                    }
                 };
 
                 let context_result = canvas_element.get_context("webgpu");
@@ -1946,6 +2048,7 @@ impl WebDevice {
     ) -> dispatch::DispatchTexture {
         WebTexture {
             inner: texture,
+            error_sink: self.error_sink.clone(),
             drop_guard: Some(Rc::new(DropGuard::new(drop_callback))),
             ident: crate::cmp::Identifier::create(),
             desc: crate::TextureDescriptor {
@@ -1979,7 +2082,7 @@ impl WebDevice {
             .import_external_texture(&descriptor)
             .expect("importExternalTexture failed");
         WebExternalTexture {
-            inner,
+            inner: Some(inner),
             ident: crate::cmp::Identifier::create(),
         }
         .into()
@@ -2177,7 +2280,16 @@ impl dispatch::DeviceInterface for WebDevice {
             })?;
 
             let writer_flags = naga::back::wgsl::WriterFlags::empty();
-            let wgsl_text = back::wgsl::write_string(module, &module_info, writer_flags).unwrap();
+            let wgsl_text =
+                back::wgsl::write_string(module, &module_info, writer_flags).map_err(|error| {
+                    crate::CompilationInfo {
+                        messages: vec![crate::CompilationMessage {
+                            message: format!("failed to translate shader to WGSL: {error}"),
+                            message_type: crate::CompilationMessageType::Error,
+                            location: None,
+                        }],
+                    }
+                })?;
             Ok(webgpu_sys::GpuShaderModuleDescriptor::new(
                 wgsl_text.as_str(),
             ))
@@ -2245,7 +2357,14 @@ impl dispatch::DeviceInterface for WebDevice {
         &self,
         desc: &crate::BindGroupLayoutDescriptor<'_>,
     ) -> dispatch::DispatchBindGroupLayout {
-        let mapped_bindings = desc
+        let mapping_failed = Cell::new(false);
+        let mapping = MappingContext {
+            error_sink: &self.error_sink,
+            operation: "Device::create_bind_group_layout",
+            failed: &mapping_failed,
+            fallback: webgpu_sys::GpuTextureFormat::Rgba8unorm,
+        };
+        let mut mapped_bindings = desc
             .entries
             .iter()
             .map(|bind| {
@@ -2318,19 +2437,30 @@ impl dispatch::DeviceInterface for WebDevice {
                                 webgpu_sys::GpuStorageTextureAccess::ReadWrite
                             }
                             wgt::StorageTextureAccess::Atomic => {
-                                // Validated out by `BindGroupLayoutEntryError::StorageTextureAtomic`
-                                unreachable!()
+                                self.error_sink.report_synthetic_error(web_validation_error(
+                                    "Device::create_bind_group_layout",
+                                    "atomic storage textures are not supported on the WebGPU backend",
+                                ));
+                                mapping_failed.set(true);
+                                return mapped_entry;
                             }
                         };
-                        let storage_texture = webgpu_sys::GpuStorageTextureBindingLayout::new(
-                            map_texture_format(format),
-                        );
+                        let format = map_texture_format(&mapping, format);
+                        let storage_texture =
+                            webgpu_sys::GpuStorageTextureBindingLayout::new(format);
                         storage_texture.set_access(mapped_access);
                         storage_texture
                             .set_view_dimension(map_texture_view_dimension(view_dimension));
                         mapped_entry.set_storage_texture(&storage_texture);
                     }
-                    wgt::BindingType::AccelerationStructure { .. } => todo!(),
+                    wgt::BindingType::AccelerationStructure { .. } => {
+                        self.error_sink.report_synthetic_error(web_validation_error(
+                            "Device::create_bind_group_layout",
+                            "ray tracing is not supported on the WebGPU backend",
+                        ));
+                        mapping_failed.set(true);
+                        return mapped_entry;
+                    }
                     wgt::BindingType::ExternalTexture => {
                         mapped_entry.set_external_texture(
                             &webgpu_sys::GpuExternalTextureBindingLayout::new(),
@@ -2341,6 +2471,12 @@ impl dispatch::DeviceInterface for WebDevice {
                 mapped_entry
             })
             .collect::<Vec<webgpu_sys::GpuBindGroupLayoutEntry>>();
+        if mapping_failed.get() {
+            // Duplicate binding numbers force browser validation to return an invalid layout,
+            // rather than accepting placeholder entries after a mapping error.
+            mapped_bindings.push(webgpu_sys::GpuBindGroupLayoutEntry::new(0, 0));
+            mapped_bindings.push(webgpu_sys::GpuBindGroupLayoutEntry::new(0, 0));
+        }
 
         let mapped_desc = webgpu_sys::GpuBindGroupLayoutDescriptor::new(&mapped_bindings);
         if let Some(label) = desc.label {
@@ -2359,7 +2495,13 @@ impl dispatch::DeviceInterface for WebDevice {
         &self,
         desc: &crate::BindGroupDescriptor<'_>,
     ) -> dispatch::DispatchBindGroup {
-        let mapped_entries = desc
+        let mapping_failed = Cell::new(false);
+        let placeholder_entry = |binding| {
+            mapping_failed.set(true);
+            let sampler = self.inner.create_sampler();
+            webgpu_sys::GpuBindGroupEntry::new(binding, &sampler)
+        };
+        let mut mapped_entries = desc
             .entries
             .iter()
             .map(|binding| match binding.resource {
@@ -2381,14 +2523,22 @@ impl dispatch::DeviceInterface for WebDevice {
                     )
                 }
                 crate::BindingResource::BufferArray(..) => {
-                    panic!("Web backend does not support arrays of buffers")
+                    self.error_sink.report_synthetic_error(web_validation_error(
+                        "Device::create_bind_group",
+                        "buffer binding arrays are not supported on the WebGPU backend",
+                    ));
+                    placeholder_entry(binding.binding)
                 }
                 crate::BindingResource::Sampler(sampler) => {
                     let sampler = &sampler.inner.as_webgpu().inner;
                     webgpu_sys::GpuBindGroupEntry::new(binding.binding, sampler)
                 }
                 crate::BindingResource::SamplerArray(..) => {
-                    panic!("Web backend does not support arrays of samplers")
+                    self.error_sink.report_synthetic_error(web_validation_error(
+                        "Device::create_bind_group",
+                        "sampler binding arrays are not supported on the WebGPU backend",
+                    ));
+                    placeholder_entry(binding.binding)
                 }
                 crate::BindingResource::TextureView(texture_view) => {
                     let texture_view = &texture_view.inner.as_webgpu().inner;
@@ -2398,16 +2548,25 @@ impl dispatch::DeviceInterface for WebDevice {
                     )
                 }
                 crate::BindingResource::TextureViewArray(..) => {
-                    panic!("Web backend does not support BINDING_INDEXING extension")
+                    self.error_sink.report_synthetic_error(web_validation_error(
+                        "Device::create_bind_group",
+                        "texture view binding arrays are not supported on the WebGPU backend",
+                    ));
+                    placeholder_entry(binding.binding)
                 }
-                crate::BindingResource::AccelerationStructure(_) => {
-                    unimplemented!("Raytracing not implemented for web")
-                }
-                crate::BindingResource::AccelerationStructureArray(_) => {
-                    unimplemented!("Raytracing not implemented for web")
+                crate::BindingResource::AccelerationStructure(_)
+                | crate::BindingResource::AccelerationStructureArray(_) => {
+                    self.error_sink.report_synthetic_error(web_validation_error(
+                        "Device::create_bind_group",
+                        "ray tracing is not supported on the WebGPU backend",
+                    ));
+                    placeholder_entry(binding.binding)
                 }
                 crate::BindingResource::ExternalTexture(external_texture) => {
-                    let external_texture = &external_texture.inner.as_webgpu().inner;
+                    let Some(external_texture) = external_texture.inner.as_webgpu().inner.as_ref()
+                    else {
+                        return placeholder_entry(binding.binding);
+                    };
                     webgpu_sys::GpuBindGroupEntry::new_with_gpu_external_texture(
                         binding.binding,
                         external_texture,
@@ -2415,6 +2574,13 @@ impl dispatch::DeviceInterface for WebDevice {
                 }
             })
             .collect::<Vec<webgpu_sys::GpuBindGroupEntry>>();
+        if mapping_failed.get() {
+            // Duplicate binding numbers force the browser to return an invalid bind group.
+            // The sampler only supplies a correctly typed resource for the invalid entries.
+            let sampler = self.inner.create_sampler();
+            mapped_entries.push(webgpu_sys::GpuBindGroupEntry::new(0, &sampler));
+            mapped_entries.push(webgpu_sys::GpuBindGroupEntry::new(0, &sampler));
+        }
 
         let bgl = &desc.layout.inner.as_webgpu().inner;
         let mapped_desc = webgpu_sys::GpuBindGroupDescriptor::new(&mapped_entries, bgl);
@@ -2460,6 +2626,13 @@ impl dispatch::DeviceInterface for WebDevice {
         &self,
         desc: &crate::RenderPipelineDescriptor<'_>,
     ) -> dispatch::DispatchRenderPipeline {
+        let mapping_failed = Cell::new(false);
+        let mapping = MappingContext {
+            error_sink: &self.error_sink,
+            operation: "Device::create_render_pipeline",
+            failed: &mapping_failed,
+            fallback: webgpu_sys::GpuTextureFormat::Rgba8unorm,
+        };
         let module = desc.vertex.module.inner.as_webgpu();
         let mapped_vertex_state = webgpu_sys::GpuVertexState::new(&module.module);
         insert_constants_map(
@@ -2481,7 +2654,10 @@ impl dispatch::DeviceInterface for WebDevice {
                         .iter()
                         .map(|attr| {
                             webgpu_sys::GpuVertexAttribute::new_with_f64(
-                                map_vertex_format(attr.format),
+                                map_vertex_format(
+                                    &mapping.with_fallback(webgpu_sys::GpuVertexFormat::Float32),
+                                    attr.format,
+                                ),
                                 attr.offset as f64,
                                 attr.shader_location,
                             )
@@ -2517,7 +2693,8 @@ impl dispatch::DeviceInterface for WebDevice {
         }
 
         if let Some(ref depth_stencil) = desc.depth_stencil {
-            mapped_desc.set_depth_stencil(&map_depth_stencil_state(depth_stencil));
+            let mapped_depth_stencil = map_depth_stencil_state(&mapping, depth_stencil);
+            mapped_desc.set_depth_stencil(&mapped_depth_stencil);
         }
 
         if let Some(ref frag) = desc.fragment {
@@ -2526,7 +2703,7 @@ impl dispatch::DeviceInterface for WebDevice {
                 .iter()
                 .map(|target| match target {
                     Some(target) => {
-                        let mapped_format = map_texture_format(target.format);
+                        let mapped_format = map_texture_format(&mapping, target.format);
                         let mapped_color_state =
                             webgpu_sys::GpuColorTargetState::new(mapped_format);
                         if let Some(ref bs) = target.blend {
@@ -2551,14 +2728,27 @@ impl dispatch::DeviceInterface for WebDevice {
         }
 
         let mapped_multisample = webgpu_sys::GpuMultisampleState::new();
-        mapped_multisample.set_count(desc.multisample.count);
+        // Zero samples force browser validation to return an invalid pipeline instead of
+        // accepting the fallback values used after a descriptor-mapping error.
+        mapped_multisample.set_count(if mapping_failed.get() {
+            0
+        } else {
+            desc.multisample.count
+        });
         mapped_multisample.set_mask(desc.multisample.mask as u32);
         mapped_multisample
             .set_alpha_to_coverage_enabled(desc.multisample.alpha_to_coverage_enabled);
         mapped_desc.set_multisample(&mapped_multisample);
 
-        let mapped_primitive = map_primitive_state(&desc.primitive);
+        let mapped_primitive = map_primitive_state(
+            &mapping.with_fallback(webgpu_sys::GpuPrimitiveState::new()),
+            &desc.primitive,
+        );
         mapped_desc.set_primitive(&mapped_primitive);
+        if mapping_failed.get() {
+            // Primitive mapping can also fail; zero samples invalidate the pipeline here too.
+            mapped_multisample.set_count(0);
+        }
 
         let render_pipeline = self.inner.create_render_pipeline(&mapped_desc).unwrap();
 
@@ -2573,7 +2763,32 @@ impl dispatch::DeviceInterface for WebDevice {
         &self,
         _desc: &crate::MeshPipelineDescriptor<'_>,
     ) -> dispatch::DispatchRenderPipeline {
-        panic!("MESH_SHADER feature must be enabled to call create_mesh_pipeline")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "Device::create_mesh_pipeline",
+            "MESH_SHADER is not supported on the WebGPU backend",
+        ));
+        let shader = self
+            .inner
+            .create_shader_module(&webgpu_sys::GpuShaderModuleDescriptor::new(""));
+        let vertex = webgpu_sys::GpuVertexState::new(&shader);
+        let descriptor = webgpu_sys::GpuRenderPipelineDescriptor::new_with_gpu_auto_layout_mode(
+            webgpu_sys::GpuAutoLayoutMode::Auto,
+            &vertex,
+        );
+        let multisample = webgpu_sys::GpuMultisampleState::new();
+        // WebGPU has no mesh pipelines. Zero samples force validation to produce a typed,
+        // invalid render pipeline to satisfy the return type after reporting the error.
+        multisample.set_count(0);
+        descriptor.set_multisample(&multisample);
+        let inner = self
+            .inner
+            .create_render_pipeline(&descriptor)
+            .expect("fixed invalid render pipeline descriptor should not throw");
+        WebRenderPipeline {
+            inner,
+            ident: crate::cmp::Identifier::create(),
+        }
+        .into()
     }
 
     fn create_compute_pipeline(
@@ -2616,6 +2831,7 @@ impl dispatch::DeviceInterface for WebDevice {
     ) -> dispatch::DispatchPipelineCache {
         WebPipelineCache {
             ident: crate::cmp::Identifier::create(),
+            error_sink: self.error_sink.clone(),
         }
         .into()
     }
@@ -2631,9 +2847,23 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> dispatch::DispatchTexture {
+        let mapping_failed = Cell::new(false);
+        let mapping = MappingContext {
+            error_sink: &self.error_sink,
+            operation: "Device::create_texture",
+            failed: &mapping_failed,
+            fallback: webgpu_sys::GpuTextureFormat::Rgba8unorm,
+        };
+        let format = map_texture_format(&mapping, desc.format);
+        let mapped_size = map_extent_3d(desc.size);
+        if mapping_failed.get() {
+            // Zero width forces the browser to return an invalid texture, not a usable
+            // texture in the fallback format chosen after the mapping error.
+            mapped_size.set_width(0);
+        }
         let mapped_desc = webgpu_sys::GpuTextureDescriptor::new_with_gpu_extent_3d_dict(
-            map_texture_format(desc.format),
-            &map_extent_3d(desc.size),
+            format,
+            &mapped_size,
             desc.usage.bits(),
         );
         if let Some(label) = desc.label {
@@ -2646,16 +2876,20 @@ impl dispatch::DeviceInterface for WebDevice {
             .view_formats
             .iter()
             .map(|format| {
-                wasm_bindgen::JsValue::from(map_texture_format(*format))
-                    .dyn_into::<js_sys::JsString>()
-                    .unwrap()
+                let format = map_texture_format(&mapping, *format);
+                wasm_bindgen::JsValue::from(format).unchecked_into::<js_sys::JsString>()
             })
             .collect::<Vec<js_sys::JsString>>();
         mapped_desc.set_view_formats(&mapped_view_formats);
+        if mapping_failed.get() {
+            // View-format mapping can also fail; zero width invalidates the texture then too.
+            mapped_size.set_width(0);
+        }
 
         let texture = self.inner.create_texture(&mapped_desc).unwrap();
         WebTexture {
             inner: texture,
+            error_sink: self.error_sink.clone(),
             drop_guard: None,
             ident: crate::cmp::Identifier::create(),
             desc: crate::TextureDescriptor {
@@ -2672,11 +2906,15 @@ impl dispatch::DeviceInterface for WebDevice {
         _desc: &crate::ExternalTextureDescriptor<'_>,
         _planes: &[&crate::TextureView],
     ) -> dispatch::DispatchExternalTexture {
-        // The browser builds external textures from a video source, not from
-        // plane textures. Use `Device::import_external_texture` on this backend.
-        unimplemented!(
-            "plane-based external textures are unsupported on WebGPU; use Device::import_external_texture"
-        );
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "Device::create_external_texture",
+            "plane-based external textures are unsupported on WebGPU; use Device::import_external_texture",
+        ));
+        WebExternalTexture {
+            inner: None,
+            ident: crate::cmp::Identifier::create(),
+        }
+        .into()
     }
 
     fn create_blas(
@@ -2684,18 +2922,43 @@ impl dispatch::DeviceInterface for WebDevice {
         _desc: &crate::CreateBlasDescriptor<'_>,
         _sizes: crate::BlasGeometrySizeDescriptors,
     ) -> (Option<u64>, dispatch::DispatchBlas) {
-        unimplemented!("Raytracing not implemented for web");
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "Device::create_blas",
+            "ray tracing is not supported on the WebGPU backend",
+        ));
+        (
+            None,
+            WebBlas {
+                ident: crate::cmp::Identifier::create(),
+                error_sink: self.error_sink.clone(),
+            }
+            .into(),
+        )
     }
 
     fn create_tlas(&self, _desc: &crate::CreateTlasDescriptor<'_>) -> dispatch::DispatchTlas {
-        unimplemented!("Raytracing not implemented for web");
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "Device::create_tlas",
+            "ray tracing is not supported on the WebGPU backend",
+        ));
+        WebTlas {
+            ident: crate::cmp::Identifier::create(),
+        }
+        .into()
     }
 
     fn create_sampler(&self, desc: &crate::SamplerDescriptor<'_>) -> dispatch::DispatchSampler {
+        let mapping_failed = Cell::new(false);
+        let mapping = MappingContext {
+            error_sink: &self.error_sink,
+            operation: "Device::create_sampler",
+            failed: &mapping_failed,
+            fallback: webgpu_sys::GpuAddressMode::ClampToEdge,
+        };
         let mapped_desc = webgpu_sys::GpuSamplerDescriptor::new();
-        mapped_desc.set_address_mode_u(map_address_mode(desc.address_mode_u));
-        mapped_desc.set_address_mode_v(map_address_mode(desc.address_mode_v));
-        mapped_desc.set_address_mode_w(map_address_mode(desc.address_mode_w));
+        mapped_desc.set_address_mode_u(map_address_mode(&mapping, desc.address_mode_u));
+        mapped_desc.set_address_mode_v(map_address_mode(&mapping, desc.address_mode_v));
+        mapped_desc.set_address_mode_w(map_address_mode(&mapping, desc.address_mode_w));
         if let Some(compare) = desc.compare {
             mapped_desc.set_compare(map_compare_function(compare));
         }
@@ -2704,7 +2967,13 @@ impl dispatch::DeviceInterface for WebDevice {
         mapped_desc.set_mag_filter(map_filter_mode(desc.mag_filter));
         mapped_desc.set_min_filter(map_filter_mode(desc.min_filter));
         mapped_desc.set_mipmap_filter(map_mipmap_filter_mode(desc.mipmap_filter));
-        mapped_desc.set_max_anisotropy(desc.anisotropy_clamp);
+        // Anisotropy must be at least one. Zero makes the browser return an invalid sampler
+        // instead of accepting the fallback address modes after a mapping error.
+        mapped_desc.set_max_anisotropy(if mapping_failed.get() {
+            0
+        } else {
+            desc.anisotropy_clamp
+        });
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
         }
@@ -2719,12 +2988,20 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn create_query_set(&self, desc: &crate::QuerySetDescriptor<'_>) -> dispatch::DispatchQuerySet {
-        let ty = match desc.ty {
-            wgt::QueryType::Occlusion => webgpu_sys::GpuQueryType::Occlusion,
-            wgt::QueryType::Timestamp => webgpu_sys::GpuQueryType::Timestamp,
-            wgt::QueryType::PipelineStatistics(_) => unreachable!(),
+        let (ty, count) = match desc.ty {
+            wgt::QueryType::Occlusion => (webgpu_sys::GpuQueryType::Occlusion, desc.count),
+            wgt::QueryType::Timestamp => (webgpu_sys::GpuQueryType::Timestamp, desc.count),
+            wgt::QueryType::PipelineStatistics(_) => {
+                self.error_sink.report_synthetic_error(web_validation_error(
+                    "Device::create_query_set",
+                    "pipeline statistics queries are not supported on the WebGPU backend",
+                ));
+                // Zero queries force browser validation to return an invalid query set;
+                // the occlusion type is only a representable placeholder.
+                (webgpu_sys::GpuQueryType::Occlusion, 0)
+            }
         };
-        let mapped_desc = webgpu_sys::GpuQuerySetDescriptor::new(desc.count, ty);
+        let mapped_desc = webgpu_sys::GpuQuerySetDescriptor::new(count, ty);
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
         }
@@ -2756,6 +3033,7 @@ impl dispatch::DeviceInterface for WebDevice {
         WebCommandEncoder {
             inner: command_encoder,
             ident: crate::cmp::Identifier::create(),
+            error_sink: self.error_sink.clone(),
         }
         .into()
     }
@@ -2764,15 +3042,23 @@ impl dispatch::DeviceInterface for WebDevice {
         &self,
         desc: &crate::RenderBundleEncoderDescriptor<'_>,
     ) -> dispatch::DispatchRenderBundleEncoder {
+        let mapping_failed = Cell::new(false);
+        let mapping = MappingContext {
+            error_sink: &self.error_sink,
+            operation: "Device::create_render_bundle_encoder",
+            failed: &mapping_failed,
+            fallback: webgpu_sys::GpuTextureFormat::Rgba8unorm,
+        };
         let mapped_color_formats = desc
             .color_formats
             .iter()
             .map(|cf| match cf {
-                Some(cf) => js_sys::JsNullable::wrap(
-                    wasm_bindgen::JsValue::from(map_texture_format(*cf))
-                        .dyn_into::<js_sys::JsString>()
-                        .unwrap(),
-                ),
+                Some(cf) => {
+                    let format = map_texture_format(&mapping, *cf);
+                    js_sys::JsNullable::wrap(
+                        wasm_bindgen::JsValue::from(format).unchecked_into::<js_sys::JsString>(),
+                    )
+                }
                 None => js_sys::JsNullable::new(),
             })
             .collect::<Vec<js_sys::JsNullable<js_sys::JsString>>>();
@@ -2781,11 +3067,17 @@ impl dispatch::DeviceInterface for WebDevice {
             mapped_desc.set_label(label);
         }
         if let Some(ds) = desc.depth_stencil {
-            mapped_desc.set_depth_stencil_format(map_texture_format(ds.format));
+            mapped_desc.set_depth_stencil_format(map_texture_format(&mapping, ds.format));
             mapped_desc.set_depth_read_only(ds.depth_read_only);
             mapped_desc.set_stencil_read_only(ds.stencil_read_only);
         }
-        mapped_desc.set_sample_count(desc.sample_count);
+        // Zero samples force the browser to return an invalid bundle encoder instead of
+        // recording commands with fallback formats after a descriptor-mapping error.
+        mapped_desc.set_sample_count(if mapping_failed.get() {
+            0
+        } else {
+            desc.sample_count
+        });
 
         let render_bundle_encoder = self
             .inner
@@ -2795,6 +3087,7 @@ impl dispatch::DeviceInterface for WebDevice {
         WebRenderBundleEncoder {
             inner: render_bundle_encoder,
             ident: crate::cmp::Identifier::create(),
+            error_sink: self.error_sink.clone(),
         }
         .into()
     }
@@ -3000,9 +3293,20 @@ impl dispatch::QueueInterface for WebQueue {
         }
         mapped_data_layout.set_offset_f64(data_layout.offset as f64);
 
+        let mapping_failed = Cell::new(false);
+        let mapping = MappingContext {
+            error_sink: &self.error_sink,
+            operation: "Queue::write_texture",
+            failed: &mapping_failed,
+            fallback: webgpu_sys::GpuTextureAspect::All,
+        };
+        let mapped_texture = map_texture_copy_view(&mapping, texture);
+        if mapping_failed.get() {
+            return;
+        }
         self.inner
             .write_texture_with_u8_slice_and_gpu_extent_3d_dict(
-                &map_texture_copy_view(texture),
+                &mapped_texture,
                 data,
                 &mapped_data_layout,
                 &map_extent_3d(size),
@@ -3016,10 +3320,21 @@ impl dispatch::QueueInterface for WebQueue {
         dest: crate::CopyExternalImageDestInfo<&crate::api::Texture>,
         size: crate::Extent3d,
     ) {
+        let mapping_failed = Cell::new(false);
+        let mapping = MappingContext {
+            error_sink: &self.error_sink,
+            operation: "Queue::copy_external_image_to_texture",
+            failed: &mapping_failed,
+            fallback: webgpu_sys::GpuTextureAspect::All,
+        };
+        let mapped_dest = map_tagged_texture_copy_view(&mapping, dest);
+        if mapping_failed.get() {
+            return;
+        }
         self.inner
             .copy_external_image_to_texture_with_gpu_extent_3d_dict(
                 &map_external_texture_copy_view(source),
-                &map_tagged_texture_copy_view(dest),
+                &mapped_dest,
                 &map_extent_3d(size),
             )
             .unwrap();
@@ -3063,7 +3378,18 @@ impl dispatch::QueueInterface for WebQueue {
         &self,
         _blas: &dispatch::DispatchBlas,
     ) -> (Option<u64>, dispatch::DispatchBlas) {
-        unimplemented!("Raytracing not implemented for web")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "Queue::compact_blas",
+            "ray tracing is not supported on the WebGPU backend",
+        ));
+        (
+            None,
+            WebBlas {
+                ident: crate::cmp::Identifier::create(),
+                error_sink: self.error_sink.clone(),
+            }
+            .into(),
+        )
     }
 
     fn present(&self, _detail: &dispatch::DispatchSurfaceOutputDetail) {
@@ -3183,14 +3509,24 @@ impl dispatch::TextureInterface for WebTexture {
         &self,
         desc: &crate::TextureViewDescriptor<'_>,
     ) -> dispatch::DispatchTextureView {
+        let mapping_failed = Cell::new(false);
+        let mapping = MappingContext {
+            error_sink: &self.error_sink,
+            operation: "Texture::create_view",
+            failed: &mapping_failed,
+            fallback: webgpu_sys::GpuTextureFormat::Rgba8unorm,
+        };
         let mapped = webgpu_sys::GpuTextureViewDescriptor::new();
         if let Some(dim) = desc.dimension {
             mapped.set_dimension(map_texture_view_dimension(dim));
         }
         if let Some(format) = desc.format {
-            mapped.set_format(map_texture_format(format));
+            mapped.set_format(map_texture_format(&mapping, format));
         }
-        mapped.set_aspect(map_texture_aspect(desc.aspect));
+        mapped.set_aspect(map_texture_aspect(
+            &mapping.with_fallback(webgpu_sys::GpuTextureAspect::All),
+            desc.aspect,
+        ));
         mapped.set_base_array_layer(desc.base_array_layer);
         if let Some(count) = desc.array_layer_count {
             mapped.set_array_layer_count(count);
@@ -3198,6 +3534,11 @@ impl dispatch::TextureInterface for WebTexture {
         mapped.set_base_mip_level(desc.base_mip_level);
         if let Some(count) = desc.mip_level_count {
             mapped.set_mip_level_count(count);
+        }
+        if mapping_failed.get() {
+            // A view must contain at least one mip level. Zero makes the browser return an
+            // invalid view instead of accepting the fallback format or aspect.
+            mapped.set_mip_level_count(0);
         }
         if let Some(label) = desc.label {
             mapped.set_label(label);
@@ -3263,11 +3604,19 @@ impl Drop for WebExternalTexture {
 }
 
 impl dispatch::BlasInterface for WebBlas {
-    fn prepare_compact_async(&self, _callback: BlasCompactCallback) {
-        unimplemented!("Raytracing not implemented for web")
+    fn prepare_compact_async(&self, callback: BlasCompactCallback) {
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "Blas::prepare_compact_async",
+            "ray tracing is not supported on the WebGPU backend",
+        ));
+        callback(Err(crate::BlasAsyncError));
     }
     fn ready_for_compaction(&self) -> bool {
-        unimplemented!("Raytracing not implemented for web")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "Blas::ready_for_compaction",
+            "ray tracing is not supported on the WebGPU backend",
+        ));
+        false
     }
 }
 impl Drop for WebBlas {
@@ -3384,10 +3733,21 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         destination: crate::TexelCopyTextureInfo<'_>,
         copy_size: crate::Extent3d,
     ) {
+        let mapping_failed = Cell::new(false);
+        let mapping = MappingContext {
+            error_sink: &self.error_sink,
+            operation: "CommandEncoder::copy_buffer_to_texture",
+            failed: &mapping_failed,
+            fallback: webgpu_sys::GpuTextureAspect::All,
+        };
+        let destination = map_texture_copy_view(&mapping, destination);
+        if mapping_failed.get() {
+            return;
+        }
         self.inner
             .copy_buffer_to_texture_with_gpu_extent_3d_dict(
                 &map_buffer_copy_view(source),
-                &map_texture_copy_view(destination),
+                &destination,
                 &map_extent_3d(copy_size),
             )
             .unwrap();
@@ -3399,9 +3759,20 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         destination: crate::TexelCopyBufferInfo<'_>,
         copy_size: crate::Extent3d,
     ) {
+        let mapping_failed = Cell::new(false);
+        let mapping = MappingContext {
+            error_sink: &self.error_sink,
+            operation: "CommandEncoder::copy_texture_to_buffer",
+            failed: &mapping_failed,
+            fallback: webgpu_sys::GpuTextureAspect::All,
+        };
+        let source = map_texture_copy_view(&mapping, source);
+        if mapping_failed.get() {
+            return;
+        }
         self.inner
             .copy_texture_to_buffer_with_gpu_extent_3d_dict(
-                &map_texture_copy_view(source),
+                &source,
                 &map_buffer_copy_view(destination),
                 &map_extent_3d(copy_size),
             )
@@ -3414,10 +3785,25 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         destination: crate::TexelCopyTextureInfo<'_>,
         copy_size: crate::Extent3d,
     ) {
+        let mapping_failed = Cell::new(false);
+        let mapping = MappingContext {
+            error_sink: &self.error_sink,
+            operation: "CommandEncoder::copy_texture_to_texture",
+            failed: &mapping_failed,
+            fallback: webgpu_sys::GpuTextureAspect::All,
+        };
+        let source = map_texture_copy_view(&mapping, source);
+        if mapping_failed.get() {
+            return;
+        }
+        let destination = map_texture_copy_view(&mapping, destination);
+        if mapping_failed.get() {
+            return;
+        }
         self.inner
             .copy_texture_to_texture_with_gpu_extent_3d_dict(
-                &map_texture_copy_view(source),
-                &map_texture_copy_view(destination),
+                &source,
+                &destination,
                 &map_extent_3d(copy_size),
             )
             .unwrap();
@@ -3449,6 +3835,7 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         WebComputePassEncoder {
             inner: compute_pass,
             ident: crate::cmp::Identifier::create(),
+            error_sink: self.error_sink.clone(),
         }
         .into()
     }
@@ -3567,6 +3954,7 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         WebRenderPassEncoder {
             inner: render_pass,
             ident: crate::cmp::Identifier::create(),
+            error_sink: self.error_sink.clone(),
         }
         .into()
     }
@@ -3594,7 +3982,10 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         _texture: &dispatch::DispatchTexture,
         _subresource_range: &crate::ImageSubresourceRange,
     ) {
-        unimplemented!("clear_texture is not yet implemented");
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "CommandEncoder::clear_texture",
+            "clear_texture is not supported on the WebGPU backend",
+        ));
     }
 
     fn clear_buffer(
@@ -3629,9 +4020,10 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
     }
 
     fn write_timestamp(&self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
-        // Not available on WebGPU.
-        // This was part of the spec originally but got removed, see https://github.com/gpuweb/gpuweb/pull/4370
-        panic!("TIMESTAMP_QUERY_INSIDE_ENCODERS feature must be enabled to call write_timestamp on a command encoder.")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "CommandEncoder::write_timestamp",
+            "TIMESTAMP_QUERY_INSIDE_ENCODERS is not supported on the WebGPU backend",
+        ));
     }
 
     fn resolve_query_set(
@@ -3659,7 +4051,10 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         _blas: &mut dyn Iterator<Item = &'a Blas>,
         _tlas: &mut dyn Iterator<Item = &'a Tlas>,
     ) {
-        unimplemented!("Raytracing not implemented for web");
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "CommandEncoder::mark_acceleration_structures_built",
+            "ray tracing is not supported on the WebGPU backend",
+        ));
     }
 
     fn build_acceleration_structures<'a>(
@@ -3667,7 +4062,10 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         _blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
         _tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
     ) {
-        unimplemented!("Raytracing not implemented for web");
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "CommandEncoder::build_acceleration_structures",
+            "ray tracing is not supported on the WebGPU backend",
+        ));
     }
 
     fn transition_resources<'a>(
@@ -3690,7 +4088,11 @@ impl Drop for WebCommandEncoder {
 
 impl dispatch::PipelineCacheInterface for WebPipelineCache {
     fn get_data(&self) -> Option<Vec<u8>> {
-        todo!()
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "PipelineCache::get_data",
+            "pipeline caches are not supported on the WebGPU backend",
+        ));
+        None
     }
 }
 impl Drop for WebPipelineCache {
@@ -3729,7 +4131,10 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
     }
 
     fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
-        panic!("IMMEDIATES feature must be enabled to call set_immediates")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "ComputePass::set_immediates",
+            "IMMEDIATES is not supported on the WebGPU backend",
+        ));
     }
 
     fn insert_debug_marker(&mut self, label: &str) {
@@ -3745,7 +4150,10 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
     }
 
     fn write_timestamp(&mut self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
-        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass.")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "ComputePass::write_timestamp",
+            "TIMESTAMP_QUERY_INSIDE_PASSES is not supported on the WebGPU backend",
+        ));
     }
 
     fn begin_pipeline_statistics_query(
@@ -3870,7 +4278,10 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
     }
 
     fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
-        panic!("IMMEDIATES feature must be enabled to call set_immediates")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "RenderPass::set_immediates",
+            "IMMEDIATES is not supported on the WebGPU backend",
+        ));
     }
 
     fn set_blend_constant(&mut self, color: crate::Color) {
@@ -3922,7 +4333,10 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
     }
 
     fn draw_mesh_tasks(&mut self, _group_count_x: u32, _group_count_y: u32, _group_count_z: u32) {
-        panic!("MESH_SHADER feature must be enabled to call draw_mesh_tasks")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "RenderPass::draw_mesh_tasks",
+            "MESH_SHADER is not supported on the WebGPU backend",
+        ));
     }
 
     fn draw_indirect(
@@ -3950,7 +4364,10 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         _indirect_buffer: &dispatch::DispatchBuffer,
         _indirect_offset: crate::BufferAddress,
     ) {
-        panic!("MESH_SHADER feature must be enabled to call draw_mesh_tasks_indirect")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "RenderPass::draw_mesh_tasks_indirect",
+            "MESH_SHADER is not supported on the WebGPU backend",
+        ));
     }
 
     fn multi_draw_indirect(
@@ -3989,7 +4406,10 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         _indirect_offset: crate::BufferAddress,
         _count: u32,
     ) {
-        panic!("MESH_SHADER feature must be enabled to call multi_draw_mesh_tasks_indirect")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "RenderPass::multi_draw_mesh_tasks_indirect",
+            "MESH_SHADER is not supported on the WebGPU backend",
+        ));
     }
 
     fn multi_draw_indirect_count(
@@ -4000,9 +4420,10 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         _count_buffer_offset: crate::BufferAddress,
         _max_count: u32,
     ) {
-        panic!(
-            "MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indirect_count"
-        )
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "RenderPass::multi_draw_indirect_count",
+            "MULTI_DRAW_INDIRECT_COUNT is not supported on the WebGPU backend",
+        ));
     }
 
     fn multi_draw_indexed_indirect_count(
@@ -4013,7 +4434,10 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         _count_buffer_offset: crate::BufferAddress,
         _max_count: u32,
     ) {
-        panic!("MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indexed_indirect_count")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "RenderPass::multi_draw_indexed_indirect_count",
+            "MULTI_DRAW_INDIRECT_COUNT is not supported on the WebGPU backend",
+        ));
     }
 
     fn multi_draw_mesh_tasks_indirect_count(
@@ -4024,7 +4448,10 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         _count_buffer_offset: crate::BufferAddress,
         _max_count: u32,
     ) {
-        panic!("MESH_SHADER feature must be enabled to call multi_draw_mesh_tasks_indirect_count")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "RenderPass::multi_draw_mesh_tasks_indirect_count",
+            "MESH_SHADER is not supported on the WebGPU backend",
+        ));
     }
 
     fn insert_debug_marker(&mut self, label: &str) {
@@ -4040,7 +4467,10 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
     }
 
     fn write_timestamp(&mut self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
-        panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a render pass.")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "RenderPass::write_timestamp",
+            "TIMESTAMP_QUERY_INSIDE_PASSES is not supported on the WebGPU backend",
+        ));
     }
 
     fn begin_occlusion_query(&mut self, query_index: u32) {
@@ -4161,7 +4591,10 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
     }
 
     fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
-        panic!("IMMEDIATES feature must be enabled to call set_immediates")
+        self.error_sink.report_synthetic_error(web_validation_error(
+            "RenderBundleEncoder::set_immediates",
+            "IMMEDIATES is not supported on the WebGPU backend",
+        ));
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
@@ -4332,7 +4765,7 @@ mod rgba16float_probe {
         let context: webgpu_sys::GpuCanvasContext = context.unchecked_into();
         let config = webgpu_sys::GpuCanvasConfiguration::new(
             device,
-            map_texture_format(wgt::TextureFormat::Rgba16Float),
+            webgpu_sys::GpuTextureFormat::Rgba16float,
         );
         let supported = context.configure(&config).is_ok();
         if supported {
@@ -4354,7 +4787,6 @@ impl dispatch::SurfaceInterface for WebSurface {
         if rgba16float_probe::rgba16float_canvas_supported() {
             formats.push(wgt::TextureFormat::Rgba16Float);
         }
-        let mut mapped_formats = formats.iter().map(|format| map_texture_format(*format));
         // Preferred canvas format will only be either "rgba8unorm" or "bgra8unorm".
         // https://www.w3.org/TR/webgpu/#dom-gpu-getpreferredcanvasformat
         let preferred_format = self
@@ -4362,8 +4794,8 @@ impl dispatch::SurfaceInterface for WebSurface {
             .as_ref()
             .expect("Caller could not have created an adapter if gpu is undefined.")
             .get_preferred_canvas_format();
-        if let Some(index) = mapped_formats.position(|format| format == preferred_format) {
-            formats.swap(0, index);
+        if preferred_format == webgpu_sys::GpuTextureFormat::Bgra8unorm {
+            formats.swap(0, 1);
         }
 
         wgt::SurfaceCapabilities {
@@ -4438,6 +4870,7 @@ impl dispatch::SurfaceInterface for WebSurface {
 
     fn configure(&self, device: &dispatch::DispatchDevice, config: &crate::SurfaceConfiguration) {
         let device = device.as_webgpu();
+        *self.error_sink.borrow_mut() = Some(device.error_sink.clone());
 
         match self.canvas {
             Canvas::Canvas(ref canvas) => {
@@ -4451,21 +4884,44 @@ impl dispatch::SurfaceInterface for WebSurface {
         }
 
         if let wgt::PresentMode::Mailbox | wgt::PresentMode::Immediate = config.present_mode {
-            panic!("Only FIFO/Auto* is supported on web");
+            self.configure_failed.set(true);
+            device
+                .error_sink
+                .report_synthetic_error(web_validation_error(
+                    "Surface::configure",
+                    "only FIFO/Auto present modes are supported on the WebGPU backend",
+                ));
+            return;
         }
         if let wgt::CompositeAlphaMode::PostMultiplied | wgt::CompositeAlphaMode::Inherit =
             config.alpha_mode
         {
-            panic!("Only Opaque/Auto or PreMultiplied alpha mode are supported on web");
+            self.configure_failed.set(true);
+            device
+                .error_sink
+                .report_synthetic_error(web_validation_error(
+                "Surface::configure",
+                "only Opaque/Auto or PreMultiplied alpha modes are supported on the WebGPU backend",
+            ));
+            return;
         }
         let alpha_mode = match config.alpha_mode {
             wgt::CompositeAlphaMode::PreMultiplied => webgpu_sys::GpuCanvasAlphaMode::Premultiplied,
             _ => webgpu_sys::GpuCanvasAlphaMode::Opaque,
         };
-        let mapped = webgpu_sys::GpuCanvasConfiguration::new(
-            &device.inner,
-            map_texture_format(config.format),
-        );
+        let mapping_failed = Cell::new(false);
+        let mapping = MappingContext {
+            error_sink: &device.error_sink,
+            operation: "Surface::configure",
+            failed: &mapping_failed,
+            fallback: webgpu_sys::GpuTextureFormat::Rgba8unorm,
+        };
+        let format = map_texture_format(&mapping, config.format);
+        if mapping_failed.get() {
+            self.configure_failed.set(true);
+            return;
+        }
+        let mapped = webgpu_sys::GpuCanvasConfiguration::new(&device.inner, format);
         mapped.set_usage(config.usage.bits());
         mapped.set_alpha_mode(alpha_mode);
         match config.color_space {
@@ -4476,12 +4932,18 @@ impl dispatch::SurfaceInterface for WebSurface {
             wgt::SurfaceColorSpace::DisplayP3 => {
                 // The vendored bindings have no `colorSpace` setter, so set
                 // the dictionary member by reflection.
-                js_sys::Reflect::set(
+                if let Err(error) = js_sys::Reflect::set(
                     &mapped,
                     &JsValue::from_str("colorSpace"),
                     &JsValue::from_str("display-p3"),
-                )
-                .expect("Setting the canvas configuration color space should never fail");
+                ) {
+                    self.configure_failed.set(true);
+                    device.error_sink.report_synthetic_error(web_internal_error(
+                        "Surface::configure",
+                        format!("failed to set canvas color space: {error:?}"),
+                    ));
+                    return;
+                }
             }
             wgt::SurfaceColorSpace::ExtendedSrgb => {
                 // The canvas keeps the default "srgb" color space; "extended"
@@ -4498,12 +4960,18 @@ impl dispatch::SurfaceInterface for WebSurface {
                 // with "extended" tone mapping holds Display-P3-encoded
                 // extended-range values. Set both dictionary members (colorSpace
                 // by reflection, as for `DisplayP3`).
-                js_sys::Reflect::set(
+                if let Err(error) = js_sys::Reflect::set(
                     &mapped,
                     &JsValue::from_str("colorSpace"),
                     &JsValue::from_str("display-p3"),
-                )
-                .expect("Setting the canvas configuration color space should never fail");
+                ) {
+                    self.configure_failed.set(true);
+                    device.error_sink.report_synthetic_error(web_internal_error(
+                        "Surface::configure",
+                        format!("failed to set canvas color space: {error:?}"),
+                    ));
+                    return;
+                }
                 let tone_mapping = webgpu_sys::GpuCanvasToneMapping::new();
                 tone_mapping.set_mode(webgpu_sys::GpuCanvasToneMappingMode::Extended);
                 mapped.set_tone_mapping(&tone_mapping);
@@ -4520,23 +4988,28 @@ impl dispatch::SurfaceInterface for WebSurface {
                 // rather than panicking, since there is no `catch_unwind` on
                 // wasm to recover an abort.
                 self.configure_failed.set(true);
-                log::error!(
-                    "Surface color space {cs:?} is not supported on the WebGPU backend; \
-                     the surface will report as lost. Check `get_capabilities` before \
-                     configuring."
-                );
+                device
+                    .error_sink
+                    .report_synthetic_error(web_validation_error(
+                        "Surface::configure",
+                        format!(
+                            "surface color space {cs:?} is not supported on the WebGPU backend"
+                        ),
+                    ));
                 return;
             }
         }
-        let mapped_view_formats = config
-            .view_formats
-            .iter()
-            .map(|format| {
-                wasm_bindgen::JsValue::from(map_texture_format(*format))
-                    .dyn_into::<js_sys::JsString>()
-                    .unwrap()
-            })
-            .collect::<Vec<js_sys::JsString>>();
+        let mut mapped_view_formats = Vec::with_capacity(config.view_formats.len());
+        for &format in &config.view_formats {
+            mapped_view_formats.push(
+                wasm_bindgen::JsValue::from(map_texture_format(&mapping, format))
+                    .unchecked_into::<js_sys::JsString>(),
+            );
+            if mapping_failed.get() {
+                self.configure_failed.set(true);
+                return;
+            }
+        }
         mapped.set_view_formats(&mapped_view_formats);
         // `configure` can throw (e.g. the browser doesn't support the requested
         // canvas format). There is no `catch_unwind` on wasm, so unwrapping here
@@ -4550,14 +5023,12 @@ impl dispatch::SurfaceInterface for WebSurface {
         // `configure`. Once they stop doing that, this handling can go away.
         match self.context.configure(&mapped) {
             Ok(()) => self.configure_failed.set(false),
-            Err(err) => {
+            Err(error) => {
                 self.configure_failed.set(true);
-                log::error!(
-                    "Surface configuration failed: {err:?}. The browser may not support \
-                     this canvas format (for example, Firefox does not yet support \
-                     `rgba16float` canvases). The surface will report as lost until it \
-                     is successfully reconfigured."
-                );
+                device.error_sink.report_synthetic_error(web_internal_error(
+                    "Surface::configure",
+                    format!("browser configuration failed: {error:?}"),
+                ));
             }
         }
     }
@@ -4588,9 +5059,18 @@ impl dispatch::SurfaceInterface for WebSurface {
             }
         };
 
+        let Some(desc) = desc else {
+            log::error!("Surface texture descriptor is missing");
+            return (None, crate::SurfaceStatus::Lost, detail.into());
+        };
+        let Some(error_sink) = self.error_sink.borrow().clone() else {
+            log::error!("Surface is not configured with a device");
+            return (None, crate::SurfaceStatus::Lost, detail.into());
+        };
         let web_surface_texture = WebTexture {
-            desc: desc.unwrap(),
+            desc,
             inner: surface_texture,
+            error_sink,
             drop_guard: None,
             ident: crate::cmp::Identifier::create(),
         };
