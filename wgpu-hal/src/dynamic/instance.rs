@@ -40,6 +40,7 @@ pub trait DynInstance: DynResource {
     unsafe fn enumerate_adapters(
         &self,
         surface_hint: Option<&dyn DynSurface>,
+        options: Option<&wgt::BackendAdapterOptionsMap>,
     ) -> Vec<DynExposedAdapter>;
 }
 
@@ -56,9 +57,11 @@ impl<I: Instance + DynResource> DynInstance for I {
     unsafe fn enumerate_adapters(
         &self,
         surface_hint: Option<&dyn DynSurface>,
+        options: Option<&wgt::BackendAdapterOptionsMap>,
     ) -> Vec<DynExposedAdapter> {
         let surface_hint = surface_hint.map(|s| s.expect_downcast_ref());
-        unsafe { I::enumerate_adapters(self, surface_hint) }
+        let options = options.and_then(|map| map.get::<I::AdapterOptions>());
+        unsafe { I::enumerate_adapters(self, surface_hint, options) }
             .into_iter()
             .map(|exposed| DynExposedAdapter {
                 adapter: Box::new(exposed.adapter),

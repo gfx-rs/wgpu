@@ -11,8 +11,17 @@ use crate::{
     },
 };
 
+crate::adapter_options! {
+    /// Options for enumerating DX12 adapters.
+    #[backend(wgt::Backend::Dx12)]
+    #[derive(Clone, Debug)]
+    pub struct Dx12AdapterOptions;
+}
+
 impl crate::Instance for super::Instance {
     type A = super::Api;
+
+    type AdapterOptions = Dx12AdapterOptions;
 
     unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init DX12 Backend");
@@ -166,6 +175,7 @@ impl crate::Instance for super::Instance {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&super::Surface>,
+        _options: Option<&Self::AdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<super::Api>> {
         let adapters = auxil::dxgi::factory::enumerate_adapters(self.factory.clone());
 

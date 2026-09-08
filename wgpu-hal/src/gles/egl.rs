@@ -718,8 +718,19 @@ impl Instance {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Instance: Send, Sync);
 
+#[derive(Clone, Debug)]
+pub struct GlAdapterOptions;
+
+impl wgt::DynBackendMapValue<dyn wgt::BackendAdapterOptions> for GlAdapterOptions { }
+
+impl wgt::BackendMapValue<dyn wgt::BackendAdapterOptions> for GlAdapterOptions {
+    const BACKEND: wgt::Backend = wgt::Backend::Gl;
+}
+
 impl crate::Instance for Instance {
     type A = super::Api;
+
+    type AdapterOptions = GlAdapterOptions;
 
     unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         use raw_window_handle::RawDisplayHandle as Rdh;
@@ -1014,6 +1025,7 @@ impl crate::Instance for Instance {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&Surface>,
+        _options: Option<&Self::AdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<super::Api>> {
         let inner = self.inner.lock();
         inner.egl.make_current();

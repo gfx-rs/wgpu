@@ -20,7 +20,7 @@ use crate::{
     DOWNLEVEL_WARNING_MESSAGE,
 };
 
-use wgt::{Backend, Backends, InstanceFlags, PowerPreference};
+use wgt::{Backend, BackendAdapterOptionsMap, Backends, InstanceFlags, PowerPreference};
 
 #[test]
 fn downlevel_default_limits_less_than_default_limits() {
@@ -502,7 +502,7 @@ impl Instance {
             // macro emits no code, so unused code linting changes depending on the backend.
             profiling::scope!("enumerating", &*alloc::format!("{_backend:?}"));
 
-            let hal_adapters = unsafe { instance.enumerate_adapters(None) };
+            let hal_adapters = unsafe { instance.enumerate_adapters(None, None) };
 
             adapters.extend(
                 hal_adapters
@@ -542,6 +542,15 @@ impl Instance {
         desc: &wgt::RequestAdapterOptions<&Surface>,
         backends: Backends,
     ) -> Result<Arc<Adapter>, wgt::RequestAdapterError> {
+        unsafe { self.request_adapter_ext(desc, backends, None) }
+    }
+
+    pub unsafe fn request_adapter_ext(
+        self: &Arc<Self>,
+        desc: &wgt::RequestAdapterOptions<&Surface>,
+        backends: Backends,
+        backend_options: Option<&BackendAdapterOptionsMap>,
+    ) -> Result<Arc<Adapter>, wgt::RequestAdapterError> {
         profiling::scope!("Instance::request_adapter");
         api_log!("Instance::request_adapter");
 
@@ -559,8 +568,12 @@ impl Instance {
                 .compatible_surface
                 .and_then(|surface| surface.raw(backend));
 
-            let mut backend_adapters =
-                unsafe { instance.enumerate_adapters(compatible_hal_surface) };
+            let mut backend_adapters = unsafe {
+                instance.enumerate_adapters(
+                    compatible_hal_surface,
+                    backend_options,
+                )
+            };
             if backend_adapters.is_empty() {
                 log::debug!("enabled backend `{backend:?}` has no adapters");
                 no_adapter_backends |= Backends::from(backend);

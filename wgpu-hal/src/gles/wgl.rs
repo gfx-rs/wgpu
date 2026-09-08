@@ -447,8 +447,17 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
     Ok(InstanceDevice { dc, _tx: drop_tx })
 }
 
+crate::adapter_options! {
+    /// Options for enumerating GL adapters.
+    #[backend(wgt::Backend::Gl)]
+    #[derive(Clone, Debug)]
+    pub struct GlAdapterOptions;
+}
+
 impl crate::Instance for Instance {
     type A = super::Api;
+
+    type AdapterOptions = GlAdapterOptions;
 
     unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init OpenGL (WGL) Backend");
@@ -590,6 +599,7 @@ impl crate::Instance for Instance {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&Surface>,
+        _options: Option<&Self::AdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<super::Api>> {
         unsafe {
             super::Adapter::expose(

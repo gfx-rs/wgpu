@@ -69,6 +69,16 @@ impl<S> Default for RequestAdapterOptions<S> {
     }
 }
 
+/// Marker trait specializing [`BackendMap`] for [`BackendAdapterOptionsMap`].
+pub trait BackendAdapterOptions: core::any::Any { }
+
+/// A [`BackendMap`] containing backend-defined options for requesting an adapter or
+/// enumerating adapters.
+pub type BackendAdapterOptionsMap = crate::BackendMap<dyn BackendAdapterOptions>;
+
+/// Backend-defined options for requesting (opening) a device.
+pub trait BackendDeviceOptions: core::any::Any {}
+
 /// Power Preference when choosing a physical adapter.
 ///
 /// Corresponds to [WebGPU `GPUPowerPreference`](

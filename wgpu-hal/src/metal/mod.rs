@@ -135,6 +135,20 @@ impl OsFeatures {
     }
 }
 
+crate::adapter_options! {
+    /// Options for enumerating Metal adapters.
+    #[backend(wgt::Backend::Metal)]
+    #[derive(Clone, Debug)]
+    pub struct MetalAdapterOptions;
+}
+
+crate::device_options! {
+    /// Options for opening Metal devices.
+    #[backend(wgt::Backend::Metal)]
+    #[derive(Clone, Debug)]
+    pub struct MetalDeviceOptions;
+}
+
 #[derive(Debug)]
 pub struct Instance {
     flags: wgt::InstanceFlags,
@@ -148,6 +162,8 @@ impl Instance {
 
 impl crate::Instance for Instance {
     type A = Api;
+
+    type AdapterOptions = MetalAdapterOptions;
 
     unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init Metal Backend");
@@ -189,6 +205,7 @@ impl crate::Instance for Instance {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&Surface>,
+        _options: Option<&Self::AdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<Api>> {
         let devices = objc2_metal::MTLCopyAllDevices();
         let instance_flags = self.flags;
