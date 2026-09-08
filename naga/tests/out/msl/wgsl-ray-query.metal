@@ -3,6 +3,47 @@
 #include <simd/simd.h>
 
 using metal::uint;
+struct NagaRayQuery {
+    thread metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data>& query;
+    bool initialized = false;
+    bool candidate = false;
+    bool finished = false;
+    float tmin = 0.0;
+    float tmax = 0.0;
+
+    bool next() thread {
+        if (!initialized || finished) return false;
+        candidate = query.next();
+        finished = !candidate;
+        return candidate;
+    }
+
+    void abort() thread {
+        if (candidate) {
+            query.abort();
+            candidate = false;
+            finished = true;
+        }
+    }
+
+    void commit_triangle_intersection() thread {
+        if (candidate && query.get_candidate_intersection_type() == metal::raytracing::intersection_type::triangle) {
+            query.commit_triangle_intersection();
+        }
+    }
+
+    void commit_bounding_box_intersection(float distance) thread {
+        if (candidate && query.get_candidate_intersection_type() == metal::raytracing::intersection_type::bounding_box) {
+            float closest = tmax;
+            if (query.get_committed_intersection_type() != metal::raytracing::intersection_type::none) {
+                closest = query.get_committed_distance();
+            }
+            if ((as_type<uint>(distance) & 0x7fffffffu) <= 0x7f800000u && distance >= tmin && distance <= closest) {
+                query.commit_bounding_box_intersection(distance);
+            }
+        }
+    }
+};
 
 struct RayIntersection {
     uint kind;
@@ -32,8 +73,10 @@ struct Output {
     metal::float3 normal;
 };
 
-RayIntersection ray_query_get_intersection_true(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector) {
+RayIntersection ray_query_get_intersection_true(thread NagaRayQuery& rq) {
     RayIntersection intersection = RayIntersection {};
+    if (!rq.finished) return intersection;
+    thread auto& intersector = rq.query;
     metal::raytracing::intersection_type ty = intersector.get_committed_intersection_type();
     if (ty == metal::raytracing::intersection_type::triangle) {
         intersection.kind = 1;
@@ -58,36 +101,49 @@ RayIntersection query_loop(
     metal::float3 dir,
     metal::raytracing::instance_acceleration_structure acs
 ) {
-    metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq_1 = {};
+    metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> naga_ray_query_rq_2;
+    NagaRayQuery rq_2 = {naga_ray_query_rq_2};
     RayDesc _e8 = RayDesc {4u, 255u, 0.1, 100.0, pos, dir};
     {
-        RayDesc desc = _e8;
-        metal::raytracing::intersection_params params;
-        params.set_opacity_cull_mode(
-            (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
-                (desc.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none
-            )
-        );
-        params.force_opacity(
-            (desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (
-                (desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none
-            )
-        );
-        params.accept_any_intersection((desc.flags & 4) != 0);
-        metal::raytracing::ray ray = metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);
-        rq_1.reset(ray,acs, desc.cull_mask, params);
+        RayDesc naga_ray_query_desc = _e8;
+        thread NagaRayQuery& naga_ray_query_ref = rq_2;
+        naga_ray_query_ref.initialized = false; naga_ray_query_ref.candidate = false; naga_ray_query_ref.finished = false;
+        bool naga_ray_query_valid_origin = metal::all((as_type<metal::uint3>(naga_ray_query_desc.origin) & 0x7f800000u) != 0x7f800000u);
+        bool naga_ray_query_valid_dir = metal::all((as_type<metal::uint3>(naga_ray_query_desc.dir) & 0x7f800000u) != 0x7f800000u) && metal::any(naga_ray_query_desc.dir != metal::float3(0.0));
+        bool naga_ray_query_valid_range = (as_type<uint>(naga_ray_query_desc.tmin) & 0x7f800000u) != 0x7f800000u && (as_type<uint>(naga_ray_query_desc.tmax) & 0x7fffffffu) <= 0x7f800000u && naga_ray_query_desc.tmin >= 0.0 && naga_ray_query_desc.tmax >= naga_ray_query_desc.tmin;
+        bool naga_ray_query_valid_flags = metal::popcount(naga_ray_query_desc.flags & 195u) <= 1 && metal::popcount(naga_ray_query_desc.flags & 304u) <= 1 && metal::popcount(naga_ray_query_desc.flags & 768u) <= 1;
+        if (naga_ray_query_valid_origin && naga_ray_query_valid_dir && naga_ray_query_valid_range && naga_ray_query_valid_flags) {
+            metal::raytracing::intersection_params naga_ray_query_params;
+            naga_ray_query_params.set_opacity_cull_mode(
+                (naga_ray_query_desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
+                    (naga_ray_query_desc.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none
+                )
+            );
+            naga_ray_query_params.force_opacity(
+                (naga_ray_query_desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (
+                    (naga_ray_query_desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none
+                )
+            );
+            naga_ray_query_params.accept_any_intersection((naga_ray_query_desc.flags & 4) != 0);
+            naga_ray_query_params.set_triangle_front_facing_winding(metal::winding::clockwise);
+            naga_ray_query_params.set_triangle_cull_mode((naga_ray_query_desc.flags & 16u) != 0 ? metal::raytracing::triangle_cull_mode::back : ((naga_ray_query_desc.flags & 32u) != 0 ? metal::raytracing::triangle_cull_mode::front : metal::raytracing::triangle_cull_mode::none));
+            naga_ray_query_params.set_geometry_cull_mode((naga_ray_query_desc.flags & 256u) != 0 ? metal::raytracing::geometry_cull_mode::triangle : ((naga_ray_query_desc.flags & 512u) != 0 ? metal::raytracing::geometry_cull_mode::bounding_box : metal::raytracing::geometry_cull_mode::none));
+            metal::raytracing::ray naga_ray_query_ray = metal::raytracing::ray(naga_ray_query_desc.origin, naga_ray_query_desc.dir, naga_ray_query_desc.tmin, naga_ray_query_desc.tmax);
+            naga_ray_query_ref.query.reset(naga_ray_query_ray,acs, naga_ray_query_desc.cull_mask, naga_ray_query_params);
+            naga_ray_query_ref.initialized = true; naga_ray_query_ref.tmin = naga_ray_query_desc.tmin; naga_ray_query_ref.tmax = naga_ray_query_desc.tmax;
+        }
     }
     uint2 loop_bound = uint2(4294967295u);
     while(true) {
         if (metal::all(loop_bound == uint2(0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
-        bool _e9 = rq_1.next();
+        bool _e9 = rq_2.next();
         if (_e9) {
         } else {
             break;
         }
     }
-    return ray_query_get_intersection_true(rq_1);
+    return ray_query_get_intersection_true(rq_2);
 }
 
 metal::float3 get_torus_normal(
@@ -113,8 +169,10 @@ metal::float3 get_torus_normal(
     return;
 }
 
-RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> intersector) {
+RayIntersection ray_query_get_intersection_false(thread NagaRayQuery& rq) {
     RayIntersection intersection = RayIntersection {};
+    if (!rq.candidate) return intersection;
+    thread auto& intersector = rq.query;
     metal::raytracing::intersection_type ty = intersector.get_candidate_intersection_type();
     if (ty == metal::raytracing::intersection_type::triangle) {
         intersection.kind = 1;
@@ -138,26 +196,39 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
 [[max_total_threads_per_threadgroup(1)]] kernel void main_candidate(
   metal::raytracing::instance_acceleration_structure acc_struct [[user(fake0)]]
 ) {
-    metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> rq = {};
+    metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> naga_ray_query_rq;
+    NagaRayQuery rq = {naga_ray_query_rq};
     metal::float3 pos_2 = metal::float3(0.0);
     metal::float3 dir_2 = metal::float3(0.0, 1.0, 0.0);
     RayDesc _e12 = RayDesc {4u, 255u, 0.1, 100.0, pos_2, dir_2};
     {
-        RayDesc desc = _e12;
-        metal::raytracing::intersection_params params;
-        params.set_opacity_cull_mode(
-            (desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
-                (desc.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none
-            )
-        );
-        params.force_opacity(
-            (desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (
-                (desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none
-            )
-        );
-        params.accept_any_intersection((desc.flags & 4) != 0);
-        metal::raytracing::ray ray = metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax);
-        rq.reset(ray,acc_struct, desc.cull_mask, params);
+        RayDesc naga_ray_query_desc = _e12;
+        thread NagaRayQuery& naga_ray_query_ref = rq;
+        naga_ray_query_ref.initialized = false; naga_ray_query_ref.candidate = false; naga_ray_query_ref.finished = false;
+        bool naga_ray_query_valid_origin = metal::all((as_type<metal::uint3>(naga_ray_query_desc.origin) & 0x7f800000u) != 0x7f800000u);
+        bool naga_ray_query_valid_dir = metal::all((as_type<metal::uint3>(naga_ray_query_desc.dir) & 0x7f800000u) != 0x7f800000u) && metal::any(naga_ray_query_desc.dir != metal::float3(0.0));
+        bool naga_ray_query_valid_range = (as_type<uint>(naga_ray_query_desc.tmin) & 0x7f800000u) != 0x7f800000u && (as_type<uint>(naga_ray_query_desc.tmax) & 0x7fffffffu) <= 0x7f800000u && naga_ray_query_desc.tmin >= 0.0 && naga_ray_query_desc.tmax >= naga_ray_query_desc.tmin;
+        bool naga_ray_query_valid_flags = metal::popcount(naga_ray_query_desc.flags & 195u) <= 1 && metal::popcount(naga_ray_query_desc.flags & 304u) <= 1 && metal::popcount(naga_ray_query_desc.flags & 768u) <= 1;
+        if (naga_ray_query_valid_origin && naga_ray_query_valid_dir && naga_ray_query_valid_range && naga_ray_query_valid_flags) {
+            metal::raytracing::intersection_params naga_ray_query_params;
+            naga_ray_query_params.set_opacity_cull_mode(
+                (naga_ray_query_desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
+                    (naga_ray_query_desc.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none
+                )
+            );
+            naga_ray_query_params.force_opacity(
+                (naga_ray_query_desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (
+                    (naga_ray_query_desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none
+                )
+            );
+            naga_ray_query_params.accept_any_intersection((naga_ray_query_desc.flags & 4) != 0);
+            naga_ray_query_params.set_triangle_front_facing_winding(metal::winding::clockwise);
+            naga_ray_query_params.set_triangle_cull_mode((naga_ray_query_desc.flags & 16u) != 0 ? metal::raytracing::triangle_cull_mode::back : ((naga_ray_query_desc.flags & 32u) != 0 ? metal::raytracing::triangle_cull_mode::front : metal::raytracing::triangle_cull_mode::none));
+            naga_ray_query_params.set_geometry_cull_mode((naga_ray_query_desc.flags & 256u) != 0 ? metal::raytracing::geometry_cull_mode::triangle : ((naga_ray_query_desc.flags & 512u) != 0 ? metal::raytracing::geometry_cull_mode::bounding_box : metal::raytracing::geometry_cull_mode::none));
+            metal::raytracing::ray naga_ray_query_ray = metal::raytracing::ray(naga_ray_query_desc.origin, naga_ray_query_desc.dir, naga_ray_query_desc.tmin, naga_ray_query_desc.tmax);
+            naga_ray_query_ref.query.reset(naga_ray_query_ray,acc_struct, naga_ray_query_desc.cull_mask, naga_ray_query_params);
+            naga_ray_query_ref.initialized = true; naga_ray_query_ref.tmin = naga_ray_query_desc.tmin; naga_ray_query_ref.tmax = naga_ray_query_desc.tmax;
+        }
     }
     RayIntersection intersection_1 = ray_query_get_intersection_false(rq);
     if (intersection_1.kind == 3u) {
@@ -172,4 +243,103 @@ RayIntersection ray_query_get_intersection_false(metal::raytracing::intersection
             return;
         }
     }
+}
+
+
+[[max_total_threads_per_threadgroup(1)]] kernel void runtime_flags_and_reinitialize(
+  metal::raytracing::instance_acceleration_structure acc_struct [[user(fake0)]]
+, device Output& output [[user(fake0)]]
+) {
+    metal::raytracing::intersection_query<metal::raytracing::instancing, metal::raytracing::triangle_data> naga_ray_query_rq_1;
+    NagaRayQuery rq_1 = {naga_ray_query_rq_1};
+    bool _e1 = rq_1.next();
+    rq_1.commit_triangle_intersection();
+    rq_1.commit_bounding_box_intersection(1.0);
+    rq_1.abort();
+    output.visible = ray_query_get_intersection_false(rq_1).kind;
+    uint _e10 = output.visible;
+    RayDesc _e20 = RayDesc {_e10, 255u, 0.0, 100.0, metal::float3(0.0), metal::float3(0.0, 0.0, 1.0)};
+    {
+        RayDesc naga_ray_query_desc = _e20;
+        thread NagaRayQuery& naga_ray_query_ref = rq_1;
+        naga_ray_query_ref.initialized = false; naga_ray_query_ref.candidate = false; naga_ray_query_ref.finished = false;
+        bool naga_ray_query_valid_origin = metal::all((as_type<metal::uint3>(naga_ray_query_desc.origin) & 0x7f800000u) != 0x7f800000u);
+        bool naga_ray_query_valid_dir = metal::all((as_type<metal::uint3>(naga_ray_query_desc.dir) & 0x7f800000u) != 0x7f800000u) && metal::any(naga_ray_query_desc.dir != metal::float3(0.0));
+        bool naga_ray_query_valid_range = (as_type<uint>(naga_ray_query_desc.tmin) & 0x7f800000u) != 0x7f800000u && (as_type<uint>(naga_ray_query_desc.tmax) & 0x7fffffffu) <= 0x7f800000u && naga_ray_query_desc.tmin >= 0.0 && naga_ray_query_desc.tmax >= naga_ray_query_desc.tmin;
+        bool naga_ray_query_valid_flags = metal::popcount(naga_ray_query_desc.flags & 195u) <= 1 && metal::popcount(naga_ray_query_desc.flags & 304u) <= 1 && metal::popcount(naga_ray_query_desc.flags & 768u) <= 1;
+        if (naga_ray_query_valid_origin && naga_ray_query_valid_dir && naga_ray_query_valid_range && naga_ray_query_valid_flags) {
+            metal::raytracing::intersection_params naga_ray_query_params;
+            naga_ray_query_params.set_opacity_cull_mode(
+                (naga_ray_query_desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
+                    (naga_ray_query_desc.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none
+                )
+            );
+            naga_ray_query_params.force_opacity(
+                (naga_ray_query_desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (
+                    (naga_ray_query_desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none
+                )
+            );
+            naga_ray_query_params.accept_any_intersection((naga_ray_query_desc.flags & 4) != 0);
+            naga_ray_query_params.set_triangle_front_facing_winding(metal::winding::clockwise);
+            naga_ray_query_params.set_triangle_cull_mode((naga_ray_query_desc.flags & 16u) != 0 ? metal::raytracing::triangle_cull_mode::back : ((naga_ray_query_desc.flags & 32u) != 0 ? metal::raytracing::triangle_cull_mode::front : metal::raytracing::triangle_cull_mode::none));
+            naga_ray_query_params.set_geometry_cull_mode((naga_ray_query_desc.flags & 256u) != 0 ? metal::raytracing::geometry_cull_mode::triangle : ((naga_ray_query_desc.flags & 512u) != 0 ? metal::raytracing::geometry_cull_mode::bounding_box : metal::raytracing::geometry_cull_mode::none));
+            metal::raytracing::ray naga_ray_query_ray = metal::raytracing::ray(naga_ray_query_desc.origin, naga_ray_query_desc.dir, naga_ray_query_desc.tmin, naga_ray_query_desc.tmax);
+            naga_ray_query_ref.query.reset(naga_ray_query_ray,acc_struct, naga_ray_query_desc.cull_mask, naga_ray_query_params);
+            naga_ray_query_ref.initialized = true; naga_ray_query_ref.tmin = naga_ray_query_desc.tmin; naga_ray_query_ref.tmax = naga_ray_query_desc.tmax;
+        }
+    }
+    uint2 loop_bound_1 = uint2(4294967295u);
+    while(true) {
+        if (metal::all(loop_bound_1 == uint2(0u))) { break; }
+        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
+        bool _e21 = rq_1.next();
+        if (_e21) {
+        } else {
+            break;
+        }
+        {
+            RayIntersection hit = ray_query_get_intersection_false(rq_1);
+            if (hit.kind == 1u) {
+                rq_1.commit_triangle_intersection();
+            } else {
+                rq_1.commit_bounding_box_intersection(10.0);
+            }
+        }
+    }
+    output.visible = ray_query_get_intersection_true(rq_1).kind;
+    bool _e31 = rq_1.next();
+    RayDesc _e43 = RayDesc {0u, 255u, 1.0, 0.0, metal::float3(0.0), metal::float3(0.0, 0.0, 1.0)};
+    {
+        RayDesc naga_ray_query_desc = _e43;
+        thread NagaRayQuery& naga_ray_query_ref = rq_1;
+        naga_ray_query_ref.initialized = false; naga_ray_query_ref.candidate = false; naga_ray_query_ref.finished = false;
+        bool naga_ray_query_valid_origin = metal::all((as_type<metal::uint3>(naga_ray_query_desc.origin) & 0x7f800000u) != 0x7f800000u);
+        bool naga_ray_query_valid_dir = metal::all((as_type<metal::uint3>(naga_ray_query_desc.dir) & 0x7f800000u) != 0x7f800000u) && metal::any(naga_ray_query_desc.dir != metal::float3(0.0));
+        bool naga_ray_query_valid_range = (as_type<uint>(naga_ray_query_desc.tmin) & 0x7f800000u) != 0x7f800000u && (as_type<uint>(naga_ray_query_desc.tmax) & 0x7fffffffu) <= 0x7f800000u && naga_ray_query_desc.tmin >= 0.0 && naga_ray_query_desc.tmax >= naga_ray_query_desc.tmin;
+        bool naga_ray_query_valid_flags = metal::popcount(naga_ray_query_desc.flags & 195u) <= 1 && metal::popcount(naga_ray_query_desc.flags & 304u) <= 1 && metal::popcount(naga_ray_query_desc.flags & 768u) <= 1;
+        if (naga_ray_query_valid_origin && naga_ray_query_valid_dir && naga_ray_query_valid_range && naga_ray_query_valid_flags) {
+            metal::raytracing::intersection_params naga_ray_query_params;
+            naga_ray_query_params.set_opacity_cull_mode(
+                (naga_ray_query_desc.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (
+                    (naga_ray_query_desc.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none
+                )
+            );
+            naga_ray_query_params.force_opacity(
+                (naga_ray_query_desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (
+                    (naga_ray_query_desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none
+                )
+            );
+            naga_ray_query_params.accept_any_intersection((naga_ray_query_desc.flags & 4) != 0);
+            naga_ray_query_params.set_triangle_front_facing_winding(metal::winding::clockwise);
+            naga_ray_query_params.set_triangle_cull_mode((naga_ray_query_desc.flags & 16u) != 0 ? metal::raytracing::triangle_cull_mode::back : ((naga_ray_query_desc.flags & 32u) != 0 ? metal::raytracing::triangle_cull_mode::front : metal::raytracing::triangle_cull_mode::none));
+            naga_ray_query_params.set_geometry_cull_mode((naga_ray_query_desc.flags & 256u) != 0 ? metal::raytracing::geometry_cull_mode::triangle : ((naga_ray_query_desc.flags & 512u) != 0 ? metal::raytracing::geometry_cull_mode::bounding_box : metal::raytracing::geometry_cull_mode::none));
+            metal::raytracing::ray naga_ray_query_ray = metal::raytracing::ray(naga_ray_query_desc.origin, naga_ray_query_desc.dir, naga_ray_query_desc.tmin, naga_ray_query_desc.tmax);
+            naga_ray_query_ref.query.reset(naga_ray_query_ray,acc_struct, naga_ray_query_desc.cull_mask, naga_ray_query_params);
+            naga_ray_query_ref.initialized = true; naga_ray_query_ref.tmin = naga_ray_query_desc.tmin; naga_ray_query_ref.tmax = naga_ray_query_desc.tmax;
+        }
+    }
+    bool _e44 = rq_1.next();
+    uint _e47 = output.visible;
+    output.visible = _e47 + ray_query_get_intersection_true(rq_1).kind;
+    return;
 }

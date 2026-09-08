@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 396
+; Bound: 457
 OpCapability Shader
 OpCapability RayQueryKHR
 OpExtension "SPV_KHR_ray_query"
@@ -9,8 +9,10 @@ OpExtension "SPV_KHR_ray_query"
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %242 "main" %15 %17
 OpEntryPoint GLCompute %262 "main_candidate" %15
+OpEntryPoint GLCompute %397 "runtime_flags_and_reinitialize" %15 %17
 OpExecutionMode %242 LocalSize 1 1 1
 OpExecutionMode %262 LocalSize 1 1 1
+OpExecutionMode %397 LocalSize 1 1 1
 OpMemberDecorate %10 0 Offset 0
 OpMemberDecorate %10 1 Offset 4
 OpMemberDecorate %10 2 Offset 8
@@ -112,6 +114,8 @@ OpMemberDecorate %18 0 Offset 0
 %265 = OpConstant  %3  10
 %322 = OpTypeFunction %2 %32 %33 %3 %36
 %363 = OpTypeFunction %2 %32 %33
+%400 = OpConstantComposite  %4  %38 %38 %227
+%401 = OpConstantComposite  %12  %35 %28 %227 %38 %247 %400
 %42 = OpFunction  %2  None %41
 %43 = OpFunctionParameter  %32
 %44 = OpFunctionParameter  %5
@@ -558,5 +562,88 @@ OpReturn
 %360 = OpLabel
 OpBranch %319
 %319 = OpLabel
+OpReturn
+OpFunctionEnd
+%397 = OpFunction  %2  None %243
+%396 = OpLabel
+%402 = OpVariable  %32  Function
+%403 = OpVariable  %33  Function %35
+%404 = OpVariable  %36  Function %38
+%421 = OpVariable  %129  Function %133
+%398 = OpLoad  %5  %15
+%399 = OpAccessChain  %245  %17 %35
+OpBranch %405
+%405 = OpLabel
+%406 = OpFunctionCall  %8  %148 %402 %403
+%407 = OpFunctionCall  %2  %364 %402 %403
+%408 = OpFunctionCall  %2  %323 %402 %403 %227 %404
+%409 = OpFunctionCall  %2  %383 %402 %403
+%410 = OpFunctionCall  %10  %271 %402 %403
+%411 = OpCompositeExtract  %6  %410 0
+%412 = OpAccessChain  %251  %399 %35
+OpStore %412 %411
+%413 = OpAccessChain  %251  %399 %35
+%414 = OpLoad  %6  %413
+%415 = OpCompositeConstruct  %12  %414 %28 %38 %30 %247 %400
+%416 = OpFunctionCall  %2  %42 %402 %398 %415 %403 %404
+OpBranch %417
+%417 = OpLabel
+OpLoopMerge %418 %420 None
+OpBranch %422
+%422 = OpLabel
+%423 = OpLoad  %128  %421
+%424 = OpIEqual  %130  %131 %423
+%425 = OpAll  %8  %424
+OpSelectionMerge %426 None
+OpBranchConditional %425 %418 %426
+%426 = OpLabel
+%427 = OpCompositeExtract  %6  %423 1
+%428 = OpIEqual  %8  %427 %35
+%429 = OpSelect  %6  %428 %90 %35
+%430 = OpCompositeConstruct  %128  %429 %90
+%431 = OpISub  %128  %423 %430
+OpStore %421 %431
+OpBranch %419
+%419 = OpLabel
+%432 = OpFunctionCall  %8  %148 %402 %403
+OpSelectionMerge %433 None
+OpBranchConditional %432 %433 %434
+%434 = OpLabel
+OpBranch %418
+%433 = OpLabel
+OpBranch %435
+%435 = OpLabel
+%437 = OpFunctionCall  %10  %271 %402 %403
+%438 = OpCompositeExtract  %6  %437 0
+%439 = OpIEqual  %8  %438 %90
+OpSelectionMerge %440 None
+OpBranchConditional %439 %441 %442
+%441 = OpLabel
+%443 = OpFunctionCall  %2  %364 %402 %403
+OpBranch %440
+%442 = OpLabel
+%444 = OpFunctionCall  %2  %323 %402 %403 %265 %404
+OpBranch %440
+%440 = OpLabel
+OpBranch %436
+%436 = OpLabel
+OpBranch %420
+%420 = OpLabel
+OpBranch %417
+%418 = OpLabel
+%445 = OpFunctionCall  %10  %172 %402 %403
+%446 = OpCompositeExtract  %6  %445 0
+%447 = OpAccessChain  %251  %399 %35
+OpStore %447 %446
+%448 = OpFunctionCall  %8  %148 %402 %403
+%449 = OpFunctionCall  %2  %42 %402 %398 %401 %403 %404
+%450 = OpFunctionCall  %8  %148 %402 %403
+%451 = OpAccessChain  %251  %399 %35
+%452 = OpLoad  %6  %451
+%453 = OpFunctionCall  %10  %172 %402 %403
+%454 = OpCompositeExtract  %6  %453 0
+%455 = OpIAdd  %6  %452 %454
+%456 = OpAccessChain  %251  %399 %35
+OpStore %456 %455
 OpReturn
 OpFunctionEnd

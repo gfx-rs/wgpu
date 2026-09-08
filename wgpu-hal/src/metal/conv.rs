@@ -6,7 +6,7 @@ use objc2_metal::{
     MTLAccelerationStructureTriangleGeometryDescriptor, MTLAccelerationStructureUsage,
     MTLAttributeFormat, MTLBlendFactor, MTLBlendOperation, MTLBlitOption, MTLClearColor,
     MTLColorWriteMask, MTLCompareFunction, MTLCullMode, MTLIndexType,
-    MTLInstanceAccelerationStructureDescriptor, MTLOrigin,
+    MTLInstanceAccelerationStructureDescriptor, MTLMatrixLayout, MTLOrigin,
     MTLPrimitiveAccelerationStructureDescriptor, MTLPrimitiveTopologyClass, MTLPrimitiveType,
     MTLRenderStages, MTLResourceUsage, MTLSamplerAddressMode, MTLSamplerBorderColor,
     MTLSamplerMinMagFilter, MTLSize, MTLStencilOperation, MTLStoreAction, MTLTextureType,
@@ -417,6 +417,7 @@ pub fn map_acceleration_structure_descriptor<'a>(
                         )
                     });
                     if let Some(transform) = triangles.transform.as_ref() {
+                        descriptor.setTransformationMatrixLayout(MTLMatrixLayout::RowMajor);
                         unsafe {
                             descriptor.setTransformationMatrixBuffer(Some(&transform.buffer.raw));
                             descriptor
@@ -428,11 +429,10 @@ pub fn map_acceleration_structure_descriptor<'a>(
                             .flags
                             .contains(wgt::AccelerationStructureGeometryFlags::OPAQUE),
                     );
-                    if !triangles.flags.contains(
+                    let allow_duplicates = !triangles.flags.contains(
                         wgt::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION,
-                    ) {
-                        descriptor.allowDuplicateIntersectionFunctionInvocation();
-                    }
+                    );
+                    descriptor.setAllowDuplicateIntersectionFunctionInvocation(allow_duplicates);
                     // descriptor.setIntersectionFunctionTableOffset(offset);
                     descriptor.into_super()
                 })
@@ -459,11 +459,10 @@ pub fn map_acceleration_structure_descriptor<'a>(
                             .flags
                             .contains(wgt::AccelerationStructureGeometryFlags::OPAQUE),
                     );
-                    if !aabbs.flags.contains(
+                    let allow_duplicates = !aabbs.flags.contains(
                         wgt::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION,
-                    ) {
-                        descriptor.allowDuplicateIntersectionFunctionInvocation();
-                    }
+                    );
+                    descriptor.setAllowDuplicateIntersectionFunctionInvocation(allow_duplicates);
                     // descriptor.setIntersectionFunctionTableOffset(offset);
                     descriptor.into_super()
                 })

@@ -12,6 +12,10 @@
             entry_point:"main_candidate",
             target_profile:"cs_6_5",
         ),
+        (
+            entry_point:"runtime_flags_and_reinitialize",
+            target_profile:"cs_6_5",
+        ),
     ],
     task:[
     ],

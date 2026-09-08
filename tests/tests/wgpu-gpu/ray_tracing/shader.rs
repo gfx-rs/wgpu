@@ -1,12 +1,12 @@
 use crate::ray_tracing::{acceleration_structure_limits, AsBuildContext};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    include_wgsl, Backends, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor,
+    include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, InstanceFlags,
 };
 use wgpu::{AccelerationStructureFlags, BufferUsages};
 use wgpu_macros::gpu_test;
-use wgpu_test::{FailureCase, GpuTestInitializer};
+use wgpu_test::GpuTestInitializer;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
 
 const STRUCT_SIZE: wgpu::BufferAddress = 176;
@@ -103,7 +103,13 @@ fn access_all_struct_members(ctx: TestingContext) {
         pass.dispatch_workgroups(1, 1, 1)
     }
 
-    ctx.queue.submit([encoder_compute.finish()]);
+    let submission = ctx.queue.submit([encoder_compute.finish()]);
+    ctx.device
+        .poll(wgpu::PollType::Wait {
+            submission_index: Some(submission),
+            timeout: Some(std::time::Duration::from_secs(30)),
+        })
+        .unwrap();
 }
 
 #[gpu_test]
@@ -114,9 +120,7 @@ static PREVENT_INVALID_RAY_QUERY_CALLS: GpuTestConfiguration = GpuTestConfigurat
             .limits(acceleration_structure_limits())
             .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
             // Otherwise, mistakes in the generated code won't be caught.
-            .instance_flags(InstanceFlags::GPU_BASED_VALIDATION)
-            // not yet implemented in metal
-            .skip(FailureCase::backend(Backends::METAL)),
+            .instance_flags(InstanceFlags::GPU_BASED_VALIDATION),
     )
     .run_sync(prevent_invalid_ray_query_calls);
 
@@ -197,5 +201,11 @@ fn prevent_invalid_ray_query_calls(ctx: TestingContext) {
         pass.dispatch_workgroups(1, 1, 1)
     }
 
-    ctx.queue.submit([encoder_compute.finish()]);
+    let submission = ctx.queue.submit([encoder_compute.finish()]);
+    ctx.device
+        .poll(wgpu::PollType::Wait {
+            submission_index: Some(submission),
+            timeout: Some(std::time::Duration::from_secs(30)),
+        })
+        .unwrap();
 }

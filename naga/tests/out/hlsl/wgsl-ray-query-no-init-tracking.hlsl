@@ -81,19 +81,19 @@ RayIntersection GetCommittedIntersection(RayQuery<RAY_FLAG_NONE> rq, uint rq_tra
 
 RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructure acs)
 {
-    RayQuery<RAY_FLAG_NONE> rq_1;
-    uint naga_query_init_tracker_for_rq_1 = 0;
+    RayQuery<RAY_FLAG_NONE> rq_2;
+    uint naga_query_init_tracker_for_rq_2 = 0;
 
     {
         RayDesc_ naga_desc = ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir);
-        rq_1.TraceRayInline(acs, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
+        rq_2.TraceRayInline(acs, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
     }
     uint2 loop_bound = uint2(4294967295u, 4294967295u);
     while(true) {
         if (all(loop_bound == uint2(0u, 0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         bool _e9 = false;
-        _e9 = rq_1.Proceed();
+        _e9 = rq_2.Proceed();
         if (_e9) {
         } else {
             break;
@@ -101,7 +101,7 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
         {
         }
     }
-    const RayIntersection rayintersection = GetCommittedIntersection(rq_1, naga_query_init_tracker_for_rq_1);
+    const RayIntersection rayintersection = GetCommittedIntersection(rq_2, naga_query_init_tracker_for_rq_2);
     return rayintersection;
 }
 
@@ -171,4 +171,54 @@ void main_candidate()
             return;
         }
     }
+}
+
+[numthreads(1, 1, 1)]
+void runtime_flags_and_reinitialize()
+{
+    RayQuery<RAY_FLAG_NONE> rq_1;
+    uint naga_query_init_tracker_for_rq_1 = 0;
+
+    bool _e1 = false;
+    _e1 = rq_1.Proceed();
+    rq_1.CommitNonOpaqueTriangleHit();
+    rq_1.CommitProceduralPrimitiveHit(1.0);
+    rq_1.Abort();
+    output.Store(0, asuint(GetCandidateIntersection(rq_1, naga_query_init_tracker_for_rq_1).kind));
+    uint _e10 = asuint(output.Load(0));
+    {
+        RayDesc_ naga_desc = ConstructRayDesc_(_e10, 255u, 0.0, 100.0, (0.0).xxx, float3(0.0, 0.0, 1.0));
+        rq_1.TraceRayInline(acc_struct, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
+    }
+    uint2 loop_bound_1 = uint2(4294967295u, 4294967295u);
+    while(true) {
+        if (all(loop_bound_1 == uint2(0u, 0u))) { break; }
+        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
+        bool _e21 = false;
+        _e21 = rq_1.Proceed();
+        if (_e21) {
+        } else {
+            break;
+        }
+        {
+            RayIntersection hit = GetCandidateIntersection(rq_1, naga_query_init_tracker_for_rq_1);
+            if ((hit.kind == 1u)) {
+                rq_1.CommitNonOpaqueTriangleHit();
+            } else {
+                rq_1.CommitProceduralPrimitiveHit(10.0);
+            }
+        }
+    }
+    output.Store(0, asuint(GetCommittedIntersection(rq_1, naga_query_init_tracker_for_rq_1).kind));
+    bool _e31 = false;
+    _e31 = rq_1.Proceed();
+    {
+        RayDesc_ naga_desc = ConstructRayDesc_(0u, 255u, 1.0, 0.0, (0.0).xxx, float3(0.0, 0.0, 1.0));
+        rq_1.TraceRayInline(acc_struct, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
+    }
+    bool _e44 = false;
+    _e44 = rq_1.Proceed();
+    uint _e47 = asuint(output.Load(0));
+    output.Store(0, asuint((_e47 + GetCommittedIntersection(rq_1, naga_query_init_tracker_for_rq_1).kind)));
+    return;
 }

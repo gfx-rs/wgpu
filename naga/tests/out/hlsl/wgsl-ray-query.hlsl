@@ -83,8 +83,8 @@ RayIntersection GetCommittedIntersection(RayQuery<RAY_FLAG_NONE> rq, uint rq_tra
 
 RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructure acs)
 {
-    RayQuery<RAY_FLAG_NONE> rq_1;
-    uint naga_query_init_tracker_for_rq_1 = 0;
+    RayQuery<RAY_FLAG_NONE> rq_2;
+    uint naga_query_init_tracker_for_rq_2 = 0;
 
     {
         RayDesc_ naga_desc = ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir);
@@ -109,8 +109,8 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
         bool naga_contains_skip_triangles_cull =  (naga_contains_cull_front && naga_contains_skip_triangles) || (naga_contains_cull_front && naga_contains_cull_back) || (naga_contains_cull_back && naga_contains_skip_triangles) ;
         bool naga_contains_multiple_opaque =  (naga_contains_cull_no_opaque && naga_contains_opaque) || (naga_contains_cull_no_opaque && naga_contains_no_opaque) || (naga_contains_cull_no_opaque && naga_contains_cull_opaque) || (naga_contains_cull_opaque && naga_contains_opaque) || (naga_contains_cull_opaque && naga_contains_no_opaque) || (naga_contains_no_opaque && naga_contains_opaque) ;
         if (naga_tmin_valid && naga_tmax_valid && naga_origin_valid && naga_dir_valid && !(naga_contains_skip_triangles_aabbs || naga_contains_skip_triangles_cull || naga_contains_multiple_opaque)) {
-            naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 1;
-            rq_1.TraceRayInline(acs, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
+            naga_query_init_tracker_for_rq_2 = naga_query_init_tracker_for_rq_2 | 1;
+            rq_2.TraceRayInline(acs, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
         }
     }
     uint2 loop_bound = uint2(4294967295u, 4294967295u);
@@ -119,12 +119,12 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         bool _e9 = false;
         {
-            bool naga_has_initialized = ((naga_query_init_tracker_for_rq_1 & 1) == 1);
-            bool naga_has_finished = ((naga_query_init_tracker_for_rq_1 & 4) == 4);
+            bool naga_has_initialized = ((naga_query_init_tracker_for_rq_2 & 1) == 1);
+            bool naga_has_finished = ((naga_query_init_tracker_for_rq_2 & 4) == 4);
             if (naga_has_initialized && !naga_has_finished) {
-                _e9 = rq_1.Proceed();
-                naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 2;
-                if (!_e9) { naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 4; }
+                _e9 = rq_2.Proceed();
+                naga_query_init_tracker_for_rq_2 = naga_query_init_tracker_for_rq_2 | 2;
+                if (!_e9) { naga_query_init_tracker_for_rq_2 = naga_query_init_tracker_for_rq_2 | 4; }
         }}
         if (_e9) {
         } else {
@@ -133,7 +133,7 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
         {
         }
     }
-    const RayIntersection rayintersection = GetCommittedIntersection(rq_1, naga_query_init_tracker_for_rq_1);
+    const RayIntersection rayintersection = GetCommittedIntersection(rq_2, naga_query_init_tracker_for_rq_2);
     return rayintersection;
 }
 
@@ -240,4 +240,150 @@ void main_candidate()
             return;
         }
     }
+}
+
+[numthreads(1, 1, 1)]
+void runtime_flags_and_reinitialize()
+{
+    RayQuery<RAY_FLAG_NONE> rq_1;
+    uint naga_query_init_tracker_for_rq_1 = 0;
+
+    bool _e1 = false;
+    {
+        bool naga_has_initialized = ((naga_query_init_tracker_for_rq_1 & 1) == 1);
+        bool naga_has_finished = ((naga_query_init_tracker_for_rq_1 & 4) == 4);
+        if (naga_has_initialized && !naga_has_finished) {
+            _e1 = rq_1.Proceed();
+            naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 2;
+            if (!_e1) { naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 4; }
+    }}
+    if (((naga_query_init_tracker_for_rq_1 & 2) == 2) && !((naga_query_init_tracker_for_rq_1 & 4) == 4)) {
+        CANDIDATE_TYPE naga_kind = rq_1.CandidateType();
+        if (naga_kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {
+            rq_1.CommitNonOpaqueTriangleHit();
+    }}
+    if (((naga_query_init_tracker_for_rq_1 & 2) == 2) && !((naga_query_init_tracker_for_rq_1 & 4) == 4)) {
+        CANDIDATE_TYPE naga_kind = rq_1.CandidateType();
+        float naga_tmin = rq_1.RayTMin();
+        float naga_tcurrentmax = rq_1.CommittedRayT();
+        if ((naga_kind == CANDIDATE_PROCEDURAL_PRIMITIVE) && (naga_tmin <=1.0) && (1.0 <= naga_tcurrentmax)) {
+            rq_1.CommitProceduralPrimitiveHit(1.0);
+    }}
+    if (((naga_query_init_tracker_for_rq_1 & 1) == 1)) {
+        rq_1.Abort();
+    }
+    output.Store(0, asuint(GetCandidateIntersection(rq_1, naga_query_init_tracker_for_rq_1).kind));
+    uint _e10 = asuint(output.Load(0));
+    {
+        RayDesc_ naga_desc = ConstructRayDesc_(_e10, 255u, 0.0, 100.0, (0.0).xxx, float3(0.0, 0.0, 1.0));
+        float naga_tmin = naga_desc.tmin;
+        float naga_tmax = naga_desc.tmax;
+        float3 naga_origin = naga_desc.origin;
+        float3 naga_dir = naga_desc.dir;
+        uint naga_flags = naga_desc.flags;
+        bool naga_tmin_valid = (naga_tmin >= 0.0) && (naga_tmin <= naga_tmax) && !(((asuint(naga_tmin) & 2139095040) == 2139095040) && ((asuint(naga_tmin) & 0x7fffff) != 0));
+        bool naga_tmax_valid = !(((asuint(naga_tmax) & 2139095040) == 2139095040) && ((asuint(naga_tmax) & 0x7fffff) != 0));
+        bool naga_origin_valid = !any((((asuint(naga_origin) & 2139095040) == 2139095040) && ((asuint(naga_origin) & 0x7fffff) != 0)));
+        bool naga_dir_valid = !any((((asuint(naga_dir) & 2139095040) == 2139095040) && ((asuint(naga_dir) & 0x7fffff) != 0)));
+        bool naga_contains_opaque = ((naga_flags & 1) == 1);
+        bool naga_contains_no_opaque = ((naga_flags & 2) == 2);
+        bool naga_contains_cull_opaque = ((naga_flags & 64) == 64);
+        bool naga_contains_cull_no_opaque = ((naga_flags & 128) == 128);
+        bool naga_contains_cull_front = ((naga_flags & 32) == 32);
+        bool naga_contains_cull_back = ((naga_flags & 16) == 16);
+        bool naga_contains_skip_triangles = ((naga_flags & 256) == 256);
+        bool naga_contains_skip_aabbs = ((naga_flags & 512) == 512);
+        bool naga_contains_skip_triangles_aabbs =  (naga_contains_skip_aabbs && naga_contains_skip_triangles) ;
+        bool naga_contains_skip_triangles_cull =  (naga_contains_cull_front && naga_contains_skip_triangles) || (naga_contains_cull_front && naga_contains_cull_back) || (naga_contains_cull_back && naga_contains_skip_triangles) ;
+        bool naga_contains_multiple_opaque =  (naga_contains_cull_no_opaque && naga_contains_opaque) || (naga_contains_cull_no_opaque && naga_contains_no_opaque) || (naga_contains_cull_no_opaque && naga_contains_cull_opaque) || (naga_contains_cull_opaque && naga_contains_opaque) || (naga_contains_cull_opaque && naga_contains_no_opaque) || (naga_contains_no_opaque && naga_contains_opaque) ;
+        if (naga_tmin_valid && naga_tmax_valid && naga_origin_valid && naga_dir_valid && !(naga_contains_skip_triangles_aabbs || naga_contains_skip_triangles_cull || naga_contains_multiple_opaque)) {
+            naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 1;
+            rq_1.TraceRayInline(acc_struct, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
+        }
+    }
+    uint2 loop_bound_1 = uint2(4294967295u, 4294967295u);
+    while(true) {
+        if (all(loop_bound_1 == uint2(0u, 0u))) { break; }
+        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
+        bool _e21 = false;
+        {
+            bool naga_has_initialized = ((naga_query_init_tracker_for_rq_1 & 1) == 1);
+            bool naga_has_finished = ((naga_query_init_tracker_for_rq_1 & 4) == 4);
+            if (naga_has_initialized && !naga_has_finished) {
+                _e21 = rq_1.Proceed();
+                naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 2;
+                if (!_e21) { naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 4; }
+        }}
+        if (_e21) {
+        } else {
+            break;
+        }
+        {
+            RayIntersection hit = GetCandidateIntersection(rq_1, naga_query_init_tracker_for_rq_1);
+            if ((hit.kind == 1u)) {
+                if (((naga_query_init_tracker_for_rq_1 & 2) == 2) && !((naga_query_init_tracker_for_rq_1 & 4) == 4)) {
+                    CANDIDATE_TYPE naga_kind = rq_1.CandidateType();
+                    if (naga_kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {
+                        rq_1.CommitNonOpaqueTriangleHit();
+                }}
+            } else {
+                if (((naga_query_init_tracker_for_rq_1 & 2) == 2) && !((naga_query_init_tracker_for_rq_1 & 4) == 4)) {
+                    CANDIDATE_TYPE naga_kind = rq_1.CandidateType();
+                    float naga_tmin = rq_1.RayTMin();
+                    float naga_tcurrentmax = rq_1.CommittedRayT();
+                    if ((naga_kind == CANDIDATE_PROCEDURAL_PRIMITIVE) && (naga_tmin <=10.0) && (10.0 <= naga_tcurrentmax)) {
+                        rq_1.CommitProceduralPrimitiveHit(10.0);
+                }}
+            }
+        }
+    }
+    output.Store(0, asuint(GetCommittedIntersection(rq_1, naga_query_init_tracker_for_rq_1).kind));
+    bool _e31 = false;
+    {
+        bool naga_has_initialized = ((naga_query_init_tracker_for_rq_1 & 1) == 1);
+        bool naga_has_finished = ((naga_query_init_tracker_for_rq_1 & 4) == 4);
+        if (naga_has_initialized && !naga_has_finished) {
+            _e31 = rq_1.Proceed();
+            naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 2;
+            if (!_e31) { naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 4; }
+    }}
+    {
+        RayDesc_ naga_desc = ConstructRayDesc_(0u, 255u, 1.0, 0.0, (0.0).xxx, float3(0.0, 0.0, 1.0));
+        float naga_tmin = naga_desc.tmin;
+        float naga_tmax = naga_desc.tmax;
+        float3 naga_origin = naga_desc.origin;
+        float3 naga_dir = naga_desc.dir;
+        uint naga_flags = naga_desc.flags;
+        bool naga_tmin_valid = (naga_tmin >= 0.0) && (naga_tmin <= naga_tmax) && !(((asuint(naga_tmin) & 2139095040) == 2139095040) && ((asuint(naga_tmin) & 0x7fffff) != 0));
+        bool naga_tmax_valid = !(((asuint(naga_tmax) & 2139095040) == 2139095040) && ((asuint(naga_tmax) & 0x7fffff) != 0));
+        bool naga_origin_valid = !any((((asuint(naga_origin) & 2139095040) == 2139095040) && ((asuint(naga_origin) & 0x7fffff) != 0)));
+        bool naga_dir_valid = !any((((asuint(naga_dir) & 2139095040) == 2139095040) && ((asuint(naga_dir) & 0x7fffff) != 0)));
+        bool naga_contains_opaque = ((naga_flags & 1) == 1);
+        bool naga_contains_no_opaque = ((naga_flags & 2) == 2);
+        bool naga_contains_cull_opaque = ((naga_flags & 64) == 64);
+        bool naga_contains_cull_no_opaque = ((naga_flags & 128) == 128);
+        bool naga_contains_cull_front = ((naga_flags & 32) == 32);
+        bool naga_contains_cull_back = ((naga_flags & 16) == 16);
+        bool naga_contains_skip_triangles = ((naga_flags & 256) == 256);
+        bool naga_contains_skip_aabbs = ((naga_flags & 512) == 512);
+        bool naga_contains_skip_triangles_aabbs =  (naga_contains_skip_aabbs && naga_contains_skip_triangles) ;
+        bool naga_contains_skip_triangles_cull =  (naga_contains_cull_front && naga_contains_skip_triangles) || (naga_contains_cull_front && naga_contains_cull_back) || (naga_contains_cull_back && naga_contains_skip_triangles) ;
+        bool naga_contains_multiple_opaque =  (naga_contains_cull_no_opaque && naga_contains_opaque) || (naga_contains_cull_no_opaque && naga_contains_no_opaque) || (naga_contains_cull_no_opaque && naga_contains_cull_opaque) || (naga_contains_cull_opaque && naga_contains_opaque) || (naga_contains_cull_opaque && naga_contains_no_opaque) || (naga_contains_no_opaque && naga_contains_opaque) ;
+        if (naga_tmin_valid && naga_tmax_valid && naga_origin_valid && naga_dir_valid && !(naga_contains_skip_triangles_aabbs || naga_contains_skip_triangles_cull || naga_contains_multiple_opaque)) {
+            naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 1;
+            rq_1.TraceRayInline(acc_struct, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
+        }
+    }
+    bool _e44 = false;
+    {
+        bool naga_has_initialized = ((naga_query_init_tracker_for_rq_1 & 1) == 1);
+        bool naga_has_finished = ((naga_query_init_tracker_for_rq_1 & 4) == 4);
+        if (naga_has_initialized && !naga_has_finished) {
+            _e44 = rq_1.Proceed();
+            naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 2;
+            if (!_e44) { naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 4; }
+    }}
+    uint _e47 = asuint(output.Load(0));
+    output.Store(0, asuint((_e47 + GetCommittedIntersection(rq_1, naga_query_init_tracker_for_rq_1).kind)));
+    return;
 }

@@ -97,3 +97,28 @@ fn main_candidate() {
         rayQueryTerminate(&rq);
     }
 }
+
+@compute @workgroup_size(1)
+fn runtime_flags_and_reinitialize() {
+    var rq: ray_query;
+    let query_ptr = &rq;
+    rayQueryProceed(query_ptr);
+    rayQueryConfirmIntersection(query_ptr);
+    rayQueryGenerateIntersection(query_ptr, 1.0);
+    rayQueryTerminate(query_ptr);
+    output.visible = rayQueryGetCandidateIntersection(query_ptr).kind;
+    rayQueryInitialize(query_ptr, acc_struct, RayDesc(output.visible, 255u, 0.0, 100.0, vec3f(0.0), vec3f(0.0, 0.0, 1.0)));
+    while rayQueryProceed(query_ptr) {
+        let hit = rayQueryGetCandidateIntersection(query_ptr);
+        if hit.kind == RAY_QUERY_INTERSECTION_TRIANGLE {
+            rayQueryConfirmIntersection(query_ptr);
+        } else {
+            rayQueryGenerateIntersection(query_ptr, 10.0);
+        }
+    }
+    output.visible = rayQueryGetCommittedIntersection(query_ptr).kind;
+    rayQueryProceed(query_ptr);
+    rayQueryInitialize(query_ptr, acc_struct, RayDesc(0u, 255u, 1.0, 0.0, vec3f(0.0), vec3f(0.0, 0.0, 1.0)));
+    rayQueryProceed(query_ptr);
+    output.visible += rayQueryGetCommittedIntersection(query_ptr).kind;
+}

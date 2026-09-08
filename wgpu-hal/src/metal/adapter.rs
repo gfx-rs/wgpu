@@ -1123,12 +1123,12 @@ impl super::CapabilitiesQuery {
             supports_cooperative_matrix: family_check
                 && (device.supportsFamily(MTLGPUFamily::Apple7)
                     || device.supportsFamily(MTLGPUFamily::Mac2)),
-            // https://developer.apple.com/documentation/metal/mtlresidencyset
+            // Residency sets and row-major BLAS transformation matrices.
             supports_raytracing: if available!(
                 macos = 15.0,
                 ios = 18.0,
-                tvos = 18.0,
-                visionos = 2.0,
+                tvos = 18.1,
+                visionos = 2.1,
             ) {
                 device_class_responds_to(device, sel!(supportsRaytracing))
                     && device.supportsRaytracing()

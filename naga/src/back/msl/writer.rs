@@ -370,7 +370,7 @@ impl Display for TypeContext<'_> {
                 if vertex_return {
                     unimplemented!("metal does not support vertex ray hit return")
                 }
-                write!(out, "{}", super::ray::metal_intersector_ty())
+                write!(out, "{}", super::ray::QUERY_TYPE)
             }
             crate::TypeInner::BindingArray { base, .. } => {
                 let base_tyname = Self {
@@ -1090,6 +1090,26 @@ impl<W: Write> Writer<W> {
                 (name_key, ty, None)
             }))
         {
+            if matches!(
+                context.module.types[ty].inner,
+                crate::TypeInner::RayQuery { .. }
+            ) {
+                let name = &self.names[&name_key];
+                let raw_name = format!("naga_ray_query_{name}");
+                writeln!(
+                    self.out,
+                    "{}{} {raw_name};",
+                    back::INDENT,
+                    super::ray::metal_intersector_ty()
+                )?;
+                writeln!(
+                    self.out,
+                    "{}{} {name} = {{{raw_name}}};",
+                    back::INDENT,
+                    super::ray::QUERY_TYPE
+                )?;
+                continue;
+            }
             let ty_name = TypeContext {
                 handle: ty,
                 gctx: context.module.to_ctx(),
@@ -4373,6 +4393,8 @@ impl<W: Write> Writer<W> {
             &[
                 CLAMPED_LOD_LOAD_PREFIX,
                 super::ray::INTERSECTION_FUNCTION_NAME,
+                super::ray::QUERY_TYPE,
+                "naga_ray_query_",
             ],
             &mut self.names,
         );
@@ -4398,12 +4420,20 @@ impl<W: Write> Writer<W> {
             .iter()
             .any(|e| e.stage == crate::ShaderStage::Task && e.task_payload.is_some());
 
-        if module.special_types.ray_desc.is_some()
-            || module.special_types.ray_intersection.is_some()
+        let has_ray_queries = module
+            .types
+            .iter()
+            .any(|(_, ty)| matches!(ty.inner, crate::TypeInner::RayQuery { .. }));
+        if (has_ray_queries
+            || module.special_types.ray_desc.is_some()
+            || module.special_types.ray_intersection.is_some())
+            && options.lang_version < (2, 4)
         {
-            if options.lang_version < (2, 4) {
-                return Err(Error::UnsupportedRayTracing);
-            }
+            return Err(Error::UnsupportedRayTracing);
+        }
+
+        if has_ray_queries {
+            self.write_ray_query_type()?;
         }
 
         if options

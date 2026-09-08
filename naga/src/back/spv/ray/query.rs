@@ -1467,7 +1467,7 @@ impl Writer {
         function.to_words(&mut self.logical_layout.function_definitions);
 
         self.ray_query_functions
-            .insert(LookupRayQueryFunction::Proceed, func_id);
+            .insert(LookupRayQueryFunction::Terminate, func_id);
         func_id
     }
 }
@@ -1599,5 +1599,45 @@ impl BlockContext<'_> {
             &[query_id, tracker_id.initialized_tracker],
         ));
         func_call_id
+    }
+}
+
+#[test]
+fn terminate_and_proceed_helpers_have_distinct_cached_types() {
+    for tracking in [false, true] {
+        for terminate_first in [false, true] {
+            let mut writer = Writer::new(&super::super::Options::default()).unwrap();
+            writer.ray_query_initialization_tracking = tracking;
+            let (terminate, proceed) = if terminate_first {
+                let terminate = writer.write_ray_query_terminate();
+                (terminate, writer.write_ray_query_proceed())
+            } else {
+                let proceed = writer.write_ray_query_proceed();
+                (writer.write_ray_query_terminate(), proceed)
+            };
+            assert_ne!(terminate, proceed);
+            let before = writer.logical_layout.function_definitions.len();
+            assert_eq!(writer.write_ray_query_terminate(), terminate);
+            assert_eq!(writer.write_ray_query_proceed(), proceed);
+            assert_eq!(writer.logical_layout.function_definitions.len(), before);
+            let bool_type = writer.get_bool_type_id();
+            let mut words = writer.logical_layout.function_definitions.as_slice();
+            let mut functions = 0;
+            while let Some(&header) = words.first() {
+                let count = (header >> 16) as usize;
+                if header & 0xffff == spirv::Op::Function as u32 {
+                    let expected = if words[2] == terminate {
+                        writer.void_type
+                    } else {
+                        assert_eq!(words[2], proceed);
+                        bool_type
+                    };
+                    assert_eq!(words[1], expected);
+                    functions += 1;
+                }
+                words = &words[count..];
+            }
+            assert_eq!(functions, 2);
+        }
     }
 }

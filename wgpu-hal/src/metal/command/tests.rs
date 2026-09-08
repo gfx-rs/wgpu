@@ -555,6 +555,76 @@ fn query_only_compute_and_render_passes_join_once() {
 }
 
 #[test]
+fn descriptor_transform_layout_and_duplicate_invocations() {
+    use objc2_metal::{
+        MTLAccelerationStructureTriangleGeometryDescriptor, MTLMatrixLayout,
+        MTLPrimitiveAccelerationStructureDescriptor,
+    };
+    let Some(crate::OpenDevice { device, .. }) = open() else {
+        return;
+    };
+    let data = buffer(&device, 256);
+    for no_duplicate in [false, true] {
+        let mut flags = wgt::AccelerationStructureGeometryFlags::empty();
+        flags.set(
+            wgt::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION,
+            no_duplicate,
+        );
+        let mut entries = triangles(&data);
+        if let crate::AccelerationStructureEntries::Triangles(triangles) = &mut entries {
+            triangles[0].flags = flags;
+            triangles[0].transform = Some(crate::AccelerationStructureTriangleTransform {
+                buffer: &data,
+                offset: 64,
+            });
+        }
+        let descriptor = conv::map_acceleration_structure_descriptor(
+            &entries,
+            wgt::AccelerationStructureFlags::empty(),
+        )
+        .downcast::<MTLPrimitiveAccelerationStructureDescriptor>()
+        .unwrap();
+        let geometry = descriptor
+            .geometryDescriptors()
+            .unwrap()
+            .objectAtIndex(0)
+            .downcast::<MTLAccelerationStructureTriangleGeometryDescriptor>()
+            .unwrap();
+        assert_eq!(
+            geometry.transformationMatrixLayout(),
+            MTLMatrixLayout::RowMajor
+        );
+        assert_eq!(geometry.transformationMatrixBufferOffset(), 64);
+        assert_eq!(
+            geometry.allowDuplicateIntersectionFunctionInvocation(),
+            !no_duplicate
+        );
+        let entries =
+            crate::AccelerationStructureEntries::AABBs(vec![crate::AccelerationStructureAABBs {
+                buffer: Some(&data),
+                offset: 0,
+                count: 1,
+                stride: 24,
+                flags,
+            }]);
+        let descriptor = conv::map_acceleration_structure_descriptor(
+            &entries,
+            wgt::AccelerationStructureFlags::empty(),
+        )
+        .downcast::<MTLPrimitiveAccelerationStructureDescriptor>()
+        .unwrap();
+        assert_eq!(
+            descriptor
+                .geometryDescriptors()
+                .unwrap()
+                .objectAtIndex(0)
+                .allowDuplicateIntersectionFunctionInvocation(),
+            !no_duplicate
+        );
+    }
+}
+
+#[test]
 fn tlas_recorded_before_blas_and_compact_size_retirement() {
     let Some(crate::OpenDevice { mut device, queue }) = open() else {
         return;
