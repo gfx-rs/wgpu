@@ -654,6 +654,7 @@ impl Drop for DeviceShared {
 )]
 pub struct Device {
     mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
+    transient_mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
     desc_allocator: Mutex<descriptor::DescriptorAllocator>,
     valid_ash_memory_types: u32,
     naga_options: naga::back::spv::Options<'static>,
@@ -789,6 +790,8 @@ impl Drop for Queue {
 #[derive(Debug)]
 enum BufferMemoryBacking {
     Managed(gpu_allocator::vulkan::Allocation),
+    /// Like [`Self::Managed`], but from [`Device::transient_mem_allocator`].
+    ManagedTransient(gpu_allocator::vulkan::Allocation),
     VulkanMemory {
         memory: vk::DeviceMemory,
         offset: u64,
@@ -798,19 +801,19 @@ enum BufferMemoryBacking {
 impl BufferMemoryBacking {
     fn memory(&self) -> vk::DeviceMemory {
         match self {
-            Self::Managed(m) => unsafe { m.memory() },
+            Self::Managed(m) | Self::ManagedTransient(m) => unsafe { m.memory() },
             Self::VulkanMemory { memory, .. } => *memory,
         }
     }
     fn offset(&self) -> u64 {
         match self {
-            Self::Managed(m) => m.offset(),
+            Self::Managed(m) | Self::ManagedTransient(m) => m.offset(),
             Self::VulkanMemory { offset, .. } => *offset,
         }
     }
     fn size(&self) -> u64 {
         match self {
-            Self::Managed(m) => m.size(),
+            Self::Managed(m) | Self::ManagedTransient(m) => m.size(),
             Self::VulkanMemory { size, .. } => *size,
         }
     }
@@ -899,6 +902,8 @@ pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
     allocation: gpu_allocator::vulkan::Allocation,
+    /// The allocation is from [`Device::transient_mem_allocator`].
+    transient: bool,
     compacted_size_query: Option<vk::QueryPool>,
 }
 
