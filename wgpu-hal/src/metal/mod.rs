@@ -92,6 +92,8 @@ impl crate::Api for Api {
     type PipelineCache = PipelineCache;
 
     type AccelerationStructure = AccelerationStructure;
+
+    type AdapterOptions = MetalAdapterOptions;
 }
 
 crate::impl_dyn_resource!(
@@ -133,6 +135,13 @@ impl OsFeatures {
         // https://developer.apple.com/documentation/quartzcore/cametallayer/displaysyncenabled
         available!(macos = 10.13) || cfg!(target_abi = "macabi")
     }
+}
+
+crate::adapter_options! {
+    /// Options for enumerating Metal adapters.
+    #[backend(wgt::Backend::Metal)]
+    #[derive(Clone, Debug)]
+    pub struct MetalAdapterOptions;
 }
 
 #[derive(Debug)]
@@ -189,6 +198,7 @@ impl crate::Instance for Instance {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&Surface>,
+        _options: Option<&MetalAdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<Api>> {
         let devices = objc2_metal::MTLCopyAllDevices();
         let instance_flags = self.flags;

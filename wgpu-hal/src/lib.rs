@@ -309,7 +309,7 @@ use bitflags::bitflags;
 use raw_window_handle::DisplayHandle;
 use thiserror::Error;
 use wgpu_sync::Arc;
-use wgt::WasmNotSendSync;
+use wgt::{backend_map_type, WasmNotSendSync};
 
 // - Vertex + Fragment
 // - Compute
@@ -689,7 +689,17 @@ pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
     type PipelineCache: DynPipelineCache;
 
     type AccelerationStructure: DynAccelerationStructure + 'static;
+
+    /// This API's adapter options struct type (used with `request_adapter_ext`).
+    type AdapterOptions: wgt::BackendMapValue<dyn wgt::BackendAdapterOptions>;
 }
+
+backend_map_type!(
+    adapter_options,
+    dyn wgt::BackendAdapterOptions,
+    AdapterOptionsType,
+    AdapterOptionsTypeAssignment,
+);
 
 pub trait Instance: Sized + WasmNotSendSync {
     type A: Api;
@@ -704,6 +714,7 @@ pub trait Instance: Sized + WasmNotSendSync {
     unsafe fn enumerate_adapters(
         &self,
         surface_hint: Option<&<Self::A as Api>::Surface>,
+        options: Option<&<Self::A as Api>::AdapterOptions>,
     ) -> Vec<ExposedAdapter<Self::A>>;
 }
 

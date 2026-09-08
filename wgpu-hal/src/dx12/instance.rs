@@ -11,6 +11,17 @@ use crate::{
     },
 };
 
+crate::adapter_options! {
+    /// Options for enumerating DX12 adapters.
+    ///
+    /// # Safety
+    ///
+    /// These options are safe.
+    #[backend(wgt::Backend::Dx12)]
+    #[derive(Clone, Debug)]
+    pub struct Dx12AdapterOptions;
+}
+
 impl crate::Instance for super::Instance {
     type A = super::Api;
 
@@ -166,6 +177,7 @@ impl crate::Instance for super::Instance {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&super::Surface>,
+        _options: Option<&Self::AdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<super::Api>> {
         let adapters = auxil::dxgi::factory::enumerate_adapters(self.factory.clone());
 
