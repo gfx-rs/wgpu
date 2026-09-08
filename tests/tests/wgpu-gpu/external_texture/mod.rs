@@ -13,6 +13,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         EXTERNAL_TEXTURE_SAMPLE,
         EXTERNAL_TEXTURE_SAMPLE_YUV,
         EXTERNAL_TEXTURE_SAMPLE_TRANSFORM,
+        EXTERNAL_TEXTURE_FROM_VIEW_ZERO_INIT_AFTER_DISCARD,
     ]);
 }
 
@@ -1125,3 +1126,73 @@ static EXTERNAL_TEXTURE_SAMPLE_TRANSFORM: GpuTestConfiguration = GpuTestConfigur
         );
         assert_eq!(&samples, &[RED_F32, GREEN_F32, BLUE_F32, YELLOW_F32]);
     });
+
+/// Tests that a `TextureView` bound to an `external_texture` binding point reads as
+/// zero when the underlying texture is uninitialized.
+///
+/// This path must register the same `NeedsInitializedMemory` init action as the
+/// ordinary sampled-texture path. Without it, nothing clears the texture before the
+/// shader samples plane 0, and the load returns whatever the allocation held.
+///
+/// The texture is cleared to a non-zero sentinel and then discarded, rather than
+/// merely left freshly allocated: discarding returns it to the uninitialized state
+/// while leaving the sentinel in memory, so a missing init action is observable
+/// without relying on the allocator to hand back dirty pages.
+#[apply(gpu_test!)]
+static EXTERNAL_TEXTURE_FROM_VIEW_ZERO_INIT_AFTER_DISCARD: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .features(wgpu::Features::EXTERNAL_TEXTURE),
+        )
+        .run_async(|ctx| async move {
+            let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: wgpu::Extent3d {
+                    width: 2,
+                    height: 2,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+            let mut encoder = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            // Store the sentinel, then discard it in a second pass. A single
+            // clear-and-discard pass would let the backend elide the write.
+            for (load, store) in [
+                (wgpu::LoadOp::Clear(wgpu::Color::RED), wgpu::StoreOp::Store),
+                (wgpu::LoadOp::Load, wgpu::StoreOp::Discard),
+            ] {
+                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations { load, store },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+            }
+            ctx.queue.submit(Some(encoder.finish()));
+
+            let loads = get_loads(
+                &ctx,
+                &[[0, 0], [1, 0], [0, 1], [1, 1]],
+                wgpu::BindingResource::TextureView(&view),
+            );
+            assert_eq!(&loads, &[TRANSPARENT_BLACK_F32; 4]);
+        });
