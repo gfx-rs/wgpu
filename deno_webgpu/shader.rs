@@ -8,7 +8,6 @@ use deno_core::v8;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
-use wgpu_core::pipeline;
 
 use crate::error::GPUGenericError;
 
@@ -123,16 +122,10 @@ impl GPUCompilationMessage {
 }
 
 impl GPUCompilationMessage {
-  fn new(error: &pipeline::CreateShaderModuleError, source: &str) -> Self {
-    let message = error.to_string();
+  fn new(error: &wgpu_types::CompilationMessage, source: &str) -> Self {
+    let message = error.message.clone();
 
-    let loc = match error {
-      pipeline::CreateShaderModuleError::Parsing(e) => e.inner.location(source),
-      pipeline::CreateShaderModuleError::Validation(e) => {
-        e.inner.location(source)
-      }
-      _ => None,
-    };
+    let loc = error.location.as_ref();
 
     match loc {
       Some(loc) => {
@@ -188,13 +181,14 @@ impl GPUCompilationInfo {
 impl GPUCompilationInfo {
   pub fn new<'args, 'scope>(
     scope: &mut v8::HandleScope<'scope>,
-    messages: impl ExactSizeIterator<
-      Item = &'args pipeline::CreateShaderModuleError,
-    >,
+    compilation_info: &wgpu_types::CompilationInfo,
     source: &'args str,
   ) -> Self {
-    let array = v8::Array::new(scope, messages.len().try_into().unwrap());
-    for (i, message) in messages.enumerate() {
+    let array = v8::Array::new(
+      scope,
+      compilation_info.messages.len().try_into().unwrap(),
+    );
+    for (i, message) in compilation_info.messages.iter().enumerate() {
       let message_object =
         make_cppgc_object(scope, GPUCompilationMessage::new(message, source));
       array.set_index(scope, i.try_into().unwrap(), message_object.into());

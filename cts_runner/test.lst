@@ -59,7 +59,8 @@ webgpu:api,operation,rendering,depth:*
 webgpu:api,operation,rendering,draw:*
 fails-if(dx12,vulkan) webgpu:api,operation,sampling,*
 webgpu:api,operation,shader_module,compilation_info:*
-webgpu:api,operation,texture_view,texture_component_swizzle:*
+// Doesn't actually fail, but is very slow. https://github.com/gfx-rs/wgpu/issues/9229
+fails-if(dx12) webgpu:api,operation,texture_view,texture_component_swizzle:*
 webgpu:api,operation,uncapturederror:iff_uncaptured:*
 //FAIL: webgpu:api,operation,uncapturederror:onuncapturederror_order_wrt_addEventListener
 // There are also two unimplemented SKIPs in uncapturederror not enumerated here.
@@ -245,6 +246,7 @@ webgpu:api,validation,image_copy,layout_related:required_bytes_in_copy:*
 webgpu:api,validation,image_copy,layout_related:rows_per_image_alignment:*
 webgpu:api,validation,image_copy,texture_related:*
 fails-if(dx12) webgpu:api,validation,layout_shader_compat:pipeline_layout_shader_exact_match:*
+webgpu:api,validation,min_buffer_binding_size:*
 webgpu:api,validation,pipeline,immediates:*
 webgpu:api,validation,query_set,destroy:*
 webgpu:api,validation,queue,buffer_mapped:*
