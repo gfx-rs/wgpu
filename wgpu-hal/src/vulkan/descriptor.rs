@@ -56,6 +56,9 @@ struct Pool {
     raw: vk::DescriptorPool,
     capacity: u32,
     available: u32,
+    /// Set when the driver refused to allocate from this pool despite it
+    /// having free capacity, making `alloc` skip it.
+    poisoned: bool,
 }
 
 /// Keeps track of all pools created with this bucket's [`BucketKey`].
@@ -174,31 +177,51 @@ impl DescriptorAllocator {
         // Prefer smaller/older/fuller pools for new allocations to prevent
         // fragmentation and possibly fragmentation of hardware resources
         // (VK_ERROR_FRAGMENTATION)
-        let mut pool_index = match bucket.pools.iter().position(|pool| pool.available != 0) {
-            Some(index) => index,
-            None => bucket.create_pool(device, &key, capacity_hint)?.0,
-        };
+        let mut candidate = bucket
+            .pools
+            .iter()
+            .position(|pool| !pool.poisoned && pool.available != 0);
 
-        let vk_info = vk::DescriptorSetAllocateInfo::default()
-            .descriptor_pool(bucket.pools[pool_index].raw)
-            .set_layouts(core::slice::from_ref(&layout.raw));
+        // Some drivers (e.g. Mali) report these errors despite the same-shape
+        // guarantee the spec grants our per-bucket pools, in particular for
+        // update-after-bind pools which cannot be defragmented. Retire the
+        // offending pool and try the next one, falling back to a freshly
+        // created pool, as the spec prescribes.
+        // https://docs.vulkan.org/refpages/latest/refpages/source/VkDescriptorPoolCreateInfo.html#_description
+        let (raw, pool_index) = loop {
+            let index = match candidate {
+                Some(index) => index,
+                None => bucket.create_pool(device, &key, capacity_hint)?.0,
+            };
 
-        let raw = match unsafe { device.allocate_descriptor_sets(&vk_info) } {
-            Ok(sets) => sets[0],
-            // Some drivers (e.g. Adreno, Mali) report these errors despite the same-shape
-            // guarantee the spec grants our per-bucket pools, in particular for
-            // update-after-bind pools which cannot be defragmented. Recover by
-            // allocating from a fresh pool, as the spec prescribes, before failing.
-            // https://docs.vulkan.org/refpages/latest/refpages/source/VkDescriptorPoolCreateInfo.html#_description
-            Err(vk::Result::ERROR_FRAGMENTED_POOL | vk::Result::ERROR_OUT_OF_POOL_MEMORY) => {
-                pool_index = bucket.create_pool(device, &key, capacity_hint)?.0;
-                let retry_info = vk_info.descriptor_pool(bucket.pools[pool_index].raw);
-                match unsafe { device.allocate_descriptor_sets(&retry_info) } {
-                    Ok(sets) => sets[0],
-                    Err(err) => return Err(super::map_host_device_oom_err(err)),
+            let vk_info = vk::DescriptorSetAllocateInfo::default()
+                .descriptor_pool(bucket.pools[index].raw)
+                .set_layouts(core::slice::from_ref(&layout.raw));
+
+            match unsafe { device.allocate_descriptor_sets(&vk_info) } {
+                Ok(sets) => break (sets[0], index),
+                Err(
+                    err
+                    @ (vk::Result::ERROR_FRAGMENTED_POOL | vk::Result::ERROR_OUT_OF_POOL_MEMORY),
+                ) => {
+                    bucket.pools[index].poisoned = true;
+                    let created_pool = candidate.is_none();
+                    if created_pool {
+                        log::error!("descriptor set allocation from a fresh pool failed: {err:?}");
+                        return Err(crate::DeviceError::OutOfMemory);
+                    }
+                    log::warn!(
+                        "Retiring descriptor pool ({}/{} sets free) after {err:?}, retrying on another pool",
+                        bucket.pools[index].available,
+                        bucket.pools[index].capacity,
+                    );
+                    candidate = bucket
+                        .pools
+                        .iter()
+                        .position(|pool| !pool.poisoned && pool.available != 0);
                 }
+                Err(err) => return Err(super::map_host_device_oom_err(err)),
             }
-            Err(err) => return Err(super::map_host_device_oom_err(err)),
         };
 
         let pool = &mut bucket.pools[pool_index];
@@ -339,5 +362,6 @@ fn create_descriptor_pool(
         raw,
         capacity,
         available: capacity,
+        poisoned: false,
     })
 }
