@@ -367,6 +367,11 @@ jobs:
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features metal
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features dx12
 
+          # Check important naga features in isolation
+          for feature in glsl-in glsl-out hlsl-out msl-out spv-in spv-out wgsl-in wgsl-out; do
+            cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features $feature
+          done
+
           # build docs
           cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
