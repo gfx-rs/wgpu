@@ -241,8 +241,8 @@ By @beholdnec in [#8505](https://github.com/gfx-rs/wgpu/pull/8505).
 
 #### Metal
 
-- Wake Metal completion waits from native completed handlers instead of polling at one-millisecond intervals.
-- Order Metal acceleration-structure builds and ray-query passes with encoder fences, without serializing unrelated later submissions. Reserve native command-buffer capacity for internal submissions and report ray-query fence allocation failure during fallible encoder setup.
+- Wake Metal completion waits from native completed handlers instead of polling at one-millisecond intervals. By @acoliver in [#10292](https://github.com/gfx-rs/wgpu/pull/10292).
+- Order Metal acceleration-structure builds and ray-query passes with encoder fences, without serializing unrelated later submissions. Reserve native command-buffer capacity for internal submissions and report ray-query fence allocation failure during fallible encoder setup. By @acoliver in [#10292](https://github.com/gfx-rs/wgpu/pull/10292).
 - Fix crash on fence creation when running in a MacOS Seatbelt sandbox. By @wumpf in [#9415](https://github.com/gfx-rs/wgpu/pull/9415)
 - Fixed structure field names incorrectly ignoring reserved keywords in the Metal (MSL) backend. By @39ali [#9379](https://github.com/gfx-rs/wgpu/pull/9379).
 - Restore the `Queue::as_raw` method, which was removed without good reason in v29. It now returns `&ProtocolObject<dyn MTLCommandQueue>`. By @andyleiserson in [#9560](https://github.com/gfx-rs/wgpu/pull/9560).
