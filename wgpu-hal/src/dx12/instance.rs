@@ -19,7 +19,11 @@ crate::adapter_options! {
     /// These options are safe.
     #[backend(wgt::Backend::Dx12)]
     #[derive(Clone, Debug)]
-    pub struct Dx12AdapterOptions;
+    pub struct Dx12AdapterOptions {
+        /// LUID of the desired adapter. If `Some`, only the adapter with this LUID
+        /// will be enumerated.
+        pub luid: Option<Foundation::LUID>,
+    }
 }
 
 impl crate::Instance for super::Instance {
@@ -177,12 +181,24 @@ impl crate::Instance for super::Instance {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&super::Surface>,
-        _options: Option<&Self::AdapterOptions>,
+        options: Option<&Dx12AdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<super::Api>> {
         let adapters = auxil::dxgi::factory::enumerate_adapters(self.factory.clone());
 
         adapters
             .into_iter()
+            .filter(|raw| {
+                let Some(luid) = options.and_then(|o| o.luid) else {
+                    return true;
+                };
+                match unsafe { raw.GetDesc() } {
+                    Ok(desc) => luid == desc.AdapterLuid,
+                    Err(e) => {
+                        log::error!("GetDesc failed for dxgi adapter: {e}");
+                        false
+                    }
+                }
+            })
             .filter_map(|raw| {
                 super::Adapter::expose(
                     raw,
