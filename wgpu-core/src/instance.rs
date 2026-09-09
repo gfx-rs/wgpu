@@ -1274,7 +1274,10 @@ impl Adapter {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
 
-        normalize_max_resource_per_shader_stage_limits(&mut desc.required_limits);
+        normalize_max_resource_per_shader_stage_limits(
+            &desc.required_features,
+            &mut desc.required_limits,
+        );
 
         Ok(())
     }
@@ -1434,7 +1437,10 @@ fn filter_features_and_limits(
     }
 }
 
-fn normalize_max_resource_per_shader_stage_limits(limits: &mut wgt::Limits) {
+fn normalize_max_resource_per_shader_stage_limits(
+    features: &wgt::Features,
+    limits: &mut wgt::Limits,
+) {
     // The next steps are from <https://www.w3.org/TR/webgpu/#a-new-device>.
 
     // > 7. Set `limits.maxStorageBuffersPerShaderStage` to
@@ -1464,21 +1470,20 @@ fn normalize_max_resource_per_shader_stage_limits(limits: &mut wgt::Limits) {
     .unwrap();
 
     // > 9. If features contains "core-features-and-limits":
-    //
-    // NOTE: We don't implement compat (yet?), so we do this unconditionally. See also:
-    // <https://github.com/gfx-rs/wgpu/issues/8124>
+    if features.contains(wgt::Features::CORE_FEATURES_AND_LIMITS) {
+        // >   1. Set `limits.maxStorageBuffersInVertexStage` and
+        // >      `limits.maxStorageBuffersInFragmentStage` to
+        // >      `limits.maxStorageBuffersPerShaderStage`.
+        limits.max_storage_buffers_in_vertex_stage = limits.max_storage_buffers_per_shader_stage;
+        limits.max_storage_buffers_in_fragment_stage = limits.max_storage_buffers_per_shader_stage;
 
-    // >   1. Set `limits.maxStorageBuffersInVertexStage` and
-    // >      `limits.maxStorageBuffersInFragmentStage` to
-    // >      `limits.maxStorageBuffersPerShaderStage`.
-    limits.max_storage_buffers_in_vertex_stage = limits.max_storage_buffers_per_shader_stage;
-    limits.max_storage_buffers_in_fragment_stage = limits.max_storage_buffers_per_shader_stage;
-
-    // >   2. Set `limits.maxStorageTexturesInVertexStage` and
-    // >      `limits.maxStorageTexturesInFragmentStage` to
-    // >      `limits.maxStorageTexturesPerShaderStage`.
-    limits.max_storage_textures_in_vertex_stage = limits.max_storage_textures_per_shader_stage;
-    limits.max_storage_textures_in_fragment_stage = limits.max_storage_textures_per_shader_stage;
+        // >   2. Set `limits.maxStorageTexturesInVertexStage` and
+        // >      `limits.maxStorageTexturesInFragmentStage` to
+        // >      `limits.maxStorageTexturesPerShaderStage`.
+        limits.max_storage_textures_in_vertex_stage = limits.max_storage_textures_per_shader_stage;
+        limits.max_storage_textures_in_fragment_stage =
+            limits.max_storage_textures_per_shader_stage;
+    }
 }
 
 #[cfg(test)]
@@ -1590,7 +1595,10 @@ mod tests {
         #[track_caller]
         fn assert_normalized_eq(non_normalized: &wgt::Limits, expected: &wgt::Limits) {
             let mut normalized = non_normalized.clone();
-            normalize_max_resource_per_shader_stage_limits(&mut normalized);
+            normalize_max_resource_per_shader_stage_limits(
+                &wgt::Features::CORE_FEATURES_AND_LIMITS,
+                &mut normalized,
+            );
             assert_eq!(&normalized, expected);
         }
 
@@ -1603,11 +1611,17 @@ mod tests {
             };
 
             let mut first_normalization = original.clone();
-            normalize_max_resource_per_shader_stage_limits(&mut first_normalization);
+            normalize_max_resource_per_shader_stage_limits(
+                &wgt::Features::CORE_FEATURES_AND_LIMITS,
+                &mut first_normalization,
+            );
             assert_ne!(original, first_normalization);
 
             let mut second_normalization = first_normalization.clone();
-            normalize_max_resource_per_shader_stage_limits(&mut second_normalization);
+            normalize_max_resource_per_shader_stage_limits(
+                &wgt::Features::CORE_FEATURES_AND_LIMITS,
+                &mut second_normalization,
+            );
             assert_eq!(first_normalization, second_normalization);
         }
 
