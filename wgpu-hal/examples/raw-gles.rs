@@ -332,6 +332,7 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
             wgpu_types::Features::empty(),
             &wgpu_types::Limits::downlevel_defaults(),
             &wgpu_types::MemoryHints::default(),
+            None,
         )
     }
     .unwrap();

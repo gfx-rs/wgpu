@@ -3166,13 +3166,17 @@ impl super::Adapter {
 impl crate::Adapter for super::Adapter {
     type A = super::Api;
 
+    type DeviceOptions = super::VulkanDeviceOptions;
+
     unsafe fn open(
         &self,
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        options: Option<Box<super::VulkanDeviceOptions>>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        unsafe { self.open_with_callback(features, limits, memory_hints, None) }
+        let callback = options.and_then(|options| options.create_device_callback);
+        unsafe { self.open_with_callback(features, limits, memory_hints, callback) }
     }
 
     unsafe fn texture_format_capabilities(

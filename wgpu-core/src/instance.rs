@@ -21,7 +21,10 @@ use crate::{
     DOWNLEVEL_WARNING_MESSAGE,
 };
 
-use wgt::{Backend, BackendAdapterOptionsMap, Backends, InstanceFlags, PowerPreference};
+use wgt::{
+    Backend, BackendAdapterOptionsMap, BackendDeviceOptions, Backends, InstanceFlags,
+    PowerPreference,
+};
 
 #[test]
 fn downlevel_default_limits_less_than_default_limits() {
@@ -1319,6 +1322,34 @@ impl Adapter {
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
+        // SAFETY: Passing no backend-specific options imposes no additional
+        // safety requirements over the safe `request_device`.
+        unsafe { self.request_device_ext(desc, None) }
+    }
+
+    /// Request a device, passing backend-specific options.
+    ///
+    /// This behaves like [`Adapter::request_device`], but additionally accepts
+    /// a backend-specific options value which informs device creation (e.g. a
+    /// [`hal::vulkan::VulkanDeviceOptions`], which can install a callback that
+    /// customizes the Vulkan device creation parameters). The device is still
+    /// created through the normal, validated wgpu-core path.
+    ///
+    /// [`hal::vulkan::VulkanDeviceOptions`]: hal/vulkan/struct.VulkanDeviceOptions.html
+    ///
+    /// # Safety
+    ///
+    /// - If `options` is `Some`, it must satisfy any safety requirements
+    ///   applicable to its type. Passing `None` for `options` is safe.
+    ///
+    /// # Panics
+    ///
+    /// - If `options` is not of this adapter's backend's options type.
+    pub unsafe fn request_device_ext(
+        self: &Arc<Self>,
+        desc: &DeviceDescriptor,
+        options: Option<Box<dyn BackendDeviceOptions>>,
+    ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         profiling::scope!("Adapter::request_device");
         api_log!("Adapter::request_device");
 
@@ -1330,6 +1361,7 @@ impl Adapter {
                 desc.required_features,
                 &desc.required_limits,
                 &desc.memory_hints,
+                options,
             )
         }
         .map_err(DeviceError::from_hal)?;

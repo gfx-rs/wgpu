@@ -235,11 +235,14 @@ impl crate::Surface for Context {
 impl crate::Adapter for Context {
     type A = Api;
 
+    type DeviceOptions = NoopDeviceOptions;
+
     unsafe fn open(
         &self,
         features: wgt::Features,
         _limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
+        _options: Option<Box<NoopDeviceOptions>>,
     ) -> DeviceResult<crate::OpenDevice<Api>> {
         Ok(crate::OpenDevice {
             device: Context {

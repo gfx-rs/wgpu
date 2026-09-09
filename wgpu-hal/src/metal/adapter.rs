@@ -9,7 +9,7 @@ use objc2_metal::{
 };
 use wgt::{AstcBlock, AstcChannel};
 
-use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, string::ToString as _, sync::Arc, vec::Vec};
 use wgpu_sync::{atomic, Mutex, OnceCell};
 
 use crate::metal::QueueShared;
@@ -63,11 +63,14 @@ impl super::Adapter {
 impl crate::Adapter for super::Adapter {
     type A = super::Api;
 
+    type DeviceOptions = super::MetalDeviceOptions;
+
     unsafe fn open(
         &self,
         features: wgt::Features,
         limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
+        _options: Option<Box<super::MetalDeviceOptions>>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         autoreleasepool(|_| {
             let queue = self

@@ -1904,6 +1904,26 @@ pub struct CreateDeviceCallbackArgs<'arg, 'pnext> {
 pub type CreateDeviceCallback =
     dyn for<'arg, 'pnext> FnOnce(CreateDeviceCallbackArgs<'arg, 'pnext>) + 'static;
 
+/// Vulkan-specific options for [`Adapter::open`](crate::Adapter::open).
+///
+/// Pass this (boxed as `Box<dyn wgt::BackendDeviceOptions>`) in the `options`
+/// argument of [`crate::Adapter::open`], or, from `wgpu-core`, via
+/// `request_device_ext`. It is the type-erased equivalent of the inherent
+/// [`Adapter::open_with_callback`] method; because it is passed as an
+/// [`Any`](core::any::Any), the callback must be `'static`.
+#[derive(Default)]
+#[expect(missing_debug_implementations, reason = "contains a callback")]
+pub struct VulkanDeviceOptions {
+    /// Callback allowing the Vulkan device creation parameters to be customized.
+    ///
+    /// # Safety
+    ///
+    /// See [`CreateDeviceCallback`].
+    pub create_device_callback: Option<Box<CreateDeviceCallback>>,
+}
+
+impl wgt::BackendDeviceOptions for VulkanDeviceOptions {}
+
 /// Arguments to the [`CreateInstanceCallback`].
 #[expect(missing_debug_implementations, reason = "TODO?")]
 pub struct CreateInstanceCallbackArgs<'arg, 'pnext> {

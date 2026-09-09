@@ -828,11 +828,29 @@ pub trait Surface: WasmNotSendSync {
 pub trait Adapter: WasmNotSendSync {
     type A: Api;
 
+    // TODO: should probably move to Api
+    type DeviceOptions: wgt::BackendDeviceOptions;
+
+    /// Open a device on this adapter.
+    ///
+    /// `options` carries backend-specific device creation parameters, for
+    /// example a [`vulkan::VulkanDeviceOptions`], which can install a callback
+    /// that customizes the [`vk::DeviceCreateInfo`]. Options bypass the
+    /// validation that a higher-level crate such as `wgpu-core` would normally
+    /// perform.
+    ///
+    /// [`vulkan::VulkanDeviceOptions`]: vulkan/struct.VulkanDeviceOptions.html
+    /// [`vk::DeviceCreateInfo`]: https://docs.rs/ash/latest/ash/vk/struct.DeviceCreateInfo.html
+    ///
+    /// # Safety
+    ///
+    /// - `options` must uphold the safety contract documented on its type.
     unsafe fn open(
         &self,
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        options: Option<Box<Self::DeviceOptions>>,
     ) -> Result<OpenDevice<Self::A>, DeviceError>;
 
     /// Return the set of supported capabilities for a texture format.
