@@ -173,6 +173,7 @@ impl RenderPassContext {
 
 pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
 
+#[must_use]
 #[derive(Default)]
 pub struct UserClosures {
     pub mappings: Vec<BufferMapPendingClosure>,

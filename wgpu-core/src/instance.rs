@@ -11,7 +11,7 @@ use crate::{
     },
     id::markers,
     limits::{self, check_limits, FailedLimit},
-    lock::{rank, Mutex},
+    lock::{rank, Mutex, MutexGuard},
     present::{ConfigureSurfaceError, Presentation},
     resource::ResourceType,
     resource_log,
@@ -856,8 +856,12 @@ impl Surface {
             .map(|surface| surface.as_ref())
     }
 
-    fn unconfigure_inner(&self) {
-        if let Some(mut present) = self.presentation.lock().take() {
+    fn unconfigure_inner<'a>(
+        &self,
+        presentation: &mut MutexGuard<'a, Option<Presentation>>,
+    ) -> UserClosures {
+        let mut result = UserClosures::default();
+        if let Some(mut present) = presentation.take() {
             if let Some(texture) = present.acquired_texture.take() {
                 texture.destroy();
             }
@@ -871,20 +875,25 @@ impl Surface {
                     .device
                     .maintain(wgt::PollType::wait_indefinitely(), snatch_guard);
             }
+            result.extend(user_callbacks);
 
             for (&backend, surface) in &self.surface_per_backend {
                 if backend == present.device.backend() {
                     unsafe { surface.unconfigure(present.device.raw()) };
                 }
             }
-
-            user_callbacks.fire();
         }
+        result
     }
 
     pub fn unconfigure(self: &Arc<Self>) {
         profiling::scope!("Surface::unconfigure");
-        self.unconfigure_inner();
+        let user_callbacks;
+        {
+            let mut presentation = self.presentation.lock();
+            user_callbacks = self.unconfigure_inner(&mut presentation);
+        }
+        user_callbacks.fire();
     }
 
     pub fn configure(
@@ -960,34 +969,43 @@ impl Surface {
             device.limits.max_texture_dimension_2d,
         )?;
 
-        self.unconfigure_inner();
-
         device.check_is_valid()?;
 
-        let surface_raw = self.raw(device.backend()).unwrap();
-        match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
-            Ok(()) => (),
-            Err(error) => {
-                return Err(match error {
-                    hal::SurfaceError::Outdated
-                    | hal::SurfaceError::Lost
-                    | hal::SurfaceError::Occluded
-                    | hal::SurfaceError::Timeout => E::InvalidSurface,
-                    hal::SurfaceError::Device(error) => E::Device(device.handle_hal_error(error)),
-                    hal::SurfaceError::Other(message) => {
-                        log::error!("surface configuration failed: {message}");
-                        E::InvalidSurface
-                    }
-                });
-            }
-        }
+        let user_callbacks;
+        {
+            // we keep presentation locked for the entire duration of the configure call,
+            // so that no change can happen in the middle of it.
+            let mut presentation = self.presentation.lock();
 
-        let mut presentation = self.presentation.lock();
-        *presentation = Some(Presentation {
-            device: Arc::clone(device),
-            config: config.clone(),
-            acquired_texture: None,
-        });
+            user_callbacks = self.unconfigure_inner(&mut presentation);
+
+            let surface_raw = self.raw(device.backend()).unwrap();
+            match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
+                Ok(()) => (),
+                Err(error) => {
+                    return Err(match error {
+                        hal::SurfaceError::Outdated
+                        | hal::SurfaceError::Lost
+                        | hal::SurfaceError::Occluded
+                        | hal::SurfaceError::Timeout => E::InvalidSurface,
+                        hal::SurfaceError::Device(error) => {
+                            E::Device(device.handle_hal_error(error))
+                        }
+                        hal::SurfaceError::Other(message) => {
+                            log::error!("surface configuration failed: {message}");
+                            E::InvalidSurface
+                        }
+                    });
+                }
+            }
+
+            *presentation = Some(Presentation {
+                device: Arc::clone(device),
+                config: config.clone(),
+                acquired_texture: None,
+            });
+        }
+        user_callbacks.fire();
 
         Ok(())
     }
@@ -999,7 +1017,12 @@ impl Drop for Surface {
         profiling::scope!("Surface::drop");
 
         api_log!("Surface::drop {:?}", self as *const _);
-        self.unconfigure_inner();
+        let user_closures;
+        {
+            let mut presentation = self.presentation.lock();
+            user_closures = self.unconfigure_inner(&mut presentation);
+        }
+        user_closures.fire();
     }
 }
 
