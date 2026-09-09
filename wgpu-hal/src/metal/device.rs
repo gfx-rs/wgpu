@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, borrow::ToOwned as _, sync::Arc, vec::Vec};
 use core::{mem::align_of, ptr::NonNull};
 
 use bytemuck::TransparentWrapper;
@@ -456,8 +456,18 @@ impl super::Device {
     }
 }
 
+pub struct MetalRawTexture {
+    texture: Retained<ProtocolObject<dyn MTLTexture>>,
+    raw_type: MTLTextureType,
+    drop_callback: Option<DropCallback>,
+}
+
+impl crate::RawTexture for MetalRawTexture { }
+
 impl crate::Device for super::Device {
     type A = super::Api;
+
+    type RawTexture = MetalRawTexture;
 
     unsafe fn create_buffer(
         &self,
@@ -608,6 +618,22 @@ impl crate::Device for super::Device {
 
     unsafe fn add_raw_texture(&self, _texture: &super::Texture) {
         self.counters.textures.add(1);
+    }
+
+    unsafe fn texture_from_raw(
+        &self,
+        texture: Box<MetalRawTexture>,
+        desc: &crate::TextureDescriptor,
+    ) -> DeviceResult<super::Texture> {
+        Ok(super::Texture {
+            raw: texture.texture,
+            format: desc.format,
+            raw_type: texture.raw_type,
+            array_layers: desc.array_layer_count(),
+            mip_levels: desc.mip_level_count,
+            copy_size: desc.copy_extent(),
+            _drop_guard: DropGuard::from_option(texture.drop_callback),
+        })
     }
 
     unsafe fn create_texture_view(

@@ -297,12 +297,7 @@ pub use dynamic::{
 use alloc::boxed::Box;
 use alloc::{borrow::Cow, string::String, vec::Vec};
 use core::{
-    borrow::Borrow,
-    error::Error,
-    fmt,
-    num::NonZeroU32,
-    ops::{Range, RangeInclusive},
-    ptr::NonNull,
+    any::Any, borrow::Borrow, error::Error, fmt, num::NonZeroU32, ops::{Range, RangeInclusive}, ptr::NonNull
 };
 
 use bitflags::bitflags;
@@ -336,6 +331,8 @@ pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
 pub type AtomicFenceValue = wgpu_sync::atomic::AtomicU64;
+
+pub trait RawTexture: Any { }
 
 /// A callback to signal that wgpu is no longer using a resource.
 #[cfg(all(any(gles, vulkan, metal), not(webgl)))]
@@ -1095,6 +1092,15 @@ pub trait Device: WasmNotSendSync {
 
     /// A hook for when a wgpu-core texture is created from a raw wgpu-hal texture.
     unsafe fn add_raw_texture(&self, texture: &<Self::A as Api>::Texture);
+
+    type RawTexture: RawTexture;
+
+    /// Create a texture from from a raw platform texture reference.
+    unsafe fn texture_from_raw(
+        &self,
+        hal_texture: Box<Self::RawTexture>,
+        desc: &TextureDescriptor,
+    ) -> Result<<Self::A as Api>::Texture, DeviceError>;
 
     unsafe fn create_texture_view(
         &self,
@@ -2829,7 +2835,7 @@ pub struct SurfaceConfiguration {
     pub view_formats: Vec<wgt::TextureFormat>,
 }
 
-pub trait RawSurfaceConfiguration: fmt::Debug + core::any::Any + Send + Sync { }
+pub trait RawSurfaceConfiguration: fmt::Debug + Any + Send + Sync { }
 
 #[derive(Debug, Clone)]
 pub struct Rect<T> {
