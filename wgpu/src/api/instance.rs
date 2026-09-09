@@ -176,6 +176,34 @@ impl Instance {
         async move { future.await.map(|adapter| Adapter { inner: adapter }) }
     }
 
+    /// Retrieves an [`Adapter`] which matches the given [`RequestAdapterOptions`], passing
+    /// backend-specific options to the backends.
+    ///
+    /// `backend_options` may contain options for any number of backends. Options for
+    /// backends that are not enabled are ignored. The `webgpu` and `custom` backends
+    /// ignore `backend_options`.
+    ///
+    /// The available options structs can be found by looking for implementors of
+    /// [`BackendMapValue<dyn BackendAdapterOptions>`](wgt::BackendMapValue) in [`wgpu_hal`].
+    ///
+    /// # Safety
+    ///
+    /// - Any safety requirements of the options in `backend_options` must be upheld.
+    #[cfg(wgpu_core)]
+    pub unsafe fn request_adapter_ext(
+        &self,
+        options: &RequestAdapterOptions<'_, '_>,
+        backend_options: BackendAdapterOptionsMap,
+    ) -> impl Future<Output = Result<Adapter, RequestAdapterError>> + WasmNotSend {
+        // Values from `backend_options` are passed by reference to hal, but to avoid
+        // needing to make it `Send`/`Sync` for a future in our caller, we take it by value.
+        let future = match self.inner.as_core_opt() {
+            Some(core) => unsafe { core.request_adapter_ext(options, Some(backend_options)) },
+            None => self.inner.request_adapter(options),
+        };
+        async move { future.await.map(|adapter| Adapter { inner: adapter }) }
+    }
+
     /// Creates a new surface targeting a given window/canvas/surface/etc..
     ///
     /// Internally, this creates surfaces for all backends that are enabled for this instance.
