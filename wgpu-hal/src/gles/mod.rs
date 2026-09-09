@@ -341,6 +341,11 @@ pub struct Adapter {
     shared: Arc<AdapterShared>,
 }
 
+#[derive(Clone, Debug)]
+pub struct GlDeviceOptions;
+
+impl wgt::BackendDeviceOptions for GlDeviceOptions {}
+
 #[derive(Debug)]
 pub struct Device {
     shared: Arc<AdapterShared>,

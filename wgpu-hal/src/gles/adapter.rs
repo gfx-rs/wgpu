@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned as _, format, string::String, sync::Arc, vec, vec::Vec};
+use alloc::{borrow::ToOwned as _, boxed::Box, format, string::String, sync::Arc, vec, vec::Vec};
 
 use glow::HasContext;
 use wgpu_sync::{atomic::AtomicU8, Mutex};
@@ -1086,11 +1086,14 @@ impl super::Adapter {
 impl crate::Adapter for super::Adapter {
     type A = super::Api;
 
+    type DeviceOptions = super::GlDeviceOptions;
+
     unsafe fn open(
         &self,
         features: wgt::Features,
         _limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
+        _options: Option<Box<super::GlDeviceOptions>>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let gl = &self.shared.context.lock();
         unsafe { gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1) };

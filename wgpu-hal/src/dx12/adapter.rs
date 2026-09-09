@@ -1,4 +1,4 @@
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::ptr;
 use std::thread;
 
@@ -1060,11 +1060,14 @@ impl super::Adapter {
 impl crate::Adapter for super::Adapter {
     type A = super::Api;
 
+    type DeviceOptions = super::Dx12DeviceOptions;
+
     unsafe fn open(
         &self,
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        _options: Option<Box<super::Dx12DeviceOptions>>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue: Direct3D12::ID3D12CommandQueue = {
             profiling::scope!("ID3D12Device::CreateCommandQueue");
