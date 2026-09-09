@@ -1,7 +1,6 @@
 use alloc::{borrow::ToOwned as _, boxed::Box, ffi::CString, string::String, sync::Arc, vec::Vec};
 use core::{
     ffi::{c_void, CStr},
-    marker::PhantomData,
     slice,
     str::FromStr,
 };
@@ -812,7 +811,6 @@ impl super::Instance {
                 extensions: &mut extensions,
                 create_info: &mut create_info,
                 entry: &entry,
-                _phantom: PhantomData,
             });
         }
 

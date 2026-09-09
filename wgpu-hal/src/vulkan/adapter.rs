@@ -1,5 +1,5 @@
 use alloc::{borrow::ToOwned as _, boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
-use core::{ffi::CStr, marker::PhantomData};
+use core::ffi::CStr;
 
 use ash::{ext, google, khr, vk};
 use wgpu_sync::Mutex;
@@ -3090,12 +3090,12 @@ impl super::Adapter {
     /// - Same as `open` plus
     /// - The callback may not change anything that the device does not support.
     /// - The callback may not remove features.
-    pub unsafe fn open_with_callback<'a>(
+    pub unsafe fn open_with_callback(
         &self,
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
-        callback: Option<Box<super::CreateDeviceCallback<'a>>>,
+        callback: Option<Box<super::CreateDeviceCallback>>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let mut enabled_extensions = self.required_device_extensions(features);
         let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
@@ -3113,7 +3113,6 @@ impl super::Adapter {
                 device_features: &mut enabled_phd_features,
                 queue_create_infos: &mut family_infos,
                 create_info: &mut pre_info,
-                _phantom: PhantomData,
             })
         }
 

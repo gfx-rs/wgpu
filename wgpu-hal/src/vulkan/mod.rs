@@ -1877,10 +1877,7 @@ struct RawTlasInstance {
 
 /// Arguments to the [`CreateDeviceCallback`].
 #[derive(Debug)]
-pub struct CreateDeviceCallbackArgs<'arg, 'pnext, 'this>
-where
-    'this: 'pnext,
-{
+pub struct CreateDeviceCallbackArgs<'arg, 'pnext> {
     /// The extensions to enable for the device. You must not remove anything from this list,
     /// but you may add to it.
     pub extensions: &'arg mut Vec<&'static CStr>,
@@ -1895,10 +1892,6 @@ where
     /// do not turn features off. Additionally, do not add things to the list of extensions,
     /// or to the feature set, as all changes to that member will be overwritten.
     pub create_info: &'arg mut vk::DeviceCreateInfo<'pnext>,
-    /// We need to have `'this` in the struct, so we can declare that all lifetimes coming from
-    /// captures in the closure will live longer (and hence satisfy) `'pnext`. However, we
-    /// don't actually directly use `'this`
-    _phantom: PhantomData<&'this ()>,
 }
 
 /// Callback to allow changing the vulkan device creation parameters.
@@ -1908,15 +1901,12 @@ where
 ///   as the create info value will be overwritten.
 /// - Callback must not remove features.
 /// - Callback must not change anything to what the instance does not support.
-pub type CreateDeviceCallback<'this> =
-    dyn for<'arg, 'pnext> FnOnce(CreateDeviceCallbackArgs<'arg, 'pnext, 'this>) + 'this;
+pub type CreateDeviceCallback =
+    dyn for<'arg, 'pnext> FnOnce(CreateDeviceCallbackArgs<'arg, 'pnext>) + 'static;
 
 /// Arguments to the [`CreateInstanceCallback`].
 #[expect(missing_debug_implementations, reason = "TODO?")]
-pub struct CreateInstanceCallbackArgs<'arg, 'pnext, 'this>
-where
-    'this: 'pnext,
-{
+pub struct CreateInstanceCallbackArgs<'arg, 'pnext> {
     /// The extensions to enable for the instance. You must not remove anything from this list,
     /// but you may add to it.
     pub extensions: &'arg mut Vec<&'static CStr>,
@@ -1926,10 +1916,6 @@ where
     pub create_info: &'arg mut vk::InstanceCreateInfo<'pnext>,
     /// Vulkan entry point.
     pub entry: &'arg ash::Entry,
-    /// We need to have `'this` in the struct, so we can declare that all lifetimes coming from
-    /// captures in the closure will live longer (and hence satisfy) `'pnext`. However, we
-    /// don't actually directly use `'this`
-    _phantom: PhantomData<&'this ()>,
 }
 
 /// Callback to allow changing the vulkan instance creation parameters.
@@ -1940,4 +1926,4 @@ where
 /// - Callback must not remove features.
 /// - Callback must not change anything to what the instance does not support.
 pub type CreateInstanceCallback<'this> =
-    dyn for<'arg, 'pnext> FnOnce(CreateInstanceCallbackArgs<'arg, 'pnext, 'this>) + 'this;
+    dyn for<'arg, 'pnext> FnOnce(CreateInstanceCallbackArgs<'arg, 'pnext>) + 'static;
