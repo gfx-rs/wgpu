@@ -868,12 +868,25 @@ impl Surface {
 
             let user_callbacks;
             {
-                // Wait for all work to finish
+                // Wait for all work that uses the surface texture to finish
                 let snatch_guard = present.device.snatchable_lock.read();
 
-                (user_callbacks, _) = present
+                let result;
+                (user_callbacks, result) = present
                     .device
                     .maintain(wgt::PollType::wait_indefinitely(), snatch_guard);
+                match result {
+                    Ok(_) => {}
+                    Err(WaitIdleError::Device(_)) => {
+                        // we can ignore device lost errors here, since we are just cleaning up
+                    }
+                    Err(WaitIdleError::Timeout) => {
+                        unreachable!("wait_indefinitely() should never timeout")
+                    }
+                    Err(WaitIdleError::WrongSubmissionIndex(_, _)) => {
+                        unreachable!("no submission index was provided")
+                    }
+                }
             }
             result.extend(user_callbacks);
 
