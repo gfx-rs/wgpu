@@ -44,7 +44,7 @@ Bottom level categories:
 
 ### Major changes
 
-### `TEXTURE_COMPONENT_SWIZZLE` feature and `swizzle` field in `TextureViewDescriptor`
+#### `TEXTURE_COMPONENT_SWIZZLE` feature and `swizzle` field in `TextureViewDescriptor`
 
 A new `swizzle` field is in `TextureViewDescriptor` used for mapping red/green/blue/alpha channels of the texture view
 when accessed by shaders. This requires `TEXTURE_COMPONENT_SWIZZLE` feature if `swizzle` is not identity.
@@ -93,6 +93,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - `wgpu::WriteOnly<[_]>` now implements `Send`. By @kpreid in [#10163](https://github.com/gfx-rs/wgpu/pull/10163).
 - Added `Texture::mark_externally_initialized()` to stop a texture from being lazily cleared if it was written to externally (e.g. via `as_hal`). By @R-Cramer4 in [#10075](https://github.com/gfx-rs/wgpu/pull/10075).
 - Added the following members to `Limits`:
+
   - `Limits::max_storage_buffers_in_vertex_stage`
   - `Limits::max_storage_buffers_in_fragment_stage`
   - `Limits::max_storage_textures_in_vertex_stage`
@@ -168,6 +169,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Fix `PendingSubmission` releasing its lock guards out of stacking order, which tripped `--cfg wgpu_validate_locks` on any submission. By @AdrianEddy in [#9960](https://github.com/gfx-rs/wgpu/pull/9960).
 - Fix `Buffer::unmap` failing with `NotMapped` when it races a `Buffer::map` running on another thread. By @AdrianEddy in [#9959](https://github.com/gfx-rs/wgpu/pull/9959).
 - Fix separate depth/stencil read-only state and `SYNC-HAZARD-WRITE-AFTER-WRITE` Vulkan validation error. By @beicause in [#9763](https://github.com/gfx-rs/wgpu/pull/9763).
+- In `Queue::submit`, validate all command buffers before making any updates to the init trackers. This is not expected to affect performance or behavior when handling successful submission. By @andyleiserson in [#10003](https://github.com/gfx-rs/wgpu/pull/10003).
 - Fix initialization tracking for some cases of array textures, 3d textures, and depth/stencil textures with divergent usage in a render pass. By @andyleiserson in [#10002](https://github.com/gfx-rs/wgpu/pull/10002) and [#10060](https://github.com/gfx-rs/wgpu/pull/10060).
 - Fixed a deadlock between `Queue::compact_blas` and `Queue::submit`, which acquired `Device::command_indices` and `Queue::pending_writes` in opposite orders. By @mstampfli in [#10118](https://github.com/gfx-rs/wgpu/pull/10118).
 - Fixed some cases of passing object labels to platform APIs despite `InstanceFlags::DISCARD_HAL_LABELS` being set. By @andyleiserson in [#10121](https://github.com/gfx-rs/wgpu/pull/10121) and [#10123](https://github.com/gfx-rs/wgpu/pull/10123).
@@ -223,6 +225,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 #### GLES
 
+- Fix black EGL surfaces on some platforms by selecting the default framebuffer's color buffer before presentation. By @valadaptive in [#10268](https://github.com/gfx-rs/wgpu/pull/10268).
 - Avoid duplicate `EGL_SURFACE_TYPE` attributes when selecting an EGL framebuffer configuration, which caused Mesa to return no matching configurations. By @BlueJayLouche and @scroix in [#10048](https://github.com/gfx-rs/wgpu/pull/10048).
 - `@interpolate(linear)` is now rejected by `Device::create_shader_module` on adapters that lack `DownlevelFlags::LINEAR_INTERPOLATION` (GLES/WebGL2), with a shader label and a source span. Previously such a shader validated fine and then failed at pipeline creation with `The selected version doesn't support Features(NOPERSPECTIVE_QUALIFIER)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - Fixed signed integer `%` (and `%=`) returning the wrong result for negative operands in the GLSL (OpenGL/GLES) backend, e.g. `-1 % 768` yielding `255` instead of `-1`. GLSL's `%` is undefined when either operand is negative, so signed remainder is now lowered as `a - b * (a / b)`, matching the SPIR-V, HLSL, and Metal backends. By @mstampfli in [#9687](https://github.com/gfx-rs/wgpu/pull/9687).
