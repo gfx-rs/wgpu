@@ -204,6 +204,7 @@ profiling = { workspace = true, default-features = false }
 raw-window-handle.workspace = true
 ron = { workspace = true, optional = true }
 rustc-hash.workspace = true
+scopeguard.workspace = true
 serde = { workspace = true, features = ["derive"], default-features = false, optional = true }
 smallvec.workspace = true
 thiserror.workspace = true

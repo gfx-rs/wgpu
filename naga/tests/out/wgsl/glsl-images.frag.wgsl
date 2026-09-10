@@ -1,16 +1,16 @@
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var img1D: texture_storage_1d<rgba8unorm,read_write>;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var img2D: texture_storage_2d<rgba8unorm,read_write>;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var img3D: texture_storage_3d<rgba8unorm,read_write>;
-@group(0) @binding(5) 
+@group(0) @binding(5)
 var img2DArray: texture_storage_2d_array<rgba8unorm,read_write>;
-@group(0) @binding(7) 
+@group(0) @binding(7)
 var imgReadOnly: texture_storage_2d<rgba8unorm,read>;
-@group(0) @binding(8) 
+@group(0) @binding(8)
 var imgWriteOnly: texture_storage_2d<rgba8unorm,write>;
-@group(0) @binding(9) 
+@group(0) @binding(9)
 var imgWriteReadOnly: texture_storage_2d<rgba8unorm,write>;
 
 fn testImg1D(coord: i32) {
@@ -125,7 +125,7 @@ fn main_1() {
     return;
 }
 
-@fragment 
+@fragment
 fn main() {
     main_1();
     return;

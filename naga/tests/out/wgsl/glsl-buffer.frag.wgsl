@@ -6,9 +6,9 @@ struct testBufferReadOnlyBlock {
     data: array<u32>,
 }
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage, read_write> testBuffer: testBufferBlock;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var<storage> testBufferReadOnly: testBufferReadOnlyBlock;
 
 fn main_1() {
@@ -23,7 +23,7 @@ fn main_1() {
     return;
 }
 
-@fragment 
+@fragment
 fn main() {
     main_1();
     return;

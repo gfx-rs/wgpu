@@ -202,7 +202,7 @@ pub trait DeviceInterface: CommonTraits {
     fn create_render_bundle_encoder(
         &self,
         desc: &crate::RenderBundleEncoderDescriptor<'_>,
-    ) -> Result<DispatchRenderBundleEncoder, crate::CreateRenderBundleEncoderError>;
+    ) -> DispatchRenderBundleEncoder;
 
     fn set_device_lost_callback(&self, device_lost_callback: BoxDeviceLostCallback);
 
@@ -308,6 +308,17 @@ pub trait TextureInterface: CommonTraits {
     fn format(&self) -> wgt::TextureFormat;
 
     fn usage(&self) -> wgt::TextureUsages;
+
+    /// Marks this texture's contents as already initialized, skipping wgpu's
+    /// lazy zero-initialization of it.
+    ///
+    /// Defaults to a no-op, which is a valid implementation for backends
+    /// (such as WebGPU) that have no concept of lazy zero-initialization.
+    ///
+    /// # Safety
+    ///
+    /// The entire contents of the texture must already be initialized.
+    unsafe fn mark_externally_initialized(&self) {}
 }
 pub trait ExternalTextureInterface: CommonTraits {
     fn destroy(&self);
@@ -455,14 +466,14 @@ pub trait RenderPassInterface: CommonTraits + Drop {
         buffer: &DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     );
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
         buffer: Option<&DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     );
     fn set_immediates(&mut self, offset: u32, data: &[u8]);
     fn set_blend_constant(&mut self, color: crate::Color);
@@ -566,14 +577,14 @@ pub trait RenderBundleEncoderInterface: CommonTraits {
         buffer: &DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     );
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
         buffer: Option<&DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     );
     fn set_immediates(&mut self, offset: u32, data: &[u8]);
 

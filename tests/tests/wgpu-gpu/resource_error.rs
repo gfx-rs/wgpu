@@ -30,11 +30,7 @@ static BAD_BUFFER_MAP: GpuTestConfiguration = GpuTestConfiguration::new()
             || buffer.slice(..).map_async(wgpu::MapMode::Write, |_| {}),
             Some("Buffer with '' label is invalid"),
         );
-        fail(
-            &ctx.device,
-            || buffer.unmap(),
-            Some("Buffer with '' label is invalid"),
-        );
+        valid(&ctx.device, || buffer.unmap());
         valid(&ctx.device, || buffer.destroy());
         valid(&ctx.device, || buffer.destroy());
     });

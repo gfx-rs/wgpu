@@ -5,7 +5,7 @@ struct Input {
 
 var<workgroup> wg_var: u32;
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn compute1_(input: Input) {
     wg_var = (input.local_invocation_index * 2u);
     let _e6 = wg_var;

@@ -1,6 +1,6 @@
-@group(1) @binding(0) 
+@group(1) @binding(0)
 var tex2D: texture_depth_2d;
-@group(1) @binding(1) 
+@group(1) @binding(1)
 var sampShadow: sampler_comparison;
 
 fn CalcShadowPCF1_(T_P_t_TextureDepth: texture_depth_2d, S_P_t_TextureDepth: sampler_comparison, t_ProjCoord: vec3<f32>) -> f32 {
@@ -37,7 +37,7 @@ fn main_1() {
     return;
 }
 
-@fragment 
+@fragment
 fn main() {
     main_1();
     return;

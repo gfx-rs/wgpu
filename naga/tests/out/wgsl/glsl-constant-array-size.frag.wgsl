@@ -4,7 +4,7 @@ struct Data {
 
 const NUM_VECS: i32 = 42i;
 
-@group(1) @binding(0) 
+@group(1) @binding(0)
 var<uniform> global: Data;
 
 fn function_() -> vec4<f32> {
@@ -36,7 +36,7 @@ fn main_1() {
     return;
 }
 
-@fragment 
+@fragment
 fn main() {
     main_1();
     return;

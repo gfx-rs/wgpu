@@ -95,11 +95,10 @@ impl Device {
 
     /// Check for resource cleanups and mapping callbacks. Will block if [`PollType::Wait`] is passed.
     ///
-    /// Return `true` if the queue is empty, or `false` if there are more queue
-    /// submissions still in flight. (Note that, unless access to the [`Queue`] is
-    /// coordinated somehow, this information could be out of date by the time
-    /// the caller receives it. `Queue`s can be shared between threads, so
-    /// other threads could submit new work at any time.)
+    /// (Note that, unless access to the [`Queue`] is coordinated somehow,
+    /// the returned [`PollStatus`] could be out of date by the time the caller
+    /// receives it. `Queue`s can be shared between threads, so other threads
+    /// could submit new work at any time.)
     ///
     /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
     pub fn poll(&self, poll_type: PollType) -> Result<crate::PollStatus, crate::PollError> {
@@ -228,12 +227,12 @@ impl Device {
     pub fn create_render_bundle_encoder<'a>(
         &self,
         desc: &RenderBundleEncoderDescriptor<'_>,
-    ) -> Result<RenderBundleEncoder<'a>, CreateRenderBundleEncoderError> {
-        let encoder = self.inner.create_render_bundle_encoder(desc)?;
-        Ok(RenderBundleEncoder {
+    ) -> RenderBundleEncoder<'a> {
+        let encoder = self.inner.create_render_bundle_encoder(desc);
+        RenderBundleEncoder {
             inner: encoder,
             _p: PhantomData,
-        })
+        }
     }
 
     /// Creates a new [`BindGroup`].
@@ -363,13 +362,7 @@ impl Device {
     ) -> Texture {
         let texture = unsafe {
             let core_device = self.inner.as_core();
-            core_device.context.create_texture_from_hal::<A>(
-                hal_texture,
-                core_device,
-                desc,
-                initial_state,
-                cleared,
-            )
+            core_device.create_texture_from_hal::<A>(hal_texture, desc, initial_state, cleared)
         };
         Texture {
             inner: texture.into(),
@@ -519,10 +512,7 @@ impl Device {
         // not created on this device.
         let core_device = self.inner.as_core_opt()?;
         let core_texture = texture.inner.as_core_opt()?;
-        if !core_device
-            .context
-            .texture_belongs_to_device(core_texture, core_device)
-        {
+        if !core_device.texture_belongs_to_device(core_texture) {
             return None;
         }
 
@@ -625,9 +615,7 @@ impl Device {
 
         let buffer = unsafe {
             let core_device = self.inner.as_core();
-            core_device
-                .context
-                .create_buffer_from_hal::<A>(hal_buffer, core_device, desc)
+            core_device.create_buffer_from_hal::<A>(hal_buffer, desc)
         };
 
         Buffer {
@@ -653,6 +641,9 @@ impl Device {
     }
 
     /// Set a callback which will be called for all errors that are not handled in error scopes.
+    ///
+    /// Detailed shader creation errors will not be provided to handler;
+    /// they can be inspected via [`ShaderModule::get_compilation_info`].
     pub fn on_uncaptured_error(&self, handler: Arc<dyn UncapturedErrorHandler>) {
         self.inner.on_uncaptured_error(handler)
     }
@@ -819,7 +810,7 @@ impl Device {
         &self,
     ) -> Option<impl Deref<Target = A::Device> + WasmNotSendSync> {
         let device = self.inner.as_core_opt()?;
-        unsafe { device.context.device_as_hal::<A>(device) }
+        unsafe { device.as_hal::<A>() }
     }
 
     /// Destroy this device.
@@ -1073,6 +1064,9 @@ impl ErrorScopeGuard {
     ///
     /// Returns a future which resolves to the error captured by this scope, if any.
     /// The pop takes effect immediately; the future does not need to be awaited before doing work that is outside of this error scope.
+    ///
+    /// Detailed shader creation errors are not returned via this function;
+    /// they can be inspected via [`ShaderModule::get_compilation_info`].
     pub fn pop(mut self) -> impl Future<Output = Option<Error>> + WasmNotSend {
         self.popped = true;
         self.device.pop_error_scope(self.index)

@@ -210,7 +210,8 @@ impl crate::BuiltIn {
             | Self::RayTCurrentMax
             | Self::ObjectToWorld
             | Self::WorldToObject
-            | Self::HitKind => unreachable!(),
+            | Self::HitKind
+            | Self::HitBarycentrics => unreachable!(),
         }))
     }
 }

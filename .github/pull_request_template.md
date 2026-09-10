@@ -10,10 +10,11 @@ approved. Don't use draft PR status to indicate this._
 _Describe what problem this is solving, and how it's solved._
 
 **Testing**
-_Explain how this change is tested._
+_Explain what you have done to ensure this change is adequately tested
+(e.g. adding test cases, running tests on an unusual platform, or
+manually checking visual results)._
 
 **Squash or Rebase?**
-
 _If your pull request contains multiple commits, please indicate whether
 they need to be squashed into a single commit before they're merged,
 or if they're ready to rebase onto `trunk` as they stand. In the
@@ -32,10 +33,10 @@ person(s) who reviewed your changes. This will make sure it gets re-added to the
 <!-- Note that checking all the boxes is not necessary to open a PR. -->
 
 - [ ] I self-reviewed and fully understand this PR.
-- [ ] WebGPU implementations built with `wgpu` may be affected behaviorally.
-- [ ] Validation and feature gates are in place to confine behavioral changes.
-- [ ] Tests demonstrate the validation and altered logic works. <!-- See `docs/testing.md` -->
 - [ ] `CHANGELOG.md` entries for the user-facing effects of this change are present. <!-- See instructions at the top of `CHANGELOG.md`. -->
 - [ ] The PR is minimal, and doesn't make sense to land as multiple PRs.
 - [ ] Commits are logically scoped and individually reviewable.
 - [ ] The PR description has enough context to understand the motivation and solution implemented.
+- [ ] (If applicable) WebGPU implementations built with `wgpu` may be affected behaviorally.
+- [ ] (If applicable) Validation and feature gates are in place to confine behavioral changes.
+- [ ] (If applicable) Tests demonstrate the validation and altered logic works. <!-- See `docs/testing.md` -->

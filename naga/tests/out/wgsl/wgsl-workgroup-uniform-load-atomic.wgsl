@@ -7,7 +7,7 @@ var<workgroup> wg_scalar: atomic<u32>;
 var<workgroup> wg_signed: atomic<i32>;
 var<workgroup> wg_struct: AtomicStruct;
 
-@compute @workgroup_size(64, 1, 1) 
+@compute @workgroup_size(64, 1, 1)
 fn test_atomic_workgroup_uniform_load(@builtin(workgroup_id) workgroup_id: vec3<u32>, @builtin(local_invocation_id) local_id: vec3<u32>) {
     var local: bool;
     var local_1: bool;

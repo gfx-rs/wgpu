@@ -1,6 +1,6 @@
 var<private> global: vec4<f32>;
 var<private> entryPointParam_fs_main: vec4<f32>;
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var texture: texture_multisampled_2d<f32>;
 
 fn fs_main() {
@@ -28,7 +28,7 @@ fn fs_main() {
     return;
 }
 
-@fragment 
+@fragment
 fn main(@builtin(position) param: vec4<f32>) -> @location(0) vec4<f32> {
     global = param;
     fs_main();

@@ -12,7 +12,7 @@ struct FragmentIn {
 
 var<immediate> im: ImmediateData;
 
-@fragment 
+@fragment
 fn main(in: FragmentIn) -> @location(0) vec4<f32> {
     let _e4 = im.index;
     if (in.primitive_index == _e4) {

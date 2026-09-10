@@ -1,29 +1,7 @@
-use alloc::string::String;
-use core::error::Error;
-use core::fmt::Display;
 use core::{marker::PhantomData, num::NonZeroU32, ops::Range};
 
 use crate::dispatch::RenderBundleEncoderInterface;
 use crate::*;
-
-/// Error type for [`Device::create_render_bundle_encoder`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CreateRenderBundleEncoderError(String);
-
-impl CreateRenderBundleEncoderError {
-    /// Creates a new `CreateRenderBundleEncoderError` with the given message.
-    pub fn new(msg: String) -> Self {
-        Self(msg)
-    }
-}
-
-impl Display for CreateRenderBundleEncoderError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
-        write!(f, "Error while creating render bundle encoder: {}", self.0)
-    }
-}
-
-impl Error for CreateRenderBundleEncoderError {}
 
 /// Encodes a series of GPU operations into a reusable "render bundle".
 ///
@@ -119,8 +97,7 @@ impl<'a> RenderBundleEncoder<'a> {
             &buffer_slice.buffer.inner,
             index_format,
             buffer_slice.offset,
-            // TODO(https://github.com/gfx-rs/wgpu/issues/3170): Empty slices should be supported here
-            Some(buffer_slice.size_expect_nonzero()),
+            Some(buffer_slice.size),
         );
     }
 
@@ -148,8 +125,7 @@ impl<'a> RenderBundleEncoder<'a> {
                 slot,
                 Some(&buffer_slice.buffer.inner),
                 buffer_slice.offset,
-                // TODO(https://github.com/gfx-rs/wgpu/issues/3170): Empty slices should be supported here
-                Some(buffer_slice.size_expect_nonzero()),
+                Some(buffer_slice.size),
             );
         } else {
             self.inner.set_vertex_buffer(slot, None, 0, None);

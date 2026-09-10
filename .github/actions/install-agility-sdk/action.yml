@@ -4,7 +4,12 @@ runs:
   using: "composite"
   steps:
     - shell: bash
-      run: |
+      # NOTE: We ignore the `github-env` lint because we trust:
+      #
+      # - Our `install-agility-sdk` task's output
+      # - Otherwise, `WGPU_DX12_AGILITY_SDK_REQUIRE` is a fixed environment variable that is easy
+      #   to audit.
+      run: | # zizmor: ignore[github-env]
         set -e
 
         cargo xtask install-agility-sdk >> "$GITHUB_ENV"
