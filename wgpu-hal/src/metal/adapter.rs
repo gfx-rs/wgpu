@@ -1,5 +1,5 @@
 use objc2::rc::autoreleasepool;
-use objc2::runtime::{AnyObject, ProtocolObject, Sel};
+use objc2::runtime::{ProtocolObject, Sel};
 use objc2::{available, sel};
 use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo};
 use objc2_metal::{
@@ -21,9 +21,15 @@ use super::{OsFeatures, TimestampQuerySupport};
 /// This mirrors the check that `objc2` performs internally (in debug builds)
 /// before sending a message. We use it to skip method calls that would panic
 /// on proxy objects like Apple's `CaptureMTLDevice`, which forwards messages
-/// at runtime but doesn't declare the methods in its class.
-fn device_class_responds_to(device: &ProtocolObject<dyn MTLDevice>, sel: Sel) -> bool {
-    AnyObject::class(device.as_ref()).responds_to(sel)
+/// at runtime but doesn't declare the methods in its class. See
+/// <https://github.com/gfx-rs/wgpu/issues/10028>.
+#[cfg(debug_assertions)]
+fn is_valid_objc_call(device: &ProtocolObject<dyn MTLDevice>, sel: Sel) -> bool {
+    objc2::runtime::AnyObject::class(device.as_ref()).responds_to(sel)
+}
+#[cfg(not(debug_assertions))]
+fn is_valid_objc_call(_device: &ProtocolObject<dyn MTLDevice>, _sel: Sel) -> bool {
+    true
 }
 
 /// Maximum number of command buffers for `MTLCommandQueue`s that we create.
@@ -70,6 +76,31 @@ impl crate::Adapter for super::Adapter {
         _memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         autoreleasepool(|_| {
+            #[cfg(debug_assertions)]
+            {
+                // Detect and warn if our feature detection may be degraded due to
+                // the Metal capture device. See `is_valid_objc_call` and
+                // <https://github.com/gfx-rs/wgpu/issues/10028>.
+                use core::sync::atomic::{AtomicBool, Ordering};
+                static MTL_DEBUG_DEVICES: &[&str] = &[
+                    "CaptureMTLDevice",
+                    // others...?
+                ];
+                static WARN_ONCE: AtomicBool = AtomicBool::new(false);
+                let class = objc2::runtime::AnyObject::class(self.shared.device.as_ref())
+                    .name()
+                    .to_string_lossy();
+                if let Some(class) = MTL_DEBUG_DEVICES.iter().find(|&&c| class == c) {
+                    if !WARN_ONCE.fetch_or(true, Ordering::SeqCst) {
+                        log::warn!(
+                            "Metal debug device ({class}) detected. Some Metal features may \
+                            be incorrectly detected as not supported. \
+                            See <https://github.com/gfx-rs/wgpu/issues/10028>."
+                        );
+                    }
+                }
+            }
+
             let queue = self
                 .shared
                 .device
@@ -763,7 +794,7 @@ impl super::CapabilitiesQuery {
             texture_cube_array: Self::supports_any(device, TEXTURE_CUBE_ARRAY_SUPPORT),
             supports_float_filtering: os_type == super::OsType::Macos
                 || (available!(macos = 11.0, ios = 14.0, tvos = 16.0, visionos = 1.0)
-                    && device_class_responds_to(device, sel!(supports32BitFloatFiltering))
+                    && is_valid_objc_call(device, sel!(supports32BitFloatFiltering))
                     && device.supports32BitFloatFiltering()),
             format_depth24_stencil8: os_type == super::OsType::Macos
                 && device.isDepth24Stencil8PixelFormatSupported(),
@@ -777,7 +808,7 @@ impl super::CapabilitiesQuery {
             format_b5: os_type != super::OsType::Macos,
             format_bc: os_type == super::OsType::Macos
                 || (available!(macos = 11.0, ios = 16.4, tvos = 16.4, visionos = 1.0)
-                    && device_class_responds_to(device, sel!(supportsBCTextureCompression))
+                    && is_valid_objc_call(device, sel!(supportsBCTextureCompression))
                     && device.supportsBCTextureCompression()),
             format_eac_etc: os_type != super::OsType::Macos
                 // M1 in macOS supports EAC/ETC2
@@ -1066,7 +1097,7 @@ impl super::CapabilitiesQuery {
                 ios = 13.0,
                 tvos = 13.0,
                 visionos = 1.0
-            ) && device_class_responds_to(device, sel!(hasUnifiedMemory))
+            ) && is_valid_objc_call(device, sel!(hasUnifiedMemory))
             {
                 Some(device.hasUnifiedMemory())
             } else {
@@ -1100,10 +1131,7 @@ impl super::CapabilitiesQuery {
                     && (device.supportsFamily(MTLGPUFamily::Apple7)
                         || device.supportsFamily(MTLGPUFamily::Mac2)))
                 || (available!(macos = 10.15, ios = 14.0, tvos = 16.0, visionos = 1.0)
-                    && device_class_responds_to(
-                        device,
-                        sel!(supportsShaderBarycentricCoordinates),
-                    )
+                    && is_valid_objc_call(device, sel!(supportsShaderBarycentricCoordinates))
                     && device.supportsShaderBarycentricCoordinates()),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             // See https://github.com/gfx-rs/wgpu/pull/8725 for more details
@@ -1169,9 +1197,9 @@ impl super::CapabilitiesQuery {
                 // `supportsRayTracing{,FromRender}` picks up a few devices before Apple6,
                 // but requires the capture device workaround.
                 (family_check && device.supportsFamily(MTLGPUFamily::Apple6))
-                    || (device_class_responds_to(device, sel!(supportsRaytracing))
+                    || (is_valid_objc_call(device, sel!(supportsRaytracing))
                         && device.supportsRaytracing()
-                        && device_class_responds_to(device, sel!(supportsRaytracingFromRender))
+                        && is_valid_objc_call(device, sel!(supportsRaytracingFromRender))
                         && device.supportsRaytracingFromRender())
             } else {
                 false

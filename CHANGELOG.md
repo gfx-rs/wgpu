@@ -158,6 +158,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 #### Metal
 
 - Removed the `size` argument to `wgpu_hal::metal::Device::buffer_from_raw`. The passed size value was previously used only to resolve vertex buffer bindings without an explicit size, possibly incorrectly. Binding sizes are now resolved in `wgpu-core`. By @andyleiserson in [#9848](https://github.com/gfx-rs/wgpu/pull/9848).
+- When `cfg(debug_assertions)` is active and the Metal capture device is detected (e.g. if running the application under Xcode), print a warning that feature detection may be degraded. Without `cfg(debug_assertions)`, remove the feature detection workaround in question entirely. By @andyleiserson in [#9757](https://github.com/gfx-rs/wgpu/pull/9757). Also see <https://github.com/gfx-rs/wgpu/issues/10028>.
 
 ### Bug Fixes
 
