@@ -131,7 +131,7 @@ impl Player {
             }
             Action::DropBuffer(id) => {
                 let buffer = self.buffers.remove(&id).expect("invalid buffer");
-                let _ = buffer.unmap();
+                buffer.unmap();
             }
             Action::CreateTexture(id, desc) => {
                 let texture = device.create_texture(&desc);
@@ -269,10 +269,7 @@ impl Player {
                         data.kind()
                     );
                 };
-                let (shader, error) = device.create_shader_module(&desc, source);
-                if let Some(e) = error {
-                    panic!("shader compilation error:\n---{code}\n---\n{e}");
-                }
+                let shader = device.create_shader_module(&desc, source);
                 self.shader_modules.insert(id, shader);
             }
             Action::CreateShaderModulePassthrough {
@@ -327,10 +324,7 @@ impl Player {
                     glsl,
                     wgsl,
                 };
-                let (shader, error) = unsafe { device.create_shader_module_passthrough(&desc) };
-                if let Some(e) = error {
-                    panic!("shader compilation error:\n{e}");
-                }
+                let shader = unsafe { device.create_shader_module_passthrough(&desc) };
                 self.shader_modules.insert(id, shader);
             }
             Action::DropShaderModule(id) => {
@@ -353,7 +347,7 @@ impl Player {
                 // pipeline descriptor that can represent either a conventional
                 // pipeline or a mesh shading pipeline.
                 let resolved_desc = self.resolve_render_pipeline_descriptor(desc);
-                let (pipeline, _error) = device.create_render_pipeline(resolved_desc);
+                let pipeline = device.create_render_pipeline(resolved_desc);
                 self.render_pipelines.insert(id, pipeline);
             }
             Action::DropRenderPipeline(id) => {

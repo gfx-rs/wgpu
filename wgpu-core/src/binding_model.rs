@@ -120,6 +120,17 @@ pub enum BindingError {
         offset: wgt::BufferAddress,
         buffer_size: u64,
     },
+    /// The supplied binding offset was equal to the buffer size.
+    ///
+    /// A binding offset equal to the buffer size is legal for vertex and index buffer
+    /// bindings, but not for storage/uniform buffer bindings, thus this error should only
+    /// be raised for the latter.
+    #[error("Buffer {buffer}: Binding offset {offset} must be strictly less than buffer size {buffer_size}")]
+    BindingOffsetEqualsSize {
+        buffer: ResourceErrorIdent,
+        offset: wgt::BufferAddress,
+        buffer_size: u64,
+    },
     #[error("Unbinding vertex buffer at slot {slot} expects offset to be 0. However an offset of {offset} was provided.")]
     UnbindingVertexBufferOffsetNotZero { slot: u32, offset: u64 },
     #[error("Unbinding vertex buffer at slot {slot} expects size to be 0. However a size of {size} was provided.")]
@@ -132,6 +143,7 @@ impl WebGpuError for BindingError {
             Self::DestroyedResource(e) => e.webgpu_error_type(),
             Self::BindingRangeTooLarge { .. }
             | Self::BindingOffsetTooLarge { .. }
+            | Self::BindingOffsetEqualsSize { .. }
             | BindingError::UnbindingVertexBufferOffsetNotZero { .. }
             | BindingError::UnbindingVertexBufferSizeNotZero { .. } => ErrorType::Validation,
         }
@@ -613,10 +625,18 @@ impl BindingTypeMaxCountValidator {
             limits.max_storage_buffers_per_shader_stage,
             BindingTypeMaxCountErrorKind::StorageBuffers,
         )?;
+        // NOTE: We don't explicitly check `max_storage_buffers_in_vertex_stage` or
+        // `max_storage_buffers_in_fragment_stage` because we don't assign different values between
+        // those and `max_storage_buffers_per_shader_stage`. If this changes, this needs to be
+        // fixed!
         self.storage_textures.validate(
             limits.max_storage_textures_per_shader_stage,
             BindingTypeMaxCountErrorKind::StorageTextures,
         )?;
+        // NOTE: We don't explicitly check `max_storage_textures_in_vertex_stage` or
+        // `max_storage_textures_in_fragment_stage` because we don't assign different values between
+        // those and `max_storage_textures_per_shader_stage`. If this changes, this needs to be
+        // fixed!
         self.uniform_buffers.validate(
             limits.max_uniform_buffers_per_shader_stage,
             BindingTypeMaxCountErrorKind::UniformBuffers,

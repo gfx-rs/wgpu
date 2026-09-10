@@ -5,7 +5,7 @@ struct VertexOutput {
     @builtin(clip_distances) clip_distances: array<f32, 1>,
 }
 
-@vertex 
+@vertex
 fn main() -> VertexOutput {
     var out: VertexOutput;
 

@@ -19,7 +19,7 @@ struct MeshOutput {
 
 var<workgroup> mesh_output: MeshOutput;
 
-@mesh(mesh_output) @workgroup_size(1, 1, 1) 
+@mesh(mesh_output) @workgroup_size(1, 1, 1)
 fn ms_main() {
     mesh_output.vertex_count = 3u;
     mesh_output.primitive_count = 1u;
@@ -31,7 +31,7 @@ fn ms_main() {
     return;
 }
 
-@fragment 
+@fragment
 fn fs_main(@builtin(primitive_index) index: u32) -> @location(0) vec4<f32> {
     return vec4<f32>(f32(index), 1f, 1f, 1f);
 }

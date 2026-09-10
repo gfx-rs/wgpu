@@ -2,9 +2,8 @@ use alloc::borrow::ToOwned;
 use alloc::{
     borrow::Cow::{self, Borrowed},
     boxed::Box,
-    string::{String, ToString as _},
+    string::String,
     sync::Arc,
-    vec,
     vec::Vec,
 };
 use core::{
@@ -21,15 +20,14 @@ use wgt::error::WebGpuError;
 
 use arrayvec::ArrayVec;
 use smallvec::SmallVec;
-use wgc::{pipeline::CreateShaderModuleError, resource::BlasPrepareCompactResult};
+use wgc::resource::BlasPrepareCompactResult;
 use wgt::WasmNotSendSync;
 
 use crate::{
     api,
     dispatch::{self, BlasCompactCallback, BufferMappedRangeInterface},
-    BindingResource, Blas, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
-    CompilationMessageType, Features, LoadOp, MapMode, Operations, ShaderSource,
-    SurfaceTargetUnsafe, TextureDescriptor, Tlas, WriteOnly,
+    BindingResource, Blas, BufferBinding, BufferDescriptor, Features, LoadOp, MapMode, Operations,
+    ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas, WriteOnly,
 };
 use crate::{dispatch::DispatchAdapter, util::Mutex};
 
@@ -281,7 +279,6 @@ impl CoreBuffer {
 #[derive(Debug, Clone)]
 pub struct CoreShaderModule {
     pub(crate) wgpu_shader_module: Arc<wgc::pipeline::ShaderModule>,
-    compilation_info: CompilationInfo,
 }
 
 #[derive(Debug, Clone)]
@@ -488,35 +485,6 @@ impl fmt::Debug for CoreSurfaceOutputDetail {
         f.debug_struct("CoreSurfaceOutputDetail")
             .field("wgpu_surface", &Arc::as_ptr(&self.wgpu_surface))
             .finish()
-    }
-}
-
-impl From<CreateShaderModuleError> for CompilationInfo {
-    fn from(value: CreateShaderModuleError) -> Self {
-        match value {
-            #[cfg(feature = "wgsl")]
-            CreateShaderModuleError::Parsing(v) => v.into(),
-            #[cfg(feature = "glsl")]
-            CreateShaderModuleError::ParsingGlsl(v) => v.into(),
-            #[cfg(feature = "spirv")]
-            CreateShaderModuleError::ParsingSpirV(v) => v.into(),
-            CreateShaderModuleError::Validation(v) => v.into(),
-            // Device errors are reported through the error sink, and are not compilation errors.
-            // Same goes for native shader module generation errors.
-            CreateShaderModuleError::Device(_) | CreateShaderModuleError::Generation => {
-                CompilationInfo {
-                    messages: Vec::new(),
-                }
-            }
-            // Everything else is an error message without location information.
-            _ => CompilationInfo {
-                messages: vec![CompilationMessage {
-                    message: value.to_string(),
-                    message_type: CompilationMessageType::Error,
-                    location: None,
-                }],
-            },
-        }
     }
 }
 
@@ -841,25 +809,9 @@ impl dispatch::DeviceInterface for CoreDevice {
             ShaderSource::Naga(module) => wgc::pipeline::ShaderModuleSource::Naga(module),
             ShaderSource::Dummy(_) => panic!("found `ShaderSource::Dummy`"),
         };
-        let (wgpu_shader_module, error) =
-            self.wgpu_device.create_shader_module(&descriptor, source);
-        let compilation_info = match error {
-            Some(cause) => {
-                self.wgpu_device.handle_error(
-                    cause.clone(),
-                    desc.label,
-                    "Device::create_shader_module",
-                );
-                CompilationInfo::from(cause)
-            }
-            None => CompilationInfo { messages: vec![] },
-        };
+        let wgpu_shader_module = self.wgpu_device.create_shader_module(&descriptor, source);
 
-        CoreShaderModule {
-            wgpu_shader_module,
-            compilation_info,
-        }
-        .into()
+        CoreShaderModule { wgpu_shader_module }.into()
     }
 
     unsafe fn create_shader_module_passthrough(
@@ -867,26 +819,10 @@ impl dispatch::DeviceInterface for CoreDevice {
         desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
     ) -> dispatch::DispatchShaderModule {
         let desc = desc.map_label(|l| l.map(Cow::from));
-        let (wgpu_shader_module, error) =
+        let wgpu_shader_module =
             unsafe { self.wgpu_device.create_shader_module_passthrough(&desc) };
 
-        let compilation_info = match error {
-            Some(cause) => {
-                self.wgpu_device.handle_error(
-                    cause.clone(),
-                    desc.label.as_deref(),
-                    "Device::create_shader_module_passthrough",
-                );
-                CompilationInfo::from(cause)
-            }
-            None => CompilationInfo { messages: vec![] },
-        };
-
-        CoreShaderModule {
-            wgpu_shader_module,
-            compilation_info,
-        }
-        .into()
+        CoreShaderModule { wgpu_shader_module }.into()
     }
 
     fn create_bind_group_layout(
@@ -1157,15 +1093,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
         };
 
-        let (wgpu_render_pipeline, error) = self.wgpu_device.create_render_pipeline(descriptor);
-        if let Some(cause) = error {
-            if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
-                log::error!("Shader translation error for stage {stage:?}: {error}");
-                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
-            }
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_render_pipeline");
-        }
+        let wgpu_render_pipeline = self.wgpu_device.create_render_pipeline(descriptor);
         CoreRenderPipeline {
             wgpu_render_pipeline,
         }
@@ -1248,16 +1176,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
         };
 
-        let (wgpu_render_pipeline, error) =
-            self.wgpu_device.create_render_pipeline(descriptor.into());
-        if let Some(cause) = error {
-            if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
-                log::error!("Shader translation error for stage {stage:?}: {error}");
-                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
-            }
-            self.wgpu_device
-                .handle_error(cause, desc.label, "Device::create_render_pipeline");
-        }
+        let wgpu_render_pipeline = self.wgpu_device.create_render_pipeline(descriptor.into());
         CoreRenderPipeline {
             wgpu_render_pipeline,
         }
@@ -1750,7 +1669,7 @@ impl dispatch::QueueInterface for CoreQueue {
 
 impl dispatch::ShaderModuleInterface for CoreShaderModule {
     fn get_compilation_info(&self) -> Pin<Box<dyn dispatch::ShaderCompilationInfoFuture>> {
-        Box::pin(ready(self.compilation_info.clone()))
+        Box::pin(ready(self.wgpu_shader_module.compilation_info().clone()))
     }
 }
 
@@ -1786,16 +1705,8 @@ impl dispatch::BufferInterface for CoreBuffer {
             })),
         };
 
-        match self
-            .wgpu_buffer
-            .map_async(range.start, Some(range.end - range.start), operation)
-        {
-            Ok(_) => (),
-            Err(cause) => self
-                .wgpu_buffer
-                .device()
-                .handle_error_nolabel(cause, "Buffer::map_async"),
-        }
+        self.wgpu_buffer
+            .map_async(range.start, Some(range.end - range.start), operation);
     }
 
     fn get_mapped_range(
@@ -1816,13 +1727,7 @@ impl dispatch::BufferInterface for CoreBuffer {
     }
 
     fn unmap(&self) {
-        match self.wgpu_buffer.unmap() {
-            Ok(()) => (),
-            Err(cause) => self
-                .wgpu_buffer
-                .device()
-                .handle_error_nolabel(cause, "Buffer::buffer_unmap"),
-        }
+        self.wgpu_buffer.unmap();
     }
 
     fn destroy(&self) {
@@ -2455,7 +2360,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         buffer: &dispatch::DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.as_core();
 
@@ -2468,7 +2373,7 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         slot: u32,
         buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.map(|buffer| buffer.as_core().wgpu_buffer.clone());
 
@@ -2792,7 +2697,7 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         buffer: &dispatch::DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.as_core();
 
@@ -2805,7 +2710,7 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         slot: u32,
         buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.map(|buffer| buffer.as_core().wgpu_buffer.clone());
 

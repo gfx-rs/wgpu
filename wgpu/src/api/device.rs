@@ -96,11 +96,10 @@ impl Device {
 
     /// Check for resource cleanups and mapping callbacks. Will block if [`PollType::Wait`] is passed.
     ///
-    /// Return `true` if the queue is empty, or `false` if there are more queue
-    /// submissions still in flight. (Note that, unless access to the [`Queue`] is
-    /// coordinated somehow, this information could be out of date by the time
-    /// the caller receives it. `Queue`s can be shared between threads, so
-    /// other threads could submit new work at any time.)
+    /// (Note that, unless access to the [`Queue`] is coordinated somehow,
+    /// the returned [`PollStatus`] could be out of date by the time the caller
+    /// receives it. `Queue`s can be shared between threads, so other threads
+    /// could submit new work at any time.)
     ///
     /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
     pub fn poll(&self, poll_type: PollType) -> Result<crate::PollStatus, crate::PollError> {
@@ -653,6 +652,9 @@ impl Device {
     }
 
     /// Set a callback which will be called for all errors that are not handled in error scopes.
+    ///
+    /// Detailed shader creation errors will not be provided to handler;
+    /// they can be inspected via [`ShaderModule::get_compilation_info`].
     pub fn on_uncaptured_error(&self, handler: Arc<dyn UncapturedErrorHandler>) {
         self.inner.on_uncaptured_error(handler)
     }
@@ -1073,6 +1075,9 @@ impl ErrorScopeGuard {
     ///
     /// Returns a future which resolves to the error captured by this scope, if any.
     /// The pop takes effect immediately; the future does not need to be awaited before doing work that is outside of this error scope.
+    ///
+    /// Detailed shader creation errors are not returned via this function;
+    /// they can be inspected via [`ShaderModule::get_compilation_info`].
     pub fn pop(mut self) -> impl Future<Output = Option<Error>> + WasmNotSend {
         self.popped = true;
         self.device.pop_error_scope(self.index)

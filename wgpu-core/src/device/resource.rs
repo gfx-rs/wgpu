@@ -8,18 +8,18 @@ use alloc::{
 use core::{
     fmt,
     mem::{self, ManuallyDrop},
-    num::NonZeroU32,
+    num::{NonZeroU32, NonZeroU64},
 };
-use hal::ShouldBeNonZeroExt;
 
 use arrayvec::ArrayVec;
 use bitflags::Flags;
+use scopeguard::{guard, ScopeGuard};
 use smallvec::SmallVec;
 use wgpu_sync::atomic::{AtomicBool, Ordering};
 use wgpu_sync::OnceCell;
 use wgt::{
-    math::align_to, ColorWrites, DeviceLostReason, TextureFormat, TextureSampleType,
-    TextureViewDimension,
+    error::WebGpuError, math::align_to, ColorWrites, DeviceLostReason, TextureFormat,
+    TextureSampleType, TextureViewDimension,
 };
 
 #[cfg(feature = "trace")]
@@ -45,7 +45,7 @@ use crate::{
     },
     instance::{Adapter, RequestDeviceError},
     lock::{rank, Mutex, RwLock},
-    pipeline::{self, ColorStateError},
+    pipeline::{self, shader_module_error_into_compilation_info, ColorStateError},
     pool::ResourcePool,
     resource::{
         self, Buffer, BufferState, ExternalTexture, ExternalTextureState, Labeled, ParentDevice,
@@ -171,6 +171,13 @@ pub struct ExternalTextureParams {
     pub _padding: [u8; 4],
 }
 
+const _: () =
+    assert!(size_of::<ExternalTextureParams>() == wgpu_hal::EXTERNAL_TEXTURE_PARAMS_SIZE as usize);
+const EXTERNAL_TEXTURE_PARAMS_BUFFER_SIZE: usize = {
+    size_of::<ExternalTextureParams>()
+        .next_multiple_of(wgpu_hal::UNIVERSAL_BUFFER_SIZE_ALIGNMENT as usize)
+};
+
 impl ExternalTextureParams {
     pub fn from_desc<L>(desc: &wgt::ExternalTextureDescriptor<L>) -> Self {
         let gamut_conversion_matrix = [
@@ -220,27 +227,9 @@ impl DeferredBufferMapPendingClosures {
     }
 }
 
-/// Resources associated with a device.
-///
-/// This struct exists so that resources can be cleaned up properly on error returns
-/// from [`Device::new`].
-///
-/// [`Device::timestamp_normalizer`] is late-initialized after [`Device::new`], so it is not
-/// included here.
-struct DeviceResources<'a> {
-    raw: &'a dyn hal::DynDevice,
-    zero_buffer: Option<Box<dyn hal::DynBuffer>>,
-    empty_bgl: Option<Box<dyn hal::DynBindGroupLayout>>,
-    default_external_texture_params_buffer: Option<Box<dyn hal::DynBuffer>>,
-    fence: Option<Box<dyn hal::DynFence>>,
-    indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
-}
-
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 pub struct Device {
-    raw: Box<dyn hal::DynDevice>,
-    pub(crate) adapter: Arc<Adapter>,
     pub(crate) queue: OnceCell<Weak<Queue>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     pub(crate) empty_bgl: ManuallyDrop<Box<dyn hal::DynBindGroupLayout>>,
@@ -317,7 +306,17 @@ pub struct Device {
     /// binding point will be rendered correctly. Intended to be used as the
     /// [`hal::ExternalTextureBinding::params`] field.
     pub(crate) default_external_texture_params_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
-    // needs to be dropped last
+
+    // Drop order matters!
+    //
+    //  - Any member whose drop might destroy hal resources needs to be dropped
+    //    before the device. Most hal resources are handled manually in
+    //    `Device::drop`, but this applies to `command_allocator`.
+    //  - The device must be dropped before the adapter.
+    //  - Any member whose drop might write into the trace must be dropped
+    //    before the trace.
+    raw: Box<dyn hal::DynDevice>,
+    pub(crate) adapter: Arc<Adapter>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<Box<dyn trace::Trace + Send + Sync + 'static>>>,
 }
@@ -338,45 +337,12 @@ impl fmt::Debug for Device {
     }
 }
 
-impl Drop for DeviceResources<'_> {
-    fn drop(&mut self) {
-        if let Some(indirect_validation) = self.indirect_validation.take() {
-            indirect_validation.dispose(self.raw);
-        }
-        unsafe {
-            if let Some(zero_buffer) = self.zero_buffer.take() {
-                self.raw.destroy_buffer(zero_buffer);
-            }
-            if let Some(empty_bgl) = self.empty_bgl.take() {
-                self.raw.destroy_bind_group_layout(empty_bgl);
-            }
-            if let Some(default_external_texture_params_buffer) =
-                self.default_external_texture_params_buffer.take()
-            {
-                self.raw
-                    .destroy_buffer(default_external_texture_params_buffer);
-            }
-            if let Some(fence) = self.fence.take() {
-                self.raw.destroy_fence(fence);
-            }
-        }
-    }
-}
-
 impl Drop for Device {
     #[allow(trivial_casts)]
     fn drop(&mut self) {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {:?}", self as *const _);
         resource_log!("Drop {}", self.error_ident());
-
-        // The timestamp normalizer is late-initialized, so it is not included in `DeviceResources`.
-        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
-            timestamp_normalizer.dispose(self.raw.as_ref());
-        }
-
-        // Transfer the rest of the resources back to `DeviceResources`, which cleans them
-        // up for us.
 
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this
         // point.
@@ -389,15 +355,19 @@ impl Drop for Device {
             unsafe { ManuallyDrop::take(&mut self.default_external_texture_params_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence) };
-
-        drop(DeviceResources {
-            raw: self.raw.as_ref(),
-            zero_buffer: Some(zero_buffer),
-            empty_bgl: Some(empty_bgl),
-            default_external_texture_params_buffer: Some(default_external_texture_params_buffer),
-            fence: Some(fence),
-            indirect_validation: self.indirect_validation.take(),
-        });
+        if let Some(indirect_validation) = self.indirect_validation.take() {
+            indirect_validation.dispose(self.raw.as_ref());
+        }
+        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
+            timestamp_normalizer.dispose(self.raw.as_ref());
+        }
+        unsafe {
+            self.raw.destroy_buffer(zero_buffer);
+            self.raw.destroy_bind_group_layout(empty_bgl);
+            self.raw
+                .destroy_buffer(default_external_texture_params_buffer);
+            self.raw.destroy_fence(fence);
+        }
     }
 }
 
@@ -533,17 +503,13 @@ impl Device {
         let ordered_buffer_usages = adapter.raw.adapter.get_ordered_buffer_usages();
         let ordered_texture_usages = adapter.raw.adapter.get_ordered_texture_usages();
 
-        let mut resources = DeviceResources {
-            raw: raw_device.as_ref(),
-            zero_buffer: None,
-            empty_bgl: None,
-            default_external_texture_params_buffer: None,
-            fence: None,
-            indirect_validation: None,
-        };
+        // Resources requiring explicit destruction ahead of the device are wrapped in
+        // `ScopeGuard`s, which are defused just before the `Device` takes ownership of the
+        // resources.
+        let raw = raw_device.as_ref();
 
-        resources.fence =
-            Some(unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?);
+        let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
+        let fence = guard(fence, |fence| unsafe { raw.destroy_fence(fence) });
 
         let command_allocator = command::CommandAllocator::new();
 
@@ -557,43 +523,47 @@ impl Device {
         };
 
         // Create zeroed buffer used for texture clears (and raytracing if required).
-        resources.zero_buffer = Some(
-            unsafe {
-                raw_device.create_buffer(&hal::BufferDescriptor {
-                    label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
-                    size: ZERO_BUFFER_SIZE,
-                    usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
-                    memory_flags: hal::MemoryFlags::empty(),
-                })
-            }
-            .map_err(DeviceError::from_hal)?,
-        );
+        let zero_buffer = unsafe {
+            raw_device.create_buffer(&hal::BufferDescriptor {
+                label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
+                size: ZERO_BUFFER_SIZE,
+                usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
+                memory_flags: hal::MemoryFlags::empty(),
+            })
+        }
+        .map_err(DeviceError::from_hal)?
+        .0;
+        let zero_buffer = guard(zero_buffer, |buffer| unsafe { raw.destroy_buffer(buffer) });
 
-        resources.empty_bgl = Some(
-            unsafe {
-                raw_device.create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
-                    label: None,
-                    flags: hal::BindGroupLayoutFlags::empty(),
-                    entries: &[],
-                })
-            }
-            .map_err(DeviceError::from_hal)?,
-        );
+        let empty_bgl = unsafe {
+            raw_device.create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
+                label: None,
+                flags: hal::BindGroupLayoutFlags::empty(),
+                entries: &[],
+            })
+        }
+        .map_err(DeviceError::from_hal)?;
+        let empty_bgl = guard(empty_bgl, |bgl| unsafe {
+            raw.destroy_bind_group_layout(bgl)
+        });
 
-        resources.default_external_texture_params_buffer = Some(
-            unsafe {
-                raw_device.create_buffer(&hal::BufferDescriptor {
-                    label: hal_label(
-                        Some("(wgpu internal) default external texture params buffer"),
-                        instance_flags,
-                    ),
-                    size: size_of::<ExternalTextureParams>() as _,
-                    usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
-                    memory_flags: hal::MemoryFlags::empty(),
-                })
-            }
-            .map_err(DeviceError::from_hal)?,
-        );
+        let default_external_texture_params_buffer = unsafe {
+            raw_device.create_buffer(&hal::BufferDescriptor {
+                label: hal_label(
+                    Some("(wgpu internal) default external texture params buffer"),
+                    instance_flags,
+                ),
+                size: EXTERNAL_TEXTURE_PARAMS_BUFFER_SIZE as _,
+                usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
+                memory_flags: hal::MemoryFlags::empty(),
+            })
+        }
+        .map_err(DeviceError::from_hal)?
+        .0;
+        let default_external_texture_params_buffer =
+            guard(default_external_texture_params_buffer, |buffer| unsafe {
+                raw.destroy_buffer(buffer)
+            });
 
         // Cloned as we need them below anyway.
         let alignments = adapter.raw.capabilities.alignments.clone();
@@ -607,29 +577,30 @@ impl Device {
             )
             && limits.max_storage_buffers_per_shader_stage >= 2;
 
-        if enable_indirect_validation {
-            resources.indirect_validation =
-                Some(crate::indirect_validation::IndirectValidation::new(
-                    raw_device.as_ref(),
-                    &desc.required_limits,
-                    &desc.required_features,
-                    instance_flags,
-                    adapter.backend(),
-                )?);
-        }
+        let indirect_validation = if enable_indirect_validation {
+            let indirect_validation = crate::indirect_validation::IndirectValidation::new(
+                raw,
+                &desc.required_limits,
+                &desc.required_features,
+                instance_flags,
+                adapter.backend(),
+            )?;
+            Some(guard(indirect_validation, |indirect_validation| {
+                indirect_validation.dispose(raw)
+            }))
+        } else {
+            None
+        };
 
-        // Error returns after this point could bypass resource cleanup.
+        // Error returns after we start consuming guards could bypass resource cleanup.
         #[deny(clippy::question_mark_used)]
         {
-            let zero_buffer = resources.zero_buffer.take().unwrap();
-            let empty_bgl = resources.empty_bgl.take().unwrap();
-            let default_external_texture_params_buffer = resources
-                .default_external_texture_params_buffer
-                .take()
-                .unwrap();
-            let fence = resources.fence.take().unwrap();
-            let indirect_validation = resources.indirect_validation.take();
-            drop(resources);
+            let zero_buffer = ScopeGuard::into_inner(zero_buffer);
+            let empty_bgl = ScopeGuard::into_inner(empty_bgl);
+            let default_external_texture_params_buffer =
+                ScopeGuard::into_inner(default_external_texture_params_buffer);
+            let fence = ScopeGuard::into_inner(fence);
+            let indirect_validation = indirect_validation.map(ScopeGuard::into_inner);
 
             Ok(Self {
                 raw: raw_device,
@@ -717,9 +688,11 @@ impl Device {
             num_planes: 1,
             _padding: Default::default(),
         };
-        let mut staging_buffer =
-            StagingBuffer::new(self, wgt::BufferSize::new(size_of_val(&data) as _).unwrap())?;
-        staging_buffer.write(bytemuck::bytes_of(&data));
+        let mut staging_buffer = StagingBuffer::new(
+            self,
+            wgt::BufferSize::new(EXTERNAL_TEXTURE_PARAMS_BUFFER_SIZE as _).unwrap(),
+        )?;
+        staging_buffer.write_with_zero_padding(bytemuck::bytes_of(&data));
         let staging_buffer = staging_buffer.flush();
 
         let params_buffer = self.default_external_texture_params_buffer.as_ref();
@@ -916,8 +889,6 @@ impl Device {
     }
 
     /// Check device for freeable resources and completed buffer mappings.
-    ///
-    /// Return `queue_empty` indicating whether there are more queue submissions still in flight.
     pub fn poll(
         &self,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
@@ -961,14 +932,9 @@ impl Device {
     /// This will process _all_ completed submissions, even if the caller only asked
     /// us to poll to a given submission index.
     ///
-    /// Return a pair `(closures, result)`, where:
-    ///
-    /// - `closures` is a list of callbacks that need to be invoked informing the user
-    ///   about various things occurring. These happen and should be handled even if
-    ///   this function returns an error, hence they are outside of the result.
-    ///
-    /// - `results` is a boolean indicating the result of the wait operation, including
-    ///   if there was a timeout or a validation error.
+    /// The returned [`UserClosures`] contains callbacks that need to be invoked informing
+    /// the user about various things occurring. These happen and should be handled even
+    /// if this function returns an error, hence they are outside of the result.
     pub(crate) fn maintain<'this>(
         &'this self,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
@@ -1264,34 +1230,49 @@ impl Device {
 
         // The great thing about buffer sizes is there are so many to choose from!
         //  - The application may request an arbitrary byte-aligned size.
-        //  - We add an extra byte if it's a vertex buffer so that we can simulate binding an
-        //    empty range at the end of the buffer, which Vulkan does not natively allow.
-        //  - The overall buffer size must be a non-zero multiple of 4.
-        // Because initialization operates at multiples of 4 bytes, and initialization
-        // tracking will never determine that it is necessary to initialize a region outside
-        // the application-visible range, we eagerly zero-initialize anything beyond that.
-        let actual_size = if desc.size == 0 {
+        //  - If the buffer supports usage as a vertex or index buffer, we must ensure there
+        //    is a naturally aligned block of 4B at the end of the buffer. Zero-size bindings
+        //    are not supported by hal and are redirected to this block by
+        //    `resolve_vertex_or_index_binding_range`.
+        //  - The overall buffer size must be a non-zero multiple of COPY_BUFFER_ALIGNMENT (4).
+        //    In some cases additional platform-dependent requirements may apply. The actual
+        //    allocated size of the buffer is returned by hal along with the buffer object from
+        //    `create_buffer`. `wgpu-core` is responsible for ensuring that any region of the
+        //    buffer, including hal-added padding, is initialized before it may be accessed.
+        //
+        // Because buffer writes for initialization operate at multiples of COPY_BUFFER_ALIGNMENT,
+        // and because initialization tracking will never determine that it is necessary to
+        // initialize a region outside the application-visible range, round the tracked
+        // initialization range down to a multiple of COPY_BUFFER_ALIGNMENT (tail_start), and
+        // eagerly zero-initialize from there to the buffer's true end.
+
+        let padded_size = if desc.size == 0 {
             wgt::COPY_BUFFER_ALIGNMENT
-        } else if desc.usage.contains(wgt::BufferUsages::VERTEX) {
-            desc.size + 1
+        } else if desc
+            .usage
+            .intersects(wgt::BufferUsages::VERTEX | wgt::BufferUsages::INDEX)
+        {
+            // We require 4B of padding with 4B alignment. See above.
+            align_to(desc.size, wgt::COPY_BUFFER_ALIGNMENT) + wgt::COPY_BUFFER_ALIGNMENT
         } else {
-            desc.size
+            align_to(desc.size, wgt::COPY_BUFFER_ALIGNMENT)
         };
-        let actual_size = align_to(actual_size, wgt::COPY_BUFFER_ALIGNMENT);
         let tail_start = desc.size & !(wgt::COPY_BUFFER_ALIGNMENT - 1);
-        debug_assert!(actual_size - 4 <= tail_start);
 
         let hal_desc = hal::BufferDescriptor {
             label: desc.label.to_hal(self.instance_flags),
-            size: actual_size,
+            size: padded_size,
             usage,
             memory_flags: hal::MemoryFlags::empty(),
         };
-        let buffer = unsafe { self.raw().create_buffer(&hal_desc) }
+        let (buffer, final_size) = unsafe { self.raw().create_buffer(&hal_desc) }
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
+        debug_assert!(final_size >= padded_size);
+
         let timestamp_normalization_bind_group = Snatchable::new(unsafe {
-            // SAFETY: The size passed here must not overflow the buffer.
+            // SAFETY: The size passed here must be 4B aligned, >= the application size, and
+            // <= the buffer size.
             self.timestamp_normalizer
                 .get()
                 .unwrap()
@@ -1332,7 +1313,7 @@ impl Device {
             let mapping = map_buffer(
                 buffer,
                 tail_start,
-                actual_size - tail_start,
+                final_size - tail_start,
                 HostMap::Write,
                 snatch_guard,
             )?;
@@ -1341,11 +1322,13 @@ impl Device {
                 .expect("newly-created buffer cannot be destroyed");
             unsafe {
                 // SAFETY: The buffer tail is valid and aligned.
-                mapping.ptr.cast::<u32>().as_ptr().write(0);
+                mapping
+                    .ptr
+                    .write_bytes(0, (final_size - tail_start) as usize);
                 if !mapping.is_coherent {
                     #[allow(clippy::single_range_in_vec_init)]
                     self.raw()
-                        .flush_mapped_ranges(raw, &[tail_start..actual_size]);
+                        .flush_mapped_ranges(raw, &[tail_start..final_size]);
                 }
                 self.raw().unmap_buffer(raw);
             }
@@ -1353,7 +1336,7 @@ impl Device {
         };
 
         let buffer_use = if !desc.mapped_at_creation {
-            if tail_start == actual_size {
+            if tail_start == final_size {
                 // No tail init necessary
             } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
                 // Tail init by mapping
@@ -1370,7 +1353,7 @@ impl Device {
                 pending_writes.clear_buffer(
                     self,
                     &buffer,
-                    tail_start..actual_size,
+                    tail_start..final_size,
                     &snatch_guard,
                 )?;
                 return Ok(buffer);
@@ -1383,7 +1366,7 @@ impl Device {
             // application-visible portion of the buffer. Don't do both in the same
             // mapping, because the application shouldn't see the tail.
             let snatch_guard = self.snatchable_lock.read();
-            if tail_start != actual_size {
+            if tail_start != final_size {
                 init_buffer_tail(&buffer, &snatch_guard)?;
             }
             let map_size = buffer.size;
@@ -1410,12 +1393,12 @@ impl Device {
             // which may cause problems for its shaders if they read out-of-bounds, but
             // won't cause problems in wgpu.
             let mut staging_buffer =
-                StagingBuffer::new(self, wgt::BufferSize::new(actual_size).unwrap())?;
+                StagingBuffer::new(self, wgt::BufferSize::new(final_size).unwrap())?;
 
             // Zero initialize memory and then mark the buffer as initialized
             // (it's guaranteed that this is the case by the time the buffer is usable)
             staging_buffer.write_zeros();
-            buffer.initialization_status.write().drain(0..actual_size);
+            buffer.initialization_status.write().drain(0..final_size);
 
             *buffer.map_state.lock() = resource::BufferMapState::Init { staging_buffer };
             wgt::BufferUses::COPY_DST
@@ -1615,7 +1598,8 @@ impl Device {
     /// # Safety
     ///
     /// - `hal_buffer` must have been created on this device.
-    /// - `hal_buffer` must have been created respecting `desc` (in particular, the size).
+    /// - `hal_buffer` must have been created respecting `desc` (in particular, the size,
+    ///   which must always be a multiple of 4, and may be subject to other requirements).
     /// - `hal_buffer` must be initialized.
     /// - `hal_buffer` must not have zero size.
     pub unsafe fn create_buffer_from_hal(
@@ -1642,16 +1626,15 @@ impl Device {
 
     /// # Safety
     ///
-    /// - `hal_buffer` must have been created on this device.
-    /// - `hal_buffer` must have been created respecting `desc` (in particular, the size).
-    /// - `hal_buffer` must be initialized.
-    /// - `hal_buffer` must not have zero size.
+    /// Same safety requirements as `create_buffer_from_hal`.
     pub(crate) unsafe fn create_buffer_from_hal_inner(
         self: &Arc<Self>,
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
     ) -> Result<Arc<Buffer>, resource::CreateBufferError> {
         let timestamp_normalization_bind_group = Snatchable::new(unsafe {
+            // SAFETY: The size passed here must be 4B aligned, >= the application size, and
+            // <= the buffer size.
             self.timestamp_normalizer
                 .get()
                 .unwrap()
@@ -1701,6 +1684,10 @@ impl Device {
         Ok(buffer)
     }
 
+    /// If needed, creates the bind groups for indirect validation shaders to read
+    /// from `raw_buffer`.
+    ///
+    /// `buffer_size` is the user-requested size of the buffer.
     fn create_indirect_validation_bind_groups(
         &self,
         raw_buffer: &dyn hal::DynBuffer,
@@ -2457,10 +2444,7 @@ impl Device {
         self: &Arc<Self>,
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: pipeline::ShaderModuleSource<'a>,
-    ) -> (
-        Arc<pipeline::ShaderModule>,
-        Option<pipeline::CreateShaderModuleError>,
-    ) {
+    ) -> Arc<pipeline::ShaderModule> {
         profiling::scope!("Device::create_shader_module");
         #[cfg(feature = "trace")]
         let data = self.trace.lock().as_mut().map(|trace| {
@@ -2490,14 +2474,17 @@ impl Device {
                 }
             }
         });
-        let (shader, error) = match self.create_shader_module_inner(desc, source) {
-            Ok(shader) => (shader, None),
-            Err(e) => {
-                let shader =
-                    pipeline::ShaderModule::invalid(Arc::clone(self), desc.label.to_string());
-                (shader, Some(e))
-            }
-        };
+        let shader = self
+            .create_shader_module_inner(desc, source)
+            .unwrap_or_else(|e| {
+                let shader = pipeline::ShaderModule::invalid(
+                    Arc::clone(self),
+                    desc.label.to_string(),
+                    shader_module_error_into_compilation_info(&e),
+                );
+                self.handle_error(e, desc.label.as_deref(), "Device::create_shader_module");
+                shader
+            });
         api_log!("Device::create_shader_module -> {:?}", Arc::as_ptr(&shader));
 
         #[cfg(feature = "trace")]
@@ -2515,7 +2502,7 @@ impl Device {
                     data,
                 });
         };
-        (shader, error)
+        shader
     }
 
     pub(crate) fn create_shader_module_inner<'a>(
@@ -2648,6 +2635,7 @@ impl Device {
             }),
             device: self.clone(),
             label: desc.label.to_string(),
+            compilation_info: wgt::CompilationInfo::default(),
         };
 
         let module = Arc::new(module);
@@ -2662,20 +2650,24 @@ impl Device {
     pub unsafe fn create_shader_module_passthrough<'a>(
         self: &Arc<Self>,
         desc: &pipeline::ShaderModuleDescriptorPassthrough<'a>,
-    ) -> (
-        Arc<pipeline::ShaderModule>,
-        Option<pipeline::CreateShaderModuleError>,
-    ) {
+    ) -> Arc<pipeline::ShaderModule> {
         profiling::scope!("Device::create_shader_module_passthrough");
 
-        let (shader, error) = match unsafe { self.create_shader_module_passthrough_inner(desc) } {
-            Ok(shader) => (shader, None),
-            Err(e) => {
-                let shader =
-                    pipeline::ShaderModule::invalid(Arc::clone(self), desc.label.to_string());
-                (shader, Some(e))
-            }
-        };
+        let shader =
+            unsafe { self.create_shader_module_passthrough_inner(desc) }.unwrap_or_else(|e| {
+                let shader = pipeline::ShaderModule::invalid(
+                    Arc::clone(self),
+                    desc.label.to_string(),
+                    shader_module_error_into_compilation_info(&e),
+                );
+                self.handle_error(
+                    e,
+                    desc.label.as_deref(),
+                    "Device::create_shader_module_passthrough",
+                );
+                shader
+            });
+
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace::{DataKind, IntoTrace as _};
@@ -2708,7 +2700,7 @@ impl Device {
             "Device::create_shader_module_spirv -> {:?}",
             Arc::as_ptr(&shader)
         );
-        (shader, error)
+        shader
     }
 
     pub(crate) unsafe fn create_shader_module_passthrough_inner<'a>(
@@ -2809,6 +2801,7 @@ impl Device {
             }),
             device: self.clone(),
             label: descriptor.label.to_string(),
+            compilation_info: wgt::CompilationInfo::default(),
         };
 
         Ok(Arc::new(module))
@@ -3278,7 +3271,7 @@ impl Device {
         late_buffer_binding_sizes: &mut FastHashMap<u32, wgt::BufferSize>,
         used: &mut BindGroupStates,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer>, CreateBindGroupError> {
+    ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer, NonZeroU64>, CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
         let (binding_ty, dynamic, min_size) = match decl.ty {
@@ -3340,7 +3333,8 @@ impl Device {
             // Requested zero size
             Some(None) => return Err(CreateBindGroupError::BindingZeroSize(buffer.error_ident())),
         };
-        let (bb, bind_size) = buffer.binding(bb.offset, req_size, snatch_guard)?;
+        let bb = buffer.binding(bb.offset, req_size, snatch_guard)?;
+        let bind_size = bb.size.get();
 
         if matches!(binding_ty, wgt::BufferBindingType::Storage { .. })
             && bind_size % u64::from(wgt::STORAGE_BINDING_SIZE_ALIGNMENT) != 0
@@ -3409,6 +3403,9 @@ impl Device {
             bb.offset..bb.offset + visible_size
         };
 
+        // Once a buffer is initialized, nothing can cause the contents to revert to an
+        // unknown state, so we do not record an init action in the bind group when that is
+        // the case. (The same is not true of textures.)
         buffer_init_actions.extend(buffer.initialization_status.read().create_action(
             buffer,
             init_range,
@@ -3490,6 +3487,10 @@ impl Device {
 
         let texture = &view.parent;
 
+        // Unlike buffers, textures contents can revert to being undefined if used as a
+        // render attachment with `StoreOp::Discard`. Therefore, we must always register
+        // the init action in the bind group, and check the initialization state every
+        // time the binding is used.
         texture_init_actions.push(TextureInitTrackerAction {
             texture: texture.clone(),
             range: TextureInitRange {
@@ -3603,8 +3604,7 @@ impl Device {
         );
         let params = external_texture_state
             .params
-            .binding(0, None, snatch_guard)?
-            .0;
+            .binding(0, None, snatch_guard)?;
 
         Ok(hal::ExternalTextureBinding { planes, params })
     }
@@ -3657,7 +3657,7 @@ impl Device {
         let params = hal::BufferBinding::new_unchecked(
             self.default_external_texture_params_buffer.as_ref(),
             0,
-            None,
+            NonZeroU64::new(size_of::<ExternalTextureParams>() as u64).unwrap(),
         );
 
         Ok(hal::ExternalTextureBinding { planes, params })
@@ -4363,8 +4363,16 @@ impl Device {
     ) -> Arc<pipeline::ComputePipeline> {
         profiling::scope!("Device::create_compute_pipeline");
         let compute_pipeline = self
-            .create_compute_pipeline_or_error(desc.clone())
+            .create_compute_pipeline_or_error_inner(desc.clone())
             .unwrap_or_else(|err| {
+                if let pipeline::CreateComputePipelineError::Internal(ref error) = err {
+                    log::error!(
+                        "Shader translation error for stage {:?}: {}",
+                        wgt::ShaderStages::COMPUTE,
+                        error
+                    );
+                    log::error!("Please report it to https://github.com/gfx-rs/wgpu");
+                }
                 self.handle_error(
                     err,
                     desc.label.as_deref(),
@@ -4390,9 +4398,24 @@ impl Device {
     }
 
     /// Creates a compute pipeline without raising any error to device.
+    /// Device lost errors will be mapped to invalid compute pipeline
+    /// as required by specification.
     ///
     /// Corresponds to [GPUDevice.createComputePipelineAsync](https://www.w3.org/TR/webgpu/#dom-gpudevice-createcomputepipelineasync)
     pub fn create_compute_pipeline_or_error(
+        self: &Arc<Self>,
+        desc: pipeline::ComputePipelineDescriptor,
+    ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
+        let label = desc.label.to_string();
+        match self.create_compute_pipeline_or_error_inner(desc) {
+            Err(err) if err.webgpu_error_type() == wgt::error::ErrorType::DeviceLost => {
+                Ok(pipeline::ComputePipeline::invalid(self.clone(), label))
+            }
+            result => result,
+        }
+    }
+
+    fn create_compute_pipeline_or_error_inner(
         self: &Arc<Self>,
         desc: pipeline::ComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
@@ -4541,21 +4564,26 @@ impl Device {
         Ok(pipeline)
     }
 
+    /// Creates a render pipeline. If the creation fails,
+    /// it will handle error in device and return an invalid render pipeline.
+    ///
+    /// Corresponds to [GPUDevice.createRenderPipeline](https://www.w3.org/TR/webgpu/#dom-gpudevice-createrenderpipeline)
     pub fn create_render_pipeline(
         self: &Arc<Self>,
         desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
-    ) -> (
-        Arc<pipeline::RenderPipeline>,
-        Option<pipeline::CreateRenderPipelineError>,
-    ) {
+    ) -> Arc<pipeline::RenderPipeline> {
         profiling::scope!("Device::create_render_pipeline");
-        let (render_pipeline, error) = match self.create_render_pipeline_inner(desc.clone()) {
-            Ok(pipeline) => (pipeline, None),
-            Err(e) => (
-                pipeline::RenderPipeline::invalid(self.clone(), desc.label.to_string()),
-                Some(e),
-            ),
-        };
+
+        let render_pipeline = self
+            .create_render_pipeline_or_error_inner(desc.clone())
+            .unwrap_or_else(|err| {
+                if let pipeline::CreateRenderPipelineError::Internal { stage, ref error } = err {
+                    log::error!("Shader translation error for stage {stage:?}: {error}");
+                    log::error!("Please report it to https://github.com/gfx-rs/wgpu");
+                }
+                self.handle_error(err, desc.label.as_deref(), "Device::create_render_pipeline");
+                pipeline::RenderPipeline::invalid(self.clone(), desc.label.to_string())
+            });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.trace.lock() {
             use crate::device::trace::IntoTrace;
@@ -4568,10 +4596,28 @@ impl Device {
             "Device::create_render_pipeline -> {:?}",
             Arc::as_ptr(&render_pipeline)
         );
-        (render_pipeline, error)
+        render_pipeline
     }
 
-    pub fn create_render_pipeline_inner(
+    /// Creates a render pipeline without raising any error to device.
+    /// Device lost errors will be mapped to invalid render pipeline
+    /// as required by specification.
+    ///
+    /// Corresponds to [GPUDevice.createRenderPipelineAsync](https://www.w3.org/TR/webgpu/#dom-gpudevice-createrenderpipelineasync)
+    pub fn create_render_pipeline_or_error(
+        self: &Arc<Self>,
+        desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
+    ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreateRenderPipelineError> {
+        let label = desc.label.to_string();
+        match self.create_render_pipeline_or_error_inner(desc) {
+            Err(e) if e.webgpu_error_type() == wgt::error::ErrorType::DeviceLost => Ok(
+                pipeline::RenderPipeline::invalid(self.clone(), label.to_string()),
+            ),
+            result => result,
+        }
+    }
+
+    fn create_render_pipeline_or_error_inner(
         self: &Arc<Self>,
         desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
     ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreateRenderPipelineError> {

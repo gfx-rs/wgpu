@@ -11,6 +11,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
+    math::align_to,
     TextureSelector,
 };
 
@@ -597,36 +598,73 @@ impl Buffer {
     ///
     /// If the binding would overflow the buffer, then an error is returned.
     ///
-    /// Zero-size bindings are permitted here for historical reasons. Although
-    /// zero-size bindings are permitted by WebGPU, they are not permitted by
-    /// some backends. See [`Buffer::binding`] and
-    /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
-    pub fn resolve_binding_size(
+    /// `S` is `wgt::BufferSize` (`NonZeroU64`) when called from [`Buffer::binding`]
+    /// for a storage or uniform buffer binding. `S` is `wgt::BufferAddress` (`u64`)
+    /// when called from `resolve_vertex_or_index_binding_range` for a vertex or
+    /// index buffer binding.
+    fn resolve_binding_size<S: Copy + Into<wgt::BufferAddress> + TryFrom<wgt::BufferAddress>>(
         &self,
         offset: wgt::BufferAddress,
-        binding_size: Option<wgt::BufferSize>,
-    ) -> Result<u64, BindingError> {
+        binding_size: Option<S>,
+    ) -> Result<S, BindingError> {
         let buffer_size = self.size;
 
         match binding_size {
-            Some(binding_size) => match offset.checked_add(binding_size.get()) {
-                Some(end) if end <= buffer_size => Ok(binding_size.get()),
+            Some(binding_size) => match offset.checked_add(binding_size.into()) {
+                Some(end) if end <= buffer_size => Ok(binding_size),
                 _ => Err(BindingError::BindingRangeTooLarge {
                     buffer: self.error_ident(),
                     offset,
-                    binding_size: binding_size.get(),
+                    binding_size: binding_size.into(),
                     buffer_size,
                 }),
             },
-            None => {
-                buffer_size
-                    .checked_sub(offset)
-                    .ok_or_else(|| BindingError::BindingOffsetTooLarge {
-                        buffer: self.error_ident(),
-                        offset,
-                        buffer_size,
-                    })
-            }
+            None => buffer_size
+                .checked_sub(offset)
+                .and_then(|remaining| S::try_from(remaining).ok())
+                .ok_or_else(|| {
+                    if offset <= buffer_size {
+                        debug_assert_eq!(offset, buffer_size);
+                        BindingError::BindingOffsetEqualsSize {
+                            buffer: self.error_ident(),
+                            offset,
+                            buffer_size,
+                        }
+                    } else {
+                        BindingError::BindingOffsetTooLarge {
+                            buffer: self.error_ident(),
+                            offset,
+                            buffer_size,
+                        }
+                    }
+                }),
+        }
+    }
+
+    /// Resolve the binding range for a vertex or index buffer.
+    ///
+    /// This function is for vertex and index buffer bindings, which WebGPU
+    /// allows to have zero size. For storage and uniform buffer bindings,
+    /// which must have non-zero size, use [`Buffer::binding`].
+    ///
+    /// Returns an error if the binding would overflow the buffer.
+    pub fn resolve_vertex_or_index_binding_range(
+        &self,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
+    ) -> Result<Range<wgt::BufferAddress>, BindingError> {
+        let resolved_size = self.resolve_binding_size(offset, size)?;
+        if resolved_size != 0 {
+            Ok(offset..offset + resolved_size)
+        } else {
+            // Relocate zero-size binding to end of buffer, because hal does not support
+            // zero-size bindings (ignores end offsets). `create_buffer` must have
+            // ensured sufficient padding.
+            const _: () = {
+                assert!(wgt::VERTEX_ALIGNMENT == wgt::COPY_BUFFER_ALIGNMENT);
+            };
+            let target = align_to(self.size, wgt::VERTEX_ALIGNMENT);
+            Ok(target..target)
         }
     }
 
@@ -636,32 +674,24 @@ impl Buffer {
     /// If `binding_size` is `None`, then the remainder of the buffer starting
     /// from `offset` is used.
     ///
-    /// If the binding would overflow the buffer, then an error is returned.
+    /// Returns an error if the binding would overflow the buffer.
     ///
-    /// A zero-size binding at the end of the buffer is permitted here for historical reasons. Although
-    /// zero-size bindings are permitted by WebGPU, they are not permitted by
-    /// some backends. The zero-size binding need to be quashed or remapped to a
-    /// non-zero size, either universally in wgpu-core, or in specific backends
-    /// that do not support them. See
-    /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
-    ///
-    /// Although it seems like it would be simpler and safer to use the resolved
-    /// size in the returned [`hal::BufferBinding`], doing this (and removing
-    /// redundant logic in backends to resolve the implicit size) was observed
-    /// to cause problems in certain CTS tests, so an implicit size
-    /// specification is preserved in the output.
+    /// This function is for storage and uniform buffer bindings, which must have
+    /// non-zero size. For vertex and index buffer bindings, which may have zero
+    /// size, use [`Buffer::resolve_vertex_or_index_binding_range`].
     pub fn binding<'a>(
         &'a self,
         offset: wgt::BufferAddress,
         binding_size: Option<wgt::BufferSize>,
         snatch_guard: &'a SnatchGuard,
-    ) -> Result<(hal::BufferBinding<'a, dyn hal::DynBuffer>, u64), BindingError> {
+    ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer, wgt::BufferSize>, BindingError> {
         let buf_raw = self.try_raw(snatch_guard)?;
         let resolved_size = self.resolve_binding_size(offset, binding_size)?;
         // SAFETY: The offset and size passed to hal::BufferBinding::new_unchecked must
         // define a binding contained within the buffer.
-        Ok((
-            hal::BufferBinding::new_unchecked(buf_raw, offset, binding_size),
+        Ok(hal::BufferBinding::new_unchecked(
+            buf_raw,
+            offset,
             resolved_size,
         ))
     }
@@ -674,7 +704,7 @@ impl Buffer {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<SubmissionIndex, BufferAccessError> {
+    ) -> Option<SubmissionIndex> {
         profiling::scope!("Buffer::map_async");
         api_log!(
             "Buffer::map_async {:?} offset {offset:?} size {size:?} op: {op:?}",
@@ -683,11 +713,13 @@ impl Buffer {
 
         self.try_map_async(offset, size, op)
             .map_err(|(mut operation, err)| {
+                self.device
+                    .handle_error(err.clone(), Some(&self.label), "Buffer::map_async");
                 if let Some(callback) = operation.callback.take() {
-                    callback(Err(err.clone()));
+                    callback(Err(err));
                 }
-                err
             })
+            .ok()
     }
 
     /// Try to schedule buffer mapping.
@@ -943,18 +975,23 @@ impl Buffer {
     /// Other errors are returned within `BufferMapPendingClosure`.
     #[must_use]
     pub(crate) fn map(&self, snatch_guard: &SnatchGuard) -> Option<BufferMapPendingClosure> {
-        // This _cannot_ be inlined into the match. If it is, the lock will be held
-        // open through the whole match, resulting in a deadlock when we try to re-lock
-        // the buffer back to active.
-        let mapping = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
-        let pending_mapping = match mapping {
+        // Hold the lock on `map_state` until we have updated it with the
+        // outcome of the mapping, to prevent concurrent activity from
+        // observing an intermediate state.
+        //
+        // Unfortunately this does mean that we hold the guard across
+        // `crate::device::map_buffer` and the associated call to
+        // `handle_hal_error`, which may invoke a device loss callback.
+        // See <https://github.com/gfx-rs/wgpu/issues/10031>.
+        let mut map_state = self.map_state.lock();
+        let pending_mapping = match mem::replace(&mut *map_state, BufferMapState::Idle) {
             BufferMapState::Waiting(pending_mapping) => pending_mapping,
             // Mapping cancelled
             BufferMapState::Idle => return None,
             // Mapping queued at least twice by map -> unmap -> map
             // and was already successfully mapped below
-            BufferMapState::Active { .. } => {
-                *self.map_state.lock() = mapping;
+            mapping @ BufferMapState::Active { .. } => {
+                *map_state = mapping;
                 return None;
             }
             _ => panic!("No pending mapping."),
@@ -970,7 +1007,7 @@ impl Buffer {
                 snatch_guard,
             ) {
                 Ok(mapping) => {
-                    *self.map_state.lock() = BufferMapState::Active {
+                    *map_state = BufferMapState::Active {
                         mapping,
                         range: pending_mapping.range.clone(),
                         host,
@@ -980,7 +1017,7 @@ impl Buffer {
                 Err(e) => Err(e),
             }
         } else {
-            *self.map_state.lock() = BufferMapState::Active {
+            *map_state = BufferMapState::Active {
                 mapping: hal::BufferMapping {
                     ptr: NonNull::dangling(),
                     is_coherent: true,
@@ -994,25 +1031,35 @@ impl Buffer {
     }
 
     // Note: This must not be called while holding a lock.
-    pub fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
+    pub fn unmap(self: &Arc<Self>) {
         profiling::scope!("unmap", "Buffer");
         api_log!("Buffer::unmap {:?}", Arc::as_ptr(self));
-        if let Some((mut operation, status)) = self.unmap_inner()? {
+        if let Some((mut operation, status)) = self.unmap_inner() {
             if let Some(callback) = operation.callback.take() {
                 callback(status);
             }
         }
-
-        Ok(())
     }
 
-    fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
+    /// Per the WebGPU spec, unmap does not raise any errors
+    /// it just resolves any pending map_async calls with a MapAborted error.
+    /// It is okay to ignore errors because:
+    /// - if the buffer or device was invalid from the start it couldn't have been mapped via `map_async` anyway (no callback to resolve)
+    /// - if the device becomes invalid it calls the callback in `poll`/`maintain`
+    /// - if the buffer was destroyed (via `Buffer::destroy`) it was first unmapped
+    ///
+    /// <https://gpuweb.github.io/gpuweb/#dom-gpubuffer-unmap>
+    fn unmap_inner(self: &Arc<Self>) -> Option<BufferMapPendingClosure> {
         let device = &self.device;
-        self.check_is_valid()?;
-        self.device.check_is_valid()?;
+        // We can stop here if the device is invalid because:
+        // - if the device was invalid from the start it couldn't have been mapped via `map_async` anyway
+        // - if the device becomes invalid it calls the callback in `poll`/`maintain`
+        self.device.check_is_valid().ok()?;
         let snatch_guard = device.snatchable_lock.read();
-        self.check_destroyed(&snatch_guard)?;
-        let raw_buf = self.try_raw(&snatch_guard)?;
+        // We can stop here if the buffer is invalid or destroyed because:
+        // - if the device was invalid from the start it couldn't have been mapped via `map_async` anyway
+        // - if the buffer was destroyed (via `Buffer::destroy`) it was first unmapped
+        let raw_buf = self.try_raw(&snatch_guard).ok()?;
         let map_state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
         match map_state {
             BufferMapState::Init { staging_buffer } => {
@@ -1070,12 +1117,11 @@ impl Buffer {
                     pending_writes.consume(staging_buffer);
                     pending_writes.insert_buffer(self);
                 }
+                None
             }
-            BufferMapState::Idle => {
-                return Err(BufferAccessError::NotMapped);
-            }
+            BufferMapState::Idle => None,
             BufferMapState::Waiting(pending) => {
-                return Ok(Some((pending.op, Err(BufferAccessError::MapAborted))));
+                Some((pending.op, Err(BufferAccessError::MapAborted)))
             }
             BufferMapState::Active {
                 mapping,
@@ -1104,9 +1150,9 @@ impl Buffer {
                     }
                 }
                 unsafe { device.raw().unmap_buffer(raw_buf) };
+                None
             }
         }
-        Ok(None)
     }
 
     pub fn destroy(self: &Arc<Self>) {
@@ -1125,7 +1171,7 @@ impl Buffer {
             return;
         };
 
-        let _ = self.unmap();
+        self.unmap();
 
         let temp = {
             let mut snatch_guard = device.snatchable_lock.write();
@@ -1325,7 +1371,7 @@ impl StagingBuffer {
             memory_flags: hal::MemoryFlags::TRANSIENT,
         };
 
-        let raw = unsafe { device.raw().create_buffer(&stage_desc) }
+        let (raw, _) = unsafe { device.raw().create_buffer(&stage_desc) }
             .map_err(|e| device.handle_hal_error(e))?;
         let mapping = unsafe { device.raw().map_buffer(raw.as_ref(), 0..size.get()) }
             .map_err(|e| device.handle_hal_error(e))?;
@@ -1356,8 +1402,13 @@ impl StagingBuffer {
         unsafe { core::ptr::write_bytes(self.ptr.as_ptr(), 0, self.size.get() as usize) };
     }
 
-    pub(crate) fn write(&mut self, data: &[u8]) {
-        assert!(data.len() >= self.size.get() as usize);
+    /// Write the entire staging buffer.
+    ///
+    /// # Panics
+    ///
+    /// If `data.len()` is not equal to the size of the staging buffer.
+    pub(crate) fn write_exact(&mut self, data: &[u8]) {
+        assert_eq!(data.len(), self.size.get() as usize);
         // SAFETY: With the assert above, all of `copy_nonoverlapping`'s
         // requirements are satisfied.
         unsafe {
@@ -1365,6 +1416,25 @@ impl StagingBuffer {
                 data.as_ptr(),
                 self.ptr.as_ptr(),
                 self.size.get() as usize,
+            );
+        }
+    }
+
+    /// Write `data` to the staging buffer, filling any remainder with zeros.
+    ///
+    /// # Panics
+    ///
+    /// If `data` exceeds the size of the staging buffer.
+    pub(crate) fn write_with_zero_padding(&mut self, data: &[u8]) {
+        assert!(data.len() <= self.size.get() as usize);
+        // SAFETY: The assert ensures the requirements of `copy_nonoverlapping`
+        // and `write_bytes` are satisfied.
+        unsafe {
+            core::ptr::copy_nonoverlapping(data.as_ptr(), self.ptr.as_ptr(), data.len());
+            core::ptr::write_bytes(
+                self.ptr.as_ptr().add(data.len()),
+                0,
+                self.size.get() as usize - data.len(),
             );
         }
     }
