@@ -223,7 +223,6 @@ impl GPUAdapter {
     let queue_obj = deno_core::cppgc::make_cppgc_object(
       scope,
       GPUQueue {
-        label: descriptor.label.clone(),
         wgpu_queue: queue,
         wgpu_device: wgpu_device.clone(),
       },
@@ -232,7 +231,6 @@ impl GPUAdapter {
 
     let device = GPUDevice {
       wgpu_device: wgpu_device.clone(),
-      label: descriptor.label,
       queue_obj,
       adapter_info: self.info.clone(),
       error_handler,
@@ -425,16 +423,12 @@ impl GPUSupportedLimits {
 
   #[getter]
   fn maxStorageBuffersInVertexStage(&self) -> u32 {
-    // TODO(https://github.com/gfx-rs/wgpu/issues/8748): InVertexStage limit
-    // not implemented; return the PerShaderStage limit.
-    self.0.max_storage_buffers_per_shader_stage
+    self.0.max_storage_buffers_in_vertex_stage
   }
 
   #[getter]
   fn maxStorageBuffersInFragmentStage(&self) -> u32 {
-    // TODO(https://github.com/gfx-rs/wgpu/issues/8748): InFragmentStage limit
-    // not implemented; return the PerShaderStage limit.
-    self.0.max_storage_buffers_per_shader_stage
+    self.0.max_storage_buffers_in_fragment_stage
   }
 
   #[getter]
@@ -444,16 +438,12 @@ impl GPUSupportedLimits {
 
   #[getter]
   fn maxStorageTexturesInVertexStage(&self) -> u32 {
-    // TODO(https://github.com/gfx-rs/wgpu/issues/8748): InVertexStage limit
-    // not implemented; return the PerShaderStage limit.
-    self.0.max_storage_textures_per_shader_stage
+    self.0.max_storage_textures_in_vertex_stage
   }
 
   #[getter]
   fn maxStorageTexturesInFragmentStage(&self) -> u32 {
-    // TODO(https://github.com/gfx-rs/wgpu/issues/8748): InFragmentStage limit
-    // not implemented; return the PerShaderStage limit.
-    self.0.max_storage_textures_per_shader_stage
+    self.0.max_storage_textures_in_fragment_stage
   }
 
   #[getter]
