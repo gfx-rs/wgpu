@@ -481,6 +481,7 @@ impl super::CommandEncoder {
                 resource,
                 allocated_size: size.get(),
                 allocation,
+                _drop_guard: None,
             }
         };
 
