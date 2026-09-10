@@ -1,4 +1,4 @@
-use alloc::borrow::ToOwned as _;
+use alloc::{boxed::Box, borrow::ToOwned as _};
 
 use objc2::{
     available,
@@ -249,6 +249,7 @@ impl crate::Surface for super::Surface {
         &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
+        _raw_config: Option<Box<dyn crate::RawSurfaceConfiguration>>,
     ) -> Result<(), crate::SurfaceError> {
         log::debug!("build swapchain {config:?}");
 

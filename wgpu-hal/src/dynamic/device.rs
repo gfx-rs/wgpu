@@ -1,3 +1,5 @@
+use core::any::Any;
+
 use alloc::{borrow::ToOwned as _, boxed::Box, vec::Vec};
 
 use crate::{
@@ -43,6 +45,11 @@ pub trait DynDevice: DynResource {
     ) -> Result<Box<dyn DynTexture>, DeviceError>;
     unsafe fn destroy_texture(&self, texture: Box<dyn DynTexture>);
     unsafe fn add_raw_texture(&self, texture: &dyn DynTexture);
+    unsafe fn texture_from_raw(
+        &self,
+        hal_texture: Box<dyn crate::RawTexture>,
+        desc: &TextureDescriptor,
+    ) -> Result<Box<dyn DynTexture>, DeviceError>;
 
     unsafe fn create_texture_view(
         &self,
@@ -241,6 +248,19 @@ impl<D: Device + DynResource> DynDevice for D {
     unsafe fn add_raw_texture(&self, texture: &dyn DynTexture) {
         let texture = texture.expect_downcast_ref();
         unsafe { D::add_raw_texture(self, texture) };
+    }
+
+    unsafe fn texture_from_raw(
+        &self,
+        hal_texture: Box<dyn crate::RawTexture>,
+        desc: &TextureDescriptor,
+    ) -> Result<Box<dyn DynTexture>, DeviceError> {
+        let hal_texture = Box::<dyn Any>::downcast(hal_texture).unwrap();
+        unsafe { D::texture_from_raw(self, hal_texture, desc) }.map(|b| {
+            let boxed_texture: Box<dyn DynTexture> = Box::new(b);
+            boxed_texture
+        })
+
     }
 
     unsafe fn create_texture_view(

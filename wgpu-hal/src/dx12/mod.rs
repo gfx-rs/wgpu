@@ -603,6 +603,11 @@ pub struct Adapter {
 unsafe impl Send for Adapter {}
 unsafe impl Sync for Adapter {}
 
+#[derive(Clone, Debug)]
+pub struct Dx12DeviceOptions;
+
+impl wgt::BackendDeviceOptions for Dx12DeviceOptions {}
+
 impl Adapter {
     pub fn as_raw(&self) -> &Dxgi::IDXGIAdapter3 {
         &self.raw

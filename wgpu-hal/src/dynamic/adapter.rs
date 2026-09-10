@@ -1,4 +1,5 @@
 use alloc::boxed::Box;
+use core::any::Any;
 
 use crate::{
     Adapter, Api, DeviceError, OpenDevice, SurfaceCapabilities, TextureFormatCapabilities,
@@ -22,11 +23,20 @@ impl<A: Api> From<OpenDevice<A>> for DynOpenDevice {
 }
 
 pub trait DynAdapter: DynResource {
+    /// # Safety
+    ///
+    /// - Same as [`Adapter::open`].
+    ///
+    /// # Panics
+    ///
+    /// - If `options` is not of this adapter's backend's
+    ///   [`DeviceOptions`](Adapter::DeviceOptions) type.
     unsafe fn open(
         &self,
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        options: Option<Box<dyn wgt::BackendDeviceOptions>>,
     ) -> Result<DynOpenDevice, DeviceError>;
 
     unsafe fn texture_format_capabilities(
@@ -54,10 +64,17 @@ impl<A: Adapter + DynResource> DynAdapter for A {
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        options: Option<Box<dyn wgt::BackendDeviceOptions>>,
     ) -> Result<DynOpenDevice, DeviceError> {
-        unsafe { A::open(self, features, limits, memory_hints) }.map(|open_device| DynOpenDevice {
-            device: Box::new(open_device.device),
-            queue: Box::new(open_device.queue),
+        let options = options.map(|options| {
+            Box::<dyn Any>::downcast(options)
+                .expect("Device options don't have the expected backend type.")
+        });
+        unsafe { A::open(self, features, limits, memory_hints, options) }.map(|open_device| {
+            DynOpenDevice {
+                device: Box::new(open_device.device),
+                queue: Box::new(open_device.queue),
+            }
         })
     }
 

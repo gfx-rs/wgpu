@@ -2,8 +2,7 @@ use alloc::boxed::Box;
 use core::time::Duration;
 
 use crate::{
-    DynDevice, DynFence, DynResource, DynSurfaceTexture, Surface, SurfaceConfiguration,
-    SurfaceError,
+    DynDevice, DynFence, DynResource, DynSurfaceTexture, RawSurfaceConfiguration, Surface, SurfaceConfiguration, SurfaceError
 };
 
 use super::DynResourceExt as _;
@@ -22,6 +21,7 @@ pub trait DynSurface: DynResource {
         &self,
         device: &dyn DynDevice,
         config: &SurfaceConfiguration,
+        raw_config: Option<Box<dyn RawSurfaceConfiguration>>,
     ) -> Result<(), SurfaceError>;
 
     unsafe fn unconfigure(&self, device: &dyn DynDevice);
@@ -40,9 +40,13 @@ impl<S: Surface + DynResource> DynSurface for S {
         &self,
         device: &dyn DynDevice,
         config: &SurfaceConfiguration,
+        raw_config: Option<Box<dyn RawSurfaceConfiguration>>,
     ) -> Result<(), SurfaceError> {
+        // Normally, we would downcast `config.raw` here as well, but surfaces are special
+        // because Vulkan can have either a native or DXGI swapchain, so we defer
+        // downcasting to the backend.
         let device = device.expect_downcast_ref();
-        unsafe { S::configure(self, device, config) }
+        unsafe { S::configure(self, device, config, raw_config) }
     }
 
     unsafe fn unconfigure(&self, device: &dyn DynDevice) {

@@ -11,8 +11,21 @@ use crate::{
     },
 };
 
+crate::adapter_options! {
+    /// Options for enumerating DX12 adapters.
+    #[backend(wgt::Backend::Dx12)]
+    #[derive(Clone, Debug)]
+    pub struct Dx12AdapterOptions {
+        /// LUID of the desired adapter. If `Some`, only the adapter with this LUID
+        /// will be enumerated.
+        pub luid: Option<Foundation::LUID>,
+    }
+}
+
 impl crate::Instance for super::Instance {
     type A = super::Api;
+
+    type AdapterOptions = Dx12AdapterOptions;
 
     unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init DX12 Backend");
@@ -166,11 +179,24 @@ impl crate::Instance for super::Instance {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&super::Surface>,
+        options: Option<&Self::AdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<super::Api>> {
         let adapters = auxil::dxgi::factory::enumerate_adapters(self.factory.clone());
 
         adapters
             .into_iter()
+            .filter(|raw| {
+                let Some(luid) = options.and_then(|o| o.luid) else {
+                    return true;
+                };
+                match unsafe { raw.GetDesc() } {
+                    Ok(desc) => luid == desc.AdapterLuid,
+                    Err(e) => {
+                        log::error!("GetDesc failed for dxgi adapter: {e}");
+                        false
+                    }
+                }
+            })
             .filter_map(|raw| {
                 super::Adapter::expose(
                     raw,

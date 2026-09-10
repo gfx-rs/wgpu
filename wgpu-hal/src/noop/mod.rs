@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use alloc::{string::String, sync::Arc, vec, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
 use core::{ptr, sync::atomic::Ordering, time::Duration};
 
 use wgpu_sync::atomic::AtomicU64;
@@ -88,8 +88,24 @@ impl core::borrow::Borrow<dyn crate::DynTexture> for Resource {
     }
 }
 
+crate::adapter_options! {
+    /// Options for enumerating Noop adapters.
+    #[backend(wgt::Backend::Noop)]
+    #[derive(Clone, Debug)]
+    pub struct NoopAdapterOptions;
+}
+
+crate::device_options!{
+    /// Options for opening Noop devices.
+    #[backend(wgt::Backend::Noop)]
+    #[derive(Clone, Debug)]
+    pub struct NoopDeviceOptions;
+}
+
 impl crate::Instance for Context {
     type A = Api;
+
+    type AdapterOptions = NoopAdapterOptions;
 
     unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         let options = Arc::new(desc.backend_options.noop.clone());
@@ -113,6 +129,7 @@ impl crate::Instance for Context {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&Context>,
+        _options: Option<&Self::AdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<Api>> {
         let device_type = self.options.device_type.unwrap_or(wgt::DeviceType::Other);
         let subgroup_min_size = self
@@ -198,6 +215,7 @@ impl crate::Surface for Context {
         &self,
         device: &Context,
         config: &crate::SurfaceConfiguration,
+        _raw_config: Option<Box<dyn crate::RawSurfaceConfiguration>>,
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }
@@ -217,11 +235,14 @@ impl crate::Surface for Context {
 impl crate::Adapter for Context {
     type A = Api;
 
+    type DeviceOptions = NoopDeviceOptions;
+
     unsafe fn open(
         &self,
         features: wgt::Features,
         _limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
+        _options: Option<Box<NoopDeviceOptions>>,
     ) -> DeviceResult<crate::OpenDevice<Api>> {
         Ok(crate::OpenDevice {
             device: Context {

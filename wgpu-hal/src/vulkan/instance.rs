@@ -1,7 +1,6 @@
 use alloc::{borrow::ToOwned as _, boxed::Box, ffi::CString, string::String, sync::Arc, vec::Vec};
 use core::{
     ffi::{c_void, CStr},
-    marker::PhantomData,
     slice,
     str::FromStr,
 };
@@ -812,7 +811,6 @@ impl super::Instance {
                 extensions: &mut extensions,
                 create_info: &mut create_info,
                 entry: &entry,
-                _phantom: PhantomData,
             });
         }
 
@@ -1053,8 +1051,17 @@ impl Drop for super::InstanceShared {
     }
 }
 
+crate::adapter_options! {
+    /// Options for enumerating Vulkan adapters.
+    #[backend(wgt::Backend::Vulkan)]
+    #[derive(Clone, Debug)]
+    pub struct VulkanAdapterOptions;
+}
+
 impl crate::Instance for super::Instance {
     type A = super::Api;
+
+    type AdapterOptions = VulkanAdapterOptions;
 
     unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         unsafe { Self::init_with_callback(desc, None) }
@@ -1121,6 +1128,7 @@ impl crate::Instance for super::Instance {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&super::Surface>,
+        _options: Option<&Self::AdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<super::Api>> {
         use crate::auxil::db;
 
@@ -1186,6 +1194,7 @@ impl crate::Surface for super::Surface {
         &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
+        raw_config: Option<Box<dyn crate::RawSurfaceConfiguration>>,
     ) -> Result<(), crate::SurfaceError> {
         // SAFETY: `configure`'s contract guarantees there are no resources derived from the swapchain in use.
         let mut swap_chain = self.swapchain.write();
@@ -1195,7 +1204,7 @@ impl crate::Surface for super::Surface {
             unsafe { old.release_resources(device) };
         }
 
-        let swapchain = unsafe { self.inner.create_swapchain(device, config, old)? };
+        let swapchain = unsafe { self.inner.create_swapchain(device, config, raw_config, old)? };
         *swap_chain = Some(swapchain);
 
         Ok(())

@@ -297,19 +297,14 @@ pub use dynamic::{
 use alloc::boxed::Box;
 use alloc::{borrow::Cow, string::String, vec::Vec};
 use core::{
-    borrow::Borrow,
-    error::Error,
-    fmt,
-    num::NonZeroU32,
-    ops::{Range, RangeInclusive},
-    ptr::NonNull,
+    any::Any, borrow::Borrow, error::Error, fmt, num::NonZeroU32, ops::{Range, RangeInclusive}, ptr::NonNull
 };
 
 use bitflags::bitflags;
 use raw_window_handle::DisplayHandle;
 use thiserror::Error;
 use wgpu_sync::Arc;
-use wgt::WasmNotSendSync;
+use wgt::{WasmNotSendSync, backend_map_type, backend_type};
 
 // - Vertex + Fragment
 // - Compute
@@ -336,6 +331,8 @@ pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
 pub type AtomicFenceValue = wgpu_sync::atomic::AtomicU64;
+
+pub trait RawTexture: Any { }
 
 /// A callback to signal that wgpu is no longer using a resource.
 #[cfg(all(any(gles, vulkan, metal), not(webgl)))]
@@ -679,8 +676,25 @@ pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
     type AccelerationStructure: DynAccelerationStructure + 'static;
 }
 
+backend_map_type!(
+    adapter_options,
+    dyn wgt::BackendAdapterOptions,
+    AdapterOptionsType,
+    AdapterOptionsTypeAssignment,
+);
+
+backend_type!(
+    device_options,
+    wgt::BackendDeviceOptions,
+    DeviceOptionsType,
+    DeviceOptionsTypeAssignment,
+);
+
 pub trait Instance: Sized + WasmNotSendSync {
     type A: Api;
+
+    // TODO: should probably move to Api
+    type AdapterOptions: wgt::BackendMapValue<dyn wgt::BackendAdapterOptions>;
 
     unsafe fn init(desc: &InstanceDescriptor<'_>) -> Result<Self, InstanceError>;
     unsafe fn create_surface(
@@ -692,6 +706,7 @@ pub trait Instance: Sized + WasmNotSendSync {
     unsafe fn enumerate_adapters(
         &self,
         surface_hint: Option<&<Self::A as Api>::Surface>,
+        options: Option<&Self::AdapterOptions>,
     ) -> Vec<ExposedAdapter<Self::A>>;
 }
 
@@ -699,6 +714,10 @@ pub trait Surface: WasmNotSendSync {
     type A: Api;
 
     /// Configure `self` to use `device`.
+    ///
+    /// Normally, this method would take a concrete type for `raw_config`, but surfaces
+    /// are special because Vulkan has an additional layer to dispatch to either a native
+    /// or DXGI swapchain, so we defer downcasting to within the backend.
     ///
     /// # Safety
     ///
@@ -710,6 +729,7 @@ pub trait Surface: WasmNotSendSync {
         &self,
         device: &<Self::A as Api>::Device,
         config: &SurfaceConfiguration,
+        raw_config: Option<Box<dyn RawSurfaceConfiguration>>,
     ) -> Result<(), SurfaceError>;
 
     /// Unconfigure `self` on `device`.
@@ -805,11 +825,29 @@ pub trait Surface: WasmNotSendSync {
 pub trait Adapter: WasmNotSendSync {
     type A: Api;
 
+    // TODO: should probably move to Api
+    type DeviceOptions: wgt::BackendDeviceOptions;
+
+    /// Open a device on this adapter.
+    ///
+    /// `options` carries backend-specific device creation parameters, for
+    /// example a [`vulkan::VulkanDeviceOptions`], which can install a callback
+    /// that customizes the [`vk::DeviceCreateInfo`]. Options bypass the
+    /// validation that a higher-level crate such as `wgpu-core` would normally
+    /// perform.
+    ///
+    /// [`vulkan::VulkanDeviceOptions`]: vulkan/struct.VulkanDeviceOptions.html
+    /// [`vk::DeviceCreateInfo`]: https://docs.rs/ash/latest/ash/vk/struct.DeviceCreateInfo.html
+    ///
+    /// # Safety
+    ///
+    /// - `options` must uphold the safety contract documented on its type.
     unsafe fn open(
         &self,
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        options: Option<Box<Self::DeviceOptions>>,
     ) -> Result<OpenDevice<Self::A>, DeviceError>;
 
     /// Return the set of supported capabilities for a texture format.
@@ -1054,6 +1092,15 @@ pub trait Device: WasmNotSendSync {
 
     /// A hook for when a wgpu-core texture is created from a raw wgpu-hal texture.
     unsafe fn add_raw_texture(&self, texture: &<Self::A as Api>::Texture);
+
+    type RawTexture: RawTexture;
+
+    /// Create a texture from from a raw platform texture reference.
+    unsafe fn texture_from_raw(
+        &self,
+        hal_texture: Box<Self::RawTexture>,
+        desc: &TextureDescriptor,
+    ) -> Result<<Self::A as Api>::Texture, DeviceError>;
 
     unsafe fn create_texture_view(
         &self,
@@ -2761,7 +2808,7 @@ pub struct RayTracingPipelineDescriptor<
     pub cache: Option<&'a Pc>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct SurfaceConfiguration {
     /// Maximum number of queued frames. Must be in
     /// `SurfaceCapabilities::maximum_frame_latency` range.
@@ -2787,6 +2834,8 @@ pub struct SurfaceConfiguration {
     /// than the texture does.
     pub view_formats: Vec<wgt::TextureFormat>,
 }
+
+pub trait RawSurfaceConfiguration: fmt::Debug + Any + Send + Sync { }
 
 #[derive(Debug, Clone)]
 pub struct Rect<T> {
