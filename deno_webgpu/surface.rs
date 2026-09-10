@@ -107,9 +107,9 @@ impl GPUCanvasContext {
 
     let device = configuration.device;
 
-    let err = self.wgpu_surface.configure(&device.wgpu_device, &conf);
+    let result = self.wgpu_surface.configure(&device.wgpu_device, &conf);
 
-    device.error_handler.push_error(err.err());
+    device.error_handler.push_error(result.err());
 
     self.config.borrow_mut().replace(Configuration {
       device,
@@ -200,11 +200,11 @@ impl GPUCanvasContext {
     config.surface_config.width = width;
     config.surface_config.height = height;
 
-    let err = self
+    let result = self
       .wgpu_surface
       .configure(&config.device.wgpu_device, &config.surface_config);
 
-    config.device.error_handler.push_error(err.err());
+    config.device.error_handler.push_error(result.err());
   }
 }
 
