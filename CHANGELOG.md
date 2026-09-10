@@ -221,6 +221,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - BREAKING: Advertise `CompositeAlphaMode::PreMultiplied` instead of `PostMultiplied`, matching the premultiplied alpha compositing that Core Animation actually performs for a non-opaque `CAMetalLayer`. By @nicoburns in [#9922](https://github.com/gfx-rs/wgpu/pull/9922).
   - If you previously hard-coded `PostMultiplied` to get a transparent macOS window, you will start receiving `UnsupportedAlphaMode` validation errors for this. Those affected should migrate to `PreMultiplied` instead.
 - Fix a crash when creating a declared alternate sRGB view of a render-attachment-only surface with Metal API Validation enabled. By @jinleili in [#10280](https://github.com/gfx-rs/wgpu/pull/10280).
+- Fix `Surface::get_current_texture` returning `Occluded` for a window that hasn't been visible yet: before it is shown, or right after, while AppKit hasn't updated its occlusion state. Applications render into such a window to avoid a flash of empty content on first show, and that frame was dropped. Acquisition is now only skipped once the window has been visible and then got occluded. By @tronical in [#10302](https://github.com/gfx-rs/wgpu/pull/10302).
 
 #### GLES
 
