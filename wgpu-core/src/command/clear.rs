@@ -331,7 +331,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
         TextureClearMode::BufferCopy => wgt::TextureUses::COPY_DST,
         TextureClearMode::RenderPass {
             is_color: false, ..
-        } => wgt::TextureUses::DEPTH_STENCIL_WRITE,
+        } => wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE,
         TextureClearMode::Surface { .. } | TextureClearMode::RenderPass { is_color: true, .. } => {
             wgt::TextureUses::COLOR_TARGET
         }
@@ -555,11 +555,13 @@ fn clear_texture_via_render_passes(
                                 mip_level,
                                 depth_or_layer,
                             ),
-                            usage: wgt::TextureUses::DEPTH_STENCIL_WRITE,
+                            usage: wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE,
                         },
                         depth_ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
                         stencil_ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
                         clear_value: (0.0, 0),
+                        depth_read_only: false,
+                        stencil_read_only: false,
                     }),
                 )
             };

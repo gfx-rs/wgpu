@@ -648,7 +648,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// or if the alignment of type `U` is greater than the alignment of type `T`.
     ///
     /// This panic occurs regardless of the run-time length or alignment of the slice;
-    /// any call to `cast_elements()` with a particular type `T` and typ` U` will
+    /// any call to `cast_elements()` with particular types `T` and `U` will
     /// either always succeed or always fail.
     #[inline]
     #[track_caller]

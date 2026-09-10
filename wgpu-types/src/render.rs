@@ -906,12 +906,6 @@ impl DepthStencilState {
     pub fn is_stencil_read_only(&self, cull_mode: Option<Face>) -> bool {
         self.stencil.is_read_only(cull_mode)
     }
-
-    /// Returns true if the state doesn't mutate either depth or stencil of the target.
-    #[must_use]
-    pub fn is_read_only(&self, cull_mode: Option<Face>) -> bool {
-        self.is_depth_read_only() && self.is_stencil_read_only(cull_mode)
-    }
 }
 
 /// Describes the depth/stencil attachment for render bundles.

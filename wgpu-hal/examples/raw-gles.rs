@@ -348,6 +348,7 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
                     dimension: wgpu_types::TextureViewDimension::D2,
                     usage: wgpu_types::TextureUses::COLOR_TARGET,
                     range: wgpu_types::ImageSubresourceRange::default(),
+                    swizzle: wgpu_types::TextureComponentSwizzle::default(),
                 },
             )
             .unwrap()

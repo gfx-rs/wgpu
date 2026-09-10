@@ -491,7 +491,7 @@ impl super::Device {
     ) -> super::Buffer {
         super::Buffer {
             resource,
-            size,
+            allocated_size: size,
             allocation: suballocation::Allocation::none(
                 suballocation::AllocationType::Buffer,
                 size,
@@ -506,7 +506,7 @@ impl crate::Device for super::Device {
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,
-    ) -> Result<super::Buffer, crate::DeviceError> {
+    ) -> Result<(super::Buffer, wgt::BufferAddress), crate::DeviceError> {
         let mut desc = desc.clone();
 
         if desc.usage.contains(wgt::BufferUses::UNIFORM) {
@@ -520,11 +520,14 @@ impl crate::Device for super::Device {
 
         self.counters.buffers.add(1);
 
-        Ok(super::Buffer {
-            resource,
-            size: desc.size,
-            allocation,
-        })
+        Ok((
+            super::Buffer {
+                resource,
+                allocated_size: desc.size,
+                allocation,
+            },
+            desc.size,
+        ))
     }
 
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
@@ -693,8 +696,12 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
-            handle_dsv_ro: if desc.usage.intersects(wgt::TextureUses::DEPTH_STENCIL_READ) {
-                let raw_desc = unsafe { view_desc.to_dsv(true) };
+            handle_dsv_wr: if desc.format.is_combined_depth_stencil_format()
+                && desc
+                    .usage
+                    .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
+            {
+                let raw_desc = unsafe { view_desc.to_dsv(false, true) };
                 let handle = self.dsv_pool.lock().alloc_handle()?;
                 unsafe {
                     self.raw
@@ -704,8 +711,40 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
-            handle_dsv_rw: if desc.usage.intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE) {
-                let raw_desc = unsafe { view_desc.to_dsv(false) };
+            handle_dsv_rw: if desc.format.is_combined_depth_stencil_format()
+                && desc
+                    .usage
+                    .contains(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_WRITE)
+            {
+                let raw_desc = unsafe { view_desc.to_dsv(true, false) };
+                let handle = self.dsv_pool.lock().alloc_handle()?;
+                unsafe {
+                    self.raw
+                        .CreateDepthStencilView(&texture.resource, Some(&raw_desc), handle.raw)
+                };
+                Some(handle)
+            } else {
+                None
+            },
+            handle_dsv_ww: if desc
+                .usage
+                .intersects(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE)
+            {
+                let raw_desc = unsafe { view_desc.to_dsv(false, false) };
+                let handle = self.dsv_pool.lock().alloc_handle()?;
+                unsafe {
+                    self.raw
+                        .CreateDepthStencilView(&texture.resource, Some(&raw_desc), handle.raw)
+                };
+                Some(handle)
+            } else {
+                None
+            },
+            handle_dsv_rr: if desc
+                .usage
+                .intersects(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_READ)
+            {
+                let raw_desc = unsafe { view_desc.to_dsv(true, true) };
                 let handle = self.dsv_pool.lock().alloc_handle()?;
                 unsafe {
                     self.raw
@@ -731,12 +770,22 @@ impl crate::Device for super::Device {
         if let Some(handle) = view.handle_rtv {
             self.rtv_pool.lock().free_handle(handle);
         }
-        if view.handle_dsv_ro.is_some() || view.handle_dsv_rw.is_some() {
+        if view.handle_dsv_rr.is_some()
+            || view.handle_dsv_wr.is_some()
+            || view.handle_dsv_rw.is_some()
+            || view.handle_dsv_ww.is_some()
+        {
             let mut pool = self.dsv_pool.lock();
-            if let Some(handle) = view.handle_dsv_ro {
+            if let Some(handle) = view.handle_dsv_rr {
+                pool.free_handle(handle);
+            }
+            if let Some(handle) = view.handle_dsv_wr {
                 pool.free_handle(handle);
             }
             if let Some(handle) = view.handle_dsv_rw {
+                pool.free_handle(handle);
+            }
+            if let Some(handle) = view.handle_dsv_ww {
                 pool.free_handle(handle);
             }
         }
@@ -774,7 +823,9 @@ impl crate::Device for super::Device {
             MipLODBias: 0f32,
             MaxAnisotropy: desc.anisotropy_clamp as u32,
 
-            ComparisonFunc: conv::map_comparison(desc.compare.unwrap_or_default()),
+            ComparisonFunc: desc
+                .compare
+                .map_or(Direct3D12::D3D12_COMPARISON_FUNC_NONE, conv::map_comparison),
             BorderColor: border_color,
             MinLOD: desc.lod_clamp.start,
             MaxLOD: desc.lod_clamp.end,
@@ -1547,7 +1598,7 @@ impl crate::Device for super::Device {
                     let end = start + entry.count as usize;
                     for data in &desc.buffers[start..end] {
                         let gpu_address = data.resolve_address();
-                        let mut size = data.resolve_size().try_into().unwrap();
+                        let mut size = data.size.get().try_into().unwrap();
 
                         if has_dynamic_offset {
                             match ty {
@@ -1559,8 +1610,13 @@ impl crate::Device for super::Device {
                                     ));
                                     continue;
                                 }
+                                // TODO(https://github.com/gfx-rs/wgpu/issues/9865): There is not currently
+                                // any mechanism to check that shader accesses are within the valid range
+                                // of a dynamic offset binding, and while using the actual size of the buffer
+                                // here would be slightly closer to being correct, it isn't sufficient
+                                // (because the upper bound moves with the dynamic offset).
                                 wgt::BufferBindingType::Storage { .. } => {
-                                    size = (data.buffer.size - data.offset) as u32;
+                                    size = (data.buffer.allocated_size - data.offset) as u32;
                                     dynamic_buffers.push(super::DynamicBuffer::Storage);
                                 }
                             }
@@ -1741,7 +1797,7 @@ impl crate::Device for super::Device {
                         cpu_views.as_mut().unwrap().stage.push(plane_handle.raw);
                     }
                     let gpu_address = external_texture.params.resolve_address();
-                    let size = external_texture.params.resolve_size() as u32;
+                    let size = crate::EXTERNAL_TEXTURE_PARAMS_SIZE as u32;
                     let inner = cpu_views.as_mut().unwrap();
                     let cpu_index = inner.stage.len() as u32;
                     let params_handle = desc.layout.cpu_heap_views.as_ref().unwrap().at(cpu_index);
@@ -2644,7 +2700,7 @@ impl crate::Device for super::Device {
         Some(self.mem_allocator.generate_report())
     }
 
-    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {
         const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
         let temp = Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC {
             Transform: instance.transform,
@@ -2655,7 +2711,7 @@ impl crate::Device for super::Device {
 
         wgt::bytemuck_wrapper!(unsafe struct Desc(Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC));
 
-        bytemuck::bytes_of(&Desc::wrap(temp)).to_vec()
+        to_extend.extend_from_slice(bytemuck::bytes_of(&Desc::wrap(temp)))
     }
 
     fn check_if_oom(&self) -> Result<(), crate::DeviceError> {

@@ -17,7 +17,7 @@ path = "lib.rs"
 # We make all dependencies conditional on not being wasm,
 # so the whole workspace can built as wasm.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-wgpu-core = { workspace = true, features = [
+wgpu-core = { workspace = true, default-features = true, features = [
     "trace",
     "replay",
     "serde",
@@ -41,16 +41,16 @@ deno_unsync.workspace = true
 #
 # We want the Metal backend.
 [target.'cfg(target_vendor = "apple")'.dependencies]
-wgpu-core = { workspace = true, features = ["metal"] }
+wgpu-core = { workspace = true, default-features = true, features = ["metal"] }
 
 # Windows
 #
 # We want the DX12 backend.
 [target.'cfg(windows)'.dependencies]
-wgpu-core = { workspace = true, features = ["dx12"] }
+wgpu-core = { workspace = true, default-features = true, features = ["dx12"] }
 
 # Windows and Unix (not Emscripten)
 #
 # We want the Vulkan backend.
 [target.'cfg(any(windows, all(unix, not(target_os = "emscripten"))))'.dependencies]
-wgpu-core = { workspace = true, features = ["vulkan"] }
+wgpu-core = { workspace = true, default-features = true, features = ["vulkan"] }

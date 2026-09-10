@@ -1,4 +1,5 @@
-#version 320 es
+#version 310 es
+#extension GL_OES_geometry_shader : require
 
 precision highp float;
 precision highp int;

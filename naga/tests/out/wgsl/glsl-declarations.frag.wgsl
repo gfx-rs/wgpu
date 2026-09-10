@@ -55,7 +55,7 @@ fn main_1() {
     return;
 }
 
-@fragment 
+@fragment
 fn main(@location(0) position: vec2<f32>, @location(1) a: vec2<f32>, @location(2) in_array: vec4<f32>, @location(3) in_array_1: vec4<f32>) -> FragmentOutput {
     vert.position = position;
     vert.a = a;

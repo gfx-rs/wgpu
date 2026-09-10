@@ -19,7 +19,7 @@ fn main_1() {
     return;
 }
 
-@vertex 
+@vertex
 fn main(@location(0) a_pos: vec2<f32>, @location(1) a_uv: vec2<f32>) -> VertexOutput {
     a_pos_1 = a_pos;
     a_uv_1 = a_uv;

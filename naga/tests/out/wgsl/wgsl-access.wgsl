@@ -43,13 +43,13 @@ struct Outer {
 }
 
 var<private> msl_padding_global_const: GlobalConst = GlobalConst(0u, vec3<u32>(0u, 0u, 0u), 0i);
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage, read_write> bar: Bar;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<uniform> baz: Baz;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var<storage, read_write> qux: vec2<i32>;
-@group(0) @binding(3) 
+@group(0) @binding(3)
 var<uniform> nested_mat_cx2_: MatCx2InArray;
 
 fn test_matrix_within_struct_accesses() {
@@ -223,7 +223,7 @@ fn var_members_of_members() -> i32 {
     return _e15;
 }
 
-@vertex 
+@vertex
 fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     var foo: f32 = 0f;
     var c2_: array<i32, 5>;
@@ -247,7 +247,7 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     return vec4<f32>((_matrix * vec4<f32>(vec4(value_1))), 2f);
 }
 
-@fragment 
+@fragment
 fn foo_frag() -> @location(0) vec4<f32> {
     bar._matrix[1][2] = 1f;
     bar._matrix = mat4x3<f32>(vec3(0f), vec3(1f), vec3(2f), vec3(3f));
@@ -257,7 +257,7 @@ fn foo_frag() -> @location(0) vec4<f32> {
     return vec4(0f);
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn foo_compute() {
     assign_through_ptr();
     assign_to_ptr_components();

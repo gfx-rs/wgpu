@@ -1,8 +1,8 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
-use core::{ptr, sync::atomic::AtomicU64};
+use core::ptr;
 use std::thread;
 
-use wgpu_sync::Mutex;
+use wgpu_sync::{atomic::AtomicU64, Mutex};
 use windows::{
     core::Interface as _,
     Win32::{
@@ -484,7 +484,8 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_ATOMIC
             | wgt::Features::PASSTHROUGH_SHADERS
             | wgt::Features::EXTERNAL_TEXTURE
-            | wgt::Features::MEMORY_DECORATION_COHERENT;
+            | wgt::Features::MEMORY_DECORATION_COHERENT
+            | wgt::Features::TEXTURE_COMPONENT_SWIZZLE;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
@@ -905,8 +906,12 @@ impl super::Adapter {
                     max_bindings_per_bind_group: u32::MAX,
                     max_sampled_textures_per_shader_stage,
                     max_samplers_per_shader_stage,
-                    max_storage_textures_per_shader_stage,
                     max_storage_buffers_per_shader_stage,
+                    max_storage_buffers_in_vertex_stage: 0,
+                    max_storage_buffers_in_fragment_stage: 0,
+                    max_storage_textures_per_shader_stage,
+                    max_storage_textures_in_vertex_stage: 0,
+                    max_storage_textures_in_fragment_stage: 0,
                     max_uniform_buffers_per_shader_stage,
                     // See `InputSlot` param docs: https://learn.microsoft.com/en-ca/windows/win32/api/d3d12/ns-d3d12-d3d12_input_element_desc
                     max_vertex_buffers: 16,
@@ -1397,7 +1402,8 @@ impl crate::Adapter for super::Adapter {
     fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
         wgt::TextureUses::INCLUSIVE
             | wgt::TextureUses::COLOR_TARGET
-            | wgt::TextureUses::DEPTH_STENCIL_WRITE
+            | wgt::TextureUses::DEPTH_WRITE
+            | wgt::TextureUses::STENCIL_WRITE
     }
 }
 

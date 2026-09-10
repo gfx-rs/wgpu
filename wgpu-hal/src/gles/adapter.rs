@@ -1,8 +1,7 @@
 use alloc::{borrow::ToOwned as _, format, string::String, sync::Arc, vec, vec::Vec};
-use core::sync::atomic::AtomicU8;
 
 use glow::HasContext;
-use wgpu_sync::Mutex;
+use wgpu_sync::{atomic::AtomicU8, Mutex};
 use wgt::AstcChannel;
 
 use crate::auxil::db;
@@ -791,7 +790,11 @@ impl super::Adapter {
             max_sampled_textures_per_shader_stage: super::MAX_TEXTURE_SLOTS as u32,
             max_samplers_per_shader_stage: super::MAX_SAMPLERS as u32,
             max_storage_buffers_per_shader_stage,
+            max_storage_buffers_in_vertex_stage: 0,
+            max_storage_buffers_in_fragment_stage: 0,
             max_storage_textures_per_shader_stage,
+            max_storage_textures_in_vertex_stage: 0,
+            max_storage_textures_in_fragment_stage: 0,
             max_uniform_buffers_per_shader_stage,
             max_binding_array_elements_per_shader_stage: 0,
             max_binding_array_sampler_elements_per_shader_stage: 0,
@@ -1402,7 +1405,8 @@ impl crate::Adapter for super::Adapter {
     fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
         wgt::TextureUses::INCLUSIVE
             | wgt::TextureUses::COLOR_TARGET
-            | wgt::TextureUses::DEPTH_STENCIL_WRITE
+            | wgt::TextureUses::DEPTH_WRITE
+            | wgt::TextureUses::STENCIL_WRITE
     }
 }
 

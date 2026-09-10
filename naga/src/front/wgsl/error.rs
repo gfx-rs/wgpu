@@ -529,6 +529,7 @@ pub(crate) enum Error<'a> {
     ExpectedPositiveArrayLength(Span),
     MissingWorkgroupSize(Span),
     ConstantEvaluatorError(Box<ConstantEvaluatorError>, Span),
+    TypeMismatch(Box<TypeMismatchError>),
     AutoConversion(Box<AutoConversionError>),
     AutoConversionLeafScalar(Box<AutoConversionLeafScalarError>),
     ConcretizationFailed(Box<ConcretizationFailedError>),
@@ -603,6 +604,7 @@ pub(crate) enum Error<'a> {
     UnexpectedExprForTypeExpression(Span),
     MissingIncomingPayload(Span),
     UnterminatedBlockComment(Span),
+    RayQueryWithInitializer(Span),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -622,6 +624,17 @@ impl From<&'static str> for DiagnosticAttributeNotSupportedPosition {
     fn from(display_plural: &'static str) -> Self {
         Self::Other { display_plural }
     }
+}
+
+/// A value's concrete type differs from the type required by its context.
+#[derive(Clone, Debug)]
+pub(crate) struct TypeMismatchError {
+    /// Where the required type comes from.
+    pub dest_span: Span,
+    pub dest_type: String,
+    /// The value whose type is wrong.
+    pub source_span: Span,
+    pub source_type: String,
 }
 
 #[derive(Clone, Debug)]
@@ -1353,6 +1366,29 @@ impl<'a> Error<'a> {
                 message: "internal WGSL front end error".into(),
                 labels: vec![],
             },
+            Error::TypeMismatch(ref error) => {
+                let TypeMismatchError {
+                    dest_span,
+                    ref dest_type,
+                    source_span,
+                    ref source_type,
+                } = **error;
+                let mut labels = vec![(
+                    source_span,
+                    format!("this expression has type `{source_type}`").into(),
+                )];
+                if dest_span != source_span {
+                    labels.push((
+                        dest_span,
+                        format!("a value of type `{dest_type}` is required here").into(),
+                    ));
+                }
+                ParseError {
+                    message: format!("expected `{dest_type}`, found `{source_type}`").into(),
+                    labels,
+                    notes: vec![],
+                }
+            }
             Error::AutoConversion(ref error) => {
                 // destructuring ensures all fields are handled
                 let AutoConversionError {
@@ -1680,6 +1716,14 @@ impl<'a> Error<'a> {
                     "must be closed with `*/`".into(),
                 )],
                 message: "unterminated block comment".into(),
+                notes: vec![],
+            },
+            Error::RayQueryWithInitializer(span) => ParseError {
+                message: "Ray query with initialize".into(),
+                labels: vec![(
+                    *span,
+                    "variables with type `ray_query` are special and so cannot have initializers".into(),
+                )],
                 notes: vec![],
             },
         }

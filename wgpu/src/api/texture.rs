@@ -60,7 +60,7 @@ impl Texture {
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::Texture>> {
         let texture = self.inner.as_core_opt()?;
-        unsafe { texture.context.texture_as_hal::<A>(texture) }
+        unsafe { texture.as_hal::<A>() }
     }
 
     /// Returns the underlying [`webgpu::GpuTexture`] handle if this `Texture`
@@ -180,6 +180,20 @@ impl Texture {
     /// This is always equal to the `usage` that was specified when creating the texture.
     pub fn usage(&self) -> TextureUsages {
         self.inner.usage()
+    }
+
+    /// Marks this texture's contents as already initialized, skipping wgpu's
+    /// lazy zero-initialization of it.
+    ///
+    /// This is a no-op on backends without a concept of lazy
+    /// zero-initialization, such as WebGPU.
+    ///
+    /// # Safety
+    ///
+    /// The entire contents of the texture must already be initialized, e.g. by
+    /// writing to it through the handle returned by [`Texture::as_hal`].
+    pub unsafe fn mark_externally_initialized(&self) {
+        unsafe { self.inner.mark_externally_initialized() }
     }
 }
 

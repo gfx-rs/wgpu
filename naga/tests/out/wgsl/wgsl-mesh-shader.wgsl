@@ -41,7 +41,7 @@ fn helper_writer(value: bool) {
     return;
 }
 
-@task @payload(taskPayload) @workgroup_size(1, 1, 1) 
+@task @payload(taskPayload) @workgroup_size(1, 1, 1)
 fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
     workgroupData = 1f;
     taskPayload.colorMask = vec4<f32>(1f, 1f, 0f, 1f);
@@ -51,7 +51,7 @@ fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
     return vec3<u32>(1u, 1u, 1u);
 }
 
-@task @payload(taskPayload) @workgroup_size(2, 1, 1) 
+@task @payload(taskPayload) @workgroup_size(2, 1, 1)
 fn ts_divergent(@builtin(local_invocation_id) thread_id: vec3<u32>) -> @builtin(mesh_task_size) vec3<u32> {
     if (thread_id.x == 0u) {
         taskPayload.colorMask = vec4<f32>(1f, 1f, 0f, 1f);
@@ -61,7 +61,7 @@ fn ts_divergent(@builtin(local_invocation_id) thread_id: vec3<u32>) -> @builtin(
     return vec3<u32>(2u, 2u, 2u);
 }
 
-@mesh(mesh_output) @workgroup_size(1, 1, 1) @payload(taskPayload) 
+@mesh(mesh_output) @workgroup_size(1, 1, 1) @payload(taskPayload)
 fn ms_main() {
     mesh_output.vertex_count = 3u;
     mesh_output.primitive_count = 1u;
@@ -82,7 +82,7 @@ fn ms_main() {
     return;
 }
 
-@mesh(mesh_output) @workgroup_size(1, 1, 1) 
+@mesh(mesh_output) @workgroup_size(1, 1, 1)
 fn ms_no_ts() {
     mesh_output.vertex_count = 3u;
     mesh_output.primitive_count = 1u;
@@ -99,7 +99,7 @@ fn ms_no_ts() {
     return;
 }
 
-@mesh(mesh_output) @workgroup_size(2, 1, 1) 
+@mesh(mesh_output) @workgroup_size(2, 1, 1)
 fn ms_divergent(@builtin(local_invocation_id) thread_id_1: vec3<u32>) {
     if (thread_id_1.x == 0u) {
         mesh_output.vertex_count = 3u;
@@ -120,7 +120,7 @@ fn ms_divergent(@builtin(local_invocation_id) thread_id_1: vec3<u32>) {
     }
 }
 
-@fragment 
+@fragment
 fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
     return (vertex.color * primitive.colorMask);
 }

@@ -93,11 +93,12 @@ mod types;
 mod view;
 
 use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
-use core::{ffi, fmt, mem, ops::Deref, sync::atomic::AtomicU64};
+use core::{ffi, fmt, mem, ops::Deref};
 
 use arrayvec::ArrayVec;
 use hashbrown::HashMap;
 use suballocation::Allocator;
+use wgpu_sync::atomic::AtomicU64;
 use wgpu_sync::{Mutex, RwLock};
 use windows::{
     core::{Free as _, Interface},
@@ -916,10 +917,14 @@ unsafe impl Sync for CommandBuffer {}
 #[derive(Debug)]
 pub struct Buffer {
     resource: Direct3D12::ID3D12Resource,
-    // While the allocation also has _a_ size, it may not
-    // be the same as the original size of the buffer,
-    // as the allocation size varies for assorted reasons.
-    size: wgt::BufferAddress,
+    /// The allocated size of the buffer.
+    ///
+    /// This may not be the same as the size the application requested.
+    //
+    // TODO(https://github.com/gfx-rs/wgpu/issues/9865): Consider removing this.
+    // The usage associated with the TODO is currently the only usage. Computing
+    // things from the allocated buffer size is usually incorrect.
+    allocated_size: wgt::BufferAddress,
     allocation: suballocation::Allocation,
 }
 
@@ -934,14 +939,7 @@ unsafe impl Sync for Buffer {}
 
 impl crate::DynBuffer for Buffer {}
 
-impl crate::BufferBinding<'_, Buffer> {
-    fn resolve_size(&self) -> wgt::BufferAddress {
-        match self.size {
-            Some(size) => size.get(),
-            None => self.buffer.size - self.offset,
-        }
-    }
-
+impl<S> crate::BufferBinding<'_, Buffer, S> {
     // TODO: Return GPU handle directly?
     fn resolve_address(&self) -> wgt::BufferAddress {
         (unsafe { self.buffer.resource.GetGPUVirtualAddress() }) + self.offset
@@ -1063,8 +1061,14 @@ pub struct TextureView {
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,
     handle_rtv: Option<descriptor::Handle>,
-    handle_dsv_ro: Option<descriptor::Handle>,
+    /// Depth write stencil read-only view.
+    handle_dsv_wr: Option<descriptor::Handle>,
+    /// Depth read-only stencil write view.
     handle_dsv_rw: Option<descriptor::Handle>,
+    /// Depth read-only stencil read-only view.
+    handle_dsv_rr: Option<descriptor::Handle>,
+    /// Depth write stencil write view.
+    handle_dsv_ww: Option<descriptor::Handle>,
 }
 
 impl crate::DynTextureView for TextureView {}

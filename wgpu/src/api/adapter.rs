@@ -80,11 +80,7 @@ impl Adapter {
         desc: &DeviceDescriptor<'_>,
     ) -> Result<(Device, Queue), RequestDeviceError> {
         let core_adapter = self.inner.as_core();
-        let (device, queue) = unsafe {
-            core_adapter
-                .context
-                .create_device_from_hal(core_adapter, hal_device, desc)
-        }?;
+        let (device, queue) = unsafe { core_adapter.create_device_from_hal(hal_device, desc) }?;
 
         Ok((
             Device {
@@ -133,7 +129,7 @@ impl Adapter {
     ) -> Option<impl Deref<Target = A::Adapter> + WasmNotSendSync> {
         let adapter = self.inner.as_core_opt()?;
 
-        unsafe { adapter.context.adapter_as_hal::<A>(adapter) }
+        unsafe { adapter.as_hal::<A>() }
     }
 
     #[cfg(custom)]

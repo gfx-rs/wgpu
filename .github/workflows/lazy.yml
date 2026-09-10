@@ -27,8 +27,11 @@ jobs:
   parse-dota2:
     name: "Validate Shaders: Dota2"
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - run: mkdir naga/data
 
@@ -53,8 +56,11 @@ jobs:
   parse-vulkan-tutorial-shaders:
     name: "Validate Shaders: Sascha Willems Vulkan Tutorial"
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download shaders
         run: cd naga && git clone https://github.com/SaschaWillems/Vulkan.git
@@ -88,8 +94,11 @@ jobs:
   dneto0_spirv-samples:
     name: "Validate Shaders: dneto0 spirv-samples"
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download shaders
         run: |
@@ -101,7 +110,7 @@ jobs:
           cargo build --release -p naga-cli
 
       - name: Install Vulkan SDK
-        uses: ./.github/actions/install-vulkan-sdk
+        uses: $/.github/actions/install-vulkan-sdk
 
       - name: Compile `spv` from `spvasm`
         run: |

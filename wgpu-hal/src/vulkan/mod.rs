@@ -31,11 +31,13 @@ mod descriptor;
 mod device;
 mod drm;
 mod instance;
+mod pnext_chain;
 mod sampler;
 mod semaphore_list;
 mod swapchain;
 
 pub use adapter::PhysicalDeviceFeatures;
+pub(crate) use pnext_chain::PnextChain;
 
 use alloc::{boxed::Box, ffi::CString, sync::Arc, vec::Vec};
 use core::{
@@ -320,6 +322,43 @@ impl Surface {
             .expect("Surface should have a native Vulkan swapchain");
         unsafe { swapchain.set_next_present_chain(chain) };
     }
+
+    /// Set a `pNext` chain of extension structs to attach to the
+    /// [`vk::SwapchainCreateInfoKHR`] used by the next configuration of this surface.
+    ///
+    /// This supports swapchain extensions that `wgpu-hal` has no dedicated support
+    /// for. One example is `VkSwapchainLatencyCreateInfoNV` from [VK_NV_low_latency2].
+    /// The device extension itself must be enabled at device creation, for example
+    /// with [`Adapter::open_with_callback()`](super::vulkan::Adapter::open_with_callback).
+    ///
+    /// The next configuration consumes the chain. A later call replaces a chain that
+    /// hasn't been consumed yet. If the surface is dropped first, the chain is
+    /// discarded unread. Every configuration creates a new swapchain, so you must set
+    /// the chain again before each configuration, including on resize.
+    ///
+    /// # Safety
+    ///
+    /// - `chain` must point to a valid `pNext` chain of structs that can extend
+    ///   [`vk::SwapchainCreateInfoKHR`]. The extensions in the chain must be enabled
+    ///   on the device the surface is configured with.
+    /// - The chain must stay valid until the configuration that consumes it returns
+    ///   or the surface is dropped. Don't read or write the chain during that time.
+    ///   Fields the driver wrote during swapchain creation may be read afterwards.
+    ///
+    /// # Panics
+    ///
+    /// - If the surface isn't a native Vulkan surface, such as a DXGI surface.
+    ///
+    /// [VK_NV_low_latency2]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_low_latency2.html
+    #[track_caller]
+    pub unsafe fn set_next_swapchain_create_chain(&self, chain: *mut c_void) {
+        let surface = self
+            .inner
+            .as_any()
+            .downcast_ref::<swapchain::NativeSurface>()
+            .expect("Surface should be a native Vulkan surface");
+        unsafe { surface.set_next_swapchain_create_chain(chain) };
+    }
 }
 
 #[derive(Debug)]
@@ -469,10 +508,20 @@ struct PrivateCapabilities {
     ///  a scratch buffer when building acceleration structures.
     scratch_buffer_alignment: u32,
 
+    /// Indicating that depth/stencil texturing operations with `VK_COMPONENT_SWIZZLE_ONE` have defined behavior.
+    depth_stencil_swizzle_one_support: bool,
+
     /// `get_raytracing_pipeline_group_data` requires both a group count and a data size.
     /// The data size parameter is just this * the group count, so we store this to not
     /// require an unnecessary parameter.
     ray_tracing_pipeline_group_data_size: u32,
+
+    /// Whether `VK_ATTACHMENT_STORE_OP_NONE` is supported. This includes:
+    /// - `VK_ATTACHMENT_STORE_OP_NONE` provided by `VK_VERSION_1_3`.
+    /// - `VK_ATTACHMENT_STORE_OP_NONE_KHR` provided by `VK_KHR_dynamic_rendering`, or `VK_KHR_load_store_op_none` (promoted to Vulkan 1.4).
+    /// - `VK_ATTACHMENT_STORE_OP_NONE_QCOM` provided by `VK_QCOM_render_pass_store_ops`.
+    /// - `VK_ATTACHMENT_STORE_OP_NONE_EXT` provided by `VK_EXT_load_store_op_none`.
+    store_op_none: bool,
 }
 
 bitflags::bitflags!(
@@ -545,6 +594,8 @@ struct RenderPassKey {
     depth_stencil: Option<DepthStencilAttachmentKey>,
     sample_count: u32,
     multiview_mask: Option<NonZeroU32>,
+    depth_read_only: bool,
+    stencil_read_only: bool,
 }
 
 struct DeviceShared {
@@ -700,6 +751,11 @@ pub struct Queue {
     relay_semaphores: Mutex<RelaySemaphores>,
     signal_semaphores: Mutex<SemaphoreList>,
     wait_semaphores: Mutex<SemaphoreList>,
+    /// A caller-provided `pNext` chain to attach to the [`vk::SubmitInfo`] of the
+    /// next call to [`submit()`](crate::Queue::submit).
+    ///
+    /// Set only through [`Queue::set_next_submit_chain()`].
+    next_submit_chain: Mutex<Option<PnextChain>>,
 }
 
 impl fmt::Debug for Queue {
@@ -711,6 +767,7 @@ impl fmt::Debug for Queue {
             relay_semaphores: _,
             signal_semaphores: _,
             wait_semaphores: _,
+            next_submit_chain: _,
         } = self;
         f.debug_struct("Queue")
             .field("family_index", family_index)
@@ -846,6 +903,33 @@ pub struct AccelerationStructure {
 }
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
+
+impl AccelerationStructure {
+    /// Returns the raw Vulkan acceleration structure handle.
+    ///
+    /// This allows recording acceleration structure commands that `wgpu-hal` doesn't
+    /// support. If those commands come from a device extension, enable it with
+    /// [`Adapter::open_with_callback`].
+    ///
+    /// For a device address, use
+    /// [`crate::Device::get_acceleration_structure_device_address`] instead.
+    ///
+    /// `wgpu` doesn't observe an external build, and rejects an acceleration structure
+    /// that it never built. Call `wgpu::CommandEncoder::mark_acceleration_structures_built`
+    /// on the encoder that recorded the build.
+    ///
+    /// # Safety
+    ///
+    /// - The acceleration structure handle must not be manually destroyed, or used after
+    ///   the acceleration structure is dropped
+    /// - External work using the handle must be synchronized against `wgpu`'s own reads
+    ///   and writes, such as compaction
+    /// - An external build must not write more data than the size the acceleration
+    ///   structure was created with
+    pub unsafe fn raw_handle(&self) -> vk::AccelerationStructureKHR {
+        self.raw
+    }
+}
 
 #[derive(Debug)]
 pub enum TextureMemory {
@@ -1000,7 +1084,7 @@ struct ResourceIdentityFactory<T> {
     #[cfg(not(target_has_atomic = "64"))]
     next_id: Mutex<u64>,
     #[cfg(target_has_atomic = "64")]
-    next_id: core::sync::atomic::AtomicU64,
+    next_id: wgpu_sync::atomic::AtomicU64,
     _phantom: PhantomData<T>,
 }
 
@@ -1010,7 +1094,7 @@ impl<T> ResourceIdentityFactory<T> {
             #[cfg(not(target_has_atomic = "64"))]
             next_id: Mutex::new(0),
             #[cfg(target_has_atomic = "64")]
-            next_id: core::sync::atomic::AtomicU64::new(0),
+            next_id: wgpu_sync::atomic::AtomicU64::new(0),
             _phantom: PhantomData,
         }
     }
@@ -1536,6 +1620,13 @@ impl crate::Queue for Queue {
             &mut vk_timeline_info,
         );
 
+        let submit_chain = self.next_submit_chain.lock().take();
+        if let Some(chain) = submit_chain {
+            // SAFETY: The contract on `Queue::set_next_submit_chain()` keeps the chain
+            // valid and unaliased until this submission is made.
+            vk_info.p_next = unsafe { chain.splice_into(vk_info.p_next) };
+        }
+
         profiling::scope!("vkQueueSubmit");
         unsafe {
             self.device
@@ -1619,6 +1710,33 @@ impl Queue {
     /// already consumed it, this is a no-op that returns `false`.
     pub fn remove_wait_semaphore(&self, semaphore: vk::Semaphore) -> bool {
         self.wait_semaphores.lock().remove(semaphore)
+    }
+
+    /// Set a `pNext` chain of extension structs to attach to the [`vk::SubmitInfo`]
+    /// of the next [`submit()`](crate::Queue::submit) on this queue.
+    ///
+    /// This supports submission extensions that `wgpu-hal` has no dedicated support
+    /// for. One example is `VkLatencySubmissionPresentIdNV` from `VK_NV_low_latency2`.
+    /// The device extension itself must be enabled at device creation, for example
+    /// with [`Adapter::open_with_callback()`](super::vulkan::Adapter::open_with_callback).
+    ///
+    /// The next submission on this queue consumes the chain, and a later call
+    /// replaces a chain that hasn't been submitted yet. One `wgpu` or `wgpu-core`
+    /// submit maps to one submission here, but layers above `wgpu-hal` also make
+    /// housekeeping submissions of their own, for example when a buffer is mapped,
+    /// and those consume the chain too. Set the chain right before the submission
+    /// it applies to, with no other queue or buffer-mapping work in between.
+    ///
+    /// # Safety
+    ///
+    /// - `chain` must point to a valid `pNext` chain of structs that can extend
+    ///   [`vk::SubmitInfo`]. The extensions in the chain must be enabled on this
+    ///   queue's device.
+    /// - The chain must stay valid until the next submission on this queue is made
+    ///   or the queue is dropped. Don't read or write the chain during that time.
+    ///   Fields the driver wrote during submission may be read afterwards.
+    pub unsafe fn set_next_submit_chain(&self, chain: *mut c_void) {
+        *self.next_submit_chain.lock() = Some(PnextChain::new(chain));
     }
 }
 

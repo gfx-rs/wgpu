@@ -42,8 +42,6 @@ pub enum ExternalImageSource {
     /// Copy from a on-screen canvas.
     HTMLCanvasElement(web_sys::HtmlCanvasElement),
     /// Copy from a off-screen canvas.
-    ///
-    /// Requires [`DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES`]
     OffscreenCanvas(web_sys::OffscreenCanvas),
     /// Copy from a video frame.
     VideoFrame(web_sys::VideoFrame),

@@ -88,6 +88,9 @@ mod webgpu_impl {
 
     #[doc(hidden)]
     pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 17;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE: u64 = 1 << 18;
 }
 
 macro_rules! bitflags_array_impl {
@@ -628,8 +631,6 @@ bitflags_array! {
         // ? const NORM16_RESOLVE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3839)
         // ? const 32BIT_FORMAT_MULTISAMPLE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3844)
         // ? const 32BIT_FORMAT_RESOLVE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3844)
-        // ? const TEXTURE_COMPRESSION_ASTC_HDR = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3856)
-        // TEXTURE_FORMAT_16BIT_NORM & TEXTURE_COMPRESSION_ASTC_HDR will most likely become web features as well
         // TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES might not be necessary if we have all the texture features implemented
 
         // Texture Formats:
@@ -922,6 +923,7 @@ bitflags_array! {
         /// - DX12
         /// - Vulkan
         /// - Metal
+        /// - OpenGL (not GLES)
         ///
         /// This is a native only feature.
         ///
@@ -935,6 +937,7 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - Vulkan
+        /// - OpenGL (not GLES)
         ///
         /// This is a native only feature.
         ///
@@ -1827,6 +1830,21 @@ bitflags_array! {
         /// remain compatible with previous wgpu behavior.
         #[name("primitive-index", "shader-primitive-index")]
         const PRIMITIVE_INDEX = WEBGPU_FEATURE_PRIMITIVE_INDEX;
+
+        /// Allows `TextureView`s to rearrange or replace the color components
+        /// from texture's red/green/blue/alpha channels when used as a `TEXTURE_BINDING`.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal on Apple2+ or Mac2+
+        ///
+        /// Not yet implemented:
+        /// - OpenGL
+        ///
+        /// This is a web and native feature.
+        #[name("texture-component-swizzle")]
+        const TEXTURE_COMPONENT_SWIZZLE = WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE;
     }
 }
 
