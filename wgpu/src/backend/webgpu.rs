@@ -584,6 +584,10 @@ fn map_vertex_format(format: wgt::VertexFormat) -> webgpu_sys::GpuVertexFormat {
         VertexFormat::Sint32x4 => vf::Sint32x4,
         VertexFormat::Unorm10_10_10_2 => vf::Unorm1010102,
         VertexFormat::Unorm8x4Bgra => vf::Unorm8x4Bgra,
+        VertexFormat::Snorm10_10_10_2 => {
+            // https://github.com/gfx-rs/wgpu/issues/10216
+            panic!("snorm10-10-10-2 is not yet available on the WebGPU backend")
+        }
         VertexFormat::Float64
         | VertexFormat::Float64x2
         | VertexFormat::Float64x3
@@ -884,7 +888,11 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_sampled_textures_per_shader_stage: limits.max_sampled_textures_per_shader_stage(),
         max_samplers_per_shader_stage: limits.max_samplers_per_shader_stage(),
         max_storage_buffers_per_shader_stage: limits.max_storage_buffers_per_shader_stage(),
+        max_storage_buffers_in_vertex_stage: limits.max_storage_buffers_in_vertex_stage(),
+        max_storage_buffers_in_fragment_stage: limits.max_storage_buffers_in_fragment_stage(),
         max_storage_textures_per_shader_stage: limits.max_storage_textures_per_shader_stage(),
+        max_storage_textures_in_vertex_stage: limits.max_storage_textures_in_vertex_stage(),
+        max_storage_textures_in_fragment_stage: limits.max_storage_textures_in_fragment_stage(),
         max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
         max_binding_array_elements_per_shader_stage: 0,
         max_binding_array_sampler_elements_per_shader_stage: 0,
@@ -999,7 +1007,11 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object<js_sys::Number> {
         (maxSampledTexturesPerShaderStage, max_sampled_textures_per_shader_stage),
         (maxSamplersPerShaderStage, max_samplers_per_shader_stage),
         (maxStorageBuffersPerShaderStage, max_storage_buffers_per_shader_stage),
+        (maxStorageBuffersInVertexStage, max_storage_buffers_in_vertex_stage),
+        (maxStorageBuffersInFragmentStage, max_storage_buffers_in_fragment_stage),
         (maxStorageTexturesPerShaderStage, max_storage_textures_per_shader_stage),
+        (maxStorageTexturesInVertexStage, max_storage_textures_in_vertex_stage),
+        (maxStorageTexturesInFragmentStage, max_storage_textures_in_fragment_stage),
         (maxUniformBuffersPerShaderStage, max_uniform_buffers_per_shader_stage),
         (maxUniformBufferBindingSize, max_uniform_buffer_binding_size),
         (maxStorageBufferBindingSize, max_storage_buffer_binding_size),
@@ -2607,8 +2619,11 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> dispatch::DispatchBuffer {
-        let mapped_desc =
-            webgpu_sys::GpuBufferDescriptor::new_with_f64(desc.size as f64, desc.usage.bits());
+        assert!(desc.usage.buffer_usages_wgpu.is_empty());
+        let mapped_desc = webgpu_sys::GpuBufferDescriptor::new_with_f64(
+            desc.size as f64,
+            desc.usage.buffer_usages_webgpu.bits(),
+        );
         mapped_desc.set_mapped_at_creation(desc.mapped_at_creation);
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2925,7 +2940,10 @@ impl dispatch::QueueInterface for WebQueue {
     ) -> Option<()> {
         let buffer = buffer.as_webgpu();
 
-        let usage = wgt::BufferUsages::from_bits_truncate(buffer.inner.usage());
+        let usage = wgt::BufferUsages::from_internal_flags(
+            wgt::BufferUsagesWebGPU::from_bits_truncate(buffer.inner.usage()),
+            wgt::BufferUsagesWGPU::empty(),
+        );
         // TODO: actually send this down the error scope
         if !usage.contains(wgt::BufferUsages::COPY_DST) {
             log::error!("Destination buffer is missing the `COPY_DST` usage flag");
@@ -3805,7 +3823,7 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         buffer: &dispatch::DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.as_webgpu();
         let index_format = map_index_format(index_format);
@@ -3815,7 +3833,7 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
                 &buffer.inner,
                 index_format,
                 offset as f64,
-                size.get() as f64,
+                size as f64,
             );
         } else {
             self.inner
@@ -3828,17 +3846,13 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         slot: u32,
         buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
-            self.inner.set_vertex_buffer_with_f64_and_f64(
-                slot,
-                buffer,
-                offset as f64,
-                size.get() as f64,
-            );
+            self.inner
+                .set_vertex_buffer_with_f64_and_f64(slot, buffer, offset as f64, size as f64);
         } else {
             self.inner
                 .set_vertex_buffer_with_f64(slot, buffer, offset as f64);
@@ -4096,7 +4110,7 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         buffer: &dispatch::DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.as_webgpu();
         let index_format = map_index_format(index_format);
@@ -4106,7 +4120,7 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
                 &buffer.inner,
                 index_format,
                 offset as f64,
-                size.get() as f64,
+                size as f64,
             );
         } else {
             self.inner
@@ -4119,17 +4133,13 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         slot: u32,
         buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
-            self.inner.set_vertex_buffer_with_f64_and_f64(
-                slot,
-                buffer,
-                offset as f64,
-                size.get() as f64,
-            );
+            self.inner
+                .set_vertex_buffer_with_f64_and_f64(slot, buffer, offset as f64, size as f64);
         } else {
             self.inner
                 .set_vertex_buffer_with_f64(slot, buffer, offset as f64);

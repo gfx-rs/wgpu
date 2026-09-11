@@ -111,7 +111,6 @@ impl Surface<'_> {
     ///
     /// # Panics
     ///
-    /// - An old [`SurfaceTexture`] is still alive referencing an old surface.
     /// - Texture format requested is unsupported on the surface.
     /// - The requested color space is unsupported for the requested format
     ///   (see [`SurfaceCapabilities::format_capabilities`]).

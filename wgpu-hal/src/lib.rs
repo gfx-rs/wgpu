@@ -300,7 +300,7 @@ use core::{
     borrow::Borrow,
     error::Error,
     fmt,
-    num::{NonZeroU32, NonZeroU64},
+    num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
 };
@@ -323,6 +323,14 @@ pub const MAX_MIP_LEVELS: u32 = 16;
 /// Size of a single occlusion/timestamp query, when copied into a buffer, in bytes.
 /// cbindgen:ignore
 pub const QUERY_SIZE: wgt::BufferAddress = 8;
+// The struct itself is defined in core, but we need to know the size.
+// There is a const assert for correctness located with the struct definition.
+#[doc(hidden)]
+pub const EXTERNAL_TEXTURE_PARAMS_SIZE: wgt::BufferAddress = 208;
+/// Universally safe value for buffer size alignment.
+///
+/// This is determined by `D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT`.
+pub const UNIVERSAL_BUFFER_SIZE_ALIGNMENT: wgt::BufferAddress = 256;
 
 pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
@@ -921,10 +929,22 @@ pub trait Device: WasmNotSendSync {
     /// Creates a new buffer.
     ///
     /// The initial usage is `wgt::BufferUses::empty()`.
+    ///
+    /// `wgpu_hal` may adjust the size in `desc` to a larger value if required
+    /// by the platform. On success, it returns a tuple of the buffer itself
+    /// and its actual allocated size. `wgpu-core` is responsible for
+    /// initializing any portion of the buffer that may be accessed, including
+    /// any padding added by `create_buffer`.
+    ///
+    /// Platform-dependent padding is currently required for uniform buffers on
+    /// dx12. Support for zero-size vertex and index bindings is also platform
+    /// dependent, but presently, `wgpu-core` adds padding to the end of all
+    /// buffers with vertex or index usage, and redirects all zero-size bindings
+    /// to that padding region, regardless of platform.
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,
-    ) -> Result<<Self::A as Api>::Buffer, DeviceError>;
+    ) -> Result<(<Self::A as Api>::Buffer, wgt::BufferAddress), DeviceError>;
 
     /// Free `buffer` and any GPU resources it owns.
     ///
@@ -1674,15 +1694,43 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &<Self::A as Api>::RenderPipeline);
 
+    /// Register an index buffer binding.
+    ///
+    /// The binding offset must be 4B-aligned and strictly less than the buffer
+    /// size. On some backends, the binding size is ignored. This means that
+    /// zero-size bindings must be simulated by binding a region of zeros
+    /// spanning from the provided offset to the end of the buffer. See
+    /// [`CommandEncoder::set_vertex_buffer`] for more detail.
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: BufferBinding<'a, <Self::A as Api>::Buffer>,
+        binding: BufferBinding<'a, <Self::A as Api>::Buffer, wgt::BufferAddress>,
         format: wgt::IndexFormat,
     );
+    /// Register a vertex buffer binding.
+    ///
+    /// The binding offset must be 4B-aligned and strictly less than the buffer
+    /// size. On some backends, the binding size is ignored. This means that
+    /// zero-size bindings must be simulated by binding a region of zeros
+    /// spanning from the provided offset to the end of the buffer.
+    ///
+    /// These restrictions arise from Vulkan's `vkCmdBindVertexBuffers` and
+    /// `vkCmdBindIndexBuffer`, which:
+    ///
+    ///  1. Do not support specifying the size of the binding.
+    ///  2. Require that the binding offset is strictly less than the buffer size.
+    ///
+    /// A read at any offset from a zero-size binding is out-of-bounds, and
+    /// should return zero. Because the binding size is not respected, this
+    /// means there may not be non-zero data between the binding offset and
+    /// the end of the buffer.
+    ///
+    /// Because the binding offset must be strictly less than the buffer size,
+    /// supporting zero-size bindings requires zero padding at the end of the
+    /// buffer.
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: BufferBinding<'a, <Self::A as Api>::Buffer>,
+        binding: BufferBinding<'a, <Self::A as Api>::Buffer, wgt::BufferAddress>,
     );
     unsafe fn set_viewport(&mut self, rect: &Rect<f32>, depth_range: Range<f32>);
     unsafe fn set_scissor_rect(&mut self, rect: &Rect<u32>);
@@ -2211,6 +2259,15 @@ pub struct BufferMapping {
 #[derive(Clone, Debug)]
 pub struct BufferDescriptor<'a> {
     pub label: Label<'a>,
+
+    /// The requested size of the buffer.
+    ///
+    /// `wgpu-hal` may allocate more bytes than requested, if required by the
+    /// platform. The actual allocation size is returned by `create_buffer`.
+    /// Where platforms offer bounds checking, it will operate based on the
+    /// allocated size, not the requested size, so other means may be necessary
+    /// to prevent access beyond the original requested size. The content of
+    /// newly-created buffers is undefined.
     pub size: wgt::BufferAddress,
     pub usage: wgt::BufferUses,
     pub memory_flags: MemoryFlags,
@@ -2340,16 +2397,18 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 ///
 /// ## Zero-length bindings
 ///
-/// Some back ends cannot tolerate zero-length regions; for example, see
-/// [VUID-VkDescriptorBufferInfo-offset-00340][340] and
+/// Some platform APIs do not accept zero-length regions; for example, see
+/// [VUID-VkDescriptorBufferInfo-offset-00340][340],
 /// [VUID-VkDescriptorBufferInfo-range-00341][341], or the
-/// documentation for GLES's [glBindBufferRange][bbr]. This documentation
-/// previously stated that a `BufferBinding` must have `offset` strictly less
-/// than the size of the buffer, but this restriction was not honored elsewhere
-/// in the code, so has been removed. However, it remains the case that
-/// some backends do not support zero-length bindings, so additional
-/// logic is needed somewhere to handle this properly. See
-/// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
+/// documentation for GLES's [glBindBufferRange][bbr]. For
+/// [VUID-VkCmdBindVertexBuffers-pOffsets-00626][626], no size is specified,
+/// the binding extends from the offset to the end of the buffer, and the offset
+/// must be strictly less than the buffer size.
+///
+/// WebGPU does not allow zero-length storage/uniform buffer bindings, but does
+/// allow zero-length vertex/index buffer bindings. `wgpu-core` ensures that
+/// buffers supporting vertex/index usage have 4B of naturally-aligned padding at
+/// the end, to enable simulating a zero-length binding at the end of the buffer.
 ///
 /// [`offset`]: BufferBinding::offset
 /// [`size`]: BufferBinding::size
@@ -2357,10 +2416,11 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 /// [`Uniform`]: wgt::BufferBindingType::Uniform
 /// [340]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-offset-00340
 /// [341]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-range-00341
+/// [626]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-vkCmdBindVertexBuffers-pOffsets-00626
 /// [bbr]: https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glBindBufferRange.xhtml
 /// [woob]: https://gpuweb.github.io/gpuweb/wgsl/#out-of-bounds-access-sec
 #[derive(Debug)]
-pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
+pub struct BufferBinding<'a, B: DynBuffer + ?Sized, S> {
     /// The buffer being bound.
     ///
     /// This is not fully `pub` to prevent direct construction of
@@ -2375,15 +2435,11 @@ pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     pub offset: wgt::BufferAddress,
 
     /// The size of the region bound, in bytes.
-    ///
-    /// If `None`, the region extends from `offset` to the end of the
-    /// buffer. Given the restrictions on `offset`, this means that
-    /// the size is always greater than zero.
-    pub size: Option<wgt::BufferSize>,
+    pub size: S,
 }
 
 // We must implement this manually because `B` is not necessarily `Clone`.
-impl<B: DynBuffer + ?Sized> Clone for BufferBinding<'_, B> {
+impl<B: DynBuffer + ?Sized, S: Copy> Clone for BufferBinding<'_, B, S> {
     fn clone(&self) -> Self {
         BufferBinding {
             buffer: self.buffer,
@@ -2393,35 +2449,7 @@ impl<B: DynBuffer + ?Sized> Clone for BufferBinding<'_, B> {
     }
 }
 
-/// Temporary convenience trait to let us call `.get()` on `u64`s in code that
-/// really wants to be using `NonZeroU64`.
-/// TODO(<https://github.com/gfx-rs/wgpu/issues/3170>): remove this
-pub trait ShouldBeNonZeroExt {
-    fn get(&self) -> u64;
-}
-
-impl ShouldBeNonZeroExt for NonZeroU64 {
-    fn get(&self) -> u64 {
-        NonZeroU64::get(*self)
-    }
-}
-
-impl ShouldBeNonZeroExt for u64 {
-    fn get(&self) -> u64 {
-        *self
-    }
-}
-
-impl ShouldBeNonZeroExt for Option<NonZeroU64> {
-    fn get(&self) -> u64 {
-        match *self {
-            Some(non_zero) => non_zero.get(),
-            None => 0,
-        }
-    }
-}
-
-impl<'a, B: DynBuffer + ?Sized> BufferBinding<'a, B> {
+impl<'a, B: DynBuffer + ?Sized, S> BufferBinding<'a, B, S> {
     /// Construct a `BufferBinding` with the given contents.
     ///
     /// When possible, use the `binding` method on a wgpu-core `Buffer` instead
@@ -2432,21 +2460,13 @@ impl<'a, B: DynBuffer + ?Sized> BufferBinding<'a, B> {
     /// not having direct access to the size of a `DynBuffer`.
     ///
     /// SAFETY: The caller is responsible for ensuring that a binding of `size`
-    /// bytes starting at `offset` is contained within the buffer.
-    ///
-    /// The `S` type parameter is a temporary convenience to allow callers to
-    /// pass a zero size. When the zero-size binding issue is resolved, the
-    /// argument should just match the type of the member.
-    /// TODO(<https://github.com/gfx-rs/wgpu/issues/3170>): remove the parameter
-    pub fn new_unchecked<S: Into<Option<NonZeroU64>>>(
-        buffer: &'a B,
-        offset: wgt::BufferAddress,
-        size: S,
-    ) -> Self {
+    /// bytes starting at `offset` is contained within the buffer. `size`
+    /// may be zero only for vertex/index buffer bindings.
+    pub fn new_unchecked(buffer: &'a B, offset: wgt::BufferAddress, size: S) -> Self {
         Self {
             buffer,
             offset,
-            size: size.into(),
+            size,
         }
     }
 
@@ -2474,7 +2494,7 @@ impl<'a, T: DynTextureView + ?Sized> Clone for TextureBinding<'a, T> {
 #[derive(Debug)]
 pub struct ExternalTextureBinding<'a, B: DynBuffer + ?Sized, T: DynTextureView + ?Sized> {
     pub planes: [TextureBinding<'a, T>; 3],
-    pub params: BufferBinding<'a, B>,
+    pub params: BufferBinding<'a, B, wgt::BufferSize>,
 }
 
 impl<'a, B: DynBuffer + ?Sized, T: DynTextureView + ?Sized> Clone
@@ -2516,7 +2536,7 @@ pub struct BindGroupDescriptor<
 > {
     pub label: Label<'a>,
     pub layout: &'a Bgl,
-    pub buffers: &'a [BufferBinding<'a, B>],
+    pub buffers: &'a [BufferBinding<'a, B, wgt::BufferSize>],
     pub samplers: &'a [&'a S],
     pub textures: &'a [TextureBinding<'a, T>],
     pub entries: &'a [BindGroupEntry],

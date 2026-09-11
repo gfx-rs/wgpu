@@ -1766,8 +1766,12 @@ impl PhysicalDeviceProperties {
                 .max_descriptor_set_storage_buffers_dynamic,
             max_samplers_per_shader_stage,
             max_sampled_textures_per_shader_stage,
-            max_storage_textures_per_shader_stage,
             max_storage_buffers_per_shader_stage,
+            max_storage_buffers_in_vertex_stage: 0,
+            max_storage_buffers_in_fragment_stage: 0,
+            max_storage_textures_per_shader_stage,
+            max_storage_textures_in_vertex_stage: 0,
+            max_storage_textures_in_fragment_stage: 0,
             max_uniform_buffers_per_shader_stage,
             max_vertex_buffers: limits.max_vertex_input_bindings,
             max_buffer_size,
@@ -2491,12 +2495,12 @@ impl super::Instance {
             can_present: true,
             //TODO: make configurable
             robust_buffer_access: phd_features.core.robust_buffer_access != 0,
-            robust_image_access: match phd_features.robustness2 {
-                Some(ref f) => f.robust_image_access2 != 0,
-                None => phd_features
+            robust_image_access: phd_features
+                .robustness2
+                .is_some_and(|f| f.robust_image_access2 != 0)
+                || phd_features
                     .image_robustness
                     .is_some_and(|ext| ext.robust_image_access != 0),
-            },
             robust_buffer_access2: has_robust_buffer_access2,
             robust_image_access2: phd_features
                 .robustness2

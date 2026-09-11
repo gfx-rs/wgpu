@@ -393,7 +393,7 @@ pub(crate) fn build_acceleration_structures(
                 state.device,
                 wgt::BufferSize::new(instance_buffer_staging_source.len() as u64).unwrap(),
             )?;
-            staging_buffer.write(&instance_buffer_staging_source);
+            staging_buffer.write_exact(&instance_buffer_staging_source);
             let flushed = staging_buffer.flush();
             Some(flushed)
         } else {
