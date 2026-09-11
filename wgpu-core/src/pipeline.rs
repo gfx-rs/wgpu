@@ -1483,7 +1483,8 @@ impl ShaderBindingData {
             base_data.extend_from_slice(&intersection_data);
         }
 
-        let buffer = unsafe {
+        // Don't need the exact allocated size as it will be grater than this.
+        let (buffer, _) = unsafe {
             device.raw().create_buffer(&BufferDescriptor {
                 label: None,
                 size: base_data.len() as _,
@@ -1512,7 +1513,7 @@ impl ShaderBindingData {
                 ),
             )?;
 
-            staging.write(&base_data);
+            staging.write_exact(&base_data);
 
             let staging_buf = staging.flush();
 
