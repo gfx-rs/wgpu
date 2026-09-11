@@ -434,8 +434,8 @@ impl AdapterShared {
             let name = device.name().to_string();
             let capabilities_query = CapabilitiesQuery::new(&device);
             let shared = AdapterShared::new(device, &capabilities_query);
-            let features = capabilities_query.features();
             let capabilities = capabilities_query.capabilities(instance_flags);
+            let features = capabilities_query.features(&capabilities);
             crate::ExposedAdapter {
                 info: wgt::AdapterInfo {
                     name,

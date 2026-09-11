@@ -30,61 +30,64 @@ mod webgpu_impl {
     #![allow(missing_docs)]
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_DEPTH_CLIP_CONTROL: u64 = 1 << 0;
+    pub const WEBGPU_FEATURE_CORE_FEATURES_AND_LIMITS: u64 = 1 << 0;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_DEPTH32FLOAT_STENCIL8: u64 = 1 << 1;
+    pub const WEBGPU_FEATURE_DEPTH_CLIP_CONTROL: u64 = 1 << 1;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC: u64 = 1 << 2;
+    pub const WEBGPU_FEATURE_DEPTH32FLOAT_STENCIL8: u64 = 1 << 2;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D: u64 = 1 << 3;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC: u64 = 1 << 3;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2: u64 = 1 << 4;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D: u64 = 1 << 4;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC: u64 = 1 << 5;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2: u64 = 1 << 5;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D: u64 = 1 << 6;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC: u64 = 1 << 6;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TIMESTAMP_QUERY: u64 = 1 << 7;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D: u64 = 1 << 7;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE: u64 = 1 << 8;
+    pub const WEBGPU_FEATURE_TIMESTAMP_QUERY: u64 = 1 << 8;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_SHADER_F16: u64 = 1 << 9;
+    pub const WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE: u64 = 1 << 9;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE: u64 = 1 << 10;
+    pub const WEBGPU_FEATURE_SHADER_F16: u64 = 1 << 10;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_BGRA8UNORM_STORAGE: u64 = 1 << 11;
+    pub const WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE: u64 = 1 << 11;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 12;
+    pub const WEBGPU_FEATURE_BGRA8UNORM_STORAGE: u64 = 1 << 12;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_FLOAT32_BLENDABLE: u64 = 1 << 13;
+    pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 13;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 14;
+    pub const WEBGPU_FEATURE_FLOAT32_BLENDABLE: u64 = 1 << 14;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 15;
+    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 15;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 16;
+    pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 16;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 17;
+    pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 17;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE: u64 = 1 << 18;
+    pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 18;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE: u64 = 1 << 19;
 }
 
 impl From<FeatureBits> for Features {
@@ -1033,6 +1036,13 @@ crate::bitflags_array! {
     #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct FeaturesWebGPU features_webgpu {
         // API:
+
+        /// Core features and limits that are guaranteed to be supported by all WebGPU specification-compliant adapters.
+        /// This feature is always enabled on adapters for which [`crate::DownlevelCapabilities::is_webgpu_compliant`] returns `true`.
+        ///
+        /// This is a web and native feature.
+        #[name("core-features-and-limits")]
+        const CORE_FEATURES_AND_LIMITS = WEBGPU_FEATURE_CORE_FEATURES_AND_LIMITS;
 
         /// By default, polygon depth is clipped to 0-1 range before/during rasterization.
         /// Anything outside of that range is rejected, and respective fragments are not touched.

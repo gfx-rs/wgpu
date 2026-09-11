@@ -871,6 +871,11 @@ impl super::Adapter {
             0
         };
 
+        features.set(
+            wgt::Features::CORE_FEATURES_AND_LIMITS,
+            downlevel.is_webgpu_compliant(),
+        );
+
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
                 raw: adapter,
