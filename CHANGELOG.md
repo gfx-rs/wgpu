@@ -180,7 +180,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Fixed some cases of passing object labels to platform APIs despite `InstanceFlags::DISCARD_HAL_LABELS` being set. By @andyleiserson in [#10121](https://github.com/gfx-rs/wgpu/pull/10121) and [#10123](https://github.com/gfx-rs/wgpu/pull/10123).
 - Clean up resources properly when `Device::new` fails, to avoid a leak or panic. By @andyleiserson in [#10160](https://github.com/gfx-rs/wgpu/pull/10160).
 - Fix pending buffer mappings incorrectly succeeding when the device is lost before they are processed. By @jinleili in [#10301](https://github.com/gfx-rs/wgpu/pull/10301).
-- Fix initialization tracking for `TextureView`s bound to `external_texture` binding points. By @ErichDonGubler in [#10276](https://github.com/gfx-rs/wgpu/pull/10276).
+- Fix initialization tracking for `external_texture` binding points, for both `ExternalTexture`s and `TextureView`s bound to them. By @ErichDonGubler in [#10276](https://github.com/gfx-rs/wgpu/pull/10276) and [#10366](https://github.com/gfx-rs/wgpu/pull/10366).
 
 #### naga
 
