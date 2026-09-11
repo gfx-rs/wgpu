@@ -120,7 +120,8 @@ impl MaxFragmentShaderInputDeduction {
             | BuiltIn::RayTCurrentMax
             | BuiltIn::ObjectToWorld
             | BuiltIn::WorldToObject
-            | BuiltIn::HitKind => return None,
+            | BuiltIn::HitKind
+            | BuiltIn::HitBarycentrics => return None,
         }))
     }
 }

@@ -705,7 +705,8 @@ impl ResolvedBinding {
                     | Bi::RayTCurrentMax
                     | Bi::ObjectToWorld
                     | Bi::WorldToObject
-                    | Bi::HitKind => unreachable!(),
+                    | Bi::HitKind
+                    | Bi::HitBarycentrics => unreachable!(),
                 };
                 write!(out, "{name}")?;
             }

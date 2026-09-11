@@ -367,6 +367,11 @@ jobs:
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features metal
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features dx12
 
+          # Check important naga features in isolation
+          for feature in glsl-in glsl-out hlsl-out msl-out spv-in spv-out wgsl-in wgsl-out; do
+            cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features $feature
+          done
+
           # build docs
           cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
@@ -885,7 +890,7 @@ jobs:
       # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
       # files, even ones this step doesn't modify.
       - name: "Format `**/*.{md,js,html,yml}` files"
-        run: "npx --yes prettier@3.8.1 --check --write . && git diff --exit-code"
+        run: "npx --yes prettier@3.9.6 --check --write . && git diff --exit-code"
 
       - name: Run `cargo fmt`
         run: |

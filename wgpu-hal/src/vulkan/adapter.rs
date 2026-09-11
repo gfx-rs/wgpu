@@ -1319,7 +1319,11 @@ impl PhysicalDeviceProperties {
                 extensions.push(khr::shader_float16_int8::NAME);
             }
 
-            if requested_features.intersects(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
+            // `SPV_EXT_mesh_shader` and `SPV_KHR_ray_tracing` both require SPIR-V 1.4.
+            if requested_features.intersects(
+                wgt::Features::EXPERIMENTAL_MESH_SHADER
+                    | wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES,
+            ) {
                 extensions.push(khr::spirv_1_4::NAME);
             }
 
@@ -1762,8 +1766,12 @@ impl PhysicalDeviceProperties {
                 .max_descriptor_set_storage_buffers_dynamic,
             max_samplers_per_shader_stage,
             max_sampled_textures_per_shader_stage,
-            max_storage_textures_per_shader_stage,
             max_storage_buffers_per_shader_stage,
+            max_storage_buffers_in_vertex_stage: 0,
+            max_storage_buffers_in_fragment_stage: 0,
+            max_storage_textures_per_shader_stage,
+            max_storage_textures_in_vertex_stage: 0,
+            max_storage_textures_in_fragment_stage: 0,
             max_uniform_buffers_per_shader_stage,
             max_vertex_buffers: limits.max_vertex_input_bindings,
             max_buffer_size,
@@ -2487,12 +2495,12 @@ impl super::Instance {
             can_present: true,
             //TODO: make configurable
             robust_buffer_access: phd_features.core.robust_buffer_access != 0,
-            robust_image_access: match phd_features.robustness2 {
-                Some(ref f) => f.robust_image_access2 != 0,
-                None => phd_features
+            robust_image_access: phd_features
+                .robustness2
+                .is_some_and(|f| f.robust_image_access2 != 0)
+                || phd_features
                     .image_robustness
                     .is_some_and(|ext| ext.robust_image_access != 0),
-            },
             robust_buffer_access2: has_robust_buffer_access2,
             robust_image_access2: phd_features
                 .robustness2
@@ -2903,14 +2911,23 @@ impl super::Adapter {
                 capabilities.extend(&[spv::Capability::Int8]);
             }
             spv::Options {
-                lang_version: match self.phd_capabilities.device_api_version {
+                lang_version: {
                     // Use maximum supported SPIR-V version according to
                     // <https://github.com/KhronosGroup/Vulkan-Docs/blob/19b7651/appendices/spirvenv.adoc?plain=1#L21-L40>.
-                    vk::API_VERSION_1_0..vk::API_VERSION_1_1 => (1, 0),
-                    vk::API_VERSION_1_1..vk::API_VERSION_1_2 => (1, 3),
-                    vk::API_VERSION_1_2..vk::API_VERSION_1_3 => (1, 5),
-                    vk::API_VERSION_1_3.. => (1, 6),
-                    _ => unreachable!(),
+                    let version = match self.phd_capabilities.device_api_version {
+                        vk::API_VERSION_1_0..vk::API_VERSION_1_1 => (1, 0),
+                        vk::API_VERSION_1_1..vk::API_VERSION_1_2 => (1, 3),
+                        vk::API_VERSION_1_2..vk::API_VERSION_1_3 => (1, 5),
+                        vk::API_VERSION_1_3.. => (1, 6),
+                        _ => unreachable!(),
+                    };
+                    // `VK_KHR_spirv_1_4` raises that ceiling on pre-1.2 devices, which
+                    // both mesh shaders and ray tracing pipelines need it to do.
+                    if enabled_extensions.contains(&khr::spirv_1_4::NAME) {
+                        version.max((1, 4))
+                    } else {
+                        version
+                    }
                 },
                 flags,
                 capabilities: Some(capabilities.iter().cloned().collect()),

@@ -723,59 +723,63 @@ impl super::Queue {
                 dst_target,
                 ref copy,
             } => {
-                //TODO: handle 3D copies
                 unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo)) };
-                if is_layered_target(src_target) {
-                    //TODO: handle GLES without framebuffer_texture_3d
-                    unsafe {
-                        gl.framebuffer_texture_layer(
-                            glow::READ_FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            Some(src),
-                            copy.src_base.mip_level as i32,
-                            copy.src_base.array_layer as i32,
-                        )
-                    };
-                } else {
-                    unsafe {
-                        gl.framebuffer_texture_2d(
-                            glow::READ_FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            src_target,
-                            Some(src),
-                            copy.src_base.mip_level as i32,
-                        )
-                    };
-                }
-
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
-                if is_layered_target(dst_target) {
-                    unsafe {
-                        gl.copy_tex_sub_image_3d(
-                            dst_target,
-                            copy.dst_base.mip_level as i32,
-                            copy.dst_base.origin.x as i32,
-                            copy.dst_base.origin.y as i32,
-                            get_z_offset(dst_target, &copy.dst_base) as i32,
-                            copy.src_base.origin.x as i32,
-                            copy.src_base.origin.y as i32,
-                            copy.size.width as i32,
-                            copy.size.height as i32,
-                        )
-                    };
-                } else {
-                    unsafe {
-                        gl.copy_tex_sub_image_2d(
-                            get_2d_target(dst_target, copy.dst_base.array_layer),
-                            copy.dst_base.mip_level as i32,
-                            copy.dst_base.origin.x as i32,
-                            copy.dst_base.origin.y as i32,
-                            copy.src_base.origin.x as i32,
-                            copy.src_base.origin.y as i32,
-                            copy.size.width as i32,
-                            copy.size.height as i32,
-                        )
-                    };
+
+                // The read framebuffer holds a single 2D slice at a time, so a copy of
+                // depth > 1 is issued one slice per iteration.
+                for z in 0..copy.size.depth {
+                    if is_layered_target(src_target) {
+                        //TODO: handle GLES without framebuffer_texture_3d
+                        unsafe {
+                            gl.framebuffer_texture_layer(
+                                glow::READ_FRAMEBUFFER,
+                                glow::COLOR_ATTACHMENT0,
+                                Some(src),
+                                copy.src_base.mip_level as i32,
+                                (get_z_offset(src_target, &copy.src_base) + z) as i32,
+                            )
+                        };
+                    } else {
+                        unsafe {
+                            gl.framebuffer_texture_2d(
+                                glow::READ_FRAMEBUFFER,
+                                glow::COLOR_ATTACHMENT0,
+                                get_2d_target(src_target, copy.src_base.array_layer + z),
+                                Some(src),
+                                copy.src_base.mip_level as i32,
+                            )
+                        };
+                    }
+
+                    if is_layered_target(dst_target) {
+                        unsafe {
+                            gl.copy_tex_sub_image_3d(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                (get_z_offset(dst_target, &copy.dst_base) + z) as i32,
+                                copy.src_base.origin.x as i32,
+                                copy.src_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                            )
+                        };
+                    } else {
+                        unsafe {
+                            gl.copy_tex_sub_image_2d(
+                                get_2d_target(dst_target, copy.dst_base.array_layer + z),
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.src_base.origin.x as i32,
+                                copy.src_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                            )
+                        };
+                    }
                 }
             }
             C::CopyBufferToTexture {
