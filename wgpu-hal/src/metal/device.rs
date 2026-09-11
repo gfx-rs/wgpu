@@ -147,6 +147,7 @@ const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> nt::VertexF
         wgt::VertexFormat::Sint32x3 => nt::VertexFormat::Sint32x3,
         wgt::VertexFormat::Sint32x4 => nt::VertexFormat::Sint32x4,
         wgt::VertexFormat::Unorm10_10_10_2 => nt::VertexFormat::Unorm10_10_10_2,
+        wgt::VertexFormat::Snorm10_10_10_2 => nt::VertexFormat::Snorm10_10_10_2,
         wgt::VertexFormat::Unorm8x4Bgra => nt::VertexFormat::Unorm8x4Bgra,
 
         wgt::VertexFormat::Float64
