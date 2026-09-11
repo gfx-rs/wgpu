@@ -1438,8 +1438,16 @@ impl super::CapabilitiesQuery {
             max_buffer_size: self.max_buffer_size,
             // No limit, use maxBufferSize.
             max_uniform_buffer_binding_size: self.max_buffer_size,
-            // No limit, use maxBufferSize.
-            max_storage_buffer_binding_size: self.max_buffer_size,
+            // Metal has no limit here either, but the shaders do: naga bounds-checks runtime-sized
+            // arrays against `_mslBufferSizes`, whose members are `uint`, and
+            // `make_sizes_buffer_update` saturates a bound range's byte size at `u32::MAX` to fill
+            // them. A storage binding of 2^32 bytes or more therefore looks 2^32 - 1 bytes long to
+            // its own kernel: the last element's index clamps onto its neighbour, and every element
+            // past byte 2^32 - 4 reads as zero and is never written. Cap the binding, not the
+            // buffer (ranges under 4 GiB of a larger buffer are fine), until those sizes are wider.
+            max_storage_buffer_binding_size: self
+                .max_buffer_size
+                .min(u64::from(u32::MAX) & !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT as u64 - 1)),
             min_uniform_buffer_offset_alignment: self.constant_buffer_offset_alignment,
             // No documented limit. Use 32, which is the lowest allowed value.
             min_storage_buffer_offset_alignment: 32,

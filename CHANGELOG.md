@@ -218,6 +218,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 #### Metal
 
+- Cap `max_storage_buffer_binding_size` at `u32::MAX & !3` on Metal again. The bounds checks naga emits read a bound range's byte size from a `u32` (`_mslBufferSizes`), so a storage binding of 2^32 bytes or more silently lost every element past byte 2^32 - 4 once `InstanceFlags::VALIDATION_INDIRECT_CALL` was off; such bindings are refused at bind group creation instead. By @nuri-yoo in [#10306](https://github.com/gfx-rs/wgpu/pull/10306).
 - Fix a crash/hang when configuring a surface with the `Bt2100Pq`, `Bt2100Hlg`, or `ExtendedDisplayP3` color space: the dynamically resolved CoreGraphics color-space constants were read with one level of indirection missing. By @stuartparmenter in [#10175](https://github.com/gfx-rs/wgpu/pull/10175).
 - Fix bind group resources for the task, mesh, fragment, and compute shader stages being bound from the wrong offsets whenever a bind group contained resources visible to the task or mesh stages, which could bind the wrong buffer, texture, or sampler to a shader slot. By @teoxoy in [#10043](https://github.com/gfx-rs/wgpu/issues/10043).
 - Report an error instead of panicking when Metal declines to create a texture view, which can occur for some views of textures with `TRANSIENT_ATTACHMENT` usage. By @matthargett in [#10145](https://github.com/gfx-rs/wgpu/pull/10145).
