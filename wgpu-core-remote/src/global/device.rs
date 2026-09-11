@@ -17,7 +17,7 @@ use wgpu_core::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
         ResolvedGeneralRenderPipelineDescriptor,
     },
-    resource::{self, BufferAccessError, BufferMapOperation, CreateBufferError},
+    resource::{self, BufferAccessError, BufferMapOperation, BufferMappingLock, CreateBufferError},
     Label, LabelHelpers, SubmissionIndex,
 };
 
@@ -1185,7 +1185,7 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-    ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
+    ) -> Result<(BufferMappingLock, NonNull<u8>, u64), BufferAccessError> {
         let hub = self.hub.borrow();
 
         let buffer = hub.buffers.get(buffer_id);
