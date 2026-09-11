@@ -57,7 +57,8 @@ struct Pool {
     capacity: u32,
     available: u32,
     /// Set when the driver refused to allocate from this pool despite it
-    /// having free capacity, making `alloc` skip it.
+    /// having free capacity, making `alloc` skip it until a set is freed from
+    /// the pool again.
     poisoned: bool,
 }
 
@@ -182,11 +183,12 @@ impl DescriptorAllocator {
             .iter()
             .position(|pool| !pool.poisoned && pool.available != 0);
 
-        // Some drivers (e.g. Mali) report these errors despite the same-shape
+        // Some drivers (e.g. Mali) report fragmentation despite the same-shape
         // guarantee the spec grants our per-bucket pools, in particular for
         // update-after-bind pools which cannot be defragmented. Retire the
         // offending pool and try the next one, falling back to a freshly
-        // created pool, as the spec prescribes.
+        // created pool, as the spec prescribes. The pool is retried once a set
+        // is freed from it.
         // https://docs.vulkan.org/refpages/latest/refpages/source/VkDescriptorPoolCreateInfo.html#_description
         let (raw, pool_index) = loop {
             let index = match candidate {
@@ -200,18 +202,17 @@ impl DescriptorAllocator {
 
             match unsafe { device.allocate_descriptor_sets(&vk_info) } {
                 Ok(sets) => break (sets[0], index),
-                Err(
-                    err
-                    @ (vk::Result::ERROR_FRAGMENTED_POOL | vk::Result::ERROR_OUT_OF_POOL_MEMORY),
-                ) => {
+                Err(vk::Result::ERROR_FRAGMENTED_POOL) => {
                     bucket.pools[index].poisoned = true;
                     let created_pool = candidate.is_none();
                     if created_pool {
-                        log::error!("descriptor set allocation from a fresh pool failed: {err:?}");
+                        log::error!(
+                            "descriptor set allocation from a fresh pool failed due to fragmentation"
+                        );
                         return Err(crate::DeviceError::OutOfMemory);
                     }
                     log::warn!(
-                        "Retiring descriptor pool ({}/{} sets free) after {err:?}, retrying on another pool",
+                        "Retiring fragmented descriptor pool ({}/{} sets free), retrying on another pool",
                         bucket.pools[index].available,
                         bucket.pools[index].capacity,
                     );
@@ -219,6 +220,14 @@ impl DescriptorAllocator {
                         .pools
                         .iter()
                         .position(|pool| !pool.poisoned && pool.available != 0);
+                }
+                // Our accounting says the pool has free capacity, so this is
+                // an unexpected backend error.
+                Err(err @ vk::Result::ERROR_OUT_OF_POOL_MEMORY) => {
+                    log::error!(
+                        "descriptor set allocation reported a pool with free capacity as full"
+                    );
+                    return Err(super::get_unexpected_err(err));
                 }
                 Err(err) => return Err(super::map_host_device_oom_err(err)),
             }
@@ -256,6 +265,8 @@ impl DescriptorAllocator {
         }
 
         pool.available += 1;
+        // A freed set may allow this pool to satisfy allocations again.
+        pool.poisoned = false;
         bucket.available_sets += 1;
         bucket.allocated_sets -= 1;
         if set.bucket_key.update_after_bind {
