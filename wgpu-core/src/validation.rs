@@ -2200,7 +2200,9 @@ impl Interface {
 
         let current_ray_payload = entry_point.ray_tracing_payload.clone();
 
-        if let (Some(ray_tracing_payload), Some(current_ray_payload)) = (ray_tracing_payload.as_ref(), current_ray_payload.as_ref()) {
+        if let (Some(ray_tracing_payload), Some(current_ray_payload)) =
+            (ray_tracing_payload.as_ref(), current_ray_payload.as_ref())
+        {
             if ray_tracing_payload != current_ray_payload {
                 return Err(StageError::RayTracingPayloadMismatch);
             }
