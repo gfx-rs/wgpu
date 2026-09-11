@@ -925,11 +925,13 @@ static_assertions::assert_impl_all!(MapMode: Send, Sync);
 /// [`map_async`]: BufferSlice::map_async
 #[derive(Debug)]
 pub struct BufferView {
+    // we need to drop BufferMappedRange before Buffer,
+    // so that the buffer is not unmapped while the view is still alive
+    inner: dispatch::DispatchBufferMappedRange,
     // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
     buffer: Buffer,
     offset: BufferAddress,
     size: BufferAddress,
-    inner: dispatch::DispatchBufferMappedRange,
 }
 
 /// A write-only view of a mapped buffer's bytes.
@@ -951,11 +953,13 @@ pub struct BufferView {
 /// [map]: Buffer#mapping-buffers
 #[derive(Debug)]
 pub struct BufferViewMut {
+    // we need to drop BufferMappedRange before Buffer,
+    // so that the buffer is not unmapped while the view is still alive
+    inner: dispatch::DispatchBufferMappedRange,
     // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
     buffer: Buffer,
     offset: BufferAddress,
     size: BufferAddress,
-    inner: dispatch::DispatchBufferMappedRange,
 }
 
 // `BufferView` simply dereferences. `BufferViewMut` cannot, because mapped memory may be

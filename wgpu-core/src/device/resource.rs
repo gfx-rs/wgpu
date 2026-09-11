@@ -1296,7 +1296,10 @@ impl Device {
                 rank::BUFFER_INITIALIZATION_STATUS,
                 BufferInitTracker::new(tail_start),
             ),
-            map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
+            map_state: Arc::new(RwLock::new(
+                rank::BUFFER_MAP_STATE,
+                resource::BufferMapState::Idle,
+            )),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
@@ -1376,7 +1379,7 @@ impl Device {
                 map_buffer(&buffer, 0, map_size, HostMap::Write, &snatch_guard)?
             };
             drop(snatch_guard);
-            *buffer.map_state.lock() = resource::BufferMapState::Active {
+            *buffer.map_state.write() = resource::BufferMapState::Active {
                 mapping,
                 range: 0..map_size,
                 host: HostMap::Write,
@@ -1397,7 +1400,7 @@ impl Device {
             staging_buffer.write_zeros();
             buffer.initialization_status.write().drain(0..final_size);
 
-            *buffer.map_state.lock() = resource::BufferMapState::Init { staging_buffer };
+            *buffer.map_state.write() = resource::BufferMapState::Init { staging_buffer };
             wgt::BufferUses::COPY_DST
         };
 
@@ -1663,7 +1666,10 @@ impl Device {
                 rank::BUFFER_INITIALIZATION_STATUS,
                 BufferInitTracker::new(0),
             ),
-            map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
+            map_state: Arc::new(RwLock::new(
+                rank::BUFFER_MAP_STATE,
+                resource::BufferMapState::Idle,
+            )),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),

@@ -118,11 +118,10 @@ impl Test<'_> {
 
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);
-            let (ptr, size) = player
+            let (lock, ptr, size) = player
                 .resolve_buffer_id(expect.buffer)
                 .get_mapped_range(expect.offset, Some(expect.data.len() as wgt::BufferAddress))
                 .unwrap();
-            let contents = unsafe { slice::from_raw_parts(ptr.as_ptr(), size as usize) };
             let expected_data = match expect.data {
                 ExpectedData::Raw(vec) => vec,
                 ExpectedData::File(name, size) => {
@@ -139,11 +138,14 @@ impl Test<'_> {
                     .collect::<Vec<u8>>(),
             };
 
+            let guard = lock.lock();
+            let contents = unsafe { slice::from_raw_parts(ptr.as_ptr(), size as usize) };
             if &expected_data[..] != contents {
                 panic!(
                     "Test expectation is not met!\nBuffer content was:\n{contents:?}\nbut expected:\n{expected_data:?}"
                 );
             }
+            drop(guard);
         }
     }
 }
