@@ -14,6 +14,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         EXTERNAL_TEXTURE_SAMPLE_YUV,
         EXTERNAL_TEXTURE_SAMPLE_TRANSFORM,
         EXTERNAL_TEXTURE_FROM_VIEW_ZERO_INIT_AFTER_DISCARD,
+        EXTERNAL_TEXTURE_ZERO_INIT_AFTER_DISCARD,
     ]);
 }
 
@@ -1204,3 +1205,45 @@ static EXTERNAL_TEXTURE_FROM_VIEW_ZERO_INIT_AFTER_DISCARD: GpuTestConfiguration 
             );
             assert_eq!(&loads, &[TRANSPARENT_BLACK_F32; 4]);
         });
+
+/// Tests that an `ExternalTexture` reads as zero when the texture underlying one of
+/// its planes is uninitialized.
+///
+/// The same reasoning as [`EXTERNAL_TEXTURE_FROM_VIEW_ZERO_INIT_AFTER_DISCARD`]
+/// applies, but by way of `BindingResource::ExternalTexture` rather than a
+/// `TextureView` bound to the same binding point. The planes are ordinary textures
+/// owned by the caller, so they carry the same initialization state as any other
+/// texture; `Device::create_external_texture` does not write to them.
+#[apply(gpu_test!)]
+static EXTERNAL_TEXTURE_ZERO_INIT_AFTER_DISCARD: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::EXTERNAL_TEXTURE),
+    )
+    .run_async(|ctx| async move {
+        let view = create_discarded_texture_and_view(&ctx);
+
+        let external_texture = ctx.device.create_external_texture(
+            &wgpu::ExternalTextureDescriptor {
+                label: None,
+                width: 2,
+                height: 2,
+                format: wgpu::ExternalTextureFormat::Rgba,
+                yuv_conversion_matrix: IDENTITY_YUV_CONVERSION_MATRIX,
+                gamut_conversion_matrix: IDENTITY_GAMUT_CONVERSION_MATRIX,
+                src_transfer_function: Default::default(),
+                dst_transfer_function: Default::default(),
+                sample_transform: IDENTITY_SAMPLE_TRANSFORM,
+                load_transform: IDENTITY_LOAD_TRANSFORM,
+            },
+            &[&view],
+        );
+
+        let loads = get_loads(
+            &ctx,
+            &[[0, 0], [1, 0], [0, 1], [1, 1]],
+            wgpu::BindingResource::ExternalTexture(&external_texture),
+        );
+        assert_eq!(&loads, &[TRANSPARENT_BLACK_F32; 4]);
+    });

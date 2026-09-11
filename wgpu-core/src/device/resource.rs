@@ -3554,6 +3554,7 @@ impl Device {
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         external_texture: &'a Arc<ExternalTexture>,
+        texture_init_actions: &mut Vec<TextureInitTrackerAction>,
         used: &mut BindGroupStates,
         snatch_guard: &'a SnatchGuard,
     ) -> Result<
@@ -3600,6 +3601,23 @@ impl Device {
             // array::try_from_fn() above, once it stabilizes.
             .collect::<Result<Vec<_>, Error>>()?;
         let planes = planes.try_into().unwrap();
+
+        // Iterate over the distinct planes, rather than the three bindings produced
+        // above, so that a plane repeated to fill the bindings is only recorded once.
+        for plane in external_texture.planes.iter() {
+            let texture = &plane.parent;
+            texture_init_actions.push(TextureInitTrackerAction {
+                texture: texture.clone(),
+                range: TextureInitRange {
+                    mip_range: plane.desc.range.mip_range(texture.desc.mip_level_count),
+                    layer_range: plane
+                        .desc
+                        .range
+                        .layer_range(texture.desc.array_layer_count()),
+                },
+                kind: MemoryInitKind::NeedsInitializedMemory,
+            });
+        }
 
         used.buffers.insert_single(
             external_texture_state.params.clone(),
@@ -3897,6 +3915,7 @@ impl Device {
                         binding,
                         decl,
                         et,
+                        &mut texture_init_actions,
                         &mut used,
                         &snatch_guard,
                     )?;
