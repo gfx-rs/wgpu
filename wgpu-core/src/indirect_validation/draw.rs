@@ -770,7 +770,7 @@ fn create_buffer_and_bind_group(
         usage,
         memory_flags: hal::MemoryFlags::empty(),
     };
-    let buffer = unsafe { device.create_buffer(&buffer_desc) }?;
+    let (buffer, _) = unsafe { device.create_buffer(&buffer_desc) }?;
     let bind_group_desc = hal::BindGroupDescriptor {
         label: bind_group_label,
         layout: bind_group_layout,

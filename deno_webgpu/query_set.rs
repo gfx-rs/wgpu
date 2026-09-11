@@ -7,14 +7,12 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
+use wgpu_core::resource::Labeled;
 
 use crate::error::GPUGenericError;
 
 pub struct GPUQuerySet {
   pub wgpu_query_set: Arc<wgpu_core::resource::QuerySet>,
-  pub r#type: GPUQueryType,
-  pub count: u32,
-  pub label: String,
 }
 
 impl WebIdlInterfaceConverter for GPUQuerySet {
@@ -38,7 +36,7 @@ impl GPUQuerySet {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_query_set.label().to_string()
   }
   #[setter]
   #[string]
@@ -56,13 +54,13 @@ impl GPUQuerySet {
   #[getter]
   #[string]
   #[rename("type")]
-  fn r#type(&self) -> &'static str {
-    self.r#type.as_str()
+  fn r#type(&self) -> String {
+    self.wgpu_query_set.descriptor().ty.to_string()
   }
 
   #[getter]
   fn count(&self) -> u32 {
-    self.count
+    self.wgpu_query_set.descriptor().count
   }
 }
 

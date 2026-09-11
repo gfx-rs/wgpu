@@ -70,7 +70,17 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let buffer = device.create_buffer(desc);
+        let desc = resource::BufferDescriptor {
+            label: desc.label.as_ref().map(|s| Cow::Borrowed(s.deref())),
+            size: desc.size,
+            usage: wgt::BufferUsages::from_internal_flags(
+                desc.usage,
+                wgt::BufferUsagesWGPU::empty(),
+            ),
+            mapped_at_creation: desc.mapped_at_creation,
+        };
+
+        let buffer = device.create_buffer(&desc);
 
         buffers.assign(id_in, buffer);
     }
@@ -114,7 +124,16 @@ impl Global {
             buffers, devices, ..
         } = &mut *hub;
         let device = devices.get(device_id);
-        buffers.assign(id_in, resource::Buffer::invalid(device, desc));
+        let desc = resource::BufferDescriptor {
+            label: desc.label.as_ref().map(|s| Cow::Borrowed(s.deref())),
+            size: desc.size,
+            usage: wgt::BufferUsages::from_internal_flags(
+                desc.usage,
+                wgt::BufferUsagesWGPU::empty(),
+            ),
+            mapped_at_creation: desc.mapped_at_creation,
+        };
+        buffers.assign(id_in, resource::Buffer::invalid(device, &desc));
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -295,7 +314,17 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (buffer, err) = unsafe { device.create_buffer_from_hal(Box::new(hal_buffer), desc) };
+        let desc = resource::BufferDescriptor {
+            label: desc.label.as_ref().map(|s| Cow::Borrowed(s.deref())),
+            size: desc.size,
+            usage: wgt::BufferUsages::from_internal_flags(
+                desc.usage,
+                wgt::BufferUsagesWGPU::empty(),
+            ),
+            mapped_at_creation: desc.mapped_at_creation,
+        };
+
+        let (buffer, err) = unsafe { device.create_buffer_from_hal(Box::new(hal_buffer), &desc) };
 
         let id = buffers.assign(id_in, buffer);
 
@@ -627,9 +656,6 @@ impl Global {
         device_id: DeviceId,
         desc: &ShaderModuleDescriptor,
         id_in: id::ShaderModuleId,
-    ) -> (
-        id::ShaderModuleId,
-        Option<pipeline::CreateShaderModuleError>,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -647,11 +673,18 @@ impl Global {
             runtime_checks: wgt::ShaderRuntimeChecks::checked(),
         };
 
-        let (shader, error) = device.create_shader_module(&desc, code);
+        let shader = device.create_shader_module(&desc, code);
 
-        let id = shader_modules.assign(id_in, shader);
+        shader_modules.assign(id_in, shader);
+    }
 
-        (id, error)
+    pub fn shader_module_compilation_info(
+        &self,
+        shader_module_id: id::ShaderModuleId,
+    ) -> wgt::CompilationInfo {
+        let hub = self.hub.borrow();
+        let shader_module = hub.shader_modules.get(shader_module_id);
+        shader_module.compilation_info().clone()
     }
 
     pub fn shader_module_remove(

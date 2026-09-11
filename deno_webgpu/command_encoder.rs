@@ -15,6 +15,7 @@ use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 use wgpu_core::command::PassChannel;
+use wgpu_core::resource::Labeled as _;
 use wgpu_types::{BufferAddress, TexelCopyBufferInfo};
 
 use crate::buffer::GPUBuffer;
@@ -27,7 +28,6 @@ use crate::webidl::GPUExtent3D;
 
 pub struct GPUCommandEncoder {
   pub wgpu_command_encoder: Arc<wgpu_core::command::CommandEncoder>,
-  pub label: String,
 
   // Weak reference to the JS object so we can attach a finalizer.
   // See `GPUDevice::create_command_encoder`.
@@ -52,7 +52,7 @@ impl GPUCommandEncoder {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_command_encoder.label().to_string()
   }
   #[setter]
   #[string]
@@ -395,7 +395,6 @@ impl GPUCommandEncoder {
 
     GPUCommandBuffer {
       wgpu_command_buffer,
-      label: descriptor.label,
     }
   }
 

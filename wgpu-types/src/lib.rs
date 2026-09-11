@@ -30,8 +30,10 @@ mod adapter;
 pub mod assertions;
 mod backend;
 mod binding;
+mod bitflags_array;
 mod buffer;
 mod cast_utils;
+mod compilation_info;
 mod counters;
 mod device;
 mod env;
@@ -62,6 +64,7 @@ pub use adapter::*;
 pub use backend::*;
 pub use binding::*;
 pub use buffer::*;
+pub use compilation_info::*;
 pub use counters::*;
 pub use device::*;
 pub use features::*;
@@ -79,6 +82,8 @@ pub use tokens::*;
 pub use transfers::*;
 pub use vertex::*;
 pub use write_only::*;
+
+pub(crate) use bitflags_array::*;
 
 pub(crate) use macros::ConstDefault;
 pub(crate) use naga_types::{link_to_wgc_docs, link_to_wgpu_docs, link_to_wgpu_item};
@@ -513,6 +518,16 @@ pub enum QueryType {
     #[doc = link_to_wgpu_docs!(["`ComputePass::begin_pipeline_statistics_query()`"]: "struct.ComputePass.html#method.begin_pipeline_statistics_query")]
     #[doc = link_to_wgpu_docs!(["`RenderPass::begin_pipeline_statistics_query()`"]: "struct.RenderPass.html#method.begin_pipeline_statistics_query")]
     PipelineStatistics(PipelineStatisticsTypes),
+}
+
+impl fmt::Display for QueryType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Occlusion => f.write_str("occlusion"),
+            Self::Timestamp => f.write_str("timestamp"),
+            Self::PipelineStatistics(_) => f.write_str("pipeline-statistics"),
+        }
+    }
 }
 
 bitflags::bitflags! {

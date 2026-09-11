@@ -207,6 +207,7 @@ impl Device {
                         memory_flags: hal::MemoryFlags::PREFER_COHERENT,
                     })
                     .map_err(DeviceError::from_hal)?
+                    .0
             }))
         } else {
             None
@@ -317,7 +318,7 @@ impl Device {
             .raw_tlas_instance_size
             .checked_mul(desc.max_instances.max(1))
             .expect("max_tlas_instance_count should not allow excessive buffer size");
-        let instance_buffer = unsafe {
+        let (instance_buffer, _) = unsafe {
             self.raw().create_buffer(&hal::BufferDescriptor {
                 label: hal_label(Some("(wgpu-core) instances_buffer"), self.instance_flags),
                 size: u64::from(instance_buffer_size),

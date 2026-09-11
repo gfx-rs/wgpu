@@ -8,10 +8,10 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
+use wgpu_core::resource::Labeled;
 use wgpu_core::resource::ParentDevice;
 use wgpu_types::AstcBlock;
 use wgpu_types::AstcChannel;
-use wgpu_types::Extent3d;
 use wgpu_types::TextureAspect;
 use wgpu_types::TextureDimension;
 use wgpu_types::TextureFormat;
@@ -46,11 +46,6 @@ pub struct GPUTexture {
   pub wgpu_texture: Arc<wgpu_core::resource::Texture>,
   pub default_view: OnceLock<Arc<wgpu_core::resource::TextureView>>,
 
-  pub label: String,
-
-  pub size: Extent3d,
-  pub mip_level_count: u32,
-  pub sample_count: u32,
   pub dimension: GPUTextureDimension,
   pub format: GPUTextureFormat,
   pub usage: GPUTextureUsageFlags,
@@ -86,7 +81,7 @@ impl GPUTexture {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_texture.label().to_string()
   }
   #[setter]
   #[string]
@@ -96,23 +91,23 @@ impl GPUTexture {
 
   #[getter]
   fn width(&self) -> u32 {
-    self.size.width
+    self.wgpu_texture.descriptor().size.width
   }
   #[getter]
   fn height(&self) -> u32 {
-    self.size.height
+    self.wgpu_texture.descriptor().size.height
   }
   #[getter]
   fn depth_or_array_layers(&self) -> u32 {
-    self.size.depth_or_array_layers
+    self.wgpu_texture.descriptor().size.depth_or_array_layers
   }
   #[getter]
   fn mip_level_count(&self) -> u32 {
-    self.mip_level_count
+    self.wgpu_texture.descriptor().mip_level_count
   }
   #[getter]
   fn sample_count(&self) -> u32 {
-    self.sample_count
+    self.wgpu_texture.descriptor().sample_count
   }
   #[getter]
   #[string]
@@ -168,10 +163,7 @@ impl GPUTexture {
 
     let wgpu_texture_view = self.wgpu_texture.create_view(&wgpu_descriptor);
 
-    Ok(GPUTextureView {
-      wgpu_texture_view,
-      label: descriptor.label,
-    })
+    Ok(GPUTextureView { wgpu_texture_view })
   }
 }
 
@@ -251,7 +243,6 @@ impl From<GPUTextureAspect> for TextureAspect {
 
 pub struct GPUTextureView {
   pub wgpu_texture_view: Arc<wgpu_core::resource::TextureView>,
-  pub label: String,
 }
 
 impl WebIdlInterfaceConverter for GPUTextureView {
@@ -276,7 +267,7 @@ impl GPUTextureView {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_texture_view.label().to_string()
   }
   #[setter]
   #[string]
