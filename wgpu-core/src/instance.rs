@@ -11,7 +11,7 @@ use crate::{
     },
     id::markers,
     limits::{self, check_limits, FailedLimit},
-    lock::{rank, Mutex},
+    lock::{rank, Mutex, MutexGuard},
     present::{ConfigureSurfaceError, Presentation},
     resource::ResourceType,
     resource_log,
@@ -856,11 +856,64 @@ impl Surface {
             .map(|surface| surface.as_ref())
     }
 
+    fn unconfigure_inner<'a>(
+        &self,
+        presentation: &mut MutexGuard<'a, Option<Presentation>>,
+    ) -> UserClosures {
+        let mut result = UserClosures::default();
+        if let Some(mut present) = presentation.take() {
+            if let Some(texture) = present.acquired_texture.take() {
+                texture.destroy();
+            }
+
+            let user_callbacks;
+            {
+                // Wait for all work that uses the surface texture to finish
+                let snatch_guard = present.device.snatchable_lock.read();
+
+                let result;
+                (user_callbacks, result) = present
+                    .device
+                    .maintain(wgt::PollType::wait_indefinitely(), snatch_guard);
+                match result {
+                    Ok(_) => {}
+                    Err(WaitIdleError::Device(_)) => {
+                        // we can ignore device lost errors here, since we are just cleaning up
+                    }
+                    Err(WaitIdleError::Timeout) => {
+                        unreachable!("wait_indefinitely() should never timeout")
+                    }
+                    Err(WaitIdleError::WrongSubmissionIndex(_, _)) => {
+                        unreachable!("no submission index was provided")
+                    }
+                }
+            }
+            result.extend(user_callbacks);
+
+            for (&backend, surface) in &self.surface_per_backend {
+                if backend == present.device.backend() {
+                    unsafe { surface.unconfigure(present.device.raw()) };
+                }
+            }
+        }
+        result
+    }
+
+    pub fn unconfigure(self: &Arc<Self>) {
+        profiling::scope!("Surface::unconfigure");
+        let user_callbacks;
+        {
+            let mut presentation = self.presentation.lock();
+            user_callbacks = self.unconfigure_inner(&mut presentation);
+        }
+        user_callbacks.fire();
+    }
+
     pub fn configure(
         self: &Arc<Self>,
         device: &Arc<Device>,
         config: &wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
-    ) -> Option<ConfigureSurfaceError> {
+    ) -> Result<(), ConfigureSurfaceError> {
         use ConfigureSurfaceError as E;
         profiling::scope!("Surface::configure");
 
@@ -873,152 +926,101 @@ impl Surface {
 
         log::debug!("configuring surface with {config:?}");
 
-        let error = 'error: {
-            // User callbacks must not be called while we are holding locks.
-            let user_callbacks;
-            {
-                if let Err(e) = device.check_is_valid() {
-                    break 'error e.into();
-                }
+        let caps = self
+            .get_hal_capabilities(&device.adapter)
+            .map_err(|_| E::UnsupportedQueueFamily)?;
 
-                let caps = match self.get_hal_capabilities(&device.adapter) {
-                    Ok(caps) => caps,
-                    Err(_) => break 'error E::UnsupportedQueueFamily,
-                };
-
-                let mut hal_view_formats = Vec::new();
-                for format in config.view_formats.iter() {
-                    if *format == config.format {
-                        continue;
-                    }
-                    if !caps.formats.iter().any(|fc| fc.format == config.format) {
-                        break 'error E::UnsupportedFormat {
-                            requested: config.format,
-                            available: caps.texture_formats().collect(),
-                        };
-                    }
-                    if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
-                        break 'error E::InvalidViewFormat(*format, config.format);
-                    }
-                    hal_view_formats.push(*format);
-                }
-
-                if !hal_view_formats.is_empty() {
-                    if let Err(missing_flag) =
-                        device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
-                    {
-                        break 'error E::MissingDownlevelFlags(missing_flag);
-                    }
-                }
-
-                let maximum_frame_latency = config.desired_maximum_frame_latency.clamp(
-                    *caps.maximum_frame_latency.start(),
-                    *caps.maximum_frame_latency.end(),
-                );
-                let mut hal_config = hal::SurfaceConfiguration {
-                    maximum_frame_latency,
-                    present_mode: config.present_mode,
-                    composite_alpha_mode: config.alpha_mode,
-                    format: config.format,
-                    color_space: config.color_space,
-                    extent: wgt::Extent3d {
-                        width: config.width,
-                        height: config.height,
-                        depth_or_array_layers: 1,
-                    },
-                    usage: crate::conv::map_texture_usage(
-                        config.usage,
-                        hal::FormatAspects::COLOR,
-                        wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
-                            | wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
-                            | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
-                    ),
-                    view_formats: hal_view_formats,
-                };
-
-                if let Err(error) = crate::device::surface_config::validate_surface_configuration(
-                    &mut hal_config,
-                    &caps,
-                    device.limits.max_texture_dimension_2d,
-                ) {
-                    break 'error error;
-                }
-
-                // Wait for all work to finish before configuring the surface.
-                let snatch_guard = device.snatchable_lock.read();
-
-                let maintain_result;
-                (user_callbacks, maintain_result) =
-                    device.maintain(wgt::PollType::wait_indefinitely(), snatch_guard);
-
-                match maintain_result {
-                    // We're happy
-                    Ok(wgt::PollStatus::QueueEmpty) => {}
-                    Ok(wgt::PollStatus::WaitSucceeded) => {
-                        // After the wait, the queue should be empty. It can only be non-empty
-                        // if another thread is submitting at the same time.
-                        break 'error E::GpuWaitTimeout;
-                    }
-                    Ok(wgt::PollStatus::Poll) => {
-                        unreachable!("Cannot get a Poll result from a Wait action.")
-                    }
-                    Err(WaitIdleError::Timeout) if cfg!(target_family = "wasm") => {
-                        // On wasm, you cannot actually successfully wait for the surface.
-                        // However WebGL does not actually require you do this, so ignoring
-                        // the failure is totally fine. See
-                        // https://github.com/gfx-rs/wgpu/issues/7363
-                    }
-                    Err(e) => {
-                        break 'error e.into();
-                    }
-                }
-
-                // All textures must be destroyed before the surface can be re-configured.
-                if let Some(present) = self.presentation.lock().take() {
-                    if present.acquired_texture.is_some() {
-                        break 'error E::PreviousOutputExists;
-                    }
-                }
-
-                // TODO: Texture views may still be alive that point to the texture.
-                // this will allow the user to render to the surface texture, long after
-                // it has been removed.
-                //
-                // https://github.com/gfx-rs/wgpu/issues/4105
-
-                let surface_raw = self.raw(device.backend()).unwrap();
-                match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
-                    Ok(()) => (),
-                    Err(error) => {
-                        break 'error match error {
-                            hal::SurfaceError::Outdated
-                            | hal::SurfaceError::Lost
-                            | hal::SurfaceError::Occluded
-                            | hal::SurfaceError::Timeout => E::InvalidSurface,
-                            hal::SurfaceError::Device(error) => {
-                                E::Device(device.handle_hal_error(error))
-                            }
-                            hal::SurfaceError::Other(message) => {
-                                log::error!("surface configuration failed: {message}");
-                                E::InvalidSurface
-                            }
-                        }
-                    }
-                }
-
-                let mut presentation = self.presentation.lock();
-                *presentation = Some(Presentation {
-                    device: Arc::clone(device),
-                    config: config.clone(),
-                    acquired_texture: None,
+        let mut hal_view_formats = Vec::new();
+        for format in config.view_formats.iter() {
+            if *format == config.format {
+                continue;
+            }
+            if !caps.formats.iter().any(|fc| fc.format == config.format) {
+                return Err(E::UnsupportedFormat {
+                    requested: config.format,
+                    available: caps.texture_formats().collect(),
                 });
             }
+            if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                return Err(E::InvalidViewFormat(*format, config.format));
+            }
+            hal_view_formats.push(*format);
+        }
 
-            user_callbacks.fire();
-            return None;
+        if !hal_view_formats.is_empty() {
+            device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)?;
+        }
+
+        let maximum_frame_latency = config.desired_maximum_frame_latency.clamp(
+            *caps.maximum_frame_latency.start(),
+            *caps.maximum_frame_latency.end(),
+        );
+        let mut hal_config = hal::SurfaceConfiguration {
+            maximum_frame_latency,
+            present_mode: config.present_mode,
+            composite_alpha_mode: config.alpha_mode,
+            format: config.format,
+            color_space: config.color_space,
+            extent: wgt::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            usage: crate::conv::map_texture_usage(
+                config.usage,
+                hal::FormatAspects::COLOR,
+                wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
+                    | wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
+                    | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+            ),
+            view_formats: hal_view_formats,
         };
 
-        Some(error)
+        crate::device::surface_config::validate_surface_configuration(
+            &mut hal_config,
+            &caps,
+            device.limits.max_texture_dimension_2d,
+        )?;
+
+        device.check_is_valid()?;
+
+        let user_callbacks;
+        {
+            // we keep presentation locked for the entire duration of the configure call,
+            // so that no change can happen in the middle of it.
+            let mut presentation = self.presentation.lock();
+
+            user_callbacks = self.unconfigure_inner(&mut presentation);
+
+            let surface_raw = self.raw(device.backend()).unwrap();
+            match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
+                Ok(()) => (),
+                Err(error) => {
+                    return Err(match error {
+                        hal::SurfaceError::Outdated
+                        | hal::SurfaceError::Lost
+                        | hal::SurfaceError::Occluded
+                        | hal::SurfaceError::Timeout => E::InvalidSurface,
+                        hal::SurfaceError::Device(error) => {
+                            E::Device(device.handle_hal_error(error))
+                        }
+                        hal::SurfaceError::Other(message) => {
+                            log::error!("surface configuration failed: {message}");
+                            E::InvalidSurface
+                        }
+                    });
+                }
+            }
+
+            *presentation = Some(Presentation {
+                device: Arc::clone(device),
+                config: config.clone(),
+                acquired_texture: None,
+            });
+        }
+        user_callbacks.fire();
+
+        Ok(())
     }
 }
 
@@ -1028,13 +1030,12 @@ impl Drop for Surface {
         profiling::scope!("Surface::drop");
 
         api_log!("Surface::drop {:?}", self as *const _);
-        if let Some(present) = self.presentation.lock().take() {
-            for (&backend, surface) in &self.surface_per_backend {
-                if backend == present.device.backend() {
-                    unsafe { surface.unconfigure(present.device.raw()) };
-                }
-            }
+        let user_closures;
+        {
+            let mut presentation = self.presentation.lock();
+            user_closures = self.unconfigure_inner(&mut presentation);
         }
+        user_closures.fire();
     }
 }
 
