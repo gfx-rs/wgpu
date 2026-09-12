@@ -57,8 +57,8 @@ struct Pool {
     capacity: u32,
     available: u32,
     /// Set when the driver refused to allocate from this pool despite it
-    /// having free capacity, making `alloc` skip it until a set is freed from
-    /// the pool again.
+    /// having free capacity, making `alloc` skip it until the pool is empty
+    /// again and can be reset.
     poisoned: bool,
 }
 
@@ -284,8 +284,11 @@ impl DescriptorAllocator {
         }
 
         pool.available += 1;
-        // A freed set may allow this pool to satisfy allocations again.
-        pool.poisoned = false;
+        // A failed pool is only worth retrying once it is empty, since that
+        // is the only state it can be reset back to a usable one from.
+        if pool.available == pool.capacity {
+            pool.poisoned = false;
+        }
         bucket.available_sets += 1;
         bucket.allocated_sets -= 1;
         if set.bucket_key.update_after_bind {
