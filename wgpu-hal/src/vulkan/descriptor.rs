@@ -205,6 +205,10 @@ impl DescriptorAllocator {
             match unsafe { device.allocate_descriptor_sets(&vk_info) } {
                 Ok(sets) => break (sets[0], index),
                 Err(vk::Result::ERROR_FRAGMENTED_POOL) => {
+                    // Resetting a pool restores the spec guarantee that
+                    // fragmentation cannot cause an allocation failure, but it
+                    // implicitly frees all of the pool's sets, so only reset
+                    // it when none are live.
                     let empty = bucket.pools[index].available == bucket.pools[index].capacity;
                     let reset = !created_pool
                         && empty
@@ -217,7 +221,6 @@ impl DescriptorAllocator {
                                 .is_ok()
                         };
                     if reset {
-                        log::debug!("Reset empty fragmented descriptor pool, retrying on it");
                         if let Ok(sets) = unsafe { device.allocate_descriptor_sets(&vk_info) } {
                             break (sets[0], index);
                         }
@@ -285,9 +288,15 @@ impl DescriptorAllocator {
 
         pool.available += 1;
         // On Mali, freeing descriptor sets from a fragmented pool does not
-        // make it usable again, so only retry a failed pool once it is empty
-        // and can be reset.
-        if pool.available == pool.capacity {
+        // make it usable again; resetting it is what does. That is only safe
+        // once no sets are live.
+        if pool.fragmented
+            && pool.available == pool.capacity
+            && unsafe {
+                device.reset_descriptor_pool(pool.raw, vk::DescriptorPoolResetFlags::empty())
+            }
+            .is_ok()
+        {
             pool.fragmented = false;
         }
         bucket.available_sets += 1;
