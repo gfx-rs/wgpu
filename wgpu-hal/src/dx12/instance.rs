@@ -171,19 +171,79 @@ impl crate::Instance for super::Instance {
 
         adapters
             .into_iter()
-            .filter_map(|raw| {
-                super::Adapter::expose(
-                    raw,
-                    &self.library,
-                    &self.device_factory,
-                    &self.dcomp_lib,
-                    self.flags,
-                    self.memory_budget_thresholds,
-                    self.compiler_container.clone(),
-                    self.options.clone(),
-                    self.telemetry,
-                )
-            })
+            .filter_map(|raw| self.expose_adapter(raw))
             .collect()
+    }
+
+    unsafe fn request_adapter(
+        &self,
+        power_preference: wgt::PowerPreference,
+        force_fallback_adapter: bool,
+        _surface_hint: Option<&super::Surface>,
+    ) -> Option<crate::ExposedAdapter<super::Api>> {
+        // Ranking from DXGI descriptors alone, so only the selected adapter
+        // pays `D3D12CreateDevice`. `EnumAdapters1` order (the adapter the
+        // primary display is connected to first) mirrors what an unsorted
+        // full enumeration would select for `PowerPreference::None`. The
+        // preference modes need `EnumAdapterByGpuPreference` (DXGI 1.6);
+        // without it, decline so the caller's full-enumeration ranking runs.
+        let preference = match power_preference {
+            wgt::PowerPreference::None => None,
+            wgt::PowerPreference::LowPower => Some(Dxgi::DXGI_GPU_PREFERENCE_MINIMUM_POWER),
+            wgt::PowerPreference::HighPerformance => {
+                Some(Dxgi::DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE)
+            }
+        };
+        let raw_adapters = match preference {
+            Some(preference) => auxil::dxgi::factory::enumerate_adapters_by_gpu_preference(
+                &self.factory,
+                preference,
+            )?,
+            None => auxil::dxgi::factory::enumerate_adapters(self.factory.clone()),
+        };
+
+        let mut raw_adapters: Vec<_> = raw_adapters
+            .into_iter()
+            .map(|raw| {
+                let is_software = unsafe { raw.GetDesc1() }.is_ok_and(|desc| {
+                    Dxgi::DXGI_ADAPTER_FLAG(desc.Flags as i32)
+                        .contains(Dxgi::DXGI_ADAPTER_FLAG_SOFTWARE)
+                });
+                (raw, is_software)
+            })
+            .collect();
+        if force_fallback_adapter {
+            raw_adapters.retain(|&(_, is_software)| is_software);
+        } else if preference.is_some() {
+            // `EnumAdapterByGpuPreference` does not pin the software
+            // rasterizer last, but the caller's ranking of a full enumeration
+            // does (`wgt::DeviceType::Cpu` sorts last). `PowerPreference::None`
+            // keeps raw `EnumAdapters1` order, which an unsorted full
+            // enumeration also uses.
+            raw_adapters.sort_by_key(|&(_, is_software)| is_software);
+        }
+
+        raw_adapters
+            .into_iter()
+            .find_map(|(raw, _)| self.expose_adapter(raw))
+    }
+}
+
+impl super::Instance {
+    fn expose_adapter(
+        &self,
+        raw: auxil::dxgi::factory::DxgiAdapter,
+    ) -> Option<crate::ExposedAdapter<super::Api>> {
+        super::Adapter::expose(
+            raw,
+            &self.library,
+            &self.device_factory,
+            &self.dcomp_lib,
+            self.flags,
+            self.memory_budget_thresholds,
+            self.compiler_container.clone(),
+            self.options.clone(),
+            self.telemetry,
+        )
     }
 }

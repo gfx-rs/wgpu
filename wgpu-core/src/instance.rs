@@ -484,6 +484,46 @@ impl Instance {
         )
     }
 
+    /// Apply the same validation and transforms to a lazily selected adapter
+    /// (`hal::Instance::request_adapter`) that [`Self::request_adapter`]
+    /// applies to a full enumeration. `None` means the adapter is unsuitable
+    /// and the caller must fall back to full enumeration.
+    ///
+    /// Keep the filter sequence in sync with the per-backend loop in
+    /// [`Self::request_adapter`].
+    fn validate_requested_adapter(
+        &self,
+        mut raw: hal::DynExposedAdapter,
+        desc: &wgt::RequestAdapterOptions<&Surface>,
+    ) -> Option<hal::DynExposedAdapter> {
+        if desc.force_fallback_adapter && raw.info.device_type != wgt::DeviceType::Cpu {
+            return None;
+        }
+
+        if let Some(surface) = desc.compatible_surface {
+            if let Err(err) = surface.get_capabilities_with_raw(&raw) {
+                log::debug!(
+                    "Adapter {:?} not compatible with surface: {}",
+                    raw.info,
+                    err
+                );
+                return None;
+            }
+        }
+
+        self.adjust_limits_for_indirect_validation(&mut raw.capabilities.limits);
+        filter_features_and_limits(self.flags, &mut raw.features, &mut raw.capabilities.limits);
+        if !self.adapter_allowed(&raw) {
+            return None;
+        }
+
+        if desc.apply_limit_buckets {
+            limits::apply_limit_buckets(raw)
+        } else {
+            Some(raw)
+        }
+    }
+
     pub fn enumerate_adapters(
         self: &Arc<Self>,
         backends: Backends,
@@ -558,6 +598,31 @@ impl Instance {
             let compatible_hal_surface = desc
                 .compatible_surface
                 .and_then(|surface| surface.raw(backend));
+
+            // Give the backend a chance to select an adapter without exposing
+            // every adapter in the system (see `hal::Instance::request_adapter`).
+            // The result goes through the same validation as a full
+            // enumeration (`validate_requested_adapter` — keep it in sync with
+            // the filter sequence below); if it does not survive, fall through
+            // to the enumeration path so selection and error reporting are
+            // unchanged.
+            let lazy_adapter = unsafe {
+                instance.request_adapter(
+                    desc.power_preference,
+                    desc.force_fallback_adapter,
+                    compatible_hal_surface,
+                )
+            };
+            if let Some(exposed) = lazy_adapter {
+                if let Some(exposed) = self.validate_requested_adapter(exposed, desc) {
+                    log::debug!(
+                        "Backend `{backend:?}` selected adapter without full enumeration: {:?}",
+                        exposed.info
+                    );
+                    adapters.push(exposed);
+                    continue;
+                }
+            }
 
             let mut backend_adapters =
                 unsafe { instance.enumerate_adapters(compatible_hal_surface) };
