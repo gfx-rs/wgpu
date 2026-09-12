@@ -76,6 +76,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
             )),
             0,
             0xff,
+            0,
         ));
     }
 

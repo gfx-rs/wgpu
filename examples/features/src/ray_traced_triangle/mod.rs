@@ -165,6 +165,7 @@ impl crate::framework::Example for Example {
                 .unwrap(),
             0,
             0xff,
+            0,
         ));
 
         tlas[1] = Some(TlasInstance::new(
@@ -180,6 +181,7 @@ impl crate::framework::Example for Example {
                 .unwrap(),
             0,
             0xff,
+            0,
         ));
 
         tlas[2] = Some(TlasInstance::new(
@@ -195,6 +197,7 @@ impl crate::framework::Example for Example {
                 .unwrap(),
             0,
             0xff,
+            0,
         ));
 
         let uniforms = {

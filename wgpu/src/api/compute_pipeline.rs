@@ -75,6 +75,7 @@ pub struct ComputePipelineDescriptor<'a> {
     /// selected.
     // NOTE: keep phrasing in sync. with `FragmentState::entry_point`
     // NOTE: keep phrasing in sync. with `VertexState::entry_point`
+    // NOTE: keep phrasing in sync. with `RayTracingStage::entry_point`
     pub entry_point: Option<&'a str>,
     /// Advanced options for when this pipeline is compiled
     ///

@@ -4,7 +4,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::fmt;
+use core::{fmt, num::NonZeroU32};
 
 use arrayvec::ArrayVec;
 use hashbrown::{hash_map::Entry, HashSet};
@@ -354,6 +354,9 @@ struct EntryPoint {
 
     /// Size of the immediate data, and which slots this entry point uses.
     immediate_usage: naga::valid::ImmediateUsage,
+
+    /// The payload for ray tracing, if this is a ray tracing stage.
+    ray_tracing_payload: Option<RayTracingPayloadType>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -365,6 +368,91 @@ struct EntryPointKeyRef<'a>(naga::ShaderStage, &'a str);
 impl hashbrown::Equivalent<EntryPointKey> for EntryPointKeyRef<'_> {
     fn equivalent(&self, key: &EntryPointKey) -> bool {
         self.0 == key.0 && self.1 == key.1
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+/// An enum containing the types allowed in a ray tracing payload, to be
+/// stored in the interface so various shaders can be checked that they
+/// all have the same types. Roughly equal to naga's type inner, but without names,
+pub enum RayTracingPayloadType {
+    /// A single numeric type.
+    Numeric(NumericType),
+    /// A struct containing other payload types
+    Struct {
+        /// The members of the struct and their offset
+        members: Vec<RayTracingPayloadMember>,
+        /// The span of the struct
+        span: u32,
+    },
+    /// An array containing other payload types
+    Array {
+        /// The type the array contains within itself
+        inner: Box<RayTracingPayloadType>,
+        /// The size of the array, (non-override, non-dynamic).
+        size: NonZeroU32,
+        /// The stride of each element in the array.
+        stride: u32,
+    },
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct RayTracingPayloadMember {
+    offset: u32,
+    ty: Box<RayTracingPayloadType>,
+}
+
+impl RayTracingPayloadType {
+    pub fn from_naga(ty: &naga::TypeInner, module: &naga::Module) -> Option<Self> {
+        Some(match ty {
+            naga::TypeInner::Scalar(scalar) => Self::Numeric(NumericType {
+                dim: NumericDimension::Scalar,
+                scalar: *scalar,
+            }),
+            naga::TypeInner::Vector { size, scalar } => Self::Numeric(NumericType {
+                dim: NumericDimension::Vector(*size),
+                scalar: *scalar,
+            }),
+            naga::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => Self::Numeric(NumericType {
+                dim: NumericDimension::Matrix(*columns, *rows),
+                scalar: *scalar,
+            }),
+            naga::TypeInner::Struct { members, span } => {
+                let mut struct_members = Vec::with_capacity(members.len());
+
+                for member in members {
+                    let ty = &module.types[member.ty].inner;
+
+                    struct_members.push(RayTracingPayloadMember {
+                        offset: member.offset,
+                        ty: Box::new(Self::from_naga(ty, module)?),
+                    });
+                }
+
+                Self::Struct {
+                    members: struct_members,
+                    span: *span,
+                }
+            }
+            naga::TypeInner::Array {
+                base,
+                size: naga::ArraySize::Constant(size),
+                stride,
+            } => {
+                let ty = &module.types[*base].inner;
+
+                Self::Array {
+                    inner: Box::new(Self::from_naga(ty, module)?),
+                    size: *size,
+                    stride: *stride,
+                }
+            }
+            _ => return None,
+        })
     }
 }
 
@@ -630,6 +718,8 @@ pub enum StageError {
     MeshTopologyMismatch,
     #[error("Pipeline layout immediate size ({layout}) must be >= the required immediate size ({required}) of the shader entry point")]
     LayoutImmediateSize { layout: u32, required: u32 },
+    #[error("Ray tracing payloads do not match.")]
+    RayTracingPayloadMismatch,
 }
 
 impl WebGpuError for StageError {
@@ -667,7 +757,8 @@ impl WebGpuError for StageError {
             | Self::MissingFragDepthAttachment
             | Self::PerVertexNotTriangles
             | Self::MeshTopologyMismatch
-            | Self::LayoutImmediateSize { .. } => ErrorType::Validation,
+            | Self::LayoutImmediateSize { .. }
+            | Self::RayTracingPayloadMismatch => ErrorType::Validation,
         }
     }
 }
@@ -1186,6 +1277,7 @@ pub struct StageIo {
     /// This is Some if it was a mesh shader.
     pub primitive_index: Option<bool>,
     pub immediates: naga::valid::ImmediateUsage,
+    pub ray_tracing_payload: Option<RayTracingPayloadType>,
 }
 
 impl Interface {
@@ -1471,6 +1563,34 @@ impl Interface {
                     mesh_info.primitive_output_type,
                     &module.types,
                 );
+            }
+
+            // Set the payload if there is an incoming payload set and it is a shader that should have one.
+            if matches!(
+                entry_point.stage,
+                naga::ShaderStage::ClosestHit | naga::ShaderStage::AnyHit | naga::ShaderStage::Miss
+            ) {
+                let ray_payload = entry_point
+                    .incoming_ray_payload
+                    .expect("these stages must have an incoming payload");
+                let ty = module.global_variables[ray_payload].ty;
+
+                ep.ray_tracing_payload = Some(
+                    RayTracingPayloadType::from_naga(&module.types[ty].inner, module)
+                        .expect("naga should already validate invalid payloads out!"),
+                );
+            }
+            // Or if a payload global variable is used and it is a ray gen shader which doesn't have incoming
+            // payloads. This may not have a payload if it dispatches no trace rays which should be fine
+            else if matches!(entry_point.stage, naga::ShaderStage::RayGeneration) {
+                for (handle, gv) in module.global_variables.iter() {
+                    if !func_info[handle].is_empty() && gv.space == naga::AddressSpace::RayPayload {
+                        ep.ray_tracing_payload = Some(
+                            RayTracingPayloadType::from_naga(&module.types[gv.ty].inner, module)
+                                .expect("naga should already validate invalid payloads out!"),
+                        );
+                    }
+                }
             }
 
             entry_points.insert(
@@ -2077,6 +2197,25 @@ impl Interface {
             }
         }
 
+        let mut ray_tracing_payload = inputs.ray_tracing_payload;
+
+        let current_ray_payload = entry_point.ray_tracing_payload.clone();
+
+        if let (Some(ray_tracing_payload), Some(current_ray_payload)) =
+            (ray_tracing_payload.as_ref(), current_ray_payload.as_ref())
+        {
+            if ray_tracing_payload != current_ray_payload {
+                return Err(StageError::RayTracingPayloadMismatch);
+            }
+        }
+
+        // We've just checked that if there was previously a payload, it is the same as
+        // the current payload (if any), so the two must be the same if both `Some`, so
+        // this doesn't go over any validation.
+        if let Some(current_ray_payload) = current_ray_payload {
+            ray_tracing_payload = Some(current_ray_payload)
+        }
+
         Ok(StageIo {
             task_payload_size: entry_point.task_payload_size,
             varyings: outputs,
@@ -2086,6 +2225,7 @@ impl Interface {
                 None
             },
             immediates: immediate_usage,
+            ray_tracing_payload,
         })
     }
 }
@@ -2218,6 +2358,14 @@ pub enum ShaderStageForValidation {
     },
     Compute,
     Task,
+    RayGeneration,
+    Miss,
+    ClosestHit {
+        triangle: bool,
+    },
+    AnyHit {
+        triangle: bool,
+    },
 }
 
 impl ShaderStageForValidation {
@@ -2228,6 +2376,10 @@ impl ShaderStageForValidation {
             Self::Fragment { .. } => naga::ShaderStage::Fragment,
             Self::Compute => naga::ShaderStage::Compute,
             Self::Task => naga::ShaderStage::Task,
+            Self::RayGeneration => naga::ShaderStage::RayGeneration,
+            Self::Miss => naga::ShaderStage::Miss,
+            Self::AnyHit { .. } => naga::ShaderStage::AnyHit,
+            Self::ClosestHit { .. } => naga::ShaderStage::ClosestHit,
         }
     }
 
@@ -2238,6 +2390,10 @@ impl ShaderStageForValidation {
             Self::Fragment { .. } => wgt::ShaderStages::FRAGMENT,
             Self::Compute => wgt::ShaderStages::COMPUTE,
             Self::Task => wgt::ShaderStages::TASK,
+            Self::RayGeneration => wgt::ShaderStages::RAY_GENERATION,
+            Self::Miss => wgt::ShaderStages::MISS,
+            Self::AnyHit { .. } => wgt::ShaderStages::ANY_HIT,
+            Self::ClosestHit { .. } => wgt::ShaderStages::CLOSEST_HIT,
         }
     }
 }
