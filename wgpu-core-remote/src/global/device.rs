@@ -490,9 +490,29 @@ impl Global {
 
         let device = devices.get(device_id);
 
+        let entries = desc
+            .entries
+            .iter()
+            .map(
+                |&BindGroupLayoutEntry {
+                     binding,
+                     visibility,
+                     ty,
+                 }| wgt::BindGroupLayoutEntry {
+                    binding,
+                    visibility: wgt::ShaderStages::from_internal_flags(
+                        visibility,
+                        wgt::ShaderStagesWGPU::empty(),
+                    ),
+                    ty,
+                    count: None,
+                },
+            )
+            .collect();
+
         let desc = binding_model::BindGroupLayoutDescriptor {
             label: desc.label.as_ref().map(|l| Cow::Borrowed(l.as_ref())),
-            entries: Cow::Borrowed(&desc.entries),
+            entries: Cow::Owned(entries),
         };
 
         let bgl = device.create_bind_group_layout(&desc);
