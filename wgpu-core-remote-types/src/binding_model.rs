@@ -67,6 +67,21 @@ pub struct BindGroupDescriptor<'a> {
     pub entries: Cow<'a, [BindGroupEntry]>,
 }
 
+/// Describes a single binding inside a bind group.
+///
+/// Corresponds to [WebGPU `GPUBindGroupLayoutEntry`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct BindGroupLayoutEntry {
+    /// Binding index. Must match shader index and be unique inside a `BindGroupLayout`. A binding
+    /// of index 1, would be described as `@group(0) @binding(1)` in shaders.
+    pub binding: u32,
+    /// Which shader stages can see this binding.
+    pub visibility: wgt::ShaderStagesWebGPU,
+    /// The type of the binding
+    pub ty: wgt::BindingType,
+}
+
 /// Corresponds to [`GPUBindGroupLayoutDescriptor`](https://www.w3.org/TR/webgpu/#dictdef-gpubindgrouplayoutdescriptor).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BindGroupLayoutDescriptor<'a> {
@@ -75,5 +90,5 @@ pub struct BindGroupLayoutDescriptor<'a> {
     /// This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// Array of entries in this BindGroupLayout
-    pub entries: Cow<'a, [wgt::BindGroupLayoutEntry]>,
+    pub entries: Cow<'a, [BindGroupLayoutEntry]>,
 }

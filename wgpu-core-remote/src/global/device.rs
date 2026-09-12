@@ -28,7 +28,7 @@ use crate::{
     registry::Registry,
 };
 
-use wgt::{error::WebGpuError, BufferAddress};
+use wgt::{error::WebGpuError, BindGroupLayoutEntry, BufferAddress};
 
 pub use wgpu_core_remote_types::binding_model::*;
 
@@ -490,9 +490,23 @@ impl Global {
 
         let device = devices.get(device_id);
 
+        let entries = desc
+            .entries
+            .iter()
+            .map(|e| BindGroupLayoutEntry {
+                binding: e.binding,
+                visibility: wgt::ShaderStages::from_internal_flags(
+                    e.visibility,
+                    wgt::ShaderStagesWGPU::empty(),
+                ),
+                ty: e.ty,
+                count: None,
+            })
+            .collect();
+
         let desc = binding_model::BindGroupLayoutDescriptor {
             label: desc.label.as_ref().map(|l| Cow::Borrowed(l.as_ref())),
-            entries: Cow::Borrowed(&desc.entries),
+            entries: Cow::Owned(entries),
         };
 
         let bgl = device.create_bind_group_layout(&desc);
