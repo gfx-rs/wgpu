@@ -185,16 +185,18 @@ impl DescriptorAllocator {
 
         // Some drivers (e.g. Mali) report fragmentation despite the same-shape
         // guarantee the spec grants our per-bucket pools, in particular for
-        // update-after-bind pools which cannot be defragmented. Retire the
-        // offending pool and try the next one, falling back to a freshly
-        // created pool, as the spec prescribes. The pool is retried once a set
-        // is freed from it.
+        // update-after-bind pools which cannot be defragmented. Resetting a
+        // pool with no live sets restores that guarantee, so try that first;
+        // otherwise retire the offending pool and try the next one, falling
+        // back to a freshly created pool, as the spec prescribes. A retired
+        // pool is retried once a set is freed from it.
         // https://docs.vulkan.org/refpages/latest/refpages/source/VkDescriptorPoolCreateInfo.html#_description
         let (raw, pool_index) = loop {
             let index = match candidate {
                 Some(index) => index,
                 None => bucket.create_pool(device, &key, capacity_hint)?.0,
             };
+            let created_pool = candidate.is_none();
 
             let vk_info = vk::DescriptorSetAllocateInfo::default()
                 .descriptor_pool(bucket.pools[index].raw)
@@ -203,8 +205,25 @@ impl DescriptorAllocator {
             match unsafe { device.allocate_descriptor_sets(&vk_info) } {
                 Ok(sets) => break (sets[0], index),
                 Err(vk::Result::ERROR_FRAGMENTED_POOL) => {
+                    let empty = bucket.pools[index].available == bucket.pools[index].capacity;
+                    let reset = !created_pool
+                        && empty
+                        && unsafe {
+                            device
+                                .reset_descriptor_pool(
+                                    bucket.pools[index].raw,
+                                    vk::DescriptorPoolResetFlags::empty(),
+                                )
+                                .is_ok()
+                        };
+                    if reset {
+                        log::debug!("Reset empty fragmented descriptor pool, retrying on it");
+                        if let Ok(sets) = unsafe { device.allocate_descriptor_sets(&vk_info) } {
+                            break (sets[0], index);
+                        }
+                    }
+
                     bucket.pools[index].poisoned = true;
-                    let created_pool = candidate.is_none();
                     if created_pool {
                         log::error!(
                             "descriptor set allocation from a fresh pool failed due to fragmentation"
