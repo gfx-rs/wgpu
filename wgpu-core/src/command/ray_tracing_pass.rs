@@ -461,7 +461,7 @@ impl RayTracingPass {
     }
     pub fn end_inner(&mut self) -> Result<(), EncoderStateError> {
         profiling::scope!(
-            "CommandEncoder::encode_ray_tracing_pass {}",
+            "CommandEncoder::run_ray_tracing_pass {}",
             self.base.label.as_deref().unwrap_or("")
         );
 
