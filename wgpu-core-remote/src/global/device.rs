@@ -515,7 +515,7 @@ impl Global {
                     ty,
                     has_dynamic_offset,
                     min_binding_size,
-                }) = buffer
+                }) = buffer.to_std()
                 {
                     binding_ty = Some(wgt::BindingType::Buffer {
                         ty,
@@ -523,7 +523,7 @@ impl Global {
                         min_binding_size,
                     });
                 }
-                if let Some(SamplerBindingLayout { ty }) = sampler {
+                if let Some(SamplerBindingLayout { ty }) = sampler.to_std() {
                     if binding_ty.is_some() {
                         return Err(binding_model::CreateBindGroupLayoutError::Entry {
                             binding,
@@ -536,7 +536,7 @@ impl Global {
                     sample_type,
                     view_dimension,
                     multisampled,
-                }) = texture
+                }) = texture.to_std()
                 {
                     if binding_ty.is_some() {
                         return Err(binding_model::CreateBindGroupLayoutError::Entry {
@@ -554,7 +554,7 @@ impl Global {
                     access,
                     format,
                     view_dimension,
-                }) = storage_texture
+                }) = storage_texture.to_std()
                 {
                     if binding_ty.is_some() {
                         return Err(binding_model::CreateBindGroupLayoutError::Entry {
@@ -568,7 +568,7 @@ impl Global {
                         view_dimension,
                     })
                 }
-                if let Some(ExternalTextureBindingLayout {}) = external_texture {
+                if external_texture {
                     if binding_ty.is_some() {
                         return Err(binding_model::CreateBindGroupLayoutError::Entry {
                             binding,
@@ -609,26 +609,33 @@ impl Global {
                         visibility,
                         wgt::ShaderStagesWGPU::empty(),
                     ),
-                    buffer: buffer.map(|b| binding_model::BufferBindingLayout {
+                    buffer: buffer.to_std().map(|b| binding_model::BufferBindingLayout {
                         ty: b.ty,
                         has_dynamic_offset: b.has_dynamic_offset,
                         min_binding_size: b.min_binding_size,
                     }),
-                    sampler: sampler.map(|s| binding_model::SamplerBindingLayout { ty: s.ty }),
-                    texture: texture.map(|t| binding_model::TextureBindingLayout {
-                        sample_type: t.sample_type,
-                        view_dimension: t.view_dimension,
-                        multisampled: t.multisampled,
-                    }),
-                    storage_texture: storage_texture.map(|s| {
+                    sampler: sampler
+                        .to_std()
+                        .map(|s| binding_model::SamplerBindingLayout { ty: s.ty }),
+                    texture: texture
+                        .to_std()
+                        .map(|t| binding_model::TextureBindingLayout {
+                            sample_type: t.sample_type,
+                            view_dimension: t.view_dimension,
+                            multisampled: t.multisampled,
+                        }),
+                    storage_texture: storage_texture.to_std().map(|s| {
                         binding_model::StorageTextureBindingLayout {
                             access: s.access,
                             format: s.format,
                             view_dimension: s.view_dimension,
                         }
                     }),
-                    external_texture: external_texture
-                        .map(|_| binding_model::ExternalTextureBindingLayout {}),
+                    external_texture: if external_texture {
+                        Some(binding_model::ExternalTextureBindingLayout {})
+                    } else {
+                        None
+                    },
                     acceleration_structure: None,
                     count: None,
                 }
