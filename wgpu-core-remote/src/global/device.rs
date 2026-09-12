@@ -1,6 +1,5 @@
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::ops::Deref;
-use core::ptr::NonNull;
 use wgpu_core_remote_types::{
     encoders::{RenderBundleDescriptor, RenderBundleEncoderDescriptor},
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
@@ -17,7 +16,7 @@ use wgpu_core::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
         ResolvedGeneralRenderPipelineDescriptor,
     },
-    resource::{self, BufferAccessError, BufferMapOperation, BufferMappingLock, CreateBufferError},
+    resource::{self, BufferAccessError, BufferMapOperation, BufferMapping, CreateBufferError},
     Label, LabelHelpers, SubmissionIndex,
 };
 
@@ -1185,7 +1184,7 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-    ) -> Result<(BufferMappingLock, NonNull<u8>, u64), BufferAccessError> {
+    ) -> Result<BufferMapping, BufferAccessError> {
         let hub = self.hub.borrow();
 
         let buffer = hub.buffers.get(buffer_id);

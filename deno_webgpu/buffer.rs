@@ -200,7 +200,7 @@ impl GPUBuffer {
     #[webidl(default = 0)] offset: u64,
     #[webidl] size: Option<u64>,
   ) -> Result<v8::Local<'s, v8::ArrayBuffer>, BufferError> {
-    let (lock, slice_pointer, range_size) = self
+    let mapping = self
       .wgpu_buffer
       .get_mapped_range(offset, size)
       .map_err(BufferError::Access)?;
@@ -218,35 +218,29 @@ impl GPUBuffer {
         deleter_data: *mut std::ffi::c_void,
       ) {
         // SAFETY: Box::into_raw is down bellow
-        let guard: Box<wgpu_core::resource::BufferMappingGuard> =
+        let mapping: Box<wgpu_core::resource::BufferMapping> =
           unsafe { Box::from_raw(deleter_data as *mut _) };
-        drop(guard);
+        drop(mapping);
       }
 
-      let guard: Box<wgpu_core::resource::BufferMappingGuard> =
-        Box::new(lock.lock());
+      let mapping: Box<wgpu_core::resource::BufferMapping> = Box::new(mapping);
 
       // SAFETY: creating a backing store from the pointer and length provided by wgpu
       unsafe {
         v8::ArrayBuffer::new_backing_store_from_ptr(
-          slice_pointer.as_ptr() as _,
-          range_size as usize,
+          mapping.ptr().as_ptr() as _,
+          mapping.len() as usize,
           deleter_callback,
-          Box::into_raw(guard) as *mut std::ffi::c_void,
+          Box::into_raw(mapping) as *mut std::ffi::c_void,
         )
       }
     } else {
-      let vec = {
-        let _guard = lock.lock();
-        // SAFETY: creating a vector from the pointer and length provided by wgpu
-        let slice = unsafe {
-          std::slice::from_raw_parts(
-            slice_pointer.as_ptr(),
-            range_size as usize,
-          )
-        };
-        slice.to_vec()
-      };
+      // SAFETY: buffer is mapped for read
+      // FIXME: but there are overlapping views
+      let slice = unsafe { mapping.slice() };
+      let vec = slice.to_vec();
+      drop(mapping);
+
       v8::ArrayBuffer::new_backing_store_from_vec(vec)
     };
 

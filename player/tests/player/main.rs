@@ -18,7 +18,6 @@ use std::{
     fs::{read_to_string, File},
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
-    slice,
     sync::Arc,
 };
 use wgc::{command::PointerReferences, device::trace::DiskTraceLoader};
@@ -118,7 +117,7 @@ impl Test<'_> {
 
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);
-            let (lock, ptr, size) = player
+            let mapping = player
                 .resolve_buffer_id(expect.buffer)
                 .get_mapped_range(expect.offset, Some(expect.data.len() as wgt::BufferAddress))
                 .unwrap();
@@ -138,14 +137,14 @@ impl Test<'_> {
                     .collect::<Vec<u8>>(),
             };
 
-            let guard = lock.lock();
-            let contents = unsafe { slice::from_raw_parts(ptr.as_ptr(), size as usize) };
+            // SAFETY: Buffer is mapped for read and this is only mapping
+            let contents = unsafe { mapping.slice() };
             if &expected_data[..] != contents {
                 panic!(
                     "Test expectation is not met!\nBuffer content was:\n{contents:?}\nbut expected:\n{expected_data:?}"
                 );
             }
-            drop(guard);
+            drop(mapping);
         }
     }
 }
