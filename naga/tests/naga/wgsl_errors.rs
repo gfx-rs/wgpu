@@ -4383,6 +4383,187 @@ fn const_eval_value_errors() {
     assert!(variant("f32(abs(-9223372036854775807 - 1))").is_ok());
 }
 
+/// Constant evaluation of `extractBits`.
+///
+/// <https://www.w3.org/TR/WGSL/#extractBits-signed-builtin>
+#[test]
+fn const_eval_extract_bits() {
+    check_success(
+        "
+        // Unsigned: the bits above the field are zero.
+        const_assert extractBits(0x12345678u, 8u, 8u) == 0x56u;
+        const_assert extractBits(0xf0000000u, 28u, 4u) == 0xfu;
+        const_assert extractBits(0x80000000u, 31u, 1u) == 1u;
+
+        // Signed: the bits above the field copy the top bit of the field.
+        const_assert extractBits(0x12345678i, 8u, 8u) == 0x56i;
+        const_assert extractBits(8i, 3u, 1u) == -1i;
+        const_assert extractBits(0x70000000i, 28u, 4u) == 7i;
+
+        // A `count` of zero yields zero, and covering the full width is the identity.
+        const_assert extractBits(0xffffffffu, 0u, 0u) == 0u;
+        const_assert extractBits(0xffffffffu, 32u, 0u) == 0u;
+        const_assert extractBits(0x12345678u, 0u, 32u) == 0x12345678u;
+        const_assert extractBits(-1i, 0u, 32u) == -1i;
+
+        // Component-wise on vectors.
+        const_assert all(extractBits(vec2(0x12345678u, 0xf0f0f0f0u), 4u, 8u) == vec2(0x67u, 0xfu));
+        const_assert all(extractBits(vec3(8i, 0i, -1i), 3u, 1u) == vec3(-1i, 0i, -1i));
+        ",
+    );
+}
+
+/// Constant evaluation of `insertBits`.
+///
+/// <https://www.w3.org/TR/WGSL/#insertBits-builtin>
+#[test]
+fn const_eval_insert_bits() {
+    check_success(
+        "
+        // Only bits `offset..offset + count` change, and only the low `count`
+        // bits of `newbits` are read.
+        const_assert insertBits(0x12345678u, 0xffu, 8u, 8u) == 0x1234ff78u;
+        const_assert insertBits(0x12345678u, 0xabcdu, 8u, 8u) == 0x1234cd78u;
+        const_assert insertBits(0u, 1u, 31u, 1u) == 0x80000000u;
+        const_assert insertBits(0i, -1i, 31u, 1u) == -2147483647i - 1i;
+        const_assert insertBits(-1i, 0i, 0u, 31u) == -2147483647i - 1i;
+
+        // A `count` of zero leaves `e` untouched, and covering the full width
+        // replaces it entirely.
+        const_assert insertBits(0x12345678u, 0xffffffffu, 0u, 0u) == 0x12345678u;
+        const_assert insertBits(0x12345678u, 0xffffffffu, 32u, 0u) == 0x12345678u;
+        const_assert insertBits(0x12345678u, 0xdeadbeefu, 0u, 32u) == 0xdeadbeefu;
+
+        // Component-wise on vectors.
+        const_assert all(insertBits(vec2(0u, 0u), vec2(0xfu, 0x3u), 4u, 4u) == vec2(0xf0u, 0x30u));
+        ",
+    );
+}
+
+/// Constant evaluation of `faceForward`, `reflect` and `refract`.
+///
+/// The values below are chosen so that every `f32` result doesn't round.
+#[test]
+fn const_eval_geometry() {
+    check_success(
+        "
+        // faceForward returns `e1` when `dot(e2, e3)` is negative and `-e1`
+        // otherwise, including when the dot product is exactly zero.
+        const_assert all(faceForward(vec2(1.0, 2.0), vec2(-1.0, 0.0), vec2(1.0, 0.0)) == vec2(1.0, 2.0));
+        const_assert all(faceForward(vec2(1.0, 2.0), vec2(1.0, 0.0), vec2(1.0, 0.0)) == vec2(-1.0, -2.0));
+        const_assert all(faceForward(vec2(1.0, 2.0), vec2(0.0, 1.0), vec2(1.0, 0.0)) == vec2(-1.0, -2.0));
+        const_assert all(faceForward(vec3(1.0, 2.0, 3.0), vec3(-1.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0)) == vec3(1.0, 2.0, 3.0));
+
+        // reflect is `e1 - 2 * dot(e2, e1) * e2`. A surface parallel to the
+        // incident vector leaves it alone.
+        const_assert all(reflect(vec2(1.0, -1.0), vec2(0.0, 1.0)) == vec2(1.0, 1.0));
+        const_assert all(reflect(vec2(1.0, 0.0), vec2(1.0, 0.0)) == vec2(-1.0, 0.0));
+        const_assert all(reflect(vec2(1.0, 0.0), vec2(0.0, 1.0)) == vec2(1.0, 0.0));
+        const_assert all(reflect(vec3(1.0, -1.0, 0.0), vec3(0.0, 1.0, 0.0)) == vec3(1.0, 1.0, 0.0));
+
+        // refract transmits the vector when `k` is non-negative.
+        const_assert all(refract(vec2(0.0, -1.0), vec2(0.0, 1.0), 1.0) == vec2(0.0, -1.0));
+        const_assert all(refract(vec2(0.5, -0.5), vec2(0.0, 1.0), 1.0) == vec2(0.5, -0.5));
+        const_assert all(refract(vec2(0.5, -0.5), vec2(0.0, -1.0), 1.0) == vec2(0.5, 0.5));
+        const_assert all(refract(vec2(0.0, -1.0), vec2(0.0, 1.0), 0.5) == vec2(0.0, -1.0));
+
+        // Under total internal reflection it returns the zero vector instead.
+        const_assert all(refract(vec2(0.8, -0.6), vec2(0.0, 1.0), 2.0) == vec2(0.0, 0.0));
+        const_assert all(refract(vec3(0.8, -0.6, 0.0), vec3(0.0, 1.0, 0.0), 2.0) == vec3(0.0, 0.0, 0.0));
+        ",
+    );
+}
+
+/// A dot product that overflows will cause a shader creation error.
+/// No resulting to infinity.
+#[test]
+fn const_eval_geometry_overflow() {
+    for expr in [
+        "faceForward(vec2(1.0, 0.0), vec2(3.4e38, 0.0), vec2(3.4e38, 0.0))",
+        "reflect(vec2(1.0, 0.0), vec2(3.4e38, 0.0))",
+        "refract(vec2(1.0, 0.0), vec2(3.4e38, 0.0), 1.0)",
+    ] {
+        let input = format!("const x = {expr};");
+        let result = naga::front::wgsl::parse_str(&input);
+        assert!(
+            result.is_err(),
+            "expected `{expr}` to overflow, got {result:#?}"
+        );
+    }
+}
+
+/// offset + count  past the width of the operand is an error w shader creation
+/// when both are const expressions.
+#[test]
+fn bitfield_range_too_large() {
+    check_error_matches(
+        "const x = extractBits(0u, 30u, 8u);",
+        "`offset` + `count` must be at most 32",
+    );
+    check_error_matches(
+        "const x = extractBits(0u, 33u, 0u);",
+        "`offset` + `count` must be at most 32",
+    );
+    check_error_matches(
+        "const x = insertBits(0i, 0i, 1u, 32u);",
+        "`offset` + `count` must be at most 32",
+    );
+    check_error_matches(
+        "const x = insertBits(vec2(0u), vec2(0u), 4294967295u, 4294967295u);",
+        "`offset` + `count` must be at most 32",
+    );
+}
+
+/// Same as above
+/// offset + count  past the width of the operand is an error w shader creation
+/// when both are const expressions.
+/// Even if the operand is not.
+///
+/// <https://github.com/gfx-rs/wgpu/issues/9152>
+#[test]
+fn bitfield_range_too_large_partially_const() {
+    // The operand is a function parameter, so these calls never reach constant
+    // evaluation at all.
+    check_error_matches(
+        "fn f(e: u32) -> u32 { return extractBits(e, 30u, 8u); }",
+        "`offset` + `count` must be at most 32",
+    );
+    check_error_matches(
+        "fn f(e: i32) -> i32 { return extractBits(e, 30u, 8u); }",
+        "`offset` + `count` must be at most 32",
+    );
+    check_error_matches(
+        "fn f(e: vec2<u32>) -> vec2<u32> { return extractBits(e, 30u, 8u); }",
+        "`offset` + `count` must be at most 32",
+    );
+    check_error_matches(
+        "fn f(e: u32, n: u32) -> u32 { return insertBits(e, n, 30u, 8u); }",
+        "`offset` + `count` must be at most 32",
+    );
+
+    // `offset` and `count` are const expressions here too, just not literals.
+    check_error_matches(
+        "const OFFSET = 30u;
+         fn f(e: u32) -> u32 { return extractBits(e, OFFSET, 8u); }",
+        "`offset` + `count` must be at most 32",
+    );
+
+    // In range, so these are all fine.
+    check_success("fn f(e: u32) -> u32 { return extractBits(e, 8u, 8u); }");
+    check_success("fn f(e: u32) -> u32 { return extractBits(e, 0u, 32u); }");
+    check_success("fn f(e: u32) -> u32 { return extractBits(e, 32u, 0u); }");
+    check_success("fn f(e: u32, n: u32) -> u32 { return insertBits(e, n, 24u, 8u); }");
+
+    // Nothing to check when `offset` and `count` are not const expressions.
+    check_success("fn f(e: u32, o: u32, c: u32) -> u32 { return extractBits(e, o, c); }");
+
+    // An out-of-range override expression is a pipeline creation error.
+    check_success(
+        "override o: u32;
+         fn f(e: u32) -> u32 { return extractBits(e, o, 40u); }",
+    );
+}
+
 #[test]
 fn subgroup_capability() {
     // Some of these tests should be `check_extension_validation` tests that

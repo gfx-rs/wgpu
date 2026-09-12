@@ -4141,6 +4141,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let rule = self.resolve_overloads(span, fun, fun_overloads, &lowered_arguments, ctx)?;
         self.apply_automatic_conversions_for_call(&rule, &mut lowered_arguments, ctx)?;
 
+        self.check_bitfield_range(span, fun, &rule, &lowered_arguments, ctx)?;
+
         // If this function returns a predeclared type, register it
         // in `Module::special_types`. The typifier will expect to
         // be able to find it there.
@@ -4155,6 +4157,48 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             arg2: lowered_arguments.get(2).cloned(),
             arg3: lowered_arguments.get(3).cloned(),
         })
+    }
+
+    /// Check the `offset` and `count` arguments of a call to [`ExtractBits`]
+    /// or [`InsertBits`] to make sure it fits inside the number's `width`.
+    ///
+    /// If `offset` and `count` are fixed numbers and they pick bits outside
+    /// the range, shader DIES.  No thinking.  Shader creation error.
+    ///
+    /// If the pipeline overrides the numbers, we do not check them here.
+    /// [`get_const_val`] reports them as non-const, so they fall through
+    /// this check.
+    ///
+    /// [`ExtractBits`]: ir::MathFunction::ExtractBits
+    /// [`InsertBits`]: ir::MathFunction::InsertBits
+    /// [`get_const_val`]: ExpressionContext::get_const_val
+    fn check_bitfield_range(
+        &mut self,
+        span: Span,
+        fun: ir::MathFunction,
+        rule: &proc::Rule,
+        arguments: &[Handle<ir::Expression>],
+        ctx: &ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, ()> {
+        let (builtin, offset, count) = match fun {
+            ir::MathFunction::ExtractBits => ("extractBits", 1, 2),
+            ir::MathFunction::InsertBits => ("insertBits", 2, 3),
+            _ => return Ok(()),
+        };
+
+        let (Ok(offset), Ok(count)) = (
+            ctx.get_const_val::<u32>(arguments[offset]),
+            ctx.get_const_val::<u32>(arguments[count]),
+        ) else {
+            return Ok(());
+        };
+
+        let Some(scalar) = rule.arguments[0].inner_with(&ctx.module.types).scalar() else {
+            return Ok(());
+        };
+
+        proc::check_bitfield_range(builtin, offset, count, u32::from(scalar.width) * 8)
+            .map_err(|e| Box::new(Error::ConstantEvaluatorError(Box::new(e), span)))
     }
 
     /// Choose the right overload for a function call.
