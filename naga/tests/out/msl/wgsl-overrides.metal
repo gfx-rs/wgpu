@@ -17,6 +17,8 @@ kernel void main_(
 ) {
     float gain_x_10_ = 11.0;
     float store_override = {};
+    metal::float4 override_compose = metal::float4(metal::float2(1.1, 1.0), metal::float2(2.0, 3.0));
+    metal::float4 override_compose_zero_value = metal::float4(metal::float2 {}, 1.1, 1.0);
     float t = 23.0;
     bool x = {};
     float gain_x_100_ = {};
@@ -24,5 +26,7 @@ kernel void main_(
     float _e9 = gain_x_10_;
     gain_x_100_ = _e9 * 10.0;
     store_override = gain;
+    metal::float4 phony = override_compose;
+    metal::float4 phony_1 = override_compose_zero_value;
     return;
 }

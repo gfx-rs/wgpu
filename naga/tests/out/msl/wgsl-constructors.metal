@@ -30,6 +30,12 @@ constant metal::float2x2 cz5_ = metal::float2x2 {};
 constant type_10 cz6_ = type_10 {};
 constant Foo cz7_ = Foo {};
 constant metal::uint2 cp1_ = metal::uint2(0u);
+constant metal::float4 ccz0_ = metal::float4(metal::float2 {}, 1.0, 1.0);
+constant metal::float4 ccz1_ = metal::float4(metal::float2(1.0), 0.0, 1.0);
+constant metal::float4 ccz2_ = metal::float4(metal::float2(1.0, 0.0), 0.0, 1.0);
+constant metal::float2x2 ccm0_ = metal::float2x2(metal::float2 {}, metal::float2(1.0, 2.0));
+constant metal::float2x2 ccm1_ = metal::float2x2(metal::float2(1.0), metal::float2 {});
+constant metal::float4 ccn0_ = metal::float4(metal::float3(metal::float2 {}, 3.0), 4.0);
 
 kernel void main_(
 ) {
@@ -42,6 +48,12 @@ kernel void main_(
     metal::uint2 cit0_ = metal::uint2(0u);
     metal::float2x2 cit1_ = metal::float2x2(metal::float2(0.0), metal::float2(0.0));
     type_12 cit2_ = type_12 {{0, 1, 2, 3}};
+    metal::float4 ccz3_ = metal::float4(metal::float2 {}, 1.0, 1.0);
+    metal::float4 ccz4_ = metal::float4(metal::float2(1.0), 0.0, 1.0);
+    metal::float4 ccz5_ = metal::float4(metal::float2(1.0, 0.0), 0.0, 1.0);
+    metal::float2x2 ccm2_ = metal::float2x2(metal::float2 {}, metal::float2(1.0, 2.0));
+    metal::float2x2 ccm3_ = metal::float2x2(metal::float2(1.0), metal::float2 {});
+    metal::float4 ccn1_ = metal::float4(metal::float3(metal::float2 {}, 3.0), 4.0);
     metal::uint2 ic4_ = metal::uint2(0u, 0u);
     metal::float2x3 ic5_ = metal::float2x3(metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0));
     return;

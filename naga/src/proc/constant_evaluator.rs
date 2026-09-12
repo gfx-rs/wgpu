@@ -17,6 +17,7 @@ use num_traits::{real::Real, FromPrimitive, One, ToPrimitive, Zero};
 
 use crate::{
     arena::{Arena, Handle, HandleVec, UniqueArena},
+    proc::FlattenedComponent,
     ArraySize, BinaryOperator, Constant, Expression, Literal, Override, RelationalFunction,
     ScalarKind, Span, Type, TypeInner, UnaryOperator,
 };
@@ -94,7 +95,7 @@ macro_rules! gen_component_wise_extractor {
 
             macro_rules! sanitize {
                 ($expr:expr) => {
-                    eval.eval_zero_value_and_splat($expr, span)
+                    eval.eval_constructors($expr, span)
                         .map(|expr| &eval.expressions[expr])
                 };
             }
@@ -120,34 +121,20 @@ macro_rules! gen_component_wise_extractor {
                             let first_ty = ty;
                             let mut component_groups =
                                 ArrayVec::<ArrayVec<_, { crate::VectorSize::MAX }>, N>::new();
-                            {
-                                let mut inner = ArrayVec::new();
-                                for item in crate::proc::flatten_compose(
-                                    first_ty,
-                                    components,
-                                    eval.expressions,
-                                    eval.types,
-                                ) {
-                                    inner.push(item);
-                                }
-                                component_groups.push(inner);
-                            }
+                            component_groups.push(
+                                ArrayVec::try_from(components.as_slice())
+                                    .map_err(|_| err.clone())?
+                            );
                             for expr in exprs {
                                 match sanitize!(expr)? {
                                     &Expression::Compose { ty, ref components }
                                         if &eval.types[ty].inner
                                             == &eval.types[first_ty].inner =>
                                     {
-                                        let mut inner = ArrayVec::new();
-                                        for item in crate::proc::flatten_compose(
-                                            ty,
-                                            components,
-                                            eval.expressions,
-                                            eval.types,
-                                        ) {
-                                            inner.push(item);
-                                        }
-                                        component_groups.push(inner);
+                                        component_groups.push(
+                                            ArrayVec::try_from(components.as_slice())
+                                                .map_err(|_| err.clone())?
+                                        );
                                     }
                                     _ => return Err(err),
                                 }
@@ -1356,18 +1343,17 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
-    /// Splat `value` to `size`, without using [`Splat`] expressions.
+    /// Evaluate a [`Splat`] of `value` to `size`.
     ///
-    /// This constructs [`Compose`] or [`ZeroValue`] expressions to
-    /// build a vector with the given `size` whose components are all
-    /// `value`.
+    /// This returns a [`Compose`] of [`Literal`] expressions representing
+    /// a vector with the given `size` whose components are all `value`.
     ///
     /// Use `span` as the span of the inserted expressions and
     /// resulting types.
     ///
     /// [`Splat`]: Expression::Splat
     /// [`Compose`]: Expression::Compose
-    /// [`ZeroValue`]: Expression::ZeroValue
+    /// [`Literal`]: Expression::Literal
     fn splat(
         &mut self,
         value: Handle<Expression>,
@@ -1396,7 +1382,11 @@ impl<'a> ConstantEvaluator<'a> {
                     _ => return Err(ConstantEvaluatorError::SplatScalarOnly),
                 };
                 let res_ty = self.types.insert(Type { name: None, inner }, span);
-                let expr = Expression::ZeroValue(res_ty);
+                let value = self.zero_value(ty, span)?;
+                let expr = Expression::Compose {
+                    ty: res_ty,
+                    components: vec![value; size as usize],
+                };
                 self.register_evaluated_expr(expr, span)
             }
             _ => Err(ConstantEvaluatorError::SplatScalarOnly),
@@ -1410,6 +1400,8 @@ impl<'a> ConstantEvaluator<'a> {
         src_constant: Handle<Expression>,
         pattern: [crate::SwizzleComponent; 4],
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        let src = self.eval_constructors(src_constant, span)?;
+
         let mut get_dst_ty = |ty| match self.types[ty].inner {
             TypeInner::Vector { size: _, scalar } => Ok(self.types.insert(
                 Type {
@@ -1421,32 +1413,15 @@ impl<'a> ConstantEvaluator<'a> {
             _ => Err(ConstantEvaluatorError::SwizzleVectorOnly),
         };
 
-        match self.expressions[src_constant] {
-            Expression::ZeroValue(ty) => {
-                let dst_ty = get_dst_ty(ty)?;
-                let expr = Expression::ZeroValue(dst_ty);
-                self.register_evaluated_expr(expr, span)
-            }
-            Expression::Splat { value, .. } => {
-                let expr = Expression::Splat { size, value };
-                self.register_evaluated_expr(expr, span)
-            }
+        match self.expressions[src] {
             Expression::Compose { ty, ref components } => {
                 let dst_ty = get_dst_ty(ty)?;
-
-                let mut flattened = [src_constant; 4]; // dummy value
-                let len =
-                    crate::proc::flatten_compose(ty, components, self.expressions, self.types)
-                        .zip(flattened.iter_mut())
-                        .map(|(component, elt)| *elt = component)
-                        .count();
-                let flattened = &flattened[..len];
 
                 let swizzled_components = pattern[..size as usize]
                     .iter()
                     .map(|&sc| {
                         let sc = sc as usize;
-                        if let Some(elt) = flattened.get(sc) {
+                        if let Some(elt) = components.get(sc) {
                             Ok(*elt)
                         } else {
                             Err(ConstantEvaluatorError::SwizzleOutOfBounds)
@@ -2115,16 +2090,13 @@ impl<'a> ConstantEvaluator<'a> {
         expr: Handle<Expression>,
     ) -> Result<([Literal; N], Handle<Type>), ConstantEvaluatorError> {
         let span = self.expressions.get_span(expr);
-        let expr = self.eval_zero_value_and_splat(expr, span)?;
+        let expr = self.eval_constructors(expr, span)?;
         let Expression::Compose { ty, ref components } = self.expressions[expr] else {
             return Err(ConstantEvaluatorError::InvalidMathArg);
         };
 
         let mut value = [Literal::Bool(false); N];
-        for (component, elt) in
-            crate::proc::flatten_compose(ty, components, self.expressions, self.types)
-                .zip(value.iter_mut())
-        {
+        for (&component, elt) in components.iter().zip(value.iter_mut()) {
             let Expression::Literal(literal) = self.expressions[component] else {
                 return Err(ConstantEvaluatorError::InvalidMathArg);
             };
@@ -2147,17 +2119,18 @@ impl<'a> ConstantEvaluator<'a> {
         allow_single: bool,
     ) -> Result<LiteralVector, ConstantEvaluatorError> {
         let span = self.expressions.get_span(expr);
-        let expr = self.eval_zero_value_and_splat(expr, span)?;
+        let expr = self.eval_constructors(expr, span)?;
 
         match self.expressions[expr] {
             Expression::Literal(literal) if allow_single => {
                 Ok(LiteralVector::from_literal(literal))
             }
-            Expression::Compose { ty, ref components } => {
+            Expression::Compose {
+                ty: _,
+                ref components,
+            } => {
                 let mut components_out = ArrayVec::<Literal, { crate::VectorSize::MAX }>::new();
-                for expr in
-                    crate::proc::flatten_compose(ty, components, self.expressions, self.types)
-                {
+                for &expr in components {
                     match self.expressions[expr] {
                         Expression::Literal(l) => components_out.push(l),
                         _ => return Err(ConstantEvaluatorError::InvalidMathArg),
@@ -2198,105 +2171,96 @@ impl<'a> ConstantEvaluator<'a> {
         index: usize,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        match self.expressions[base] {
-            Expression::ZeroValue(ty) => {
-                let ty_inner = &self.types[ty].inner;
-                let components = ty_inner
-                    .components()
-                    .ok_or(ConstantEvaluatorError::InvalidAccessBase)?;
-
-                if index >= components as usize {
-                    Err(ConstantEvaluatorError::InvalidAccessBase)
-                } else {
-                    let ty_res = ty_inner
-                        .component_type(index)
-                        .ok_or(ConstantEvaluatorError::InvalidAccessIndex)?;
-                    let ty = match ty_res {
-                        crate::proc::TypeResolution::Handle(ty) => ty,
-                        crate::proc::TypeResolution::Value(inner) => {
-                            self.types.insert(Type { name: None, inner }, span)
-                        }
-                    };
-                    self.register_evaluated_expr(Expression::ZeroValue(ty), span)
-                }
-            }
-            Expression::Splat { size, value } => {
-                if index >= size as usize {
-                    Err(ConstantEvaluatorError::InvalidAccessBase)
-                } else {
-                    Ok(value)
-                }
-            }
-            Expression::Compose { ty, ref components } => {
-                let _ = self.types[ty]
-                    .inner
-                    .components()
-                    .ok_or(ConstantEvaluatorError::InvalidAccessBase)?;
-
-                crate::proc::flatten_compose(ty, components, self.expressions, self.types)
-                    .nth(index)
-                    .ok_or(ConstantEvaluatorError::InvalidAccessIndex)
-            }
+        let eval = self.eval_constructors(base, span)?;
+        match self.expressions[eval] {
+            Expression::Compose {
+                ty: _,
+                ref components,
+            } => components
+                .get(index)
+                .copied()
+                .ok_or(ConstantEvaluatorError::InvalidAccessIndex),
             _ => Err(ConstantEvaluatorError::InvalidAccessBase),
         }
     }
 
-    /// Lower [`ZeroValue`] and [`Splat`] expressions to [`Literal`] and [`Compose`] expressions.
+    /// Lower a combination of [`Compose`], [`Literal`], [`ZeroValue`] and
+    /// [`Splat`] expressions to only [`Compose`] and [`Literal`] expressions.
     ///
+    /// If `expr` has a vector type, flattens nested vectors within it.
+    ///
+    /// Does not flatten vector-typed expressions appearing elsewhere within
+    /// `expr`, e.g. if `expr` is struct-typed, however, typically such
+    /// nested composes are evaluated by separate calls to this function.
+    ///
+    /// [`Compose`]: Expression::Compose
+    /// [`Literal`]: Expression::Literal
     /// [`ZeroValue`]: Expression::ZeroValue
     /// [`Splat`]: Expression::Splat
-    /// [`Literal`]: Expression::Literal
-    /// [`Compose`]: Expression::Compose
-    fn eval_zero_value_and_splat(
+    fn eval_constructors(
         &mut self,
         mut expr: Handle<Expression>,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        // If expr is a Compose expression, eliminate ZeroValue and Splat expressions for
-        // each of its components.
-        if let Expression::Compose { ty, ref components } = self.expressions[expr] {
-            let components = components
-                .clone()
-                .iter()
-                .map(|component| self.eval_zero_value_and_splat(*component, span))
-                .collect::<Result<_, _>>()?;
-            expr = self.register_evaluated_expr(Expression::Compose { ty, components }, span)?;
-        }
-
-        // The result of the splat() for a Splat of a scalar ZeroValue is a
-        // vector ZeroValue, so we must call eval_zero_value_impl() after
-        // splat() in order to ensure we have no ZeroValues remaining.
-        if let Expression::Splat { size, value } = self.expressions[expr] {
-            expr = self.splat(value, size, span)?;
-        }
-        if let Expression::ZeroValue(ty) = self.expressions[expr] {
-            expr = self.eval_zero_value_impl(ty, span)?;
+        match self.expressions[expr] {
+            Expression::Compose { ty, ref components } => {
+                let component_scalar_ty = match self.types[ty].inner {
+                    TypeInner::Vector { size: _, scalar } => Some(scalar),
+                    _ => None,
+                };
+                let mut zero_handle = None;
+                let components = match crate::proc::flatten_compose(
+                    ty,
+                    components,
+                    self.expressions,
+                    self.types,
+                ) {
+                    Some(flattened) => flattened
+                        .into_iter()
+                        .map(|component| match component {
+                            FlattenedComponent::Expression(expr) => Ok(expr),
+                            FlattenedComponent::Zero => {
+                                let component_ty = *(zero_handle.get_or_insert_with(|| {
+                                    self.types.insert(
+                                        Type {
+                                            name: None,
+                                            inner: TypeInner::Scalar(
+                                                component_scalar_ty
+                                                    .expect("zeros only in flattened vectors"),
+                                            ),
+                                        },
+                                        span,
+                                    )
+                                }));
+                                self.zero_value(component_ty, span)
+                            }
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    None => components.clone(),
+                };
+                expr =
+                    self.register_evaluated_expr(Expression::Compose { ty, components }, span)?;
+            }
+            Expression::Splat { size, value } => {
+                expr = self.splat(value, size, span)?;
+            }
+            Expression::ZeroValue(ty) => {
+                expr = self.zero_value(ty, span)?;
+            }
+            _ => {}
         }
         Ok(expr)
     }
 
-    /// Lower [`ZeroValue`] expressions to [`Literal`] and [`Compose`] expressions.
+    /// Evaluate the [`ZeroValue`] of `ty`.
+    ///
+    /// Returns [`Literal`] and [`Compose`] expressions representing the
+    /// zero value of the specified type.
     ///
     /// [`ZeroValue`]: Expression::ZeroValue
     /// [`Literal`]: Expression::Literal
     /// [`Compose`]: Expression::Compose
-    fn eval_zero_value(
-        &mut self,
-        expr: Handle<Expression>,
-        span: Span,
-    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        match self.expressions[expr] {
-            Expression::ZeroValue(ty) => self.eval_zero_value_impl(ty, span),
-            _ => Ok(expr),
-        }
-    }
-
-    /// Lower [`ZeroValue`] expressions to [`Literal`] and [`Compose`] expressions.
-    ///
-    /// [`ZeroValue`]: Expression::ZeroValue
-    /// [`Literal`]: Expression::Literal
-    /// [`Compose`]: Expression::Compose
-    fn eval_zero_value_impl(
+    fn zero_value(
         &mut self,
         ty: Handle<Type>,
         span: Span,
@@ -2316,7 +2280,7 @@ impl<'a> ConstantEvaluator<'a> {
                     },
                     span,
                 );
-                let el = self.eval_zero_value_impl(scalar_ty, span)?;
+                let el = self.zero_value(scalar_ty, span)?;
                 let expr = Expression::Compose {
                     ty,
                     components: vec![el; size as usize],
@@ -2335,7 +2299,7 @@ impl<'a> ConstantEvaluator<'a> {
                     },
                     span,
                 );
-                let el = self.eval_zero_value_impl(vec_ty, span)?;
+                let el = self.zero_value(vec_ty, span)?;
                 let expr = Expression::Compose {
                     ty,
                     components: vec![el; columns as usize],
@@ -2347,7 +2311,7 @@ impl<'a> ConstantEvaluator<'a> {
                 size: ArraySize::Constant(size),
                 ..
             } => {
-                let el = self.eval_zero_value_impl(base, span)?;
+                let el = self.zero_value(base, span)?;
                 let expr = Expression::Compose {
                     ty,
                     components: vec![el; size.get() as usize],
@@ -2358,7 +2322,7 @@ impl<'a> ConstantEvaluator<'a> {
                 let types: Vec<_> = members.iter().map(|m| m.ty).collect();
                 let mut components = Vec::with_capacity(members.len());
                 for ty in types {
-                    components.push(self.eval_zero_value_impl(ty, span)?);
+                    components.push(self.zero_value(ty, span)?);
                 }
                 let expr = Expression::Compose { ty, components };
                 self.register_evaluated_expr(expr, span)
@@ -2378,7 +2342,10 @@ impl<'a> ConstantEvaluator<'a> {
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
         use crate::Scalar as Sc;
 
-        let expr = self.eval_zero_value(expr, span)?;
+        let expr = match self.expressions[expr] {
+            Expression::ZeroValue(ty) => self.zero_value(ty, span)?,
+            _ => expr,
+        };
 
         let make_error = || -> Result<_, ConstantEvaluatorError> {
             let from = format!("{:?} {:?}", expr, self.expressions[expr]);
@@ -2690,7 +2657,7 @@ impl<'a> ConstantEvaluator<'a> {
         expr: Handle<Expression>,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        let expr = self.eval_zero_value_and_splat(expr, span)?;
+        let expr = self.eval_constructors(expr, span)?;
 
         let expr = match self.expressions[expr] {
             Expression::Literal(value) => Expression::Literal(match op {
@@ -2749,8 +2716,8 @@ impl<'a> ConstantEvaluator<'a> {
         right: Handle<Expression>,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        let left = self.eval_zero_value_and_splat(left, span)?;
-        let right = self.eval_zero_value_and_splat(right, span)?;
+        let left = self.eval_constructors(left, span)?;
+        let right = self.eval_constructors(right, span)?;
 
         // Note: in most cases constant evaluation checks for overflow, but for
         // i32/u32, it uses wrapping arithmetic. See
@@ -3045,27 +3012,12 @@ impl<'a> ConstantEvaluator<'a> {
                 },
             ) => {
                 // We have to make a copy of the component lists, because the
-                // call to `binary_op_vector` needs `&mut self`, but `self` owns
+                // call to `binary_op_compose` needs `&mut self`, but `self` owns
                 // the component lists.
-                let left_flattened = crate::proc::flatten_compose(
-                    left_ty,
-                    left_components,
-                    self.expressions,
-                    self.types,
-                )
-                .collect::<Vec<_>>();
-                let right_flattened = crate::proc::flatten_compose(
-                    right_ty,
-                    right_components,
-                    self.expressions,
-                    self.types,
-                )
-                .collect::<Vec<_>>();
-
                 self.binary_op_compose(
                     op,
-                    &left_flattened,
-                    &right_flattened,
+                    &left_components.clone(),
+                    &right_components.clone(),
                     left_ty,
                     right_ty,
                     span,
@@ -3401,7 +3353,7 @@ impl<'a> ConstantEvaluator<'a> {
         arg: Handle<Expression>,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        let arg = self.eval_zero_value_and_splat(arg, span)?;
+        let arg = self.eval_constructors(arg, span)?;
         match fun {
             RelationalFunction::All | RelationalFunction::Any => match self.expressions[arg] {
                 Expression::Literal(Literal::Bool(_)) => Ok(arg),
@@ -3409,9 +3361,7 @@ impl<'a> ConstantEvaluator<'a> {
                     if matches!(self.types[ty].inner, TypeInner::Vector { .. }) =>
                 {
                     let mut bool_components = ArrayVec::<bool, { crate::VectorSize::MAX }>::new();
-                    for component in
-                        crate::proc::flatten_compose(ty, components, self.expressions, self.types)
-                    {
+                    for &component in components {
                         match self.expressions[component] {
                             Expression::Literal(Literal::Bool(val)) => {
                                 bool_components.push(val);
@@ -3591,7 +3541,7 @@ impl<'a> ConstantEvaluator<'a> {
         condition: Handle<Expression>,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        let mut arg = |arg| self.eval_zero_value_and_splat(arg, span);
+        let mut arg = |arg| self.eval_constructors(arg, span);
 
         let reject = arg(reject)?;
         let accept = arg(accept)?;

@@ -133,6 +133,26 @@ void abstract_access(uint i) {
     return;
 }
 
+void swizzle_of_compose_zero_value() {
+    ivec2 out_6 = ivec2(0, 3);
+    return;
+}
+
+void index_of_compose_zero_value() {
+    int out_7 = 0;
+    return;
+}
+
+void index_of_nested_compose_zero_value() {
+    int out_8 = 0;
+    return;
+}
+
+void access_of_compose_zero_value() {
+    ivec3 out_9 = ivec3(0);
+    return;
+}
+
 void main() {
     swizzle_of_compose();
     index_of_compose();
@@ -148,6 +168,10 @@ void main() {
     packed_dot_product();
     test_local_const();
     abstract_access(1u);
+    swizzle_of_compose_zero_value();
+    index_of_compose_zero_value();
+    index_of_nested_compose_zero_value();
+    access_of_compose_zero_value();
     return;
 }
 
