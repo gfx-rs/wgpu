@@ -208,6 +208,8 @@ impl Frontend {
                     "gl_SampleID" => BuiltIn::SampleIndex,
                     "gl_LocalInvocationIndex" => BuiltIn::LocalInvocationIndex,
                     "gl_DrawID" => BuiltIn::DrawIndex,
+                    "gl_SubgroupSize" => BuiltIn::SubgroupSize,
+                    "gl_SubgroupInvocationID" => BuiltIn::SubgroupInvocationId,
                     _ => return Ok(None),
                 };
 
