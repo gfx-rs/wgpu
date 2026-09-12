@@ -32,8 +32,12 @@ env:
 # Every time a PR is pushed to, cancel any previous jobs. This
 # makes us behave nicer to github and get faster turnaround times
 # on PRs that are pushed to multiple times in rapid succession.
+#
+# Off pull requests every run gets a group of its own. `trunk` gets one push
+# after another, and a shared group makes each of those runs wait for the run
+# before it to finish.
 concurrency:
-  group: ${{github.workflow}}-${{github.ref}}
+  group: ${{github.workflow}}-${{github.event_name == 'pull_request' && github.ref || github.run_id}}
   cancel-in-progress: ${{github.event_name == 'pull_request'}}
 
 jobs:

@@ -21,13 +21,23 @@ env:
 # Every time a PR is pushed to, cancel any previous jobs. This
 # makes us behave nicer to github and get faster turnaround times
 # on PRs that are pushed to multiple times in rapid succession.
+#
+# Off pull requests every run gets a group of its own. `trunk` gets one push
+# after another, and a shared group makes each of those runs wait for the run
+# before it to finish.
 concurrency:
-  group: ${{github.workflow}}-${{github.ref}}
+  group: ${{github.workflow}}-${{github.event_name == 'pull_request' && github.ref || github.run_id}}
   cancel-in-progress: ${{github.event_name == 'pull_request'}}
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # `Docs` and `Publish` both deploy to `gfx-rs/wgpu-rs.github.io`, so only one
+    # of them may run at a time. This group is shared between the two workflows on
+    # purpose. Off `trunk` nothing deploys, so those runs keep a group of their own.
+    concurrency:
+      group: ${{github.ref == 'refs/heads/trunk' && 'wgpu-rs.github.io' || github.run_id}}
+      cancel-in-progress: false
 
     permissions: {}
 
