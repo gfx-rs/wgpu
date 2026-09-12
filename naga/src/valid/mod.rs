@@ -672,6 +672,8 @@ impl Validator {
         self.valid_expression_list.clear();
         self.valid_expression_set.clear();
         self.override_ids.clear();
+        self.trace_rays_vertex_return = TraceRayVertexReturnState::NoTraceRays;
+        self.trace_rays_payload_type = None;
     }
 
     fn validate_constant(
