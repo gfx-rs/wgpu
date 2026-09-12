@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 197
+; Bound: 204
 OpCapability Shader
 OpCapability ShaderInvocationReorderEXT
 OpCapability RayTracingKHR
@@ -73,8 +73,9 @@ OpDecorate %16 Binding 0
 %153 = OpConstantFalse  %48
 %159 = OpConstant  %10  4
 %165 = OpConstant  %10  6
-%173 = OpTypeFunction %2 %38 %32 %33
-%192 = OpTypeFunction %2 %38
+%173 = OpTypeFunction %2 %38 %32 %33 %35
+%192 = OpConstantNull  %3
+%199 = OpTypeFunction %2 %38
 %41 = OpFunction  %2  None %40
 %42 = OpFunctionParameter  %32
 %43 = OpFunctionParameter  %9
@@ -185,34 +186,43 @@ OpFunctionEnd
 %175 = OpFunctionParameter  %38
 %176 = OpFunctionParameter  %32
 %177 = OpFunctionParameter  %33
-%178 = OpLabel
-%179 = OpLoad  %10  %177
-%180 = OpBitwiseAnd  %10  %179 %159
-%181 = OpINotEqual  %48  %180 %22
-OpSelectionMerge %182 None
-OpBranchConditional %181 %184 %183
-%184 = OpLabel
-%185 = OpRayQueryGetIntersectionTypeKHR  %10  %176 %90
-%186 = OpINotEqual  %48  %185 %22
-OpSelectionMerge %188 None
-OpBranchConditional %186 %187 %188
-%187 = OpLabel
-%189 = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR  %10  %176 %90
-OpBranch %188
+%178 = OpFunctionParameter  %35
+%179 = OpLabel
+%180 = OpLoad  %10  %177
+%181 = OpBitwiseAnd  %10  %180 %159
+%182 = OpINotEqual  %48  %181 %22
+OpSelectionMerge %183 None
+OpBranchConditional %182 %185 %184
+%185 = OpLabel
+%186 = OpRayQueryGetIntersectionTypeKHR  %10  %176 %90
+%187 = OpINotEqual  %48  %186 %22
+OpSelectionMerge %190 None
+OpBranchConditional %187 %188 %189
 %188 = OpLabel
-%190 = OpPhi  %10  %189 %187 %22 %184
-OpHitObjectRecordFromQueryEXT %175 %176 %190 %6
-OpBranch %182
-%183 = OpLabel
+%191 = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR  %10  %176 %90
+OpStore %6 %192
+OpHitObjectRecordFromQueryEXT %175 %176 %191 %6
+OpBranch %190
+%189 = OpLabel
+%193 = OpRayQueryGetRayFlagsKHR  %10  %176
+%194 = OpRayQueryGetWorldRayOriginKHR  %7  %176
+%195 = OpRayQueryGetRayTMinKHR  %4  %176
+%196 = OpRayQueryGetWorldRayDirectionKHR  %7  %176
+%197 = OpLoad  %4  %178
+OpHitObjectRecordMissEXT %175 %193 %22 %194 %195 %196 %197
+OpBranch %190
+%190 = OpLabel
+OpBranch %183
+%184 = OpLabel
 OpHitObjectRecordEmptyEXT %175
-OpBranch %182
-%182 = OpLabel
+OpBranch %183
+%183 = OpLabel
 OpReturn
 OpFunctionEnd
-%193 = OpFunction  %2  None %192
-%194 = OpFunctionParameter  %38
-%195 = OpLabel
-OpHitObjectExecuteShaderEXT %194 %14
+%200 = OpFunction  %2  None %199
+%201 = OpFunctionParameter  %38
+%202 = OpLabel
+OpHitObjectExecuteShaderEXT %201 %14
 OpReturn
 OpFunctionEnd
 %19 = OpFunction  %2  None %20
@@ -223,6 +233,7 @@ OpFunctionEnd
 %36 = OpVariable  %35  Function %26
 %134 = OpVariable  %129  Function %133
 %21 = OpLoad  %9  %16
+OpHitObjectRecordEmptyEXT %37
 OpBranch %39
 %39 = OpLabel
 %123 = OpFunctionCall  %2  %41 %31 %21 %30 %34 %36
@@ -259,8 +270,8 @@ OpBranch %127
 %127 = OpLabel
 OpBranch %124
 %125 = OpLabel
-%191 = OpFunctionCall  %2  %174 %37 %31 %34
+%198 = OpFunctionCall  %2  %174 %37 %31 %34 %36
 OpReorderThreadWithHitObjectEXT %37
-%196 = OpFunctionCall  %2  %193 %37
+%203 = OpFunctionCall  %2  %200 %37
 OpReturn
 OpFunctionEnd

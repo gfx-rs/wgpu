@@ -48,6 +48,8 @@ var<storage, read_write> out_hit: Hit;
 @ray_generation
 fn ray_gen_main(@builtin(ray_invocation_id) id: vec3<u32>, @builtin(num_ray_invocations) num_invocations: vec3<u32>) {
     var ho: hit_object;
+    var i: u32 = 0u;
+    var loop_ho: hit_object;
 
     let shift = (vec3<f32>(id) / vec3<f32>(num_invocations));
     let desc = RayDesc(0u, 255u, 0.01f, 100f, vec3(0f), (vec3<f32>(0f, 1f, 0f) + shift));
@@ -70,6 +72,24 @@ fn ray_gen_main(@builtin(ray_invocation_id) id: vec3<u32>, @builtin(num_ray_invo
             if hitObjectIsEmpty((&ho)) {
                 hitObjectRecordEmpty((&ho));
             }
+        }
+    }
+    loop {
+        let _e49 = i;
+        if (_e49 < 2u) {
+        } else {
+            break;
+        }
+        {
+            hitObjectRecordEmpty((&loop_ho));
+            if hitObjectIsEmpty((&loop_ho)) {
+                hitObjectTraceRay((&loop_ho), acc_struct, desc, (&payload));
+            }
+            hitObjectExecuteShader((&loop_ho), (&payload));
+        }
+        continuing {
+            let _e57 = i;
+            i = (_e57 + 1u);
         }
     }
     hitObjectExecuteShader((&ho), (&payload));

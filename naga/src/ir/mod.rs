@@ -998,10 +998,22 @@ pub enum TypeInner {
     ///
     /// Like [`RayQuery`], values of this type may only live in local variables
     /// in the [`Function`] address space, and may only be manipulated through
-    /// [`Statement::HitObject`] and [`Expression::HitObjectQuery`].
+    /// [`Statement::HitObject`] and [`Expression::HitObjectQuery`]. Such
+    /// variables are only valid in functions reachable from the
+    /// [`RayGeneration`], [`ClosestHit`] and [`Miss`] stages.
+    ///
+    /// A hit object local variable is empty (as if by
+    /// [`HitObjectFunction::RecordEmpty`]) when its function starts executing.
+    /// A declaration inside a loop is not reset automatically on each
+    /// iteration; front ends that want that behavior should emit a
+    /// [`RecordEmpty`] at the top of the loop body, as the WGSL front end does.
     ///
     /// [`RayQuery`]: TypeInner::RayQuery
     /// [`Function`]: AddressSpace::Function
+    /// [`RayGeneration`]: ShaderStage::RayGeneration
+    /// [`ClosestHit`]: ShaderStage::ClosestHit
+    /// [`Miss`]: ShaderStage::Miss
+    /// [`RecordEmpty`]: HitObjectFunction::RecordEmpty
     HitObject,
 
     /// Array of bindings.
@@ -2845,7 +2857,7 @@ pub enum RayPipelineFunction {
         hint: Handle<Expression>,
 
         /// How many of the low bits of `hint` are significant. Must be a
-        /// [`U32`] scalar.
+        /// [`U32`] scalar. Values greater than 32 are undefined behavior.
         ///
         /// [`U32`]: Scalar::U32
         bits: Handle<Expression>,
@@ -2900,10 +2912,17 @@ pub enum HitObjectFunction {
     /// Record the committed intersection of a ray query in the hit object.
     ///
     /// If the ray query's committed intersection is a hit, the hit object
-    /// records that hit; otherwise it records a miss. The shader binding table
-    /// record used for a hit is chosen exactly as a [`TraceRay`] would choose
-    /// it: the shader binding table offset and stride are zero, so the hit
-    /// group is the intersected instance's shader binding table record offset.
+    /// records that hit. The shader binding table record used for a hit is
+    /// chosen exactly as a [`TraceRay`] would choose it: the shader binding
+    /// table offset and stride are zero, so the hit group is the intersected
+    /// instance's shader binding table record offset. For a triangle hit, the
+    /// hit kind and barycentric attributes come from the ray query. Ray queries
+    /// carry no hit kind or attributes for procedural (AABB) hits, so those are
+    /// recorded with zeroed attributes and an implementation-chosen hit kind.
+    ///
+    /// If the ray query has no committed intersection, the hit object records
+    /// a miss along the ray the query was initialized with, with a miss index
+    /// of zero, exactly as a [`TraceRay`] that missed would have.
     ///
     /// If the ray query has not finished traversal, the hit object is recorded
     /// as empty instead.
@@ -2957,7 +2976,7 @@ pub struct ReorderHint {
     pub hint: Handle<Expression>,
 
     /// How many of the low bits of `hint` are significant. Must be a [`U32`]
-    /// scalar.
+    /// scalar. Values greater than 32 are undefined behavior.
     ///
     /// [`U32`]: Scalar::U32
     pub bits: Handle<Expression>,

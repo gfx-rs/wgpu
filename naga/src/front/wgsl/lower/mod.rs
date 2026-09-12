@@ -1967,15 +1967,24 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                         crate::TypeInner::HitObject => {
                             // Initializers are disallowed for hit objects as any store is
-                            // disallowed. Unlike ray queries, hit objects need no special
-                            // IR to reset them at the top of a loop body.
+                            // disallowed.
                             if let Some(expr) = initializer {
                                 return Err(Box::new(Error::HitObjectWithInitializer(
                                     ctx.function.expressions.get_span(expr),
                                 )));
                             }
 
-                            return Ok(());
+                            // Backends record every hit object as empty when its
+                            // function starts, but a declaration inside a loop must
+                            // start out empty on every iteration, so reset it here.
+                            if is_inside_loop {
+                                ir::Statement::HitObject {
+                                    hit_object: handle,
+                                    fun: ir::HitObjectFunction::RecordEmpty,
+                                }
+                            } else {
+                                return Ok(());
+                            }
                         }
                         _ => {
                             let initializer = if is_inside_loop {

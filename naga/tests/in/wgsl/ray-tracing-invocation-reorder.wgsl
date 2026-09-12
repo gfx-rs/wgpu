@@ -53,6 +53,15 @@ fn ray_gen_main(@builtin(ray_invocation_id) id: vec3<u32>, @builtin(num_ray_invo
         hitObjectRecordEmpty(&ho);
     }
 
+    // A hit object declared inside a loop starts out empty on every iteration.
+    for (var i = 0u; i < 2u; i += 1u) {
+        var loop_ho: hit_object;
+        if hitObjectIsEmpty(&loop_ho) {
+            hitObjectTraceRay(&loop_ho, acc_struct, desc, &payload);
+        }
+        hitObjectExecuteShader(&loop_ho, &payload);
+    }
+
     hitObjectExecuteShader(&ho, &payload);
 }
 

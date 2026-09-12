@@ -1747,6 +1747,14 @@ impl Writer {
                     },
                 );
             }
+
+            if let crate::TypeInner::HitObject = ir_module.types[variable.ty].inner {
+                // SPIR-V gives a fresh hit object no defined state, so record it
+                // as empty. This lands in the first block right after the
+                // `OpVariable`s, so an untouched hit object reliably reports
+                // `hitObjectIsEmpty`.
+                prelude.body.push(Instruction::hit_object_record_empty(id));
+            }
         }
 
         for (handle, expr) in ir_function.expressions.iter() {

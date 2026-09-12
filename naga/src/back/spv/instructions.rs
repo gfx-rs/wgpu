@@ -858,7 +858,13 @@ impl super::Instruction {
     }
 
     pub(super) fn ray_query_get_t_min(result_type_id: Word, id: Word, query: Word) -> Self {
-        let mut instruction = Self::new(Op::RayQueryGetRayTMinKHR);
+        Self::ray_query_get(Op::RayQueryGetRayTMinKHR, result_type_id, id, query)
+    }
+
+    /// Any of the `OpRayQueryGet*KHR` instructions that describe the ray
+    /// itself rather than an intersection, and so take only the ray query.
+    pub(super) fn ray_query_get(op: Op, result_type_id: Word, id: Word, query: Word) -> Self {
+        let mut instruction = Self::new(op);
         instruction.set_type(result_type_id);
         instruction.set_result(id);
         instruction.add_operand(query);
@@ -961,20 +967,26 @@ impl super::Instruction {
 
     /// `OpHitObjectRecordFromQueryEXT`.
     ///
-    /// The optional `HitKind` operand is never emitted, so the hit object keeps
-    /// whatever hit kind the ray query's committed intersection has. Naga's IR
-    /// has no way to name a different one.
+    /// The `Hit Kind` operand is optional in SPIR-V. Revision 3 of
+    /// `SPV_EXT_shader_invocation_reorder` requires it whenever the ray
+    /// query's committed intersection is a procedural (AABB) one, and ignores
+    /// it for triangle intersections, whose hit kind is taken from the ray
+    /// query.
     pub(super) fn hit_object_record_from_query(
         hit_object: Word,
         ray_query: Word,
         sbt_index: Word,
         attributes: Word,
+        hit_kind: Option<Word>,
     ) -> Self {
         let mut instruction = Self::new(Op::HitObjectRecordFromQueryEXT);
         instruction.add_operand(hit_object);
         instruction.add_operand(ray_query);
         instruction.add_operand(sbt_index);
         instruction.add_operand(attributes);
+        if let Some(hit_kind) = hit_kind {
+            instruction.add_operand(hit_kind);
+        }
         instruction
     }
 

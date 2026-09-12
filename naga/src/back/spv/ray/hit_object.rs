@@ -226,13 +226,26 @@ impl Writer {
     /// intersection in a hit object.
     ///
     /// The generated function takes a pointer to the hit object, a pointer to
-    /// the ray query, and a pointer to that query's initialization tracker.
+    /// the ray query, a pointer to that query's initialization tracker, and a
+    /// pointer to that query's `t_max` tracker.
     ///
     /// `OpRayQueryGetIntersection*` may only be used on a query that has
     /// finished traversal, so the tracker is checked first exactly as
     /// [`Writer::write_ray_query_get_intersection_function`] does for committed
     /// intersections; if the query is not usable the hit object is recorded as
     /// empty instead.
+    ///
+    /// `OpHitObjectRecordFromQueryEXT` is only defined for a query whose
+    /// committed intersection is a hit. When the query has no committed
+    /// intersection we instead record a miss with `OpHitObjectRecordMissEXT`,
+    /// using the ray the query was initialized with and a miss index of zero,
+    /// which is what `hitObjectTraceRay` would have recorded.
+    ///
+    /// For a hit, the attribute variable is the source of the recorded
+    /// attributes when the committed intersection is procedural (an AABB), so
+    /// it is zeroed before recording; for triangles the barycentrics come from
+    /// the query. See [`Instruction::hit_object_record_from_query`] for why the
+    /// `Hit Kind` operand is not emitted.
     fn write_hit_object_record_from_query(&mut self) -> Result<spirv::Word, super::super::Error> {
         if let Some(&word) = self
             .ray_tracing_functions
@@ -248,6 +261,17 @@ impl Writer {
         let u32_type_id = self.get_u32_type_id();
         let u32_pointer_type_id =
             self.get_pointer_type_id(u32_type_id, spirv::StorageClass::Function);
+        let f32_type_id = self.get_f32_type_id();
+        let f32_pointer_type_id =
+            self.get_pointer_type_id(f32_type_id, spirv::StorageClass::Function);
+        let vec3_type_id = self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Tri,
+            scalar: crate::Scalar::F32,
+        });
+        let barycentrics_type_id = self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Bi,
+            scalar: crate::Scalar::F32,
+        });
         let bool_type_id = self.get_bool_type_id();
 
         let attribute_var_id = self.get_hit_object_attribute_var();
@@ -257,6 +281,7 @@ impl Writer {
                 hit_object_pointer_type_id,
                 ray_query_pointer_type_id,
                 u32_pointer_type_id,
+                f32_pointer_type_id,
             ],
             self.void_type,
         );
@@ -264,6 +289,7 @@ impl Writer {
         let hit_object_id = arg_ids[0];
         let query_id = arg_ids[1];
         let tracker_id = arg_ids[2];
+        let t_max_tracker_id = arg_ids[3];
 
         let entry_label_id = self.id_gen.next();
         let mut entry_block = Block::new(entry_label_id);
@@ -304,8 +330,6 @@ impl Writer {
             ),
         );
 
-        // The instance's shader binding table record offset is only defined
-        // when there actually is a committed intersection, so guard the getter.
         let committed_id = self.get_constant_scalar(crate::Literal::U32(
             spirv::RayQueryIntersection::RayQueryCommittedIntersectionKHR as _,
         ));
@@ -334,18 +358,26 @@ impl Writer {
         let hit_label_id = self.id_gen.next();
         let mut hit_block = Block::new(hit_label_id);
 
-        let record_label_id = self.id_gen.next();
-        let mut record_block = Block::new(record_label_id);
+        let miss_label_id = self.id_gen.next();
+        let mut miss_block = Block::new(miss_label_id);
+
+        let recorded_label_id = self.id_gen.next();
+        let recorded_block = Block::new(recorded_label_id);
 
         usable_block.body.push(Instruction::selection_merge(
-            record_label_id,
+            recorded_label_id,
             spirv::SelectionControl::NONE,
         ));
         function.consume(
             usable_block,
-            Instruction::branch_conditional(is_hit_id, hit_label_id, record_label_id),
+            Instruction::branch_conditional(is_hit_id, hit_label_id, miss_label_id),
         );
 
+        let zero_id = self.get_constant_scalar(crate::Literal::U32(0));
+
+        // A hit. Like `traceRay`, the shader binding table offset and stride
+        // are zero, so the hit group is just the instance's record offset,
+        // which is only defined when there is a committed intersection.
         let hit_sbt_id = self.id_gen.next();
         hit_block.body.push(Instruction::ray_query_get_intersection(
             spirv::Op::RayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR,
@@ -354,26 +386,84 @@ impl Writer {
             query_id,
             committed_id,
         ));
-        function.consume(hit_block, Instruction::branch(record_label_id));
-
-        // Like `traceRay`, the shader binding table offset and stride are zero,
-        // so the hit group is just the instance's record offset.
-        let zero_id = self.get_constant_scalar(crate::Literal::U32(0));
-        let sbt_id = self.id_gen.next();
-        record_block.body.push(Instruction::phi(
-            u32_type_id,
-            sbt_id,
-            &[(hit_sbt_id, hit_label_id), (zero_id, usable_label_id)],
+        // For procedural hits the attribute variable is the source of the
+        // recorded attributes, so give it a defined value. For triangle hits
+        // it is ignored and the barycentrics come from the query.
+        let zero_barycentrics_id = self.get_constant_null(barycentrics_type_id);
+        hit_block.body.push(Instruction::store(
+            attribute_var_id,
+            zero_barycentrics_id,
+            None,
         ));
-        record_block
+        // Revision 3 of the extension requires a `Hit Kind` operand for
+        // procedural hits. We cannot emit one yet: the `rspirv` grammar we
+        // disassemble with in tests predates that revision and rejects the
+        // extra operand. The specification's issue 1 notes that, for
+        // compatibility with such SPIR-V, implementations should accept the
+        // instruction for AABB intersections without a hit kind.
+        //
+        // TODO: pass `Some(zero_id)` once `rspirv` ships a grammar that knows
+        // about the operand.
+        hit_block
             .body
             .push(Instruction::hit_object_record_from_query(
                 hit_object_id,
                 query_id,
-                sbt_id,
+                hit_sbt_id,
                 attribute_var_id,
+                None,
             ));
-        function.consume(record_block, Instruction::branch(merge_label_id));
+        function.consume(hit_block, Instruction::branch(recorded_label_id));
+
+        // No committed intersection: record a miss along the query's ray.
+        let ray_flags_id = self.id_gen.next();
+        miss_block.body.push(Instruction::ray_query_get(
+            spirv::Op::RayQueryGetRayFlagsKHR,
+            u32_type_id,
+            ray_flags_id,
+            query_id,
+        ));
+        let ray_origin_id = self.id_gen.next();
+        miss_block.body.push(Instruction::ray_query_get(
+            spirv::Op::RayQueryGetWorldRayOriginKHR,
+            vec3_type_id,
+            ray_origin_id,
+            query_id,
+        ));
+        let tmin_id = self.id_gen.next();
+        miss_block.body.push(Instruction::ray_query_get_t_min(
+            f32_type_id,
+            tmin_id,
+            query_id,
+        ));
+        let ray_dir_id = self.id_gen.next();
+        miss_block.body.push(Instruction::ray_query_get(
+            spirv::Op::RayQueryGetWorldRayDirectionKHR,
+            vec3_type_id,
+            ray_dir_id,
+            query_id,
+        ));
+        // SPIR-V has no getter for the `t_max` a query was initialized with,
+        // so use the value the initialization tracked for us.
+        let tmax_id = self.id_gen.next();
+        miss_block.body.push(Instruction::load(
+            f32_type_id,
+            tmax_id,
+            t_max_tracker_id,
+            None,
+        ));
+        miss_block.body.push(Instruction::hit_object_record_miss(
+            hit_object_id,
+            ray_flags_id,
+            zero_id,
+            ray_origin_id,
+            tmin_id,
+            ray_dir_id,
+            tmax_id,
+        ));
+        function.consume(miss_block, Instruction::branch(recorded_label_id));
+
+        function.consume(recorded_block, Instruction::branch(merge_label_id));
 
         // A query that has not finished traversal has no committed
         // intersection to read, so leave the hit object in a well-defined
@@ -757,11 +847,10 @@ impl BlockContext<'_> {
             }
             crate::HitObjectFunction::RecordFromQuery { query } => {
                 let query_id = self.cached[query];
-                let tracker_id = self
+                let trackers = *self
                     .ray_query_tracker_expr
                     .get(&query)
-                    .expect("not a cached ray query")
-                    .initialized_tracker;
+                    .expect("not a cached ray query");
 
                 let func = self.writer.write_hit_object_record_from_query()?;
 
@@ -770,7 +859,12 @@ impl BlockContext<'_> {
                     self.writer.void_type,
                     func_id,
                     func,
-                    &[hit_object_id, query_id, tracker_id],
+                    &[
+                        hit_object_id,
+                        query_id,
+                        trackers.initialized_tracker,
+                        trackers.t_max_tracker,
+                    ],
                 ));
             }
             crate::HitObjectFunction::RecordEmpty => {

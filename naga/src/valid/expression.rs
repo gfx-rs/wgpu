@@ -527,7 +527,12 @@ impl super::Validator {
                 if !mod_info[ty].contains(TypeFlags::CONSTRUCTIBLE) {
                     return Err(ExpressionError::InvalidZeroValue(ty));
                 }
-                if matches!(module.types[ty].inner, crate::TypeInner::RayQuery { .. }) {
+                // Opaque handle types cannot be constructed, even though their
+                // `CONSTRUCTIBLE` flag lets them be declared as locals.
+                if matches!(
+                    module.types[ty].inner,
+                    crate::TypeInner::RayQuery { .. } | crate::TypeInner::HitObject
+                ) {
                     return Err(ExpressionError::InvalidZeroValue(ty));
                 }
                 ShaderStages::all()

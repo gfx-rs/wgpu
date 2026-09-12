@@ -2013,6 +2013,16 @@ impl super::Validator {
                     .with_span_handle(var.ty, &module.types)
                     .with_handle(var_handle, &fun.local_variables)
                 })?;
+
+            // Hit objects exist only in the ray tracing pipeline stages that can
+            // hold a hit. The type check cannot enforce this since types are
+            // module-wide, and an unreferenced variable has no expression or
+            // statement to carry the restriction, so apply it here.
+            if let crate::TypeInner::HitObject = module.types[var.ty].inner {
+                info.available_stages &= super::ShaderStages::RAY_GENERATION
+                    | super::ShaderStages::CLOSEST_HIT
+                    | super::ShaderStages::MISS;
+            }
         }
 
         for (index, argument) in fun.arguments.iter().enumerate() {
