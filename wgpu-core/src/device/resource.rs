@@ -2910,10 +2910,15 @@ impl Device {
             .collect()
     }
 
-    pub fn create_bind_group_layout(
+    pub fn create_bind_group_layout<BGLE>(
         self: &Arc<Self>,
-        desc: &binding_model::BindGroupLayoutDescriptor,
-    ) -> Arc<BindGroupLayout> {
+        desc: &binding_model::BindGroupLayoutDescriptor<BGLE>,
+    ) -> Arc<BindGroupLayout>
+    where
+        BGLE: TryInto<wgt::BindGroupLayoutEntry> + Copy,
+        CreateBindGroupLayoutError: From<<BGLE as TryInto<wgt::BindGroupLayoutEntry>>::Error>,
+        BGLE: Into<binding_model::BindGroupLayoutEntry>,
+    {
         profiling::scope!("Device::create_bind_group_layout");
 
         let bgl = self
@@ -2933,7 +2938,7 @@ impl Device {
 
             trace.add(trace::Action::CreateBindGroupLayout(
                 bgl.to_trace(),
-                desc.clone(),
+                desc.to_trace(),
             ));
         }
         api_log!(
@@ -2943,10 +2948,14 @@ impl Device {
         bgl
     }
 
-    fn create_bind_group_layout_inner(
+    fn create_bind_group_layout_inner<BGLE>(
         self: &Arc<Device>,
-        desc: &binding_model::BindGroupLayoutDescriptor,
-    ) -> Result<Arc<BindGroupLayout>, CreateBindGroupLayoutError> {
+        desc: &binding_model::BindGroupLayoutDescriptor<BGLE>,
+    ) -> Result<Arc<BindGroupLayout>, CreateBindGroupLayoutError>
+    where
+        BGLE: TryInto<wgt::BindGroupLayoutEntry> + Copy,
+        CreateBindGroupLayoutError: From<<BGLE as TryInto<wgt::BindGroupLayoutEntry>>::Error>,
+    {
         self.check_is_valid()?;
 
         let entry_map = bgl::EntryMap::from_entries(&desc.entries)?;
