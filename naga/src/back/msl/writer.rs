@@ -555,6 +555,35 @@ pub struct Writer<W> {
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
     struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
     needs_object_memory_barriers: bool,
+    /// Stack of `break_if` condition snapshot variables for enclosing
+    /// [`Statement::Loop`]s, innermost last; `None` for loops without a
+    /// `break_if` or whose condition must be evaluated in the continuing
+    /// block itself.
+    ///
+    /// Since the continuing block is rendered at the top of the next `while`
+    /// iteration, a `break_if` condition computed in the loop body must be
+    /// captured before the continuing statements update the variables it
+    /// reads (see gfx-rs/wgpu#4558):
+    ///
+    /// ```ignore
+    /// bool loop_break = false;
+    /// while(true) {
+    ///   if (!loop_init) {
+    ///     // continuing statements...
+    ///     if (loop_break) { break; }
+    ///   }
+    ///   // body statements...
+    ///   loop_break = <condition>; // also emitted before each `continue;`
+    /// }
+    /// ```
+    ///
+    /// Conditions that read state written by the continuing block (WGSL's
+    /// `continuing { ...; break if c; }` form) are instead rendered in
+    /// place, after the continuing statements; see
+    /// [`break_if_depends_on_continuing`].
+    ///
+    /// [`Statement::Loop`]: crate::Statement::Loop
+    loop_break_snapshots: Vec<Option<(String, Handle<crate::Expression>)>>,
 }
 
 impl crate::Scalar {
@@ -943,6 +972,104 @@ pub(super) struct StatementContext<'a> {
     pub(super) result_struct: Option<&'a str>,
 }
 
+/// Whether `block` (or any block nested within it) contains an [`Emit`]
+/// statement whose range covers `handle`.
+///
+/// [`Emit`]: crate::Statement::Emit
+fn block_emits_expression(block: &crate::Block, handle: Handle<crate::Expression>) -> bool {
+    block.iter().any(|stmt| match *stmt {
+        crate::Statement::Emit(ref range) => range.clone().any(|h| h == handle),
+        crate::Statement::Block(ref b) => block_emits_expression(b, handle),
+        crate::Statement::If {
+            ref accept,
+            ref reject,
+            ..
+        } => block_emits_expression(accept, handle) || block_emits_expression(reject, handle),
+        crate::Statement::Switch { ref cases, .. } => cases
+            .iter()
+            .any(|case| block_emits_expression(&case.body, handle)),
+        crate::Statement::Loop {
+            ref body,
+            ref continuing,
+            ..
+        } => block_emits_expression(body, handle) || block_emits_expression(continuing, handle),
+        _ => false,
+    })
+}
+
+/// Whether evaluating `cond` must wait until the loop's `continuing` block
+/// has executed: true iff its expression tree contains a state-reading
+/// sub-expression ([`Load`] or similar) emitted within `continuing`. See
+/// [`Writer::loop_break_snapshots`].
+///
+/// [`Load`]: crate::Expression::Load
+fn break_if_depends_on_continuing(
+    func: &crate::Function,
+    continuing: &crate::Block,
+    cond: Handle<crate::Expression>,
+) -> bool {
+    use crate::Expression as Ex;
+    let mut stack = vec![cond];
+    let mut seen = FastHashSet::default();
+    while let Some(handle) = stack.pop() {
+        if !seen.insert(handle) {
+            continue;
+        }
+        let stateful = matches!(
+            func.expressions[handle],
+            Ex::Load { .. }
+                | Ex::ImageSample { .. }
+                | Ex::ImageLoad { .. }
+                | Ex::RayQueryVertexPositions { .. }
+                | Ex::RayQueryGetIntersection { .. }
+        );
+        if stateful && block_emits_expression(continuing, handle) {
+            return true;
+        }
+        match func.expressions[handle] {
+            Ex::Access { base, index } => {
+                stack.push(base);
+                stack.push(index);
+            }
+            Ex::AccessIndex { base, .. } => stack.push(base),
+            Ex::Splat { value, .. } => stack.push(value),
+            Ex::Swizzle { vector, .. } => stack.push(vector),
+            Ex::Compose { ref components, .. } => stack.extend(components.iter().copied()),
+            Ex::Load { pointer } => stack.push(pointer),
+            Ex::Unary { expr, .. } | Ex::Derivative { expr, .. } | Ex::As { expr, .. } => {
+                stack.push(expr)
+            }
+            Ex::Binary { left, right, .. } => {
+                stack.push(left);
+                stack.push(right);
+            }
+            Ex::Select {
+                condition,
+                accept,
+                reject,
+            } => {
+                stack.push(condition);
+                stack.push(accept);
+                stack.push(reject);
+            }
+            Ex::Relational { argument, .. } => stack.push(argument),
+            Ex::Math {
+                arg,
+                arg1,
+                arg2,
+                arg3,
+                ..
+            } => {
+                stack.push(arg);
+                stack.extend([arg1, arg2, arg3].into_iter().flatten());
+            }
+            Ex::ArrayLength(expr) => stack.push(expr),
+            _ => {}
+        }
+    }
+    false
+}
+
 impl<W: Write> Writer<W> {
     /// Creates a new `Writer` instance.
     pub fn new(out: W) -> Self {
@@ -956,6 +1083,7 @@ impl<W: Write> Writer<W> {
             emit_int_div_checks: true,
             struct_member_pads: FastHashSet::default(),
             needs_object_memory_barriers: false,
+            loop_break_snapshots: Vec::new(),
         }
     }
 
@@ -4085,9 +4213,22 @@ impl<W: Write> Writer<W> {
                         self.gen_force_bounded_loop_statements(level, context);
                     let gate_name = (!continuing.is_empty() || break_if.is_some())
                         .then(|| self.namer.call("loop_init"));
+                    // See `loop_break_snapshots`.
+                    let break_snap = break_if
+                        .filter(|&cond| {
+                            !break_if_depends_on_continuing(
+                                context.expression.function,
+                                continuing,
+                                cond,
+                            )
+                        })
+                        .map(|cond| (self.namer.call("loop_break"), cond));
 
                     if let Some((ref decl, _)) = force_loop_bound_statements {
                         writeln!(self.out, "{decl}")?;
+                    }
+                    if let Some((ref snap, _)) = break_snap {
+                        writeln!(self.out, "{level}bool {snap} = false;")?;
                     }
                     if let Some(ref gate_name) = gate_name {
                         writeln!(self.out, "{level}bool {gate_name} = true;")?;
@@ -4102,7 +4243,11 @@ impl<W: Write> Writer<W> {
                         let lcontinuing = lif.next();
                         writeln!(self.out, "{lif}if (!{gate_name}) {{")?;
                         self.put_block(lcontinuing, continuing, context)?;
-                        if let Some(condition) = break_if {
+                        if let Some((ref snap, _)) = break_snap {
+                            writeln!(self.out, "{lcontinuing}if ({snap}) {{")?;
+                            writeln!(self.out, "{}break;", lcontinuing.next())?;
+                            writeln!(self.out, "{lcontinuing}}}")?;
+                        } else if let Some(condition) = break_if {
                             write!(self.out, "{lcontinuing}if (")?;
                             self.put_expression(condition, &context.expression, true)?;
                             writeln!(self.out, ") {{")?;
@@ -4112,7 +4257,26 @@ impl<W: Write> Writer<W> {
                         writeln!(self.out, "{lif}}}")?;
                         writeln!(self.out, "{lif}{gate_name} = false;")?;
                     }
+                    self.loop_break_snapshots.push(break_snap.clone());
                     self.put_block(level.next(), body, context)?;
+                    self.loop_break_snapshots.pop();
+                    // Body fall-through also reaches the continuing block:
+                    // capture the condition here too, unless this statement
+                    // would be unreachable.
+                    let body_falls_through = !matches!(
+                        body.last(),
+                        Some(
+                            &crate::Statement::Continue
+                                | &crate::Statement::Break
+                                | &crate::Statement::Return { .. }
+                                | &crate::Statement::Kill
+                        )
+                    );
+                    if let Some((ref snap, cond)) = break_snap.filter(|_| body_falls_through) {
+                        write!(self.out, "{}{snap} = ", level.next())?;
+                        self.put_expression(cond, &context.expression, true)?;
+                        writeln!(self.out, ";")?;
+                    }
 
                     writeln!(self.out, "{level}}}")?;
                 }
@@ -4120,6 +4284,12 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, "{level}break;")?;
                 }
                 crate::Statement::Continue => {
+                    // See `loop_break_snapshots`.
+                    if let Some(Some((snap, cond))) = self.loop_break_snapshots.last().cloned() {
+                        write!(self.out, "{level}{snap} = ")?;
+                        self.put_expression(cond, &context.expression, true)?;
+                        writeln!(self.out, ";")?;
+                    }
                     writeln!(self.out, "{level}continue;")?;
                 }
                 crate::Statement::Return {

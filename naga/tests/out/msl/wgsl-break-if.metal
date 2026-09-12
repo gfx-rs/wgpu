@@ -8,16 +8,18 @@ using metal::uint;
 void breakIfEmpty(
 ) {
     uint2 loop_bound = uint2(4294967295u);
+    bool loop_break = false;
     bool loop_init = true;
     while(true) {
         if (metal::all(loop_bound == uint2(0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
-            if (true) {
+            if (loop_break) {
                 break;
             }
         }
         loop_init = false;
+        loop_break = true;
     }
     return;
 }
