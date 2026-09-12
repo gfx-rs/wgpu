@@ -267,6 +267,64 @@ unsafe impl Send for BufferMapState {}
 #[cfg(send_sync)]
 unsafe impl Sync for BufferMapState {}
 
+/// Represents a mapped range in the buffer.
+///
+/// While returned [`BufferMapping`] is alive, [`Buffer::destroy`] and [`Buffer::unmap`] calls will block until [`BufferMapping`] is dropped.
+#[derive(Debug)]
+pub struct BufferMapping {
+    ptr: NonNull<u8>,
+    len: u64,
+    // guard needs to be dropped before the lock
+    _guard: wgpu_sync::RwLockReadGuard<'static, BufferMapState>,
+    _lock: Arc<RwLock<BufferMapState>>,
+}
+
+impl BufferMapping {
+    fn new(ptr: NonNull<u8>, len: u64, lock: Arc<RwLock<BufferMapState>>) -> Self {
+        // SAFETY: We want to bypass the lock ranking system here,
+        // because the lock is exposed to users.
+        let guard = unsafe { lock.underlying() }.read();
+        Self {
+            ptr,
+            len,
+            // SAFETY: Guard is tied to the lifetime of the lock,
+            // and it will be dropped before the lock.
+            _guard: unsafe {
+                mem::transmute::<
+                    wgpu_sync::RwLockReadGuard<'_, BufferMapState>,
+                    wgpu_sync::RwLockReadGuard<'static, BufferMapState>,
+                >(guard)
+            },
+            _lock: lock,
+        }
+    }
+
+    /// ### How to safely use the pointer
+    ///
+    /// - No other overlapping mapped range should be accessed simultaneously.
+    /// - Pointer is only accessed for the length returned by [`BufferMapping::len`].
+    /// - Writing to a [`wgt::BufferUsages::MAP_READ`] buffer can have unexpected results (visible in GPU only if it's coherent).
+    /// - Reading [`wgt::BufferUsages::MAP_WRITE`] buffer with [`wgt::Features::MAPPABLE_PRIMARY_BUFFERS`] feature enabled
+    ///   can have unexpected results due to write combing.
+    pub fn ptr(&self) -> NonNull<u8> {
+        self.ptr
+    }
+
+    #[expect(clippy::len_without_is_empty)]
+    pub fn len(&self) -> u64 {
+        self.len
+    }
+
+    /// # Safety
+    ///
+    /// - No other overlapping mapped range should be accessed simultaneously.
+    /// - Buffer was mapped with [`wgt::BufferUsages::MAP_READ`] or with [`wgt::BufferUsages::MAP_WRITE`] but without [`wgt::Features::MAPPABLE_PRIMARY_BUFFERS`],
+    ///   otherwise one can have unexpected results due to write combing
+    pub unsafe fn slice(&self) -> &[u8] {
+        unsafe { core::slice::from_raw_parts(self.ptr().as_ptr(), self.len() as usize) }
+    }
+}
+
 #[cfg(send_sync)]
 pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static>;
 #[cfg(not(send_sync))]
@@ -457,7 +515,7 @@ pub struct Buffer {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
-    pub(crate) map_state: Mutex<BufferMapState>,
+    pub(crate) map_state: Arc<RwLock<BufferMapState>>,
     // Bind groups that reference this buffer. May contain duplicates.
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
     pub(crate) timestamp_normalization_bind_group: Snatchable<TimestampNormalizationBindGroup>,
@@ -482,7 +540,7 @@ impl Drop for Buffer {
             raw.dispose(self.device.raw());
         }
 
-        let map_state = mem::replace(self.map_state.get_mut(), BufferMapState::Idle);
+        let map_state = mem::replace(&mut *self.map_state.write(), BufferMapState::Idle);
         let active_map = match map_state {
             BufferMapState::Init { staging_buffer } => {
                 staging_buffer.dispose();
@@ -581,7 +639,7 @@ impl Buffer {
                 rank::BUFFER_INITIALIZATION_STATUS,
                 BufferInitTracker::new(0),
             ),
-            map_state: Mutex::new(rank::BUFFER_MAP_STATE, BufferMapState::Idle),
+            map_state: Arc::new(RwLock::new(rank::BUFFER_MAP_STATE, BufferMapState::Idle)),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
@@ -816,7 +874,7 @@ impl Buffer {
             }
 
             {
-                let map_state = &mut *self.map_state.lock();
+                let map_state = &mut *self.map_state.write();
                 *map_state = match *map_state {
                     BufferMapState::Init { .. } | BufferMapState::Active { .. } => {
                         return Err((op, BufferAccessError::AlreadyMapped));
@@ -835,7 +893,8 @@ impl Buffer {
             if let Some(queue) = device.get_queue().as_ref() {
                 match queue.flush_writes_for_buffer(self, snatch_guard) {
                     Err(err) => {
-                        let state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
+                        let state =
+                            mem::replace(&mut *self.map_state.write(), BufferMapState::Idle);
                         let BufferMapState::Waiting(BufferPendingMapping { op, .. }) = state else {
                             unreachable!();
                         };
@@ -884,11 +943,15 @@ impl Buffer {
         }
     }
 
+    /// Get a guarded pointer to the mapped range of the buffer.
+    ///
+    /// While returned [`BufferMapping`] is alive,
+    /// [`Buffer::destroy`] and [`Buffer::unmap`] calls will block until [`BufferMapping`] is dropped.
     pub fn get_mapped_range(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
-    ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
+    ) -> Result<BufferMapping, BufferAccessError> {
         profiling::scope!("Buffer::get_mapped_range");
         api_log!(
             "Buffer::get_mapped_range {:?} offset {offset:?} size {size:?}",
@@ -913,7 +976,7 @@ impl Buffer {
         if !range_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err(BufferAccessError::UnalignedRangeSize { range_size });
         }
-        let map_state = &*self.map_state.lock();
+        let map_state = &*self.map_state.read();
         match *map_state {
             BufferMapState::Init { ref staging_buffer } => {
                 if offset > self.size {
@@ -932,7 +995,7 @@ impl Buffer {
                 }
                 let ptr = unsafe { staging_buffer.ptr() };
                 let ptr = unsafe { NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)) };
-                Ok((ptr, range_size))
+                Ok(BufferMapping::new(ptr, range_size, self.map_state.clone()))
             }
             BufferMapState::Active {
                 ref mapping,
@@ -962,9 +1025,10 @@ impl Buffer {
                 // rather than the beginning of the buffer.
                 let relative_offset = (offset - range.start) as isize;
                 unsafe {
-                    Ok((
+                    Ok(BufferMapping::new(
                         NonNull::new_unchecked(mapping.ptr.as_ptr().offset(relative_offset)),
                         range_size,
+                        self.map_state.clone(),
                     ))
                 }
             }
@@ -983,7 +1047,7 @@ impl Buffer {
         // `crate::device::map_buffer` and the associated call to
         // `handle_hal_error`, which may invoke a device loss callback.
         // See <https://github.com/gfx-rs/wgpu/issues/10031>.
-        let mut map_state = self.map_state.lock();
+        let mut map_state = self.map_state.write();
         let pending_mapping = match mem::replace(&mut *map_state, BufferMapState::Idle) {
             BufferMapState::Waiting(pending_mapping) => pending_mapping,
             // Mapping cancelled
@@ -1060,7 +1124,7 @@ impl Buffer {
         // - if the device was invalid from the start it couldn't have been mapped via `map_async` anyway
         // - if the buffer was destroyed (via `Buffer::destroy`) it was first unmapped
         let raw_buf = self.try_raw(&snatch_guard).ok()?;
-        let map_state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
+        let map_state = mem::replace(&mut *self.map_state.write(), BufferMapState::Idle);
         match map_state {
             BufferMapState::Init { staging_buffer } => {
                 #[cfg(feature = "trace")]
