@@ -3122,11 +3122,12 @@ impl Device {
                     )
                 }
                 Bt::AccelerationStructure { vertex_return } => {
-                    self.require_acceleration_structures()
-                        .map_err(|e| CreateBindGroupLayoutError::Entry {
+                    self.require_acceleration_structures().map_err(|e| {
+                        CreateBindGroupLayoutError::Entry {
                             binding: entry.binding,
                             error: e.into(),
-                        })?;
+                        }
+                    })?;
                     if vertex_return {
                         self.require_features(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)
                             .map_err(|e| CreateBindGroupLayoutError::Entry {
