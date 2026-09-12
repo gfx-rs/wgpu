@@ -59,7 +59,7 @@ struct Pool {
     /// Set when the driver refused to allocate from this pool despite it
     /// having free capacity, making `alloc` skip it until the pool is empty
     /// again and can be reset.
-    poisoned: bool,
+    fragmented: bool,
 }
 
 /// Keeps track of all pools created with this bucket's [`BucketKey`].
@@ -181,7 +181,7 @@ impl DescriptorAllocator {
         let mut candidate = bucket
             .pools
             .iter()
-            .position(|pool| !pool.poisoned && pool.available != 0);
+            .position(|pool| !pool.fragmented && pool.available != 0);
 
         // Some drivers (e.g. Mali) report fragmentation despite the same-shape
         // guarantee the spec grants our per-bucket pools, in particular for
@@ -223,7 +223,7 @@ impl DescriptorAllocator {
                         }
                     }
 
-                    bucket.pools[index].poisoned = true;
+                    bucket.pools[index].fragmented = true;
                     if created_pool {
                         log::error!(
                             "descriptor set allocation from a fresh pool failed due to fragmentation"
@@ -238,7 +238,7 @@ impl DescriptorAllocator {
                     candidate = bucket
                         .pools
                         .iter()
-                        .position(|pool| !pool.poisoned && pool.available != 0);
+                        .position(|pool| !pool.fragmented && pool.available != 0);
                 }
                 // Our accounting says the pool has free capacity, so this is
                 // an unexpected backend error.
@@ -284,10 +284,11 @@ impl DescriptorAllocator {
         }
 
         pool.available += 1;
-        // A failed pool is only worth retrying once it is empty, since that
-        // is the only state it can be reset back to a usable one from.
+        // On Mali, freeing descriptor sets from a fragmented pool does not
+        // make it usable again, so only retry a failed pool once it is empty
+        // and can be reset.
         if pool.available == pool.capacity {
-            pool.poisoned = false;
+            pool.fragmented = false;
         }
         bucket.available_sets += 1;
         bucket.allocated_sets -= 1;
@@ -395,6 +396,6 @@ fn create_descriptor_pool(
         raw,
         capacity,
         available: capacity,
-        poisoned: false,
+        fragmented: false,
     })
 }
