@@ -67,6 +67,168 @@ pub struct BindGroupDescriptor<'a> {
     pub entries: Cow<'a, [BindGroupEntry]>,
 }
 
+/// A buffer binding.
+///
+/// Corresponds to [WebGPU `GPUBufferBindingLayout`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpubufferbindinglayout).
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct BufferBindingLayout {
+    /// Sub-type of the buffer binding.
+    pub ty: wgt::BufferBindingType,
+
+    /// Indicates that the binding has a dynamic offset.
+    ///
+    /// One offset must be passed to [`RenderPass::set_bind_group`][RPsbg]
+    /// for each dynamic binding in increasing order of binding number.
+    ///
+    #[serde(default)]
+    pub has_dynamic_offset: bool,
+
+    /// The minimum size for a [`BufferBinding`] matching this entry, in bytes.
+    ///
+    /// If this is `Some(size)`:
+    ///
+    /// - When calling [`create_bind_group`], the resource at this bind point
+    ///   must be a [`BindingResource::Buffer`] whose effective size is at
+    ///   least `size`.
+    ///
+    /// - When calling [`create_render_pipeline`] or [`create_compute_pipeline`],
+    ///   `size` must be at least the [minimum buffer binding size] for the
+    ///   shader module global at this bind point: large enough to hold the
+    ///   global's value, along with one element of a trailing runtime-sized
+    ///   array, if present.
+    ///
+    /// If this is `None`:
+    ///
+    /// - Each draw or dispatch command checks that the buffer range at this
+    ///   bind point satisfies the [minimum buffer binding size].
+    ///
+    /// [minimum buffer binding size]: https://www.w3.org/TR/webgpu/#minimum-buffer-binding-size
+    #[serde(default)]
+    pub min_binding_size: Option<wgt::BufferSize>,
+}
+
+/// A sampler that can be used to sample a texture.
+///
+/// Example WGSL syntax:
+/// ```rust,ignore
+/// @group(0) @binding(0)
+/// var s: sampler;
+/// ```
+///
+/// Example GLSL syntax:
+/// ```cpp,ignore
+/// layout(binding = 0)
+/// uniform sampler s;
+/// ```
+///
+/// Corresponds to [WebGPU `GPUSamplerBindingLayout`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpusamplerbindinglayout).
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct SamplerBindingLayout {
+    /// Type of a sampler binding.
+    pub ty: wgt::SamplerBindingType,
+}
+
+/// A texture binding.
+///
+/// Example WGSL syntax:
+/// ```rust,ignore
+/// @group(0) @binding(0)
+/// var t: texture_2d<f32>;
+/// ```
+///
+/// Example GLSL syntax:
+/// ```cpp,ignore
+/// layout(binding = 0)
+/// uniform texture2D t;
+/// ```
+///
+/// Corresponds to [WebGPU `GPUTextureBindingLayout`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gputexturebindinglayout).
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct TextureBindingLayout {
+    /// Sample type of the texture binding.
+    pub sample_type: wgt::TextureSampleType,
+    /// Dimension of the texture view that is going to be sampled.
+    pub view_dimension: wgt::TextureViewDimension,
+    /// True if the texture has a sample count greater than 1. If this is true,
+    /// the texture must be declared as `texture_multisampled_2d` or
+    /// `texture_depth_multisampled_2d` in the shader, and read using `textureLoad`.
+    pub multisampled: bool,
+}
+
+/// A storage texture.
+///
+/// Example WGSL syntax:
+/// ```rust,ignore
+/// @group(0) @binding(0)
+/// var my_storage_image: texture_storage_2d<r32float, write>;
+/// ```
+///
+/// Example GLSL syntax:
+/// ```cpp,ignore
+/// layout(set=0, binding=0, r32f) writeonly uniform image2D myStorageImage;
+/// ```
+/// Note that the texture format must be specified in the shader, along with the
+/// access mode. For WGSL, the format must be one of the enumerants in the list
+/// of [storage texel formats](https://gpuweb.github.io/gpuweb/wgsl/#storage-texel-formats).
+///
+/// Corresponds to [WebGPU `GPUStorageTextureBindingLayout`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpustoragetexturebindinglayout).
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct StorageTextureBindingLayout {
+    /// Allowed access to this texture.
+    pub access: wgt::StorageTextureAccess,
+    /// Format of the texture.
+    pub format: wgt::TextureFormat,
+    /// Dimension of the texture view that is going to be sampled.
+    pub view_dimension: wgt::TextureViewDimension,
+}
+
+/// A ray-tracing acceleration structure binding.
+///
+/// Example WGSL syntax:
+/// ```rust,ignore
+/// @group(0) @binding(0)
+/// var as: acceleration_structure;
+/// ```
+///
+/// or with vertex return enabled
+/// ```rust,ignore
+/// @group(0) @binding(0)
+/// var as: acceleration_structure<vertex_return>;
+/// ```
+///
+/// Example GLSL syntax:
+/// ```cpp,ignore
+/// layout(binding = 0)
+/// uniform accelerationStructureEXT as;
+/// ```
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct AccelerationStructureBindingLayout {
+    /// Whether this acceleration structure can be used to
+    /// create a ray query that has flag vertex return in the shader
+    ///
+    /// If enabled requires [`Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN`]
+    pub vertex_return: bool,
+}
+
+/// An external texture binding.
+///
+/// Example WGSL syntax:
+/// ```rust,ignore
+/// @group(0) @binding(0)
+/// var t: texture_external;
+/// ```
+///
+/// Corresponds to [WebGPU `GPUExternalTextureBindingLayout`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuexternaltexturebindinglayout).
+///
+/// Requires [`Features::EXTERNAL_TEXTURE`]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct ExternalTextureBindingLayout;
+
 /// Describes a single binding inside a bind group.
 ///
 /// Corresponds to [WebGPU `GPUBindGroupLayoutEntry`](
@@ -78,8 +240,12 @@ pub struct BindGroupLayoutEntry {
     pub binding: u32,
     /// Which shader stages can see this binding.
     pub visibility: wgt::ShaderStagesWebGPU,
-    /// The type of the binding
-    pub ty: wgt::BindingType,
+    // The type of the binding
+    pub buffer: Option<BufferBindingLayout>,
+    pub sampler: Option<SamplerBindingLayout>,
+    pub texture: Option<TextureBindingLayout>,
+    pub storage_texture: Option<StorageTextureBindingLayout>,
+    pub external_texture: Option<ExternalTextureBindingLayout>,
 }
 
 /// Corresponds to [`GPUBindGroupLayoutDescriptor`](https://www.w3.org/TR/webgpu/#dictdef-gpubindgrouplayoutdescriptor).
