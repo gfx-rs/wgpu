@@ -224,6 +224,12 @@ bitflags::bitflags! {
         ///
         /// [`Interpolation::Linear`]: crate::Interpolation::Linear
         const LINEAR_INTERPOLATION = 1 << 44;
+        /// Support for ray tracing invocation reordering: the `hit_object` type,
+        /// the `hitObject*` built-in functions, and `reorderThread`.
+        ///
+        /// Only useful together with [`Capabilities::RAY_TRACING_PIPELINE`], since
+        /// hit objects exist only in ray tracing pipeline stages.
+        const RAY_TRACING_INVOCATION_REORDER = 1 << 45;
     }
 }
 
@@ -246,6 +252,7 @@ impl Capabilities {
             Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
             Self::COOPERATIVE_MATRIX => Some(Ext::WgpuCooperativeMatrix),
             Self::RAY_TRACING_PIPELINE => Some(Ext::WgpuRayTracingPipeline),
+            Self::RAY_TRACING_INVOCATION_REORDER => Some(Ext::WgpuRayTracingInvocationReorder),
             Self::PER_VERTEX => Some(Ext::WgpuPerVertex),
             Self::BUFFER_BINDING_ARRAY
             | Self::BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
@@ -552,6 +559,7 @@ impl crate::TypeInner {
             | Self::Sampler { .. }
             | Self::AccelerationStructure { .. }
             | Self::RayQuery { .. }
+            | Self::HitObject
             | Self::BindingArray { .. } => false,
         }
     }
@@ -664,6 +672,8 @@ impl Validator {
         self.valid_expression_list.clear();
         self.valid_expression_set.clear();
         self.override_ids.clear();
+        self.trace_rays_vertex_return = TraceRayVertexReturnState::NoTraceRays;
+        self.trace_rays_payload_type = None;
     }
 
     fn validate_constant(

@@ -87,6 +87,8 @@ pub enum LocalVariableError {
     NonConstOrOverrideInitializer,
     #[error("Local variable has a type `ray_query` and so cannot be initialized.")]
     RayQueryWithInitializeExpression,
+    #[error("Local variable has a type `hit_object` and so cannot be initialized.")]
+    HitObjectWithInitializeExpression,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -240,6 +242,14 @@ pub enum FunctionError {
     PayloadPointerNotGlobal,
     #[error("Tried to store to pointer {0:?} which is a ray query and so cannot be assigned to")]
     RayQueryStore(Handle<crate::Expression>),
+    #[error("Tried to store to pointer {0:?} which is a hit object and so cannot be assigned to")]
+    HitObjectStore(Handle<crate::Expression>),
+    #[error("Hit object {0:?} is not a local variable")]
+    InvalidHitObjectExpression(Handle<crate::Expression>),
+    #[error("Hit object {0:?} does not have a matching type")]
+    InvalidHitObjectType(Handle<crate::Type>),
+    #[error("Expression {0:?} passed to a reordering operation should be a `u32`")]
+    InvalidReorderOperand(Handle<crate::Expression>),
 }
 
 bitflags::bitflags! {
@@ -823,6 +833,7 @@ impl super::Validator {
                             | Ex::ArrayLength(_)
                             | Ex::RayQueryGetIntersection { .. }
                             | Ex::RayQueryVertexPositions { .. }
+                            | Ex::HitObjectQuery { .. }
                             | Ex::CooperativeLoad { .. }
                             | Ex::CooperativeMultiplyAdd { .. } => {
                                 self.emit_expression(handle, context)?
@@ -1101,6 +1112,13 @@ impl super::Validator {
                         *value_ty == Ti::Scalar(*scalar)
                     } else if let Some(&Ti::RayQuery { .. }) = pointer_base_ty {
                         return Err(FunctionError::RayQueryStore(pointer)
+                            .with_span_context((
+                                context.expressions.get_span(pointer),
+                                format!("this pointer has a base type of {pointer_base_ty:?} which cannot be stored to"),
+                            ))
+                            .with_span(span, "store to a type which is not allowed to be stored to"));
+                    } else if let Some(&Ti::HitObject) = pointer_base_ty {
+                        return Err(FunctionError::HitObjectStore(pointer)
                             .with_span_context((
                                 context.expressions.get_span(pointer),
                                 format!("this pointer has a base type of {pointer_base_ty:?} which cannot be stored to"),
@@ -1523,22 +1541,7 @@ impl super::Validator {
                     }
                 }
                 S::RayQuery { query, ref fun } => {
-                    let query_var = match *context.get_expression(query) {
-                        crate::Expression::LocalVariable(var) => &context.local_vars[var],
-                        ref other => {
-                            log::error!("Unexpected ray query expression {other:?}");
-                            return Err(FunctionError::InvalidRayQueryExpression(query)
-                                .with_span_static(span, "invalid query expression"));
-                        }
-                    };
-                    let rq_vertex_return = match context.types[query_var.ty].inner {
-                        Ti::RayQuery { vertex_return } => vertex_return,
-                        ref other => {
-                            log::error!("Unexpected ray query type {other:?}");
-                            return Err(FunctionError::InvalidRayQueryType(query_var.ty)
-                                .with_span_static(span, "invalid query type"));
-                        }
-                    };
+                    let rq_vertex_return = Self::validate_ray_query_variable(query, context, span)?;
                     match *fun {
                         crate::RayQueryFunction::Initialize {
                             acceleration_structure,
@@ -1707,85 +1710,235 @@ impl super::Validator {
                         descriptor,
                         payload,
                     } => {
-                        match *context.resolve_type_inner(
+                        self.validate_trace_ray_acceleration_structure(
                             acceleration_structure,
-                            &self.valid_expression_set,
-                        )? {
-                            crate::TypeInner::AccelerationStructure { vertex_return } => {
-                                if !vertex_return {
-                                    self.trace_rays_vertex_return =
-                                        super::TraceRayVertexReturnState::NoVertexReturn(span);
-                                } else if let super::TraceRayVertexReturnState::NoTraceRays =
-                                    self.trace_rays_vertex_return
-                                {
-                                    self.trace_rays_vertex_return =
-                                        super::TraceRayVertexReturnState::VertexReturn;
-                                }
-                            }
-                            _ => {
-                                return Err(FunctionError::InvalidAccelerationStructure(
-                                    acceleration_structure,
-                                )
-                                .with_span_handle(acceleration_structure, context.expressions))
-                            }
-                        }
-
-                        let current_payload_ty = match *context
-                            .resolve_type_inner(payload, &self.valid_expression_set)?
+                            context,
+                            span,
+                        )?;
+                        self.validate_ray_payload(payload, context)?;
+                        self.validate_ray_descriptor(descriptor, context, span)?;
+                    }
+                    crate::RayPipelineFunction::ReorderThread { hint, bits } => {
+                        stages &= super::ShaderStages::RAY_GENERATION;
+                        // Unlike every other invocation reordering operation,
+                        // this one doesn't mention a `hit_object`, so there is
+                        // no type to carry the capability requirement for us.
+                        if !self
+                            .capabilities
+                            .contains(super::Capabilities::RAY_TRACING_INVOCATION_REORDER)
                         {
-                            crate::TypeInner::Pointer { base, space } => {
-                                match space {
-                                    AddressSpace::RayPayload | AddressSpace::IncomingRayPayload => {
-                                    }
-                                    space => {
-                                        return Err(FunctionError::InvalidPayloadAddressSpace(
-                                            space,
-                                        )
-                                        .with_span_handle(payload, context.expressions))
-                                    }
-                                }
-                                base
-                            }
-                            _ => {
-                                return Err(FunctionError::InvalidPayloadType
-                                    .with_span_handle(payload, context.expressions))
-                            }
-                        };
-
-                        // spir-v requires a direct reference to a global variable.
-                        let crate::Expression::GlobalVariable(_) = context.expressions[payload]
-                        else {
-                            return Err(FunctionError::PayloadPointerNotGlobal
-                                .with_span_handle(payload, context.expressions));
-                        };
-
-                        let ty = *self
-                            .trace_rays_payload_type
-                            .get_or_insert(current_payload_ty);
-
-                        if ty != current_payload_ty {
-                            return Err(FunctionError::MismatchedPayloadType(
-                                current_payload_ty,
-                                ty,
+                            return Err(FunctionError::MissingCapability(
+                                super::Capabilities::RAY_TRACING_INVOCATION_REORDER,
                             )
-                            .with_span_handle(ty, context.types));
+                            .with_span_static(span, "missing capability for this operation"));
                         }
-
-                        let desc_ty_given =
-                            context.resolve_type_inner(descriptor, &self.valid_expression_set)?;
-                        let desc_ty_expected = context
-                            .special_types
-                            .ray_desc
-                            .map(|handle| &context.types[handle].inner);
-                        if Some(desc_ty_given) != desc_ty_expected {
-                            return Err(FunctionError::InvalidRayDescriptor(descriptor)
-                                .with_span_static(span, "invalid ray descriptor"));
-                        }
+                        self.validate_reorder_operand(hint, context)?;
+                        self.validate_reorder_operand(bits, context)?;
                     }
                 },
+                S::HitObject {
+                    hit_object,
+                    ref fun,
+                } => {
+                    stages &= super::ShaderStages::RAY_GENERATION
+                        | super::ShaderStages::CLOSEST_HIT
+                        | super::ShaderStages::MISS;
+
+                    let hit_object_var = match *context.get_expression(hit_object) {
+                        crate::Expression::LocalVariable(var) => &context.local_vars[var],
+                        ref other => {
+                            log::error!("Unexpected hit object expression {other:?}");
+                            return Err(FunctionError::InvalidHitObjectExpression(hit_object)
+                                .with_span_static(span, "invalid hit object expression"));
+                        }
+                    };
+                    match context.types[hit_object_var.ty].inner {
+                        Ti::HitObject => {}
+                        ref other => {
+                            log::error!("Unexpected hit object type {other:?}");
+                            return Err(FunctionError::InvalidHitObjectType(hit_object_var.ty)
+                                .with_span_static(span, "invalid hit object type"));
+                        }
+                    }
+
+                    match *fun {
+                        crate::HitObjectFunction::TraceRay {
+                            acceleration_structure,
+                            descriptor,
+                            payload,
+                        } => {
+                            self.validate_trace_ray_acceleration_structure(
+                                acceleration_structure,
+                                context,
+                                span,
+                            )?;
+                            self.validate_ray_payload(payload, context)?;
+                            self.validate_ray_descriptor(descriptor, context, span)?;
+                        }
+                        crate::HitObjectFunction::RecordMiss { descriptor } => {
+                            self.validate_ray_descriptor(descriptor, context, span)?;
+                        }
+                        crate::HitObjectFunction::RecordFromQuery { query } => {
+                            // The `ray_query` type carries the
+                            // `Capabilities::RAY_QUERY` requirement for us.
+                            Self::validate_ray_query_variable(query, context, span)?;
+                        }
+                        crate::HitObjectFunction::RecordEmpty => {}
+                        crate::HitObjectFunction::ExecuteShader { payload } => {
+                            self.validate_ray_payload(payload, context)?;
+                        }
+                        crate::HitObjectFunction::Reorder { hint } => {
+                            stages &= super::ShaderStages::RAY_GENERATION;
+                            self.validate_reorder_hint(hint, context)?;
+                        }
+                    }
+                }
             }
         }
         Ok(BlockInfo { stages })
+    }
+
+    /// Check that `query` is a local variable of a `ray_query` type, and return
+    /// whether that type provides vertex positions.
+    fn validate_ray_query_variable(
+        query: Handle<crate::Expression>,
+        context: &BlockContext,
+        span: crate::Span,
+    ) -> Result<bool, WithSpan<FunctionError>> {
+        let query_var = match *context.get_expression(query) {
+            crate::Expression::LocalVariable(var) => &context.local_vars[var],
+            ref other => {
+                log::error!("Unexpected ray query expression {other:?}");
+                return Err(FunctionError::InvalidRayQueryExpression(query)
+                    .with_span_static(span, "invalid query expression"));
+            }
+        };
+        match context.types[query_var.ty].inner {
+            crate::TypeInner::RayQuery { vertex_return } => Ok(vertex_return),
+            ref other => {
+                log::error!("Unexpected ray query type {other:?}");
+                Err(FunctionError::InvalidRayQueryType(query_var.ty)
+                    .with_span_static(span, "invalid query type"))
+            }
+        }
+    }
+
+    /// Validate the acceleration structure operand of a ray tracing pipeline
+    /// operation, and record whether it provides vertex positions.
+    fn validate_trace_ray_acceleration_structure(
+        &mut self,
+        acceleration_structure: Handle<crate::Expression>,
+        context: &BlockContext,
+        span: crate::Span,
+    ) -> Result<(), WithSpan<FunctionError>> {
+        match *context.resolve_type_inner(acceleration_structure, &self.valid_expression_set)? {
+            crate::TypeInner::AccelerationStructure { vertex_return } => {
+                if !vertex_return {
+                    self.trace_rays_vertex_return =
+                        super::TraceRayVertexReturnState::NoVertexReturn(span);
+                } else if let super::TraceRayVertexReturnState::NoTraceRays =
+                    self.trace_rays_vertex_return
+                {
+                    self.trace_rays_vertex_return = super::TraceRayVertexReturnState::VertexReturn;
+                }
+                Ok(())
+            }
+            _ => Err(
+                FunctionError::InvalidAccelerationStructure(acceleration_structure)
+                    .with_span_handle(acceleration_structure, context.expressions),
+            ),
+        }
+    }
+
+    /// Validate a ray payload pointer operand, and check that every ray tracing
+    /// pipeline operation in the module agrees on the payload type.
+    fn validate_ray_payload(
+        &mut self,
+        payload: Handle<crate::Expression>,
+        context: &BlockContext,
+    ) -> Result<(), WithSpan<FunctionError>> {
+        let current_payload_ty = match *context
+            .resolve_type_inner(payload, &self.valid_expression_set)?
+        {
+            crate::TypeInner::Pointer { base, space } => {
+                match space {
+                    crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {}
+                    space => {
+                        return Err(FunctionError::InvalidPayloadAddressSpace(space)
+                            .with_span_handle(payload, context.expressions))
+                    }
+                }
+                base
+            }
+            _ => {
+                return Err(FunctionError::InvalidPayloadType
+                    .with_span_handle(payload, context.expressions))
+            }
+        };
+
+        // spir-v requires a direct reference to a global variable.
+        let crate::Expression::GlobalVariable(_) = context.expressions[payload] else {
+            return Err(FunctionError::PayloadPointerNotGlobal
+                .with_span_handle(payload, context.expressions));
+        };
+
+        let ty = *self
+            .trace_rays_payload_type
+            .get_or_insert(current_payload_ty);
+
+        if ty != current_payload_ty {
+            return Err(FunctionError::MismatchedPayloadType(current_payload_ty, ty)
+                .with_span_handle(ty, context.types));
+        }
+
+        Ok(())
+    }
+
+    /// Validate that `descriptor` has the module's `RayDesc` type.
+    fn validate_ray_descriptor(
+        &self,
+        descriptor: Handle<crate::Expression>,
+        context: &BlockContext,
+        span: crate::Span,
+    ) -> Result<(), WithSpan<FunctionError>> {
+        let desc_ty_given = context.resolve_type_inner(descriptor, &self.valid_expression_set)?;
+        let desc_ty_expected = context
+            .special_types
+            .ray_desc
+            .map(|handle| &context.types[handle].inner);
+        if Some(desc_ty_given) != desc_ty_expected {
+            return Err(FunctionError::InvalidRayDescriptor(descriptor)
+                .with_span_static(span, "invalid ray descriptor"));
+        }
+        Ok(())
+    }
+
+    /// Validate the optional user-supplied hint of an invocation reordering
+    /// operation.
+    fn validate_reorder_hint(
+        &self,
+        hint: Option<crate::ReorderHint>,
+        context: &BlockContext,
+    ) -> Result<(), WithSpan<FunctionError>> {
+        if let Some(crate::ReorderHint { hint, bits }) = hint {
+            self.validate_reorder_operand(hint, context)?;
+            self.validate_reorder_operand(bits, context)?;
+        }
+        Ok(())
+    }
+
+    /// Validate that `expr` is a `u32` scalar, as required by the operands of
+    /// the invocation reordering operations.
+    fn validate_reorder_operand(
+        &self,
+        expr: Handle<crate::Expression>,
+        context: &BlockContext,
+    ) -> Result<(), WithSpan<FunctionError>> {
+        match *context.resolve_type_inner(expr, &self.valid_expression_set)? {
+            crate::TypeInner::Scalar(crate::Scalar::U32) => Ok(()),
+            _ => Err(FunctionError::InvalidReorderOperand(expr)
+                .with_span_handle(expr, context.expressions)),
+        }
     }
 
     fn validate_block(
@@ -1829,6 +1982,10 @@ impl super::Validator {
             if matches!(gctx.types[var.ty].inner, crate::TypeInner::RayQuery { .. }) {
                 return Err(LocalVariableError::RayQueryWithInitializeExpression);
             }
+
+            if matches!(gctx.types[var.ty].inner, crate::TypeInner::HitObject) {
+                return Err(LocalVariableError::HitObjectWithInitializeExpression);
+            }
         }
 
         Ok(())
@@ -1856,6 +2013,16 @@ impl super::Validator {
                     .with_span_handle(var.ty, &module.types)
                     .with_handle(var_handle, &fun.local_variables)
                 })?;
+
+            // Hit objects exist only in the ray tracing pipeline stages that can
+            // hold a hit. The type check cannot enforce this since types are
+            // module-wide, and an unreferenced variable has no expression or
+            // statement to carry the restriction, so apply it here.
+            if let crate::TypeInner::HitObject = module.types[var.ty].inner {
+                info.available_stages &= super::ShaderStages::RAY_GENERATION
+                    | super::ShaderStages::CLOSEST_HIT
+                    | super::ShaderStages::MISS;
+            }
         }
 
         for (index, argument) in fun.arguments.iter().enumerate() {

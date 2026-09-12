@@ -940,12 +940,59 @@ impl crate::Module {
         false
     }
 
+    /// Whether this module uses ray tracing invocation reordering: either the
+    /// [`HitObject`] type, or a [`ReorderThread`] statement.
+    ///
+    /// [`HitObject`]: crate::TypeInner::HitObject
+    /// [`ReorderThread`]: crate::RayPipelineFunction::ReorderThread
+    pub fn uses_invocation_reorder(&self) -> bool {
+        if self
+            .types
+            .iter()
+            .any(|(_, ty)| matches!(ty.inner, crate::TypeInner::HitObject))
+        {
+            return true;
+        }
+
+        fn block_reorders(block: &crate::Block) -> bool {
+            block.iter().any(|stmt| match *stmt {
+                crate::Statement::RayPipelineFunction(
+                    crate::RayPipelineFunction::ReorderThread { .. },
+                ) => true,
+                crate::Statement::Block(ref block) => block_reorders(block),
+                crate::Statement::If {
+                    ref accept,
+                    ref reject,
+                    ..
+                } => block_reorders(accept) || block_reorders(reject),
+                crate::Statement::Switch { ref cases, .. } => {
+                    cases.iter().any(|case| block_reorders(&case.body))
+                }
+                crate::Statement::Loop {
+                    ref body,
+                    ref continuing,
+                    ..
+                } => block_reorders(body) || block_reorders(continuing),
+                _ => false,
+            })
+        }
+
+        self.functions
+            .iter()
+            .map(|(_, f)| &f.body)
+            .chain(self.entry_points.iter().map(|ep| &ep.function.body))
+            .any(block_reorders)
+    }
+
     pub fn uses_ray_tracing(&self, ep_index: Option<usize>) -> RayTracingUses {
         let mut uses = RayTracingUses::default();
         // Whether this uses ray tracing (unknown whether the usage is pipelines or ray queries).
         let mut uses_ray_tracing = self.special_types.ray_desc.is_some();
 
-        uses.queries |= self.special_types.ray_intersection.is_some();
+        // NOTE: `ray_intersection` alone does not imply ray queries: it is also
+        // the result type of `hitObjectGetIntersection`, which is a ray tracing
+        // pipeline feature. Modules that really use ray queries are caught by
+        // the `RayQuery` type below, or by the per-entry-point check further on.
 
         for (_, &crate::Type { ref inner, .. }) in self.types.iter() {
             // Backends do not know whether these have vertex return - that is done by us
@@ -954,6 +1001,8 @@ impl crate::Module {
                     uses_ray_tracing = true;
                 }
                 crate::TypeInner::RayQuery { .. } => uses.queries = true,
+                // Hit objects are only available in ray tracing pipelines.
+                crate::TypeInner::HitObject => uses.pipelines = true,
                 _ => {}
             }
         }

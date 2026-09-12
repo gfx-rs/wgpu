@@ -429,7 +429,54 @@ impl StatementGraph {
                         self.dependencies.push((id, payload, "payload"));
                         "TraceRay"
                     }
+                    crate::RayPipelineFunction::ReorderThread { hint, bits } => {
+                        self.dependencies.push((id, hint, "hint"));
+                        self.dependencies.push((id, bits, "bits"));
+                        "ReorderThread"
+                    }
                 },
+                S::HitObject {
+                    hit_object,
+                    ref fun,
+                } => {
+                    self.dependencies.push((id, hit_object, "hit_object"));
+                    match *fun {
+                        crate::HitObjectFunction::TraceRay {
+                            acceleration_structure,
+                            descriptor,
+                            payload,
+                        } => {
+                            self.dependencies.push((
+                                id,
+                                acceleration_structure,
+                                "acceleration_structure",
+                            ));
+                            self.dependencies.push((id, descriptor, "descriptor"));
+                            self.dependencies.push((id, payload, "payload"));
+                            "HitObjectTraceRay"
+                        }
+                        crate::HitObjectFunction::RecordMiss { descriptor } => {
+                            self.dependencies.push((id, descriptor, "descriptor"));
+                            "HitObjectRecordMiss"
+                        }
+                        crate::HitObjectFunction::RecordFromQuery { query } => {
+                            self.dependencies.push((id, query, "query"));
+                            "HitObjectRecordFromQuery"
+                        }
+                        crate::HitObjectFunction::RecordEmpty => "HitObjectRecordEmpty",
+                        crate::HitObjectFunction::ExecuteShader { payload } => {
+                            self.dependencies.push((id, payload, "payload"));
+                            "HitObjectExecuteShader"
+                        }
+                        crate::HitObjectFunction::Reorder { hint } => {
+                            if let Some(crate::ReorderHint { hint, bits }) = hint {
+                                self.dependencies.push((id, hint, "hint"));
+                                self.dependencies.push((id, bits, "bits"));
+                            }
+                            "ReorderThreadWithHitObject"
+                        }
+                    }
+                }
             };
             // Set the last node to the merge node
             last_node = merge_id;
@@ -768,6 +815,16 @@ fn write_function_expressions(
                 edges.insert("", query);
                 let ty = if committed { "Committed" } else { "Candidate" };
                 (format!("get{ty}HitVertexPositions").into(), 4)
+            }
+            E::HitObjectQuery { hit_object, query } => {
+                edges.insert("", hit_object);
+                let name = match query {
+                    crate::HitObjectQuery::IsEmpty => "hitObjectIsEmpty",
+                    crate::HitObjectQuery::IsHit => "hitObjectIsHit",
+                    crate::HitObjectQuery::IsMiss => "hitObjectIsMiss",
+                    crate::HitObjectQuery::Intersection => "hitObjectGetIntersection",
+                };
+                (name.into(), 4)
             }
             E::CooperativeLoad { ref data, .. } => {
                 edges.insert("pointer", data.pointer);
