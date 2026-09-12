@@ -1,0 +1,31 @@
+# Mergify merge queue configuration.
+# Reference: https://docs.mergify.com/configuration/file-format/
+#
+# Pull requests enter the queue with the `@mergifyio queue` command.
+# A pull request goes to the first queue rule whose `queue_conditions`
+# match. Required checks and approvals come from branch protection.
+
+merge_queue:
+  queued_label: "queue: queued"
+  dequeued_label: "queue: dequeued"
+
+queue_rules:
+  - name: rebase
+    queue_conditions:
+      - 'label = "merge: rebase"'
+    merge_method: rebase
+    update_method: rebase
+
+  - name: squash
+    queue_conditions:
+      - '-label = "merge: rebase"'
+    merge_method: squash
+    update_method: rebase
+    commit_message_format:
+      title: inherit
+      body: inherit
+
+commands_restrictions:
+  queue:
+    conditions:
+      - sender-permission >= write
