@@ -409,6 +409,24 @@ impl super::Device {
                 vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
         }
 
+        let mut usage = conv::map_texture_usage(desc.usage);
+        // wgpu allows views of textures that are only ever copied to or from, but Vulkan
+        // requires a viewable image to carry at least one of `VIEWABLE_IMAGE_USAGES`. Add a
+        // usage the format supports so that such views stay valid. Images backed by external
+        // memory are left alone: their usage has to match the resource being imported.
+        if !usage.intersects(conv::VIEWABLE_IMAGE_USAGES)
+            && external_memory_image_create_info.is_none()
+            && super::adapter::supports_format(
+                &self.shared.instance.raw,
+                self.shared.physical_device,
+                original_format,
+                tiling,
+                vk::FormatFeatureFlags::SAMPLED_IMAGE,
+            )
+        {
+            usage |= vk::ImageUsageFlags::SAMPLED;
+        }
+
         let mut vk_info = vk::ImageCreateInfo::default()
             .flags(raw_flags)
             .image_type(conv::map_texture_dimension(desc.dimension))
@@ -418,7 +436,7 @@ impl super::Device {
             .array_layers(desc.array_layer_count())
             .samples(vk::SampleCountFlags::from_raw(desc.sample_count))
             .tiling(tiling)
-            .usage(conv::map_texture_usage(desc.usage))
+            .usage(usage)
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .initial_layout(vk::ImageLayout::UNDEFINED);
 
