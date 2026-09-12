@@ -406,6 +406,11 @@ impl LifetimeTracker {
         for buffer in self.ready_to_map.drain(..) {
             match buffer.map(snatch_guard) {
                 Some(cb) => pending_callbacks.push(cb),
+                // `None` means the mapping was cancelled between when this
+                // buffer was added to `ready_to_map` and now — typically
+                // because `unmap` was called on it. `unmap_inner` already fired
+                // the callback with `MapAborted` in that case, so there is
+                // nothing left to do here.
                 None => continue,
             }
         }
