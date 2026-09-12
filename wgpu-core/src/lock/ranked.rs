@@ -88,6 +88,13 @@ std::thread_local! {
     static LOCK_STATE: Cell<LockState> = const { Cell::new(LockState::INITIAL) };
 }
 
+// If this ever fails, see observing.rs and snatch.rs for cases where thread_locals used for
+// instrumentation must be put into a ManuallyDrop
+const _: () = assert!(
+    !core::mem::needs_drop::<Cell<LockState>>(),
+    "LOCK_STATE must not require Dropping, otherwise locks may be destroyed before user code accesses them, during TLS destruction"
+);
+
 /// Per-thread state for the deadlock checker.
 #[derive(Debug, Copy, Clone)]
 pub struct LockState {
