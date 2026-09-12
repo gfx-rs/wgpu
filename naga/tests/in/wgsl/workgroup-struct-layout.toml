@@ -1,0 +1,8 @@
+targets = "SPIRV"
+
+[spv]
+adjust_coordinate_space = false
+debug = true
+# SPIR-V 1.4+ is required for OpCopyLogical, which is used to convert
+# between layoutless Workgroup types and their decorated counterparts.
+version = [1, 4]

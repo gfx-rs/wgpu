@@ -107,6 +107,7 @@ impl Writer {
             cached_constants: crate::FastHashMap::default(),
             global_variables: HandleVec::new(),
             std140_compat_uniform_types: crate::FastHashMap::default(),
+            workgroup_type_ids: crate::FastHashMap::default(),
             fake_missing_bindings: options.fake_missing_bindings,
             binding_map: options.binding_map.clone(),
             saved_cached: CachedExpressions::default(),
@@ -206,6 +207,7 @@ impl Writer {
             cached_constants: take(&mut self.cached_constants).reclaim(),
             global_variables: take(&mut self.global_variables).reclaim(),
             std140_compat_uniform_types: take(&mut self.std140_compat_uniform_types).reclaim(),
+            workgroup_type_ids: take(&mut self.workgroup_type_ids).reclaim(),
             saved_cached: take(&mut self.saved_cached).reclaim(),
             temp_list: take(&mut self.temp_list).reclaim(),
             ray_query_functions: take(&mut self.ray_query_functions).reclaim(),
@@ -485,7 +487,14 @@ impl Writer {
                 LocalType::Cooperative(CooperativeType::from_inner(inner).unwrap())
             }
             crate::TypeInner::Pointer { base, space } => {
-                let base_type_id = self.get_handle_type_id(base);
+                let base_type_id = if space == crate::AddressSpace::WorkGroup {
+                    self.workgroup_type_ids
+                        .get(&base)
+                        .copied()
+                        .unwrap_or_else(|| self.get_handle_type_id(base))
+                } else {
+                    self.get_handle_type_id(base)
+                };
                 LocalType::Pointer {
                     base: base_type_id,
                     class: map_storage_class(space),
@@ -2307,6 +2316,90 @@ impl Writer {
         Ok(id)
     }
 
+    /// Get or create a SPIR-V type ID without layout decorations
+    /// (ArrayStride, Offset, MatrixStride, ColMajor) for Workgroup storage
+    /// class variables (VUID-StandaloneSpirv-None-10684).
+    ///
+    /// Scalars, vectors, atomics, and matrices reuse the existing type ID.
+    /// Arrays and structs get separate declarations without decorations.
+    fn get_workgroup_type_id(
+        &mut self,
+        handle: Handle<crate::Type>,
+        module: &crate::Module,
+    ) -> Result<Word, Error> {
+        if let Some(&id) = self.workgroup_type_ids.get(&handle) {
+            return Ok(id);
+        }
+
+        let ty = &module.types[handle];
+        let id = match ty.inner {
+            crate::TypeInner::Array { base, size, .. } => {
+                let id = self.id_gen.next();
+                let element_type_id = self.get_workgroup_type_id(base, module)?;
+                let instruction = match size.resolve(module.to_ctx())? {
+                    crate::proc::IndexableLength::Known(length) => {
+                        let length_id = self.get_index_constant(length);
+                        Instruction::type_array(id, element_type_id, length_id)
+                    }
+                    crate::proc::IndexableLength::Dynamic => {
+                        Instruction::type_runtime_array(id, element_type_id)
+                    }
+                };
+                instruction.to_words(&mut self.logical_layout.declarations);
+                id
+            }
+            crate::TypeInner::Struct {
+                ref members,
+                span: _,
+            } => {
+                let id = self.id_gen.next();
+                let mut member_ids = Vec::with_capacity(members.len());
+                for (index, member) in members.iter().enumerate() {
+                    let member_id = self.get_workgroup_type_id(member.ty, module)?;
+                    member_ids.push(member_id);
+                    if self.flags.contains(WriterFlags::DEBUG) {
+                        if let Some(ref name) = member.name {
+                            self.debugs
+                                .push(Instruction::member_name(id, index as u32, name));
+                        }
+                    }
+                }
+                Instruction::type_struct(id, member_ids.as_slice())
+                    .to_words(&mut self.logical_layout.declarations);
+                id
+            }
+            _ => {
+                let id = self.get_handle_type_id(handle);
+                self.workgroup_type_ids.insert(handle, id);
+                return Ok(id);
+            }
+        };
+
+        self.workgroup_type_ids.insert(handle, id);
+        if self.flags.contains(WriterFlags::DEBUG) {
+            if let Some(ref name) = ty.name {
+                self.debugs.push(Instruction::name(id, name));
+            }
+        }
+        Ok(id)
+    }
+
+    /// Pre-create layoutless type declarations for Workgroup global variables.
+    /// Only on SPIR-V 1.4+ where `OpCopyLogical` is available for conversion.
+    /// Must be called after `write_type_declaration_arena` and before
+    /// `write_global_variable`.
+    fn write_workgroup_types(&mut self, module: &crate::Module) -> Result<(), Error> {
+        if self.physical_layout.lang_version() < (1, 4) {
+            return Ok(());
+        }
+        for (_, var) in module.global_variables.iter() {
+            if var.space == crate::AddressSpace::WorkGroup {
+                self.get_workgroup_type_id(var.ty, module)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Writes a std140 layout compatible type declaration for a type. Returns
     /// the ID of the declared type, or None if no declaration is required.
     ///
@@ -2875,7 +2968,14 @@ impl Writer {
                 // variables in the `Uniform` and `StorageBuffer` address spaces
                 // get wrapped, and we're initializing `WorkGroup` variables.
                 let var_id = self.global_variables[handle].var_id;
-                let var_type_id = self.get_handle_type_id(var.ty);
+                let var_type_id = if var.space == crate::AddressSpace::WorkGroup {
+                    self.workgroup_type_ids
+                        .get(&var.ty)
+                        .copied()
+                        .unwrap_or_else(|| self.get_handle_type_id(var.ty))
+                } else {
+                    self.get_handle_type_id(var.ty)
+                };
                 let init_word = self.get_constant_null(var_type_id);
                 Instruction::store(var_id, init_word, None)
             })
@@ -3610,15 +3710,27 @@ impl Writer {
             }
             if substitute_inner_type_lookup.is_some() {
                 inner_type_id
+            } else if global_variable.space == crate::AddressSpace::WorkGroup
+                && self.workgroup_type_ids.contains_key(&global_variable.ty)
+            {
+                let wg_type_id = self.workgroup_type_ids[&global_variable.ty];
+                self.get_pointer_type_id(wg_type_id, class)
             } else {
                 self.get_handle_pointer_type_id(global_variable.ty, class)
             }
         };
 
         let init_word = match (global_variable.space, self.zero_initialize_workgroup_memory) {
-            (crate::AddressSpace::Private, _)
-            | (crate::AddressSpace::WorkGroup, super::ZeroInitializeWorkgroupMemoryMode::Native) => {
+            (crate::AddressSpace::Private, _) => {
                 init_word.or_else(|| Some(self.get_constant_null(inner_type_id)))
+            }
+            (crate::AddressSpace::WorkGroup, super::ZeroInitializeWorkgroupMemoryMode::Native) => {
+                let null_type_id = self
+                    .workgroup_type_ids
+                    .get(&global_variable.ty)
+                    .copied()
+                    .unwrap_or(inner_type_id);
+                init_word.or_else(|| Some(self.get_constant_null(null_type_id)))
             }
             _ => init_word,
         };
@@ -3823,6 +3935,10 @@ impl Writer {
                 self.write_std140_compat_type_declaration(ir_module, var.ty)?;
             }
         }
+
+        // Write layoutless type declarations for Workgroup variables.
+        // Only on SPIR-V 1.4+ where OpCopyLogical is available for conversion.
+        self.write_workgroup_types(ir_module)?;
 
         // write all const-expressions as constants
         self.constant_ids
