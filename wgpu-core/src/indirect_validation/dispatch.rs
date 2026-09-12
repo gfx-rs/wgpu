@@ -249,7 +249,7 @@ impl Dispatch {
             usage: wgt::BufferUses::INDIRECT | wgt::BufferUses::STORAGE_READ_WRITE,
             memory_flags: hal::MemoryFlags::empty(),
         };
-        let dst_buffer =
+        let (dst_buffer, _) =
             unsafe { device.create_buffer(&dst_buffer_desc) }.map_err(DeviceError::from_hal)?;
         let dst_buffer = guard(dst_buffer, |buffer| unsafe {
             device.destroy_buffer(buffer)
@@ -270,7 +270,7 @@ impl Dispatch {
             buffers: &[hal::BufferBinding::new_unchecked(
                 dst_buffer.as_ref(),
                 0,
-                Some(DST_BUFFER_SIZE),
+                DST_BUFFER_SIZE,
             )],
             samplers: &[],
             textures: &[],

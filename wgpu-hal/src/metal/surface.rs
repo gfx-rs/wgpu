@@ -257,7 +257,12 @@ impl crate::Surface for super::Surface {
         *self.extent.write() = config.extent;
 
         let render_layer = self.render_layer.lock();
-        let framebuffer_only = config.usage == wgt::TextureUses::COLOR_TARGET;
+        // Metal forbids creating alternate-format views of framebuffer-only textures.
+        let framebuffer_only = config.usage == wgt::TextureUses::COLOR_TARGET
+            && config
+                .view_formats
+                .iter()
+                .all(|format| *format == config.format);
         let display_sync = match config.present_mode {
             wgt::PresentMode::Fifo => true,
             wgt::PresentMode::Immediate => false,

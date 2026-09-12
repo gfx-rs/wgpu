@@ -5,6 +5,7 @@ use std::sync::Arc;
 use deno_core::op2;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
+use wgpu_core::resource::Labeled as _;
 
 use crate::error::GPUGenericError;
 use crate::texture::GPUTextureViewDimension;
@@ -12,7 +13,6 @@ use crate::webidl::GPUShaderStageFlags;
 
 pub struct GPUBindGroupLayout {
   pub wgpu_bind_group_layout: Arc<wgpu_core::binding_model::BindGroupLayout>,
-  pub label: String,
 }
 
 impl deno_core::webidl::WebIdlInterfaceConverter for GPUBindGroupLayout {
@@ -36,7 +36,7 @@ impl GPUBindGroupLayout {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_bind_group_layout.label().to_string()
   }
   #[setter]
   #[string]

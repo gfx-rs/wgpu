@@ -107,9 +107,9 @@ impl GPUCanvasContext {
 
     let device = configuration.device;
 
-    let err = self.wgpu_surface.configure(&device.wgpu_device, &conf);
+    let result = self.wgpu_surface.configure(&device.wgpu_device, &conf);
 
-    device.error_handler.push_error(err);
+    device.error_handler.push_error(result.err());
 
     self.config.borrow_mut().replace(Configuration {
       device,
@@ -150,14 +150,6 @@ impl GPUCanvasContext {
         let texture = GPUTexture {
           wgpu_texture: output.texture.unwrap(),
           default_view: Default::default(),
-          label: "".to_string(),
-          size: wgpu_types::Extent3d {
-            width: *self.width.borrow(),
-            height: *self.height.borrow(),
-            depth_or_array_layers: 1,
-          },
-          mip_level_count: 0,
-          sample_count: 0,
           dimension: crate::texture::GPUTextureDimension::D2,
           format: config.format.clone(),
           usage: config.usage,
@@ -200,11 +192,11 @@ impl GPUCanvasContext {
     config.surface_config.width = width;
     config.surface_config.height = height;
 
-    let err = self
+    let result = self
       .wgpu_surface
       .configure(&config.device.wgpu_device, &config.surface_config);
 
-    config.device.error_handler.push_error(err);
+    config.device.error_handler.push_error(result.err());
   }
 }
 

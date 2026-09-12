@@ -1,11 +1,15 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+#[cfg(any(feature = "serde", test))]
+use serde::{Deserialize, Serialize};
+
 /// Compilation information for a shader module.
 ///
 /// Corresponds to [WebGPU `GPUCompilationInfo`](https://gpuweb.github.io/gpuweb/#gpucompilationinfo).
 /// The source locations use bytes, and index a UTF-8 encoded string.
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CompilationInfo {
     /// The messages from the shader compilation process.
     pub messages: Vec<CompilationMessage>,
@@ -16,6 +20,7 @@ pub struct CompilationInfo {
 /// Roughly corresponds to [`GPUCompilationMessage`](https://www.w3.org/TR/webgpu/#gpucompilationmessage),
 /// except that the location uses UTF-8 for all positions.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CompilationMessage {
     /// The text of the message.
     pub message: String,
@@ -27,6 +32,8 @@ pub struct CompilationMessage {
 
 /// The type of a compilation message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[repr(u8)]
 pub enum CompilationMessageType {
     /// An error message.
     Error,
@@ -45,6 +52,7 @@ pub enum CompilationMessageType {
 ///
 /// [gcm]: https://www.w3.org/TR/webgpu/#gpucompilationmessage
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SourceLocation {
     /// 1-based line number.
     pub line_number: u32,
