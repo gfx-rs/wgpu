@@ -404,6 +404,31 @@ impl Drop for NativeSwapchain {
     }
 }
 
+/// Destroy the swapchain semaphores that are no longer referenced by a live
+/// surface texture. A still-referenced semaphore is skipped, as the texture
+/// may still submit work using it.
+///
+/// The vectors are drained.
+fn destroy_swapchain_semaphores(
+    acquire_semaphores: &mut Vec<Arc<Mutex<SwapchainAcquireSemaphore>>>,
+    present_semaphores: &mut Vec<Arc<Mutex<SwapchainPresentSemaphores>>>,
+    device: &crate::vulkan::Device,
+) {
+    for semaphore in acquire_semaphores.drain(..) {
+        if let Some(mutex_removed) = Arc::into_inner(semaphore) {
+            let semaphore_removed = mutex_removed.into_inner();
+            unsafe { semaphore_removed.destroy(&device.shared.raw) };
+        }
+    }
+
+    for semaphore in present_semaphores.drain(..) {
+        if let Some(mutex_removed) = Arc::into_inner(semaphore) {
+            let semaphore_removed = mutex_removed.into_inner();
+            unsafe { semaphore_removed.destroy(&device.shared.raw) };
+        }
+    }
+}
+
 impl Swapchain for NativeSwapchain {
     unsafe fn release_resources(&mut self, device: &crate::vulkan::Device) {
         profiling::scope!("Swapchain::release_resources");
@@ -424,24 +449,11 @@ impl Swapchain for NativeSwapchain {
             unsafe { device.shared.raw.destroy_fence(fence, None) }
         }
 
-        // We cannot take this by value, as the function returns `self`.
-        for semaphore in self.acquire_semaphores.drain(..) {
-            let arc_removed = Arc::into_inner(semaphore).expect(
-                "Trying to destroy a SwapchainAcquireSemaphore that is still in use by a SurfaceTexture",
-            );
-            let mutex_removed = arc_removed.into_inner();
-
-            unsafe { mutex_removed.destroy(&device.shared.raw) };
-        }
-
-        for semaphore in self.present_semaphores.drain(..) {
-            let arc_removed = Arc::into_inner(semaphore).expect(
-                "Trying to destroy a SwapchainPresentSemaphores that is still in use by a SurfaceTexture",
-            );
-            let mutex_removed = arc_removed.into_inner();
-
-            unsafe { mutex_removed.destroy(&device.shared.raw) };
-        }
+        destroy_swapchain_semaphores(
+            &mut self.acquire_semaphores,
+            &mut self.present_semaphores,
+            device,
+        );
     }
 
     unsafe fn acquire(
