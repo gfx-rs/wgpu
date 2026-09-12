@@ -229,6 +229,40 @@ fn map_async_on_invalid_buffer_calls_callback() {
     );
 }
 
+#[test]
+fn map_async_pending_when_device_destroyed() {
+    use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
+    use std::sync::Arc;
+
+    for (mode, usage) in [
+        (wgpu::MapMode::Read, wgpu::BufferUsages::MAP_READ),
+        (wgpu::MapMode::Write, wgpu::BufferUsages::MAP_WRITE),
+    ] {
+        for size in [0, 16] {
+            let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size,
+                usage,
+                mapped_at_creation: false,
+            });
+            let callback_called = Arc::new(AtomicBool::new(false));
+            let callback_called2 = callback_called.clone();
+
+            buffer.map_async(mode, .., move |result| {
+                assert!(result.is_err(), "{mode:?}, size={size}");
+                callback_called2.store(true, SeqCst);
+            });
+            assert!(!callback_called.load(SeqCst));
+
+            device.destroy();
+            device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+            assert!(callback_called.load(SeqCst));
+            assert!(buffer.get_mapped_range(..).is_err());
+        }
+    }
+}
+
 /// Ensure that you cannot unmap a buffer while there are still accessible mapped views.
 #[test]
 #[should_panic(expected = "You cannot unmap a buffer that still has accessible mapped views")]
