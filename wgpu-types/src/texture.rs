@@ -301,6 +301,7 @@ pub struct TextureSelector {
 ///
 /// Corresponds to [WebGPU `GPUTextureSampleType`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputexturesampletype).
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TextureSampleType {
@@ -383,6 +384,7 @@ impl Default for TextureSampleType {
 ///
 /// Corresponds to [WebGPU `GPUStorageTextureAccess`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpustoragetextureaccess).
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
