@@ -2,6 +2,7 @@ use alloc::{sync::Arc, vec::Vec};
 
 use smallvec::SmallVec;
 use thiserror::Error;
+use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
     device::{
@@ -152,6 +153,17 @@ impl WaitIdleError {
                 Some(wgt::PollError::WrongSubmissionIndex(a, b))
             }
             _ => None,
+        }
+    }
+}
+
+impl WebGpuError for WaitIdleError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            WaitIdleError::Device(device_error) => device_error.webgpu_error_type(),
+            WaitIdleError::WrongSubmissionIndex(_, _) | WaitIdleError::Timeout => {
+                ErrorType::Internal
+            }
         }
     }
 }
