@@ -226,6 +226,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Report an error instead of panicking when Metal declines to create a texture view, which can occur for some views of textures with `TRANSIENT_ATTACHMENT` usage. By @matthargett in [#10145](https://github.com/gfx-rs/wgpu/pull/10145).
 - BREAKING: Advertise `CompositeAlphaMode::PreMultiplied` instead of `PostMultiplied`, matching the premultiplied alpha compositing that Core Animation actually performs for a non-opaque `CAMetalLayer`. By @nicoburns in [#9922](https://github.com/gfx-rs/wgpu/pull/9922).
   - If you previously hard-coded `PostMultiplied` to get a transparent macOS window, you will start receiving `UnsupportedAlphaMode` validation errors for this. Those affected should migrate to `PreMultiplied` instead.
+- Fix a crash in `Surface::configure` on iOS below 16. `wantsExtendedDynamicRangeContent` is iOS 16+ and is now only called there. By @VladasZ in [#10257](https://github.com/gfx-rs/wgpu/pull/10257).
 - Fix a crash when creating a declared alternate sRGB view of a render-attachment-only surface with Metal API Validation enabled. By @jinleili in [#10280](https://github.com/gfx-rs/wgpu/pull/10280).
 
 #### GLES
