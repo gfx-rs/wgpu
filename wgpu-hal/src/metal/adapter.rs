@@ -1234,6 +1234,7 @@ impl super::CapabilitiesQuery {
         features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);
         features.set(F::TEXTURE_COMPRESSION_BC_SLICED_3D, self.format_bc); // BC guarantees Sliced 3D
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
+        features.set(F::TEXTURE_COMPRESSION_UNALIGNED, true);
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
         features.set(F::PRIMITIVE_INDEX, self.supports_shader_primitive_index);

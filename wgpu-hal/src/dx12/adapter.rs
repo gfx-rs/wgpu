@@ -300,6 +300,19 @@ impl super::Adapter {
             .is_ok()
         };
 
+        let unaligned_block_textures_supported = {
+            let mut features8 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS8::default();
+            unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS8,
+                    <*mut _>::cast(&mut features8),
+                    size_of_val(&features8) as u32,
+                )
+            }
+            .is_ok()
+                && features8.UnalignedBlockTexturesSupported.as_bool()
+        };
+
         let unrestricted_buffer_texture_copy_pitch_supported = {
             let mut features13 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS13::default();
             unsafe {
@@ -501,6 +514,11 @@ impl super::Adapter {
             wgt::Features::CONSERVATIVE_RASTERIZATION,
             options.ConservativeRasterizationTier
                 != Direct3D12::D3D12_CONSERVATIVE_RASTERIZATION_TIER_NOT_SUPPORTED,
+        );
+
+        features.set(
+            wgt::Features::TEXTURE_COMPRESSION_UNALIGNED,
+            unaligned_block_textures_supported,
         );
 
         features.set(
