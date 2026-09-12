@@ -53,7 +53,7 @@ pub(crate) struct GPUBindGroupLayoutDescriptor {
   pub entries: Vec<GPUBindGroupLayoutEntry>,
 }
 
-#[derive(WebIDL)]
+#[derive(WebIDL, Copy, Clone)]
 #[webidl(dictionary)]
 pub(crate) struct GPUBindGroupLayoutEntry {
   #[options(enforce_range = true)]
@@ -66,7 +66,131 @@ pub(crate) struct GPUBindGroupLayoutEntry {
   pub external_texture: Option<GPUExternalTextureBindingLayout>,
 }
 
-#[derive(WebIDL)]
+impl TryFrom<GPUBindGroupLayoutEntry> for wgpu_types::BindGroupLayoutEntry {
+  type Error = wgpu_core::binding_model::CreateBindGroupLayoutError;
+
+  fn try_from(value: GPUBindGroupLayoutEntry) -> Result<Self, Self::Error> {
+    let GPUBindGroupLayoutEntry {
+      binding,
+      visibility,
+      buffer,
+      sampler,
+      texture,
+      storage_texture,
+      external_texture,
+    } = value;
+
+    let mut binding_type = None;
+    if let Some(buffer) = buffer {
+      if binding_type.is_some() {
+        return Err(wgpu_core::binding_model::CreateBindGroupLayoutError::Entry { binding, error: wgpu_core::binding_model::BindGroupLayoutEntryError::MultipleBindingTypesProvided });
+      }
+      binding_type = Some(wgpu_types::BindingType::Buffer {
+        ty: buffer.r#type.into(),
+        has_dynamic_offset: buffer.has_dynamic_offset,
+        min_binding_size: wgpu_types::BufferSize::new(buffer.min_binding_size),
+      });
+    }
+
+    if let Some(sampler) = sampler {
+      if binding_type.is_some() {
+        return Err(wgpu_core::binding_model::CreateBindGroupLayoutError::Entry { binding, error: wgpu_core::binding_model::BindGroupLayoutEntryError::MultipleBindingTypesProvided });
+      }
+      binding_type =
+        Some(wgpu_types::BindingType::Sampler(sampler.r#type.into()));
+    }
+
+    if let Some(texture) = texture {
+      if binding_type.is_some() {
+        return Err(wgpu_core::binding_model::CreateBindGroupLayoutError::Entry { binding, error: wgpu_core::binding_model::BindGroupLayoutEntryError::MultipleBindingTypesProvided });
+      }
+      binding_type = Some(wgpu_types::BindingType::Texture {
+        sample_type: texture.sample_type.into(),
+        view_dimension: texture.view_dimension.into(),
+        multisampled: texture.multisampled,
+      });
+    }
+
+    if let Some(storage_texture) = storage_texture {
+      if binding_type.is_some() {
+        return Err(wgpu_core::binding_model::CreateBindGroupLayoutError::Entry { binding, error: wgpu_core::binding_model::BindGroupLayoutEntryError::MultipleBindingTypesProvided });
+      }
+      binding_type = Some(wgpu_types::BindingType::StorageTexture {
+        access: storage_texture.access.into(),
+        format: storage_texture.format.into(),
+        view_dimension: storage_texture.view_dimension.into(),
+      });
+    }
+
+    if let Some(GPUExternalTextureBindingLayout {}) = external_texture {
+      if binding_type.is_some() {
+        return Err(wgpu_core::binding_model::CreateBindGroupLayoutError::Entry { binding, error: wgpu_core::binding_model::BindGroupLayoutEntryError::MultipleBindingTypesProvided });
+      }
+      binding_type = Some(wgpu_types::BindingType::ExternalTexture);
+    }
+
+    Ok(wgpu_types::BindGroupLayoutEntry {
+      binding,
+      visibility: visibility.into(),
+      ty: binding_type.ok_or(wgpu_core::binding_model::CreateBindGroupLayoutError::Entry { binding, error: wgpu_core::binding_model::BindGroupLayoutEntryError::NoBindingTypesProvided })?,
+      count: None, // native-only
+    })
+  }
+}
+
+impl From<GPUBindGroupLayoutEntry>
+  for wgpu_core::binding_model::BindGroupLayoutEntry
+{
+  fn from(value: GPUBindGroupLayoutEntry) -> Self {
+    let buffer = value.buffer.map(|buffer| {
+      wgpu_core::binding_model::BufferBindingLayout {
+        ty: buffer.r#type.into(),
+        has_dynamic_offset: buffer.has_dynamic_offset,
+        min_binding_size: wgpu_types::BufferSize::new(buffer.min_binding_size),
+      }
+    });
+
+    let sampler = value.sampler.map(|sampler| {
+      wgpu_core::binding_model::SamplerBindingLayout {
+        ty: sampler.r#type.into(),
+      }
+    });
+
+    let texture = value.texture.map(|texture| {
+      wgpu_core::binding_model::TextureBindingLayout {
+        sample_type: texture.sample_type.into(),
+        view_dimension: texture.view_dimension.into(),
+        multisampled: texture.multisampled,
+      }
+    });
+
+    let storage_texture = value.storage_texture.map(|storage_texture| {
+      wgpu_core::binding_model::StorageTextureBindingLayout {
+        access: storage_texture.access.into(),
+        format: storage_texture.format.into(),
+        view_dimension: storage_texture.view_dimension.into(),
+      }
+    });
+
+    let external_texture = value
+      .external_texture
+      .map(|_| wgpu_core::binding_model::ExternalTextureBindingLayout {});
+
+    Self {
+      binding: value.binding,
+      visibility: value.visibility.into(),
+      buffer,
+      sampler,
+      texture,
+      storage_texture,
+      external_texture,
+      acceleration_structure: None,
+      count: None, // native-only
+    }
+  }
+}
+
+#[derive(WebIDL, Copy, Clone)]
 #[webidl(dictionary)]
 pub(crate) struct GPUBufferBindingLayout {
   #[webidl(default = GPUBufferBindingType::Uniform)]
@@ -77,7 +201,7 @@ pub(crate) struct GPUBufferBindingLayout {
   pub min_binding_size: u64,
 }
 
-#[derive(WebIDL)]
+#[derive(WebIDL, Copy, Clone)]
 #[webidl(enum)]
 pub(crate) enum GPUBufferBindingType {
   Uniform,
@@ -97,14 +221,14 @@ impl From<GPUBufferBindingType> for wgpu_types::BufferBindingType {
   }
 }
 
-#[derive(WebIDL)]
+#[derive(WebIDL, Copy, Clone)]
 #[webidl(dictionary)]
 pub(crate) struct GPUSamplerBindingLayout {
   #[webidl(default = GPUSamplerBindingType::Filtering)]
   pub r#type: GPUSamplerBindingType,
 }
 
-#[derive(WebIDL)]
+#[derive(WebIDL, Copy, Clone)]
 #[webidl(enum)]
 pub(crate) enum GPUSamplerBindingType {
   Filtering,
@@ -122,7 +246,7 @@ impl From<GPUSamplerBindingType> for wgpu_types::SamplerBindingType {
   }
 }
 
-#[derive(WebIDL)]
+#[derive(WebIDL, Copy, Clone)]
 #[webidl(dictionary)]
 pub(crate) struct GPUTextureBindingLayout {
   #[webidl(default = GPUTextureSampleType::Float)]
@@ -133,7 +257,7 @@ pub(crate) struct GPUTextureBindingLayout {
   pub multisampled: bool,
 }
 
-#[derive(WebIDL)]
+#[derive(WebIDL, Copy, Clone)]
 #[webidl(enum)]
 pub(crate) enum GPUTextureSampleType {
   Float,
@@ -157,7 +281,7 @@ impl From<GPUTextureSampleType> for wgpu_types::TextureSampleType {
   }
 }
 
-#[derive(WebIDL)]
+#[derive(WebIDL, Copy, Clone)]
 #[webidl(dictionary)]
 pub(crate) struct GPUStorageTextureBindingLayout {
   #[webidl(default = GPUStorageTextureAccess::WriteOnly)]
@@ -167,7 +291,7 @@ pub(crate) struct GPUStorageTextureBindingLayout {
   pub view_dimension: GPUTextureViewDimension,
 }
 
-#[derive(WebIDL)]
+#[derive(WebIDL, Copy, Clone)]
 #[webidl(enum)]
 pub(crate) enum GPUStorageTextureAccess {
   WriteOnly,
@@ -185,6 +309,6 @@ impl From<GPUStorageTextureAccess> for wgpu_types::StorageTextureAccess {
   }
 }
 
-#[derive(WebIDL)]
+#[derive(WebIDL, Copy, Clone)]
 #[webidl(dictionary)]
 pub(crate) struct GPUExternalTextureBindingLayout {}
