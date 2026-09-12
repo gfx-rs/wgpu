@@ -350,6 +350,12 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn type_hit_object(id: Word) -> Self {
+        let mut instruction = Self::new(Op::TypeHitObjectEXT);
+        instruction.set_result(id);
+        instruction
+    }
+
     pub(super) fn type_sampled_image(id: Word, image_type_id: Word) -> Self {
         let mut instruction = Self::new(Op::TypeSampledImage);
         instruction.set_result(id);
@@ -895,6 +901,130 @@ impl super::Instruction {
         instruction.add_operand(ray_dir);
         instruction.add_operand(ray_tmax);
         instruction.add_operand(payload);
+        instruction
+    }
+
+    //
+    //  Ray Tracing Invocation Reorder Instructions
+    //
+
+    #[expect(clippy::too_many_arguments)]
+    pub(super) fn hit_object_trace_ray(
+        hit_object: Word,
+        acceleration_structure: Word,
+        ray_flags: Word,
+        cull_mask: Word,
+        sbt_offset: Word,
+        sbt_stride: Word,
+        miss_idx: Word,
+        ray_origin: Word,
+        ray_tmin: Word,
+        ray_dir: Word,
+        ray_tmax: Word,
+        payload: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::HitObjectTraceRayEXT);
+        instruction.add_operand(hit_object);
+        instruction.add_operand(acceleration_structure);
+        instruction.add_operand(ray_flags);
+        instruction.add_operand(cull_mask);
+        instruction.add_operand(sbt_offset);
+        instruction.add_operand(sbt_stride);
+        instruction.add_operand(miss_idx);
+        instruction.add_operand(ray_origin);
+        instruction.add_operand(ray_tmin);
+        instruction.add_operand(ray_dir);
+        instruction.add_operand(ray_tmax);
+        instruction.add_operand(payload);
+        instruction
+    }
+
+    pub(super) fn hit_object_record_miss(
+        hit_object: Word,
+        ray_flags: Word,
+        miss_idx: Word,
+        ray_origin: Word,
+        ray_tmin: Word,
+        ray_dir: Word,
+        ray_tmax: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::HitObjectRecordMissEXT);
+        instruction.add_operand(hit_object);
+        instruction.add_operand(ray_flags);
+        instruction.add_operand(miss_idx);
+        instruction.add_operand(ray_origin);
+        instruction.add_operand(ray_tmin);
+        instruction.add_operand(ray_dir);
+        instruction.add_operand(ray_tmax);
+        instruction
+    }
+
+    /// `OpHitObjectRecordFromQueryEXT`.
+    ///
+    /// The optional `HitKind` operand is never emitted, so the hit object keeps
+    /// whatever hit kind the ray query's committed intersection has. Naga's IR
+    /// has no way to name a different one.
+    pub(super) fn hit_object_record_from_query(
+        hit_object: Word,
+        ray_query: Word,
+        sbt_index: Word,
+        attributes: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::HitObjectRecordFromQueryEXT);
+        instruction.add_operand(hit_object);
+        instruction.add_operand(ray_query);
+        instruction.add_operand(sbt_index);
+        instruction.add_operand(attributes);
+        instruction
+    }
+
+    pub(super) fn hit_object_record_empty(hit_object: Word) -> Self {
+        let mut instruction = Self::new(Op::HitObjectRecordEmptyEXT);
+        instruction.add_operand(hit_object);
+        instruction
+    }
+
+    pub(super) fn hit_object_execute_shader(hit_object: Word, payload: Word) -> Self {
+        let mut instruction = Self::new(Op::HitObjectExecuteShaderEXT);
+        instruction.add_operand(hit_object);
+        instruction.add_operand(payload);
+        instruction
+    }
+
+    /// Any of the `OpHitObjectGet*EXT` / `OpHitObjectIs*EXT` instructions,
+    /// which all take a single hit object operand and produce a result.
+    pub(super) fn hit_object_get(op: Op, result_type_id: Word, id: Word, hit_object: Word) -> Self {
+        let mut instruction = Self::new(op);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(hit_object);
+        instruction
+    }
+
+    pub(super) fn hit_object_get_attributes(hit_object: Word, attributes: Word) -> Self {
+        let mut instruction = Self::new(Op::HitObjectGetAttributesEXT);
+        instruction.add_operand(hit_object);
+        instruction.add_operand(attributes);
+        instruction
+    }
+
+    pub(super) fn reorder_thread_with_hint(hint: Word, bits: Word) -> Self {
+        let mut instruction = Self::new(Op::ReorderThreadWithHintEXT);
+        instruction.add_operand(hint);
+        instruction.add_operand(bits);
+        instruction
+    }
+
+    pub(super) fn reorder_thread_with_hit_object(
+        hit_object: Word,
+        hint: Option<(Word, Word)>,
+    ) -> Self {
+        let mut instruction = Self::new(Op::ReorderThreadWithHitObjectEXT);
+        instruction.add_operand(hit_object);
+        if let Some((hint, bits)) = hint {
+            instruction.add_operand(hint);
+            instruction.add_operand(bits);
+        }
         instruction
     }
 

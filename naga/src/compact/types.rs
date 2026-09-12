@@ -22,7 +22,8 @@ impl TypeTracer<'_> {
             | Ti::Image { .. }
             | Ti::Sampler { .. }
             | Ti::AccelerationStructure { .. }
-            | Ti::RayQuery { .. } => {}
+            | Ti::RayQuery { .. }
+            | Ti::HitObject => {}
 
             // Types that do contain handles.
             Ti::Array {
@@ -73,7 +74,8 @@ impl ModuleMap {
             | Ti::Image { .. }
             | Ti::Sampler { .. }
             | Ti::AccelerationStructure { .. }
-            | Ti::RayQuery { .. } => {}
+            | Ti::RayQuery { .. }
+            | Ti::HitObject => {}
 
             // Types that do contain handles.
             Ti::Pointer {

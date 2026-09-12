@@ -270,6 +270,7 @@ impl Layouter {
                 | Ti::Sampler { .. }
                 | Ti::AccelerationStructure { .. }
                 | Ti::RayQuery { .. }
+                | Ti::HitObject
                 | Ti::BindingArray { .. } => TypeLayout {
                     size,
                     alignment: Alignment::ONE,

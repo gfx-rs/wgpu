@@ -9,7 +9,9 @@ use core::{matches, num::NonZeroU32};
 
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
-use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
+use crate::front::wgsl::parse::directive::enable_extension::{
+    EnableExtensions, ImplementedEnableExtension,
+};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::wgsl::Result;
@@ -1869,6 +1871,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         )));
                     }
 
+                    if matches!(ctx.module.types[ty].inner, crate::TypeInner::HitObject) {
+                        // Hit objects are like ray queries: a `let` must have an
+                        // initializer, but hit objects cannot be initialized.
+                        return Err(Box::new(Error::HitObjectWithInitializer(
+                            ctx.function.expressions.get_span(initializer),
+                        )));
+                    }
+
                     return Ok(());
                 }
                 ast::LocalDecl::Var(ref v) => {
@@ -1954,6 +1964,18 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             } else {
                                 return Ok(());
                             }
+                        }
+                        crate::TypeInner::HitObject => {
+                            // Initializers are disallowed for hit objects as any store is
+                            // disallowed. Unlike ray queries, hit objects need no special
+                            // IR to reset them at the top of a loop body.
+                            if let Some(expr) = initializer {
+                                return Err(Box::new(Error::HitObjectWithInitializer(
+                                    ctx.function.expressions.get_span(expr),
+                                )));
+                            }
+
+                            return Ok(());
                         }
                         _ => {
                             let initializer = if is_inside_loop {
@@ -2928,6 +2950,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         let vertex_return = tl.maybe_vertex_return(ctx)?;
                         ir::TypeInner::RayQuery { vertex_return }
                     }
+                    conv::TypeGenerator::HitObject => ir::TypeInner::HitObject,
                     conv::TypeGenerator::CooperativeMatrix { columns, rows } => {
                         let (ty, span) = tl.ty_with_span(self, ctx)?;
                         let ir::TypeInner::Scalar(scalar) = ctx.module.types[ty].inner else {
@@ -3907,6 +3930,26 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         ir::Expression::CooperativeMultiplyAdd { a, b, c },
                         MustUse::Yes,
                     )
+                }
+                "hitObjectTraceRay"
+                | "hitObjectRecordMiss"
+                | "hitObjectRecordFromQuery"
+                | "hitObjectRecordEmpty"
+                | "hitObjectExecuteShader"
+                | "hitObjectIsEmpty"
+                | "hitObjectIsHit"
+                | "hitObjectIsMiss"
+                | "hitObjectGetIntersection"
+                | "reorderThread" => {
+                    match self.call_hit_object_builtin(
+                        function_name,
+                        function_span,
+                        arguments,
+                        ctx,
+                    )? {
+                        Some(expr) => (expr, MustUse::Yes),
+                        None => return Ok(None),
+                    }
                 }
                 "traceRay" => {
                     let mut args = ctx.prepare_args(arguments, 3, function_span);
@@ -4942,6 +4985,232 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             None => None,
         })
+    }
+
+    /// Generate Naga IR for a call to one of the `hitObject*` built-ins, or to
+    /// `reorderThread`.
+    ///
+    /// Returns `Ok(None)` if the call lowered to a statement rather than an
+    /// expression. Every hit object built-in that does produce a value is
+    /// [`MustUse::Yes`], so the caller does not need to be told.
+    ///
+    /// This is deliberately kept out of [`Self::call_builtin`]: that function
+    /// recurses through the whole expression tree, so its stack frame is
+    /// budgeted (see `clippy.toml`'s `stack-size-threshold`), and these
+    /// built-ins' locals do not need to be part of it.
+    fn call_hit_object_builtin(
+        &mut self,
+        function_name: &'source str,
+        function_span: Span,
+        arguments: &[Handle<ast::Expression<'source>>],
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, Option<ir::Expression>> {
+        ctx.enable_extensions.require(
+            ImplementedEnableExtension::WgpuRayTracingInvocationReorder,
+            function_span,
+        )?;
+
+        Ok(Some(match function_name {
+            "hitObjectTraceRay" => {
+                let mut args = ctx.prepare_args(arguments, 4, function_span);
+                let hit_object = self.hit_object_pointer(args.next()?, ctx)?;
+                let acceleration_structure = self.expression(args.next()?, ctx)?;
+                let descriptor = self.expression(args.next()?, ctx)?;
+                let payload = self.expression(args.next()?, ctx)?;
+                args.finish()?;
+
+                let _ = ctx.module.generate_ray_desc_type();
+                let fun = ir::HitObjectFunction::TraceRay {
+                    acceleration_structure,
+                    descriptor,
+                    payload,
+                };
+
+                let rctx = ctx.runtime_expression_ctx(function_span)?;
+                rctx.block
+                    .extend(rctx.emitter.finish(&rctx.function.expressions));
+                rctx.emitter.start(&rctx.function.expressions);
+                rctx.block
+                    .push(ir::Statement::HitObject { hit_object, fun }, function_span);
+                return Ok(None);
+            }
+            "hitObjectRecordMiss" => {
+                let mut args = ctx.prepare_args(arguments, 2, function_span);
+                let hit_object = self.hit_object_pointer(args.next()?, ctx)?;
+                let descriptor = self.expression(args.next()?, ctx)?;
+                args.finish()?;
+
+                let _ = ctx.module.generate_ray_desc_type();
+                let fun = ir::HitObjectFunction::RecordMiss { descriptor };
+
+                let rctx = ctx.runtime_expression_ctx(function_span)?;
+                rctx.block
+                    .extend(rctx.emitter.finish(&rctx.function.expressions));
+                rctx.emitter.start(&rctx.function.expressions);
+                rctx.block
+                    .push(ir::Statement::HitObject { hit_object, fun }, function_span);
+                return Ok(None);
+            }
+            "hitObjectRecordFromQuery" => {
+                let mut args = ctx.prepare_args(arguments, 2, function_span);
+                let hit_object = self.hit_object_pointer(args.next()?, ctx)?;
+                let query = self.ray_query_pointer(args.next()?, ctx)?;
+                args.finish()?;
+
+                let fun = ir::HitObjectFunction::RecordFromQuery { query };
+
+                let rctx = ctx.runtime_expression_ctx(function_span)?;
+                rctx.block
+                    .extend(rctx.emitter.finish(&rctx.function.expressions));
+                rctx.emitter.start(&rctx.function.expressions);
+                rctx.block
+                    .push(ir::Statement::HitObject { hit_object, fun }, function_span);
+                return Ok(None);
+            }
+            "hitObjectRecordEmpty" => {
+                let mut args = ctx.prepare_args(arguments, 1, function_span);
+                let hit_object = self.hit_object_pointer(args.next()?, ctx)?;
+                args.finish()?;
+
+                let fun = ir::HitObjectFunction::RecordEmpty;
+
+                let rctx = ctx.runtime_expression_ctx(function_span)?;
+                rctx.block
+                    .push(ir::Statement::HitObject { hit_object, fun }, function_span);
+                return Ok(None);
+            }
+            "hitObjectExecuteShader" => {
+                let mut args = ctx.prepare_args(arguments, 2, function_span);
+                let hit_object = self.hit_object_pointer(args.next()?, ctx)?;
+                let payload = self.expression(args.next()?, ctx)?;
+                args.finish()?;
+
+                let fun = ir::HitObjectFunction::ExecuteShader { payload };
+
+                let rctx = ctx.runtime_expression_ctx(function_span)?;
+                rctx.block
+                    .extend(rctx.emitter.finish(&rctx.function.expressions));
+                rctx.emitter.start(&rctx.function.expressions);
+                rctx.block
+                    .push(ir::Statement::HitObject { hit_object, fun }, function_span);
+                return Ok(None);
+            }
+            "hitObjectIsEmpty" | "hitObjectIsHit" | "hitObjectIsMiss" => {
+                let mut args = ctx.prepare_args(arguments, 1, function_span);
+                let hit_object = self.hit_object_pointer(args.next()?, ctx)?;
+                args.finish()?;
+
+                let query = match function_name {
+                    "hitObjectIsEmpty" => ir::HitObjectQuery::IsEmpty,
+                    "hitObjectIsHit" => ir::HitObjectQuery::IsHit,
+                    _ => ir::HitObjectQuery::IsMiss,
+                };
+
+                ir::Expression::HitObjectQuery { hit_object, query }
+            }
+            "hitObjectGetIntersection" => {
+                let mut args = ctx.prepare_args(arguments, 1, function_span);
+                let hit_object = self.hit_object_pointer(args.next()?, ctx)?;
+                args.finish()?;
+
+                let _ = ctx.module.generate_ray_intersection_type();
+
+                ir::Expression::HitObjectQuery {
+                    hit_object,
+                    query: ir::HitObjectQuery::Intersection,
+                }
+            }
+            "reorderThread" => {
+                match arguments.len() {
+                    // `reorderThread(hint, bits)`
+                    2 => {
+                        let mut args = ctx.prepare_args(arguments, 2, function_span);
+                        let hint =
+                            self.expression_with_leaf_scalar(args.next()?, ir::Scalar::U32, ctx)?;
+                        let bits =
+                            self.expression_with_leaf_scalar(args.next()?, ir::Scalar::U32, ctx)?;
+                        args.finish()?;
+
+                        let fun = ir::RayPipelineFunction::ReorderThread { hint, bits };
+
+                        let rctx = ctx.runtime_expression_ctx(function_span)?;
+                        rctx.block
+                            .extend(rctx.emitter.finish(&rctx.function.expressions));
+                        rctx.emitter.start(&rctx.function.expressions);
+                        rctx.block
+                            .push(ir::Statement::RayPipelineFunction(fun), function_span);
+                    }
+                    // `reorderThread(&hit_object)` and
+                    // `reorderThread(&hit_object, hint, bits)`
+                    arg_count @ (1 | 3) => {
+                        let arg_count = arg_count as u32;
+                        let mut args = ctx.prepare_args(arguments, arg_count, function_span);
+                        let hit_object = self.hit_object_pointer(args.next()?, ctx)?;
+                        let hint = self.reorder_hint(arg_count == 3, &mut args, ctx)?;
+                        args.finish()?;
+
+                        let fun = ir::HitObjectFunction::Reorder { hint };
+
+                        let rctx = ctx.runtime_expression_ctx(function_span)?;
+                        rctx.block
+                            .extend(rctx.emitter.finish(&rctx.function.expressions));
+                        rctx.emitter.start(&rctx.function.expressions);
+                        rctx.block
+                            .push(ir::Statement::HitObject { hit_object, fun }, function_span);
+                    }
+                    found => {
+                        return Err(Box::new(Error::WrongArgumentCount {
+                            span: function_span,
+                            expected: 1..4,
+                            found: found as u32,
+                        }))
+                    }
+                }
+
+                return Ok(None);
+            }
+            _ => unreachable!("unhandled ray tracing invocation reorder built-in"),
+        }))
+    }
+
+    /// Lower the trailing `hint: u32, bits: u32` arguments of an invocation
+    /// reordering built-in, if `present` says the call supplied them.
+    fn reorder_hint(
+        &mut self,
+        present: bool,
+        args: &mut ArgumentContext<'_, 'source>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, Option<ir::ReorderHint>> {
+        if !present {
+            return Ok(None);
+        }
+
+        let hint = self.expression_with_leaf_scalar(args.next()?, ir::Scalar::U32, ctx)?;
+        let bits = self.expression_with_leaf_scalar(args.next()?, ir::Scalar::U32, ctx)?;
+        Ok(Some(ir::ReorderHint { hint, bits }))
+    }
+
+    fn hit_object_pointer(
+        &mut self,
+        expr: Handle<ast::Expression<'source>>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, Handle<ir::Expression>> {
+        let span = ctx.ast_expressions.get_span(expr);
+        let pointer = self.expression(expr, ctx)?;
+
+        match *resolve_inner!(ctx, pointer) {
+            ir::TypeInner::Pointer { base, .. } => match ctx.module.types[base].inner {
+                ir::TypeInner::HitObject => Ok(pointer),
+                ref other => {
+                    log::error!("Pointer type to {other:?} passed to hit object op");
+                    Err(Box::new(Error::InvalidHitObjectPointer(span)))
+                }
+            },
+            ref other => {
+                log::error!("Type {other:?} passed to hit object op");
+                Err(Box::new(Error::InvalidHitObjectPointer(span)))
+            }
+        }
     }
 
     fn ray_query_pointer(

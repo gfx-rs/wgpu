@@ -125,7 +125,7 @@ impl BlockContext<'_> {
         &mut self,
         function: &crate::RayPipelineFunction,
         block: &mut Block,
-    ) {
+    ) -> Result<(), super::super::Error> {
         match *function {
             crate::RayPipelineFunction::TraceRay {
                 acceleration_structure,
@@ -152,6 +152,16 @@ impl BlockContext<'_> {
                     &[acc_struct_id, desc_id],
                 ));
             }
+            crate::RayPipelineFunction::ReorderThread { hint, bits } => {
+                self.writer.require_hit_objects()?;
+                let hint_id = self.cached[hint];
+                let bits_id = self.cached[bits];
+                block
+                    .body
+                    .push(Instruction::reorder_thread_with_hint(hint_id, bits_id));
+            }
         }
+
+        Ok(())
     }
 }

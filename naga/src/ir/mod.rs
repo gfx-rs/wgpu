@@ -993,6 +993,17 @@ pub enum TypeInner {
     /// Locally used handle for ray queries.
     RayQuery { vertex_return: bool },
 
+    /// Opaque handle to ray traversal state (hit / miss / empty) used by ray
+    /// tracing invocation reordering.
+    ///
+    /// Like [`RayQuery`], values of this type may only live in local variables
+    /// in the [`Function`] address space, and may only be manipulated through
+    /// [`Statement::HitObject`] and [`Expression::HitObjectQuery`].
+    ///
+    /// [`RayQuery`]: TypeInner::RayQuery
+    /// [`Function`]: AddressSpace::Function
+    HitObject,
+
     /// Array of bindings.
     ///
     /// A `BindingArray` represents an array where each element draws its value
@@ -1906,6 +1917,26 @@ pub enum Expression {
         committed: bool,
     },
 
+    /// Query the state recorded in a [`HitObject`].
+    ///
+    /// The `hit_object` operand must be a pointer to a local variable of type
+    /// [`TypeInner::HitObject`], exactly like the operand of a
+    /// [`Statement::HitObject`] statement.
+    ///
+    /// Like [`RayQueryGetIntersection`], this is an ordinary expression that is
+    /// evaluated by the [`Emit`] statement that covers it.
+    ///
+    /// [`HitObject`]: TypeInner::HitObject
+    /// [`RayQueryGetIntersection`]: Expression::RayQueryGetIntersection
+    /// [`Emit`]: Statement::Emit
+    HitObjectQuery {
+        /// The hit object to inspect.
+        hit_object: Handle<Expression>,
+
+        /// The property of `hit_object` to retrieve.
+        query: HitObjectQuery,
+    },
+
     /// Result of a [`SubgroupBallot`] statement.
     ///
     /// [`SubgroupBallot`]: Statement::SubgroupBallot
@@ -2348,6 +2379,20 @@ pub enum Statement {
     },
     /// A ray tracing pipeline shader intrinsic.
     RayPipelineFunction(RayPipelineFunction),
+    /// An operation on a hit object.
+    HitObject {
+        /// The [`HitObject`] this statement operates on.
+        ///
+        /// This must be a [`LocalVariable`] expression whose type is
+        /// [`TypeInner::HitObject`].
+        ///
+        /// [`HitObject`]: TypeInner::HitObject
+        /// [`LocalVariable`]: Expression::LocalVariable
+        hit_object: Handle<Expression>,
+
+        /// The specific operation we're performing on `hit_object`.
+        fun: HitObjectFunction,
+    },
     /// Calculate a bitmask using a boolean from each active thread in the subgroup
     SubgroupBallot {
         /// The [`SubgroupBallotResult`] expression representing this load's result.
@@ -2786,6 +2831,166 @@ pub enum RayPipelineFunction {
         // Do we want miss index? What about sbt offset and sbt stride (could be hard to validate)?
         // https://github.com/gfx-rs/wgpu/issues/8894
     },
+
+    /// Reorder the invocations in the ray generation shader according to a
+    /// user-supplied hint.
+    ///
+    /// Only valid in the [`RayGeneration`] stage.
+    ///
+    /// [`RayGeneration`]: ShaderStage::RayGeneration
+    ReorderThread {
+        /// The value to reorder by. Must be a [`U32`] scalar.
+        ///
+        /// [`U32`]: Scalar::U32
+        hint: Handle<Expression>,
+
+        /// How many of the low bits of `hint` are significant. Must be a
+        /// [`U32`] scalar.
+        ///
+        /// [`U32`]: Scalar::U32
+        bits: Handle<Expression>,
+    },
+}
+
+/// An operation that a [`HitObject` statement] applies to its [`hit_object`] operand.
+///
+/// [`HitObject` statement]: Statement::HitObject
+/// [`hit_object`]: Statement::HitObject::hit_object
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum HitObjectFunction {
+    /// Trace a ray, recording the result in the hit object without executing
+    /// any closest hit or miss shaders.
+    TraceRay {
+        /// The acceleration structure within which this ray should search for hits.
+        ///
+        /// The expression must be an [`AccelerationStructure`].
+        ///
+        /// [`AccelerationStructure`]: TypeInner::AccelerationStructure
+        acceleration_structure: Handle<Expression>,
+
+        #[allow(rustdoc::private_intra_doc_links)]
+        /// A struct of detailed parameters for the ray.
+        ///
+        /// This expression should have the struct type given in
+        /// [`SpecialTypes::ray_desc`]. This is available in the WGSL
+        /// front end as the `RayDesc` type.
+        descriptor: Handle<Expression>,
+
+        /// A pointer in the `ray_payload` or `incoming_ray_payload` address spaces.
+        payload: Handle<Expression>,
+    },
+
+    /// Record a miss in the hit object, without tracing a ray.
+    ///
+    /// The `cull_mask` of the descriptor is ignored, and the miss index is
+    /// always zero.
+    RecordMiss {
+        #[allow(rustdoc::private_intra_doc_links)]
+        /// A struct of detailed parameters describing the recorded ray.
+        ///
+        /// This expression should have the struct type given in
+        /// [`SpecialTypes::ray_desc`]. This is available in the WGSL
+        /// front end as the `RayDesc` type.
+        descriptor: Handle<Expression>,
+    },
+
+    /// Record the committed intersection of a ray query in the hit object.
+    ///
+    /// If the ray query's committed intersection is a hit, the hit object
+    /// records that hit; otherwise it records a miss. The shader binding table
+    /// record used for a hit is chosen exactly as a [`TraceRay`] would choose
+    /// it: the shader binding table offset and stride are zero, so the hit
+    /// group is the intersected instance's shader binding table record offset.
+    ///
+    /// If the ray query has not finished traversal, the hit object is recorded
+    /// as empty instead.
+    ///
+    /// [`TraceRay`]: HitObjectFunction::TraceRay
+    RecordFromQuery {
+        /// The ray query whose committed intersection should be recorded.
+        ///
+        /// Like [`Statement::RayQuery::query`], this must be a
+        /// [`LocalVariable`] expression whose type is [`TypeInner::RayQuery`].
+        ///
+        /// [`LocalVariable`]: Expression::LocalVariable
+        query: Handle<Expression>,
+    },
+
+    /// Record that the hit object is empty: neither a hit nor a miss.
+    ///
+    /// An empty hit object does not run any shader when passed to
+    /// [`ExecuteShader`].
+    ///
+    /// [`ExecuteShader`]: HitObjectFunction::ExecuteShader
+    RecordEmpty,
+
+    /// Execute the closest hit or miss shader recorded in the hit object.
+    ExecuteShader {
+        /// A pointer in the `ray_payload` or `incoming_ray_payload` address spaces.
+        payload: Handle<Expression>,
+    },
+
+    /// Reorder invocations by the contents of the hit object, optionally
+    /// combined with a user-supplied hint.
+    ///
+    /// Only valid in the [`RayGeneration`] stage.
+    ///
+    /// [`RayGeneration`]: ShaderStage::RayGeneration
+    Reorder {
+        /// An extra user hint to reorder by, in addition to the hit object.
+        hint: Option<ReorderHint>,
+    },
+}
+
+/// A user-supplied hint for [`HitObjectFunction::Reorder`].
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub struct ReorderHint {
+    /// The value to reorder by. Must be a [`U32`] scalar.
+    ///
+    /// [`U32`]: Scalar::U32
+    pub hint: Handle<Expression>,
+
+    /// How many of the low bits of `hint` are significant. Must be a [`U32`]
+    /// scalar.
+    ///
+    /// [`U32`]: Scalar::U32
+    pub bits: Handle<Expression>,
+}
+
+/// A property of a [`HitObject`] retrieved by an [`Expression::HitObjectQuery`].
+///
+/// [`HitObject`]: TypeInner::HitObject
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum HitObjectQuery {
+    /// Whether the hit object is empty. Returns a [`Bool`] scalar.
+    ///
+    /// [`Bool`]: ScalarKind::Bool
+    IsEmpty,
+
+    /// Whether the hit object represents a hit. Returns a [`Bool`] scalar.
+    ///
+    /// [`Bool`]: ScalarKind::Bool
+    IsHit,
+
+    /// Whether the hit object represents a miss. Returns a [`Bool`] scalar.
+    ///
+    /// [`Bool`]: ScalarKind::Bool
+    IsMiss,
+
+    #[allow(rustdoc::private_intra_doc_links)]
+    /// The intersection recorded in the hit object.
+    ///
+    /// Returns a [`SpecialTypes::ray_intersection`] struct.
+    Intersection,
 }
 
 /// Shader module.

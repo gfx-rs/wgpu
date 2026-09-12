@@ -1343,9 +1343,8 @@ impl<'a> ConstantEvaluator<'a> {
             | Expression::ImageQuery { .. } => Err(ConstantEvaluatorError::ImageExpression),
             Expression::RayQueryProceedResult
             | Expression::RayQueryGetIntersection { .. }
-            | Expression::RayQueryVertexPositions { .. } => {
-                Err(ConstantEvaluatorError::RayQueryExpression)
-            }
+            | Expression::RayQueryVertexPositions { .. }
+            | Expression::HitObjectQuery { .. } => Err(ConstantEvaluatorError::RayQueryExpression),
             Expression::SubgroupBallotResult => Err(ConstantEvaluatorError::SubgroupExpression),
             Expression::SubgroupOperationResult { .. } => {
                 Err(ConstantEvaluatorError::SubgroupExpression)

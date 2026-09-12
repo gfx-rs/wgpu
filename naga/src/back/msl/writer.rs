@@ -369,6 +369,9 @@ impl Display for TypeContext<'_> {
                 }
                 write!(out, "{}", super::ray::metal_intersector_ty())
             }
+            crate::TypeInner::HitObject => {
+                unimplemented!("metal does not support ray tracing invocation reordering")
+            }
             crate::TypeInner::BindingArray { base, .. } => {
                 let base_inner = &self.gctx.types[base].inner;
                 let base_tyname = Self {
@@ -713,6 +716,7 @@ impl crate::Type {
             | Ti::Sampler { .. }
             | Ti::AccelerationStructure { .. }
             | Ti::RayQuery { .. }
+            | Ti::HitObject
             | Ti::BindingArray { .. } => false,
         }
     }
@@ -3047,7 +3051,8 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ")")?;
                 }
             }
-            crate::Expression::RayQueryVertexPositions { .. } => {
+            crate::Expression::RayQueryVertexPositions { .. }
+            | crate::Expression::HitObjectQuery { .. } => {
                 unimplemented!()
             }
             crate::Expression::RayQueryGetIntersection { query, committed } => {
@@ -4468,7 +4473,9 @@ impl<W: Write> Writer<W> {
                     }
                     writeln!(self.out, ");")?;
                 }
-                crate::Statement::RayPipelineFunction(_) => unreachable!(),
+                crate::Statement::RayPipelineFunction(_) | crate::Statement::HitObject { .. } => {
+                    unreachable!()
+                }
             }
         }
 
