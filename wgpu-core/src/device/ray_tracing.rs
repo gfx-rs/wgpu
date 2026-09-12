@@ -22,6 +22,12 @@ use hal::AccelerationStructureTriangleIndices;
 use wgt::{Features, AABB_GEOMETRY_MIN_STRIDE};
 
 impl Device {
+    /// Requires any feature that allows acceleration structures as they can be provided by any extension
+    pub fn require_acceleration_structures(&self) -> Result<(), crate::device::MissingFeatures> {
+        self.require_features(Features::EXPERIMENTAL_RAY_QUERY)
+            .or_else(|_| self.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES))
+    }
+
     pub fn create_blas(
         self: &Arc<Self>,
         blas_desc: &resource::BlasDescriptor,
@@ -53,8 +59,7 @@ impl Device {
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> Result<Arc<resource::Blas>, CreateBlasError> {
         self.check_is_valid()?;
-        self.require_features(Features::EXPERIMENTAL_RAY_QUERY)
-            .or_else(|_| self.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES))?;
+        self.require_acceleration_structures()?;
 
         if blas_desc
             .flags
@@ -264,8 +269,7 @@ impl Device {
         desc: &resource::TlasDescriptor,
     ) -> Result<Arc<resource::Tlas>, CreateTlasError> {
         self.check_is_valid()?;
-        self.require_features(Features::EXPERIMENTAL_RAY_QUERY)
-            .or_else(|_| self.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES))?;
+        self.require_acceleration_structures()?;
 
         if desc.max_instances > self.limits.max_tlas_instance_count {
             return Err(CreateTlasError::TooManyInstances(

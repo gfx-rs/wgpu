@@ -2038,8 +2038,7 @@ impl Queue {
 
         self.device.check_is_valid()?;
 
-        self.device
-            .require_features(wgpu_types::Features::EXPERIMENTAL_RAY_QUERY)?;
+        self.device.require_acceleration_structures()?;
 
         blas.check_is_valid()?;
         self.same_device_as(blas.as_ref())?;

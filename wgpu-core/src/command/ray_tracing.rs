@@ -62,11 +62,7 @@ impl super::CommandEncoder {
             |cmd_buf_data| -> Result<(), BuildAccelerationStructureError> {
                 let device = &self.device;
                 device.check_is_valid()?;
-                device
-                    .require_features(Features::EXPERIMENTAL_RAY_QUERY)
-                    .or_else(|_| {
-                        device.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
-                    })?;
+                device.require_acceleration_structures()?;
 
                 let mut build_command = AsBuild::with_capacity(blases.len(), tlases.len());
 
@@ -203,14 +199,7 @@ pub(crate) fn build_acceleration_structures(
     mut tlases: Vec<OwnedTlasPackage<ArcReferences>>,
 ) -> Result<(), BuildAccelerationStructureError> {
     profiling::scope!("build_acceleration_structures");
-    state
-        .device
-        .require_features(Features::EXPERIMENTAL_RAY_QUERY)
-        .or_else(|_| {
-            state
-                .device
-                .require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
-        })?;
+    state.device.require_acceleration_structures()?;
 
     let mut build_command = AsBuild::with_capacity(blases.len(), tlases.len());
     let mut input_barriers = Vec::<hal::BufferBarrier<dyn hal::DynBuffer>>::new();
@@ -269,20 +258,6 @@ pub(crate) fn build_acceleration_structures(
 
             if is_new_dependency {
                 state.tracker.blas_s.insert_single(blas.clone());
-            }
-
-            if instance.intersection_index >= (1u32 << 24u32) {
-                return Err(
-                    BuildAccelerationStructureError::TlasInvalidIntersectionIndex(
-                        tlas.error_ident(),
-                        instance_idx,
-                        instance.intersection_index,
-                    ),
-                );
-            } else if instance.intersection_index != 0 {
-                state
-                    .device
-                    .require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)?;
             }
 
             if instance.intersection_index >= (1u32 << 24u32) {
