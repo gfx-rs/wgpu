@@ -15,7 +15,7 @@ use core::{
     ptr::NonNull,
     slice,
 };
-use wgc::resource::{BufferMappingGuard, ParentDevice as _};
+use wgc::resource::{BufferMapping, ParentDevice as _};
 use wgt::error::WebGpuError;
 
 use arrayvec::ArrayVec;
@@ -487,7 +487,7 @@ pub struct CoreBufferMappedRange {
     ptr: NonNull<u8>,
     size: usize,
     // Stagging
-    _guard: Option<BufferMappingGuard>,
+    _guard: Option<BufferMapping>,
 }
 
 #[cfg(send_sync)]
@@ -1639,11 +1639,11 @@ impl dispatch::BufferInterface for CoreBuffer {
         let size = sub_range.end - sub_range.start;
         self.wgpu_buffer
             .get_mapped_range(sub_range.start, Some(size))
-            .map(|(lock, ptr, size)| {
+            .map(|mapping| {
                 CoreBufferMappedRange {
-                    ptr,
-                    size: size as usize,
-                    _guard: Some(lock.lock()),
+                    ptr: mapping.ptr(),
+                    size: mapping.len() as usize,
+                    _guard: Some(mapping),
                 }
                 .into()
             })

@@ -267,32 +267,61 @@ unsafe impl Send for BufferMapState {}
 #[cfg(send_sync)]
 unsafe impl Sync for BufferMapState {}
 
-#[derive(Debug, Clone)]
-pub struct BufferMappingLock(Arc<RwLock<BufferMapState>>);
-
+/// Represents a mapped range in the buffer.
+///
+/// While returned [`BufferMapping`] is alive, [`Buffer::destroy`] and [`Buffer::unmap`] calls will block until [`BufferMapping`] is dropped.
 #[derive(Debug)]
-#[expect(dead_code, reason = "we need it's drop")]
-pub struct BufferMappingGuard {
-    guard: wgpu_sync::RwLockReadGuard<'static, BufferMapState>,
-    lock: BufferMappingLock,
+pub struct BufferMapping {
+    ptr: NonNull<u8>,
+    len: u64,
+    // guard needs to be dropped before the lock
+    _guard: wgpu_sync::RwLockReadGuard<'static, BufferMapState>,
+    _lock: Arc<RwLock<BufferMapState>>,
 }
 
-impl BufferMappingLock {
-    pub fn lock(self) -> BufferMappingGuard {
+impl BufferMapping {
+    fn new(ptr: NonNull<u8>, len: u64, lock: Arc<RwLock<BufferMapState>>) -> Self {
         // SAFETY: We want to bypass the lock ranking system here,
         // because the lock is exposed to users.
-        let guard = unsafe { self.0.underlying() }.read();
-        BufferMappingGuard {
+        let guard = unsafe { lock.underlying() }.read();
+        Self {
+            ptr,
+            len,
             // SAFETY: Guard is tied to the lifetime of the lock,
             // and it will be dropped before the lock.
-            guard: unsafe {
+            _guard: unsafe {
                 mem::transmute::<
                     wgpu_sync::RwLockReadGuard<'_, BufferMapState>,
                     wgpu_sync::RwLockReadGuard<'static, BufferMapState>,
                 >(guard)
             },
-            lock: self,
+            _lock: lock,
         }
+    }
+
+    /// ### How to safely use the pointer
+    ///
+    /// - No other overlapping mapped range should be accessed simultaneously.
+    /// - Pointer is only accessed for the length returned by [`BufferMapping::len`].
+    /// - Writing to a [`wgt::BufferUsages::MAP_READ`] buffer can have unexpected results (visible in GPU only if it's coherent).
+    /// - Reading [`wgt::BufferUsages::MAP_WRITE`] buffer with [`wgt::Features::MAPPABLE_PRIMARY_BUFFERS`] feature enabled
+    ///   can have unexpected results due to write combing.
+    pub fn ptr(&self) -> NonNull<u8> {
+        self.ptr
+    }
+
+    #[expect(clippy::len_without_is_empty)]
+    pub fn len(&self) -> u64 {
+        self.len
+    }
+
+    /// # Safety
+    ///
+    /// - No other overlapping mapped range should be accessed simultaneously.
+    /// - Buffer was mapped with [`wgt::BufferUsages::MAP_READ`] or with [`wgt::BufferUsages::MAP_WRITE`] but without [`wgt::Features::MAPPABLE_PRIMARY_BUFFERS`],
+    ///   otherwise one can have unexpected results due to write combing
+    pub unsafe fn slice(&self) -> &[u8] {
+        unsafe { core::slice::from_raw_parts(self.ptr().as_ptr(), self.len() as usize) }
     }
 }
 
@@ -914,22 +943,15 @@ impl Buffer {
         }
     }
 
-    /// Get a pointer to the mapped range of the buffer.
+    /// Get a guarded pointer to the mapped range of the buffer.
     ///
-    /// ### How to safely use the pointer:
-    /// 1. Call [`BufferMappingLock::lock`] to ensure that the buffer remains mapped
-    ///    while you are using the pointer.
-    /// 2. Use the pointer to read or write data in the mapped range.
-    ///    No other overlapping mapped range should be accessed simultaneously.
-    ///    Writing to a [`wgt::BufferUsages::MAP_READ`] buffer is can have unexpected results (visible in GPU only if it's coherent).
-    ///    Reading [`wgt::BufferUsages::MAP_WRITE`] buffer with [`wgt::Features::MAPPABLE_PRIMARY_BUFFERS`] feature enabled
-    ///    can have unexpected results due to write combing.
-    /// 3. drop the [`BufferMappingGuard`] to unlock the buffer and unblock the buffer operations.
+    /// While returned [`BufferMapping`] is alive,
+    /// [`Buffer::destroy`] and [`Buffer::unmap`] calls will block until [`BufferMapping`] is dropped.
     pub fn get_mapped_range(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
-    ) -> Result<(BufferMappingLock, NonNull<u8>, u64), BufferAccessError> {
+    ) -> Result<BufferMapping, BufferAccessError> {
         profiling::scope!("Buffer::get_mapped_range");
         api_log!(
             "Buffer::get_mapped_range {:?} offset {offset:?} size {size:?}",
@@ -973,7 +995,7 @@ impl Buffer {
                 }
                 let ptr = unsafe { staging_buffer.ptr() };
                 let ptr = unsafe { NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)) };
-                Ok((BufferMappingLock(self.map_state.clone()), ptr, range_size))
+                Ok(BufferMapping::new(ptr, range_size, self.map_state.clone()))
             }
             BufferMapState::Active {
                 ref mapping,
@@ -1003,10 +1025,10 @@ impl Buffer {
                 // rather than the beginning of the buffer.
                 let relative_offset = (offset - range.start) as isize;
                 unsafe {
-                    Ok((
-                        BufferMappingLock(self.map_state.clone()),
+                    Ok(BufferMapping::new(
                         NonNull::new_unchecked(mapping.ptr.as_ptr().offset(relative_offset)),
                         range_size,
+                        self.map_state.clone(),
                     ))
                 }
             }
