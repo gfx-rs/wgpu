@@ -1006,7 +1006,8 @@ pub enum TypeInner {
     /// [`HitObjectFunction::RecordEmpty`]) when its function starts executing.
     /// A declaration inside a loop is not reset automatically on each
     /// iteration; front ends that want that behavior should emit a
-    /// [`RecordEmpty`] at the top of the loop body, as the WGSL front end does.
+    /// [`RecordEmpty`] where the declaration appears in the loop body, as the
+    /// WGSL front end does.
     ///
     /// [`RayQuery`]: TypeInner::RayQuery
     /// [`Function`]: AddressSpace::Function
