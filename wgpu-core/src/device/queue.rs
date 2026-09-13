@@ -2,7 +2,6 @@
 use alloc::string::ToString as _;
 use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
 use core::{
-    iter,
     mem::{self, ManuallyDrop},
     num::NonZeroU64,
     ptr::NonNull,
@@ -397,6 +396,31 @@ pub(crate) struct PendingWrites {
     dst_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
     copied_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
     instance_flags: wgt::InstanceFlags,
+
+    /// Staging buffers that are the source of a copy recorded in
+    /// `command_encoder`, and so need a `MAP_WRITE` -> `COPY_SRC` transition.
+    ///
+    /// See [`hoisted_buffer_barriers`] for why these are not recorded
+    /// immediately. Moved to `temp_resources` in [`pre_submit`].
+    ///
+    /// [`hoisted_buffer_barriers`]: PendingWrites::hoisted_buffer_barriers
+    /// [`pre_submit`]: PendingWrites::pre_submit
+    hoisted_staging_buffers: Vec<FlushedStagingBuffer>,
+
+    /// Buffer transitions that must happen before the copies recorded in
+    /// `command_encoder`.
+    ///
+    /// Recording a barrier immediately before each copy means that a frame
+    /// which calls `Queue::write_buffer` a few dozen times ends up with many
+    /// back-to-back barrier/copy pairs, when a single barrier covering every
+    /// buffer would have done just as well.
+    ///
+    /// Instead we accumulate the transitions here and record them all at once,
+    /// into a command buffer that [`pre_submit`] places in front of
+    /// `command_encoder`'s.
+    ///
+    /// [`pre_submit`]: PendingWrites::pre_submit
+    hoisted_buffer_barriers: Vec<(Arc<Buffer>, hal::StateTransition<wgt::BufferUses>)>,
 }
 
 impl PendingWrites {
@@ -412,6 +436,8 @@ impl PendingWrites {
             dst_textures: FastHashMap::default(),
             copied_blas_s: FastHashMap::default(),
             instance_flags,
+            hoisted_staging_buffers: Vec::new(),
+            hoisted_buffer_barriers: Vec::new(),
         }
     }
 
@@ -442,9 +468,31 @@ impl PendingWrites {
         self.temp_resources.push(resource);
     }
 
+    /// Take ownership of a staging buffer that is the source of a copy
+    /// recorded into this batch.
+    ///
+    /// This also queues up the staging buffer's `MAP_WRITE` -> `COPY_SRC`
+    /// transition, so callers must not record one themselves.
     pub fn consume(&mut self, buffer: FlushedStagingBuffer) {
-        self.temp_resources
-            .push(TempResource::StagingBuffer(buffer));
+        self.hoisted_staging_buffers.push(buffer);
+    }
+
+    /// Queue up a buffer transition to be recorded ahead of this batch's
+    /// copies.
+    ///
+    /// See [`hoisted_buffer_barriers`] for the conditions under which this is
+    /// valid.
+    ///
+    /// [`hoisted_buffer_barriers`]: PendingWrites::hoisted_buffer_barriers
+    fn hoist_buffer_barrier(
+        &mut self,
+        buffer: &Arc<Buffer>,
+        transition: Option<track::PendingTransition<wgt::BufferUses>>,
+    ) {
+        if let Some(transition) = transition {
+            self.hoisted_buffer_barriers
+                .push((buffer.clone(), transition.usage));
+        }
     }
 
     pub fn clear_buffer(
@@ -454,19 +502,18 @@ impl PendingWrites {
         range: core::ops::Range<wgt::BufferAddress>,
         snatch_guard: &SnatchGuard,
     ) -> Result<(), QueueWriteError> {
-        let barriers = {
+        let transition = {
             let mut trackers = device.trackers.lock();
             trackers
                 .buffers
                 .set_single(buffer, wgt::BufferUses::COPY_DST)
-                .map(|pending| pending.into_hal(buffer, snatch_guard))
         };
+        self.hoist_buffer_barrier(buffer, transition);
 
         let dst_raw = buffer.try_raw(snatch_guard)?;
 
         let encoder = self.activate();
         unsafe {
-            encoder.transition_buffers(barriers.as_slice());
             encoder.clear_buffer(dst_raw, range.clone());
         }
 
@@ -479,11 +526,56 @@ impl PendingWrites {
         Ok(())
     }
 
+    /// Record every transition this batch of writes needs as a single barrier,
+    /// into a command buffer placed ahead of the one holding the batch's
+    /// copies.
+    ///
+    /// Returns the staging buffers whose transitions were recorded. The caller
+    /// is responsible for keeping them alive until the submission completes.
+    fn record_hoisted_barriers(
+        &mut self,
+        encoder: &mut EncoderInFlight,
+        snatch_guard: &SnatchGuard,
+    ) -> Result<Vec<FlushedStagingBuffer>, DeviceError> {
+        let staging_buffers = mem::take(&mut self.hoisted_staging_buffers);
+        let buffer_barriers = mem::take(&mut self.hoisted_buffer_barriers);
+
+        let barriers = staging_buffers
+            .iter()
+            .map(|staging_buffer| hal::BufferBarrier {
+                buffer: staging_buffer.raw(),
+                usage: hal::StateTransition {
+                    from: wgt::BufferUses::MAP_WRITE,
+                    to: wgt::BufferUses::COPY_SRC,
+                },
+            })
+            .chain(buffer_barriers.iter().filter_map(|(buffer, usage)| {
+                // The buffer may have been destroyed since the copy was
+                // recorded, in which case there is nothing to sync.
+                Some(hal::BufferBarrier {
+                    buffer: buffer.raw(snatch_guard)?,
+                    usage: usage.clone(),
+                })
+            }))
+            .collect::<Vec<_>>();
+
+        if !barriers.is_empty() {
+            encoder
+                .inner
+                .open_pass(Some("(wgpu internal) PendingWrites Transit"))?;
+            unsafe { encoder.inner.raw.transition_buffers(&barriers) };
+            encoder.inner.close_and_push_front()?;
+        }
+
+        Ok(staging_buffers)
+    }
+
     fn pre_submit(
         &mut self,
         command_allocator: &CommandAllocator,
         device: &Arc<Device>,
         queue: &Queue,
+        snatch_guard: &SnatchGuard,
     ) -> Result<Option<EncoderInFlight>, DeviceError> {
         if self.is_recording {
             let pending_buffers = mem::take(&mut self.dst_buffers);
@@ -498,7 +590,7 @@ impl PendingWrites {
                 .acquire_encoder(device.raw(), queue.raw())
                 .map_err(|e| device.handle_hal_error(e))?;
 
-            let encoder = EncoderInFlight {
+            let mut encoder = EncoderInFlight {
                 inner: crate::command::InnerCommandEncoder {
                     raw: ManuallyDrop::new(mem::replace(&mut self.command_encoder, new_encoder)),
                     list: vec![cmd_buf],
@@ -516,6 +608,12 @@ impl PendingWrites {
                 pending_textures,
                 pending_blas_s,
             };
+
+            let staging_buffers = self.record_hoisted_barriers(&mut encoder, snatch_guard)?;
+            encoder
+                .temp_resources
+                .extend(staging_buffers.into_iter().map(TempResource::StagingBuffer));
+
             Ok(Some(encoder))
         } else {
             self.dst_buffers.clear();
@@ -934,18 +1032,11 @@ impl Queue {
             dst_offset: buffer_offset,
             size: staging_buffer.size,
         };
-        let barriers = iter::once(hal::BufferBarrier {
-            buffer: staging_buffer.raw(),
-            usage: hal::StateTransition {
-                from: wgt::BufferUses::MAP_WRITE,
-                to: wgt::BufferUses::COPY_SRC,
-            },
-        })
-        .chain(transition.map(|pending| pending.into_hal(&buffer, snatch_guard)))
-        .collect::<Vec<_>>();
+        // The staging buffer's own `MAP_WRITE` -> `COPY_SRC` transition is
+        // hoisted by `PendingWrites::consume`, which our caller invokes.
+        pending_writes.hoist_buffer_barrier(&buffer, transition);
         let encoder = pending_writes.activate();
         unsafe {
-            encoder.transition_buffers(&barriers);
             encoder.copy_buffer_to_buffer(staging_buffer.raw(), dst_raw, &[region]);
         }
 
@@ -1186,14 +1277,6 @@ impl Queue {
             .collect::<Vec<_>>();
 
         {
-            let buffer_barrier = hal::BufferBarrier {
-                buffer: staging_buffer.raw(),
-                usage: hal::StateTransition {
-                    from: wgt::BufferUses::MAP_WRITE,
-                    to: wgt::BufferUses::COPY_SRC,
-                },
-            };
-
             let mut trackers = self.device.trackers.lock();
             let transition =
                 trackers
@@ -1203,9 +1286,11 @@ impl Queue {
                 .map(|pending| pending.into_hal(dst_raw))
                 .collect::<Vec<_>>();
 
+            // The staging buffer's `MAP_WRITE` -> `COPY_SRC` transition is
+            // hoisted to the front of the batch by `PendingWrites::consume`,
+            // below.
             unsafe {
                 encoder.transition_textures(&texture_barriers);
-                encoder.transition_buffers(&[buffer_barrier]);
                 encoder.copy_buffer_to_texture(staging_buffer.raw(), dst_raw, &regions);
             }
         }
@@ -1437,7 +1522,7 @@ impl Queue {
                 source,
                 dst_raw_webgl,
                 premultiplied_alpha,
-                iter::once(regions),
+                core::iter::once(regions),
             );
         }
 
@@ -1906,7 +1991,12 @@ impl Queue {
             };
         }
 
-        match pending_writes.pre_submit(&self.device.command_allocator, &self.device, self) {
+        match pending_writes.pre_submit(
+            &self.device.command_allocator,
+            &self.device,
+            self,
+            &snatch_guard,
+        ) {
             Ok(Some(pending_execution)) => {
                 executions.insert(0, pending_execution);
             }
