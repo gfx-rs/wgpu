@@ -129,22 +129,15 @@ impl GPUCompilationMessage {
 
     match loc {
       Some(loc) => {
-        let len_utf16 = |s: &str| s.chars().map(|c| c.len_utf16() as u64).sum();
-
-        let start = loc.offset as usize;
-
-        // Naga reports a `line_pos` using UTF-8 bytes, so we cannot use it.
-        let line_start =
-          source[0..start].rfind('\n').map(|pos| pos + 1).unwrap_or(0);
-        let line_pos = len_utf16(&source[line_start..start]) + 1;
+        let loc = loc.to_utf16(source);
 
         Self {
           message,
           r#type: GPUCompilationMessageType::Error,
           line_num: loc.line_number.into(),
-          line_pos,
-          offset: len_utf16(&source[0..start]),
-          length: len_utf16(&source[start..start + loc.length as usize]),
+          line_pos: loc.line_position.into(),
+          offset: loc.offset.into(),
+          length: loc.length.into(),
         }
       }
       _ => Self {
