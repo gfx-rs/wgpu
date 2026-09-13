@@ -4807,6 +4807,7 @@ dependencies = [
  "raw-window-handle",
  "ron",
  "rustc-hash 1.1.0",
+ "scopeguard",
  "serde",
  "smallvec",
  "thiserror 2.0.18",

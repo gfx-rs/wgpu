@@ -245,3 +245,132 @@ fn unmap_while_visible() {
     let _mapping0 = buffer.slice(..).get_mapped_range_mut().unwrap();
     buffer.unmap();
 }
+
+/// Regression test for [#9959]: `Buffer::unmap` racing a `Buffer::map` in
+/// progress on another thread must never fail with `NotMapped`.
+///
+/// The main thread repeatedly requests a mapping and resolves it with `poll`;
+/// the unmapper thread issues exactly one `unmap` per iteration, only after
+/// that iteration's `map_async` has returned, with a swept spin delay so
+/// successive iterations probe different points of the map. Once `map_async`
+/// has been issued, the buffer is never observably unmapped until an `unmap`
+/// succeeds: the racing `unmap` may abort the pending mapping or unmap the
+/// freshly installed one, but it must not fail. Before the fix, `Buffer::map`
+/// swapped `map_state` out for the duration of the HAL map, and an `unmap`
+/// landing in that window failed with `NotMapped` even though its `map_async`
+/// went on to resolve `Ok` — an interleaving no sequential ordering of the two
+/// calls permits.
+///
+/// At the time of writing, unmodified trunk failed this test on every run,
+/// with ~700 spurious failures per 25 000 iterations and the first one inside
+/// the first dozen iterations. The full test takes ~0.25 s to 2 s, depending on machine.
+/// Failure rate is machine-dependent too, so lowering the iterations risks false negatives.
+///
+/// [#9959]: https://github.com/gfx-rs/wgpu/pull/9959
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn concurrent_mapping_and_unmapping() {
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    const ITERATIONS: u64 = 25_000;
+    /// Spin-delay sweep period, in multiples of 4 `spin_loop` hints, covering
+    /// the duration of the HAL map.
+    const MAX_OFFSET: u64 = 250;
+
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("map/unmap race"),
+        size: 1024,
+        usage: wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    // `Buffer::unmap` reports failure through the uncaptured-error handler; a
+    // hit is a change of this counter across the unmapper's call.
+    let errors = Arc::new(AtomicUsize::new(0));
+    let last_error = Arc::new(Mutex::new(String::new()));
+    device.on_uncaptured_error(Arc::new({
+        let errors = Arc::clone(&errors);
+        let last_error = Arc::clone(&last_error);
+        move |error: wgpu::Error| {
+            *last_error.lock().unwrap() = error.to_string();
+            errors.fetch_add(1, Ordering::SeqCst);
+        }
+    }));
+
+    // Lockstep protocol: `map_issued = i + 1` publishes that iteration i's
+    // `map_async` has returned; `unmap_done = i + 1` publishes that the
+    // unmapper's verdict for iteration i is in `unmap_failed`.
+    let map_issued = Arc::new(AtomicU64::new(0));
+    let unmap_done = Arc::new(AtomicU64::new(0));
+    let unmap_failed = Arc::new(AtomicU64::new(0));
+
+    let unmapper = std::thread::spawn({
+        let buffer = buffer.clone();
+        let errors = Arc::clone(&errors);
+        let map_issued = Arc::clone(&map_issued);
+        let unmap_done = Arc::clone(&unmap_done);
+        let unmap_failed = Arc::clone(&unmap_failed);
+        move || {
+            for i in 0..ITERATIONS {
+                while map_issued.load(Ordering::SeqCst) != i + 1 {
+                    std::hint::spin_loop();
+                }
+                for _ in 0..(i % MAX_OFFSET) * 4 {
+                    std::hint::spin_loop();
+                }
+                let before = errors.load(Ordering::SeqCst);
+                buffer.unmap();
+                let failed = errors.load(Ordering::SeqCst) != before;
+                unmap_failed.store(failed as u64, Ordering::SeqCst);
+                unmap_done.store(i + 1, Ordering::SeqCst);
+            }
+        }
+    });
+
+    let map_result = Arc::new(Mutex::new(None::<Result<(), wgpu::BufferAsyncError>>));
+    let mut hits = Vec::new();
+    for i in 0..ITERATIONS {
+        map_result.lock().unwrap().take();
+        buffer.map_async(wgpu::MapMode::Read, .., {
+            let map_result = Arc::clone(&map_result);
+            move |result| {
+                *map_result.lock().unwrap() = Some(result);
+            }
+        });
+        map_issued.store(i + 1, Ordering::SeqCst);
+        device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+        while unmap_done.load(Ordering::SeqCst) != i + 1 {
+            std::hint::spin_loop();
+        }
+
+        if unmap_failed.load(Ordering::SeqCst) != 0 {
+            let map_ok = matches!(*map_result.lock().unwrap(), Some(Ok(())));
+            hits.push(format!(
+                "iteration {i}: unmap failed ({}) while its map_async {}",
+                last_error.lock().unwrap(),
+                if map_ok {
+                    "resolved Ok"
+                } else {
+                    "did not resolve Ok"
+                },
+            ));
+            if map_ok {
+                // The spurious failure left the mapping in place; really unmap
+                // so the next iteration starts idle.
+                buffer.unmap();
+            }
+        }
+    }
+    unmapper.join().unwrap();
+
+    assert!(
+        hits.is_empty(),
+        "unmap must never fail while racing a map_async it was issued after \
+         ({} spurious failures in {ITERATIONS} iterations; first: {})",
+        hits.len(),
+        hits[0],
+    );
+}

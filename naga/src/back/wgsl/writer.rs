@@ -342,7 +342,9 @@ impl<W: Write> Writer<W> {
                 | crate::BuiltIn::RayTmin
                 | crate::BuiltIn::RayTCurrentMax
                 | crate::BuiltIn::ObjectToWorld
-                | crate::BuiltIn::WorldToObject,
+                | crate::BuiltIn::WorldToObject
+                | crate::BuiltIn::HitKind
+                | crate::BuiltIn::HitBarycentrics,
             ) => {
                 needed.ray_tracing_pipeline = true;
             }

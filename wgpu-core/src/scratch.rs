@@ -14,7 +14,7 @@ pub struct ScratchBuffer {
 
 impl ScratchBuffer {
     pub(crate) fn new(device: &Arc<Device>, size: wgt::BufferSize) -> Result<Self, DeviceError> {
-        let raw = unsafe {
+        let (raw, _) = unsafe {
             device
                 .raw()
                 .create_buffer(&hal::BufferDescriptor {

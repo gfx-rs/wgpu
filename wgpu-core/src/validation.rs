@@ -225,6 +225,7 @@ enum BuiltIn {
     ObjectToWorld,
     WorldToObject,
     HitKind,
+    HitBarycentrics,
 }
 
 impl BuiltIn {
@@ -281,6 +282,7 @@ impl BuiltIn {
             Self::ObjectToWorld => naga::BuiltIn::ObjectToWorld,
             Self::WorldToObject => naga::BuiltIn::WorldToObject,
             Self::HitKind => naga::BuiltIn::HitKind,
+            Self::HitBarycentrics => naga::BuiltIn::HitBarycentrics,
         }
     }
 }
@@ -1004,7 +1006,8 @@ impl NumericType {
             | Vf::Float16x4
             | Vf::Float32x4
             | Vf::Unorm10_10_10_2
-            | Vf::Unorm8x4Bgra => (NumericDimension::Vector(Vs::Quad), Scalar::F32),
+            | Vf::Unorm8x4Bgra
+            | Vf::Snorm10_10_10_2 => (NumericDimension::Vector(Vs::Quad), Scalar::F32),
             Vf::Float64 => (NumericDimension::Scalar, Scalar::F64),
             Vf::Float64x2 => (NumericDimension::Vector(Vs::Bi), Scalar::F64),
             Vf::Float64x3 => (NumericDimension::Vector(Vs::Tri), Scalar::F64),
@@ -1327,6 +1330,7 @@ impl Interface {
                 naga::BuiltIn::ObjectToWorld => BuiltIn::ObjectToWorld,
                 naga::BuiltIn::WorldToObject => BuiltIn::WorldToObject,
                 naga::BuiltIn::HitKind => BuiltIn::HitKind,
+                naga::BuiltIn::HitBarycentrics => BuiltIn::HitBarycentrics,
             }),
             None => {
                 log::error!("Missing binding for a varying");

@@ -17,9 +17,7 @@ use wgpu_core::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
         ResolvedGeneralRenderPipelineDescriptor,
     },
-    resource::{
-        self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
-    },
+    resource::{self, BufferAccessError, BufferMapOperation, CreateBufferError},
     Label, LabelHelpers, SubmissionIndex,
 };
 
@@ -72,7 +70,17 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let buffer = device.create_buffer(desc);
+        let desc = resource::BufferDescriptor {
+            label: desc.label.as_ref().map(|s| Cow::Borrowed(s.deref())),
+            size: desc.size,
+            usage: wgt::BufferUsages::from_internal_flags(
+                desc.usage,
+                wgt::BufferUsagesWGPU::empty(),
+            ),
+            mapped_at_creation: desc.mapped_at_creation,
+        };
+
+        let buffer = device.create_buffer(&desc);
 
         buffers.assign(id_in, buffer);
     }
@@ -116,7 +124,16 @@ impl Global {
             buffers, devices, ..
         } = &mut *hub;
         let device = devices.get(device_id);
-        buffers.assign(id_in, resource::Buffer::invalid(device, desc));
+        let desc = resource::BufferDescriptor {
+            label: desc.label.as_ref().map(|s| Cow::Borrowed(s.deref())),
+            size: desc.size,
+            usage: wgt::BufferUsages::from_internal_flags(
+                desc.usage,
+                wgt::BufferUsagesWGPU::empty(),
+            ),
+            mapped_at_creation: desc.mapped_at_creation,
+        };
+        buffers.assign(id_in, resource::Buffer::invalid(device, &desc));
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -297,7 +314,17 @@ impl Global {
 
         let device = devices.get(device_id);
 
-        let (buffer, err) = unsafe { device.create_buffer_from_hal(Box::new(hal_buffer), desc) };
+        let desc = resource::BufferDescriptor {
+            label: desc.label.as_ref().map(|s| Cow::Borrowed(s.deref())),
+            size: desc.size,
+            usage: wgt::BufferUsages::from_internal_flags(
+                desc.usage,
+                wgt::BufferUsagesWGPU::empty(),
+            ),
+            mapped_at_creation: desc.mapped_at_creation,
+        };
+
+        let (buffer, err) = unsafe { device.create_buffer_from_hal(Box::new(hal_buffer), &desc) };
 
         let id = buffers.assign(id_in, buffer);
 
@@ -629,9 +656,6 @@ impl Global {
         device_id: DeviceId,
         desc: &ShaderModuleDescriptor,
         id_in: id::ShaderModuleId,
-    ) -> (
-        id::ShaderModuleId,
-        Option<pipeline::CreateShaderModuleError>,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -649,11 +673,18 @@ impl Global {
             runtime_checks: wgt::ShaderRuntimeChecks::checked(),
         };
 
-        let (shader, error) = device.create_shader_module(&desc, code);
+        let shader = device.create_shader_module(&desc, code);
 
-        let id = shader_modules.assign(id_in, shader);
+        shader_modules.assign(id_in, shader);
+    }
 
-        (id, error)
+    pub fn shader_module_compilation_info(
+        &self,
+        shader_module_id: id::ShaderModuleId,
+    ) -> wgt::CompilationInfo {
+        let hub = self.hub.borrow();
+        let shader_module = hub.shader_modules.get(shader_module_id);
+        shader_module.compilation_info().clone()
     }
 
     pub fn shader_module_remove(
@@ -801,26 +832,11 @@ impl Global {
         hub.query_sets.remove(query_set_id)
     }
 
-    pub fn device_create_render_pipeline(
-        &self,
-        device_id: DeviceId,
-        desc: &RenderPipelineDescriptor,
-        id_in: id::RenderPipelineId,
-    ) -> (
-        id::RenderPipelineId,
-        Option<pipeline::CreateRenderPipelineError>,
-    ) {
-        let mut hub = self.hub.borrow_mut();
-        let Hub {
-            render_pipelines,
-            devices,
-            shader_modules,
-            pipeline_layouts,
-            ..
-        } = &mut *hub;
-
-        let device = devices.get(device_id);
-
+    fn resolve_render_pipeline_descriptor<'a>(
+        shader_modules: &mut Registry<Arc<pipeline::ShaderModule>>,
+        pipeline_layouts: &mut Registry<Arc<binding_model::PipelineLayout>>,
+        desc: &'a RenderPipelineDescriptor,
+    ) -> ResolvedGeneralRenderPipelineDescriptor<'a> {
         let layout = desc.layout.map(|layout| pipeline_layouts.get(layout));
 
         let vertex = {
@@ -865,7 +881,7 @@ impl Global {
             None
         };
 
-        let desc = ResolvedGeneralRenderPipelineDescriptor {
+        ResolvedGeneralRenderPipelineDescriptor {
             label: desc.label.clone(),
             layout,
             vertex,
@@ -875,13 +891,65 @@ impl Global {
             fragment,
             multiview_mask: None,
             cache: None,
-        };
+        }
+    }
 
-        let (pipeline, error) = device.create_render_pipeline(desc);
+    pub fn device_create_render_pipeline(
+        &self,
+        device_id: DeviceId,
+        desc: &RenderPipelineDescriptor,
+        id_in: id::RenderPipelineId,
+    ) {
+        let mut hub = self.hub.borrow_mut();
 
-        let id = render_pipelines.assign(id_in, pipeline);
+        let Hub {
+            shader_modules,
+            pipeline_layouts,
+            render_pipelines,
+            devices,
+            ..
+        } = &mut *hub;
 
-        (id, error)
+        let device = devices.get(device_id);
+
+        let desc = Self::resolve_render_pipeline_descriptor(shader_modules, pipeline_layouts, desc);
+
+        let pipeline = device.create_render_pipeline(desc);
+
+        render_pipelines.assign(id_in, pipeline);
+    }
+
+    /// Error-returning version of `device_create_render_pipeline` to implement
+    /// [GPUDevice.createRenderPipelineAsync](https://gpuweb.github.io/gpuweb/#dom-gpudevice-createrenderpipelineasync).
+    /// Returns an error if the pipeline creation fails instead of handling error in device.
+    ///
+    /// Id is assigned to the pipeline only if the creation succeeds.
+    pub fn create_render_pipeline_or_error(
+        &self,
+        device_id: DeviceId,
+        desc: &RenderPipelineDescriptor,
+        id_in: id::RenderPipelineId,
+    ) -> Result<(), pipeline::CreateRenderPipelineError> {
+        let mut hub = self.hub.borrow_mut();
+        let Hub {
+            render_pipelines,
+            devices,
+            shader_modules,
+            pipeline_layouts,
+            ..
+        } = &mut *hub;
+
+        let device = devices.get(device_id);
+
+        let desc = Self::resolve_render_pipeline_descriptor(shader_modules, pipeline_layouts, desc);
+
+        match device.create_render_pipeline_or_error(desc) {
+            Ok(pipeline) => {
+                render_pipelines.assign(id_in, pipeline);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Get an ID of one of the bind group layouts. The ID adds a refcount,
@@ -1035,8 +1103,6 @@ impl Global {
     }
 
     /// Check `device_id` for freeable resources and completed buffer mappings.
-    ///
-    /// Return `queue_empty` indicating whether there are more queue submissions still in flight.
     pub fn device_poll(
         &self,
         device_id: DeviceId,
@@ -1156,12 +1222,12 @@ impl Global {
         buffer.get_mapped_range(offset, size)
     }
 
-    pub fn buffer_unmap(&self, buffer_id: id::BufferId) -> BufferAccessResult {
+    pub fn buffer_unmap(&self, buffer_id: id::BufferId) {
         let hub = self.hub.borrow();
 
         let buffer = hub.buffers.get(buffer_id);
 
-        buffer.unmap()
+        buffer.unmap();
     }
 
     pub fn device_on_uncaptured_error(
