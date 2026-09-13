@@ -70,71 +70,7 @@ impl TryFrom<GPUBindGroupLayoutEntry> for wgpu_types::BindGroupLayoutEntry {
   type Error = wgpu_core::binding_model::CreateBindGroupLayoutError;
 
   fn try_from(value: GPUBindGroupLayoutEntry) -> Result<Self, Self::Error> {
-    let GPUBindGroupLayoutEntry {
-      binding,
-      visibility,
-      buffer,
-      sampler,
-      texture,
-      storage_texture,
-      external_texture,
-    } = value;
-
-    let mut binding_type = None;
-    if let Some(buffer) = buffer {
-      if binding_type.is_some() {
-        return Err(wgpu_core::binding_model::CreateBindGroupLayoutError::Entry { binding, error: wgpu_core::binding_model::BindGroupLayoutEntryError::MultipleBindingTypesProvided });
-      }
-      binding_type = Some(wgpu_types::BindingType::Buffer {
-        ty: buffer.r#type.into(),
-        has_dynamic_offset: buffer.has_dynamic_offset,
-        min_binding_size: wgpu_types::BufferSize::new(buffer.min_binding_size),
-      });
-    }
-
-    if let Some(sampler) = sampler {
-      if binding_type.is_some() {
-        return Err(wgpu_core::binding_model::CreateBindGroupLayoutError::Entry { binding, error: wgpu_core::binding_model::BindGroupLayoutEntryError::MultipleBindingTypesProvided });
-      }
-      binding_type =
-        Some(wgpu_types::BindingType::Sampler(sampler.r#type.into()));
-    }
-
-    if let Some(texture) = texture {
-      if binding_type.is_some() {
-        return Err(wgpu_core::binding_model::CreateBindGroupLayoutError::Entry { binding, error: wgpu_core::binding_model::BindGroupLayoutEntryError::MultipleBindingTypesProvided });
-      }
-      binding_type = Some(wgpu_types::BindingType::Texture {
-        sample_type: texture.sample_type.into(),
-        view_dimension: texture.view_dimension.into(),
-        multisampled: texture.multisampled,
-      });
-    }
-
-    if let Some(storage_texture) = storage_texture {
-      if binding_type.is_some() {
-        return Err(wgpu_core::binding_model::CreateBindGroupLayoutError::Entry { binding, error: wgpu_core::binding_model::BindGroupLayoutEntryError::MultipleBindingTypesProvided });
-      }
-      binding_type = Some(wgpu_types::BindingType::StorageTexture {
-        access: storage_texture.access.into(),
-        format: storage_texture.format.into(),
-        view_dimension: storage_texture.view_dimension.into(),
-      });
-    }
-
-    if let Some(GPUExternalTextureBindingLayout {}) = external_texture {
-      if binding_type.is_some() {
-        return Err(wgpu_core::binding_model::CreateBindGroupLayoutError::Entry { binding, error: wgpu_core::binding_model::BindGroupLayoutEntryError::MultipleBindingTypesProvided });
-      }
-      binding_type = Some(wgpu_types::BindingType::ExternalTexture);
-    }
-
-    Ok(wgpu_types::BindGroupLayoutEntry {
-      binding,
-      visibility: visibility.into(),
-      ty: binding_type.ok_or(wgpu_core::binding_model::CreateBindGroupLayoutError::Entry { binding, error: wgpu_core::binding_model::BindGroupLayoutEntryError::NoBindingTypesProvided })?,
-      count: None, // native-only
-    })
+    wgpu_core::binding_model::BindGroupLayoutEntry::from(value).try_into()
   }
 }
 
