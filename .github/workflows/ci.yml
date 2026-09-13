@@ -1,14 +1,12 @@
 name: CI
 
 on:
-  push:
-    branches-ignore: [
-        # Branches with the `gh-readonly-queue` prefix are used by the
-        # merge queue, so they are already covered by the `merge_group` event.
-        "gh-readonly-queue/**",
-      ]
   pull_request:
-  merge_group:
+  # Runs on `trunk` to save the build caches that pull requests read
+  # and to upload the coverage baseline.
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 env:
   #
@@ -788,7 +786,9 @@ jobs:
 
       - name: Upload coverage report to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
-        if: steps.coverage.outcome == 'success'
+        # Mergify draft pull requests re-run the tests of already-reported
+        # pull requests, so their coverage is not uploaded.
+        if: steps.coverage.outcome == 'success' && !startsWith(github.head_ref, 'mergify/merge-queue/')
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
