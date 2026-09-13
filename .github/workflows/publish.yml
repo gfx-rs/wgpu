@@ -2,13 +2,8 @@ name: Publish
 
 on:
   push:
-    branches-ignore: [
-        # Branches with the `gh-readonly-queue` prefix are used by the
-        # merge queue, so they are already covered by the `merge_group` event.
-        "gh-readonly-queue/**",
-      ]
+    branches: [trunk, "firefox*"]
   pull_request:
-  merge_group:
 
 env:
   CARGO_INCREMENTAL: false

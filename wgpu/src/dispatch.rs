@@ -466,14 +466,14 @@ pub trait RenderPassInterface: CommonTraits + Drop {
         buffer: &DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     );
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
         buffer: Option<&DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     );
     fn set_immediates(&mut self, offset: u32, data: &[u8]);
     fn set_blend_constant(&mut self, color: crate::Color);
@@ -577,14 +577,14 @@ pub trait RenderBundleEncoderInterface: CommonTraits {
         buffer: &DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     );
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
         buffer: Option<&DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     );
     fn set_immediates(&mut self, offset: u32, data: &[u8]);
 

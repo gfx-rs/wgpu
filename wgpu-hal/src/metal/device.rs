@@ -147,6 +147,7 @@ const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> nt::VertexF
         wgt::VertexFormat::Sint32x3 => nt::VertexFormat::Sint32x3,
         wgt::VertexFormat::Sint32x4 => nt::VertexFormat::Sint32x4,
         wgt::VertexFormat::Unorm10_10_10_2 => nt::VertexFormat::Unorm10_10_10_2,
+        wgt::VertexFormat::Snorm10_10_10_2 => nt::VertexFormat::Snorm10_10_10_2,
         wgt::VertexFormat::Unorm8x4Bgra => nt::VertexFormat::Unorm8x4Bgra,
 
         wgt::VertexFormat::Float64
@@ -447,11 +448,8 @@ impl super::Device {
         }
     }
 
-    pub unsafe fn buffer_from_raw(
-        raw: Retained<ProtocolObject<dyn MTLBuffer>>,
-        size: wgt::BufferAddress,
-    ) -> super::Buffer {
-        super::Buffer { raw, size }
+    pub unsafe fn buffer_from_raw(raw: Retained<ProtocolObject<dyn MTLBuffer>>) -> super::Buffer {
+        super::Buffer { raw }
     }
 
     pub fn raw_device(&self) -> &Retained<ProtocolObject<dyn MTLDevice>> {
@@ -462,7 +460,10 @@ impl super::Device {
 impl crate::Device for super::Device {
     type A = super::Api;
 
-    unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
+    unsafe fn create_buffer(
+        &self,
+        desc: &crate::BufferDescriptor,
+    ) -> DeviceResult<(super::Buffer, wgt::BufferAddress)> {
         let map_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
         let map_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
@@ -487,10 +488,7 @@ impl crate::Device for super::Device {
                 raw.setLabel(Some(&NSString::from_str(label)));
             }
             self.counters.buffers.add(1);
-            Ok(super::Buffer {
-                raw,
-                size: desc.size,
-            })
+            Ok((super::Buffer { raw }, desc.size))
         })
     }
     unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {
@@ -695,7 +693,7 @@ impl crate::Device for super::Device {
                 .array_layer_count
                 .unwrap_or(texture.array_layers - desc.range.base_array_layer);
 
-            autoreleasepool(|_| {
+            autoreleasepool(|_| -> Result<_, crate::DeviceError> {
                 let level_range = NSRange {
                     location: desc.range.base_mip_level as _,
                     length: mip_level_count as _,
@@ -704,7 +702,7 @@ impl crate::Device for super::Device {
                     location: desc.range.base_array_layer as _,
                     length: array_layer_count as _,
                 };
-                let raw = unsafe {
+                let raw_result = unsafe {
                     if let Some(swizzle) = swizzle {
                         texture
                             .raw
@@ -715,7 +713,6 @@ impl crate::Device for super::Device {
                                 slice_range,
                                 swizzle,
                             )
-                            .unwrap()
                     } else {
                         texture
                             .raw
@@ -725,14 +722,50 @@ impl crate::Device for super::Device {
                                 level_range,
                                 slice_range,
                             )
-                            .unwrap()
                     }
                 };
+                let raw = raw_result.ok_or_else(|| {
+                    // Metal refuses some views of memoryless textures. Ideally such cases
+                    // would be rejected by `wpgu-core` validation, but at least until that
+                    // is implemented, we log a verbose error message.
+                    // Related: <https://github.com/gpuweb/gpuweb/issues/6876>.
+                    let storage_mode = texture.raw.storageMode();
+                    let memoryless = if storage_mode == MTLStorageMode::Memoryless {
+                        "This may be because the texture is memoryless (has TRANSIENT_ATTACHMENT usage). "
+                    } else {
+                        ""
+                    };
+                    log::error!(
+                        "Error creating Metal texture view. {memoryless}\
+                         Texture: {:?}, {:?}, {}x{}x{}, {} mip level(s), \
+                         {} array layer(s), Metal usage {:?}, storage mode {:?}. \
+                         Requested view: {:?}. \
+                         Metal arguments: pixel format {:?}, texture type {:?}, \
+                         levels {}..{}, slices {}..{}.",
+                        texture.format,
+                        texture.raw_type,
+                        texture.copy_size.width,
+                        texture.copy_size.height,
+                        texture.copy_size.depth,
+                        texture.mip_levels,
+                        texture.array_layers,
+                        texture.raw.usage(),
+                        storage_mode,
+                        desc,
+                        raw_format,
+                        raw_type,
+                        level_range.location,
+                        level_range.location + level_range.length,
+                        slice_range.location,
+                        slice_range.location + slice_range.length,
+                    );
+                    crate::DeviceError::Unexpected
+                })?;
                 if let Some(label) = desc.label {
                     raw.setLabel(Some(&NSString::from_str(label)));
                 }
-                raw
-            })
+                Ok(raw)
+            })?
         };
 
         self.counters.texture_views.add(1);
@@ -1147,12 +1180,7 @@ impl crate::Device for super::Device {
                                     }
 
                                     if let wgt::BufferBindingType::Storage { .. } = ty {
-                                        let remaining_size = wgt::BufferSize::new(
-                                            source.buffer.size - source.offset,
-                                        );
-                                        if let Some(binding_size) = source.size.or(remaining_size) {
-                                            array_element_sizes.push((idx as u32, binding_size));
-                                        }
+                                        array_element_sizes.push((idx as u32, source.size));
                                     }
 
                                     let use_info = bg
@@ -1241,14 +1269,9 @@ impl crate::Device for super::Device {
                                 let end = start + 1;
                                 bg.buffers
                                     .extend(desc.buffers[start..end].iter().map(|source| {
-                                        // Given the restrictions on `BufferBinding::offset`,
-                                        // this should never be `None`.
-                                        let remaining_size = wgt::BufferSize::new(
-                                            source.buffer.size - source.offset,
-                                        );
                                         let binding_size = match ty {
                                             wgt::BufferBindingType::Storage { .. } => {
-                                                source.size.or(remaining_size)
+                                                Some(source.size)
                                             }
                                             _ => None,
                                         };

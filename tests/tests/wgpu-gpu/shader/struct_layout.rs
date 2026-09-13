@@ -72,6 +72,8 @@ static IMMEDIATES_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest> {
+    // Immediates don't support array types
+    let no_array_types = storage_type == InputStorageType::Immediate;
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
 
     let mut tests = Vec::new();
@@ -271,185 +273,189 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     }
 
     // Array of matrix tests
-    for columns in [2, 4] {
-        for rows in [2, 3, 4] {
-            let array_size = 2;
-            let ty = format!("mat{columns}x{rows}<f32>");
-            let input_members = format!("members: array<{ty}, {array_size}>");
-            // There's 4 possible ways to load a component of a matrix in an array:
-            // - Do `input.members[0][0].x` (direct)
-            // - Store `input.members[0][0]` in a variable; do `var.x` (vector_loaded)
-            // - Store `input.members[0]` in a variable; do `var[0].x` (matrix_loaded)
-            // - Store `input.members` in a variable; do `var[0][0].x` (fully_loaded)
-            // For each of these, we can either use a static or dynamic index.
-            let mut direct_static = String::new();
-            let mut direct_dynamic = String::new();
-            let mut vector_loaded_static = String::new();
-            let mut vector_loaded_dynamic = String::new();
-            let mut matrix_loaded_static = String::new();
-            let mut matrix_loaded_dynamic = String::new();
-            let mut fully_loaded_static = String::from("let loaded = input.members;");
-            let mut fully_loaded_dynamic = String::from("let loaded = input.members;");
-            let column_index_names = ["zero", "one", "two", "three"];
-            for (column, column_str) in column_index_names.iter().enumerate().take(columns) {
-                writeln!(direct_dynamic, "var {column_str} = {column};").unwrap();
-                writeln!(vector_loaded_dynamic, "var {column_str} = {column};").unwrap();
-                writeln!(matrix_loaded_dynamic, "var {column_str} = {column};").unwrap();
-            }
-            for element in 0..array_size {
-                writeln!(
-                    matrix_loaded_static,
-                    "let mat_{element} = input.members[{element}];"
-                )
-                .unwrap();
-                writeln!(
-                    matrix_loaded_dynamic,
-                    "let mat_{element} = input.members[{element}];"
-                )
-                .unwrap();
+    if !no_array_types {
+        for columns in [2, 4] {
+            for rows in [2, 3, 4] {
+                let array_size = 2;
+                let ty = format!("mat{columns}x{rows}<f32>");
+                let input_members = format!("members: array<{ty}, {array_size}>");
+                // There's 4 possible ways to load a component of a matrix in an array:
+                // - Do `input.members[0][0].x` (direct)
+                // - Store `input.members[0][0]` in a variable; do `var.x` (vector_loaded)
+                // - Store `input.members[0]` in a variable; do `var[0].x` (matrix_loaded)
+                // - Store `input.members` in a variable; do `var[0][0].x` (fully_loaded)
+                // For each of these, we can either use a static or dynamic index.
+                let mut direct_static = String::new();
+                let mut direct_dynamic = String::new();
+                let mut vector_loaded_static = String::new();
+                let mut vector_loaded_dynamic = String::new();
+                let mut matrix_loaded_static = String::new();
+                let mut matrix_loaded_dynamic = String::new();
+                let mut fully_loaded_static = String::from("let loaded = input.members;");
+                let mut fully_loaded_dynamic = String::from("let loaded = input.members;");
+                let column_index_names = ["zero", "one", "two", "three"];
                 for (column, column_str) in column_index_names.iter().enumerate().take(columns) {
+                    writeln!(direct_dynamic, "var {column_str} = {column};").unwrap();
+                    writeln!(vector_loaded_dynamic, "var {column_str} = {column};").unwrap();
+                    writeln!(matrix_loaded_dynamic, "var {column_str} = {column};").unwrap();
+                }
+                for element in 0..array_size {
                     writeln!(
-                        vector_loaded_static,
-                        "let mat_{element}_vec_{column} = input.members[{element}][{column}];"
+                        matrix_loaded_static,
+                        "let mat_{element} = input.members[{element}];"
                     )
                     .unwrap();
                     writeln!(
+                        matrix_loaded_dynamic,
+                        "let mat_{element} = input.members[{element}];"
+                    )
+                    .unwrap();
+                    for (column, column_str) in column_index_names.iter().enumerate().take(columns)
+                    {
+                        writeln!(
+                            vector_loaded_static,
+                            "let mat_{element}_vec_{column} = input.members[{element}][{column}];"
+                        )
+                        .unwrap();
+                        writeln!(
                         vector_loaded_dynamic,
                         "let mat_{element}_vec_{column} = input.members[{element}][{column_str}];",
                     )
-                    .unwrap();
-                }
-            }
-
-            let mut output_values = Vec::new();
-
-            let mut current_output_idx = 0;
-            let mut current_input_idx = 0;
-            for element in 0..array_size {
-                for (column, column_str) in column_index_names.iter().enumerate().take(columns) {
-                    let component_accessors = ["x", "y", "z", "w"].into_iter().take(rows);
-                    for component in component_accessors {
-                        writeln!(
-                            direct_static,
-                            "output[{current_output_idx}] = bitcast<u32>(input.members[{element}][{column}].{component});"
-                        )
                         .unwrap();
-                        writeln!(
-                            direct_dynamic,
-                            "output[{current_output_idx}] = bitcast<u32>(input.members[{element}][{column_str}].{component});"
-                        )
-                        .unwrap();
-                        writeln!(
-                            vector_loaded_static,
-                            "output[{current_output_idx}] = bitcast<u32>(mat_{element}_vec_{column}.{component});"
-                        )
-                        .unwrap();
-                        writeln!(
-                            vector_loaded_dynamic,
-                            "output[{current_output_idx}] = bitcast<u32>(mat_{element}_vec_{column}.{component});"
-                        )
-                        .unwrap();
-                        writeln!(
-                            matrix_loaded_static,
-                            "output[{current_output_idx}] = bitcast<u32>(mat_{element}[{column}].{component});"
-                        )
-                        .unwrap();
-                        writeln!(
-                            matrix_loaded_dynamic,
-                            "output[{current_output_idx}] = bitcast<u32>(mat_{element}[{column_str}].{component});"
-                        )
-                        .unwrap();
-                        writeln!(
-                            fully_loaded_static,
-                            "output[{current_output_idx}] = bitcast<u32>(loaded[{column}].{component});"
-                        )
-                        .unwrap();
-                        writeln!(
-                            fully_loaded_dynamic,
-                            "output[{current_output_idx}] = bitcast<u32>(loaded[{column_str}].{component});"
-                        )
-                        .unwrap();
-
-                        output_values.push(current_input_idx);
-                        current_input_idx += 1;
-                        current_output_idx += 1;
-                    }
-                    // Round to next vec4 if we're matrices with vec3 columns
-                    if rows == 3 {
-                        current_input_idx += 1;
                     }
                 }
+
+                let mut output_values = Vec::new();
+
+                let mut current_output_idx = 0;
+                let mut current_input_idx = 0;
+                for element in 0..array_size {
+                    for (column, column_str) in column_index_names.iter().enumerate().take(columns)
+                    {
+                        let component_accessors = ["x", "y", "z", "w"].into_iter().take(rows);
+                        for component in component_accessors {
+                            writeln!(
+                                direct_static,
+                                "output[{current_output_idx}] = bitcast<u32>(input.members[{element}][{column}].{component});",
+                            )
+                            .unwrap();
+                            writeln!(
+                                direct_dynamic,
+                                "output[{current_output_idx}] = bitcast<u32>(input.members[{element}][{column_str}].{component});",
+                            )
+                            .unwrap();
+                            writeln!(
+                                vector_loaded_static,
+                                "output[{current_output_idx}] = bitcast<u32>(mat_{element}_vec_{column}.{component});",
+                            )
+                            .unwrap();
+                            writeln!(
+                                vector_loaded_dynamic,
+                                "output[{current_output_idx}] = bitcast<u32>(mat_{element}_vec_{column}.{component});",
+                            )
+                            .unwrap();
+                            writeln!(
+                                matrix_loaded_static,
+                                "output[{current_output_idx}] = bitcast<u32>(mat_{element}[{column}].{component});",
+                            )
+                            .unwrap();
+                            writeln!(
+                                matrix_loaded_dynamic,
+                                "output[{current_output_idx}] = bitcast<u32>(mat_{element}[{column_str}].{component});",
+                            )
+                            .unwrap();
+                            writeln!(
+                                fully_loaded_static,
+                                "output[{current_output_idx}] = bitcast<u32>(loaded[{column}].{component});",
+                            )
+                            .unwrap();
+                            writeln!(
+                                fully_loaded_dynamic,
+                                "output[{current_output_idx}] = bitcast<u32>(loaded[{column_str}].{component});",
+                            )
+                            .unwrap();
+
+                            output_values.push(current_input_idx);
+                            current_input_idx += 1;
+                            current_output_idx += 1;
+                        }
+                        // Round to next vec4 if we're matrices with vec3 columns
+                        if rows == 3 {
+                            current_input_idx += 1;
+                        }
+                    }
+                }
+
+                // https://github.com/gfx-rs/wgpu/issues/4371
+                let failures = if storage_type == InputStorageType::Uniform && rows == 2 {
+                    Backends::GL
+                } else {
+                    Backends::empty()
+                };
+
+                tests.push(
+                    ShaderTest::new(
+                        format!("{ty} - direct, static index"),
+                        input_members.clone(),
+                        direct_static,
+                        &input_values,
+                        &output_values,
+                    )
+                    .failures(failures),
+                );
+                tests.push(
+                    ShaderTest::new(
+                        format!("{ty} - direct, dynamic index"),
+                        input_members.clone(),
+                        direct_dynamic,
+                        &input_values,
+                        &output_values,
+                    )
+                    .failures(failures),
+                );
+
+                tests.push(
+                    ShaderTest::new(
+                        format!("{ty} - vector loaded, static index"),
+                        input_members.clone(),
+                        vector_loaded_static,
+                        &input_values,
+                        &output_values,
+                    )
+                    .failures(failures),
+                );
+                tests.push(
+                    ShaderTest::new(
+                        format!("{ty} - vector loaded, dynamic index"),
+                        input_members.clone(),
+                        vector_loaded_dynamic,
+                        &input_values,
+                        &output_values,
+                    )
+                    .failures(failures),
+                );
+
+                tests.push(
+                    ShaderTest::new(
+                        format!("{ty} - matrix loaded, static index"),
+                        input_members.clone(),
+                        matrix_loaded_static,
+                        &input_values,
+                        &output_values,
+                    )
+                    .failures(failures),
+                );
+                tests.push(
+                    ShaderTest::new(
+                        format!("{ty} - matrix loaded, dynamic index"),
+                        input_members.clone(),
+                        matrix_loaded_dynamic,
+                        &input_values,
+                        &output_values,
+                    )
+                    .failures(failures),
+                );
             }
-
-            // https://github.com/gfx-rs/wgpu/issues/4371
-            let failures = if storage_type == InputStorageType::Uniform && rows == 2 {
-                Backends::GL
-            } else {
-                Backends::empty()
-            };
-
-            tests.push(
-                ShaderTest::new(
-                    format!("{ty} - direct, static index"),
-                    input_members.clone(),
-                    direct_static,
-                    &input_values,
-                    &output_values,
-                )
-                .failures(failures),
-            );
-            tests.push(
-                ShaderTest::new(
-                    format!("{ty} - direct, dynamic index"),
-                    input_members.clone(),
-                    direct_dynamic,
-                    &input_values,
-                    &output_values,
-                )
-                .failures(failures),
-            );
-
-            tests.push(
-                ShaderTest::new(
-                    format!("{ty} - vector loaded, static index"),
-                    input_members.clone(),
-                    vector_loaded_static,
-                    &input_values,
-                    &output_values,
-                )
-                .failures(failures),
-            );
-            tests.push(
-                ShaderTest::new(
-                    format!("{ty} - vector loaded, dynamic index"),
-                    input_members.clone(),
-                    vector_loaded_dynamic,
-                    &input_values,
-                    &output_values,
-                )
-                .failures(failures),
-            );
-
-            tests.push(
-                ShaderTest::new(
-                    format!("{ty} - matrix loaded, static index"),
-                    input_members.clone(),
-                    matrix_loaded_static,
-                    &input_values,
-                    &output_values,
-                )
-                .failures(failures),
-            );
-            tests.push(
-                ShaderTest::new(
-                    format!("{ty} - matrix loaded, dynamic index"),
-                    input_members.clone(),
-                    matrix_loaded_dynamic,
-                    &input_values,
-                    &output_values,
-                )
-                .failures(failures),
-            );
         }
     }
 
@@ -505,11 +511,12 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     // Test for https://github.com/gfx-rs/wgpu/issues/5262.
     //
     // The struct is supposed to have a size of 32 and alignment of 16.
-    for ty in ["f32", "u32", "i32"] {
-        let header = format!("struct Inner {{ vec: vec3<{ty}>, scalar1: u32, scalar2: u32 }}");
-        let members = String::from("arr: array<Inner, 2>");
-        let direct = String::from(
-            "\
+    if !no_array_types {
+        for ty in ["f32", "u32", "i32"] {
+            let header = format!("struct Inner {{ vec: vec3<{ty}>, scalar1: u32, scalar2: u32 }}");
+            let members = String::from("arr: array<Inner, 2>");
+            let direct = String::from(
+                "\
             output[0] = bitcast<u32>(input.arr[0].vec.x);
             output[1] = bitcast<u32>(input.arr[0].vec.y);
             output[2] = bitcast<u32>(input.arr[0].vec.z);
@@ -521,18 +528,19 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
             output[8] = bitcast<u32>(input.arr[1].scalar1);
             output[9] = bitcast<u32>(input.arr[1].scalar2);
         ",
-        );
+            );
 
-        tests.push(
-            ShaderTest::new(
-                format!("Alignment of 24 byte struct with a vec3<{ty}>"),
-                members,
-                direct,
-                &input_values,
-                &[0, 1, 2, 3, 4, 8, 9, 10, 11, 12],
-            )
-            .header(header),
-        );
+            tests.push(
+                ShaderTest::new(
+                    format!("Alignment of 24 byte struct with a vec3<{ty}>"),
+                    members,
+                    direct,
+                    &input_values,
+                    &[0, 1, 2, 3, 4, 8, 9, 10, 11, 12],
+                )
+                .header(header),
+            );
+        }
     }
 
     // Mat3 alignment tests
@@ -555,18 +563,19 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     //
     // This tries to exploit all the weird edge cases of the struct layout algorithm.
     {
-        let header =
-            String::from("struct Inner { scalar: f32, member: array<vec3<f32>, 2>, scalar2: f32 }");
+        let header = format!(
+            "struct Inner {{ scalar: f32, {}scalar2: f32 }}",
+            if no_array_types {
+                ""
+            } else {
+                "member: array<vec3<f32>, 2>, "
+            }
+        );
         let members = String::from("inner: Inner, scalar3: f32, vector: vec3<f32>, scalar4: f32");
-        let direct = String::from(
+        let direct = format!(
             "\
             output[0] = bitcast<u32>(input.inner.scalar);
-            output[1] = bitcast<u32>(input.inner.member[0].x);
-            output[2] = bitcast<u32>(input.inner.member[0].y);
-            output[3] = bitcast<u32>(input.inner.member[0].z);
-            output[4] = bitcast<u32>(input.inner.member[1].x);
-            output[5] = bitcast<u32>(input.inner.member[1].y);
-            output[6] = bitcast<u32>(input.inner.member[1].z);
+            {}
             output[7] = bitcast<u32>(input.inner.scalar2);
             output[8] = bitcast<u32>(input.scalar3);
             output[9] = bitcast<u32>(input.vector.x);
@@ -574,6 +583,18 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
             output[11] = bitcast<u32>(input.vector.z);
             output[12] = bitcast<u32>(input.scalar4);
         ",
+            if no_array_types {
+                ""
+            } else {
+                "\
+            output[1] = bitcast<u32>(input.inner.member[0].x);
+            output[2] = bitcast<u32>(input.inner.member[0].y);
+            output[3] = bitcast<u32>(input.inner.member[0].z);
+            output[4] = bitcast<u32>(input.inner.member[1].x);
+            output[5] = bitcast<u32>(input.inner.member[1].y);
+            output[6] = bitcast<u32>(input.inner.member[1].z);
+            "
+            }
         );
 
         tests.push(
@@ -582,15 +603,27 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                 members,
                 direct,
                 &input_values,
-                &[
-                    0, // inner.scalar
-                    4, 5, 6, // inner.member[0]
-                    8, 9, 10, // inner.member[1]
-                    12, // scalar2
-                    16, // scalar3
-                    20, 21, 22, // vector
-                    23, // scalar4
-                ],
+                if no_array_types {
+                    &[
+                        0, // inner.scalar
+                        -1, -1, -1, // inner.member[0]
+                        -1, -1, -1, // inner.member[1]
+                        1,  // scalar2
+                        2,  // scalar3
+                        4, 5, 6, // vector
+                        7, // scalar4
+                    ]
+                } else {
+                    &[
+                        0, // inner.scalar
+                        4, 5, 6, // inner.member[0]
+                        8, 9, 10, // inner.member[1]
+                        12, // scalar2
+                        16, // scalar3
+                        20, 21, 22, // vector
+                        23, // scalar4
+                    ]
+                },
             )
             .header(header),
         );
@@ -611,7 +644,7 @@ static UNIFORM_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(
             ctx,
             InputStorageType::Storage,
-            create_64bit_struct_layout_tests(),
+            create_64bit_struct_layout_tests(false),
         )
     });
 
@@ -627,7 +660,7 @@ static STORAGE_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(
             ctx,
             InputStorageType::Storage,
-            create_64bit_struct_layout_tests(),
+            create_64bit_struct_layout_tests(false),
         )
     });
 
@@ -646,11 +679,12 @@ static IMMEDIATES_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new(
         shader_input_output_test(
             ctx,
             InputStorageType::Immediate,
-            create_64bit_struct_layout_tests(),
+            // Immediates don't support array types
+            create_64bit_struct_layout_tests(true),
         )
     });
 
-fn create_64bit_struct_layout_tests() -> Vec<ShaderTest> {
+fn create_64bit_struct_layout_tests(no_array_types: bool) -> Vec<ShaderTest> {
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
 
     let mut tests = Vec::new();
@@ -680,22 +714,34 @@ fn create_64bit_struct_layout_tests() -> Vec<ShaderTest> {
     // We dont go as all-out as the other nested struct test because
     // all our primitives are twice as wide and we have only so much buffer to spare.
     {
-        let header = String::from(
-            "struct Inner { scalar: u64, scalar32: u32, member: array<vec3<u64>, 2> }",
+        let header = format!(
+            "struct Inner {{ scalar: u64, scalar32: u32{} }}",
+            if no_array_types {
+                ""
+            } else {
+                ", member: array<vec3<u64>, 2>"
+            }
         );
         let members = String::from("inner: Inner");
-        let direct = String::from(
+        let direct = format!(
             "\
-            output[0] = u32(bitcast<u64>(input.inner.scalar) & 0xFFFFFFFF);
-            output[1] = u32((bitcast<u64>(input.inner.scalar) >> 32) & 0xFFFFFFFF);
-            output[2] = bitcast<u32>(input.inner.scalar32);
-            for (var index = 0u; index < 2u; index += 1u) {
-                for (var component = 0u; component < 3u; component += 1u) {
-                    output[3 + index * 6 + component * 2] = u32(bitcast<u64>(input.inner.member[index][component]) & 0xFFFFFFFF);
-                    output[4 + index * 6 + component * 2] = u32((bitcast<u64>(input.inner.member[index][component]) >> 32) & 0xFFFFFFFF);
-                }
+                output[0] = u32(bitcast<u64>(input.inner.scalar) & 0xFFFFFFFF);
+                output[1] = u32((bitcast<u64>(input.inner.scalar) >> 32) & 0xFFFFFFFF);
+                output[2] = bitcast<u32>(input.inner.scalar32);
+                {}
+            ",
+            if no_array_types {
+                ""
+            } else {
+                "\
+                    for (var index = 0u; index < 2u; index += 1u) {
+                        for (var component = 0u; component < 3u; component += 1u) {
+                            output[3 + index * 6 + component * 2] = u32(bitcast<u64>(input.inner.member[index][component]) & 0xFFFFFFFF);
+                            output[4 + index * 6 + component * 2] = u32((bitcast<u64>(input.inner.member[index][component]) >> 32) & 0xFFFFFFFF);
+                        }
+                    }
+                "
             }
-        ",
         );
 
         tests.push(
@@ -704,12 +750,21 @@ fn create_64bit_struct_layout_tests() -> Vec<ShaderTest> {
                 members,
                 direct,
                 &input_values,
-                &[
-                    0, 1, // inner.scalar
-                    2, // inner.scalar32
-                    8, 9, 10, 11, 12, 13, // inner.member[0]
-                    16, 17, 18, 19, 20, 21, // inner.member[1]
-                ],
+                if no_array_types {
+                    &[
+                        0, 1, // inner.scalar
+                        2, // inner.scalar32
+                        -1, -1, -1, -1, -1, -1, // inner.member[0]
+                        -1, -1, -1, -1, -1, -1, // inner.member[1]
+                    ]
+                } else {
+                    &[
+                        0, 1, // inner.scalar
+                        2, // inner.scalar32
+                        8, 9, 10, 11, 12, 13, // inner.member[0]
+                        16, 17, 18, 19, 20, 21, // inner.member[1]
+                    ]
+                },
             )
             .header(header),
         );

@@ -917,10 +917,14 @@ unsafe impl Sync for CommandBuffer {}
 #[derive(Debug)]
 pub struct Buffer {
     resource: Direct3D12::ID3D12Resource,
-    // While the allocation also has _a_ size, it may not
-    // be the same as the original size of the buffer,
-    // as the allocation size varies for assorted reasons.
-    size: wgt::BufferAddress,
+    /// The allocated size of the buffer.
+    ///
+    /// This may not be the same as the size the application requested.
+    //
+    // TODO(https://github.com/gfx-rs/wgpu/issues/9865): Consider removing this.
+    // The usage associated with the TODO is currently the only usage. Computing
+    // things from the allocated buffer size is usually incorrect.
+    allocated_size: wgt::BufferAddress,
     allocation: suballocation::Allocation,
 }
 
@@ -935,14 +939,7 @@ unsafe impl Sync for Buffer {}
 
 impl crate::DynBuffer for Buffer {}
 
-impl crate::BufferBinding<'_, Buffer> {
-    fn resolve_size(&self) -> wgt::BufferAddress {
-        match self.size {
-            Some(size) => size.get(),
-            None => self.buffer.size - self.offset,
-        }
-    }
-
+impl<S> crate::BufferBinding<'_, Buffer, S> {
     // TODO: Return GPU handle directly?
     fn resolve_address(&self) -> wgt::BufferAddress {
         (unsafe { self.buffer.resource.GetGPUVirtualAddress() }) + self.offset

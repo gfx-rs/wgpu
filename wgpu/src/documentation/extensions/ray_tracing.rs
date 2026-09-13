@@ -393,6 +393,34 @@ fn ch() {}
 fn miss() {}
 ```
 
+Ray Tracing pipeline-specific builtins
+
+| Builtin                | Type          | Stages                     | Description                                                                                                                                                  |
+| ---------------------- | ------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ray_invocation_id`    | `vec3<u32>`   | all                        | The id of this ray within the rays created.                                                                                                                  |
+| `num_ray_invocations`  | `vec3<u32>`   | all                        | The number of rays created.                                                                                                                                  |
+| `world_ray_origin`     | `vec3<f32>`   | any hit, closest hit, miss | The origin of the ray in world space.                                                                                                                        |
+| `world_ray_direction`  | `vec3<f32>`   | any hit, closest hit, miss | The direction of the ray in world space.                                                                                                                     |
+| `ray_t_min`            | `f32`         | any hit, closest hit, miss | The `t_min` given in the `RayDesc`.                                                                                                                          |
+| `ray_t_current_max`    | `f32`         | any hit, closest hit, miss | The closest committed hit if there is one, otherwise the `t_max` in the `RayDesc`.                                                                           |
+| `object_ray_origin`    | `vec3<f32>`   | any hit, closest hit       | The origin of the ray in the space of the hit object.                                                                                                        |
+| `object_ray_direction` | `vec3<f32>`   | any hit, closest hit       | The direction of the ray in the space of the hit object.                                                                                                     |
+| `instance_custom_data` | `u32`         | any hit, closest hit       | Corresponds to `TlasInstance::custom_data` for the intersected object.                                                                                       |
+| `geometry_index`       | `u32`         | any hit, closest hit       | The index of the geometry in the `Blas`.                                                                                                                     |
+| `object_to_world`      | `mat4x3<f32>` | any hit, closest hit       | Matrix for converting from the space of the hit object to world-space.                                                                                       |
+| `world_to_object`      | `mat4x3<f32>` | any hit, closest hit       | Matrix for converting from world-space to the space of the hit object.                                                                                       |
+| `hit_kind`             | `u32`         | any hit, closest hit       | The kind of hit: 254 (0xFE) for a front facing triangle, 255 (0xFF) for a back facing one.                                                                   |
+| `hit_barycentrics`     | `vec2<f32>`   | any hit, closest hit       | Two of the barycentric coordinates of the hit point, the first is `1.0 - x - y`, followed by the two others (only allowed if the hit object was a triangle). |
+
+Builtins usable in ray tracing pipelines that are not specific to them
+
+| Builtin                  | Type  | Stages               | Description                                                                                    |
+| ------------------------ | ----- | -------------------- | ---------------------------------------------------------------------------------------------- |
+| `instance_index`         | `u32` | any hit, closest hit | The index of the intersected instance in the `Tlas`.                                           |
+| `primitive_index`        | `u32` | any hit, closest hit | The index of the intersected primitive within the geometry, requires `enable primitive_index`. |
+| `subgroup_size`          | `u32` | all                  | The number of invocations in the subgroup, requires `enable subgroups`.                        |
+| `subgroup_invocation_id` | `u32` | all                  | The id of this invocation within the subgroup, requires `enable subgroups`.                    |
+
 ### Acceleration structure tags
 
 These are tags that can be added to a acceleration structure (`acceleration_structure` ->

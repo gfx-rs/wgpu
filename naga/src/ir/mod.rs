@@ -502,6 +502,10 @@ pub enum BuiltIn {
     /// the intersection function if any, otherwise this is 254 (0xFE) for a
     /// front facing triangle and 255 (0xFF) for a back facing triangle
     HitKind,
+    /// Read in closest hit and any hit shaders, the second and third barycentric
+    /// coordinates of the hit point on the triangle. The first can be computed as
+    /// `1.0 - x - y`. Only meaningful if the hit was a triangle.
+    HitBarycentrics,
 }
 
 /// Number of bytes per scalar.

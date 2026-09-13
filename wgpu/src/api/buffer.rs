@@ -676,10 +676,6 @@ impl<'a> BufferSlice<'a> {
     pub fn size(&self) -> BufferAddress {
         self.size
     }
-
-    pub(crate) fn size_expect_nonzero(&self) -> BufferSize {
-        BufferSize::new(self.size).expect("buffer slice can not be empty")
-    }
 }
 
 impl<'a> TryFrom<BufferSlice<'a>> for crate::BufferBinding<'a> {
