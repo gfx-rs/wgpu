@@ -490,9 +490,79 @@ impl Global {
 
         let device = devices.get(device_id);
 
+        #[repr(transparent)]
+        #[derive(Clone, Copy, Debug)]
+        struct BindGroupLayoutEntry(wgpu_core_remote_types::binding_model::BindGroupLayoutEntry);
+
+        impl TryFrom<BindGroupLayoutEntry> for wgt::BindGroupLayoutEntry {
+            type Error = binding_model::CreateBindGroupLayoutError;
+
+            fn try_from(
+                value: BindGroupLayoutEntry,
+            ) -> Result<wgt::BindGroupLayoutEntry, Self::Error> {
+                binding_model::BindGroupLayoutEntry::from(value).try_into()
+            }
+        }
+
+        impl From<BindGroupLayoutEntry> for binding_model::BindGroupLayoutEntry {
+            fn from(entry: BindGroupLayoutEntry) -> Self {
+                let wgpu_core_remote_types::binding_model::BindGroupLayoutEntry {
+                    binding,
+                    visibility,
+                    buffer,
+                    sampler,
+                    texture,
+                    storage_texture,
+                    external_texture,
+                } = entry.0;
+                binding_model::BindGroupLayoutEntry {
+                    binding,
+                    visibility: wgt::ShaderStages::from_internal_flags(
+                        visibility,
+                        wgt::ShaderStagesWGPU::empty(),
+                    ),
+                    buffer: buffer.to_std().map(|b| binding_model::BufferBindingLayout {
+                        ty: b.ty,
+                        has_dynamic_offset: b.has_dynamic_offset,
+                        min_binding_size: b.min_binding_size,
+                    }),
+                    sampler: sampler
+                        .to_std()
+                        .map(|s| binding_model::SamplerBindingLayout { ty: s.ty }),
+                    texture: texture
+                        .to_std()
+                        .map(|t| binding_model::TextureBindingLayout {
+                            sample_type: t.sample_type,
+                            view_dimension: t.view_dimension,
+                            multisampled: t.multisampled,
+                        }),
+                    storage_texture: storage_texture.to_std().map(|s| {
+                        binding_model::StorageTextureBindingLayout {
+                            access: s.access,
+                            format: s.format,
+                            view_dimension: s.view_dimension,
+                        }
+                    }),
+                    external_texture: if external_texture {
+                        Some(binding_model::ExternalTextureBindingLayout {})
+                    } else {
+                        None
+                    },
+                    acceleration_structure: None,
+                    count: None,
+                }
+            }
+        }
+
         let desc = binding_model::BindGroupLayoutDescriptor {
             label: desc.label.as_ref().map(|l| Cow::Borrowed(l.as_ref())),
-            entries: Cow::Borrowed(&desc.entries),
+            // SAFETY: The `BindGroupLayoutEntry` type is `repr(transparent)` over the remote type.
+            entries: Cow::Borrowed(unsafe {
+                core::mem::transmute::<
+                    &[wgpu_core_remote_types::binding_model::BindGroupLayoutEntry],
+                    &[BindGroupLayoutEntry],
+                >(desc.entries.as_ref())
+            }),
         };
 
         let bgl = device.create_bind_group_layout(&desc);
