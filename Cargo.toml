@@ -140,7 +140,7 @@ exhaust = "0.2"
 fern = "0.7"
 flume = "0.12"
 futures-lite = "2"
-glam = "0.33.0"
+glam = "0.33.7"
 glob = "0.3"
 half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
 hashbrown = { version = "0.17", default-features = false, features = [
@@ -292,7 +292,8 @@ ash = "0.38"
 
 # DX12 dependencies
 range-alloc = "0.1"
-mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
+# 0.1.5 requires a newer MSVC toolset than Visual Studio 2022 provides.
+mach-dxcompiler-rs = { version = ">=0.1.0,<=0.1.4", default-features = false } # remember to increase max_shader_model if applicable
 windows-core = { version = "0.62", default-features = false }
 windows-result = { version = "0.4", default-features = false }
 
