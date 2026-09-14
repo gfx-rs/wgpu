@@ -2190,12 +2190,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
-name = "lhash"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "744a4c881f502e98c2241d2e5f50040ac73b30194d64452bb6260393b53f0dc9"
-
-[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2321,12 +2315,9 @@ dependencies = [
 
 [[package]]
 name = "mach-dxcompiler-rs"
-version = "0.1.5+2026.09.11-087be1c.1"
+version = "0.1.4+2024.11.22-df583a3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ba647632f6eb1243e15131a226b21e00cf7a31136d8236054061c0bba181e3d"
-dependencies = [
- "lhash",
-]
+checksum = "0e3cd67e8ea2ba061339150970542cf1c60ba44c6d17e31279cbc133a4b018f8"
 
 [[package]]
 name = "macro_rules_attribute"
