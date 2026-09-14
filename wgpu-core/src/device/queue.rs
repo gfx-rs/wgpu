@@ -419,7 +419,15 @@ pub(crate) struct PendingWrites {
     /// into a command buffer that [`pre_submit`] places in front of
     /// `command_encoder`'s.
     ///
+    /// Only a buffer's *first* transition in a batch may be hoisted like this.
+    /// A buffer written more than once per batch gets a second, `COPY_DST` ->
+    /// `COPY_DST` transition from the tracker (unless the adapter reports
+    /// `COPY_DST` as an ordered usage), and that barrier exists precisely to
+    /// separate the two copies, so it has to stay where it was recorded. See
+    /// [`hoist_buffer_barrier`].
+    ///
     /// [`pre_submit`]: PendingWrites::pre_submit
+    /// [`hoist_buffer_barrier`]: PendingWrites::hoist_buffer_barrier
     hoisted_buffer_barriers: Vec<(Arc<Buffer>, hal::StateTransition<wgt::BufferUses>)>,
 }
 
@@ -480,19 +488,33 @@ impl PendingWrites {
     /// Queue up a buffer transition to be recorded ahead of this batch's
     /// copies.
     ///
-    /// See [`hoisted_buffer_barriers`] for the conditions under which this is
-    /// valid.
+    /// Returns the transition instead if it cannot be hoisted, in which case
+    /// the caller must record it immediately, before its own copy. This happens
+    /// when this batch has already copied into `buffer`: the transition is then
+    /// a `COPY_DST` -> `COPY_DST` write-after-write barrier separating the
+    /// earlier copy from the caller's, as hoisting it to the front of the
+    /// batch would leave the two copies unsynchronized.
+    ///
+    /// See [`hoisted_buffer_barriers`].
     ///
     /// [`hoisted_buffer_barriers`]: PendingWrites::hoisted_buffer_barriers
+    #[must_use]
     fn hoist_buffer_barrier(
         &mut self,
         buffer: &Arc<Buffer>,
         transition: Option<track::PendingTransition<wgt::BufferUses>>,
-    ) {
-        if let Some(transition) = transition {
-            self.hoisted_buffer_barriers
-                .push((buffer.clone(), transition.usage));
+    ) -> Option<track::PendingTransition<wgt::BufferUses>> {
+        let transition = transition?;
+
+        // `dst_buffers` is only populated once a copy has been recorded, so
+        // true here means an earlier copy in this batch already wrote `buffer`.
+        if self.dst_buffers.contains_key(&buffer.tracker_index()) {
+            return Some(transition);
         }
+
+        self.hoisted_buffer_barriers
+            .push((buffer.clone(), transition.usage));
+        None
     }
 
     pub fn clear_buffer(
@@ -508,12 +530,15 @@ impl PendingWrites {
                 .buffers
                 .set_single(buffer, wgt::BufferUses::COPY_DST)
         };
-        self.hoist_buffer_barrier(buffer, transition);
+        let inline_transition = self.hoist_buffer_barrier(buffer, transition);
 
         let dst_raw = buffer.try_raw(snatch_guard)?;
 
         let encoder = self.activate();
         unsafe {
+            if let Some(transition) = inline_transition {
+                encoder.transition_buffers(&[transition.into_hal(buffer, snatch_guard)]);
+            }
             encoder.clear_buffer(dst_raw, range.clone());
         }
 
@@ -1034,9 +1059,12 @@ impl Queue {
         };
         // The staging buffer's own `MAP_WRITE` -> `COPY_SRC` transition is
         // hoisted by `PendingWrites::consume`, which our caller invokes.
-        pending_writes.hoist_buffer_barrier(&buffer, transition);
+        let inline_transition = pending_writes.hoist_buffer_barrier(&buffer, transition);
         let encoder = pending_writes.activate();
         unsafe {
+            if let Some(transition) = inline_transition {
+                encoder.transition_buffers(&[transition.into_hal(&buffer, snatch_guard)]);
+            }
             encoder.copy_buffer_to_buffer(staging_buffer.raw(), dst_raw, &[region]);
         }
 
