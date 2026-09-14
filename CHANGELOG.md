@@ -198,6 +198,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 #### Naga
 
+- Fix `Module::doc_comments`'s `struct_members` keys being off by the number of undocumented members preceding a documented one, so doc comments on struct members were attached to the wrong member. By @atirna in [#10249](https://github.com/gfx-rs/wgpu/issues/10249).
 - Replace embedded NUL characters with `?` when writing debug strings to SPIR-V. By @andyleiserson in [#9904](https://github.com/gfx-rs/wgpu/pull/9904).
 - Fix invalid HLSL generated for `textureSampleLevel` with non-2D textures. By @mvanhorn in [#9717](https://github.com/gfx-rs/wgpu/issues/9717).
 - Reject return types on compute shader entrypoints. By @ErichDonGubler in [#10026](https://github.com/gfx-rs/wgpu/pull/10026).
