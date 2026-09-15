@@ -1,11 +1,12 @@
+/*!
 # Shader `debugPrintf`
 
-`wgpu` supports shader debug printing on native backends when `Features::DEBUG_PRINTF` is enabled.
+`wgpu` supports shader debug printing on native backends when [`Features::DEBUG_PRINTF`] is enabled.
 This is a debugging extension and is not part of core WebGPU.
 
 ## Requirements
 
-- Request `Features::DEBUG_PRINTF` when creating the device.
+- Request [`Features::DEBUG_PRINTF`] when creating the device.
 - Add `enable wgpu_debug_printf;` to each WGSL module that calls `debugPrintf`.
 - Use a backend that advertises the feature:
   - Metal with shader logging support, available in Metal 3.2 and later.
@@ -17,7 +18,7 @@ On Vulkan, `debugPrintf` output is produced through the validation layer debug-p
 To receive Vulkan `debugPrintf` output:
 
 - Install the Vulkan SDK.
-- Request `InstanceFlags::VALIDATION` and `InstanceFlags::DEBUG_PRINTF`.
+- Request [`InstanceFlags::VALIDATION`] and [`InstanceFlags::DEBUG_PRINTF`].
 - Listen for log messages at the `Info` level.
 
 ## WGSL Syntax
@@ -46,5 +47,8 @@ Format string interpretation follows the active backend's shader logging impleme
 
 ## References
 
-- Apple Metal shader logging: https://developer.apple.com/documentation/metal/logging-shader-debug-messages
-- Vulkan shader debug printf sample: https://docs.vulkan.org/samples/latest/samples/extensions/shader_debugprintf/README.html
+- [Apple Metal shader logging](https://developer.apple.com/documentation/metal/logging-shader-debug-messages)
+- [Vulkan shader debug printf sample](https://docs.vulkan.org/samples/latest/samples/extensions/shader_debugprintf/README.html)
+*/
+
+use crate::{Features, InstanceFlags};

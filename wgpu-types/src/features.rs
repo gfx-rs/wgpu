@@ -396,7 +396,7 @@ crate::bitflags_array! {
         /// Allows the user to print debug messages from shaders using `debugPrintf()`.
         ///
         /// Each WGSL module using `debugPrintf` must opt in with `enable wgpu_debug_printf;`.
-        /// See the [`debugPrintf` extension specification](https://github.com/gfx-rs/wgpu/blob/trunk/docs/api-specs/debug_printf.md)
+        /// See the [`debugPrintf` extension specification][debug_printf]
         /// for the syntax, how to receive the output, and per-backend requirements.
         ///
         /// Supported platforms:
@@ -407,6 +407,8 @@ crate::bitflags_array! {
         ///   [`InstanceFlags::DEBUG_PRINTF`](crate::InstanceFlags::DEBUG_PRINTF))
         ///
         /// This is a native only feature.
+        ///
+        #[doc = link_to_wgpu_docs!(["debug_printf"]: "documentation/extensions/debug_printf/index.html")]
         #[name("wgpu-debug-printf")]
         const DEBUG_PRINTF = 1 << 14;
 

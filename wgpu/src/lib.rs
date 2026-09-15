@@ -18,7 +18,7 @@
 //!
 //! Most types and functions are documented, but for more general guides and explanations, see the [documentation modules][documentation].
 //!
-//! - [Shader `debugPrintf`](https://github.com/gfx-rs/wgpu/blob/v30/docs/api-specs/debug_printf.md).
+//! - [Shader `debugPrintf`](documentation::extensions::debug_printf).
 //!
 //! There are examples for this version [available on GitHub](https://github.com/gfx-rs/wgpu/tree/v30/examples#readme).
 //!
