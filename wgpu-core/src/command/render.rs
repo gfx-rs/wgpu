@@ -1972,6 +1972,10 @@ impl CommandEncoder {
                     ));
                 }
 
+                #[allow(
+                    clippy::collapsible_match,
+                    reason = "Match guards change which attachment error is returned."
+                )]
                 if view
                     .desc
                     .usage

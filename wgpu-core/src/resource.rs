@@ -2029,36 +2029,34 @@ impl Texture {
         match resolved_dimension {
             wgt::TextureViewDimension::D1
             | wgt::TextureViewDimension::D2
-            | wgt::TextureViewDimension::D3 => {
-                if resolved_array_layer_count != 1 {
-                    return Err(CreateTextureViewError::InvalidArrayLayerCount {
-                        requested: resolved_array_layer_count,
-                        dim: resolved_dimension,
-                    });
-                }
+            | wgt::TextureViewDimension::D3
+                if resolved_array_layer_count != 1 =>
+            {
+                return Err(CreateTextureViewError::InvalidArrayLayerCount {
+                    requested: resolved_array_layer_count,
+                    dim: resolved_dimension,
+                });
             }
-            wgt::TextureViewDimension::Cube => {
-                if resolved_array_layer_count != 6 {
-                    return Err(CreateTextureViewError::InvalidCubemapTextureDepth {
-                        depth: resolved_array_layer_count,
-                    });
-                }
+            wgt::TextureViewDimension::Cube if resolved_array_layer_count != 6 => {
+                return Err(CreateTextureViewError::InvalidCubemapTextureDepth {
+                    depth: resolved_array_layer_count,
+                });
             }
-            wgt::TextureViewDimension::CubeArray => {
-                if !resolved_array_layer_count.is_multiple_of(6) {
-                    return Err(CreateTextureViewError::InvalidCubemapArrayTextureDepth {
-                        depth: resolved_array_layer_count,
-                    });
-                }
+            wgt::TextureViewDimension::CubeArray
+                if !resolved_array_layer_count.is_multiple_of(6) =>
+            {
+                return Err(CreateTextureViewError::InvalidCubemapArrayTextureDepth {
+                    depth: resolved_array_layer_count,
+                });
             }
             _ => {}
         }
 
         match resolved_dimension {
-            wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
-                if self.desc.size.width != self.desc.size.height {
-                    return Err(CreateTextureViewError::InvalidCubeTextureViewSize);
-                }
+            wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray
+                if self.desc.size.width != self.desc.size.height =>
+            {
+                return Err(CreateTextureViewError::InvalidCubeTextureViewSize);
             }
             _ => {}
         }

@@ -750,12 +750,12 @@ impl super::Validator {
             crate::GatherMode::QuadSwap(_) => {}
         }
         match *mode {
-            crate::GatherMode::Broadcast(index) | crate::GatherMode::QuadBroadcast(index) => {
-                if !context.local_expr_kind.is_const(index) {
-                    return Err(SubgroupError::InvalidInvocationIdExprType(index)
-                        .with_span_handle(index, context.expressions)
-                        .into_other());
-                }
+            crate::GatherMode::Broadcast(index) | crate::GatherMode::QuadBroadcast(index)
+                if !context.local_expr_kind.is_const(index) =>
+            {
+                return Err(SubgroupError::InvalidInvocationIdExprType(index)
+                    .with_span_handle(index, context.expressions)
+                    .into_other());
             }
             _ => {}
         }

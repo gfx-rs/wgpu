@@ -2160,12 +2160,12 @@ impl Parser {
                         }
 
                         match stage {
-                            ShaderStage::AnyHit | ShaderStage::ClosestHit | ShaderStage::Miss => {
-                                if incoming_payload.value.is_none() {
-                                    return Err(Box::new(Error::MissingIncomingPayload(
-                                        shader_stage_error_span,
-                                    )));
-                                }
+                            ShaderStage::AnyHit | ShaderStage::ClosestHit | ShaderStage::Miss
+                                if incoming_payload.value.is_none() =>
+                            {
+                                return Err(Box::new(Error::MissingIncomingPayload(
+                                    shader_stage_error_span,
+                                )));
                             }
                             _ => {}
                         }
