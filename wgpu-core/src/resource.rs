@@ -996,7 +996,9 @@ impl Buffer {
             }
             _ => panic!("No pending mapping."),
         };
-        let status = if pending_mapping.range.start != pending_mapping.range.end {
+        let status = if let Err(error) = self.device.check_is_valid() {
+            Err(error.into())
+        } else if pending_mapping.range.start != pending_mapping.range.end {
             let host = pending_mapping.op.host;
             let size = pending_mapping.range.end - pending_mapping.range.start;
             match crate::device::map_buffer(
