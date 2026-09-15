@@ -202,6 +202,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Reject `@location(…)`s in compute shaders. By @ErichDonGubler in [#10026](https://github.com/gfx-rs/wgpu/pull/10026).
 - Correctly emit primitive_index for the SPIR-V backend, handling mesh and raytracing shaders. Before, you could not use primitive_index with these shader types. An enable primitive_index statement is still required in wgsl shaders, in addition to enable wgpu_mesh_shader/enable wgpu_ray_tracing_pipeline. By @JMS55 in [#10153](https://github.com/gfx-rs/wgpu/pull/10153).
 - Prevent invalid IR from being generated when using a ray query in a loop. By @Vecvec in [#9945](https://github.com/gfx-rs/wgpu/pull/9945)
+- Change a panic to a type error when `const`-evaluating the `condition` param. of `select` in WGSL. By @ErichDonGubler in [#10350](https://github.com/gfx-rs/wgpu/pull/10350).
 
 #### DX12
 
