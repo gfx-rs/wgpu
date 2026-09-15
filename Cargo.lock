@@ -5126,6 +5126,7 @@ dependencies = [
  "console_log",
  "env_logger",
  "exhaust",
+ "fern",
  "futures-lite",
  "glam",
  "half",
