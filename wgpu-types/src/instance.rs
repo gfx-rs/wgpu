@@ -242,9 +242,11 @@ bitflags::bitflags! {
         const STRICT_WEBGPU_COMPLIANCE = 1 << 7;
 
         /// Enable capturing the output of shader `debugPrintf`.
-        /// Supported platforms:
+        ///
+        /// This flag is supported on all platforms. It is required on:
         /// - Vulkan, via the `VK_LAYER_KHRONOS_validation` layer's
         ///   ["debug printf"](https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/main/docs/debug_printf.md)
+        ///
         /// Other backends, such as Metal, capture the output without needing this flag.
         ///
         /// When `Self::from_env()` is used takes value from `WGPU_DEBUG_PRINTF` environment variable.
