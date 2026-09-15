@@ -5992,9 +5992,11 @@ template <typename A>
                     "{type_name} {DIV_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
                 )?;
                 let level = back::Level(1);
-                // Sub-32-bit types need typed literal wrappers (e.g. `short(1)`)
-                // to avoid ambiguous metal::select overloads. For >= 32-bit,
-                // bare literals like `1`, `-1`, `0` are unambiguous.
+                // The literal operands of `metal::select` must have the same
+                // scalar type as `rhs`, otherwise the call is ambiguous.
+                // Sub-32-bit types need typed literal wrappers (e.g.
+                // `short(1)`), and 64-bit types need suffixed literals (e.g.
+                // `1L` / `1uL`). Bare `1` / `1u` are only correct for 32-bit.
                 let (lp, rp) = if scalar.width < 4 {
                     (format!("{type_name}("), ")".to_string())
                 } else {
@@ -6002,10 +6004,10 @@ template <typename A>
                 };
                 match scalar.kind {
                     crate::ScalarKind::Sint => {
-                        let min_val = match scalar.width {
-                            2 => crate::Literal::I16(i16::MIN),
-                            4 => crate::Literal::I32(i32::MIN),
-                            8 => crate::Literal::I64(i64::MIN),
+                        let (min_val, suffix) = match scalar.width {
+                            2 => (crate::Literal::I16(i16::MIN), ""),
+                            4 => (crate::Literal::I32(i32::MIN), ""),
+                            8 => (crate::Literal::I64(i64::MIN), "L"),
                             _ => {
                                 return Err(Error::GenericValidation(format!(
                                     "Unexpected width for scalar {scalar:?}"
@@ -6014,13 +6016,20 @@ template <typename A>
                         };
                         write!(
                             self.out,
-                            "{level}return lhs / metal::select(rhs, {lp}1{rp}, (lhs == "
+                            "{level}return lhs / metal::select(rhs, {lp}1{suffix}{rp}, (lhs == "
                         )?;
                         self.put_literal(min_val)?;
-                        writeln!(self.out, " & rhs == {lp}-1{rp}) | (rhs == {lp}0{rp}));")?
+                        writeln!(
+                            self.out,
+                            " & rhs == {lp}-1{suffix}{rp}) | (rhs == {lp}0{suffix}{rp}));"
+                        )?
                     }
                     crate::ScalarKind::Uint => {
-                        let suffix = if scalar.width < 4 { "" } else { "u" };
+                        let suffix = match scalar.width {
+                            8 => "uL",
+                            4 => "u",
+                            _ => "",
+                        };
                         writeln!(
                             self.out,
                             "{level}return lhs / metal::select(rhs, {lp}1{suffix}{rp}, rhs == {lp}0{suffix}{rp});"
@@ -6082,6 +6091,9 @@ template <typename A>
                     "{type_name} {MOD_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
                 )?;
                 let level = back::Level(1);
+                // See the corresponding comment in the `Divide` arm above:
+                // `metal::select` literal operands must match `rhs`'s scalar
+                // type exactly to avoid overload ambiguity.
                 let (lp, rp) = if scalar.width < 4 {
                     (format!("{type_name}("), ")".to_string())
                 } else {
@@ -6089,10 +6101,10 @@ template <typename A>
                 };
                 match scalar.kind {
                     crate::ScalarKind::Sint => {
-                        let min_val = match scalar.width {
-                            2 => crate::Literal::I16(i16::MIN),
-                            4 => crate::Literal::I32(i32::MIN),
-                            8 => crate::Literal::I64(i64::MIN),
+                        let (min_val, suffix) = match scalar.width {
+                            2 => (crate::Literal::I16(i16::MIN), ""),
+                            4 => (crate::Literal::I32(i32::MIN), ""),
+                            8 => (crate::Literal::I64(i64::MIN), "L"),
                             _ => {
                                 return Err(Error::GenericValidation(format!(
                                     "Unexpected width for scalar {scalar:?}"
@@ -6101,14 +6113,21 @@ template <typename A>
                         };
                         write!(
                             self.out,
-                            "{level}{rhs_type_name} divisor = metal::select(rhs, {lp}1{rp}, (lhs == "
+                            "{level}{rhs_type_name} divisor = metal::select(rhs, {lp}1{suffix}{rp}, (lhs == "
                         )?;
                         self.put_literal(min_val)?;
-                        writeln!(self.out, " & rhs == {lp}-1{rp}) | (rhs == {lp}0{rp}));")?;
+                        writeln!(
+                            self.out,
+                            " & rhs == {lp}-1{suffix}{rp}) | (rhs == {lp}0{suffix}{rp}));"
+                        )?;
                         writeln!(self.out, "{level}return lhs - (lhs / divisor) * divisor;")?
                     }
                     crate::ScalarKind::Uint => {
-                        let suffix = if scalar.width < 4 { "" } else { "u" };
+                        let suffix = match scalar.width {
+                            8 => "uL",
+                            4 => "u",
+                            _ => "",
+                        };
                         writeln!(
                             self.out,
                             "{level}return lhs % metal::select(rhs, {lp}1{suffix}{rp}, rhs == {lp}0{suffix}{rp});"
