@@ -86,11 +86,32 @@
     },
     {
       "description": "Rust toolchain should be stable - 3 in accordance with maximum-MSRV policy.",
-      "matchManagers": ["rust-toolchain"],
+      "matchDatasources": ["rust-version"],
+      "matchPackageNames": ["rust"],
+      "enabled": true,
+      "groupName": "Rust repository MSRV",
       "minimumReleaseAge": "18 weeks"
     }
   ],
   "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^Cargo\\.toml$/",
+        "/^README\\.md$/",
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "(?:^|\\n)rust-version = \"(?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)\"",
+        "(?:^|\\n)[ \\t]*REPO_MSRV: \"(?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)\"",
+        "If you're running our tests or examples, our MSRV is \\*\\*(?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)\\*\\*",
+        "The rest of the workspace has an MSRV of \\*\\*(?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)\\*\\*"
+      ],
+      "depNameTemplate": "rust",
+      "datasourceTemplate": "rust-version",
+      "versioningTemplate": "rust-release-channel",
+      "depTypeTemplate": "toolchain"
+    },
     {
       "customType": "regex",
       "managerFilePatterns": ["/^cts_runner\\/revision\\.txt$/"],
