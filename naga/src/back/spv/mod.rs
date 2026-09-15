@@ -961,6 +961,9 @@ pub struct Writer {
     cached_constants: crate::FastHashMap<CachedConstant, Word>,
     global_variables: HandleVec<crate::GlobalVariable, GlobalVariable>,
     std140_compat_uniform_types: crate::FastHashMap<Handle<crate::Type>, Std140CompatTypeInfo>,
+    /// Layoutless type IDs for Workgroup variables (VUID-StandaloneSpirv-None-10684).
+    /// Only populated on SPIR-V 1.4+ where `OpCopyLogical` is available.
+    workgroup_type_ids: crate::FastHashMap<Handle<crate::Type>, Word>,
     fake_missing_bindings: bool,
     binding_map: BindingMap,
 

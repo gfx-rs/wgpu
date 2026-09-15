@@ -1,0 +1,104 @@
+; SPIR-V
+; Version: 1.4
+; Generator: rspirv
+; Bound: 42
+OpCapability Shader
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %18 "main" %15 %12
+OpExecutionMode %18 LocalSize 64 1 1
+%3 = OpString "workgroup-struct-layout.wgsl"
+OpSource Unknown 0 %3 "// Workgroup variable with a struct type must NOT trigger layout decorations.
+// The Vulkan spec (VUID-StandaloneSpirv-None-10684) forbids ArrayStride, Offset,
+// MatrixStride, and ColMajor on types used by Workgroup storage class variables.
+struct Shared {
+    data: array<vec4<f32>, 64>,
+    count: u32,
+}
+
+var<workgroup> wg: Shared;
+
+@compute @workgroup_size(64)
+fn main(@builtin(local_invocation_index) lid: u32) {
+    wg.data[lid] = vec4<f32>(f32(lid));
+    workgroupBarrier();
+    if lid == 0u {
+        wg.count = 64u;
+    }
+}
+"
+OpMemberName %9 0 "data"
+OpMemberName %9 1 "count"
+OpName %9 "Shared"
+OpMemberName %10 0 "data"
+OpMemberName %10 1 "count"
+OpName %10 "Shared"
+OpName %12 "wg"
+OpName %15 "lid"
+OpName %18 "main"
+OpDecorate %6 ArrayStride 16
+OpMemberDecorate %9 0 Offset 0
+OpMemberDecorate %9 1 Offset 1024
+OpDecorate %15 BuiltIn LocalInvocationIndex
+%2 = OpTypeVoid
+%5 = OpTypeFloat 32
+%4 = OpTypeVector %5 4
+%8 = OpTypeInt 32 0
+%7 = OpConstant  %8  64
+%6 = OpTypeArray %4 %7
+%9 = OpTypeStruct %6 %8
+%11 = OpTypeArray %4 %7
+%10 = OpTypeStruct %11 %8
+%13 = OpTypePointer Workgroup %10
+%12 = OpVariable  %13  Workgroup
+%16 = OpTypePointer Input %8
+%15 = OpVariable  %16  Input
+%19 = OpTypeFunction %2
+%20 = OpConstant  %8  0
+%22 = OpConstantNull  %10
+%24 = OpTypeBool
+%27 = OpConstant  %8  2
+%28 = OpConstant  %8  264
+%30 = OpTypePointer Workgroup %11
+%31 = OpTypePointer Workgroup %4
+%39 = OpTypePointer Workgroup %8
+%40 = OpConstant  %8  1
+%18 = OpFunction  %2  None %19
+%14 = OpLabel
+%17 = OpLoad  %8  %15
+OpBranch %21
+%21 = OpLabel
+%23 = OpIEqual  %24  %17 %20
+OpSelectionMerge %25 None
+OpBranchConditional %23 %26 %25
+%26 = OpLabel
+OpStore %12 %22
+OpBranch %25
+%25 = OpLabel
+OpControlBarrier %27 %27 %28
+OpBranch %29
+%29 = OpLabel
+OpLine %3 13 5
+%32 = OpConvertUToF  %5  %17
+%33 = OpCompositeConstruct  %4  %32 %32 %32 %32
+OpLine %3 13 5
+%34 = OpAccessChain  %31  %12 %20 %17
+OpStore %34 %33
+OpLine %3 14 5
+OpControlBarrier %27 %27 %28
+OpLine %3 15 8
+%35 = OpIEqual  %24  %17 %20
+OpLine %3 15 5
+OpSelectionMerge %36 None
+OpBranchConditional %35 %37 %38
+%37 = OpLabel
+OpLine %3 16 9
+OpLine %3 16 9
+%41 = OpAccessChain  %39  %12 %40
+OpStore %41 %7
+OpReturn
+%38 = OpLabel
+OpReturn
+%36 = OpLabel
+OpReturn
+OpFunctionEnd
