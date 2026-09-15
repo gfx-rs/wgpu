@@ -1,14 +1,11 @@
 name: Shaders
 
 on:
-  push:
-    branches-ignore: [
-        # Branches with the `gh-readonly-queue` prefix are used by the
-        # merge queue, so they are already covered by the `merge_group` event.
-        "gh-readonly-queue/**",
-      ]
   pull_request:
-  merge_group:
+  # Runs on `trunk` to save the build caches that pull requests read.
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 # Every time a PR is pushed to, cancel any previous jobs. This
 # makes us behave nicer to github and get faster turnaround times
@@ -37,7 +34,7 @@ jobs:
             debug = "line-tables-only"
           EOF
 
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
@@ -87,7 +84,7 @@ jobs:
             debug = "line-tables-only"
           EOF
 
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
@@ -126,7 +123,7 @@ jobs:
             debug = "line-tables-only"
           EOF
 
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}

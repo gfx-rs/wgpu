@@ -2739,18 +2739,18 @@ impl<W: Write> Writer<W> {
                 };
 
                 match fun {
-                    Mf::ReverseBits | Mf::ExtractBits | Mf::InsertBits => {
-                        // reverse_bits is listed as requiring MSL 2.1 but that
-                        // is a copy/paste error. Looking at previous snapshots
-                        // on web.archive.org it's present in MSL 1.2.
-                        //
-                        // https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html
-                        // also talks about MSL 1.2 adding "New integer
-                        // functions to extract, insert, and reverse bits, as
-                        // described in Integer Functions."
-                        if context.lang_version < (1, 2) {
-                            return Err(Error::UnsupportedFunction(fun_name.to_string()));
-                        }
+                    // reverse_bits is listed as requiring MSL 2.1 but that
+                    // is a copy/paste error. Looking at previous snapshots
+                    // on web.archive.org it's present in MSL 1.2.
+                    //
+                    // https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html
+                    // also talks about MSL 1.2 adding "New integer
+                    // functions to extract, insert, and reverse bits, as
+                    // described in Integer Functions."
+                    Mf::ReverseBits | Mf::ExtractBits | Mf::InsertBits
+                        if context.lang_version < (1, 2) =>
+                    {
+                        return Err(Error::UnsupportedFunction(fun_name.to_string()));
                     }
                     _ => {}
                 }
@@ -3750,17 +3750,17 @@ impl<W: Write> Writer<W> {
                     crate::MathFunction::FirstLeadingBit => {
                         self.need_bake_expressions.insert(arg);
                     }
+                    // On MSL < 2.1, we emit a polyfill for these functions that uses the
+                    // argument multiple times. This is no longer necessary on MSL >= 2.1.
                     crate::MathFunction::Pack4xI8
                     | crate::MathFunction::Pack4xU8
                     | crate::MathFunction::Pack4xI8Clamp
                     | crate::MathFunction::Pack4xU8Clamp
                     | crate::MathFunction::Unpack4xI8
-                    | crate::MathFunction::Unpack4xU8 => {
-                        // On MSL < 2.1, we emit a polyfill for these functions that uses the
-                        // argument multiple times. This is no longer necessary on MSL >= 2.1.
-                        if context.lang_version < (2, 1) {
-                            self.need_bake_expressions.insert(arg);
-                        }
+                    | crate::MathFunction::Unpack4xU8
+                        if context.lang_version < (2, 1) =>
+                    {
+                        self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::ExtractBits => {
                         // Only argument 1 is re-used.
@@ -5819,6 +5819,29 @@ template <typename A>
                        return metal::float4(float(r) / 1023.0f, float(g) / 1023.0f, float(b) / 1023.0f, float(a) / 3.0f);",
                     */
                     "{}return metal::unpack_unorm10a2_to_float(b3 << 24 | b2 << 16 | b1 << 8 | b0);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, Some(VectorSize::Quad), Scalar::F32))
+            }
+            Snorm10_10_10_2 => {
+                let name = self.namer.call("unpackSnorm10_10_10_2");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(uint b0, \
+                                          uint b1, \
+                                          uint b2, \
+                                          uint b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    // Sign-extend by shifting to the top of the word and back.
+                    "{}uint v = (b3 << 24 | b2 << 16 | b1 << 8 | b0); \
+                       return metal::max(metal::float4(float(as_type<int>(v << 22) >> 22) / 511.0f, \
+                                                       float(as_type<int>(v << 12) >> 22) / 511.0f, \
+                                                       float(as_type<int>(v << 2) >> 22) / 511.0f, \
+                                                       float(as_type<int>(v) >> 30)), \
+                                         metal::float4(-1.0f));",
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
@@ -8222,10 +8245,8 @@ template <typename A>
                                     )?;
                                     continue;
                                 }
-                                Some(crate::Binding::Location { .. }) => {
-                                    if has_varyings {
-                                        write!(self.out, "{varyings_member_name}.")?;
-                                    }
+                                Some(crate::Binding::Location { .. }) if has_varyings => {
+                                    write!(self.out, "{varyings_member_name}.")?;
                                 }
                                 _ => (),
                             }
@@ -8254,17 +8275,17 @@ template <typename A>
                             )?;
                         }
                         Some(crate::Binding::Location { .. })
-                        | Some(crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. })) => {
-                            if has_varyings {
-                                writeln!(
-                                    self.out,
-                                    "{}const auto {} = {}.{};",
-                                    back::INDENT,
-                                    arg_name,
-                                    varyings_member_name,
-                                    arg_name
-                                )?;
-                            }
+                        | Some(crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. }))
+                            if has_varyings =>
+                        {
+                            writeln!(
+                                self.out,
+                                "{}const auto {} = {}.{};",
+                                back::INDENT,
+                                arg_name,
+                                varyings_member_name,
+                                arg_name
+                            )?;
                         }
                         _ => {}
                     },
