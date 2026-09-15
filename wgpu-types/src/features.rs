@@ -402,8 +402,9 @@ crate::bitflags_array! {
         /// Supported platforms:
         /// - Metal (3.2+, lowered to shader logging)
         /// - Vulkan (lowered to SPIR-V `NonSemantic.DebugPrintf`; output requires the
-        ///   validation layer's debug-printf path, which is unavailable when GPU-assisted
-        ///   validation is enabled)
+        ///   validation layer's debug-printf path, enabled with
+        ///   [`InstanceFlags::VALIDATION`](crate::InstanceFlags::VALIDATION) and
+        ///   [`InstanceFlags::DEBUG_PRINTF`](crate::InstanceFlags::DEBUG_PRINTF))
         ///
         /// This is a native only feature.
         #[name("wgpu-debug-printf")]
