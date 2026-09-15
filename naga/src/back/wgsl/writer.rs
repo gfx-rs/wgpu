@@ -472,6 +472,10 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, "enable wgpu_ray_tracing_pipeline;")?;
             any_written = true;
         }
+        if module.uses_invocation_reorder() {
+            writeln!(self.out, "enable wgpu_ray_tracing_invocation_reorder;")?;
+            any_written = true;
+        }
         if needed.per_vertex {
             writeln!(self.out, "enable wgpu_per_vertex;")?;
             any_written = true;
@@ -1234,7 +1238,65 @@ impl<W: Write> Writer<W> {
                     self.write_expr(module, payload, func_ctx)?;
                     writeln!(self.out, ");")?
                 }
+                crate::RayPipelineFunction::ReorderThread { hint, bits } => {
+                    write!(self.out, "{level}reorderThread(")?;
+                    self.write_expr(module, hint, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, bits, func_ctx)?;
+                    writeln!(self.out, ");")?
+                }
             },
+            Statement::HitObject { hit_object, fun } => {
+                let name = match fun {
+                    crate::HitObjectFunction::TraceRay { .. } => "hitObjectTraceRay",
+                    crate::HitObjectFunction::RecordMiss { .. } => "hitObjectRecordMiss",
+                    crate::HitObjectFunction::RecordFromQuery { .. } => "hitObjectRecordFromQuery",
+                    crate::HitObjectFunction::RecordEmpty => "hitObjectRecordEmpty",
+                    crate::HitObjectFunction::ExecuteShader { .. } => "hitObjectExecuteShader",
+                    crate::HitObjectFunction::Reorder { .. } => "reorderThread",
+                };
+                write!(self.out, "{level}{name}(")?;
+                self.write_expr(module, hit_object, func_ctx)?;
+                let hint = match fun {
+                    crate::HitObjectFunction::TraceRay {
+                        acceleration_structure,
+                        descriptor,
+                        payload,
+                    } => {
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, acceleration_structure, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, descriptor, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, payload, func_ctx)?;
+                        None
+                    }
+                    crate::HitObjectFunction::RecordMiss { descriptor } => {
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, descriptor, func_ctx)?;
+                        None
+                    }
+                    crate::HitObjectFunction::RecordFromQuery { query } => {
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, query, func_ctx)?;
+                        None
+                    }
+                    crate::HitObjectFunction::RecordEmpty => None,
+                    crate::HitObjectFunction::ExecuteShader { payload } => {
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, payload, func_ctx)?;
+                        None
+                    }
+                    crate::HitObjectFunction::Reorder { hint } => hint,
+                };
+                if let Some(crate::ReorderHint { hint, bits }) = hint {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, hint, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, bits, func_ctx)?;
+                }
+                writeln!(self.out, ");")?
+            }
         }
 
         Ok(())
@@ -1948,6 +2010,17 @@ impl<W: Write> Writer<W> {
 
                 self.write_expr(module, argument, func_ctx)?;
 
+                write!(self.out, ")")?
+            }
+            Expression::HitObjectQuery { hit_object, query } => {
+                let name = match query {
+                    crate::HitObjectQuery::IsEmpty => "hitObjectIsEmpty",
+                    crate::HitObjectQuery::IsHit => "hitObjectIsHit",
+                    crate::HitObjectQuery::IsMiss => "hitObjectIsMiss",
+                    crate::HitObjectQuery::Intersection => "hitObjectGetIntersection",
+                };
+                write!(self.out, "{name}(")?;
+                self.write_expr(module, hit_object, func_ctx)?;
                 write!(self.out, ")")?
             }
             // Not supported yet

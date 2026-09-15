@@ -542,6 +542,7 @@ enum LocalType {
     },
     AccelerationStructure,
     RayQuery,
+    HitObject,
 }
 
 /// A type encountered during SPIR-V generation.
@@ -595,12 +596,20 @@ enum LookupRayQueryFunction {
     Terminate,
 }
 
-// Just one supported function right now, more in the future.
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 enum LookupRaytracingFunction {
     TraceRay {
         payload: Handle<crate::GlobalVariable>,
     },
+    HitObjectTraceRay {
+        payload: Handle<crate::GlobalVariable>,
+    },
+    HitObjectRecordMiss,
+    HitObjectRecordFromQuery,
+    HitObjectExecuteShader {
+        payload: Handle<crate::GlobalVariable>,
+    },
+    HitObjectGetIntersection,
 }
 
 #[derive(Debug)]
@@ -979,6 +988,10 @@ pub struct Writer {
 
     has_ray_tracing_pipeline: bool,
 
+    /// The module-scope `HitObjectAttributeEXT` variable used to retrieve
+    /// triangle barycentrics from a hit object, created lazily.
+    hit_object_attribute_var: Option<Word>,
+
     /// F16 I/O polyfill manager for handling `f16` input/output variables
     /// when `StorageInputOutput16` capability is not available.
     io_f16_polyfills: f16_polyfill::F16IoPolyfill,
@@ -1223,6 +1236,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::COOPERATIVE_MATRIX
         | Caps::PER_VERTEX
         | Caps::RAY_TRACING_PIPELINE
+        | Caps::RAY_TRACING_INVOCATION_REORDER
         | Caps::DRAW_INDEX
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE

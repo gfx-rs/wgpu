@@ -1002,9 +1002,11 @@ impl super::Validator {
                                 ));
                             }
                         }
-                        crate::TypeInner::RayQuery { .. } => {
+                        crate::TypeInner::RayQuery { .. } | crate::TypeInner::HitObject => {
                             // This should have been rejected in `validate_type`.
-                            unreachable!("binding arrays of ray queries are not supported");
+                            unreachable!(
+                                "binding arrays of ray queries or hit objects are not supported"
+                            );
                         }
                         _ => {
                             // Fall through to the regular validation, which will reject `base`
@@ -1018,6 +1020,12 @@ impl super::Validator {
             _ => var.ty,
         };
         let type_info = &self.types[inner_ty.index()];
+
+        // Hit objects, like the ray queries they resemble, may only appear as
+        // function-scope local variables.
+        if matches!(gctx.types[inner_ty].inner, crate::TypeInner::HitObject) {
+            return Err(GlobalVariableError::InvalidType(var.space));
+        }
 
         let (required_type_flags, is_resource) = match var.space {
             crate::AddressSpace::Function => {

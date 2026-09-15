@@ -2,6 +2,7 @@
 Module for code shared between ray queries and ray tracing pipeline code.
 */
 
+pub mod hit_object;
 pub mod pipeline;
 pub mod query;
 
