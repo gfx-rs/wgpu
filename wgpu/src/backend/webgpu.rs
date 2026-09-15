@@ -584,6 +584,10 @@ fn map_vertex_format(format: wgt::VertexFormat) -> webgpu_sys::GpuVertexFormat {
         VertexFormat::Sint32x4 => vf::Sint32x4,
         VertexFormat::Unorm10_10_10_2 => vf::Unorm1010102,
         VertexFormat::Unorm8x4Bgra => vf::Unorm8x4Bgra,
+        VertexFormat::Snorm10_10_10_2 => {
+            // https://github.com/gfx-rs/wgpu/issues/10216
+            panic!("snorm10-10-10-2 is not yet available on the WebGPU backend")
+        }
         VertexFormat::Float64
         | VertexFormat::Float64x2
         | VertexFormat::Float64x3
@@ -2615,8 +2619,11 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> dispatch::DispatchBuffer {
-        let mapped_desc =
-            webgpu_sys::GpuBufferDescriptor::new_with_f64(desc.size as f64, desc.usage.bits());
+        assert!(desc.usage.buffer_usages_wgpu.is_empty());
+        let mapped_desc = webgpu_sys::GpuBufferDescriptor::new_with_f64(
+            desc.size as f64,
+            desc.usage.buffer_usages_webgpu.bits(),
+        );
         mapped_desc.set_mapped_at_creation(desc.mapped_at_creation);
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2933,7 +2940,10 @@ impl dispatch::QueueInterface for WebQueue {
     ) -> Option<()> {
         let buffer = buffer.as_webgpu();
 
-        let usage = wgt::BufferUsages::from_bits_truncate(buffer.inner.usage());
+        let usage = wgt::BufferUsages::from_internal_flags(
+            wgt::BufferUsagesWebGPU::from_bits_truncate(buffer.inner.usage()),
+            wgt::BufferUsagesWGPU::empty(),
+        );
         // TODO: actually send this down the error scope
         if !usage.contains(wgt::BufferUsages::COPY_DST) {
             log::error!("Destination buffer is missing the `COPY_DST` usage flag");
