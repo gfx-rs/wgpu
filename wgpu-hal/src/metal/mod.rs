@@ -645,6 +645,9 @@ pub struct Surface {
     render_layer: Mutex<Retained<CAMetalLayer>>,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,
     extent: RwLock<wgt::Extent3d>,
+    /// Whether the hosting window has been visible at some point, see `acquire_texture`.
+    #[cfg(target_os = "macos")]
+    has_been_visible: atomic::AtomicBool,
 }
 
 unsafe impl Send for Surface {}

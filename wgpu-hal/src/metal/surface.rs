@@ -38,6 +38,8 @@ impl super::Surface {
             render_layer: Mutex::new(layer),
             swapchain_format: RwLock::new(None),
             extent: RwLock::new(wgt::Extent3d::default()),
+            #[cfg(target_os = "macos")]
+            has_been_visible: wgpu_sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -365,14 +367,23 @@ impl crate::Surface for super::Surface {
             // When the window is occluded on macOS, presented drawables get stuck waiting
             // for vsync. Check the window's occlusion state and skip acquisition if
             // the window is not visible - this avoids a 1-second hang in nextDrawable().
+            //
+            // Only drawables presented while the window was visible get stuck, so this
+            // waits until the window has been visible once. Until then, nextDrawable()
+            // returns right away, and applications rely on that to render a first frame
+            // before the window is shown, or right after, while AppKit hasn't updated the
+            // occlusion state yet.
             use objc2::rc::Retained;
+            use wgpu_sync::atomic;
 
             // The CAMetalLayer is typically a sublayer; find the hosting window
             // and skip acquisition while it is occluded.
             if let Some(window) = hosting_window(Retained::into_super(render_layer.clone())) {
                 const NS_WINDOW_OCCLUSION_STATE_VISIBLE: usize = 1 << 1;
                 let occlusion_state: usize = unsafe { objc2::msg_send![&*window, occlusionState] };
-                if occlusion_state & NS_WINDOW_OCCLUSION_STATE_VISIBLE == 0 {
+                if occlusion_state & NS_WINDOW_OCCLUSION_STATE_VISIBLE != 0 {
+                    self.has_been_visible.store(true, atomic::Ordering::Relaxed);
+                } else if self.has_been_visible.load(atomic::Ordering::Relaxed) {
                     return Err(crate::SurfaceError::Occluded);
                 }
             }
