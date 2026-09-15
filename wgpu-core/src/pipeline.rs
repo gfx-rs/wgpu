@@ -591,6 +591,20 @@ impl ComputePipeline {
         };
         bgl
     }
+
+    // TODO: this probably doesn't need tracing?
+    pub fn get_subgroup_size(self: &Arc<Self>) -> Option<u32> {
+        self.raw()
+            // TODO:
+            // not sure if this is useful
+            // if not useful, `map_err` can just be removed
+            .map_err(|err| {
+                self.device
+                    .handle_error_nolabel(err, "ComputePipeline::get_subgroup_size");
+            })
+            .ok()
+            .and_then(hal::DynComputePipeline::get_subgroup_size)
+    }
 }
 
 #[derive(Clone, Debug, Error)]
