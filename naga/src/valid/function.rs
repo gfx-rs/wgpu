@@ -85,6 +85,8 @@ pub enum LocalVariableError {
     InitializerType,
     #[error("Initializer is not a const or override expression")]
     NonConstOrOverrideInitializer,
+    #[error("Local variable has a type `ray_query` and so cannot be initialized.")]
+    RayQueryWithInitializeExpression,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -238,6 +240,8 @@ pub enum FunctionError {
     PayloadPointerNotGlobal,
     #[error("Argument {0:?} for `debugPrintf` must be a supported scalar type")]
     InvalidDebugPrintfArgument(Handle<crate::Expression>),
+    #[error("Tried to store to pointer {0:?} which is a ray query and so cannot be assigned to")]
+    RayQueryStore(Handle<crate::Expression>),
 }
 
 bitflags::bitflags! {
@@ -748,12 +752,12 @@ impl super::Validator {
             crate::GatherMode::QuadSwap(_) => {}
         }
         match *mode {
-            crate::GatherMode::Broadcast(index) | crate::GatherMode::QuadBroadcast(index) => {
-                if !context.local_expr_kind.is_const(index) {
-                    return Err(SubgroupError::InvalidInvocationIdExprType(index)
-                        .with_span_handle(index, context.expressions)
-                        .into_other());
-                }
+            crate::GatherMode::Broadcast(index) | crate::GatherMode::QuadBroadcast(index)
+                if !context.local_expr_kind.is_const(index) =>
+            {
+                return Err(SubgroupError::InvalidInvocationIdExprType(index)
+                    .with_span_handle(index, context.expressions)
+                    .into_other());
             }
             _ => {}
         }
@@ -1097,6 +1101,13 @@ impl super::Validator {
                     let good = if let Some(&Ti::Atomic(ref scalar)) = pointer_base_ty {
                         // The Naga IR allows storing a scalar to an atomic.
                         *value_ty == Ti::Scalar(*scalar)
+                    } else if let Some(&Ti::RayQuery { .. }) = pointer_base_ty {
+                        return Err(FunctionError::RayQueryStore(pointer)
+                            .with_span_context((
+                                context.expressions.get_span(pointer),
+                                format!("this pointer has a base type of {pointer_base_ty:?} which cannot be stored to"),
+                            ))
+                            .with_span(span, "store to a type which is not allowed to be stored to"));
                     } else if let Some(tr) = pointer_base_tr {
                         context.compare_types(value_tr, &tr)
                     } else {
@@ -1579,6 +1590,7 @@ impl super::Validator {
                         }
                         crate::RayQueryFunction::ConfirmIntersection => {}
                         crate::RayQueryFunction::Terminate => {}
+                        crate::RayQueryFunction::Begin => {}
                     }
                 }
                 S::SubgroupBallot { result, predicate } => {
@@ -1850,6 +1862,10 @@ impl super::Validator {
 
             if !local_expr_kind.is_const_or_override(init) {
                 return Err(LocalVariableError::NonConstOrOverrideInitializer);
+            }
+
+            if matches!(gctx.types[var.ty].inner, crate::TypeInner::RayQuery { .. }) {
+                return Err(LocalVariableError::RayQueryWithInitializeExpression);
             }
         }
 

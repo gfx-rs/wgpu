@@ -1,4 +1,4 @@
-@fragment 
+@fragment
 fn main() {
     let v = vec4(0f);
     let a = degrees(1f);

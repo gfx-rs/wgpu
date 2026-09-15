@@ -1,8 +1,7 @@
-# Cooperative Matrix Extensions
+/*!
+# 🧪Experimental🧪 Cooperative Matrix Extensions
 
-🧪Experimental🧪
-
-`wgpu` supports an experimental cooperative matrix feature when `Features::EXPERIMENTAL_COOPERATIVE_MATRIX` is enabled.
+`wgpu` supports an experimental cooperative matrix feature when [`Features::EXPERIMENTAL_COOPERATIVE_MATRIX`] is enabled.
 This exposes hardware-accelerated matrix multiply-accumulate (MMA) operations (for example, NVIDIA tensor cores,
 Metal SIMD-group matrices, and Vulkan `VK_KHR_cooperative_matrix`).
 
@@ -63,7 +62,7 @@ Each `CooperativeMatrixProperties` describes a single supported configuration. F
 
 Example usage:
 
-```/dev/null/cooperative-matrix-host.rs#L1-40
+```ignore
 let coop_props = adapter.cooperative_matrix_properties();
 for prop in &coop_props {
     println!(
@@ -77,7 +76,7 @@ for prop in &coop_props {
 
 You **must**:
 
-1. Enable `Features::EXPERIMENTAL_COOPERATIVE_MATRIX` on the `Device`.
+1. Enable [`Features::EXPERIMENTAL_COOPERATIVE_MATRIX`] on the `Device`.
 2. Query `adapter.cooperative_matrix_properties()` and ensure that the configuration(s) you intend
    to use in WGSL are actually available on the running adapter/backend.
 3. Treat the sizes and types as a contract between your shaders and the underlying hardware implementation.
@@ -90,7 +89,7 @@ You **must**:
 ### `wgpu` feature
 
 - Using cooperative matrices requires enabling:
-  - `Features::EXPERIMENTAL_COOPERATIVE_MATRIX`
+  - [`Features::EXPERIMENTAL_COOPERATIVE_MATRIX`]
 
 This feature may be restricted to certain backends and hardware.
 
@@ -107,7 +106,7 @@ These are general guidelines, not a complete compatibility matrix:
   - Requires the `VK_KHR_cooperative_matrix` extension.
   - Many NVIDIA and AMD GPUs support `f16` at 16×16 tile sizes and similar.
   - 8×8 `f32` support is hardware-dependent.
-  - Exact configurations are enumerated by `Adapter::cooperative_matrix_properties()`.
+  - Exact configurations are enumerated by [`Adapter::cooperative_matrix_properties()`].
 
 - **Other backends**:
   - May not support cooperative matrices at all. In that case the feature will not be exposed, and
@@ -156,7 +155,7 @@ may change; the details below describe the intended semantics.
 
 Any WGSL program using cooperative matrices must declare an extension at the top of the shader, for example:
 
-```/dev/null/example.wgsl#L1-3
+```wgsl
 enable wgpu_cooperative_matrix;
 ```
 
@@ -175,7 +174,7 @@ A cooperative matrix is a value type parameterized by:
 
 Conceptually:
 
-```/dev/null/example.wgsl#L1-8
+```wgsl
 // A: MxK, B: KxN, C: MxN
 type coop_matMxN<T, A>;
 type coop_matMxN<T, B>;
@@ -185,7 +184,7 @@ type coop_matMxN<T, C>;
 Concrete examples (sizes and types must match a supported configuration from
 `Adapter::cooperative_matrix_properties`):
 
-```/dev/null/example.wgsl#L10-20
+```wgsl
 // 8x8 single-precision tiles
 alias CoopMatA = coop_mat8x8<f32, A>;
 alias CoopMatB = coop_mat8x8<f32, B>;
@@ -233,7 +232,7 @@ select the memory layout:
   `stride` is the number of elements between adjacent rows. This is the
   natural fit for C-style `ptr[i * num_cols + j]` storage.
 
-```/dev/null/example.wgsl#L1-10
+```wgsl
 fn coopLoad<T, R>(
     ptr: ptr<STORAGE_CLASS, T>, // base pointer to scalar or vector elements
     stride: u32                  // elements between adjacent columns
@@ -260,7 +259,7 @@ selection mirrors the load builtins:
 - `coopStore` — writes **column-major**; `stride` between columns.
 - `coopStoreT` — writes **row-major**; `stride` between rows.
 
-```/dev/null/example.wgsl#L12-23
+```wgsl
 fn coopStore<T, R>(
     value: coop_matMxN<T, R>,
     ptr: ptr<STORAGE_CLASS, T>,
@@ -282,7 +281,7 @@ fn coopStoreT<T, R>(
 
 Perform a matrix multiply-accumulate operation on cooperative matrices:
 
-```/dev/null/example.wgsl#L15-23
+```wgsl
 fn coopMultiplyAdd<Tab, Tcr, MA, KA, KB, NB>(
     a: coop_matMAxKA<Tab, A>, // A: MAxKA tile
     b: coop_matKBxNB<Tab, B>, // B: KBxNB tile (KB == KA)
@@ -302,7 +301,7 @@ Semantics:
 
 For example, with a supported configuration:
 
-```/dev/null/example.wgsl#L25-39
+```wgsl
 enable wgpu_cooperative_matrix;
 
 alias MatA = coop_mat8x8<f32, A>;
@@ -354,7 +353,7 @@ For portable code:
 
 Example:
 
-```/dev/null/example.wgsl#L1-42
+```wgsl
 enable wgpu_cooperative_matrix;
 
 struct Matrices {
@@ -405,7 +404,7 @@ Implementations must validate the following where possible:
 - The `wgpu_cooperative_matrix` WGSL extension is enabled if any cooperative matrix types
   or builtins are used.
 - Tile sizes `(M, N, K)` and scalar types `(ab_type, cr_type)` match at least one
-  `CooperativeMatrixProperties` entry for the current adapter/backend.
+  [`CooperativeMatrixProperties`] entry for the current adapter/backend.
 - Workgroup size, shader stage, and other pipeline configuration constraints required
   by the backend are satisfied.
 
@@ -413,7 +412,7 @@ The following are examples of **undefined behavior** (non-exhaustive):
 
 - Using cooperative matrix operations without enabling the WGSL extension.
 - Using a cooperative matrix type `(M, N, T, R)` not supported by
-  `Adapter::cooperative_matrix_properties()`.
+  [`Adapter::cooperative_matrix_properties()`].
 - Mismatching sizes or roles in `coopMultiplyAdd` (e.g. incompatible M/N/K, or incorrect roles).
 - Executing `coopLoad` / `coopLoadT`, `coopStore` / `coopStoreT`, or `coopMultiplyAdd` in divergent
   control flow within the cooperating execution group.
@@ -451,7 +450,7 @@ Key points from the example:
 
 - Workgroup size is chosen so that all cooperative operations are well-defined and efficient for 8×8 tiles.
 - Host-side code:
-  - Enables `Features::EXPERIMENTAL_COOPERATIVE_MATRIX`.
+  - Enables [`Features::EXPERIMENTAL_COOPERATIVE_MATRIX`].
   - Queries `cooperative_matrix_properties` and verifies that 8×8 `f32` or chosen configuration is supported.
   - Dispatches the compute pipeline with appropriate grid dimensions.
 
@@ -466,3 +465,7 @@ Key points from the example:
 - Avoid divergent control flow around cooperative operations.
 - Consider providing a fallback non-cooperative implementation for devices that do not support the feature.
 - This is an experimental extension; API and semantics may change across versions of `wgpu` and `naga`.
+
+*/
+
+use crate::{Adapter, CooperativeMatrixProperties, Features};

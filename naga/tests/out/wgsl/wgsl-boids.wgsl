@@ -19,14 +19,14 @@ struct Particles {
 
 const NUM_PARTICLES: u32 = 1500u;
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<uniform> params: SimParams;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage> particlesSrc: Particles;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var<storage, read_write> particlesDst: Particles;
 
-@compute @workgroup_size(64, 1, 1) 
+@compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     var vPos: vec2<f32>;
     var vVel: vec2<f32>;

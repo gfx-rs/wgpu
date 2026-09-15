@@ -365,7 +365,7 @@ impl Queue {
         &self,
     ) -> Option<impl core::ops::Deref<Target = A::Queue> + WasmNotSendSync> {
         let queue = self.inner.as_core_opt()?;
-        unsafe { queue.context.queue_as_hal::<A>(queue) }
+        unsafe { queue.as_hal::<A>() }
     }
 
     /// Schedule a surface texture to be presented on the owning surface.

@@ -73,7 +73,7 @@ impl TextureView {
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::TextureView>> {
         let view = self.inner.as_core_opt()?;
-        unsafe { view.context.texture_view_as_hal::<A>(view) }
+        unsafe { view.as_hal::<A>() }
     }
 
     /// Returns the underlying [`webgpu::GpuTextureView`] handle if this view

@@ -2911,6 +2911,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     RayQueryFunction::Terminate => {
                         self.write_terminate(module, level, query, &tracker_expr_name, func_ctx)?;
                     }
+                    RayQueryFunction::Begin => {
+                        if self.options.ray_query_initialization_tracking {
+                            writeln!(self.out, "{level}{tracker_expr_name} = 0u;")?;
+                        }
+                    }
                 }
             }
             Statement::SubgroupBallot { result, predicate } => {
@@ -4699,10 +4704,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             TypeInner::Image {
                 class: crate::ImageClass::Storage { format, .. },
                 ..
-            } => {
-                if format.single_component() {
-                    wrapping_type = Some(Scalar::from(format));
-                }
+            } if format.single_component() => {
+                wrapping_type = Some(Scalar::from(format));
             }
             _ => {}
         }

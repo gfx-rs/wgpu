@@ -13,8 +13,7 @@ use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
 use core::ptr::NonNull;
-use core::sync::atomic;
-use wgpu_sync::{Mutex, OnceCell};
+use wgpu_sync::{atomic, Mutex, OnceCell};
 
 use crate::metal::QueueShared;
 
@@ -1231,6 +1230,10 @@ impl super::CapabilitiesQuery {
                 visionos = 1.0
             ),
             supports_debug_printf: msl_version >= MTLLanguageVersion::Version3_2,
+            texture_component_swizzle: family_check
+                && (metal3
+                    || device.supportsFamily(MTLGPUFamily::Mac2)
+                    || device.supportsFamily(MTLGPUFamily::Apple2)),
         }
     }
 
@@ -1252,6 +1255,7 @@ impl super::CapabilitiesQuery {
             | F::PASSTHROUGH_SHADERS
             | F::EXTERNAL_TEXTURE;
 
+        features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
         features.set(F::FLOAT32_BLENDABLE, true);
         features.set(F::INDIRECT_FIRST_INSTANCE, self.indirect_draw_dispatch);
@@ -1451,6 +1455,8 @@ impl super::CapabilitiesQuery {
             max_buffers_and_acceleration_structures_per_shader_stage = MAX_USABLE_BUFFERS;
         }
 
+        let (max_sampled_textures_per_shader_stage, max_storage_textures_per_shader_stage) =
+            self.max_textures_per_stage;
         let limits = crate::auxil::adjust_raw_limits(wgt::Limits {
             //
             // WebGPU LIMITS:
@@ -1472,9 +1478,13 @@ impl super::CapabilitiesQuery {
             max_dynamic_storage_buffers_per_pipeline_layout: max_storage_buffers_per_shader_stage,
             // "Maximum number of entries in the sampler state argument table, per graphics or kernel function"
             max_samplers_per_shader_stage: 16,
-            max_sampled_textures_per_shader_stage: self.max_textures_per_stage.0,
-            max_storage_textures_per_shader_stage: self.max_textures_per_stage.1,
+            max_sampled_textures_per_shader_stage,
             max_storage_buffers_per_shader_stage,
+            max_storage_buffers_in_vertex_stage: 0,
+            max_storage_buffers_in_fragment_stage: 0,
+            max_storage_textures_per_shader_stage,
+            max_storage_textures_in_vertex_stage: 0,
+            max_storage_textures_in_fragment_stage: 0,
             max_uniform_buffers_per_shader_stage,
             max_vertex_buffers,
             max_buffer_size: self.max_buffer_size,
@@ -1620,6 +1630,7 @@ impl super::CapabilitiesQuery {
             supports_memoryless_storage: self.supports_memoryless_storage,
             mesh_shaders: self.mesh_shaders,
             supports_debug_printf: self.supports_debug_printf,
+            texture_component_swizzle: self.texture_component_swizzle,
         }
     }
 

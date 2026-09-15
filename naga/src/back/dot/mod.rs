@@ -305,6 +305,7 @@ impl StatementGraph {
                             "RayQueryConfirmIntersection"
                         }
                         crate::RayQueryFunction::Terminate => "RayQueryTerminate",
+                        crate::RayQueryFunction::Begin => "RayQueryVariableUsageBegins",
                     }
                 }
                 S::SubgroupBallot { result, predicate } => {

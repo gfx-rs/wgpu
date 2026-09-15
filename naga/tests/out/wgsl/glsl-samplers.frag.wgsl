@@ -1,32 +1,32 @@
-@group(1) @binding(0) 
+@group(1) @binding(0)
 var tex1D: texture_1d<f32>;
-@group(1) @binding(2) 
+@group(1) @binding(2)
 var tex2D: texture_2d<f32>;
-@group(1) @binding(3) 
+@group(1) @binding(3)
 var tex2DArray: texture_2d_array<f32>;
-@group(1) @binding(4) 
+@group(1) @binding(4)
 var texCube: texture_cube<f32>;
-@group(1) @binding(5) 
+@group(1) @binding(5)
 var texCubeArray: texture_cube_array<f32>;
-@group(1) @binding(6) 
+@group(1) @binding(6)
 var tex3D: texture_3d<f32>;
-@group(1) @binding(7) 
+@group(1) @binding(7)
 var utex2D: texture_2d<u32>;
-@group(1) @binding(8) 
+@group(1) @binding(8)
 var itex2D: texture_2d<i32>;
-@group(2) @binding(0) 
+@group(2) @binding(0)
 var samp: sampler;
-@group(1) @binding(12) 
+@group(1) @binding(12)
 var tex2DShadow: texture_depth_2d;
-@group(1) @binding(13) 
+@group(1) @binding(13)
 var tex2DArrayShadow: texture_depth_2d_array;
-@group(1) @binding(14) 
+@group(1) @binding(14)
 var texCubeShadow: texture_depth_cube;
-@group(1) @binding(15) 
+@group(1) @binding(15)
 var texCubeArrayShadow: texture_depth_cube_array;
-@group(1) @binding(17) 
+@group(1) @binding(17)
 var sampShadow: sampler_comparison;
-@group(0) @binding(18) 
+@group(0) @binding(18)
 var tex2DMS: texture_multisampled_2d<f32>;
 
 fn testTex1D(coord: f32) {
@@ -579,7 +579,7 @@ fn main_1() {
     return;
 }
 
-@fragment 
+@fragment
 fn main() {
     main_1();
     return;

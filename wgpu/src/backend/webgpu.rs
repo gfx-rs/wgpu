@@ -20,9 +20,9 @@ use core::{
     future::Future,
     ops::Range,
     pin::Pin,
-    sync::atomic::{AtomicU8, Ordering},
     task::{self, Poll},
 };
+use wgpu_sync::atomic::{AtomicU8, Ordering};
 use wgt::Backends;
 
 use js_sys::Promise;
@@ -163,47 +163,43 @@ fn map_utf16_to_utf8_offset(utf16_offset: u32, text: &str) -> u32 {
     }
 }
 
-impl crate::CompilationMessage {
-    fn from_js(
-        js_message: webgpu_sys::GpuCompilationMessage,
-        compilation_info: &WebShaderCompilationInfo,
-    ) -> Self {
-        let message_type = match js_message.type_() {
-            webgpu_sys::GpuCompilationMessageType::Error => crate::CompilationMessageType::Error,
-            webgpu_sys::GpuCompilationMessageType::Warning => {
-                crate::CompilationMessageType::Warning
-            }
-            webgpu_sys::GpuCompilationMessageType::Info => crate::CompilationMessageType::Info,
-            _ => crate::CompilationMessageType::Error,
-        };
-        let utf16_offset = js_message.offset() as u32;
-        let utf16_length = js_message.length() as u32;
-        let span = match compilation_info {
-            WebShaderCompilationInfo::Wgsl { .. } if utf16_offset == 0 && utf16_length == 0 => None,
-            WebShaderCompilationInfo::Wgsl { source } => {
-                let offset = map_utf16_to_utf8_offset(utf16_offset, source);
-                let length = map_utf16_to_utf8_offset(utf16_length, &source[offset as usize..]);
-                let line_number = js_message.line_num() as u32; // That's legal, because we're counting lines the same way
+fn compilation_message_from_js(
+    js_message: webgpu_sys::GpuCompilationMessage,
+    compilation_info: &WebShaderCompilationInfo,
+) -> crate::CompilationMessage {
+    let message_type = match js_message.type_() {
+        webgpu_sys::GpuCompilationMessageType::Error => crate::CompilationMessageType::Error,
+        webgpu_sys::GpuCompilationMessageType::Warning => crate::CompilationMessageType::Warning,
+        webgpu_sys::GpuCompilationMessageType::Info => crate::CompilationMessageType::Info,
+        _ => crate::CompilationMessageType::Error,
+    };
+    let utf16_offset = js_message.offset() as u32;
+    let utf16_length = js_message.length() as u32;
+    let span = match compilation_info {
+        WebShaderCompilationInfo::Wgsl { .. } if utf16_offset == 0 && utf16_length == 0 => None,
+        WebShaderCompilationInfo::Wgsl { source } => {
+            let offset = map_utf16_to_utf8_offset(utf16_offset, source);
+            let length = map_utf16_to_utf8_offset(utf16_length, &source[offset as usize..]);
+            let line_number = js_message.line_num() as u32; // That's legal, because we're counting lines the same way
 
-                let prefix = &source[..offset as usize];
-                let line_start = prefix.rfind('\n').map(|pos| pos + 1).unwrap_or(0) as u32;
-                let line_position = offset - line_start + 1; // Counting UTF-8 byte indices
+            let prefix = &source[..offset as usize];
+            let line_start = prefix.rfind('\n').map(|pos| pos + 1).unwrap_or(0) as u32;
+            let line_position = offset - line_start + 1; // Counting UTF-8 byte indices
 
-                Some(crate::SourceLocation {
-                    offset,
-                    length,
-                    line_number,
-                    line_position,
-                })
-            }
-            WebShaderCompilationInfo::Transformed { .. } => None,
-        };
-
-        crate::CompilationMessage {
-            message: js_message.message(),
-            message_type,
-            location: span,
+            Some(crate::SourceLocation {
+                offset,
+                length,
+                line_number,
+                line_position,
+            })
         }
+        WebShaderCompilationInfo::Transformed { .. } => None,
+    };
+
+    crate::CompilationMessage {
+        message: js_message.message(),
+        message_type,
+        location: span,
     }
 }
 
@@ -588,6 +584,10 @@ fn map_vertex_format(format: wgt::VertexFormat) -> webgpu_sys::GpuVertexFormat {
         VertexFormat::Sint32x4 => vf::Sint32x4,
         VertexFormat::Unorm10_10_10_2 => vf::Unorm1010102,
         VertexFormat::Unorm8x4Bgra => vf::Unorm8x4Bgra,
+        VertexFormat::Snorm10_10_10_2 => {
+            // https://github.com/gfx-rs/wgpu/issues/10216
+            panic!("snorm10-10-10-2 is not yet available on the WebGPU backend")
+        }
         VertexFormat::Float64
         | VertexFormat::Float64x2
         | VertexFormat::Float64x3
@@ -733,6 +733,26 @@ fn map_texture_aspect(aspect: wgt::TextureAspect) -> webgpu_sys::GpuTextureAspec
     }
 }
 
+fn map_component_swizzle(swizzle: wgt::ComponentSwizzle) -> char {
+    match swizzle {
+        wgt::ComponentSwizzle::Zero => '0',
+        wgt::ComponentSwizzle::One => '1',
+        wgt::ComponentSwizzle::R => 'r',
+        wgt::ComponentSwizzle::G => 'g',
+        wgt::ComponentSwizzle::B => 'b',
+        wgt::ComponentSwizzle::A => 'a',
+    }
+}
+fn map_texture_component_swizzle(
+    swizzle: wgt::TextureComponentSwizzle,
+) -> arrayvec::ArrayString<4> {
+    let mut s = arrayvec::ArrayString::new();
+    for component in [swizzle.r, swizzle.g, swizzle.b, swizzle.a] {
+        s.push(map_component_swizzle(component));
+    }
+    s
+}
+
 fn map_filter_mode(mode: wgt::FilterMode) -> webgpu_sys::GpuFilterMode {
     match mode {
         wgt::FilterMode::Nearest => webgpu_sys::GpuFilterMode::Nearest,
@@ -868,7 +888,11 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_sampled_textures_per_shader_stage: limits.max_sampled_textures_per_shader_stage(),
         max_samplers_per_shader_stage: limits.max_samplers_per_shader_stage(),
         max_storage_buffers_per_shader_stage: limits.max_storage_buffers_per_shader_stage(),
+        max_storage_buffers_in_vertex_stage: limits.max_storage_buffers_in_vertex_stage(),
+        max_storage_buffers_in_fragment_stage: limits.max_storage_buffers_in_fragment_stage(),
         max_storage_textures_per_shader_stage: limits.max_storage_textures_per_shader_stage(),
+        max_storage_textures_in_vertex_stage: limits.max_storage_textures_in_vertex_stage(),
+        max_storage_textures_in_fragment_stage: limits.max_storage_textures_in_fragment_stage(),
         max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
         max_binding_array_elements_per_shader_stage: 0,
         max_binding_array_sampler_elements_per_shader_stage: 0,
@@ -983,7 +1007,11 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object<js_sys::Number> {
         (maxSampledTexturesPerShaderStage, max_sampled_textures_per_shader_stage),
         (maxSamplersPerShaderStage, max_samplers_per_shader_stage),
         (maxStorageBuffersPerShaderStage, max_storage_buffers_per_shader_stage),
+        (maxStorageBuffersInVertexStage, max_storage_buffers_in_vertex_stage),
+        (maxStorageBuffersInFragmentStage, max_storage_buffers_in_fragment_stage),
         (maxStorageTexturesPerShaderStage, max_storage_textures_per_shader_stage),
+        (maxStorageTexturesInVertexStage, max_storage_textures_in_vertex_stage),
+        (maxStorageTexturesInFragmentStage, max_storage_textures_in_fragment_stage),
         (maxUniformBuffersPerShaderStage, max_uniform_buffers_per_shader_stage),
         (maxUniformBufferBindingSize, max_uniform_buffer_binding_size),
         (maxStorageBufferBindingSize, max_storage_buffer_binding_size),
@@ -1087,21 +1115,22 @@ fn future_compilation_info(
         _ => [].iter().cloned(),
     };
 
-    let messages =
-        match result {
-            Ok(info) => base_messages
-                .chain(info.messages().into_iter().map(|message| {
-                    crate::CompilationMessage::from_js(message, base_compilation_info)
-                }))
-                .collect(),
-            Err(_v) => base_messages
-                .chain(core::iter::once(crate::CompilationMessage {
-                    message: "Getting compilation info failed".to_string(),
-                    message_type: crate::CompilationMessageType::Error,
-                    location: None,
-                }))
-                .collect(),
-        };
+    let messages = match result {
+        Ok(info) => base_messages
+            .chain(
+                info.messages()
+                    .into_iter()
+                    .map(|message| compilation_message_from_js(message, base_compilation_info)),
+            )
+            .collect(),
+        Err(_v) => base_messages
+            .chain(core::iter::once(crate::CompilationMessage {
+                message: "Getting compilation info failed".to_string(),
+                message_type: crate::CompilationMessageType::Error,
+                location: None,
+            }))
+            .collect(),
+    };
 
     crate::CompilationInfo { messages }
 }
@@ -1955,6 +1984,67 @@ impl WebDevice {
     }
 }
 
+#[cfg(feature = "glsl")]
+pub(crate) fn glsl_to_compilation_info(
+    value: naga::error::ShaderError<naga::front::glsl::ParseErrors>,
+) -> wgt::CompilationInfo {
+    use alloc::string::ToString;
+    let messages = value
+        .inner
+        .errors
+        .into_iter()
+        .map(|err| wgt::CompilationMessage {
+            message: err.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: err.location(&value.source).map(naga_to_source_location),
+        })
+        .collect();
+    wgt::CompilationInfo { messages }
+}
+
+#[cfg(feature = "spirv")]
+pub(crate) fn spirv_to_compilation_info(
+    value: naga::error::ShaderError<naga::front::spv::Error>,
+) -> wgt::CompilationInfo {
+    use alloc::{string::ToString, vec};
+    wgt::CompilationInfo {
+        messages: vec![wgt::CompilationMessage {
+            message: value.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: None,
+        }],
+    }
+}
+
+#[cfg(naga)]
+pub(crate) fn naga_to_compilation_info(
+    value: crate::naga::error::ShaderError<
+        crate::naga::WithSpan<crate::naga::valid::ValidationError>,
+    >,
+) -> wgt::CompilationInfo {
+    use alloc::{string::ToString, vec};
+    wgt::CompilationInfo {
+        messages: vec![wgt::CompilationMessage {
+            message: value.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: value
+                .inner
+                .location(&value.source)
+                .map(naga_to_source_location),
+        }],
+    }
+}
+
+#[cfg(naga)]
+fn naga_to_source_location(value: crate::naga::SourceLocation) -> wgt::SourceLocation {
+    wgt::SourceLocation {
+        length: value.length,
+        offset: value.offset,
+        line_number: value.line_number,
+        line_position: value.line_position,
+    }
+}
+
 impl dispatch::DeviceInterface for WebDevice {
     fn features(&self) -> crate::Features {
         map_wgt_features(self.inner.features())
@@ -1987,7 +2077,7 @@ impl dispatch::DeviceInterface for WebDevice {
                 spv_parser
                     .parse()
                     .map_err(|inner| {
-                        crate::CompilationInfo::from(naga::error::ShaderError {
+                        spirv_to_compilation_info(naga::error::ShaderError {
                             source: String::new(),
                             label: desc.label.map(|s| s.to_string()),
                             inner: Box::new(inner),
@@ -2024,7 +2114,7 @@ impl dispatch::DeviceInterface for WebDevice {
                 parser
                     .parse(&options, shader)
                     .map_err(|inner| {
-                        crate::CompilationInfo::from(naga::error::ShaderError {
+                        glsl_to_compilation_info(naga::error::ShaderError {
                             source: shader.to_string(),
                             label: desc.label.map(|s| s.to_string()),
                             inner: Box::new(inner),
@@ -2077,7 +2167,7 @@ impl dispatch::DeviceInterface for WebDevice {
             let mut validator =
                 valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all());
             let module_info = validator.validate(module).map_err(|err| {
-                crate::CompilationInfo::from(naga::error::ShaderError {
+                naga_to_compilation_info(naga::error::ShaderError {
                     source: source.to_string(),
                     label: desc.label.map(|s| s.to_string()),
                     inner: err,
@@ -2157,8 +2247,11 @@ impl dispatch::DeviceInterface for WebDevice {
             .entries
             .iter()
             .map(|bind| {
-                let mapped_entry =
-                    webgpu_sys::GpuBindGroupLayoutEntry::new(bind.binding, bind.visibility.bits());
+                assert!(bind.visibility.features_wgpu.is_empty());
+                let mapped_entry = webgpu_sys::GpuBindGroupLayoutEntry::new(
+                    bind.binding,
+                    bind.visibility.features_webgpu.bits(),
+                );
 
                 match bind.ty {
                     wgt::BindingType::Buffer {
@@ -2529,8 +2622,11 @@ impl dispatch::DeviceInterface for WebDevice {
     }
 
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> dispatch::DispatchBuffer {
-        let mapped_desc =
-            webgpu_sys::GpuBufferDescriptor::new_with_f64(desc.size as f64, desc.usage.bits());
+        assert!(desc.usage.buffer_usages_wgpu.is_empty());
+        let mapped_desc = webgpu_sys::GpuBufferDescriptor::new_with_f64(
+            desc.size as f64,
+            desc.usage.buffer_usages_webgpu.bits(),
+        );
         mapped_desc.set_mapped_at_creation(desc.mapped_at_creation);
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2671,7 +2767,7 @@ impl dispatch::DeviceInterface for WebDevice {
     fn create_render_bundle_encoder(
         &self,
         desc: &crate::RenderBundleEncoderDescriptor<'_>,
-    ) -> Result<dispatch::DispatchRenderBundleEncoder, crate::CreateRenderBundleEncoderError> {
+    ) -> dispatch::DispatchRenderBundleEncoder {
         let mapped_color_formats = desc
             .color_formats
             .iter()
@@ -2698,16 +2794,13 @@ impl dispatch::DeviceInterface for WebDevice {
         let render_bundle_encoder = self
             .inner
             .create_render_bundle_encoder(&mapped_desc)
-            .map_err(|e| {
-                let e = e.dyn_ref::<js_sys::Error>().expect("Expected a JS Error");
-                crate::CreateRenderBundleEncoderError::new(e.message().as_string().unwrap())
-            })?;
+            .unwrap();
 
-        Ok(WebRenderBundleEncoder {
+        WebRenderBundleEncoder {
             inner: render_bundle_encoder,
             ident: crate::cmp::Identifier::create(),
         }
-        .into())
+        .into()
     }
 
     fn set_device_lost_callback(&self, device_lost_callback: dispatch::BoxDeviceLostCallback) {
@@ -2850,7 +2943,10 @@ impl dispatch::QueueInterface for WebQueue {
     ) -> Option<()> {
         let buffer = buffer.as_webgpu();
 
-        let usage = wgt::BufferUsages::from_bits_truncate(buffer.inner.usage());
+        let usage = wgt::BufferUsages::from_internal_flags(
+            wgt::BufferUsagesWebGPU::from_bits_truncate(buffer.inner.usage()),
+            wgt::BufferUsagesWGPU::empty(),
+        );
         // TODO: actually send this down the error scope
         if !usage.contains(wgt::BufferUsages::COPY_DST) {
             log::error!("Destination buffer is missing the `COPY_DST` usage flag");
@@ -3104,6 +3200,7 @@ impl dispatch::TextureInterface for WebTexture {
             mapped.set_label(label);
         }
         mapped.set_usage(desc.usage.unwrap_or(wgt::TextureUsages::empty()).bits());
+        mapped.set_swizzle(&map_texture_component_swizzle(desc.swizzle));
 
         let view = self.inner.create_view_with_descriptor(&mapped).unwrap();
 
@@ -3729,7 +3826,7 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         buffer: &dispatch::DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.as_webgpu();
         let index_format = map_index_format(index_format);
@@ -3739,7 +3836,7 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
                 &buffer.inner,
                 index_format,
                 offset as f64,
-                size.get() as f64,
+                size as f64,
             );
         } else {
             self.inner
@@ -3752,17 +3849,13 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         slot: u32,
         buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
-            self.inner.set_vertex_buffer_with_f64_and_f64(
-                slot,
-                buffer,
-                offset as f64,
-                size.get() as f64,
-            );
+            self.inner
+                .set_vertex_buffer_with_f64_and_f64(slot, buffer, offset as f64, size as f64);
         } else {
             self.inner
                 .set_vertex_buffer_with_f64(slot, buffer, offset as f64);
@@ -4020,7 +4113,7 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         buffer: &dispatch::DispatchBuffer,
         index_format: crate::IndexFormat,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.as_webgpu();
         let index_format = map_index_format(index_format);
@@ -4030,7 +4123,7 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
                 &buffer.inner,
                 index_format,
                 offset as f64,
-                size.get() as f64,
+                size as f64,
             );
         } else {
             self.inner
@@ -4043,17 +4136,13 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         slot: u32,
         buffer: Option<&dispatch::DispatchBuffer>,
         offset: crate::BufferAddress,
-        size: Option<crate::BufferSize>,
+        size: Option<crate::BufferAddress>,
     ) {
         let buffer = buffer.map(|buffer| &buffer.as_webgpu().inner);
 
         if let Some(size) = size {
-            self.inner.set_vertex_buffer_with_f64_and_f64(
-                slot,
-                buffer,
-                offset as f64,
-                size.get() as f64,
-            );
+            self.inner
+                .set_vertex_buffer_with_f64_and_f64(slot, buffer, offset as f64, size as f64);
         } else {
             self.inner
                 .set_vertex_buffer_with_f64(slot, buffer, offset as f64);

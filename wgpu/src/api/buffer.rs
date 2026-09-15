@@ -289,7 +289,7 @@ impl Buffer {
         &self,
     ) -> Option<impl core::ops::Deref<Target = A::Buffer> + WasmNotSendSync> {
         let buffer = self.inner.as_core_opt()?;
-        unsafe { buffer.context.buffer_as_hal::<A>(buffer) }
+        unsafe { buffer.as_hal::<A>() }
     }
 
     /// Returns a [`BufferSlice`] referring to the portion of `self`'s contents
@@ -675,10 +675,6 @@ impl<'a> BufferSlice<'a> {
     /// Returns the size of this slice.
     pub fn size(&self) -> BufferAddress {
         self.size
-    }
-
-    pub(crate) fn size_expect_nonzero(&self) -> BufferSize {
-        BufferSize::new(self.size).expect("buffer slice can not be empty")
     }
 }
 

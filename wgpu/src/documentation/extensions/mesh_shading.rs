@@ -1,8 +1,7 @@
-# Mesh Shader Extensions
+/*!
+# 🧪Experimental🧪 Mesh Shading
 
-🧪Experimental🧪
-
-`wgpu` supports an experimental version of mesh shading when `Features::EXPERIMENTAL_MESH_SHADER` is enabled.
+`wgpu` supports an experimental version of mesh shading when [`Features::EXPERIMENTAL_MESH_SHADER`] is enabled.
 The status of the implementation is documented in [the mesh-shading issue](https://github.com/gfx-rs/wgpu/issues/7197).
 
 **Note**: The features documented here may have major bugs in them and are expected to be subject
@@ -69,19 +68,20 @@ With the current pipeline set to a mesh pipeline, a draw command like
 
 ### New `wgpu` functions
 
-`Device::create_mesh_pipeline` - Creates a mesh shader pipeline. This is very similar to creating a standard render pipeline, except that it takes a mesh shader state and optional task shader state instead of a vertex state. If the task state is omitted, during rendering the number of workgroups is passed directly from the draw call to the mesh shader state, with an empty payload.
+[`Device::create_mesh_pipeline`] - Creates a mesh shader pipeline. This is very similar to creating a standard render pipeline, except that it takes a mesh shader state and optional task shader state instead of a vertex state. If the task state is omitted, during rendering the number of workgroups is passed directly from the draw call to the mesh shader state, with an empty payload.
 
-`RenderPass::draw_mesh_tasks` - Dispatches the mesh shader pipeline. This ignores render pipeline specific information, such as vertex buffer bindings and index buffer bindings. The dispatch size must adhere to the limits described below.
+[`RenderPass::draw_mesh_tasks`] - Dispatches the mesh shader pipeline. This ignores render pipeline specific information, such as vertex buffer bindings and index buffer bindings. The dispatch size must adhere to the limits described below.
 
-`RenderPass::draw_mesh_tasks_indirect`, `RenderPass::multi_draw_mesh_tasks_indirect` and `RenderPass::multi_draw_mesh_tasks_indirect_count` - Dispatches the mesh shader pipeline with dispatch size taken from a buffer. This ignores render pipeline specific information, such as vertex buffer bindings and index buffer bindings. The dispatch size must adhere to the limits described below. Analogous to `draw_indirect`, `multi_draw_indirect` and `multi_draw_indirect_count`. Requires the corresponding indirect feature to be enabled.
+[`RenderPass::draw_mesh_tasks_indirect`], [`RenderPass::multi_draw_mesh_tasks_indirect`] and [`RenderPass::multi_draw_mesh_tasks_indirect_count`] - Dispatches the mesh shader pipeline with dispatch size taken from a buffer. This ignores render pipeline specific information, such as vertex buffer bindings and index buffer bindings. The dispatch size must adhere to the limits described below. Analogous to `draw_indirect`, `multi_draw_indirect` and `multi_draw_indirect_count`. Requires the corresponding indirect feature to be enabled.
 
-An example of using mesh shaders to render a single triangle can be seen [here](../../examples/features/src/mesh_shader).
+An example of using mesh shaders to render a single triangle can be seen
+[here](https://github.com/gfx-rs/wgpu/tree/trunk/examples/features/src/mesh_shader).
 
 ### Features
 
-- Using mesh shaders requires enabling `Features::EXPERIMENTAL_MESH_SHADER`.
-- Using mesh shaders with multiview requires enabling `Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW`.
-- Using mesh shaders with point primitives requires enabling `Features::EXPERIMENTAL_MESH_SHADER_POINTS`.
+- Using mesh shaders requires enabling [`Features::EXPERIMENTAL_MESH_SHADER`].
+- Using mesh shaders with multiview requires enabling [`Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW`].
+- Using mesh shaders with point primitives requires enabling [`Features::EXPERIMENTAL_MESH_SHADER_POINTS`].
 - Queries are unsupported
 - Primitive index support will be added once support lands in for them in general.
 
@@ -280,3 +280,7 @@ fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4
     return vertex.color * primitive.colorMask;
 }
 ```
+
+*/
+
+use crate::{Device, Features, RenderPass};

@@ -46,30 +46,56 @@ fn shader_module() {
 #[test]
 fn requires_feature() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
-    fail(
+    let module = fail(
         &device,
         || create_shader_module(&device, DEBUG_PRINTF_SHADER),
-        Some("DEBUG_PRINTF"),
+        Some("parsing error"),
+    );
+    let info = pollster::block_on(module.get_compilation_info());
+    assert!(
+        info.messages.iter().any(|message| {
+            message.message_type == wgpu::CompilationMessageType::Error
+                && message.message.contains("wgpu_debug_printf")
+        }),
+        "{info:?}"
     );
 }
 
 #[test]
 fn requires_enable_extension() {
     let device = debug_printf_device();
-    fail(
+    let module = fail(
         &device,
         || create_shader_module(&device, DEBUG_PRINTF_WITHOUT_ENABLE_SHADER),
-        Some("enable extension is not enabled"),
+        Some("parsing error"),
+    );
+    let info = pollster::block_on(module.get_compilation_info());
+    assert!(
+        info.messages.iter().any(|message| {
+            message.message_type == wgpu::CompilationMessageType::Error
+                && message.message.contains("enable extension is not enabled")
+        }),
+        "{info:?}"
     );
 }
 
 #[test]
 fn rejects_string_literal_outside_call() {
     let device = debug_printf_device();
-    fail(
+    let module = fail(
         &device,
         || create_shader_module(&device, STRING_LITERAL_OUTSIDE_DEBUG_PRINTF_SHADER),
-        Some("String literals are only supported in debugPrintf"),
+        Some("parsing error"),
+    );
+    let info = pollster::block_on(module.get_compilation_info());
+    assert!(
+        info.messages.iter().any(|message| {
+            message.message_type == wgpu::CompilationMessageType::Error
+                && message
+                    .message
+                    .contains("String literals are only supported in debugPrintf")
+        }),
+        "{info:?}"
     );
 }
 

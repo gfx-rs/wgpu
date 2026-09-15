@@ -3,17 +3,17 @@ struct Struct {
     atomic_arr: array<atomic<i64>, 2>,
 }
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage, read_write> storage_atomic_scalar: atomic<u64>;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage, read_write> storage_atomic_arr: array<atomic<i64>, 2>;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var<storage, read_write> storage_struct: Struct;
 var<workgroup> workgroup_atomic_scalar: atomic<u64>;
 var<workgroup> workgroup_atomic_arr: array<atomic<i64>, 2>;
 var<workgroup> workgroup_struct: Struct;
 
-@compute @workgroup_size(2, 1, 1) 
+@compute @workgroup_size(2, 1, 1)
 fn cs_main(@builtin(local_invocation_id) id: vec3<u32>) {
     atomicStore((&storage_atomic_scalar), 1lu);
     atomicStore((&storage_atomic_arr[1]), 1li);

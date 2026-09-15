@@ -16,7 +16,7 @@ const cz6_: array<Foo, 3> = array<Foo, 3>();
 const cz7_: Foo = Foo();
 const cp1_: vec2<u32> = vec2(0u);
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     var foo: Foo;
 

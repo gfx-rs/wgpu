@@ -4,7 +4,11 @@ runs:
   using: "composite"
   steps:
     - shell: bash
-      run: |
+      # NOTE: We ignore the `github-env` lint because we trust:
+      #
+      # - The `cygpath` tool
+      # - The contents of the DXC release we use.
+      run: | # zizmor: ignore[github-env]
         set -e
 
         export DXC_RELEASE="v1.9.2602.24"

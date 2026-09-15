@@ -19,12 +19,12 @@ use objc2_metal::{
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
     MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
     MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor, MTLStorageMode,
-    MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode, MTLVertexDescriptor,
-    MTLVertexStepFunction,
+    MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTextureUsage, MTLTriangleFillMode,
+    MTLVertexDescriptor, MTLVertexStepFunction,
 };
 use wgpu_sync::{Condvar, CondvarMutex, RwLock};
 
-use super::{adapter::MAX_BUFFERS, conv, PassthroughShader, ShaderModuleSource};
+use super::{adapter::MAX_BUFFERS, conv, AttachmentInfo, PassthroughShader, ShaderModuleSource};
 use crate::{auxil::map_naga_stage, DropCallback, DropGuard, TlasInstance};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
@@ -147,6 +147,7 @@ const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> nt::VertexF
         wgt::VertexFormat::Sint32x3 => nt::VertexFormat::Sint32x3,
         wgt::VertexFormat::Sint32x4 => nt::VertexFormat::Sint32x4,
         wgt::VertexFormat::Unorm10_10_10_2 => nt::VertexFormat::Unorm10_10_10_2,
+        wgt::VertexFormat::Snorm10_10_10_2 => nt::VertexFormat::Snorm10_10_10_2,
         wgt::VertexFormat::Unorm8x4Bgra => nt::VertexFormat::Unorm8x4Bgra,
 
         wgt::VertexFormat::Float64
@@ -323,11 +324,9 @@ impl super::Device {
                 let mut immutable_buffer_mask = 0;
                 for (var_handle, var) in module.global_variables.iter() {
                     match var.space {
-                        naga::AddressSpace::WorkGroup => {
-                            if !ep_info[var_handle].is_empty() {
-                                let size = module.types[var.ty].inner.size(module.to_ctx());
-                                wg_memory_sizes.push(size);
-                            }
+                        naga::AddressSpace::WorkGroup if !ep_info[var_handle].is_empty() => {
+                            let size = module.types[var.ty].inner.size(module.to_ctx());
+                            wg_memory_sizes.push(size);
                         }
                         naga::AddressSpace::Uniform | naga::AddressSpace::Storage { .. } => {
                             let br = match var.binding {
@@ -451,11 +450,8 @@ impl super::Device {
         }
     }
 
-    pub unsafe fn buffer_from_raw(
-        raw: Retained<ProtocolObject<dyn MTLBuffer>>,
-        size: wgt::BufferAddress,
-    ) -> super::Buffer {
-        super::Buffer { raw, size }
+    pub unsafe fn buffer_from_raw(raw: Retained<ProtocolObject<dyn MTLBuffer>>) -> super::Buffer {
+        super::Buffer { raw }
     }
 
     pub fn raw_device(&self) -> &Retained<ProtocolObject<dyn MTLDevice>> {
@@ -466,7 +462,10 @@ impl super::Device {
 impl crate::Device for super::Device {
     type A = super::Api;
 
-    unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
+    unsafe fn create_buffer(
+        &self,
+        desc: &crate::BufferDescriptor,
+    ) -> DeviceResult<(super::Buffer, wgt::BufferAddress)> {
         let map_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
         let map_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
@@ -491,10 +490,7 @@ impl crate::Device for super::Device {
                 raw.setLabel(Some(&NSString::from_str(label)));
             }
             self.counters.buffers.add(1);
-            Ok(super::Buffer {
-                raw,
-                size: desc.size,
-            })
+            Ok((super::Buffer { raw }, desc.size))
         })
     }
     unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {
@@ -647,9 +643,47 @@ impl crate::Device for super::Device {
             desc.range
                 .is_full_resource(desc.format, texture.mip_levels, texture.array_layers);
 
-        let raw = if format_equal && type_equal && range_full_resource {
+        const R001_SWIZZLE: wgt::TextureComponentSwizzle = wgt::TextureComponentSwizzle {
+            r: wgt::ComponentSwizzle::R,
+            g: wgt::ComponentSwizzle::Zero,
+            b: wgt::ComponentSwizzle::Zero,
+            a: wgt::ComponentSwizzle::One,
+        };
+        let swizzle = 'b: {
+            if !self.shared.private_caps.texture_component_swizzle {
+                break 'b None;
+            }
+            if texture.format.is_depth_stencil_format() {
+                // Use r001 swizzle to make g,b,a channels well-defined.
+                break 'b Some(R001_SWIZZLE.compose(desc.swizzle));
+            }
+            if desc.swizzle != wgt::TextureComponentSwizzle::default() {
+                break 'b Some(desc.swizzle);
+            }
+            None
+        }
+        .map(conv::map_texture_component_swizzle);
+        let has_shader_usage = texture
+            .raw
+            .usage()
+            .intersects(MTLTextureUsage::ShaderRead | MTLTextureUsage::ShaderWrite);
+        let needs_texture_view = 'b: {
+            if !format_equal {
+                break 'b true;
+            }
             // Some images are marked as framebuffer-only, and we can't create aliases of them.
             // Also helps working around Metal bugs with aliased array textures.
+            if !has_shader_usage {
+                break 'b false;
+            }
+            // Subresource doesn't need a texture view as we use `setLevel` and `setSlice` of `MTLRenderPassDescriptor`.
+            if !type_equal || !range_full_resource || swizzle.is_some() {
+                break 'b true;
+            }
+            false
+        };
+
+        let raw = if !needs_texture_view {
             texture.raw.to_owned()
         } else {
             let mip_level_count = desc
@@ -661,7 +695,7 @@ impl crate::Device for super::Device {
                 .array_layer_count
                 .unwrap_or(texture.array_layers - desc.range.base_array_layer);
 
-            autoreleasepool(|_| {
+            autoreleasepool(|_| -> Result<_, crate::DeviceError> {
                 let level_range = NSRange {
                     location: desc.range.base_mip_level as _,
                     length: mip_level_count as _,
@@ -670,27 +704,95 @@ impl crate::Device for super::Device {
                     location: desc.range.base_array_layer as _,
                     length: array_layer_count as _,
                 };
-                let raw = unsafe {
-                    texture
-                        .raw
-                        .newTextureViewWithPixelFormat_textureType_levels_slices(
-                            raw_format,
-                            raw_type,
-                            level_range,
-                            slice_range,
-                        )
-                        .unwrap()
+                let raw_result = unsafe {
+                    if let Some(swizzle) = swizzle {
+                        texture
+                            .raw
+                            .newTextureViewWithPixelFormat_textureType_levels_slices_swizzle(
+                                raw_format,
+                                raw_type,
+                                level_range,
+                                slice_range,
+                                swizzle,
+                            )
+                    } else {
+                        texture
+                            .raw
+                            .newTextureViewWithPixelFormat_textureType_levels_slices(
+                                raw_format,
+                                raw_type,
+                                level_range,
+                                slice_range,
+                            )
+                    }
                 };
+                let raw = raw_result.ok_or_else(|| {
+                    // Metal refuses some views of memoryless textures. Ideally such cases
+                    // would be rejected by `wpgu-core` validation, but at least until that
+                    // is implemented, we log a verbose error message.
+                    // Related: <https://github.com/gpuweb/gpuweb/issues/6876>.
+                    let storage_mode = texture.raw.storageMode();
+                    let memoryless = if storage_mode == MTLStorageMode::Memoryless {
+                        "This may be because the texture is memoryless (has TRANSIENT_ATTACHMENT usage). "
+                    } else {
+                        ""
+                    };
+                    log::error!(
+                        "Error creating Metal texture view. {memoryless}\
+                         Texture: {:?}, {:?}, {}x{}x{}, {} mip level(s), \
+                         {} array layer(s), Metal usage {:?}, storage mode {:?}. \
+                         Requested view: {:?}. \
+                         Metal arguments: pixel format {:?}, texture type {:?}, \
+                         levels {}..{}, slices {}..{}.",
+                        texture.format,
+                        texture.raw_type,
+                        texture.copy_size.width,
+                        texture.copy_size.height,
+                        texture.copy_size.depth,
+                        texture.mip_levels,
+                        texture.array_layers,
+                        texture.raw.usage(),
+                        storage_mode,
+                        desc,
+                        raw_format,
+                        raw_type,
+                        level_range.location,
+                        level_range.location + level_range.length,
+                        slice_range.location,
+                        slice_range.location + slice_range.length,
+                    );
+                    crate::DeviceError::Unexpected
+                })?;
                 if let Some(label) = desc.label {
                     raw.setLabel(Some(&NSString::from_str(label)));
                 }
-                raw
-            })
+                Ok(raw)
+            })?
         };
 
         self.counters.texture_views.add(1);
 
-        Ok(super::TextureView { raw, aspects })
+        Ok(super::TextureView {
+            // Texture view with swizzle isn't renderable but depth-stencil texture view uses r001 swizzle.
+            // This is a problem if depth-stencil texture has both `RENDER_ATTACHMENT` and `TEXTURE_BINDING`,
+            // so if the formats match, we use the original texture + `setLevel` and `setSlice` of `MTLRenderPassDescriptor`
+            // to avoid using the r001 view.
+            attachment: if format_equal {
+                AttachmentInfo {
+                    texture: texture.raw.clone(),
+                    base_mip_level: desc.range.base_mip_level,
+                    base_array_layer: desc.range.base_array_layer,
+                }
+            } else {
+                AttachmentInfo {
+                    texture: raw.clone(),
+                    base_mip_level: 0,
+                    base_array_layer: 0,
+                }
+            },
+            raw,
+            aspects,
+        })
     }
 
     unsafe fn destroy_texture_view(&self, _view: super::TextureView) {
@@ -1080,12 +1182,7 @@ impl crate::Device for super::Device {
                                     }
 
                                     if let wgt::BufferBindingType::Storage { .. } = ty {
-                                        let remaining_size = wgt::BufferSize::new(
-                                            source.buffer.size - source.offset,
-                                        );
-                                        if let Some(binding_size) = source.size.or(remaining_size) {
-                                            array_element_sizes.push((idx as u32, binding_size));
-                                        }
+                                        array_element_sizes.push((idx as u32, source.size));
                                     }
 
                                     let use_info = bg
@@ -1174,14 +1271,9 @@ impl crate::Device for super::Device {
                                 let end = start + 1;
                                 bg.buffers
                                     .extend(desc.buffers[start..end].iter().map(|source| {
-                                        // Given the restrictions on `BufferBinding::offset`,
-                                        // this should never be `None`.
-                                        let remaining_size = wgt::BufferSize::new(
-                                            source.buffer.size - source.offset,
-                                        );
                                         let binding_size = match ty {
                                             wgt::BufferBindingType::Storage { .. } => {
-                                                source.size.or(remaining_size)
+                                                Some(source.size)
                                             }
                                             _ => None,
                                         };

@@ -1,6 +1,6 @@
 use macro_rules_attribute::derive;
 
-use crate::{link_to_wgpu_item, ConstDefault};
+use crate::{link_to_wgpu_docs, link_to_wgpu_item, ConstDefault};
 
 /// Token of the user agreeing to access experimental features.
 #[derive(Debug, ConstDefault!, Copy, Clone, Eq, PartialEq)]
@@ -25,7 +25,7 @@ impl ExperimentalFeatures {
     /// access to newer technology sooner, and we can work with users
     /// to fix bugs quicker.
     ///
-    /// Look inside our repo at the [`api-specs`] for more information
+    /// See the [extension documentation][extensions] for more information
     /// on various experimental apis.
     ///
     /// # Safety
@@ -35,7 +35,7 @@ impl ExperimentalFeatures {
     /// - You agree to report any such bugs to us, if you find them.
     ///
     #[doc = link_to_wgpu_item!(struct Features)]
-    /// [`api-specs`]: https://github.com/gfx-rs/wgpu/tree/trunk/docs/api-specs
+    #[doc = link_to_wgpu_docs!(["extensions"]: "documentation/extensions/index.html")]
     pub const unsafe fn enabled() -> Self {
         Self { enabled: true }
     }

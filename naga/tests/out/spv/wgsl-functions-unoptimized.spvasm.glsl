@@ -5,7 +5,15 @@ uint _5()
 {
     int _18 = int(1u);
     int _19 = int(2u);
-    uint _39 = (((0u + (bitfieldExtract(3u, int(0u), int(8u)) * bitfieldExtract(4u, int(0u), int(8u)))) + (bitfieldExtract(3u, int(8u), int(8u)) * bitfieldExtract(4u, int(8u), int(8u)))) + (bitfieldExtract(3u, int(16u), int(8u)) * bitfieldExtract(4u, int(16u), int(8u)))) + (bitfieldExtract(3u, int(24u), int(8u)) * bitfieldExtract(4u, int(24u), int(8u)));
+    uint _41 = bitfieldExtract(3u, int(0u), int(8u));
+    uint _42 = bitfieldExtract(4u, int(0u), int(8u));
+    uint _45 = bitfieldExtract(3u, int(8u), int(8u));
+    uint _46 = bitfieldExtract(4u, int(8u), int(8u));
+    uint _49 = bitfieldExtract(3u, int(16u), int(8u));
+    uint _50 = bitfieldExtract(4u, int(16u), int(8u));
+    uint _53 = bitfieldExtract(3u, int(24u), int(8u));
+    uint _54 = bitfieldExtract(4u, int(24u), int(8u));
+    uint _39 = (((0u + (_41 * _42)) + (_45 * _46)) + (_49 * _50)) + (_53 * _54);
     int _59 = int(5u + _39);
     int _60 = int(6u + _39);
     uint _76 = 7u + _39;

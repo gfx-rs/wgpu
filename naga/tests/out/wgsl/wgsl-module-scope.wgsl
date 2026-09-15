@@ -4,9 +4,9 @@ struct S {
 
 const Value: i32 = 1i;
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var Texture: texture_2d<f32>;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var Sampler: sampler;
 
 fn statement() {
@@ -24,7 +24,7 @@ fn call() {
     return;
 }
 
-@fragment 
+@fragment
 fn main() {
     call();
     statement();

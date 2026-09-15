@@ -13,6 +13,7 @@ use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 use wgpu_core::device::HostMap as MapMode;
+use wgpu_core::resource::Labeled as _;
 
 use crate::error::GPUGenericError;
 
@@ -36,7 +37,10 @@ pub enum BufferError {
   Canceled(#[from] oneshot::Canceled),
   #[class("DOMExceptionOperationError")]
   #[error(transparent)]
-  Access(#[from] wgpu_core::resource::BufferAccessError),
+  Access(wgpu_core::resource::BufferAccessError),
+  #[class("DOMExceptionAbortError")]
+  #[error("{0}")]
+  Aborted(&'static str),
   #[class("DOMExceptionOperationError")]
   #[error("{0}")]
   Operation(&'static str),
@@ -45,15 +49,21 @@ pub enum BufferError {
   Other(#[from] JsErrorBox),
 }
 
-pub struct GPUBuffer {
-  pub error_handler: super::error::ErrorHandler,
+impl From<wgpu_core::resource::BufferAccessError> for BufferError {
+  fn from(err: wgpu_core::resource::BufferAccessError) -> Self {
+    match err {
+      wgpu_core::resource::BufferAccessError::Device(
+        wgpu_core::device::DeviceError::Lost,
+      ) => BufferError::Aborted("Device lost"),
+      err => BufferError::Access(err),
+    }
+  }
+}
 
+pub struct GPUBuffer {
   pub wgpu_buffer: Arc<wgpu_core::resource::Buffer>,
   pub wgpu_device: Arc<wgpu_core::device::Device>,
 
-  pub label: String,
-
-  pub size: u64,
   pub usage: u32,
 
   pub map_state: RefCell<&'static str>,
@@ -83,7 +93,7 @@ impl GPUBuffer {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_buffer.label().to_string()
   }
   #[setter]
   #[string]
@@ -94,7 +104,7 @@ impl GPUBuffer {
   #[getter]
   #[number]
   fn size(&self) -> u64 {
-    self.size
+    self.wgpu_buffer.size()
   }
   #[getter]
   fn usage(&self) -> u32 {
@@ -144,22 +154,14 @@ impl GPUBuffer {
         sender.send(status).unwrap();
       });
 
-      let err = self
-        .wgpu_buffer
-        .map_async(
-          offset,
-          size,
-          wgpu_core::resource::BufferMapOperation {
-            host: mode,
-            callback: Some(callback),
-          },
-        )
-        .err();
-
-      if err.is_some() {
-        self.error_handler.push_error(err);
-        return Err(BufferError::Operation("validation error occurred"));
-      }
+      self.wgpu_buffer.map_async(
+        offset,
+        size,
+        wgpu_core::resource::BufferMapOperation {
+          host: mode,
+          callback: Some(callback),
+        },
+      );
     }
 
     let done = Rc::new(RefCell::new(false));
@@ -252,7 +254,7 @@ impl GPUBuffer {
       ab.detach(None);
     }
 
-    self.wgpu_buffer.unmap().map_err(BufferError::Access)?;
+    self.wgpu_buffer.unmap();
 
     *self.map_state.borrow_mut() = "unmapped";
 

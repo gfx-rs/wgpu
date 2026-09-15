@@ -279,11 +279,7 @@ impl CommandEncoder {
         hal_command_encoder_callback: F,
     ) -> R {
         if let Some(encoder) = self.inner.as_core_mut_opt() {
-            unsafe {
-                encoder
-                    .context
-                    .command_encoder_as_hal_mut::<A, F, R>(encoder, hal_command_encoder_callback)
-            }
+            unsafe { encoder.as_hal_mut::<A, F, R>(hal_command_encoder_callback) }
         } else {
             hal_command_encoder_callback(None)
         }

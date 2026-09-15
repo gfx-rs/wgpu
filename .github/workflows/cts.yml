@@ -1,21 +1,18 @@
 name: CTS
 
 on:
-  push:
-    branches-ignore: [
-        # Branches with the `gh-readonly-queue` prefix are used by the
-        # merge queue, so they are already covered by the `merge_group` event.
-        "gh-readonly-queue/**",
-      ]
   pull_request:
-  merge_group:
+  # Runs on `trunk` to save the build caches that pull requests read.
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 env:
   #
   # Keep in sync with ci.yml
   #
 
-  REPO_MSRV: "1.93"
+  REPO_MSRV: "1.95"
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
@@ -87,9 +84,13 @@ jobs:
         # Substitution of ${{ matrix.shell }} appears not to work in per-step configuration
         shell: ${{ matrix.shell }}
 
+    permissions: {}
+
     steps:
       - name: checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Repo MSRV toolchain
         run: |
@@ -98,12 +99,12 @@ jobs:
           cargo -V
 
       - name: Install `cargo-llvm-cov`
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@3f74d7c16a4242f1c95561e98edc25d36adb4375 # v2.87.12
         with:
           tool: cargo-llvm-cov
 
       - name: caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # The version number can be incremented for cache busting.
           prefix-key: v3-rust-${{ hashFiles('cts_runner/revision.txt') }}
@@ -141,19 +142,19 @@ jobs:
 
       - name: (Windows) Install DXC
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-dxc
+        uses: $/.github/actions/install-dxc
 
       # Note: `target-dir` is intentionally different from other jobs.
       # See note above about `llvm-cov show-env`.
       - name: (Windows) Install WARP
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-warp
+        uses: $/.github/actions/install-warp
         with:
           target-dir: "target/debug"
 
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
-        uses: ./.github/actions/install-mesa
+        uses: $/.github/actions/install-mesa
         with:
           target-dir: "target/debug"
 
@@ -180,7 +181,7 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info

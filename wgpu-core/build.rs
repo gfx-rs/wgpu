@@ -1,6 +1,6 @@
 fn main() {
     cfg_aliases::cfg_aliases! {
-        windows_linux_android: { any(windows, target_os = "linux", target_os = "android", target_os = "freebsd") },
+        windows_linux_android: { any(windows, target_os = "linux", target_os = "android", target_os = "freebsd", target_os = "netbsd") },
         send_sync: { all(
             feature = "std",
             any(
@@ -25,7 +25,5 @@ fn main() {
             any(target_os = "linux", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd")
         ) },
         metal: { all(target_vendor = "apple", feature = "metal") },
-
-        supports_64bit_atomics: { target_has_atomic = "64" }
     }
 }

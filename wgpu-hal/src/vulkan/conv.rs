@@ -473,6 +473,9 @@ pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> vk::Format {
         Vf::Float64x3 => vk::Format::R64G64B64_SFLOAT,
         Vf::Float64x4 => vk::Format::R64G64B64A64_SFLOAT,
         Vf::Unorm10_10_10_2 => vk::Format::A2B10G10R10_UNORM_PACK32,
+        // Note that, unlike the unorm variant, this format has no mandatory format
+        // features in Vulkan, so vertex buffer support is not guaranteed.
+        Vf::Snorm10_10_10_2 => vk::Format::A2B10G10R10_SNORM_PACK32,
         Vf::Unorm8x4Bgra => vk::Format::B8G8R8A8_UNORM,
     }
 }
@@ -1120,6 +1123,28 @@ pub fn map_acceleration_structure_usage_to_barrier(
     }
 
     (stages, access)
+}
+
+pub fn map_component_swizzle(swizzle: wgt::ComponentSwizzle) -> vk::ComponentSwizzle {
+    match swizzle {
+        wgt::ComponentSwizzle::Zero => vk::ComponentSwizzle::ZERO,
+        wgt::ComponentSwizzle::One => vk::ComponentSwizzle::ONE,
+        wgt::ComponentSwizzle::R => vk::ComponentSwizzle::R,
+        wgt::ComponentSwizzle::G => vk::ComponentSwizzle::G,
+        wgt::ComponentSwizzle::B => vk::ComponentSwizzle::B,
+        wgt::ComponentSwizzle::A => vk::ComponentSwizzle::A,
+    }
+}
+
+pub fn map_texture_component_swizzle(
+    swizzle: wgt::TextureComponentSwizzle,
+) -> vk::ComponentMapping {
+    vk::ComponentMapping {
+        r: map_component_swizzle(swizzle.r),
+        g: map_component_swizzle(swizzle.g),
+        b: map_component_swizzle(swizzle.b),
+        a: map_component_swizzle(swizzle.a),
+    }
 }
 
 #[cfg(test)]

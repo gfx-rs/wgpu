@@ -13,11 +13,20 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+pub mod atomic;
 mod mutex;
 mod rwlock;
 
 pub use mutex::RawMutex;
 pub use rwlock::RawRwLock;
+
+cfg_if::cfg_if! {
+    if #[cfg(target_has_atomic = "ptr")] {
+        pub use alloc::sync::{Arc, Weak};
+    } else if #[cfg(feature = "portable-atomic")] {
+        pub use portable_atomic_util::{Arc, Weak};
+    }
+}
 
 // FIXME:
 // * `Condvar` is only available through `parking_lot` and not through `lock_api`.

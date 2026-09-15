@@ -951,6 +951,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
                 dimension: desc.dimension,
                 usage: desc.usage,
                 range: desc.range,
+                swizzle: desc.swizzle,
             },
         },
         A::CreateExternalTexture { id, desc, planes } => A::CreateExternalTexture {

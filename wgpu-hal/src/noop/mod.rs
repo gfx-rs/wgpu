@@ -3,10 +3,7 @@
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use core::{ptr, sync::atomic::Ordering, time::Duration};
 
-#[cfg(supports_64bit_atomics)]
-use core::sync::atomic::AtomicU64;
-#[cfg(not(supports_64bit_atomics))]
-use portable_atomic::AtomicU64;
+use wgpu_sync::atomic::AtomicU64;
 
 use crate::TlasInstance;
 
@@ -302,7 +299,10 @@ impl crate::Queue for Context {
 impl crate::Device for Context {
     type A = Api;
 
-    unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Buffer> {
+    unsafe fn create_buffer(
+        &self,
+        desc: &crate::BufferDescriptor,
+    ) -> DeviceResult<(Buffer, wgt::BufferAddress)> {
         Buffer::new(desc)
     }
 
