@@ -89,10 +89,12 @@ dyn_type!(pub ref struct DynQuerySet(dyn QuerySetInterface));
 dyn_type!(pub ref struct DynPipelineLayout(dyn PipelineLayoutInterface));
 dyn_type!(pub ref struct DynRenderPipeline(dyn RenderPipelineInterface));
 dyn_type!(pub ref struct DynComputePipeline(dyn ComputePipelineInterface));
+dyn_type!(pub ref struct DynRayTracingPipeline(dyn RayTracingPipelineInterface));
 dyn_type!(pub ref struct DynPipelineCache(dyn PipelineCacheInterface));
 dyn_type!(pub mut struct DynCommandEncoder(dyn CommandEncoderInterface));
 dyn_type!(pub mut struct DynComputePass(dyn ComputePassInterface));
 dyn_type!(pub mut struct DynRenderPass(dyn RenderPassInterface));
+dyn_type!(pub mut struct DynRayTracingPass(dyn RayTracingPassInterface));
 dyn_type!(pub mut struct DynCommandBuffer(dyn CommandBufferInterface));
 
 static NEXT_RENDER_BUNDLE_ENCODER_ID: AtomicU64 = AtomicU64::new(0);

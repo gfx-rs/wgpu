@@ -191,6 +191,13 @@ impl DeviceInterface for CustomDevice {
         wgpu::custom::DispatchComputePipeline::custom(CustomComputePipeline(module.0.clone()))
     }
 
+    fn create_ray_tracing_pipeline(
+        &self,
+        _desc: &wgpu::RayTracingPipelineDescriptor<'_>,
+    ) -> wgpu::custom::DispatchRayTracingPipeline {
+        unimplemented!()
+    }
+
     unsafe fn create_pipeline_cache(
         &self,
         _desc: &wgpu::PipelineCacheDescriptor<'_>,
