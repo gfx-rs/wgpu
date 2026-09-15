@@ -1,0 +1,5 @@
+capabilities = "SUBGROUP"
+targets = "WGSL"
+
+[spv]
+version = [1, 3]

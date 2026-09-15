@@ -1,5 +1,7 @@
 use wgpu::*;
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -9,7 +11,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static STENCIL_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -42,7 +44,7 @@ static STENCIL_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::
         }
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DEPTH_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -74,7 +76,7 @@ static DEPTH_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::ne
         }
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SHARED_USAGE_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

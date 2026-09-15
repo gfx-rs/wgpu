@@ -1,5 +1,6 @@
 use wgpu_test::{
-    gpu_test, image, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, image, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -14,7 +15,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 ///
 /// So far no specific buggy glsl consumers have been identified and it isn't known whether the
 /// bug is avoided there.
-#[gpu_test]
+#[apply(gpu_test!)]
 static DEGENERATE_SWITCH: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().force_fxc(true).enable_noop())
     .run_async(|ctx| async move { test_impl(&ctx).await });

@@ -2,7 +2,7 @@
 #![cfg(wasm_test)]
 
 use wgpu_test::GpuTestInitializer;
-use wgpu_test::{gpu_test, GpuTestConfiguration};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(CANVAS_GET_CONTEXT_RETURNED_NULL);
@@ -10,7 +10,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
 /// This test applies to those cfgs that can create a surface from a canvas, which
 /// include WebGL and WebGPU, but *not* Emscripten GLES.
-#[gpu_test]
+#[apply(gpu_test!)]
 static CANVAS_GET_CONTEXT_RETURNED_NULL: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(wgpu_test::TestParameters::default().enable_noop())
     .run_async(|_ctx| async move {

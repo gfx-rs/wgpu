@@ -93,14 +93,14 @@ impl CompilerContainer {
     }
 
     pub(super) fn max_shader_model(&self) -> Option<wgt::DxcShaderModel> {
-        match self {
+        match *self {
             CompilerContainer::Fxc(..) => None,
             CompilerContainer::DynamicDxc(CompilerDynamicDxc {
                 max_shader_model, ..
             })
             | CompilerContainer::StaticDxc(CompilerStaticDxc {
                 max_shader_model, ..
-            }) => Some(max_shader_model.clone()),
+            }) => Some(max_shader_model),
         }
     }
 

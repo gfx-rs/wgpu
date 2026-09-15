@@ -1,6 +1,8 @@
 use core::ops::Range;
 
-use crate::{link_to_wgpu_docs, link_to_wgpu_item, Extent3d, Origin3d};
+use macro_rules_attribute::derive;
+
+use crate::{link_to_wgpu_docs, link_to_wgpu_item, ConstDefault, Extent3d, Origin3d};
 
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
@@ -36,7 +38,7 @@ pub enum TextureDimension {
 }
 
 /// Order in which texture data is laid out in memory.
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, ConstDefault!, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TextureDataOrder {
     /// The texture is laid out densely in memory as:
@@ -48,7 +50,7 @@ pub enum TextureDataOrder {
     /// ````
     ///
     /// This is the layout used by dds files.
-    #[default]
+    #[custom(default)]
     LayerMajor,
     /// The texture is laid out densely in memory as:
     ///
@@ -67,7 +69,7 @@ pub enum TextureDataOrder {
 /// Corresponds to [WebGPU `GPUTextureViewDimension`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureviewdimension).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TextureViewDimension {
     /// A one dimensional texture. `texture_1d` in WGSL and `texture1D` in GLSL.
@@ -75,7 +77,7 @@ pub enum TextureViewDimension {
     D1,
     /// A two dimensional texture. `texture_2d` in WGSL and `texture2D` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "2d"))]
-    #[default]
+    #[custom(default)]
     D2,
     /// A two dimensional array texture. `texture_2d_array` in WGSL and `texture2DArray` in GLSL.
     #[cfg_attr(feature = "serde", serde(rename = "2d-array"))]
@@ -113,12 +115,12 @@ impl TextureViewDimension {
 ///
 #[doc = link_to_wgpu_item!(struct Texture)]
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum TextureAspect {
     /// Depth, Stencil, and Color.
-    #[default]
+    #[custom(default)]
     All,
     /// Stencil.
     StencilOnly,
@@ -727,7 +729,7 @@ impl<L> SamplerDescriptor<L> {
 /// Corresponds to [WebGPU `GPUAddressMode`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuaddressmode).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum AddressMode {
@@ -735,7 +737,7 @@ pub enum AddressMode {
     ///
     /// -0.25 -> 0.0
     /// 1.25  -> 1.0
-    #[default]
+    #[custom(default)]
     ClampToEdge = 0,
     /// Repeat the texture in a tiling fashion
     ///
@@ -760,14 +762,14 @@ pub enum AddressMode {
 /// Corresponds to [WebGPU `GPUFilterMode`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpufiltermode).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum FilterMode {
     /// Nearest neighbor sampling.
     ///
     /// This creates a pixelated effect.
-    #[default]
+    #[custom(default)]
     Nearest = 0,
     /// Linear Interpolation
     ///
@@ -780,14 +782,14 @@ pub enum FilterMode {
 /// Corresponds to [WebGPU `GPUMipmapFilterMode`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpumipmapfiltermode).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, ConstDefault!, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum MipmapFilterMode {
     /// Nearest neighbor sampling.
     ///
     /// Return the value of the texel nearest to the texture coordinates.
-    #[default]
+    #[custom(default)]
     Nearest = 0,
     /// Linear Interpolation
     ///
@@ -829,7 +831,7 @@ pub enum SamplerBorderColor {
 /// Corresponds to [WebGPU `GPUTexelCopyBufferLayout`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagedatalayout).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, ConstDefault!)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TexelCopyBufferLayout {
     /// Offset into the buffer that is the start of the texture. Must be a multiple of texture block size.
@@ -923,7 +925,7 @@ impl<T> TexelCopyTextureInfo<T> {
 
 /// Subresource range within an image
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, ConstDefault!, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ImageSubresourceRange {

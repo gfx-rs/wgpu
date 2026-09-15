@@ -152,17 +152,15 @@ impl WebGpuError for ConfigureSurfaceError {
     }
 }
 
-pub type ResolvedSurfaceOutput = SurfaceOutput<Arc<resource::Texture>>;
-
 #[repr(C)]
 #[derive(Debug)]
-pub struct SurfaceOutput<T = id::TextureId> {
+pub struct SurfaceOutput<T = Arc<resource::Texture>> {
     pub status: Status,
     pub texture: Option<T>,
 }
 
 impl Surface {
-    pub fn get_current_texture(self: &Arc<Self>) -> Result<ResolvedSurfaceOutput, SurfaceError> {
+    pub fn get_current_texture(self: &Arc<Self>) -> Result<SurfaceOutput, SurfaceError> {
         let output = self.get_current_texture_inner();
         #[cfg(feature = "trace")]
         if let Some(present) = self.presentation.lock().as_ref() {
@@ -178,7 +176,7 @@ impl Surface {
         output
     }
 
-    pub(crate) fn get_current_texture_inner(&self) -> Result<ResolvedSurfaceOutput, SurfaceError> {
+    pub(crate) fn get_current_texture_inner(&self) -> Result<SurfaceOutput, SurfaceError> {
         profiling::scope!("Surface::get_current_texture");
 
         let (device, config) = if let Some(ref present) = *self.presentation.lock() {
@@ -292,7 +290,7 @@ impl Surface {
             ),
         };
 
-        Ok(ResolvedSurfaceOutput { status, texture })
+        Ok(SurfaceOutput { status, texture })
     }
 
     pub fn present(self: &Arc<Self>) -> Result<Status, SurfaceError> {
@@ -489,7 +487,7 @@ impl Global {
         &self,
         surface_id: id::SurfaceId,
         texture_id_in: Option<id::TextureId>,
-    ) -> Result<SurfaceOutput, SurfaceError> {
+    ) -> Result<SurfaceOutput<id::TextureId>, SurfaceError> {
         let surface = self.surfaces.get(surface_id);
 
         let fid = self.hub.textures.prepare(texture_id_in);

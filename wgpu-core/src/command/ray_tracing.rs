@@ -35,7 +35,7 @@ use crate::{
 };
 use crate::{lock::RwLockWriteGuard, resource::RawResourceAccess};
 
-use crate::id::{BlasId, TlasId};
+use crate::id::{BlasId, BufferId, TlasId};
 
 struct BlasStore<'a> {
     blas: Arc<Blas>,
@@ -218,8 +218,8 @@ impl Global {
     pub fn command_encoder_build_acceleration_structures<'a>(
         &self,
         command_encoder_id: CommandEncoderId,
-        blas_iter: impl Iterator<Item = BlasBuildEntry<'a>>,
-        tlas_iter: impl Iterator<Item = TlasPackage<'a>>,
+        blas_iter: impl Iterator<Item = BlasBuildEntry<'a, BlasId, BufferId>>,
+        tlas_iter: impl Iterator<Item = TlasPackage<'a, TlasId, BlasId>>,
     ) -> Result<(), EncoderStateError> {
         let hub = &self.hub;
 

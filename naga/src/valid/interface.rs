@@ -72,7 +72,7 @@ pub enum VaryingError {
         interpolation: crate::Interpolation,
         sampling: crate::Sampling,
     },
-    #[error("`@interpolate(flat) must be explicitly specified for integer I/O")]
+    #[error("`@interpolate(flat)` must be explicitly specified for integer I/O")]
     InvalidInterpolationForInteger,
     #[error("Interpolation must be specified on vertex shader outputs and fragment shader inputs")]
     MissingInterpolation,

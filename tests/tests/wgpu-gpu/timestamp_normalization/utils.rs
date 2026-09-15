@@ -6,7 +6,7 @@
 
 use nanorand::Rng;
 use wgpu::{util::DeviceExt, Limits};
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.extend([U64_MUL_U32, SHIFT_RIGHT_U96]);
@@ -59,7 +59,7 @@ fn assert_u64_mul_u32(left: u64, right: u32, computed: Uint96) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static U64_MUL_U32: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -140,7 +140,7 @@ fn assert_shift_right_u96(value: Uint96, shift: u32, computed: Uint96) {
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SHIFT_RIGHT_U96: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

@@ -3,14 +3,14 @@ use wgpu::{
     vertex_attr_array,
 };
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(SET_ARRAY_STRIDE_TO_0);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SET_ARRAY_STRIDE_TO_0: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

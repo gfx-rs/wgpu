@@ -1,5 +1,6 @@
 use wgpu_test::{
-    gpu_test, image, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, image, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -14,7 +15,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 /// The shader will fail to compile on Dx12 with FXC without this fix.
 ///
 /// This also tests that shaders generated with this fix execute correctly.
-#[gpu_test]
+#[apply(gpu_test!)]
 static CONTINUE_SWITCH: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().force_fxc(true).enable_noop())
     .run_async(|ctx| async move { test_impl(&ctx).await });

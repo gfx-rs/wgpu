@@ -16,10 +16,8 @@ use deno_error::JsErrorBox;
 
 use crate::error::GPUGenericError;
 use crate::get_data_slice;
-use crate::Instance;
 
 pub struct GPUComputePassEncoder {
-  pub instance: Instance,
   pub error_handler: super::error::ErrorHandler,
 
   pub compute_pass: RefCell<wgpu_core::command::ComputePass>,
@@ -57,11 +55,9 @@ impl GPUComputePassEncoder {
     #[webidl] pipeline: Ptr<crate::compute_pipeline::GPUComputePipeline>,
   ) {
     let err = self
-      .instance
-      .compute_pass_set_pipeline(
-        &mut self.compute_pass.borrow_mut(),
-        pipeline.id,
-      )
+      .compute_pass
+      .borrow_mut()
+      .set_pipeline(pipeline.wgpu_compute_pipeline.clone())
       .err();
     self.error_handler.push_error(err);
   }
@@ -76,9 +72,9 @@ impl GPUComputePassEncoder {
     work_group_count_z: u32,
   ) {
     let err = self
-      .instance
-      .compute_pass_dispatch_workgroups(
-        &mut self.compute_pass.borrow_mut(),
+      .compute_pass
+      .borrow_mut()
+      .dispatch_workgroups(
         work_group_count_x,
         work_group_count_y,
         work_group_count_z,
@@ -94,10 +90,10 @@ impl GPUComputePassEncoder {
     #[webidl(options(enforce_range = true))] indirect_offset: u64,
   ) {
     let err = self
-      .instance
-      .compute_pass_dispatch_workgroups_indirect(
-        &mut self.compute_pass.borrow_mut(),
-        indirect_buffer.id,
+      .compute_pass
+      .borrow_mut()
+      .dispatch_workgroups_indirect(
+        indirect_buffer.wgpu_buffer.clone(),
         indirect_offset,
       )
       .err();
@@ -107,19 +103,16 @@ impl GPUComputePassEncoder {
   #[fast]
   #[undefined]
   fn end(&self) {
-    let err = self
-      .instance
-      .compute_pass_end(&mut self.compute_pass.borrow_mut())
-      .err();
+    let err = self.compute_pass.borrow_mut().end().err();
     self.error_handler.push_error(err);
   }
 
   #[undefined]
   fn push_debug_group(&self, #[webidl] group_label: String) {
     let err = self
-      .instance
-      .compute_pass_push_debug_group(
-        &mut self.compute_pass.borrow_mut(),
+      .compute_pass
+      .borrow_mut()
+      .push_debug_group(
         &group_label,
         0, // wgpu#975
       )
@@ -130,19 +123,16 @@ impl GPUComputePassEncoder {
   #[fast]
   #[undefined]
   fn pop_debug_group(&self) {
-    let err = self
-      .instance
-      .compute_pass_pop_debug_group(&mut self.compute_pass.borrow_mut())
-      .err();
+    let err = self.compute_pass.borrow_mut().pop_debug_group().err();
     self.error_handler.push_error(err);
   }
 
   #[undefined]
   fn insert_debug_marker(&self, #[webidl] marker_label: String) {
     let err = self
-      .instance
-      .compute_pass_insert_debug_marker(
-        &mut self.compute_pass.borrow_mut(),
+      .compute_pass
+      .borrow_mut()
+      .insert_debug_marker(
         &marker_label,
         0, // wgpu#975
       )
@@ -196,11 +186,13 @@ impl GPUComputePassEncoder {
       let offsets = &data[start..(start + len)];
 
       self
-        .instance
-        .compute_pass_set_bind_group(
-          &mut self.compute_pass.borrow_mut(),
+        .compute_pass
+        .borrow_mut()
+        .set_bind_group(
           index,
-          bind_group.into_option().map(|bind_group| bind_group.id),
+          bind_group
+            .into_option()
+            .map(|bind_group| bind_group.wgpu_bind_group.clone()),
           offsets,
         )
         .err()
@@ -218,11 +210,13 @@ impl GPUComputePassEncoder {
       .unwrap_or_default();
 
       self
-        .instance
-        .compute_pass_set_bind_group(
-          &mut self.compute_pass.borrow_mut(),
+        .compute_pass
+        .borrow_mut()
+        .set_bind_group(
           index,
-          bind_group.into_option().map(|bind_group| bind_group.id),
+          bind_group
+            .into_option()
+            .map(|bind_group| bind_group.wgpu_bind_group.clone()),
           &offsets,
         )
         .err()
@@ -246,12 +240,9 @@ impl GPUComputePassEncoder {
     let data = get_data_slice(scope, data_arg, data_offset, data_size)?;
 
     let err = self
-      .instance
-      .compute_pass_set_immediates(
-        &mut self.compute_pass.borrow_mut(),
-        offset,
-        data,
-      )
+      .compute_pass
+      .borrow_mut()
+      .set_immediates(offset, data)
       .err();
     self.error_handler.push_error(err);
     Ok(())

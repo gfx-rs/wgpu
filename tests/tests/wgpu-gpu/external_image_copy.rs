@@ -2,9 +2,9 @@
 
 use wasm_bindgen::JsCast;
 use wgpu::ExternalImageSource;
-use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration};
+use wgpu_test::{apply, fail_if, gpu_test, GpuTestConfiguration};
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
         let image_encoded = include_bytes!("3x3_colors.png");

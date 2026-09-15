@@ -1,5 +1,7 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+use std::sync::Arc;
+
 use deno_core::cppgc::make_cppgc_object;
 use deno_core::op2;
 use deno_core::v8;
@@ -9,19 +11,11 @@ use deno_core::WebIDL;
 use wgpu_core::pipeline;
 
 use crate::error::GPUGenericError;
-use crate::Instance;
 
 pub struct GPUShaderModule {
-  pub instance: Instance,
-  pub id: wgpu_core::id::ShaderModuleId,
+  pub wgpu_shader_module: Arc<wgpu_core::pipeline::ShaderModule>,
   pub label: String,
   pub compilation_info: v8::Global<v8::Object>,
-}
-
-impl Drop for GPUShaderModule {
-  fn drop(&mut self) {
-    self.instance.shader_module_drop(self.id);
-  }
 }
 
 impl WebIdlInterfaceConverter for GPUShaderModule {

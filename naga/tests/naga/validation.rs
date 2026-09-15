@@ -1753,3 +1753,149 @@ fn memory_decorations_require_storage_address_space() {
         }
     ));
 }
+
+/// Naga validation should permit multiple entry points to have the same name,
+/// as long as they are for distinct stages.
+///
+/// WGSL does not permit conflicting names; this is a case where Naga IR is
+/// looser than WGSL.
+#[test]
+fn entry_points_distinguished_by_stage() {
+    let mut test_spans = TestSpanGenerator::default();
+    let mut module = Module::default();
+
+    let ty_vec4f = module.types.insert(
+        ir::Type {
+            name: Some("vec4f".to_string()),
+            inner: ir::TypeInner::Vector {
+                size: ir::VectorSize::Quad,
+                scalar: ir::Scalar::F32,
+            },
+        },
+        test_spans.next(),
+    );
+
+    let vertex_function = ir::Function {
+        name: Some("non_unique_name".into()),
+        result: Some(ir::FunctionResult {
+            ty: ty_vec4f,
+            binding: Some(ir::Binding::BuiltIn(ir::BuiltIn::Position {
+                invariant: false,
+            })),
+        }),
+        ..ir::Function::default()
+    };
+    module.entry_points.push(ir::EntryPoint {
+        name: "non_unique_name".into(),
+        stage: ir::ShaderStage::Vertex,
+        early_depth_test: None,
+        workgroup_size: [0, 0, 0],
+        workgroup_size_overrides: None,
+        function: vertex_function,
+        mesh_info: None,
+        task_payload: None,
+        incoming_ray_payload: None,
+    });
+
+    module.entry_points.push(ir::EntryPoint {
+        name: "non_unique_name".into(),
+        stage: ir::ShaderStage::Compute,
+        early_depth_test: None,
+        workgroup_size: [1, 1, 1],
+        workgroup_size_overrides: None,
+        function: ir::Function::default(),
+        mesh_info: None,
+        task_payload: None,
+        incoming_ray_payload: None,
+    });
+
+    valid::Validator::new(
+        valid::ValidationFlags::default(),
+        valid::Capabilities::default(),
+    )
+    .validate(&module)
+    .expect("module should be valid");
+}
+
+/// Naga validation should not allow a `Module` to have multiple entry points
+/// with the same name and the same stage.
+#[test]
+fn entry_points_share_name() {
+    let mut module = Module::default();
+
+    module.entry_points.push(ir::EntryPoint {
+        name: "non_unique_name".into(),
+        stage: ir::ShaderStage::Compute,
+        early_depth_test: None,
+        workgroup_size: [1, 1, 1],
+        workgroup_size_overrides: None,
+        function: ir::Function::default(),
+        mesh_info: None,
+        task_payload: None,
+        incoming_ray_payload: None,
+    });
+
+    module.entry_points.push(ir::EntryPoint {
+        name: "non_unique_name".into(),
+        stage: ir::ShaderStage::Compute,
+        early_depth_test: None,
+        workgroup_size: [1, 1, 1],
+        workgroup_size_overrides: None,
+        function: ir::Function::default(),
+        mesh_info: None,
+        task_payload: None,
+        incoming_ray_payload: None,
+    });
+
+    let err = valid::Validator::new(
+        valid::ValidationFlags::default(),
+        valid::Capabilities::default(),
+    )
+    .validate(&module)
+    .expect_err("module should be invalid");
+
+    assert!(matches!(
+        err.into_inner(),
+        valid::ValidationError::EntryPoint {
+            source: valid::EntryPointError::Conflict,
+            ..
+        }
+    ));
+}
+
+/// Naga validation should permit a `Module` to have multiple non-entry-point
+/// functions with the same name.
+///
+/// WGSL does not allow this, but Naga IR does: it always refers to functions by
+/// handle, so the names aren't actually needed to interpret the module's
+/// contents.
+#[test]
+fn functions_share_name() {
+    let mut test_spans = TestSpanGenerator::default();
+    let mut module = Module::default();
+
+    module.functions.append(
+        ir::Function {
+            name: Some("non_unique_name".into()),
+            result: None,
+            ..ir::Function::default()
+        },
+        test_spans.next(),
+    );
+
+    module.functions.append(
+        ir::Function {
+            name: Some("non_unique_name".into()),
+            result: None,
+            ..ir::Function::default()
+        },
+        test_spans.next(),
+    );
+
+    valid::Validator::new(
+        valid::ValidationFlags::default(),
+        valid::Capabilities::default(),
+    )
+    .validate(&module)
+    .expect("module should be valid");
+}

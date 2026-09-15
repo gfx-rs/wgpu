@@ -1,5 +1,7 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+use std::sync::Arc;
+
 use deno_core::op2;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
@@ -7,20 +9,12 @@ use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 
 use crate::error::GPUGenericError;
-use crate::Instance;
 
 pub struct GPUQuerySet {
-  pub instance: Instance,
-  pub id: wgpu_core::id::QuerySetId,
+  pub wgpu_query_set: Arc<wgpu_core::resource::QuerySet>,
   pub r#type: GPUQueryType,
   pub count: u32,
   pub label: String,
-}
-
-impl Drop for GPUQuerySet {
-  fn drop(&mut self) {
-    self.instance.query_set_drop(self.id);
-  }
 }
 
 impl WebIdlInterfaceConverter for GPUQuerySet {
@@ -55,7 +49,7 @@ impl GPUQuerySet {
   #[fast]
   #[undefined]
   fn destroy(&self) -> Result<(), JsErrorBox> {
-    self.instance.query_set_destroy(self.id);
+    self.wgpu_query_set.destroy();
     Ok(())
   }
 

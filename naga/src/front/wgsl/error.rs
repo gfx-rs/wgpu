@@ -1,5 +1,10 @@
 //! Formatting WGSL front end error messages.
 
+#![expect(
+    clippy::pattern_type_mismatch,
+    reason = "There are matches on references, since it produces less LLVM IR than dereferencing"
+)]
+
 use crate::common::wgsl::TryToWgsl;
 use crate::diagnostic_filter::ConflictingDiagnosticRuleError;
 use crate::error::replace_control_chars;
@@ -25,14 +30,15 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use core::fmt::Write as _;
 use core::ops::Range;
 
 #[derive(Clone, Debug)]
 pub struct ParseError {
-    message: String,
+    message: Cow<'static, str>,
     // The first span should be the primary span, and the other ones should be complementary.
     labels: Vec<(Span, Cow<'static, str>)>,
-    notes: Vec<String>,
+    notes: Vec<Cow<'static, str>>,
 }
 
 impl ParseError {
@@ -47,7 +53,7 @@ impl ParseError {
     }
 
     pub fn notes(&self) -> impl ExactSizeIterator<Item = &str> + '_ {
-        self.notes.iter().map(|note| note.as_str())
+        self.notes.iter().map(Cow::as_ref)
     }
 
     fn diagnostic(&self) -> Diagnostic<()> {
@@ -194,6 +200,119 @@ pub enum ExpectedToken<'a> {
     ForInit,
     /// for loop update statement (variable_updating_statement, func_call_statement)
     ForUpdate,
+}
+
+impl core::fmt::Display for ExpectedToken<'_> {
+    #[expect(
+        unused,
+        reason = "This ignores write errors, since this should only be called to write into a \
+                  String, which is infallible. Ignoring errors lowers binary bloat from this \
+                  function."
+    )]
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        // This function uses a temporary enum here to lower binary bloat by merging calls to
+        // write_str.
+        //
+        // Tokens where the output is already a single string (such as Token::Number) use Kind::Str.
+        // Tokens where the output is made up of two static strings split by a char (such as
+        // Token::Operation) use Kind::FormatChar
+        // Tokens where the output is 3 strings concatenated (such as Token::DocComment) use
+        // Kind::FormatStr
+        //
+        // Any exceptions (such as Token::ShiftOperation) handle their cases explicitly and return
+        enum Kind<'a> {
+            Str(&'a str),
+            FormatChar(&'static str, char, &'static str),
+            FormatStr([&'a str; 3]),
+        }
+
+        let kind = match *self {
+            ExpectedToken::Token(token) => match token {
+                Token::Separator(c) | Token::Paren(c) => Kind::FormatChar("`", c, "`"),
+                Token::Attribute => Kind::Str("@"),
+                Token::Number(_) => Kind::Str("number"),
+                Token::Word(s) => Kind::Str(s),
+                Token::Operation(c) => Kind::FormatChar("operation (`", c, "`)"),
+                Token::LogicalOperation(c) => Kind::FormatChar("logical operation (`", c, "`)"),
+                Token::ShiftOperation(c) => {
+                    f.write_str("bitshift (`");
+                    f.write_char(c);
+                    f.write_char(c);
+                    f.write_str("`)");
+                    return Ok(())
+                },
+                Token::AssignmentOperation(c) if c == '<' || c == '>' => {
+                    f.write_str("bitshift (`");
+                    f.write_char(c);
+                    f.write_char(c);
+                    f.write_str("=`)");
+                    return Ok(())
+                }
+                Token::AssignmentOperation(c) => Kind::FormatChar("operation (`", c, "=`)"),
+                Token::IncrementOperation => Kind::Str("increment operation"),
+                Token::DecrementOperation => Kind::Str("decrement operation"),
+                Token::Arrow => Kind::Str("->"),
+                Token::TemplateArgsStart => Kind::Str("template args start"),
+                Token::TemplateArgsEnd => Kind::Str("template args end"),
+                Token::Unknown(c) => Kind::FormatChar("unknown (`", c, "`)"),
+                Token::Trivia => Kind::Str("trivia"),
+                Token::DocComment(s) => Kind::FormatStr(["doc comment ('", s, "')"]),
+                Token::ModuleDocComment(s) => Kind::FormatStr(["module doc comment ('", s, "')"]),
+                Token::End => Kind::Str("end"),
+                Token::UnterminatedBlockComment(s) => {
+                    Kind::FormatStr(["unterminated doc comment ('", s, "')"])
+                }
+            },
+            ExpectedToken::Identifier => Kind::Str("identifier"),
+            ExpectedToken::LhsExpression => Kind::Str("LHS expression (identifier component_or_swizzle_specifier?, (`lhs_expression`) component_or_swizzle_specifier?, &`lhs_expression`, *`lhs_expression`)"),
+            ExpectedToken::PrimaryExpression => Kind::Str("expression"),
+            ExpectedToken::Assignment => Kind::Str("assignment or increment/decrement"),
+            ExpectedToken::SwitchItem => Kind::Str(concat!(
+                "switch item (`case` or `default`) or a closing curly bracket ",
+                "to signify the end of the switch statement (`}`)"
+            )),
+            ExpectedToken::WorkgroupSizeSeparator => {
+                Kind::Str("workgroup size separator (`,`) or a closing parenthesis")
+            }
+            ExpectedToken::GlobalItem => Kind::Str(concat!(
+                "global item (`struct`, `const`, `var`, `alias`, ",
+                "`fn`, `diagnostic`, `enable`, `requires`, `;`) ",
+                "or the end of the file"
+            )),
+            ExpectedToken::Variable => Kind::Str("variable access"),
+            ExpectedToken::Function => Kind::Str("function name"),
+            ExpectedToken::AfterIdentListArg => {
+                Kind::Str("next argument, trailing comma, or end of list (`,` or `;`)")
+            }
+            ExpectedToken::AfterIdentListComma => {
+                Kind::Str("next argument or end of list (`;`)")
+            }
+            ExpectedToken::DiagnosticAttribute => {
+                Kind::Str("the `diagnostic` attribute identifier")
+            }
+            ExpectedToken::Statement => Kind::Str("statement"),
+            ExpectedToken::ForInit => Kind::Str("for loop initializer statement (`var`/`let`/`const` declaration, assignment, `i++`/`i--` statement, function call)"),
+            ExpectedToken::ForUpdate => Kind::Str("for loop update statement (assignment, `i++`/`i--` statement, function call)"),
+        };
+
+        match kind {
+            Kind::Str(s) => {
+                f.write_str(s);
+            }
+            Kind::FormatChar(a, b, c) => {
+                f.write_str(a);
+                f.write_char(b);
+                f.write_str(c);
+            }
+            Kind::FormatStr(strings) => {
+                for s in strings {
+                    f.write_str(s);
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, Debug, Error, PartialEq)]
@@ -529,143 +648,399 @@ impl<'a> Error<'a> {
     // `stack-frame-limit` without causing problems.
     #[allow(clippy::large_stack_frames)]
     pub(crate) fn as_parse_error(&self, source: &'a str) -> ParseError {
-        match *self {
+        // This function normally produces a lot of binary bloat, so has been structured in a
+        // non-idiomatic way to minimize its size.
+        //
+        // Errors where the output has a static message and a single, static label are handled in
+        // the block starting with UnexpectedComponents.
+        //
+        // Errors where the output has a single static label, and a message in the form
+        // "..{&source[span]}.." are handled in the block starting with BadAccessor.
+        //
+        // Other errors with a single static label, and a non-static message are handled in the
+        // block starting with BadMatrixScalarKind.
+        //
+        // Other errors are handled on their own.
+        //
+        // If you're adding a new error type, and you're not sure where to put it, you can put it
+        // on its own; there'll only be a small difference in size from one variant :)
+
+        match self {
             Error::Unexpected(unexpected_span, expected) => {
-                let expected_str = match expected {
-                    ExpectedToken::Token(token) => match token {
-                        Token::Separator(c) => format!("`{c}`"),
-                        Token::Paren(c) => format!("`{c}`"),
-                        Token::Attribute => "@".to_string(),
-                        Token::Number(_) => "number".to_string(),
-                        Token::Word(s) => s.to_string(),
-                        Token::Operation(c) => format!("operation (`{c}`)"),
-                        Token::LogicalOperation(c) => format!("logical operation (`{c}`)"),
-                        Token::ShiftOperation(c) => format!("bitshift (`{c}{c}`)"),
-                        Token::AssignmentOperation(c) if c == '<' || c == '>' => {
-                            format!("bitshift (`{c}{c}=`)")
-                        }
-                        Token::AssignmentOperation(c) => format!("operation (`{c}=`)"),
-                        Token::IncrementOperation => "increment operation".to_string(),
-                        Token::DecrementOperation => "decrement operation".to_string(),
-                        Token::Arrow => "->".to_string(),
-                        Token::TemplateArgsStart => "template args start".to_string(),
-                        Token::TemplateArgsEnd => "template args end".to_string(),
-                        Token::Unknown(c) => format!("unknown (`{c}`)"),
-                        Token::Trivia => "trivia".to_string(),
-                        Token::DocComment(s) => format!("doc comment ('{s}')"),
-                        Token::ModuleDocComment(s) => format!("module doc comment ('{s}')"),
-                        Token::End => "end".to_string(),
-                        Token::UnterminatedBlockComment(s) => format!("unterminated doc comment ('{s}'")
-                    },
-                    ExpectedToken::Identifier => "identifier".to_string(),
-                    ExpectedToken::LhsExpression => "LHS expression (identifier component_or_swizzle_specifier?, (`lhs_expression`) component_or_swizzle_specifier?, &`lhs_expression`, *`lhs_expression`)".to_string(),
-                    ExpectedToken::PrimaryExpression => "expression".to_string(),
-                    ExpectedToken::Assignment => "assignment or increment/decrement".to_string(),
-                    ExpectedToken::SwitchItem => concat!(
-                        "switch item (`case` or `default`) or a closing curly bracket ",
-                        "to signify the end of the switch statement (`}`)"
-                    )
-                    .to_string(),
-                    ExpectedToken::WorkgroupSizeSeparator => {
-                        "workgroup size separator (`,`) or a closing parenthesis".to_string()
-                    }
-                    ExpectedToken::GlobalItem => concat!(
-                        "global item (`struct`, `const`, `var`, `alias`, ",
-                        "`fn`, `diagnostic`, `enable`, `requires`, `;`) ",
-                        "or the end of the file"
-                    )
-                    .to_string(),
-                    ExpectedToken::Variable => "variable access".to_string(),
-                    ExpectedToken::Function => "function name".to_string(),
-                    ExpectedToken::AfterIdentListArg => {
-                        "next argument, trailing comma, or end of list (`,` or `;`)".to_string()
-                    }
-                    ExpectedToken::AfterIdentListComma => {
-                        "next argument or end of list (`;`)".to_string()
-                    }
-                    ExpectedToken::DiagnosticAttribute => {
-                        "the `diagnostic` attribute identifier".to_string()
-                    }
-                    ExpectedToken::Statement => "statement".to_string(),
-                    ExpectedToken::ForInit => "for loop initializer statement (`var`/`let`/`const` declaration, assignment, `i++`/`i--` statement, function call)".to_string(),
-                    ExpectedToken::ForUpdate => "for loop update statement (assignment, `i++`/`i--` statement, function call)".to_string(),
-                };
                 ParseError {
                     message: format!(
-                        "expected {}, found {:?}",
-                        expected_str, &source[unexpected_span],
-                    ),
-                    labels: vec![(unexpected_span, format!("expected {expected_str}").into())],
+                        "expected {expected}, found {:?}",
+                        &source[*unexpected_span]
+                    ).into(),
+                    labels: vec![(*unexpected_span, format!("expected {expected}").into())],
                     notes: vec![],
                 }
             }
-            Error::UnexpectedComponents(bad_span) => ParseError {
-                message: "unexpected components".to_string(),
-                labels: vec![(bad_span, "unexpected components".into())],
-                notes: vec![],
+            // Variants where message and label are static strings
+            Error::UnexpectedComponents(span)
+                | Error::UnexpectedOperationInConstContext(span)
+                | Error::NotStorageTexture(span)
+                | Error::BadIncrDecrReferenceType(span)
+                | Error::InvalidBreakIf(span)
+                | Error::NonPowerOfTwoAlignAttribute(span)
+                | Error::InconsistentBinding(span)
+                | Error::TypeNotInferable(span)
+                | Error::InvalidAddrOfOperand(span)
+                | Error::InvalidAtomicPointer(span)
+                | Error::InvalidAtomicOperandType(span)
+                | Error::InvalidAtomicAccess(span)
+                | Error::InvalidRayQueryPointer(span)
+                | Error::NotPointer(span)
+                | Error::InvalidSwitchSelector { span }
+                | Error::InvalidSwitchCase { span }
+                | Error::SwitchCaseTypeMismatch { span }
+                | Error::CalledEntryPoint(span)
+                | Error::CalledLocalDecl(span)
+                | Error::ExpectedConstExprConcreteIntegerScalar(span)
+                | Error::ExpectedNonNegative(span)
+                | Error::ExpectedPositiveArrayLength(span)
+                | Error::MissingWorkgroupSize(span)
+                | Error::PipelineConstantIDValue(span)
+                | Error::NotBool(span)
+                | Error::ConstAssertFailed(span)
+                | Error::ExpectedGlobalVariable { name_span: span }
+                | Error::UnexpectedExprForEnumerant(span)
+                | Error::UnexpectedTemplate(span)
+                | Error::UnexpectedExprForTypeExpression(span)
+                | Error::MissingIncomingPayload(span) => {
+                let (message, label) = match self {
+                    Error::UnexpectedComponents(_) => (
+                        "unexpected components",
+                        "unexpected components"
+                    ),
+                    Error::UnexpectedOperationInConstContext(_) => (
+                        "this operation is not supported in a const context",
+                        "operation not supported here"
+                    ),
+                    Error::NotStorageTexture(_) => (
+                        "textureStore can only be applied to storage textures",
+                        "not a storage texture"
+                    ),
+                    Error::BadIncrDecrReferenceType(_) => (
+                        concat!(
+                            "increment/decrement operation requires ",
+                            "reference type to be one of i32 or u32"
+                        ),
+                        "must be a reference type of i32 or u32"
+                    ),
+                    Error::InvalidBreakIf(_) => (
+                        "A break if is only allowed in a continuing block",
+                        "not in a continuing block"
+                    ),
+                    Error::NonPowerOfTwoAlignAttribute(_) => (
+                        "struct member alignment must be a power of 2",
+                        "must be a power of 2"
+                    ),
+                    Error::InconsistentBinding(_) => (
+                        "input/output binding is not consistent",
+                        "input/output binding is not consistent"
+                    ),
+                    Error::TypeNotInferable(_) => (
+                        "type can't be inferred",
+                        "type can't be inferred"
+                    ),
+                    Error::InvalidAddrOfOperand(_) => (
+                        "cannot take the address of a vector component",
+                        "invalid operand for address-of"
+                    ),
+                    Error::InvalidAtomicPointer(_) => (
+                        "atomic operation is done on a pointer to a non-atomic",
+                        "atomic pointer is invalid"
+                    ),
+                    Error::InvalidAtomicOperandType(_) => (
+                        "atomic operand type is inconsistent with the operation",
+                        "atomic operand type is invalid"
+                    ),
+                    Error::InvalidAtomicAccess(_) => (
+                        "direct access to atomic variable is not allowed",
+                        "atomic variables cannot be accessed directly; use atomic built-in functions",
+                    ),
+                    Error::InvalidRayQueryPointer(_) => (
+                        "ray query operation is done on a pointer to a non-ray-query",
+                        "ray query pointer is invalid"
+                    ),
+                    Error::NotPointer(_) => (
+                        "the operand of the `*` operator must be a pointer",
+                        "expression is not a pointer"
+                    ),
+                    Error::InvalidSwitchSelector { .. } => (
+                        "invalid `switch` selector",
+                        "`switch` selector must be a scalar integer"
+                    ),
+                    Error::InvalidSwitchCase { .. } => (
+                        "invalid `switch` case selector value",
+                        "`switch` case selector must be a scalar integer const expression"
+                    ),
+                    Error::SwitchCaseTypeMismatch { .. } => (
+                        "invalid `switch` case selector value",
+                        "`switch` case selector must have the same type as the `switch` selector expression"
+                    ),
+                    Error::CalledEntryPoint(_) => (
+                        "entry point cannot be called",
+                        "entry point cannot be called"
+                    ),
+                    Error::CalledLocalDecl(_) => (
+                        "local declaration cannot be called",
+                        "local declaration cannot be called"
+                    ),
+                    Error::ExpectedConstExprConcreteIntegerScalar(_) => (
+                        concat!(
+                            "must be a const-expression that ",
+                            "resolves to a concrete integer scalar (`u32` or `i32`)"
+                        ),
+                        "must resolve to `u32` or `i32`"
+                    ),
+                    Error::ExpectedNonNegative(_) => (
+                        "must be non-negative (>= 0)",
+                        "must be non-negative"
+                    ),
+                    Error::ExpectedPositiveArrayLength(_) => (
+                        "array element count must be positive (> 0)",
+                        "must be positive"
+                    ),
+                    Error::MissingWorkgroupSize(_) => (
+                        "workgroup size is missing on compute shader entry point",
+                        "must be paired with a `@workgroup_size` attribute"
+                    ),
+                    Error::PipelineConstantIDValue(_) => (
+                        "pipeline constant ID must be between 0 and 65535 inclusive",
+                        "must be between 0 and 65535 inclusive"
+                    ),
+                    Error::NotBool(_) => (
+                        "must be a const-expression that resolves to a `bool`",
+                        "must resolve to `bool`"
+                    ),
+                    Error::ConstAssertFailed(_) => (
+                        "`const_assert` failure",
+                        "evaluates to `false`"
+                    ),
+                    Error::ExpectedGlobalVariable { .. } => (
+                        "expected global variable",
+                        "variable used here"
+                    ),
+                    Error::UnexpectedExprForEnumerant(_) => (
+                        "unexpected expression",
+                        "needs to be an identifier resolving to a predeclared enumerant"
+                    ),
+                    Error::UnexpectedTemplate(_) => (
+                        "unexpected template",
+                        "expected identifier"
+                    ),
+                    Error::UnexpectedExprForTypeExpression(_) => (
+                        "unexpected expression",
+                        "needs to be an identifier resolving to a type declaration (alias or struct) or predeclared type(-generator)"
+                    ),
+                    Error::MissingIncomingPayload(_) => (
+                        "incoming payload is missing on a `closest_hit`, `any_hit` or `miss` shader entry point",
+                        "must be paired with a `@incoming_payload` attribute"
+                    ),
+                    _ => unreachable!()
+                };
+
+                ParseError {
+                    labels: vec![(*span, label.into())],
+                    message: message.into(),
+                    notes: vec![],
+                }
             },
-            Error::UnexpectedOperationInConstContext(span) => ParseError {
-                message: "this operation is not supported in a const context".to_string(),
-                labels: vec![(span, "operation not supported here".into())],
-                notes: vec![],
+            // Variants with a static label, and a message in the form "..{&source[span]}.."
+            Error::BadAccessor(span)
+                | Error::BadTexture(span)
+                | Error::InvalidGatherComponent(span)
+                | Error::ReservedIdentifierPrefix(span)
+                | Error::UnknownAddressSpace(span)
+                | Error::InvalidLocalVariableAddressSpace(span)
+                | Error::UnknownRayFlag(span)
+                | Error::RepeatedAttribute(span)
+                | Error::UnknownAttribute(span)
+                | Error::UnknownBuiltin(span)
+                | Error::UnknownAccess(span)
+                | Error::UnknownStorageFormat(span)
+                | Error::UnknownConservativeDepth(span)
+                | Error::TypeNotConstructible(span)
+                | Error::DeclMissingTypeAndInit(span)
+                | Error::UnexpectedIdentForEnumerant(span) => {
+                let (message_a, message_b, label) = match self {
+                    Error::BadAccessor(_) => (
+                        "invalid field accessor `",
+                        "`",
+                        "invalid accessor"
+                    ),
+                    Error::BadTexture(_) => (
+                        "expected an image, but found `",
+                        "` which is not an image",
+                        "not an image"
+                    ),
+                    Error::InvalidGatherComponent(_) => (
+                        "textureGather component `",
+                        "` doesn't exist, must be 0, 1, 2, or 3",
+                        "invalid component"
+                    ),
+                    Error::ReservedIdentifierPrefix(_) => (
+                        "Identifier starts with a reserved prefix: `",
+                        "`",
+                        "invalid identifier"
+                    ),
+                    Error::UnknownAddressSpace(_) => (
+                        "unknown address space: `",
+                        "`",
+                        "unknown address space"
+                    ),
+                    Error::InvalidLocalVariableAddressSpace(_) => (
+                        "invalid address space for local variable: `",
+                        "`",
+                        "local variables can only use 'function' address space"
+                    ),
+                    Error::UnknownRayFlag(_) => (
+                        "unknown ray flag: `",
+                        "`",
+                        "unknown ray flag"
+                    ),
+                    Error::RepeatedAttribute(_) => (
+                        "repeated attribute: `",
+                        "`",
+                        "repeated attribute"
+                    ),
+                    Error::UnknownAttribute(_) => (
+                        "unknown attribute: `",
+                        "`",
+                        "unknown attribute"
+                    ),
+                    Error::UnknownBuiltin(_) => (
+                        "unknown builtin: `",
+                        "`",
+                        "unknown builtin"
+                    ),
+                    Error::UnknownAccess(_) => (
+                        "unknown access: `",
+                        "`",
+                        "unknown access"
+                    ),
+                    Error::UnknownStorageFormat(_) => (
+                        "unknown storage format: `",
+                        "`",
+                        "unknown storage format"
+                    ),
+                    Error::UnknownConservativeDepth(_) => (
+                        "unknown conservative depth: `",
+                        "`",
+                        "unknown conservative depth"
+                    ),
+                    Error::TypeNotConstructible(_) => (
+                        "type `",
+                        "` is not constructible",
+                        "type is not constructible"
+                    ),
+                    Error::DeclMissingTypeAndInit(_) => (
+                        "declaration of `",
+                        "` needs a type specifier or initializer",
+                        "needs a type specifier or initializer"
+                    ),
+                    Error::UnexpectedIdentForEnumerant(_) => (
+                        "identifier `",
+                        "` resolves to a declaration",
+                        "needs to resolve to a predeclared enumerant"
+                    ),
+                    _ => unreachable!()
+                };
+
+                ParseError {
+                    message: [message_a, &source[*span], message_b].concat().into(),
+                    labels: vec![(*span, label.into())],
+                    notes: vec![]
+                }
+            },
+            // Other variants with a single static label and no notes
+            Error::BadMatrixScalarKind(span, _)
+                | Error::UnknownIdent(span, _)
+                | Error::BadTextureSampleType { span, .. }
+                | Error::InvalidConstructorComponentType(span, _)
+                | Error::NotReference(_, span)
+                | Error::WrongArgumentCount { span, .. }
+                | Error::ConstantEvaluatorError(_, span)
+                | Error::EnableExtensionNotSupported { span, .. }
+                | Error::MissingTemplateArg { span, .. } => {
+                let (message, label) = match self {
+                    Error::BadMatrixScalarKind(_, scalar) => (
+                        format!(
+                            "matrix scalar type must be floating-point, but found `{}`",
+                            scalar.to_wgsl_for_diagnostics()
+                        ),
+                        "must be floating-point (e.g. `f32`)"
+                    ),
+                    Error::UnknownIdent(_, ident) => (
+                        format!("no definition in scope for identifier: `{ident}`"),
+                        "unknown identifier"
+                    ),
+                    Error::BadTextureSampleType { scalar, .. } => (
+                        format!(
+                            "texture sample type must be one of f32, i32 or u32, but found {}",
+                            scalar.to_wgsl_for_diagnostics()
+                        ),
+                        "must be one of f32, i32 or u32"
+                    ),
+                    Error::InvalidConstructorComponentType(_, component) => (
+                        format!("invalid type for constructor component at index [{component}]"),
+                        "invalid component type"
+                    ),
+                    Error::NotReference(what, _) => (
+                        format!("{what} must be a reference"),
+                        "expression is not a reference"
+                    ),
+                    Error::WrongArgumentCount {
+                        ref expected,
+                        found,
+                        ..
+                    } => (
+                        format!(
+                            "wrong number of arguments: expected {}, found {}",
+                            if expected.len() < 2 {
+                                format!("{}", expected.start)
+                            } else {
+                                format!("{}..{}", expected.start, expected.end)
+                            },
+                            found
+                        ),
+                        "wrong number of arguments"
+                    ),
+                    Error::ConstantEvaluatorError(ref e, _) => (e.to_string(), "see msg"),
+                    Error::EnableExtensionNotSupported { kind, .. } => (
+                        format!(
+                            "the `{}` extension is not supported in the current environment",
+                            kind.to_ident()
+                        ),
+                        "unsupported enable-extension"
+                    ),
+                    Error::MissingTemplateArg { description, .. } => (
+                        format!(
+                            "`{}` needs a template argument specified: {description}",
+                            &source[*span]
+                        ),
+                        "is missing a template argument"
+                    ),
+                    _ => unreachable!()
+                };
+
+                ParseError {
+                    message: message.into(),
+                    labels: vec![(*span, label.into())],
+                    notes: vec![]
+                }
             },
             Error::BadNumber(bad_span, ref err) => ParseError {
-                message: format!("{}: `{}`", err, &source[bad_span],),
-                labels: vec![(bad_span, err.to_string().into())],
-                notes: vec![],
-            },
-            Error::BadMatrixScalarKind(span, scalar) => ParseError {
-                message: format!(
-                    "matrix scalar type must be floating-point, but found `{}`",
-                    scalar.to_wgsl_for_diagnostics()
-                ),
-                labels: vec![(span, "must be floating-point (e.g. `f32`)".into())],
-                notes: vec![],
-            },
-            Error::BadAccessor(accessor_span) => ParseError {
-                message: format!("invalid field accessor `{}`", &source[accessor_span],),
-                labels: vec![(accessor_span, "invalid accessor".into())],
-                notes: vec![],
-            },
-            Error::UnknownIdent(ident_span, ident) => ParseError {
-                message: format!("no definition in scope for identifier: `{ident}`"),
-                labels: vec![(ident_span, "unknown identifier".into())],
+                message: format!("{}: `{}`", err, &source[*bad_span]).into(),
+                labels: vec![(*bad_span, err.to_string().into())],
                 notes: vec![],
             },
             Error::UnknownScalarType(bad_span) => ParseError {
-                message: format!("unknown scalar type: `{}`", &source[bad_span]),
-                labels: vec![(bad_span, "unknown scalar type".into())],
+                message: format!("unknown scalar type: `{}`", &source[*bad_span]).into(),
+                labels: vec![(*bad_span, "unknown scalar type".into())],
                 notes: vec!["Valid scalar types are f32, f64, i32, u32, bool".into()],
-            },
-            Error::NotStorageTexture(bad_span) => ParseError {
-                message: "textureStore can only be applied to storage textures".to_string(),
-                labels: vec![(bad_span, "not a storage texture".into())],
-                notes: vec![],
-            },
-            Error::BadTextureSampleType { span, scalar } => ParseError {
-                message: format!(
-                    "texture sample type must be one of f32, i32 or u32, but found {}",
-                    scalar.to_wgsl_for_diagnostics()
-                ),
-                labels: vec![(span, "must be one of f32, i32 or u32".into())],
-                notes: vec![],
-            },
-            Error::BadIncrDecrReferenceType(span) => ParseError {
-                message: concat!(
-                    "increment/decrement operation requires ",
-                    "reference type to be one of i32 or u32"
-                )
-                .to_string(),
-                labels: vec![(span, "must be a reference type of i32 or u32".into())],
-                notes: vec![],
-            },
-            Error::BadTexture(bad_span) => ParseError {
-                message: format!(
-                    "expected an image, but found `{}` which is not an image",
-                    &source[bad_span]
-                ),
-                labels: vec![(bad_span, "not an image".into())],
-                notes: vec![],
             },
             Error::BadTypeCast {
                 span,
@@ -674,106 +1049,35 @@ impl<'a> Error<'a> {
             } => {
                 let msg = format!("cannot cast a {from_type} to a {to_type}");
                 ParseError {
-                    message: msg.clone(),
-                    labels: vec![(span, msg.into())],
+                    message: msg.clone().into(),
+                    labels: vec![(*span, msg.into())],
                     notes: vec![],
                 }
             }
             Error::InvalidResolve(ref resolve_error) => ParseError {
-                message: resolve_error.to_string(),
+                message: resolve_error.to_string().into(),
                 labels: vec![],
                 notes: vec![],
             },
-            Error::InvalidBreakIf(bad_span) => ParseError {
-                message: "A break if is only allowed in a continuing block".to_string(),
-                labels: vec![(bad_span, "not in a continuing block".into())],
-                notes: vec![],
-            },
-            Error::InvalidGatherComponent(bad_span) => ParseError {
-                message: format!(
-                    "textureGather component `{}` doesn't exist, must be 0, 1, 2, or 3",
-                    &source[bad_span]
-                ),
-                labels: vec![(bad_span, "invalid component".into())],
-                notes: vec![],
-            },
-            Error::InvalidConstructorComponentType(bad_span, component) => ParseError {
-                message: format!("invalid type for constructor component at index [{component}]"),
-                labels: vec![(bad_span, "invalid component type".into())],
-                notes: vec![],
-            },
             Error::InvalidIdentifierUnderscore(bad_span) => ParseError {
-                message: "Identifier can't be `_`".to_string(),
-                labels: vec![(bad_span, "invalid identifier".into())],
+                labels: vec![(*bad_span, "invalid identifier".into())],
                 notes: vec![
                     "Use phony assignment instead (`_ =` notice the absence of `let` or `var`)"
-                        .to_string(),
+                        .into(),
                 ],
-            },
-            Error::ReservedIdentifierPrefix(bad_span) => ParseError {
-                message: format!(
-                    "Identifier starts with a reserved prefix: `{}`",
-                    &source[bad_span]
-                ),
-                labels: vec![(bad_span, "invalid identifier".into())],
-                notes: vec![],
-            },
-            Error::UnknownAddressSpace(bad_span) => ParseError {
-                message: format!("unknown address space: `{}`", &source[bad_span]),
-                labels: vec![(bad_span, "unknown address space".into())],
-                notes: vec![],
-            },
-            Error::InvalidLocalVariableAddressSpace(bad_span) => ParseError {
-                message: format!("invalid address space for local variable: `{}`", &source[bad_span]),
-                labels: vec![(bad_span, "local variables can only use 'function' address space".into())],
-                notes: vec![],
-            },
-            Error::UnknownRayFlag(bad_span) => ParseError {
-                message: format!("unknown ray flag: `{}`", &source[bad_span]),
-                labels: vec![(bad_span, "unknown ray flag".into())],
-                notes: vec![],
-            },
-            Error::RepeatedAttribute(bad_span) => ParseError {
-                message: format!("repeated attribute: `{}`", &source[bad_span]),
-                labels: vec![(bad_span, "repeated attribute".into())],
-                notes: vec![],
-            },
-            Error::UnknownAttribute(bad_span) => ParseError {
-                message: format!("unknown attribute: `{}`", &source[bad_span]),
-                labels: vec![(bad_span, "unknown attribute".into())],
-                notes: vec![],
-            },
-            Error::UnknownBuiltin(bad_span) => ParseError {
-                message: format!("unknown builtin: `{}`", &source[bad_span]),
-                labels: vec![(bad_span, "unknown builtin".into())],
-                notes: vec![],
-            },
-            Error::UnknownAccess(bad_span) => ParseError {
-                message: format!("unknown access: `{}`", &source[bad_span]),
-                labels: vec![(bad_span, "unknown access".into())],
-                notes: vec![],
-            },
-            Error::UnknownStorageFormat(bad_span) => ParseError {
-                message: format!("unknown storage format: `{}`", &source[bad_span]),
-                labels: vec![(bad_span, "unknown storage format".into())],
-                notes: vec![],
-            },
-            Error::UnknownConservativeDepth(bad_span) => ParseError {
-                message: format!("unknown conservative depth: `{}`", &source[bad_span]),
-                labels: vec![(bad_span, "unknown conservative depth".into())],
-                notes: vec![],
+                message: "Identifier can't be `_`".into(),
             },
             Error::UnknownEnableExtension(span, word) => ParseError {
-                message: format!("unknown enable-extension `{word}`"),
-                labels: vec![(span, "".into())],
+                message: format!("unknown enable-extension `{word}`").into(),
+                labels: vec![(*span, "".into())],
                 notes: vec![
                     "See available extensions at <https://www.w3.org/TR/WGSL/#enable-extension>."
                         .into(),
                 ],
             },
             Error::UnknownLanguageExtension(span, name) => ParseError {
-                message: format!("unknown language extension `{name}`"),
-                labels: vec![(span, "".into())],
+                message: format!("unknown language extension `{name}`").into(),
+                labels: vec![(*span, "".into())],
                 notes: vec![concat!(
                     "See available extensions at ",
                     "<https://www.w3.org/TR/WGSL/#language-extensions-sec>."
@@ -781,8 +1085,8 @@ impl<'a> Error<'a> {
                 .into()],
             },
             Error::UnknownDiagnosticRuleName(span) => ParseError {
-                message: format!("unknown `diagnostic(…)` rule name `{}`", &source[span]),
-                labels: vec![(span, "not a valid diagnostic rule name".into())],
+                message: format!("unknown `diagnostic(…)` rule name `{}`", &source[*span]).into(),
+                labels: vec![(*span, "not a valid diagnostic rule name".into())],
                 notes: vec![concat!(
                     "See available trigger rules at ",
                     "<https://www.w3.org/TR/WGSL/#filterable-triggering-rules>."
@@ -790,162 +1094,112 @@ impl<'a> Error<'a> {
                 .into()],
             },
             Error::SizeAttributeTooLow(bad_span, min_size) => ParseError {
-                message: format!("struct member size must be at least {min_size}"),
-                labels: vec![(bad_span, format!("must be at least {min_size}").into())],
+                message: format!("struct member size must be at least {min_size}").into(),
+                labels: vec![(*bad_span, format!("must be at least {min_size}").into())],
                 notes: vec![],
             },
             Error::SizeAttributeRequiresFixedFootprint(bad_span) => ParseError {
-                message: "@size attribute requires a type with creation-fixed footprint".to_string(),
-                labels: vec![(bad_span, "type does not have creation-fixed footprint".into())],
+                labels: vec![(*bad_span, "type does not have creation-fixed footprint".into())],
+                message: "@size attribute requires a type with creation-fixed footprint".into(),
                 notes: vec![],
             },
             Error::AlignAttributeTooLow(bad_span, min_align) => ParseError {
-                message: format!("struct member alignment must be at least {min_align}"),
-                labels: vec![(bad_span, format!("must be at least {min_align}").into())],
-                notes: vec![],
-            },
-            Error::NonPowerOfTwoAlignAttribute(bad_span) => ParseError {
-                message: "struct member alignment must be a power of 2".to_string(),
-                labels: vec![(bad_span, "must be a power of 2".into())],
-                notes: vec![],
-            },
-            Error::InconsistentBinding(span) => ParseError {
-                message: "input/output binding is not consistent".to_string(),
-                labels: vec![(span, "input/output binding is not consistent".into())],
-                notes: vec![],
-            },
-            Error::TypeNotConstructible(span) => ParseError {
-                message: format!("type `{}` is not constructible", &source[span]),
-                labels: vec![(span, "type is not constructible".into())],
-                notes: vec![],
-            },
-            Error::TypeNotInferable(span) => ParseError {
-                message: "type can't be inferred".to_string(),
-                labels: vec![(span, "type can't be inferred".into())],
+                message: format!("struct member alignment must be at least {min_align}").into(),
+                labels: vec![(*bad_span, format!("must be at least {min_align}").into())],
                 notes: vec![],
             },
             Error::InitializationTypeMismatch {
                 name,
                 ref expected,
                 ref got,
-            } => ParseError {
-                message: format!(
-                    "the type of `{}` is expected to be `{}`, but got `{}`",
-                    &source[name], expected, got,
-                ),
-                labels: vec![(name, format!("definition of `{}`", &source[name]).into())],
-                notes: vec![],
+            } => {
+                let name_str = &source[*name];
+                ParseError {
+                    message: format!(
+                        "the type of `{name_str}` is expected to be `{expected}`, but got `{got}`"
+                    )
+                        .into(),
+                    labels: vec![(*name, format!("definition of `{name_str}`").into())],
+                    notes: vec![],
+                }
             },
-            Error::DeclMissingTypeAndInit(name_span) => ParseError {
-                message: format!(
-                    "declaration of `{}` needs a type specifier or initializer",
-                    &source[name_span]
-                ),
-                labels: vec![(name_span, "needs a type specifier or initializer".into())],
-                notes: vec![],
-            },
-            Error::MissingAttribute(name, name_span) => ParseError {
-                message: format!(
-                    "variable `{}` needs a '{}' attribute",
-                    &source[name_span], name
-                ),
-                labels: vec![(
-                    name_span,
-                    format!("definition of `{}`", &source[name_span]).into(),
-                )],
-                notes: vec![],
-            },
-            Error::InvalidAddrOfOperand(span) => ParseError {
-                message: "cannot take the address of a vector component".to_string(),
-                labels: vec![(span, "invalid operand for address-of".into())],
-                notes: vec![],
-            },
-            Error::InvalidAtomicPointer(span) => ParseError {
-                message: "atomic operation is done on a pointer to a non-atomic".to_string(),
-                labels: vec![(span, "atomic pointer is invalid".into())],
-                notes: vec![],
-            },
-            Error::InvalidAtomicOperandType(span) => ParseError {
-                message: "atomic operand type is inconsistent with the operation".to_string(),
-                labels: vec![(span, "atomic operand type is invalid".into())],
-                notes: vec![],
-            },
-            Error::InvalidAtomicAccess(span) => ParseError {
-                message: "atomic variables cannot be accessed directly; use atomic built-in functions".to_string(),
-                labels: vec![(span, "direct access to atomic variable is not allowed".into())],
-                notes: vec![],
-            },
-            Error::InvalidRayQueryPointer(span) => ParseError {
-                message: "ray query operation is done on a pointer to a non-ray-query".to_string(),
-                labels: vec![(span, "ray query pointer is invalid".into())],
-                notes: vec![],
-            },
-            Error::NotPointer(span) => ParseError {
-                message: "the operand of the `*` operator must be a pointer".to_string(),
-                labels: vec![(span, "expression is not a pointer".into())],
-                notes: vec![],
-            },
-            Error::NotReference(what, span) => ParseError {
-                message: format!("{what} must be a reference"),
-                labels: vec![(span, "expression is not a reference".into())],
-                notes: vec![],
+            Error::MissingAttribute(name, name_span) => {
+                let variable = &source[*name_span];
+                ParseError {
+                    message: format!(
+                        "variable `{variable}` needs a '{name}' attribute",
+                    )
+                        .into(),
+                    labels: vec![(
+                        *name_span,
+                        format!("definition of `{variable}`").into(),
+                    )],
+                    notes: vec![],
+                }
             },
             Error::InvalidAssignment { span, ty } => {
-                let (extra_label, notes) = match ty {
+                let (notes, extra_label) = match ty {
                     InvalidAssignmentType::Swizzle => (
-                        None,
                         vec![
                             "WGSL does not support assignments to swizzles".into(),
                             "consider assigning each component individually".into(),
                         ],
+                        None,
                     ),
                     InvalidAssignmentType::ImmutableBinding(binding_span) => (
-                        Some((binding_span, "this is an immutable binding".into())),
                         vec![format!(
                             "consider declaring `{}` with `var` instead of `let`",
-                            &source[binding_span]
-                        )],
+                            &source[*binding_span]
+                        ).into()],
+                        Some((*binding_span, "this is an immutable binding".into())),
                     ),
-                    InvalidAssignmentType::Other => (None, vec![]),
+                    InvalidAssignmentType::Other => (vec![], None),
                 };
 
+                let label = (*span, "cannot assign to this expression".into());
+
                 ParseError {
+                    labels: if let Some(extra_label) = extra_label {
+                        vec![label, extra_label]
+                    } else {
+                        vec![label]
+                    },
                     message: "invalid left-hand side of assignment".into(),
-                    labels: core::iter::once((span, "cannot assign to this expression".into()))
-                        .chain(extra_label)
-                        .collect(),
                     notes,
                 }
             }
-            Error::ReservedKeyword(name_span) => ParseError {
-                message: format!("name `{}` is a reserved keyword", &source[name_span]),
-                labels: vec![(
-                    name_span,
-                    format!("definition of `{}`", &source[name_span]).into(),
-                )],
-                notes: vec![],
+            Error::ReservedKeyword(name_span) => {
+                let name = &source[*name_span];
+                ParseError {
+                    message: format!("name `{name}` is a reserved keyword").into(),
+                    labels: vec![(
+                        *name_span,
+                        format!("definition of `{name}`").into(),
+                    )],
+                    notes: vec![],
+                }
             },
-            Error::Redefinition { previous, current } => ParseError {
-                message: format!("redefinition of `{}`", &source[current]),
-                labels: vec![
-                    (
-                        current,
-                        format!("redefinition of `{}`", &source[current]).into(),
-                    ),
-                    (
-                        previous,
-                        format!("previous definition of `{}`", &source[previous]).into(),
-                    ),
-                ],
-                notes: vec![],
+            Error::Redefinition { previous, current } => {
+                let message = format!("redefinition of `{}`", &source[*current]);
+                ParseError {
+                    message: message.clone().into(),
+                    labels: vec![
+                        (*current, message.into()),
+                        (
+                            *previous,
+                            format!("previous definition of `{}`", &source[*previous]).into(),
+                        ),
+                    ],
+                    notes: vec![],
+                }
             },
             Error::RecursiveDeclaration { ident, usage } => ParseError {
-                message: format!("declaration of `{}` is recursive", &source[ident]),
-                labels: vec![(ident, "".into()), (usage, "uses itself here".into())],
+                message: format!("declaration of `{}` is recursive", &source[*ident]).into(),
+                labels: vec![(*ident, "".into()), (*usage, "uses itself here".into())],
                 notes: vec![],
             },
             Error::CyclicDeclaration { ident, ref path } => ParseError {
-                message: format!("declaration of `{}` is cyclic", &source[ident]),
+                message: format!("declaration of `{}` is cyclic", &source[*ident]).into(),
                 labels: path
                     .iter()
                     .enumerate()
@@ -965,73 +1219,19 @@ impl<'a> Error<'a> {
                     .collect(),
                 notes: vec![],
             },
-            Error::InvalidSwitchSelector { span } => ParseError {
-                message: "invalid `switch` selector".to_string(),
-                labels: vec![(
-                    span,
-                    "`switch` selector must be a scalar integer"
-                    .into(),
-                )],
-                notes: vec![],
-            },
-            Error::InvalidSwitchCase { span } => ParseError {
-                message: "invalid `switch` case selector value".to_string(),
-                labels: vec![(
-                    span,
-                    "`switch` case selector must be a scalar integer const expression"
-                    .into(),
-                )],
-                notes: vec![],
-            },
-            Error::SwitchCaseTypeMismatch { span } => ParseError {
-                message: "invalid `switch` case selector value".to_string(),
-                labels: vec![(
-                    span,
-                    "`switch` case selector must have the same type as the `switch` selector expression"
-                    .into(),
-                )],
-                notes: vec![],
-            },
-            Error::CalledEntryPoint(span) => ParseError {
-                message: "entry point cannot be called".to_string(),
-                labels: vec![(span, "entry point cannot be called".into())],
-                notes: vec![],
-            },
-            Error::CalledLocalDecl(span) => ParseError {
-                message: "local declaration cannot be called".to_string(),
-                labels: vec![(span, "local declaration cannot be called".into())],
-                notes: vec![],
-            },
-            Error::WrongArgumentCount {
-                span,
-                ref expected,
-                found,
-            } => ParseError {
-                message: format!(
-                    "wrong number of arguments: expected {}, found {}",
-                    if expected.len() < 2 {
-                        format!("{}", expected.start)
-                    } else {
-                        format!("{}..{}", expected.start, expected.end)
-                    },
-                    found
-                ),
-                labels: vec![(span, "wrong number of arguments".into())],
-                notes: vec![],
-            },
             Error::TooManyArguments {
                 ref function,
                 call_span,
                 arg_span,
                 max_arguments,
             } => ParseError {
-                message: format!("too many arguments passed to `{function}`"),
+                message: format!("too many arguments passed to `{function}`").into(),
                 labels: vec![
-                    (call_span, "".into()),
-                    (arg_span, format!("unexpected argument #{}", max_arguments + 1).into())
+                    (*call_span, "".into()),
+                    (*arg_span, format!("unexpected argument #{}", max_arguments + 1).into())
                 ],
                 notes: vec![
-                    format!("The `{function}` function accepts at most {max_arguments} argument(s)")
+                    format!("The `{function}` function accepts at most {max_arguments} argument(s)").into()
                 ],
             },
             Error::WrongArgumentType {
@@ -1045,15 +1245,15 @@ impl<'a> Error<'a> {
                 let message = format!(
                     "wrong type passed as argument #{} to `{function}`",
                     arg_index + 1,
-                );
+                ).into();
                 let labels = vec![
-                    (call_span, "".into()),
-                    (arg_span, format!("argument #{} has type `{arg_ty}`", arg_index + 1).into())
+                    (*call_span, "".into()),
+                    (*arg_span, format!("argument #{} has type `{arg_ty}`", arg_index + 1).into())
                 ];
 
                 let mut notes = vec![];
-                notes.push(format!("`{function}` accepts the following types for argument #{}:", arg_index + 1));
-                notes.extend(allowed.iter().map(|ty| format!("allowed type: {ty}")));
+                notes.push(format!("`{function}` accepts the following types for argument #{}:", arg_index + 1).into());
+                notes.extend(allowed.iter().map(|ty| format!("allowed type: {ty}").into()));
 
                 ParseError { message, labels, notes }
             },
@@ -1071,98 +1271,66 @@ impl<'a> Error<'a> {
                 let message = format!(
                     "inconsistent type passed as argument #{} to `{function}`",
                     arg_index + 1,
-                );
+                ).into();
                 let labels = vec![
-                    (call_span, "".into()),
-                    (arg_span, format!("argument #{} has type {arg_ty}", arg_index + 1).into()),
-                    (inconsistent_span, format!(
+                    (*call_span, "".into()),
+                    (*arg_span, format!("argument #{} has type {arg_ty}", arg_index + 1).into()),
+                    (*inconsistent_span, format!(
                         "this argument has type {inconsistent_ty}, which constrains subsequent arguments"
                     ).into()),
                 ];
                 let mut notes = vec![
-                    format!("Because argument #{} has type {inconsistent_ty}, only the following types", inconsistent_index + 1),
-                    format!("(or types that automatically convert to them) are accepted for argument #{}:", arg_index + 1),
+                    format!("Because argument #{} has type {inconsistent_ty}, only the following types", inconsistent_index + 1).into(),
+                    format!("(or types that automatically convert to them) are accepted for argument #{}:", arg_index + 1).into(),
                 ];
-                notes.extend(allowed.iter().map(|ty| format!("allowed type: {ty}")));
+                notes.extend(allowed.iter().map(|ty| format!("allowed type: {ty}").into()));
 
                 ParseError { message, labels, notes }
             }
             Error::FunctionReturnsVoid(span) => ParseError {
-                message: "function does not return any value".to_string(),
-                labels: vec![(span, "".into())],
+                labels: vec![(*span, "".into())],
                 notes: vec![
                     "perhaps you meant to call the function in a separate statement?".into(),
                 ],
+                message: "function does not return any value".into(),
             },
             Error::FunctionMustUseUnused(call) => ParseError {
-                message: "unused return value from function annotated with @must_use".into(),
-                labels: vec![(call, "".into())],
+                labels: vec![(*call, "".into())],
                 notes: vec![
                     format!(
                         "function '{}' is declared with `@must_use` attribute",
-                        &source[call],
-                    ),
+                        &source[*call],
+                    ).into(),
                     "use a phony assignment or declare a value using the function call as the initializer".into(),
                 ],
+                message: "unused return value from function annotated with @must_use".into(),
             },
             Error::FunctionMustUseReturnsVoid(attr, signature) => ParseError {
-                message: "function annotated with @must_use but does not return any value".into(),
                 labels: vec![
-                    (attr, "".into()),
-                    (signature, "".into()),
+                    (*attr, "".into()),
+                    (*signature, "".into()),
                 ],
                 notes: vec![
                     "declare a return type or remove the attribute".into(),
                 ],
+                message: "function annotated with @must_use but does not return any value".into(),
             },
             Error::FunctionMustUseOnNonFunction(attr) => ParseError {
-                message: "attribute `@must_use` is only valid on function declarations".into(),
-                labels: vec![(attr, "".into())],
+                labels: vec![(*attr, "".into())],
                 notes: vec![
                     "place `@must_use` on a function declaration with a return type".into(),
                 ],
+                message: "attribute `@must_use` is only valid on function declarations".into(),
             },
             Error::InvalidWorkGroupUniformLoad(span) => ParseError {
-                message: "incorrect type passed to workgroupUniformLoad".into(),
-                labels: vec![(span, "".into())],
+                labels: vec![(*span, "".into())],
                 notes: vec!["passed type must be a workgroup pointer".into()],
+                message: "incorrect type passed to workgroupUniformLoad".into(),
             },
             Error::Internal(message) => ParseError {
-                message: "internal WGSL front end error".to_string(),
+                notes: vec![(*message).into()],
+                message: "internal WGSL front end error".into(),
                 labels: vec![],
-                notes: vec![message.into()],
-            },
-            Error::ExpectedConstExprConcreteIntegerScalar(span) => ParseError {
-                message: concat!(
-                    "must be a const-expression that ",
-                    "resolves to a concrete integer scalar (`u32` or `i32`)"
-                )
-                .to_string(),
-                labels: vec![(span, "must resolve to `u32` or `i32`".into())],
-                notes: vec![],
-            },
-            Error::ExpectedNonNegative(span) => ParseError {
-                message: "must be non-negative (>= 0)".to_string(),
-                labels: vec![(span, "must be non-negative".into())],
-                notes: vec![],
-            },
-            Error::ExpectedPositiveArrayLength(span) => ParseError {
-                message: "array element count must be positive (> 0)".to_string(),
-                labels: vec![(span, "must be positive".into())],
-                notes: vec![],
-            },
-            Error::ConstantEvaluatorError(ref e, span) => ParseError {
-                message: e.to_string(),
-                labels: vec![(span, "see msg".into())],
-                notes: vec![],
-            },
-            Error::MissingWorkgroupSize(span) => ParseError {
-                message: "workgroup size is missing on compute shader entry point".to_string(),
-                labels: vec![(
-                    span,
-                    "must be paired with a `@workgroup_size` attribute".into(),
-                )],
-                notes: vec![],
             },
             Error::AutoConversion(ref error) => {
                 // destructuring ensures all fields are handled
@@ -1175,7 +1343,7 @@ impl<'a> Error<'a> {
                 ParseError {
                     message: format!(
                         "automatic conversions cannot convert `{source_type}` to `{dest_type}`"
-                    ),
+                    ).into(),
                     labels: vec![
                         (
                             dest_span,
@@ -1199,7 +1367,7 @@ impl<'a> Error<'a> {
                 ParseError {
                     message: format!(
                         "automatic conversions cannot convert elements of `{source_type}` to `{dest_scalar}`"
-                    ),
+                    ).into(),
                     labels: vec![
                         (
                             dest_span,
@@ -1223,7 +1391,6 @@ impl<'a> Error<'a> {
                     ref concretization_preferences,
                 } = **error;
                 ParseError {
-                    message: "failed to convert expression to a concrete type".to_string(),
                     labels: vec![(
                         expr_span,
                         format!("this expression has type {expr_type}").into(),
@@ -1231,35 +1398,20 @@ impl<'a> Error<'a> {
                     notes: concretization_preferences
                         .iter()
                         .map(|&(ref scalar, ref err)|
-                            format!("the expression couldn't be converted to have {scalar} scalar type: {err}")
+                            format!("the expression couldn't be converted to have {scalar} scalar type: {err}").into()
                         )
                         .collect(),
+                    message: "failed to convert expression to a concrete type".into(),
                 }
             }
             Error::ExceededLimitForNestedBraces { span, limit } => ParseError {
+                labels: vec![(*span, "limit reached at this brace".into())],
+                notes: vec![format!("nesting limit is currently set to {limit}").into()],
                 message: "brace nesting limit reached".into(),
-                labels: vec![(span, "limit reached at this brace".into())],
-                notes: vec![format!("nesting limit is currently set to {limit}")],
-            },
-            Error::PipelineConstantIDValue(span) => ParseError {
-                message: "pipeline constant ID must be between 0 and 65535 inclusive".to_string(),
-                labels: vec![(span, "must be between 0 and 65535 inclusive".into())],
-                notes: vec![],
-            },
-            Error::NotBool(span) => ParseError {
-                message: "must be a const-expression that resolves to a `bool`".to_string(),
-                labels: vec![(span, "must resolve to `bool`".into())],
-                notes: vec![],
-            },
-            Error::ConstAssertFailed(span) => ParseError {
-                message: "`const_assert` failure".to_string(),
-                labels: vec![(span, "evaluates to `false`".into())],
-                notes: vec![],
             },
             Error::DirectiveAfterFirstGlobalDecl { directive_span } => ParseError {
-                message: "expected global declaration, but found a global directive".into(),
                 labels: vec![(
-                    directive_span,
+                    *directive_span,
                     "written after first global declaration".into(),
                 )],
                 notes: vec![concat!(
@@ -1267,14 +1419,15 @@ impl<'a> Error<'a> {
                     "maybe hoist this closer to the top of the shader module?"
                 )
                 .into()],
+                message: "expected global declaration, but found a global directive".into(),
             },
             Error::EnableExtensionNotYetImplemented { kind, span } => ParseError {
                 message: format!(
                     "the `{}` enable-extension is not yet supported",
-                    EnableExtension::Unimplemented(kind).to_ident()
-                ),
+                    EnableExtension::Unimplemented(*kind).to_ident()
+                ).into(),
                 labels: vec![(
-                    span,
+                    *span,
                     concat!(
                         "this enable-extension specifies standard functionality ",
                         "which is not yet implemented in Naga"
@@ -1288,12 +1441,12 @@ impl<'a> Error<'a> {
                         "so they can prioritize it!"
                     ),
                     kind.tracking_issue_num()
-                )],
+                ).into()],
             },
             Error::EnableExtensionNotEnabled { kind, span } => ParseError {
-                message: format!("the `{}` enable extension is not enabled", kind.to_ident()),
+                message: format!("the `{}` enable extension is not enabled", kind.to_ident()).into(),
                 labels: vec![(
-                    span,
+                    *span,
                     format!(
                         concat!(
                             "the `{}` \"Enable Extension\" is needed for this functionality, ",
@@ -1312,33 +1465,22 @@ impl<'a> Error<'a> {
                             "so they can prioritize it!"
                         ),
                         kind.tracking_issue_num()
-                    )]
+                    ).into()]
                 } else {
                     vec![
                         format!(
                             "You can enable this extension by adding `enable {};` at the top of the shader, before any other items.",
                             kind.to_ident()
-                        ),
+                        ).into(),
                     ]
                 },
-            },
-            Error::EnableExtensionNotSupported { kind, span } => ParseError {
-                message: format!(
-                    "the `{}` extension is not supported in the current environment",
-                    kind.to_ident()
-                ),
-                labels: vec![(
-                    span,
-                    "unsupported enable-extension".into(),
-                )],
-                notes: vec![],
             },
             Error::LanguageExtensionNotYetImplemented { kind, span } => ParseError {
                 message: format!(
                     "the `{}` language extension is not yet supported",
-                    LanguageExtension::Unimplemented(kind).to_ident()
-                ),
-                labels: vec![(span, "".into())],
+                    LanguageExtension::Unimplemented(*kind).to_ident()
+                ).into(),
+                labels: vec![(*span, "".into())],
                 notes: vec![format!(
                     concat!(
                         "Let Naga maintainers know that you ran into this at ",
@@ -1346,14 +1488,13 @@ impl<'a> Error<'a> {
                         "so they can prioritize it!"
                     ),
                     kind.tracking_issue_num()
-                )],
+                ).into()],
             },
             Error::DiagnosticInvalidSeverity {
                 severity_control_name_span,
             } => ParseError {
-                message: "invalid `diagnostic(…)` severity".into(),
                 labels: vec![(
-                    severity_control_name_span,
+                    *severity_control_name_span,
                     "not a valid severity level".into(),
                 )],
                 notes: vec![concat!(
@@ -1361,16 +1502,16 @@ impl<'a> Error<'a> {
                     "<https://www.w3.org/TR/WGSL/#diagnostic-severity>."
                 )
                 .into()],
+                message: "invalid `diagnostic(…)` severity".into(),
             },
             Error::DiagnosticDuplicateTriggeringRule(ConflictingDiagnosticRuleError {
                 triggering_rule_spans,
             }) => {
                 let [first_span, second_span] = triggering_rule_spans;
                 ParseError {
-                    message: "found conflicting `diagnostic(…)` rule(s)".into(),
                     labels: vec![
-                        (first_span, "first rule".into()),
-                        (second_span, "second rule".into()),
+                        (*first_span, "first rule".into()),
+                        (*second_span, "second rule".into()),
                     ],
                     notes: vec![
                         concat!(
@@ -1380,13 +1521,13 @@ impl<'a> Error<'a> {
                         .into(),
                         "You should delete the rule you don't want.".into(),
                     ],
+                    message: "found conflicting `diagnostic(…)` rule(s)".into(),
                 }
             }
             Error::DiagnosticAttributeNotYetImplementedAtParseSite {
                 site_name_plural,
                 ref spans,
             } => ParseError {
-                message: "`@diagnostic(…)` attribute(s) not yet implemented".into(),
                 labels: {
                     let mut spans = spans.iter().cloned();
                     let first = spans
@@ -1402,11 +1543,12 @@ impl<'a> Error<'a> {
                         .chain(spans.map(|span| (span, "".into())))
                         .collect()
                 },
-                notes: vec![format!(concat!(
+                notes: vec![concat!(
                     "Let Naga maintainers know that you ran into this at ",
                     "<https://github.com/gfx-rs/wgpu/issues/5320>, ",
                     "so they can prioritize it!"
-                ))],
+                ).into()],
+                message: "`@diagnostic(…)` attribute(s) not yet implemented".into(),
             },
             Error::DiagnosticAttributeNotSupported { on_what, ref spans } => {
                 // In this case the user may have intended to create a global diagnostic filter directive,
@@ -1426,7 +1568,7 @@ impl<'a> Error<'a> {
                 ParseError {
                     message: format!(
                         "`@diagnostic(…)` attribute(s) on {on_what_plural} are not supported",
-                    ),
+                    ).into(),
                     labels: spans
                         .iter()
                         .cloned()
@@ -1458,9 +1600,9 @@ impl<'a> Error<'a> {
                 }
             }
             Error::SelectUnexpectedArgumentType { arg_span, ref arg_type } => ParseError {
-                message: "unexpected argument type for `select` call".into(),
-                labels: vec![(arg_span, format!("this value of type {arg_type}").into())],
+                labels: vec![(*arg_span, format!("this value of type {arg_type}").into())],
                 notes: vec!["expected a scalar or a `vecN` of scalars".into()],
+                message: "unexpected argument type for `select` call".into(),
             },
             Error::SelectRejectAndAcceptHaveNoCommonType {
                 reject_span,
@@ -1468,102 +1610,55 @@ impl<'a> Error<'a> {
                 accept_span,
                 ref accept_type,
             } => ParseError {
-                message: "type mismatch for reject and accept values in `select` call".into(),
                 labels: vec![
-                    (reject_span, format!("reject value of type {reject_type}").into()),
-                    (accept_span, format!("accept value of type {accept_type}").into()),
+                    (*reject_span, format!("reject value of type {reject_type}").into()),
+                    (*accept_span, format!("accept value of type {accept_type}").into()),
                 ],
-                notes: vec![],
-            },
-            Error::ExpectedGlobalVariable { name_span } => ParseError {
-                message: "expected global variable".to_string(),
-                labels: vec![(name_span, "variable used here".into())],
+                message: "type mismatch for reject and accept values in `select` call".into(),
                 notes: vec![],
             },
             Error::StructMemberTooLarge { member_name_span } => ParseError {
-                message: "struct member is too large".into(),
-                labels: vec![(member_name_span, "this member exceeds the maximum size".into())],
+                labels: vec![(*member_name_span, "this member exceeds the maximum size".into())],
                 notes: vec![format!(
                     "the maximum size is {} bytes",
                     crate::valid::MAX_TYPE_SIZE
-                )],
+                ).into()],
+                message: "struct member is too large".into(),
             },
             Error::TypeTooLarge { span } => ParseError {
-                message: "type is too large".into(),
-                labels: vec![(span, "this type exceeds the maximum size".into())],
+                labels: vec![(*span, "this type exceeds the maximum size".into())],
                 notes: vec![format!(
                     "the maximum size is {} bytes",
                     crate::valid::MAX_TYPE_SIZE
-                )],
+                ).into()],
+                message: "type is too large".into(),
             },
             Error::UnderspecifiedCooperativeMatrix => ParseError {
-                message: "cooperative matrix constructor is underspecified".into(),
                 labels: vec![],
-                notes: vec![format!("must be F32")],
+                notes: vec!["must be F32".into()],
+                message: "cooperative matrix constructor is underspecified".into(),
             },
             Error::InvalidCooperativeLoadType(span) => ParseError {
+                labels: vec![(*span, "type needs the coop_mat<...>".into())],
+                notes: vec!["must be a valid cooperative type".into()],
                 message: "cooperative load should have a generic type for coop_mat".into(),
-                labels: vec![(span, "type needs the coop_mat<...>".into())],
-                notes: vec![format!("must be a valid cooperative type")],
             },
             Error::UnsupportedCooperativeScalar(span) => ParseError {
+                labels: vec![(*span, "type needs the scalar type specified".into())],
+                notes: vec!["must be F32".into()],
                 message: "cooperative scalar type is not supported".into(),
-                labels: vec![(span, "type needs the scalar type specified".into())],
-                notes: vec![format!("must be F32")],
-            },
-            Error::UnexpectedIdentForEnumerant(ident_span) => ParseError {
-                message: format!(
-                    "identifier `{}` resolves to a declaration",
-                    &source[ident_span]
-                ),
-                labels: vec![(ident_span, "needs to resolve to a predeclared enumerant".into())],
-                notes: vec![],
-            },
-            Error::UnexpectedExprForEnumerant(expr_span) => ParseError {
-                message: "unexpected expression".to_string(),
-                labels: vec![(expr_span, "needs to be an identifier resolving to a predeclared enumerant".into())],
-                notes: vec![],
             },
             Error::UnusedArgsForTemplate(ref expr_spans) => ParseError {
-                message: "unused expressions for template".to_string(),
                 labels: expr_spans.iter().cloned().map(|span| -> (_, _){ (span, "unused".into()) }).collect(),
-                notes: vec![],
-            },
-            Error::UnexpectedTemplate(span) => ParseError {
-                message: "unexpected template".to_string(),
-                labels: vec![(span, "expected identifier".into())],
-                notes: vec![],
-            },
-            Error::MissingTemplateArg {
-                span,
-                description: arg,
-            } => ParseError {
-                message: format!(
-                    "`{}` needs a template argument specified: {arg}",
-                    &source[span]
-                ),
-                labels: vec![(span, "is missing a template argument".into())],
-                notes: vec![],
-            },
-            Error::UnexpectedExprForTypeExpression(expr_span) => ParseError {
-                message: "unexpected expression".to_string(),
-                labels: vec![(expr_span, "needs to be an identifier resolving to a type declaration (alias or struct) or predeclared type(-generator)".into())],
-                notes: vec![],
-            },
-            Error::MissingIncomingPayload(span) => ParseError {
-                message: "incoming payload is missing on a `closest_hit`, `any_hit` or `miss` shader entry point".to_string(),
-                labels: vec![(
-                    span,
-                    "must be paired with a `@incoming_payload` attribute".into(),
-                )],
+                message: "unused expressions for template".into(),
                 notes: vec![],
             },
             Error::UnterminatedBlockComment(span) => ParseError {
-                message: "unterminated block comment".to_string(),
                 labels: vec![(
-                    span,
+                    *span,
                     "must be closed with `*/`".into(),
                 )],
+                message: "unterminated block comment".into(),
                 notes: vec![],
             }
         }

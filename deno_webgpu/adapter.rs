@@ -2,6 +2,7 @@
 
 use std::ops::BitOr;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use deno_core::cppgc::SameObject;
 use deno_core::op2;
@@ -16,7 +17,6 @@ use super::device::DEVICE_EXTERNAL_MEMORY_SIZE;
 use super::queue::GPUQueue;
 use crate::error::GPUGenericError;
 use crate::webidl::GPUFeatureName;
-use crate::Instance;
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
@@ -49,18 +49,11 @@ struct GPUDeviceDescriptor {
 }
 
 pub struct GPUAdapter {
-  pub instance: Instance,
-  pub id: wgpu_core::id::AdapterId,
+  pub wgpu_adapter: Arc<wgpu_core::instance::Adapter>,
 
   pub features: SameObject<GPUSupportedFeatures>,
   pub limits: SameObject<GPUSupportedLimits>,
   pub info: Rc<SameObject<GPUAdapterInfo>>,
-}
-
-impl Drop for GPUAdapter {
-  fn drop(&mut self) {
-    self.instance.adapter_drop(self.id);
-  }
 }
 
 impl GarbageCollected for GPUAdapter {
@@ -81,7 +74,7 @@ impl GPUAdapter {
   #[global]
   fn info(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
     self.info.get(scope, |_| {
-      let info = self.instance.adapter_get_info(self.id);
+      let info = self.wgpu_adapter.get_info();
 
       GPUAdapterInfo { info }
     })
@@ -91,7 +84,7 @@ impl GPUAdapter {
   #[global]
   fn features(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
     self.features.get(scope, |scope| {
-      let features = self.instance.adapter_features(self.id);
+      let features = self.wgpu_adapter.features();
       // Only expose WebGPU features, not wgpu native-only features
       let features = features & wgpu_types::Features::all_webgpu_mask();
       GPUSupportedFeatures::new(scope, features)
@@ -102,7 +95,7 @@ impl GPUAdapter {
   #[global]
   fn limits(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
     self.limits.get(scope, |_| {
-      let adapter_limits = self.instance.adapter_limits(self.id);
+      let adapter_limits = self.wgpu_adapter.limits();
       GPUSupportedLimits(adapter_limits)
     })
   }
@@ -115,7 +108,7 @@ impl GPUAdapter {
     scope: &mut v8::HandleScope,
     #[webidl] descriptor: GPUDeviceDescriptor,
   ) -> Result<v8::Global<v8::Value>, CreateDeviceError> {
-    let supported_features = self.instance.adapter_features(self.id);
+    let supported_features = self.wgpu_adapter.features();
     let required_features = descriptor
       .required_features
       .iter()
@@ -161,12 +154,7 @@ impl GPUAdapter {
       trace,
     };
 
-    let (device, queue) = self.instance.adapter_request_device(
-      self.id,
-      &wgpu_descriptor,
-      None,
-      None,
-    )?;
+    let (device, queue) = self.wgpu_adapter.request_device(&wgpu_descriptor)?;
 
     // Associate external memory with the device to encourage V8 to garbage
     // collect devices promptly.
@@ -187,23 +175,21 @@ impl GPUAdapter {
     let queue_obj = deno_core::cppgc::make_cppgc_object(
       scope,
       GPUQueue {
-        instance: self.instance.clone(),
         error_handler: error_handler.clone(),
         label: descriptor.label.clone(),
-        id: queue,
-        device,
+        wgpu_queue: queue,
+        wgpu_device: device.clone(),
       },
     );
     let queue_obj = v8::Global::new(scope, queue_obj);
 
     let device = GPUDevice {
-      instance: self.instance.clone(),
-      id: device,
+      wgpu_device: device,
       label: descriptor.label,
       queue_obj,
       adapter_info: self.info.clone(),
       error_handler,
-      adapter: self.id,
+      wgpu_adapter: self.wgpu_adapter.clone(),
       lost_promise: v8::Global::new(scope, lost_promise),
       limits: SameObject::new(),
       features: SameObject::new(),

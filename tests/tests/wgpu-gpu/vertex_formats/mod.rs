@@ -4,7 +4,7 @@ use std::num::NonZeroU64;
 
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.extend([VERTEX_FORMATS_ALL, VERTEX_FORMATS_10_10_10_2]);
@@ -413,7 +413,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
     assert!(!failed);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static VERTEX_FORMATS_ALL: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -429,7 +429,7 @@ static VERTEX_FORMATS_ALL: GpuTestConfiguration = GpuTestConfiguration::new()
 
 // Some backends can handle Unorm-10-10-2, but GL backends seem to throw this error:
 // Validation Error: GL_INVALID_ENUM in glVertexAttribFormat(type = GL_UNSIGNED_INT_10_10_10_2)
-#[gpu_test]
+#[apply(gpu_test!)]
 static VERTEX_FORMATS_10_10_10_2: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

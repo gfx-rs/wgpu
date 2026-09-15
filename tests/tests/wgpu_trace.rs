@@ -15,7 +15,7 @@ enum TestType {
 }
 
 fn trace_test(test_type: TestType) {
-    let global = wgc::global::Global::new(
+    let instance = wgc::instance::Instance::new(
         "test",
         wgt::instance::InstanceDescriptor {
             backends: wgt::Backends::NOOP,
@@ -27,94 +27,60 @@ fn trace_test(test_type: TestType) {
         },
         None,
     );
-    let adapter_id = global
-        .request_adapter(
-            &wgt::RequestAdapterOptions::default(),
-            wgt::Backends::NOOP,
-            None,
-        )
+    let adapter = instance
+        .request_adapter(&wgt::RequestAdapterOptions::default(), wgt::Backends::NOOP)
         .unwrap();
-    let (device_id, queue_id) = global
-        .adapter_request_device(
-            adapter_id,
-            &wgt::DeviceDescriptor {
-                trace: wgt::Trace::Memory,
-                ..Default::default()
-            },
-            None,
-            None,
-        )
+    let (device, queue) = adapter
+        .request_device(&wgt::DeviceDescriptor {
+            trace: wgt::Trace::Memory,
+            ..Default::default()
+        })
         .unwrap();
 
-    let (buffer_id, error) = global.device_create_buffer(
-        device_id,
-        &wgt::BufferDescriptor {
-            label: None,
-            size: 1024,
-            usage: wgt::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        },
-        None,
-    );
+    let (buffer, error) = device.create_buffer(&wgt::BufferDescriptor {
+        label: None,
+        size: 1024,
+        usage: wgt::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
     assert!(error.is_none());
 
-    let (encoder_id, error) = global.device_create_command_encoder(
-        device_id,
-        &wgt::CommandEncoderDescriptor::default(),
-        None,
-    );
+    let (encoder, error) = device.create_command_encoder(&wgt::CommandEncoderDescriptor::default());
     assert!(error.is_none());
 
     match test_type {
         TestType::Normal => {
-            global
-                .command_encoder_clear_buffer(encoder_id, buffer_id, 0, None)
-                .unwrap();
-            let (cmdbuf_id, error) = global.command_encoder_finish(
-                encoder_id,
-                &wgt::CommandBufferDescriptor::default(),
-                None,
-            );
+            encoder.clear_buffer(buffer, 0, None).unwrap();
+            let (cmdbuf, error) = encoder.finish(&wgt::CommandBufferDescriptor::default());
             assert!(error.is_none());
-            global.queue_submit(queue_id, &[cmdbuf_id]).unwrap();
+            queue.submit(&[cmdbuf]).unwrap();
         }
         TestType::FailedCommands => {
             // Try to clear past the end of the buffer.
-            global
-                .command_encoder_clear_buffer(encoder_id, buffer_id, 0, Some(2048))
-                .unwrap();
-            let (_cmdbuf_id, error) = global.command_encoder_finish(
-                encoder_id,
-                &wgt::CommandBufferDescriptor::default(),
-                None,
-            );
+            encoder.clear_buffer(buffer, 0, Some(2048)).unwrap();
+            let (_cmdbuf, error) = encoder.finish(&wgt::CommandBufferDescriptor::default());
             assert!(error.is_some());
         }
         TestType::FailedSubmit => {
             // Destroy the buffer after encoding the clear command, before submitting it.
-            global
-                .command_encoder_clear_buffer(encoder_id, buffer_id, 0, None)
-                .unwrap();
-            let (cmdbuf_id, error) = global.command_encoder_finish(
-                encoder_id,
-                &wgt::CommandBufferDescriptor::default(),
-                None,
-            );
+            encoder.clear_buffer(buffer.clone(), 0, None).unwrap();
+            let (cmdbuf, error) = encoder.finish(&wgt::CommandBufferDescriptor::default());
             assert!(error.is_none());
-            global.buffer_destroy(buffer_id);
-            global.queue_submit(queue_id, &[cmdbuf_id]).unwrap_err();
+            buffer.destroy();
+            queue.submit(&[cmdbuf]).unwrap_err();
         }
     }
 
-    let trace = global.device_take_trace(device_id).unwrap();
+    let trace = device.take_trace().unwrap();
     let trace = (trace.as_ref() as &dyn Any)
         .downcast_ref::<wgc::device::trace::MemoryTrace>()
         .unwrap();
     let actions = trace.actions();
+    dbg!(actions);
 
     match test_type {
         TestType::Normal => {
-            let Some(Action::Submit(_, commands)) = actions.last() else {
+            let [.., Action::Submit(_, commands), Action::DropBuffer(_)] = actions else {
                 panic!("expected last action to be Submit");
             };
             assert_eq!(commands.len(), 1);
@@ -190,7 +156,7 @@ fn trace_failed_submit() {
 
 #[test]
 fn trace_texture_test() {
-    let global = wgc::global::Global::new(
+    let instance = wgc::instance::Instance::new(
         "test",
         wgt::instance::InstanceDescriptor {
             backends: wgt::Backends::NOOP,
@@ -202,23 +168,14 @@ fn trace_texture_test() {
         },
         None,
     );
-    let adapter_id = global
-        .request_adapter(
-            &wgt::RequestAdapterOptions::default(),
-            wgt::Backends::NOOP,
-            None,
-        )
+    let adapter = instance
+        .request_adapter(&wgt::RequestAdapterOptions::default(), wgt::Backends::NOOP)
         .unwrap();
-    let (device_id, _) = global
-        .adapter_request_device(
-            adapter_id,
-            &wgt::DeviceDescriptor {
-                trace: wgt::Trace::Memory,
-                ..Default::default()
-            },
-            None,
-            None,
-        )
+    let (device, _) = adapter
+        .request_device(&wgt::DeviceDescriptor {
+            trace: wgt::Trace::Memory,
+            ..Default::default()
+        })
         .unwrap();
 
     let desc = wgt::TextureDescriptor {
@@ -236,16 +193,16 @@ fn trace_texture_test() {
         view_formats: Vec::new(),
     };
 
-    let (texture_id, error) = global.device_create_texture(device_id, &desc, None);
+    let (texture, error) = device.create_texture(&desc);
 
     assert!(error.is_none());
 
-    let texture_error_id = global.create_texture_error(device_id, None, &desc);
+    let texture_error = device.create_texture_error(&desc);
 
-    global.texture_drop(texture_id);
-    global.texture_drop(texture_error_id);
+    drop(texture);
+    drop(texture_error);
 
-    let trace = global.device_take_trace(device_id).unwrap();
+    let trace = device.take_trace().unwrap();
     let trace = (trace.as_ref() as &dyn Any)
         .downcast_ref::<wgc::device::trace::MemoryTrace>()
         .unwrap();

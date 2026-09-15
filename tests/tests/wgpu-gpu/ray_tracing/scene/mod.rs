@@ -1,6 +1,6 @@
 use std::{iter, mem};
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 use wgpu::util::DeviceExt;
 
@@ -106,7 +106,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
         .unwrap();
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ACCELERATION_STRUCTURE_BUILD_NO_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -119,7 +119,7 @@ static ACCELERATION_STRUCTURE_BUILD_NO_INDEX: GpuTestConfiguration = GpuTestConf
         acceleration_structure_build(&ctx, false);
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ACCELERATION_STRUCTURE_BUILD_WITH_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

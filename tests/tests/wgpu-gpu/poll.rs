@@ -8,7 +8,8 @@ use wgpu::{
 };
 
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -72,7 +73,7 @@ fn generate_dummy_work(ctx: &TestingContext) -> CommandBuffer {
     cmd_buf.finish()
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WAIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -97,7 +98,7 @@ static WAIT: GpuTestConfiguration = GpuTestConfiguration::new()
 /// proposes propagating the failure by losing the device. If that is implemented, this test
 /// should be updated accordingly. Care may be needed to avoid flakiness in cases where no
 /// termination occurs.
-#[gpu_test]
+#[apply(gpu_test!)]
 static WAIT_INDEFINITELY_LONG_RUNNING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -191,7 +192,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WAIT_WITH_TIMEOUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -206,7 +207,7 @@ static WAIT_WITH_TIMEOUT: GpuTestConfiguration = GpuTestConfiguration::new()
         .unwrap();
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WAIT_WITH_TIMEOUT_MAX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -221,7 +222,7 @@ static WAIT_WITH_TIMEOUT_MAX: GpuTestConfiguration = GpuTestConfiguration::new()
         .unwrap();
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DOUBLE_WAIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -242,7 +243,7 @@ static DOUBLE_WAIT: GpuTestConfiguration = GpuTestConfiguration::new()
         .unwrap();
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WAIT_ON_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -257,7 +258,7 @@ static WAIT_ON_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
         .unwrap();
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WAIT_ON_SUBMISSION_WITH_TIMEOUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -272,7 +273,7 @@ static WAIT_ON_SUBMISSION_WITH_TIMEOUT: GpuTestConfiguration = GpuTestConfigurat
         .unwrap();
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WAIT_ON_SUBMISSION_WITH_TIMEOUT_MAX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -287,7 +288,7 @@ static WAIT_ON_SUBMISSION_WITH_TIMEOUT_MAX: GpuTestConfiguration = GpuTestConfig
         .unwrap();
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -308,7 +309,7 @@ static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::n
         .unwrap();
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WAIT_OUT_OF_ORDER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -335,7 +336,7 @@ static WAIT_OUT_OF_ORDER: GpuTestConfiguration = GpuTestConfiguration::new()
 ///
 /// We can't catch panics on Wasm, since they get reported directly to the
 /// console.
-#[gpu_test]
+#[apply(gpu_test!)]
 static WAIT_AFTER_BAD_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         wgpu_test::TestParameters::default()
@@ -383,7 +384,7 @@ async fn wait_after_bad_submission(ctx: TestingContext) {
 /// > `fence`.
 ///
 /// Regression test for <https://github.com/gfx-rs/wgpu/issues/9498>.
-#[gpu_test]
+#[apply(gpu_test!)]
 static WAIT_ON_FAILED_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(wgpu_test::TestParameters::default())
     .run_async(wait_on_failed_submission);

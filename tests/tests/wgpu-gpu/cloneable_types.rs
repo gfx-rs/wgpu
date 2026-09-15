@@ -1,10 +1,10 @@
-use wgpu_test::{gpu_test, GpuTestInitializer, TestParameters, TestingContext};
+use wgpu_test::{apply, gpu_test, GpuTestInitializer, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(CLONEABLE_BUFFERS);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static CLONEABLE_BUFFERS: GpuTestConfiguration = wgpu_test::GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(cloneable_buffers);

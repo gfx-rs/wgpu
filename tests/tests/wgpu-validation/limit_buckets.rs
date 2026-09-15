@@ -2,6 +2,8 @@
 //!
 //! See [`wgpu_core::limits`].
 
+use std::sync::Arc;
+
 use wgpu_core as wgc;
 use wgpu_types as wgt;
 
@@ -23,8 +25,8 @@ const UPLEVEL_FEATURES: wgt::Features = {
         .union(Features::IMMEDIATES)
 };
 
-fn create_noop_global(options: wgt::NoopBackendOptions) -> wgc::global::Global {
-    wgc::global::Global::new(
+fn create_noop_instance(options: wgt::NoopBackendOptions) -> Arc<wgc::instance::Instance> {
+    wgc::instance::Instance::new(
         "test",
         wgt::instance::InstanceDescriptor {
             backends: wgt::Backends::NOOP,
@@ -40,7 +42,7 @@ fn create_noop_global(options: wgt::NoopBackendOptions) -> wgc::global::Global {
 
 #[test]
 fn enabled() {
-    let global = create_noop_global(wgt::NoopBackendOptions {
+    let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::DiscreteGpu),
         features: Some(wgt::Features::empty()),
@@ -49,20 +51,19 @@ fn enabled() {
         ..Default::default() // noop defaults to max limits
     });
 
-    let adapter_id = global
+    let adapter = instance
         .request_adapter(
             &wgt::RequestAdapterOptions {
                 apply_limit_buckets: true,
                 ..Default::default()
             },
             wgt::Backends::NOOP,
-            None,
         )
         .unwrap();
 
-    let limits = global.adapter_limits(adapter_id);
-    let features = global.adapter_features(adapter_id);
-    let info = global.adapter_get_info(adapter_id);
+    let limits = adapter.limits();
+    let features = adapter.features();
+    let info = adapter.get_info();
 
     // Max limits should be replaced with "default"
     assert_eq!(limits, wgt::Limits::defaults());
@@ -78,7 +79,7 @@ fn exempt_features() {
         .union(wgt::Features::TEXTURE_FORMAT_P010)
         .union(wgt::Features::TEXTURE_FORMAT_16BIT_NORM);
 
-    let global = create_noop_global(wgt::NoopBackendOptions {
+    let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::DiscreteGpu),
         features: Some(EXEMPT_FEATURES.union(wgt::Features::SUBGROUP)),
@@ -87,20 +88,19 @@ fn exempt_features() {
         ..Default::default() // noop defaults to max limits
     });
 
-    let adapter_id = global
+    let adapter = instance
         .request_adapter(
             &wgt::RequestAdapterOptions {
                 apply_limit_buckets: true,
                 ..Default::default()
             },
             wgt::Backends::NOOP,
-            None,
         )
         .unwrap();
 
-    let limits = global.adapter_limits(adapter_id);
-    let features = global.adapter_features(adapter_id);
-    let info = global.adapter_get_info(adapter_id);
+    let limits = adapter.limits();
+    let features = adapter.features();
+    let info = adapter.get_info();
 
     // Max limits should be replaced with "default" bucket
     assert_eq!(limits, wgt::Limits::defaults());
@@ -111,7 +111,7 @@ fn exempt_features() {
 
 #[test]
 fn limits_below_minimums_returns_no_adapter() {
-    let global = create_noop_global(wgt::NoopBackendOptions {
+    let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         limits: Some(wgt::Limits {
             max_texture_dimension_2d: 1024,
@@ -122,13 +122,12 @@ fn limits_below_minimums_returns_no_adapter() {
         ..Default::default()
     });
 
-    let result = global.request_adapter(
+    let result = instance.request_adapter(
         &wgt::RequestAdapterOptions {
             apply_limit_buckets: true,
             ..Default::default()
         },
         wgt::Backends::NOOP,
-        None,
     );
 
     // Device is below WebGPU minimums, so no bucket matches
@@ -137,44 +136,38 @@ fn limits_below_minimums_returns_no_adapter() {
 
 #[test]
 fn device_creation_exceeding_bucket_fails() {
-    let global = create_noop_global(wgt::NoopBackendOptions {
+    let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::DiscreteGpu),
         features: Some(wgt::Features::empty()),
         ..Default::default()
     });
 
-    let adapter_id = global
+    let adapter = instance
         .request_adapter(
             &wgt::RequestAdapterOptions {
                 apply_limit_buckets: true,
                 ..Default::default()
             },
             wgt::Backends::NOOP,
-            None,
         )
         .unwrap();
 
     // The "default" bucket has max_bind_groups = 4
-    let result = global.adapter_request_device(
-        adapter_id,
-        &wgt::DeviceDescriptor {
-            required_limits: wgt::Limits {
-                max_bind_groups: 8,
-                ..wgt::Limits::default()
-            },
-            ..Default::default()
+    let result = adapter.request_device(&wgt::DeviceDescriptor {
+        required_limits: wgt::Limits {
+            max_bind_groups: 8,
+            ..wgt::Limits::default()
         },
-        None,
-        None,
-    );
+        ..Default::default()
+    });
 
     assert!(result.is_err());
 }
 
 #[test]
 fn subgroup_sizes_fixed_when_unsupported() {
-    let global = create_noop_global(wgt::NoopBackendOptions {
+    let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::DiscreteGpu),
         features: Some(wgt::Features::empty()),
@@ -183,19 +176,18 @@ fn subgroup_sizes_fixed_when_unsupported() {
         ..Default::default()
     });
 
-    let adapter_id = global
+    let adapter = instance
         .request_adapter(
             &wgt::RequestAdapterOptions {
                 apply_limit_buckets: true,
                 ..Default::default()
             },
             wgt::Backends::NOOP,
-            None,
         )
         .unwrap();
 
-    let info = global.adapter_get_info(adapter_id);
-    let features = global.adapter_features(adapter_id);
+    let info = adapter.get_info();
+    let features = adapter.features();
 
     // Since the "default" bucket doesn't have the `subgroups` feature:
     //  - bucket match should succeed despite subgroup size range being narrower than bucket,
@@ -208,25 +200,24 @@ fn subgroup_sizes_fixed_when_unsupported() {
 #[test]
 fn fallback_adapter() {
     // DeviceType::Cpu with empty features should match "fallback" bucket
-    let global = create_noop_global(wgt::NoopBackendOptions {
+    let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::Cpu),
         features: Some(wgt::Features::empty()),
         ..Default::default()
     });
 
-    let adapter_id = global
+    let adapter = instance
         .request_adapter(
             &wgt::RequestAdapterOptions {
                 apply_limit_buckets: true,
                 ..Default::default()
             },
             wgt::Backends::NOOP,
-            None,
         )
         .unwrap();
 
-    let info = global.adapter_get_info(adapter_id);
+    let info = adapter.get_info();
 
     // Should match fallback bucket which is a CPU/fallback adapter
     assert_eq!(info.device_type, wgt::DeviceType::Cpu);
@@ -244,7 +235,7 @@ fn subgroup_max_above_bucket() {
     // This device is disqualified from all tiers besides NO_F16 due to not
     // having f16 support, and disqualified from NO_F16 due to the subgroup max
     // size.
-    let global = create_noop_global(wgt::NoopBackendOptions {
+    let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::DiscreteGpu),
         subgroup_min_size: Some(32),
@@ -253,18 +244,17 @@ fn subgroup_max_above_bucket() {
         ..Default::default()
     });
 
-    let adapter_id = global
+    let adapter = instance
         .request_adapter(
             &wgt::RequestAdapterOptions {
                 apply_limit_buckets: true,
                 ..Default::default()
             },
             wgt::Backends::NOOP,
-            None,
         )
         .unwrap();
 
-    let features = global.adapter_features(adapter_id);
+    let features = adapter.features();
 
     assert!(!features.contains(wgt::Features::SUBGROUP));
 }
@@ -274,7 +264,7 @@ fn subgroup_min_below_bucket() {
     // The uplevel buckets with smallest subgroup_min_size are M1 (4) and I1/I2 (8). We
     // construct a device that has subgroup_min_size = 7 and max_vertex_attributes = 29, so
     // that it will not qualify for any UPLEVEL bucket (which means it won't get subgroups).
-    let global = create_noop_global(wgt::NoopBackendOptions {
+    let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::DiscreteGpu),
         subgroup_min_size: Some(7),
@@ -286,36 +276,35 @@ fn subgroup_min_below_bucket() {
         ..Default::default()
     });
 
-    let adapter_id = global
+    let adapter = instance
         .request_adapter(
             &wgt::RequestAdapterOptions {
                 apply_limit_buckets: true,
                 ..Default::default()
             },
             wgt::Backends::NOOP,
-            None,
         )
         .unwrap();
 
-    let features = global.adapter_features(adapter_id);
+    let features = adapter.features();
 
     assert!(!features.contains(wgt::Features::SUBGROUP));
 }
 
 #[test]
 fn enumerate_adapters_bucketing_enabled() {
-    let global = create_noop_global(wgt::NoopBackendOptions {
+    let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         device_type: Some(wgt::DeviceType::DiscreteGpu),
         features: Some(wgt::Features::SUBGROUP),
         ..Default::default()
     });
 
-    let adapters = global.enumerate_adapters(wgt::Backends::NOOP, true);
+    let adapters = instance.enumerate_adapters(wgt::Backends::NOOP, true);
     assert_eq!(adapters.len(), 1);
 
-    let adapter_id = adapters[0];
-    let limits = global.adapter_limits(adapter_id);
+    let adapter = &adapters[0];
+    let limits = adapter.limits();
 
     // With bucketing, should have bucketed limits
     assert_eq!(limits, wgt::Limits::defaults());
@@ -328,17 +317,17 @@ fn enumerate_adapters_bucketing_disabled() {
         ..wgt::Limits::default()
     };
 
-    let global = create_noop_global(wgt::NoopBackendOptions {
+    let instance = create_noop_instance(wgt::NoopBackendOptions {
         enable: true,
         limits: Some(custom_limits),
         ..Default::default()
     });
 
-    let adapters = global.enumerate_adapters(wgt::Backends::NOOP, false);
+    let adapters = instance.enumerate_adapters(wgt::Backends::NOOP, false);
     assert_eq!(adapters.len(), 1);
 
-    let adapter_id = adapters[0];
-    let limits = global.adapter_limits(adapter_id);
+    let adapter = &adapters[0];
+    let limits = adapter.limits();
 
     // Without bucketing, should have raw limits
     assert_eq!(limits.max_bind_groups, 99);

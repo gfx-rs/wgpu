@@ -1,6 +1,7 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use deno_core::cppgc::Ptr;
 use deno_core::op2;
@@ -20,18 +21,10 @@ use crate::sampler::GPUSampler;
 use crate::texture::GPUExternalTexture;
 use crate::texture::GPUTexture;
 use crate::texture::GPUTextureView;
-use crate::Instance;
 
 pub struct GPUBindGroup {
-  pub instance: Instance,
-  pub id: wgpu_core::id::BindGroupId,
+  pub wgpu_bind_group: Arc<wgpu_core::binding_model::BindGroup>,
   pub label: String,
-}
-
-impl Drop for GPUBindGroup {
-  fn drop(&mut self) {
-    self.instance.bind_group_drop(self.id);
-  }
 }
 
 impl WebIdlInterfaceConverter for GPUBindGroup {

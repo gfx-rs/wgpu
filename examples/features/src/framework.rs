@@ -526,17 +526,6 @@ impl<E: Example> ApplicationHandler<AppAction> for App<E> {
             | WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
-            #[cfg(not(target_arch = "wasm32"))]
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        logical_key: Key::Character(s),
-                        ..
-                    },
-                ..
-            } if s == "r" => {
-                println!("{:#?}", context.instance.generate_report());
-            }
             WindowEvent::RedrawRequested => {
                 // Don't render while occluded, this may leak on apple platforms.
                 if self.occluded {

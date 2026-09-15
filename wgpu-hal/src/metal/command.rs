@@ -1109,8 +1109,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             );
             self.update_bind_group_state(
                 Encoder::Task(&encoder),
-                // All zeros, as ts comes first
-                super::ResourceData::default(),
+                // ts's resources come right after vs's
+                group.counters.vs.clone(),
                 bg_info,
                 dynamic_offsets,
                 group_index,
@@ -1118,7 +1118,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
             );
             self.update_bind_group_state(
                 Encoder::Mesh(&encoder),
-                group.counters.ts.clone(),
+                super::ResourceData {
+                    buffers: group.counters.vs.buffers + group.counters.ts.buffers,
+                    textures: group.counters.vs.textures + group.counters.ts.textures,
+                    samplers: group.counters.vs.samplers + group.counters.ts.samplers,
+                },
                 bg_info,
                 dynamic_offsets,
                 group_index,

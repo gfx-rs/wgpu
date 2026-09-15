@@ -1,5 +1,5 @@
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -30,7 +30,7 @@ pub fn validate_capabilities(ctx: TestingContext) {
     assert_eq!(diff, Caps::empty());
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static VALIDATE_CAPABILITIES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

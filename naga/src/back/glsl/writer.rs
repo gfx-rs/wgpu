@@ -2128,7 +2128,10 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, ", ")?;
                         if let crate::AtomicFunction::Subtract = *fun {
                             // Emulate `atomicSub` with `atomicAdd` by negating the value.
-                            write!(self.out, "-")?;
+                            //
+                            // Use a space to avoid accidentally producing a prefix increment
+                            // (`--`).
+                            write!(self.out, "- ")?;
                         }
                         self.write_expr(value, ctx)?;
                         writeln!(self.out, ");")?;

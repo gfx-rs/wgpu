@@ -2,6 +2,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use deno_core::futures::channel::oneshot;
@@ -14,7 +15,6 @@ use deno_error::JsErrorBox;
 use wgpu_core::device::HostMap as MapMode;
 
 use crate::error::GPUGenericError;
-use crate::Instance;
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
@@ -46,11 +46,10 @@ pub enum BufferError {
 }
 
 pub struct GPUBuffer {
-  pub instance: Instance,
   pub error_handler: super::error::ErrorHandler,
 
-  pub id: wgpu_core::id::BufferId,
-  pub device: wgpu_core::id::DeviceId,
+  pub wgpu_buffer: Arc<wgpu_core::resource::Buffer>,
+  pub wgpu_device: Arc<wgpu_core::device::Device>,
 
   pub label: String,
 
@@ -61,12 +60,6 @@ pub struct GPUBuffer {
   pub map_mode: RefCell<Option<MapMode>>,
 
   pub mapped_js_buffers: RefCell<Vec<v8::Global<v8::ArrayBuffer>>>,
-}
-
-impl Drop for GPUBuffer {
-  fn drop(&mut self) {
-    self.instance.buffer_drop(self.id);
-  }
 }
 
 impl WebIdlInterfaceConverter for GPUBuffer {
@@ -152,9 +145,8 @@ impl GPUBuffer {
       });
 
       let err = self
-        .instance
-        .buffer_map_async(
-          self.id,
+        .wgpu_buffer
+        .map_async(
           offset,
           size,
           wgpu_core::resource::BufferMapOperation {
@@ -176,8 +168,8 @@ impl GPUBuffer {
       while !*done.borrow() {
         {
           self
-            .instance
-            .device_poll(self.device, wgpu_types::PollType::wait_indefinitely())
+            .wgpu_device
+            .poll(wgpu_types::PollType::wait_indefinitely())
             .unwrap();
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -207,8 +199,8 @@ impl GPUBuffer {
     #[webidl] size: Option<u64>,
   ) -> Result<v8::Local<'s, v8::ArrayBuffer>, BufferError> {
     let (slice_pointer, range_size) = self
-      .instance
-      .buffer_get_mapped_range(self.id, offset, size)
+      .wgpu_buffer
+      .get_mapped_range(offset, size)
       .map_err(BufferError::Access)?;
 
     let mode = self.map_mode.borrow();
@@ -260,10 +252,7 @@ impl GPUBuffer {
       ab.detach(None);
     }
 
-    self
-      .instance
-      .buffer_unmap(self.id)
-      .map_err(BufferError::Access)?;
+    self.wgpu_buffer.unmap().map_err(BufferError::Access)?;
 
     *self.map_state.borrow_mut() = "unmapped";
 
@@ -273,6 +262,6 @@ impl GPUBuffer {
   #[fast]
   #[undefined]
   fn destroy(&self) {
-    self.instance.buffer_destroy(self.id);
+    self.wgpu_buffer.destroy();
   }
 }

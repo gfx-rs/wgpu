@@ -1,5 +1,5 @@
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -12,7 +12,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 }
 
 /// Make sure that the num_workgroups builtin works properly (it requires a workaround on D3D12).
-#[gpu_test]
+#[apply(gpu_test!)]
 static NUM_WORKGROUPS_BUILTIN: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -32,7 +32,7 @@ static NUM_WORKGROUPS_BUILTIN: GpuTestConfiguration = GpuTestConfiguration::new(
     });
 
 /// Make sure that we discard (don't run) the dispatch if its size exceeds the device limit.
-#[gpu_test]
+#[apply(gpu_test!)]
 static DISCARD_DISPATCH: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -63,7 +63,7 @@ static DISCARD_DISPATCH: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 /// Make sure that resetting the bind groups set by the validation code works properly.
-#[gpu_test]
+#[apply(gpu_test!)]
 static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -105,7 +105,7 @@ static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 /// Make sure that zero sized buffer validation is raised.
-#[gpu_test]
+#[apply(gpu_test!)]
 static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

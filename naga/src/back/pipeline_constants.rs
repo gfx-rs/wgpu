@@ -54,6 +54,10 @@ pub enum PipelineConstantError {
 /// invalid results (e.g. replace an invalid expression with a constant) for
 /// invalid modules.
 ///
+/// If `entry_point` is specified, remove all other entry points from the
+/// returned module. Without this, re-validation will fail if any entry point
+/// uses an override whose value wasn't provided.
+///
 /// If no changes are needed, this just returns `Cow::Borrowed` references to
 /// `module` and `module_info`. Otherwise, it clones `module`, retains only the
 /// selected entry point, compacts the module, edits its [`global_expressions`]

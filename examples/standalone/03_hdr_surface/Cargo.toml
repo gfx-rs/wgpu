@@ -10,7 +10,7 @@ winit = { version = "0.30.8", features = ["android-native-activity"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11"
-pollster = "0.4"
+pollster = "1.0"
 
 # macOS: observe screen-parameter changes to re-query HDR info (winit has no event for it).
 [target.'cfg(target_os = "macos")'.dependencies]

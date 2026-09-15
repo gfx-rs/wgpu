@@ -1,11 +1,11 @@
 use super::*;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters};
 
 // These tests are split into `COOPERATIVE_MATRIX_F16` and
 // `COOPERATIVE_MATRIX_F32` because the latter can run without
 // `wgpu::Features::SHADER_F16`.
 
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static COOPERATIVE_MATRIX_F32: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -45,7 +45,7 @@ pub static COOPERATIVE_MATRIX_F32: GpuTestConfiguration = GpuTestConfiguration::
         assert!(max_error < tolerance);
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 pub static COOPERATIVE_MATRIX_F16: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

@@ -5,9 +5,9 @@ use wgpu::{
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, InstanceFlags,
 };
 use wgpu::{AccelerationStructureFlags, BufferUsages};
-use wgpu_macros::gpu_test;
-use wgpu_test::GpuTestInitializer;
-use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
 
 const STRUCT_SIZE: wgpu::BufferAddress = 176;
 
@@ -16,7 +16,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.push(PREVENT_INVALID_RAY_QUERY_CALLS);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ACCESS_ALL_STRUCT_MEMBERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -106,7 +106,7 @@ fn access_all_struct_members(ctx: TestingContext) {
     ctx.queue.submit([encoder_compute.finish()]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PREVENT_INVALID_RAY_QUERY_CALLS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         // Don't disable metal shader validation in `TestParameters` because

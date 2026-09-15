@@ -173,10 +173,7 @@ pub enum Action<'a, R: ReferenceType> {
     DropBindGroupLayout(PointerId<markers::BindGroupLayout>),
     CreatePipelineLayout(
         PointerId<markers::PipelineLayout>,
-        crate::binding_model::ResolvedPipelineLayoutDescriptor<
-            'a,
-            PointerId<markers::BindGroupLayout>,
-        >,
+        crate::binding_model::PipelineLayoutDescriptor<'a, PointerId<markers::BindGroupLayout>>,
     ),
     DropPipelineLayout(PointerId<markers::PipelineLayout>),
     CreateBindGroup(PointerId<markers::BindGroup>, TraceBindGroupDescriptor<'a>),

@@ -2,14 +2,14 @@ use std::num::{NonZeroU32, NonZeroU64};
 
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.extend([BINDING_ARRAY_SAMPLERS, PARTIAL_BINDING_ARRAY_SAMPLERS]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BINDING_ARRAY_SAMPLERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -32,7 +32,7 @@ static BINDING_ARRAY_SAMPLERS: GpuTestConfiguration = GpuTestConfiguration::new(
     )
     .run_async(|ctx| async move { binding_array_samplers(ctx, false).await });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PARTIAL_BINDING_ARRAY_SAMPLERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

@@ -1,7 +1,9 @@
-use crate::link_to_wgpu_item;
+use macro_rules_attribute::derive;
+
+use crate::{link_to_wgpu_item, ConstDefault};
 
 /// Token of the user agreeing to access experimental features.
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, ConstDefault!, Copy, Clone, Eq, PartialEq)]
 pub struct ExperimentalFeatures {
     enabled: bool,
 }
