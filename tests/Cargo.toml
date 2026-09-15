@@ -63,6 +63,7 @@ bitflags.workspace = true
 bytemuck.workspace = true
 cfg-if.workspace = true
 exhaust.workspace = true
+fern.workspace = true
 futures-lite.workspace = true
 libtest-mimic.workspace = true
 macro_rules_attribute.workspace = true
