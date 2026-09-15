@@ -147,22 +147,6 @@ enum WebShaderCompilationInfo {
     },
 }
 
-fn map_utf16_to_utf8_offset(utf16_offset: u32, text: &str) -> u32 {
-    let mut utf16_i = 0;
-    for (utf8_index, c) in text.char_indices() {
-        if utf16_i >= utf16_offset {
-            return utf8_index as u32;
-        }
-        utf16_i += c.len_utf16() as u32;
-    }
-    if utf16_i >= utf16_offset {
-        text.len() as u32
-    } else {
-        log::error!("UTF16 offset {utf16_offset} is out of bounds for string {text}");
-        u32::MAX
-    }
-}
-
 fn compilation_message_from_js(
     js_message: webgpu_sys::GpuCompilationMessage,
     compilation_info: &WebShaderCompilationInfo,
@@ -178,20 +162,18 @@ fn compilation_message_from_js(
     let span = match compilation_info {
         WebShaderCompilationInfo::Wgsl { .. } if utf16_offset == 0 && utf16_length == 0 => None,
         WebShaderCompilationInfo::Wgsl { source } => {
-            let offset = map_utf16_to_utf8_offset(utf16_offset, source);
-            let length = map_utf16_to_utf8_offset(utf16_length, &source[offset as usize..]);
             let line_number = js_message.line_num() as u32; // That's legal, because we're counting lines the same way
+            let utf16_line_position = js_message.line_pos() as u32;
 
-            let prefix = &source[..offset as usize];
-            let line_start = prefix.rfind('\n').map(|pos| pos + 1).unwrap_or(0) as u32;
-            let line_position = offset - line_start + 1; // Counting UTF-8 byte indices
-
-            Some(crate::SourceLocation {
-                offset,
-                length,
-                line_number,
-                line_position,
-            })
+            Some(
+                wgt::Utf16SourceLocation {
+                    offset: utf16_offset,
+                    length: utf16_length,
+                    line_number,
+                    line_position: utf16_line_position,
+                }
+                .to_utf8(source),
+            )
         }
         WebShaderCompilationInfo::Transformed { .. } => None,
     };
