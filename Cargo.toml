@@ -219,7 +219,7 @@ unicode-ident = "1.0.5"
 walkdir = "2.3"
 winit = { version = "0.30.8", features = ["android-native-activity"] }
 which = "8"
-xshell = "0.2.2"
+xshell = "0.2.6"
 
 # Metal dependencies
 block2 = "0.6.2"
