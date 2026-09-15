@@ -406,6 +406,7 @@ pub enum Expression<'a> {
         base: Handle<Expression<'a>>,
         field: Ident<'a>,
     },
+    String(&'a str),
 }
 
 #[derive(Debug)]

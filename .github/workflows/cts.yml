@@ -12,7 +12,7 @@ env:
   # Keep in sync with ci.yml
   #
 
-  REPO_MSRV: "1.93"
+  REPO_MSRV: "1.95"
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
@@ -99,12 +99,12 @@ jobs:
           cargo -V
 
       - name: Install `cargo-llvm-cov`
-        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2.83.2
+        uses: taiki-e/install-action@3f74d7c16a4242f1c95561e98edc25d36adb4375 # v2.87.12
         with:
           tool: cargo-llvm-cov
 
       - name: caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # The version number can be incremented for cache busting.
           prefix-key: v3-rust-${{ hashFiles('cts_runner/revision.txt') }}
