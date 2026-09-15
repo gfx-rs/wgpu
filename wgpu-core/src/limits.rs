@@ -579,7 +579,8 @@ mod tests {
                 //.union(Features::TEXTURE_FORMATS_TIER2) not implemented
                 .union(Features::PRIMITIVE_INDEX)
                 .union(Features::TEXTURE_COMPONENT_SWIZZLE)
-                .union(Features::IMMEDIATES),
+                .union(Features::IMMEDIATES)
+                .union(Features::DEBUG_PRINTF),
         );
         assert!(
             difference.is_empty(),
