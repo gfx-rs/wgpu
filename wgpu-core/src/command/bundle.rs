@@ -84,7 +84,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::{convert::Infallible, mem, num::NonZeroU32, ops::Range};
+use core::{convert::Infallible, mem, num::NonZeroU32, ops::Range, str};
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
@@ -97,9 +97,9 @@ use crate::{
     command::{
         bind::Binder,
         pass::{validate_immediates_alignment, ImmediateState},
-        pass_base, ArcReferences, BasePass, BindGroupStateChange, ColorAttachmentError, DrawError,
-        EncoderStateError, MapPassErr, PassErrorScope, PassStateError, RenderCommand,
-        RenderCommandError, StateChange,
+        pass_base, ArcReferences, BasePass, BindGroupStateChange, ColorAttachmentError,
+        DebugGroupError, DrawError, EncoderStateError, MapPassErr, PassErrorScope, PassStateError,
+        RenderCommand, RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -386,6 +386,8 @@ impl RenderBundleEncoder {
         state.trackers.buffers.set_size(indices.buffers.size());
         state.trackers.textures.set_size(indices.textures.size());
 
+        let mut debug_scope_depth = 0usize;
+        let mut debug_string_bytes = 0usize;
         for command in self.base.commands.drain(..) {
             match command {
                 RenderCommand::SetBindGroup {
@@ -512,10 +514,28 @@ impl RenderBundleEncoder {
                 } => {
                     unreachable!("unexpected (multi-)draw indirect with count {count}, vertex_or_index_limits {vertex_or_index_limit:?}, instance_limit {instance_limit:?} found in a render bundle");
                 }
-                RenderCommand::MultiDrawIndirectCount { .. }
-                | RenderCommand::PushDebugGroup { color: _, len: _ }
-                | RenderCommand::InsertDebugMarker { color: _, len: _ }
-                | RenderCommand::PopDebugGroup => {
+                RenderCommand::PushDebugGroup { color, len } => {
+                    debug_scope_depth += 1;
+                    debug_string_bytes += len;
+                    state
+                        .commands
+                        .push(ArcRenderCommand::PushDebugGroup { color, len });
+                }
+                RenderCommand::InsertDebugMarker { color, len } => {
+                    debug_string_bytes += len;
+                    state
+                        .commands
+                        .push(ArcRenderCommand::InsertDebugMarker { color, len });
+                }
+                RenderCommand::PopDebugGroup => {
+                    if debug_scope_depth == 0 {
+                        return Err(DebugGroupError::InvalidPop)
+                            .map_pass_err(PassErrorScope::PopDebugGroup);
+                    }
+                    debug_scope_depth -= 1;
+                    state.commands.push(ArcRenderCommand::PopDebugGroup);
+                }
+                RenderCommand::MultiDrawIndirectCount { .. } => {
                     unimplemented!("not supported by a render bundle")
                 }
                 // Must check the TIMESTAMP_QUERY_INSIDE_PASSES feature
@@ -533,6 +553,11 @@ impl RenderBundleEncoder {
                 | RenderCommand::SetScissor(_) => unreachable!("not supported by a render bundle"),
             }
         }
+
+        if debug_scope_depth != 0 {
+            return Err(DebugGroupError::MissingPop).map_pass_err(PassErrorScope::Bundle);
+        }
+        debug_assert_eq!(debug_string_bytes, self.base.string_data.len());
 
         let State {
             trackers,
@@ -864,9 +889,13 @@ impl RenderBundleEncoder {
         }
     }
 
-    fn push_debug_group_inner(&mut self, _label: &str) -> Result<(), PassStateError> {
+    fn push_debug_group_inner(&mut self, label: &str) -> Result<(), PassStateError> {
         pass_base!(self, PassErrorScope::PushDebugGroup);
-        //TODO
+        self.base.string_data.extend_from_slice(label.as_bytes());
+        self.base.commands.push(RenderCommand::PushDebugGroup {
+            color: 0,
+            len: label.len(),
+        });
         Ok(())
     }
 
@@ -879,7 +908,7 @@ impl RenderBundleEncoder {
 
     fn pop_debug_group_inner(&mut self) -> Result<(), PassStateError> {
         pass_base!(self, PassErrorScope::PopDebugGroup);
-        //TODO
+        self.base.commands.push(RenderCommand::PopDebugGroup);
         Ok(())
     }
 
@@ -890,9 +919,13 @@ impl RenderBundleEncoder {
         }
     }
 
-    fn insert_debug_marker_inner(&mut self, _label: &str) -> Result<(), PassStateError> {
+    fn insert_debug_marker_inner(&mut self, label: &str) -> Result<(), PassStateError> {
         pass_base!(self, PassErrorScope::InsertDebugMarker);
-        //TODO
+        self.base.string_data.extend_from_slice(label.as_bytes());
+        self.base.commands.push(RenderCommand::InsertDebugMarker {
+            color: 0,
+            len: label.len(),
+        });
         Ok(())
     }
 
@@ -1483,193 +1516,220 @@ impl RenderBundle {
             }
         }
 
+        let mut strings = self.base.string_data.as_slice();
+        let mut debug_scope_depth = 0usize;
         use ArcRenderCommand as Cmd;
-        for command in self.base.commands.iter() {
-            match command {
-                Cmd::SetBindGroup {
-                    index,
-                    num_dynamic_offsets,
-                    bind_group,
-                } => {
-                    let raw_bg = bind_group.as_ref().unwrap().try_raw(snatch_guard)?;
-                    unsafe {
-                        raw.set_bind_group(
-                            pipeline_layout
-                                .as_ref()
-                                .unwrap()
-                                .raw()
-                                .expect("PipelineLayout should be valid at this point"),
-                            *index,
-                            raw_bg,
-                            &offsets[..*num_dynamic_offsets],
-                        )
-                    };
-                    offsets = &offsets[*num_dynamic_offsets..];
-                }
-                Cmd::SetPipeline(pipeline) => {
-                    unsafe {
-                        raw.set_render_pipeline(
-                            pipeline
-                                .raw()
-                                .expect("RenderPipeline should be valid when executing bundle"),
-                        )
-                    };
-
-                    pipeline_layout = Some(
-                        pipeline
-                            .layout()
-                            .expect("PipelineLayout should be valid when executing bundle")
-                            .clone(),
-                    );
-                }
-                Cmd::SetIndexBuffer {
-                    buffer,
-                    index_format,
-                    offset,
-                    size,
-                } => {
-                    let buffer = buffer.try_raw(snatch_guard)?;
-                    // SAFETY: The binding size was checked against the buffer size
-                    // in `set_index_buffer` and again in `IndexState::flush`.
-                    let bb = hal::BufferBinding::new_unchecked(
-                        buffer,
-                        *offset,
-                        size.expect(
-                            "Index buffer binding size should already be resolved when executing bundle",
-                        ),
-                    );
-                    unsafe { raw.set_index_buffer(bb, *index_format) };
-                }
-                Cmd::SetVertexBuffer {
-                    slot,
-                    buffer,
-                    offset,
-                    size,
-                } => {
-                    let buffer = buffer.as_ref().unwrap().try_raw(snatch_guard)?;
-                    // SAFETY: The binding size was checked against the buffer size
-                    // in `set_vertex_buffer` and again in `VertexState::flush`.
-                    let bb = hal::BufferBinding::new_unchecked(
-                        buffer,
-                        *offset,
-                        size.expect(
-                            "Vertex buffer binding size should already be resolved when executing bundle",
-                        ),
-                    );
-                    unsafe { raw.set_vertex_buffer(*slot, bb) };
-                }
-                Cmd::SetImmediate { offset, data } => {
-                    let pipeline_layout = pipeline_layout.as_ref().unwrap();
-
-                    // SAFETY: The range of immediates written was validated in `is_ready` before each `flush_immediates`.
-                    unsafe { raw.set_immediates(pipeline_layout.raw().unwrap(), *offset, data) }
-                }
-                Cmd::Draw {
-                    vertex_count,
-                    instance_count,
-                    first_vertex,
-                    first_instance,
-                } => {
-                    unsafe {
-                        raw.draw(
-                            *first_vertex,
-                            *vertex_count,
-                            *first_instance,
-                            *instance_count,
-                        )
-                    };
-                }
-                Cmd::DrawIndexed {
-                    index_count,
-                    instance_count,
-                    first_index,
-                    base_vertex,
-                    first_instance,
-                } => {
-                    unsafe {
-                        raw.draw_indexed(
-                            *first_index,
-                            *index_count,
-                            *base_vertex,
-                            *first_instance,
-                            *instance_count,
-                        )
-                    };
-                }
-                Cmd::DrawMeshTasks {
-                    group_count_x,
-                    group_count_y,
-                    group_count_z,
-                } => unsafe {
-                    raw.draw_mesh_tasks(*group_count_x, *group_count_y, *group_count_z);
-                },
-                Cmd::DrawIndirect {
-                    buffer,
-                    offset,
-                    count: 1,
-                    family,
-
-                    vertex_or_index_limit,
-                    instance_limit,
-                } => {
-                    let (buffer, offset) = if self.device.indirect_validation.is_some()
-                        && *family != DrawCommandFamily::DrawMeshTasks
-                    {
-                        let (dst_resource_index, offset) = indirect_draw_validation_batcher.add(
-                            indirect_draw_validation_resources,
-                            &self.device,
-                            buffer,
-                            *offset,
-                            *family,
-                            vertex_or_index_limit
-                                .expect("finalized render bundle missing vertex_or_index_limit"),
-                            instance_limit.expect("finalized render bundle missing instance_limit"),
-                        )?;
-
-                        let dst_buffer =
-                            indirect_draw_validation_resources.get_dst_buffer(dst_resource_index);
-                        (dst_buffer, offset)
-                    } else {
-                        (buffer.try_raw(snatch_guard)?, *offset)
-                    };
-                    match family {
-                        DrawCommandFamily::Draw => unsafe { raw.draw_indirect(buffer, offset, 1) },
-                        DrawCommandFamily::DrawIndexed => unsafe {
-                            raw.draw_indexed_indirect(buffer, offset, 1)
-                        },
-                        DrawCommandFamily::DrawMeshTasks => unsafe {
-                            raw.draw_mesh_tasks_indirect(buffer, offset, 1);
-                        },
+        let result = (|| {
+            for command in self.base.commands.iter() {
+                match command {
+                    Cmd::SetBindGroup {
+                        index,
+                        num_dynamic_offsets,
+                        bind_group,
+                    } => {
+                        let raw_bg = bind_group.as_ref().unwrap().try_raw(snatch_guard)?;
+                        unsafe {
+                            raw.set_bind_group(
+                                pipeline_layout
+                                    .as_ref()
+                                    .unwrap()
+                                    .raw()
+                                    .expect("PipelineLayout should be valid at this point"),
+                                *index,
+                                raw_bg,
+                                &offsets[..*num_dynamic_offsets],
+                            )
+                        };
+                        offsets = &offsets[*num_dynamic_offsets..];
                     }
-                }
-                Cmd::DrawIndirect { .. } | Cmd::MultiDrawIndirectCount { .. } => {
-                    return Err(ExecutionError::Unimplemented("multi-draw-indirect"))
-                }
-                Cmd::PushDebugGroup { .. } | Cmd::InsertDebugMarker { .. } | Cmd::PopDebugGroup => {
-                    return Err(ExecutionError::Unimplemented("debug-markers"))
-                }
-                Cmd::WriteTimestamp { .. }
-                | Cmd::BeginOcclusionQuery { .. }
-                | Cmd::EndOcclusionQuery
-                | Cmd::BeginPipelineStatisticsQuery { .. }
-                | Cmd::EndPipelineStatisticsQuery => {
-                    return Err(ExecutionError::Unimplemented("queries"))
-                }
-                Cmd::ExecuteBundle(_)
-                | Cmd::SetBlendConstant(_)
-                | Cmd::SetStencilReference(_)
-                | Cmd::SetViewport { .. }
-                | Cmd::SetScissor(_) => unreachable!(),
-            }
-        }
+                    Cmd::SetPipeline(pipeline) => {
+                        unsafe {
+                            raw.set_render_pipeline(
+                                pipeline
+                                    .raw()
+                                    .expect("RenderPipeline should be valid when executing bundle"),
+                            )
+                        };
 
+                        pipeline_layout = Some(
+                            pipeline
+                                .layout()
+                                .expect("PipelineLayout should be valid when executing bundle")
+                                .clone(),
+                        );
+                    }
+                    Cmd::SetIndexBuffer {
+                        buffer,
+                        index_format,
+                        offset,
+                        size,
+                    } => {
+                        let buffer = buffer.try_raw(snatch_guard)?;
+                        let size = size.expect(
+                            "Index buffer binding size should already be resolved when executing bundle",
+                        );
+                        // SAFETY: The binding size was checked against the buffer size
+                        // in `set_index_buffer` and again in `IndexState::flush`.
+                        let bb = hal::BufferBinding::new_unchecked(buffer, *offset, size);
+                        unsafe { raw.set_index_buffer(bb, *index_format) };
+                    }
+                    Cmd::SetVertexBuffer {
+                        slot,
+                        buffer,
+                        offset,
+                        size,
+                    } => {
+                        let buffer = buffer.as_ref().unwrap().try_raw(snatch_guard)?;
+                        let size = size.expect(
+                            "Vertex buffer binding size should already be resolved when executing bundle",
+                        );
+                        // SAFETY: The binding size was checked against the buffer size
+                        // in `set_vertex_buffer` and again in `VertexState::flush`.
+                        let bb = hal::BufferBinding::new_unchecked(buffer, *offset, size);
+                        unsafe { raw.set_vertex_buffer(*slot, bb) };
+                    }
+                    Cmd::SetImmediate { offset, data } => {
+                        let pipeline_layout = pipeline_layout.as_ref().unwrap();
+
+                        // SAFETY: The range of immediates written was validated in `is_ready` before each `flush_immediates`.
+                        unsafe { raw.set_immediates(pipeline_layout.raw().unwrap(), *offset, data) }
+                    }
+                    Cmd::Draw {
+                        vertex_count,
+                        instance_count,
+                        first_vertex,
+                        first_instance,
+                    } => {
+                        unsafe {
+                            raw.draw(
+                                *first_vertex,
+                                *vertex_count,
+                                *first_instance,
+                                *instance_count,
+                            )
+                        };
+                    }
+                    Cmd::DrawIndexed {
+                        index_count,
+                        instance_count,
+                        first_index,
+                        base_vertex,
+                        first_instance,
+                    } => {
+                        unsafe {
+                            raw.draw_indexed(
+                                *first_index,
+                                *index_count,
+                                *base_vertex,
+                                *first_instance,
+                                *instance_count,
+                            )
+                        };
+                    }
+                    Cmd::DrawMeshTasks {
+                        group_count_x,
+                        group_count_y,
+                        group_count_z,
+                    } => unsafe {
+                        raw.draw_mesh_tasks(*group_count_x, *group_count_y, *group_count_z);
+                    },
+                    Cmd::DrawIndirect {
+                        buffer,
+                        offset,
+                        count: 1,
+                        family,
+
+                        vertex_or_index_limit,
+                        instance_limit,
+                    } => {
+                        let (buffer, offset) = if self.device.indirect_validation.is_some()
+                            && *family != DrawCommandFamily::DrawMeshTasks
+                        {
+                            let (dst_resource_index, offset) = indirect_draw_validation_batcher
+                                .add(
+                                    indirect_draw_validation_resources,
+                                    &self.device,
+                                    buffer,
+                                    *offset,
+                                    *family,
+                                    vertex_or_index_limit.expect(
+                                        "finalized render bundle missing vertex_or_index_limit",
+                                    ),
+                                    instance_limit
+                                        .expect("finalized render bundle missing instance_limit"),
+                                )?;
+
+                            let dst_buffer = indirect_draw_validation_resources
+                                .get_dst_buffer(dst_resource_index);
+                            (dst_buffer, offset)
+                        } else {
+                            (buffer.try_raw(snatch_guard)?, *offset)
+                        };
+                        match family {
+                            DrawCommandFamily::Draw => unsafe {
+                                raw.draw_indirect(buffer, offset, 1)
+                            },
+                            DrawCommandFamily::DrawIndexed => unsafe {
+                                raw.draw_indexed_indirect(buffer, offset, 1)
+                            },
+                            DrawCommandFamily::DrawMeshTasks => unsafe {
+                                raw.draw_mesh_tasks_indirect(buffer, offset, 1);
+                            },
+                        }
+                    }
+                    Cmd::DrawIndirect { .. } | Cmd::MultiDrawIndirectCount { .. } => {
+                        return Err(ExecutionError::Unimplemented("multi-draw-indirect"))
+                    }
+                    Cmd::PushDebugGroup { len, .. } | Cmd::InsertDebugMarker { len, .. } => {
+                        let (label, rest) = strings.split_at(*len);
+                        strings = rest;
+                        if !self.discard_hal_labels {
+                            let label = str::from_utf8(label).unwrap();
+                            if matches!(command, Cmd::PushDebugGroup { .. }) {
+                                unsafe { raw.begin_debug_marker(label) };
+                                debug_scope_depth += 1;
+                            } else {
+                                unsafe { raw.insert_debug_marker(label) };
+                            }
+                        }
+                    }
+                    Cmd::PopDebugGroup => {
+                        if !self.discard_hal_labels {
+                            unsafe { raw.end_debug_marker() };
+                            debug_scope_depth -= 1;
+                        }
+                    }
+                    Cmd::WriteTimestamp { .. }
+                    | Cmd::BeginOcclusionQuery { .. }
+                    | Cmd::EndOcclusionQuery
+                    | Cmd::BeginPipelineStatisticsQuery { .. }
+                    | Cmd::EndPipelineStatisticsQuery => {
+                        return Err(ExecutionError::Unimplemented("queries"))
+                    }
+                    Cmd::ExecuteBundle(_)
+                    | Cmd::SetBlendConstant(_)
+                    | Cmd::SetStencilReference(_)
+                    | Cmd::SetViewport { .. }
+                    | Cmd::SetScissor(_) => unreachable!(),
+                }
+            }
+
+            debug_assert!(strings.is_empty());
+            debug_assert_eq!(debug_scope_depth, 0);
+            Ok(())
+        })();
+
+        // Close only this bundle's markers, including on a destroyed-resource error.
         if !self.discard_hal_labels {
-            if let Some(_) = self.base.label {
+            for _ in 0..debug_scope_depth {
+                unsafe { raw.end_debug_marker() };
+            }
+            if self.base.label.is_some() {
                 unsafe { raw.end_debug_marker() };
             }
         }
 
-        Ok(())
+        result
     }
 }
 
@@ -1914,6 +1974,8 @@ impl State {
 #[derive(Clone, Debug, Error)]
 pub enum RenderBundleErrorInner {
     #[error(transparent)]
+    DebugGroup(#[from] DebugGroupError),
+    #[error(transparent)]
     Create(#[from] CreateRenderBundleError),
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -1950,6 +2012,7 @@ pub struct RenderBundleError {
 impl WebGpuError for RenderBundleError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self.inner.as_ref() {
+            RenderBundleErrorInner::DebugGroup(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::Create(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::Device(e) => e.webgpu_error_type(),
             RenderBundleErrorInner::RenderCommand(e) => e.webgpu_error_type(),
