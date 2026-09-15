@@ -90,6 +90,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     // See https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/main/docs/debug_printf.md
     const DEBUG_PRINTF_MESSAGE_ID: i32 = 0x4fe1fef9;
     if cd.message_id_number == DEBUG_PRINTF_MESSAGE_ID {
+        // SAFETY: Vulkan keeps the null-terminated message valid for this callback.
         let message =
             unsafe { cd.message_as_c_str() }.map_or(Cow::Borrowed(""), CStr::to_string_lossy);
 
