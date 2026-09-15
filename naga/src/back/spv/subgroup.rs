@@ -220,4 +220,39 @@ impl BlockContext<'_> {
         self.cached[result] = id;
         Ok(())
     }
+    pub(super) fn write_subgroup_ballot_find_bit(
+        &mut self,
+        order: crate::BallotFindBitOrder,
+        argument: Handle<crate::Expression>,
+        result: Handle<crate::Expression>,
+        block: &mut Block,
+    ) -> Result<(), Error> {
+        self.writer.require_any(
+            "GroupNonUniformBallot",
+            &[spirv::Capability::GroupNonUniformBallot],
+        )?;
+
+        let id = self.gen_id();
+        let result_ty = &self.fun_info[result].ty;
+        let result_type_id = self.get_expression_type_id(result_ty);
+
+        let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
+        let op = match order {
+            crate::BallotFindBitOrder::Lsb => spirv::Op::GroupNonUniformBallotFindLSB,
+            crate::BallotFindBitOrder::Msb => spirv::Op::GroupNonUniformBallotFindMSB,
+        };
+
+        let arg_id = self.cached[argument];
+        block
+            .body
+            .push(Instruction::group_non_uniform_ballot_find_bit(
+                op,
+                result_type_id,
+                id,
+                exec_scope_id,
+                arg_id,
+            ));
+        self.cached[result] = id;
+        Ok(())
+    }
 }

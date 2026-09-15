@@ -152,6 +152,14 @@ impl FunctionTracer<'_> {
                         self.expressions_used.insert(argument);
                         self.expressions_used.insert(result);
                     }
+                    St::SubgroupBallotFindBit {
+                        order: _,
+                        argument,
+                        result,
+                    } => {
+                        self.expressions_used.insert(argument);
+                        self.expressions_used.insert(result);
+                    }
                     St::CooperativeStore { target, ref data } => {
                         self.expressions_used.insert(target);
                         self.expressions_used.insert(data.pointer);
@@ -385,6 +393,14 @@ impl FunctionMap {
                             | crate::GatherMode::QuadBroadcast(ref mut index) => adjust(index),
                             crate::GatherMode::QuadSwap(_) => {}
                         }
+                        adjust(argument);
+                        adjust(result);
+                    }
+                    St::SubgroupBallotFindBit {
+                        order: _,
+                        ref mut argument,
+                        ref mut result,
+                    } => {
                         adjust(argument);
                         adjust(result);
                     }
