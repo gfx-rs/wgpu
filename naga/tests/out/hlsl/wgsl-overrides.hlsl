@@ -1,3 +1,7 @@
+float2 ZeroValuefloat2() {
+    return (float2)0;
+}
+
 static const bool has_point_light = false;
 static const float specular_param = 2.3;
 static const float gain = 1.1;
@@ -9,6 +13,8 @@ static const uint auto_conversion = 0u;
 
 static float gain_x_10_ = 11.0;
 static float store_override = (float)0;
+static float4 override_compose = float4(float2(1.1, 1.0), float2(2.0, 3.0));
+static float4 override_compose_zero_value = float4(ZeroValuefloat2(), 1.1, 1.0);
 
 [numthreads(1, 1, 1)]
 void main()
@@ -21,5 +27,7 @@ void main()
     float _e9 = gain_x_10_;
     gain_x_100_ = (_e9 * 10.0);
     store_override = gain;
+    float4 phony = override_compose;
+    float4 phony_1 = override_compose_zero_value;
     return;
 }

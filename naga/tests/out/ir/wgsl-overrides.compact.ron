@@ -21,6 +21,26 @@
                 width: 4,
             )),
         ),
+        (
+            name: None,
+            inner: Vector(
+                size: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
     ],
     special_types: (
         ray_desc: None,
@@ -98,6 +118,22 @@
             init: None,
             memory_decorations: (""),
         ),
+        (
+            name: Some("override_compose"),
+            space: Private,
+            binding: None,
+            ty: 3,
+            init: Some(17),
+            memory_decorations: (""),
+        ),
+        (
+            name: Some("override_compose_zero_value"),
+            space: Private,
+            binding: None,
+            ty: 3,
+            init: Some(21),
+            memory_decorations: (""),
+        ),
     ],
     global_expressions: [
         Literal(Bool(true)),
@@ -118,6 +154,42 @@
             op: Multiply,
             left: 8,
             right: 9,
+        ),
+        Override(2),
+        Literal(F32(1.0)),
+        Compose(
+            ty: 4,
+            components: [
+                11,
+                12,
+            ],
+        ),
+        Literal(F32(2.0)),
+        Literal(F32(3.0)),
+        Compose(
+            ty: 4,
+            components: [
+                14,
+                15,
+            ],
+        ),
+        Compose(
+            ty: 3,
+            components: [
+                13,
+                16,
+            ],
+        ),
+        ZeroValue(4),
+        Override(2),
+        Literal(F32(1.0)),
+        Compose(
+            ty: 3,
+            components: [
+                18,
+                19,
+                20,
+            ],
         ),
     ],
     functions: [],
@@ -176,6 +248,14 @@
                     LocalVariable(2),
                     GlobalVariable(1),
                     Override(2),
+                    GlobalVariable(2),
+                    Load(
+                        pointer: 13,
+                    ),
+                    GlobalVariable(3),
+                    Load(
+                        pointer: 15,
+                    ),
                     Override(1),
                     Override(3),
                     Override(6),
@@ -183,10 +263,12 @@
                 ],
                 named_expressions: {
                     4: "a",
-                    13: "phony",
                     14: "phony",
-                    15: "phony",
                     16: "phony",
+                    17: "phony",
+                    18: "phony",
+                    19: "phony",
+                    20: "phony",
                 },
                 body: [
                     Emit((
@@ -217,6 +299,14 @@
                         pointer: 11,
                         value: 12,
                     ),
+                    Emit((
+                        start: 14,
+                        end: 15,
+                    )),
+                    Emit((
+                        start: 16,
+                        end: 17,
+                    )),
                     Return(
                         value: None,
                     ),
