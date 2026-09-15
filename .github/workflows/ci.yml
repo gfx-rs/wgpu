@@ -868,6 +868,32 @@ jobs:
           # Consider expanding it to include some API tests with the noop backend.
           cargo miri test --package=wgpu --no-default-features -- write_only
 
+  renovate:
+    name: Check Renovate MSRV updates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Install Renovate
+        run: npm install --prefix "$RUNNER_TEMP/renovate" --no-package-lock renovate@44.93.1
+
+      - name: Validate Renovate configuration
+        run: '"$RUNNER_TEMP/renovate/node_modules/.bin/renovate-config-validator" --strict renovate.json'
+
+      - name: Check MSRV extraction and updates
+        run: node .github/scripts/check-renovate-msrv.mjs "$RUNNER_TEMP/renovate/node_modules/renovate"
+
   fmt:
     # runtime is normally 15 seconds
     timeout-minutes: 2
