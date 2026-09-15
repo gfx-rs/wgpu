@@ -14,6 +14,11 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS,
         CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS,
     ]);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        vec.push(DESTROY_BUFFER_WHILE_LIVE_VIEW);
+    }
 }
 
 async fn test_empty_buffer_range_with_usage(
@@ -497,3 +502,43 @@ static CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS: GpuTestConfiguration =
                 )),
             );
         });
+
+#[cfg(not(target_arch = "wasm32"))]
+#[apply(gpu_test!)]
+static DESTROY_BUFFER_WHILE_LIVE_VIEW: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_sync(|ctx| {
+        let buffer_size: u64 = 64 * 1024 * 1024; // 64 MiB
+
+        let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("big buffer"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::MAP_WRITE,
+            mapped_at_creation: false,
+        });
+
+        buffer
+            .slice(..)
+            .map_async(wgpu::MapMode::Write, Result::unwrap);
+
+        ctx.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .unwrap();
+
+        let mut view = buffer.slice(..).get_mapped_range_mut().unwrap();
+
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                buffer.destroy();
+            });
+
+            s.spawn(|| {
+                let data = vec![0x55u8; buffer_size as usize];
+
+                for _ in 0..5 {
+                    view.copy_from_slice(&data);
+                }
+                drop(view);
+            });
+        });
+    });

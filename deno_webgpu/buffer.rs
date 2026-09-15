@@ -200,7 +200,7 @@ impl GPUBuffer {
     #[webidl(default = 0)] offset: u64,
     #[webidl] size: Option<u64>,
   ) -> Result<v8::Local<'s, v8::ArrayBuffer>, BufferError> {
-    let (slice_pointer, range_size) = self
+    let mapping = self
       .wgpu_buffer
       .get_mapped_range(offset, size)
       .map_err(BufferError::Access)?;
@@ -209,28 +209,39 @@ impl GPUBuffer {
     let mode = mode.as_ref().unwrap();
 
     let bs = if mode == &MapMode::Write {
-      unsafe extern "C" fn noop_deleter_callback(
+      // FIXME: this mapping strategy is only safe when MAPPABLE_PRIMARY_BUFFERS
+      // are not used, otherwise user can inspect write combing.
+
+      unsafe extern "C" fn deleter_callback(
         _data: *mut std::ffi::c_void,
         _byte_length: usize,
-        _deleter_data: *mut std::ffi::c_void,
+        deleter_data: *mut std::ffi::c_void,
       ) {
+        // SAFETY: Box::into_raw is down bellow
+        let mapping: Box<wgpu_core::resource::BufferMapping> =
+          unsafe { Box::from_raw(deleter_data as *mut _) };
+        drop(mapping);
       }
+
+      let mapping: Box<wgpu_core::resource::BufferMapping> = Box::new(mapping);
 
       // SAFETY: creating a backing store from the pointer and length provided by wgpu
       unsafe {
         v8::ArrayBuffer::new_backing_store_from_ptr(
-          slice_pointer.as_ptr() as _,
-          range_size as usize,
-          noop_deleter_callback,
-          std::ptr::null_mut(),
+          mapping.ptr().as_ptr() as _,
+          mapping.len() as usize,
+          deleter_callback,
+          Box::into_raw(mapping) as *mut std::ffi::c_void,
         )
       }
     } else {
-      // SAFETY: creating a vector from the pointer and length provided by wgpu
-      let slice = unsafe {
-        std::slice::from_raw_parts(slice_pointer.as_ptr(), range_size as usize)
-      };
-      v8::ArrayBuffer::new_backing_store_from_vec(slice.to_vec())
+      // SAFETY: buffer is mapped for read
+      // FIXME: but there are overlapping views
+      let slice = unsafe { mapping.slice() };
+      let vec = slice.to_vec();
+      drop(mapping);
+
+      v8::ArrayBuffer::new_backing_store_from_vec(vec)
     };
 
     let shared_bs = bs.make_shared();

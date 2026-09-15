@@ -82,6 +82,19 @@ By @beicause in [#9553](https://github.com/gfx-rs/wgpu/pull/9553).
 
 By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
+#### `BufferView`s will block unmapping of `Buffer` on native
+
+To prevent `Buffer` being unmapped while any `BufferView`s are active,
+which could lead to SIGSEGV on native,
+`BufferView` and `BufferViewMut` now blocks unmapping of native buffer
+until all views are dropped.
+Users should keep views alive for shortest time as possible.
+To encourage this `Buffer::Destroy` will now panic if there is any outstanding `BufferView` or `BufferViewMut` alive.
+To prevent deadlocks one should also not keep views alive across [`Device::poll`],
+as it could trigger buffer destruction and thus unmapping in case the device is lost.
+
+By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
+
 ### Added/New Features
 
 #### General
