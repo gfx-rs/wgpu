@@ -1,3 +1,6 @@
+//! TODO: Maybe we can somehow give extra information to the compaction pass so that the adjustment only happens once.
+//! Otherwise, we can still try to share code with the compactor. This code is mostly copy-pasted from there.
+
 use core::unreachable;
 
 use crate::{non_max_u32::NonMaxU32, Arena, Expression, Handle, Statement};
