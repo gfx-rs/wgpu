@@ -9,15 +9,13 @@ use std::{
 use anyhow::{bail, Context};
 #[derive(Clone, Copy)]
 pub(super) enum Mode {
+    /// Report differences without changing files.
     Check,
+    /// Copy missing or changed files and remove extra files and empty directories.
     Write,
 }
 
 // Recursively syncs `root/source` into `root/target`.
-//
-// In `Check` mode errors on any differences, in `Write` mode
-// deletes extra files/directories, copies updated ones, and makes
-// missing ones.
 pub(super) fn sync_directory(
     root: &Path,
     source: &Path,
