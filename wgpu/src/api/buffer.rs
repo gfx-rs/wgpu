@@ -4,6 +4,7 @@ use core::{
     num::NonZero,
     ops::{Bound, Range, RangeBounds},
 };
+use hashbrown::HashSet;
 
 use crate::util::Mutex;
 use crate::*;
@@ -221,6 +222,9 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct Buffer {
     pub(crate) inner: dispatch::DispatchBuffer,
+    /// The set of buffers that are currently alive on the device.
+    /// This is used to ensure that all buffers are unmapped before the device is destroyed.
+    pub(crate) device_buffers: Arc<Mutex<HashSet<Buffer>>>,
     pub(crate) map_context: Arc<Mutex<MapContext>>,
     // Todo: missing map_state https://www.w3.org/TR/webgpu/#dom-gpubuffer-mapstate
 }
@@ -335,6 +339,7 @@ impl Buffer {
     /// Panics if there is any [`BufferView`] or [`BufferViewMut`] alive.
     pub fn destroy(&self) {
         self.map_context.lock().reset();
+        self.device_buffers.lock().remove(self);
         self.inner.destroy();
     }
 
@@ -922,10 +927,10 @@ static_assertions::assert_impl_all!(MapMode: Send, Sync);
 /// `AsRef<[u8]>`, if that's more convenient.
 ///
 /// Before the buffer can be unmapped, all `BufferView`s observing it
-/// must be dropped. Otherwise, the call to [`Buffer::unmap`]
-/// or [`Buffer::destroy`] will panic. On native buffer destruction on device lost will
+/// must be dropped. Otherwise, the call to [`Buffer::unmap`] or [`Buffer::destroy`]
+/// or [`Device::destroy`] will panic. On native buffer destruction on device lost will
 /// block until all views are dropped, thus it's recommended to not keep views alive
-/// across [`Device::poll`] to prevent deadlocks.
+/// across [`Device::poll`], [`Queue::submit`] or [`Surface::configure`] to prevent deadlocks.
 ///
 /// For example code, see the documentation on [mapping buffers][map].
 ///
@@ -954,10 +959,10 @@ pub struct BufferView {
 /// and there are also a few convenience methods such as [`BufferViewMut::copy_from_slice()`].
 ///
 /// Before the buffer can be unmapped, all `BufferViewMut`s observing it
-/// must be dropped. Otherwise, the call to [`Buffer::unmap`] or
-/// [`Buffer::destroy`] will panic. On native buffer destruction on device lost will
+/// must be dropped. Otherwise, the call to [`Buffer::unmap`] or [`Buffer::destroy`]
+/// or [`Device::destroy`] will panic. On native buffer destruction on device lost will
 /// block until all views are dropped, thus it's recommended to not keep views alive
-/// across [`Device::poll`] to prevent deadlocks.
+/// across [`Device::poll`], [`Queue::submit`] or [`Surface::configure`] to prevent deadlocks.
 ///
 /// For example code, see the documentation on [mapping buffers][map].
 ///

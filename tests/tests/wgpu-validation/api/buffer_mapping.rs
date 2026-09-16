@@ -263,6 +263,23 @@ fn destroy_while_visible() {
     buffer.destroy();
 }
 
+/// Ensure that you cannot destroy a device (and thus buffer) while there are still accessible mapped views.
+#[test]
+#[should_panic(expected = "You cannot unmap a buffer that still has accessible mapped views")]
+fn destroy_device_while_visible() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 1024,
+        usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: true,
+    });
+
+    let _mapping0 = buffer.slice(..).get_mapped_range_mut().unwrap();
+    device.destroy();
+}
+
 /// Regression test for [#9959]: `Buffer::unmap` racing a `Buffer::map` in
 /// progress on another thread must never fail with `NotMapped`.
 ///
