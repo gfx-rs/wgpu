@@ -24,11 +24,11 @@ Repository documentation exists in `docs/`. For info on where tests live, read `
 
 One of the best ways to prove that a change is correct is to write tests to prove the feature works and it errors when its supposed to.
 
-## Repository Metadata
+## Repository Files
 
-`AGENTS.md` and `.agents/` are the source of truth for agent instructions and skills. `CLAUDE.md` and `.claude/` are generated copies. Do not edit the generated copies directly. After you edit any source-of-truth metadata file or a root license file, run `cargo xtask sync-metadata`. This command also copies the root license files to every publishable default member of the Cargo workspace.
+`AGENTS.md` and `.agents/` are the source of truth for agent instructions and skills. `CLAUDE.md` and `.claude/` are generated copies. Do not edit the generated copies directly. After you edit any source-of-truth agent file or a root license file, run `cargo xtask sync-repo-files`. This command also copies the root license files to every publishable default member of the Cargo workspace.
 
-Run `cargo xtask sync-metadata --check` to verify that all generated files have the same contents and file list as their sources.
+Run `cargo xtask sync-repo-files --check` to verify that all generated files have the same contents and file list as their sources.
 
 ## External Contributions
 

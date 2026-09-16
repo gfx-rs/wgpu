@@ -12,7 +12,7 @@ mod install_agility_sdk;
 mod install_warp;
 mod miri;
 mod run_wasm;
-mod sync_metadata;
+mod sync_repo_files;
 mod test;
 mod test_wasm;
 mod util;
@@ -102,7 +102,7 @@ Commands:
                               Must be a nightly toolchain.
                               Defaults to `nightly`.
 
-  sync-metadata
+  sync-repo-files
     Sync agent files and crate licenses from their source-of-truth files
 
     --check   Check for missing, extra, or different generated files without
@@ -177,7 +177,7 @@ fn main() -> anyhow::Result<ExitCode> {
         Some("cts") => cts::run_cts(shell, args, passthrough_args)?,
         Some("run-wasm") => run_wasm::run_wasm(shell, args, passthrough_args)?,
         Some("miri") => miri::run_miri(shell, args)?,
-        Some("sync-metadata") => sync_metadata::run_sync_metadata(shell, args)?,
+        Some("sync-repo-files") => sync_repo_files::run_sync_repo_files(shell, args)?,
         Some("test") => test::run_tests(shell, args, passthrough_args)?,
         Some("test-wasm") => test_wasm::run_wasm_tests(shell, args, passthrough_args)?,
         Some("vendor-web-sys") => vendor_web_sys::run_vendor_web_sys(shell, args)?,

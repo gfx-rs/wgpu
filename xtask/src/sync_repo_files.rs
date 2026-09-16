@@ -18,7 +18,7 @@ enum Mode {
     Write,
 }
 
-pub(crate) fn run_sync_metadata(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
+pub(crate) fn run_sync_repo_files(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     let mode = if args.contains("--check") {
         Mode::Check
     } else {
@@ -28,19 +28,19 @@ pub(crate) fn run_sync_metadata(shell: Shell, mut args: Arguments) -> anyhow::Re
     let unknown_args = args.finish();
     if !unknown_args.is_empty() {
         crate::bad_arguments!(
-            "Unknown arguments to sync-metadata subcommand: {:?}",
+            "Unknown arguments to sync-repo-files subcommand: {:?}",
             unknown_args
         );
     }
 
     let root = shell.current_dir();
     let license_targets = license_targets(&shell, &root)?;
-    let discrepancies = sync_metadata(&root, &license_targets, mode)?;
+    let discrepancies = sync_repo_files(&root, &license_targets, mode)?;
 
     if discrepancies.is_empty() {
         match mode {
-            Mode::Check => eprintln!("Repository metadata is synchronized."),
-            Mode::Write => eprintln!("Repository metadata synchronized."),
+            Mode::Check => eprintln!("Repository files are synchronized."),
+            Mode::Write => eprintln!("Repository files synchronized."),
         }
         return Ok(());
     }
@@ -48,12 +48,12 @@ pub(crate) fn run_sync_metadata(shell: Shell, mut args: Arguments) -> anyhow::Re
     for discrepancy in discrepancies {
         eprintln!("error: {discrepancy}");
     }
-    eprintln!("hint: edit the source-of-truth files, then run `cargo xtask sync-metadata`");
-    bail!("repository metadata is not synchronized")
+    eprintln!("hint: edit the source-of-truth files, then run `cargo xtask sync-repo-files`");
+    bail!("repository files are not synchronized")
 }
 
-/// Sync all repository metadata.
-fn sync_metadata(
+/// Sync all repository files.
+fn sync_repo_files(
     root: &Path,
     license_targets: &[PathBuf],
     mode: Mode,
@@ -421,7 +421,7 @@ fn collect_files_recursive(
         } else if file_type.is_file() {
             files.insert(path.strip_prefix(root)?.to_owned());
         } else {
-            bail!("unsupported metadata entry `{}`", path.display());
+            bail!("unsupported file entry `{}`", path.display());
         }
     }
     Ok(())
@@ -476,7 +476,7 @@ mod tests {
         fn new() -> Self {
             let id = NEXT_TEMP_DIRECTORY.fetch_add(1, Ordering::Relaxed);
             let path = std::env::temp_dir()
-                .join(format!("wgpu-sync-metadata-{}-{id}", std::process::id()));
+                .join(format!("wgpu-sync-repo-files-{}-{id}", std::process::id()));
             fs::create_dir(&path).unwrap();
             git(&path, &["init"]);
             // Keep the developer's global ignore rules out of the test.

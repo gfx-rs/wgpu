@@ -893,8 +893,8 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      - name: Check repository metadata
-        run: cargo --locked xtask sync-metadata --check
+      - name: Check repository files
+        run: cargo --locked xtask sync-repo-files --check
 
       # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
       # files, even ones this step doesn't modify.
