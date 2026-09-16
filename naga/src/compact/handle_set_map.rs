@@ -42,6 +42,14 @@ impl<T, U> HandleMap<T, U> {
 }
 
 impl<T: 'static> HandleMap<T> {
+    /// Return a map in which none of the `len` possible handles are used yet.
+    pub fn all_unused(len: usize) -> Self {
+        Self {
+            new_index: alloc::vec![None; len],
+            as_keys: core::marker::PhantomData,
+        }
+    }
+
     pub fn from_set(set: HandleSet<T>) -> Self {
         let mut next_index = Index::new(0).unwrap();
         Self {
