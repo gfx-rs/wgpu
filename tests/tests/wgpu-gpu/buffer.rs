@@ -13,6 +13,10 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         MINIMUM_BUFFER_BINDING_SIZE_DISPATCH,
         CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS,
         CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS,
+        DEVICE_DESTROY_WHILE_WRITING_MAPPED_BUFFER,
+        DEVICE_DESTROY_WHILE_READING_MAPPED_BUFFER,
+        BUFFER_DESTROY_WHILE_READING_MAPPED_BUFFER,
+        BUFFER_DESTROY_WHILE_WRITING_MAPPED_BUFFER,
     ]);
 }
 
@@ -496,4 +500,236 @@ static CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS: GpuTestConfiguration =
                     "but these added together exceed `u64::MAX`"
                 )),
             );
+        });
+
+#[apply(gpu_test!)]
+static DEVICE_DESTROY_WHILE_WRITING_MAPPED_BUFFER: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().enable_noop())
+        .run_sync(|ctx| {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let buffer_size: u64 = 64 * 1024 * 1024; // 1MiB
+
+                let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("big buffer"),
+                    size: buffer_size,
+                    usage: wgpu::BufferUsages::MAP_WRITE,
+                    mapped_at_creation: false,
+                });
+
+                buffer
+                    .slice(..)
+                    .map_async(wgpu::MapMode::Write, Result::unwrap);
+
+                ctx.device
+                    .poll(wgpu::PollType::wait_indefinitely())
+                    .unwrap();
+
+                let mut view = buffer.slice(..).get_mapped_range_mut().unwrap();
+
+                use std::sync::atomic::{AtomicBool, Ordering};
+
+                let writing_started = &AtomicBool::new(false);
+                let done = &AtomicBool::new(false);
+                std::thread::scope(|s| {
+                    s.spawn(move || {
+                        while !writing_started.load(Ordering::Acquire) {
+                            std::hint::spin_loop();
+                        }
+
+                        ctx.device.destroy(); // should call wgc's destroy
+
+                        while !done.load(Ordering::Relaxed) {
+                            let _ = ctx.device.poll(wgpu::PollType::Poll);
+                        }
+                    });
+
+                    s.spawn(move || {
+                        let data = vec![0x55u8; buffer_size as usize];
+                        writing_started.store(true, Ordering::Release);
+
+                        for _ in 0..20 {
+                            view.copy_from_slice(&data);
+                            std::thread::yield_now();
+                        }
+
+                        done.store(true, Ordering::Relaxed);
+                    });
+                });
+            }
+        });
+
+#[apply(gpu_test!)]
+static DEVICE_DESTROY_WHILE_READING_MAPPED_BUFFER: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().enable_noop())
+        .run_sync(|ctx| {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let buffer_size: u64 = 64 * 1024 * 1024; // 1MiB
+
+                let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("big buffer"),
+                    size: buffer_size,
+                    usage: wgpu::BufferUsages::MAP_READ,
+                    mapped_at_creation: false,
+                });
+
+                buffer
+                    .slice(..)
+                    .map_async(wgpu::MapMode::Read, Result::unwrap);
+
+                ctx.device
+                    .poll(wgpu::PollType::wait_indefinitely())
+                    .unwrap();
+
+                let view = buffer.slice(..).get_mapped_range().unwrap();
+
+                use std::sync::atomic::{AtomicBool, Ordering};
+
+                let writing_started = &AtomicBool::new(false);
+                let done = &AtomicBool::new(false);
+                std::thread::scope(|s| {
+                    s.spawn(move || {
+                        while !writing_started.load(Ordering::Acquire) {
+                            std::hint::spin_loop();
+                        }
+
+                        ctx.device.destroy(); // should call wgc's destroy
+
+                        while !done.load(Ordering::Relaxed) {
+                            let _ = ctx.device.poll(wgpu::PollType::Poll);
+                        }
+                    });
+
+                    s.spawn(move || {
+                        let mut data = vec![0u8; buffer_size as usize];
+                        writing_started.store(true, Ordering::Release);
+
+                        for _ in 0..20 {
+                            data.copy_from_slice(&view);
+                            std::thread::yield_now();
+                        }
+
+                        done.store(true, Ordering::Relaxed);
+                    });
+                });
+            }
+        });
+
+#[apply(gpu_test!)]
+static BUFFER_DESTROY_WHILE_WRITING_MAPPED_BUFFER: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().enable_noop())
+        .run_sync(|ctx| {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let buffer_size: u64 = 64 * 1024 * 1024; // 1MiB
+
+                let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("big buffer"),
+                    size: buffer_size,
+                    usage: wgpu::BufferUsages::MAP_WRITE,
+                    mapped_at_creation: false,
+                });
+
+                buffer
+                    .slice(..)
+                    .map_async(wgpu::MapMode::Write, Result::unwrap);
+
+                ctx.device
+                    .poll(wgpu::PollType::wait_indefinitely())
+                    .unwrap();
+
+                let mut view = buffer.slice(..).get_mapped_range_mut().unwrap();
+
+                use std::sync::atomic::{AtomicBool, Ordering};
+
+                let writing_started = &AtomicBool::new(false);
+                let done = &AtomicBool::new(false);
+                std::thread::scope(|s| {
+                    s.spawn(move || {
+                        while !writing_started.load(Ordering::Acquire) {
+                            std::hint::spin_loop();
+                        }
+
+                        buffer.destroy(); // should call wgc's destroy
+
+                        while !done.load(Ordering::Relaxed) {
+                            let _ = ctx.device.poll(wgpu::PollType::Poll);
+                        }
+                    });
+
+                    s.spawn(move || {
+                        let data = vec![0x55u8; buffer_size as usize];
+                        writing_started.store(true, Ordering::Release);
+
+                        for _ in 0..20 {
+                            view.copy_from_slice(&data);
+                            std::thread::yield_now();
+                        }
+
+                        done.store(true, Ordering::Relaxed);
+                    });
+                });
+            }
+        });
+
+#[apply(gpu_test!)]
+static BUFFER_DESTROY_WHILE_READING_MAPPED_BUFFER: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().enable_noop())
+        .run_sync(|ctx| {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let buffer_size: u64 = 64 * 1024 * 1024; // 1MiB
+
+                let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("big buffer"),
+                    size: buffer_size,
+                    usage: wgpu::BufferUsages::MAP_READ,
+                    mapped_at_creation: false,
+                });
+
+                buffer
+                    .slice(..)
+                    .map_async(wgpu::MapMode::Read, Result::unwrap);
+
+                ctx.device
+                    .poll(wgpu::PollType::wait_indefinitely())
+                    .unwrap();
+
+                let view = buffer.slice(..).get_mapped_range().unwrap();
+
+                use std::sync::atomic::{AtomicBool, Ordering};
+
+                let writing_started = &AtomicBool::new(false);
+                let done = &AtomicBool::new(false);
+                std::thread::scope(|s| {
+                    s.spawn(move || {
+                        while !writing_started.load(Ordering::Acquire) {
+                            std::hint::spin_loop();
+                        }
+
+                        buffer.destroy(); // should call wgc's destroy
+
+                        while !done.load(Ordering::Relaxed) {
+                            let _ = ctx.device.poll(wgpu::PollType::Poll);
+                        }
+                    });
+
+                    s.spawn(move || {
+                        let mut data = vec![0u8; buffer_size as usize];
+                        writing_started.store(true, Ordering::Release);
+
+                        for _ in 0..20 {
+                            data.copy_from_slice(&view);
+                            std::thread::yield_now();
+                        }
+
+                        done.store(true, Ordering::Relaxed);
+                    });
+                });
+            }
         });
