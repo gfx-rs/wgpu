@@ -1,6 +1,7 @@
 mod expressions;
 mod functions;
 mod handle_set_map;
+mod reorder;
 mod statements;
 mod types;
 
@@ -55,7 +56,19 @@ impl From<KeepUnused> for bool {
 ///     - named expressions
 ///
 /// After removing items according to the rules above, all handles in the
-/// remaining objects are adjusted as necessary. When `KeepUnused` is `Yes`, the
+/// remaining objects are adjusted as necessary.
+///
+/// Compaction preserves the order of the objects it retains, with one
+/// exception. A function's or entry point's expression arena is permitted to
+/// contain *forward references*: expressions that refer to later expressions,
+/// which [`Function::expressions`] otherwise forbids. Passes that rewrite
+/// function bodies, such as inlining, may produce these by appending new
+/// expressions to the arena. As long as the function's statements are valid
+/// (in particular, every expression is [`Emit`]ted before it is used),
+/// compaction renumbers that function's expressions so that every expression
+/// precedes its users. Global expressions may not contain forward references.
+///
+/// When `KeepUnused` is `Yes`, the
 /// resulting module should have all the named objects (except abstract-typed
 /// constants) present in the original, and those objects should be functionally
 /// identical. When `KeepUnused` is `No`, the resulting module should have the
@@ -93,6 +106,12 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     // Thus, if the present element has not been marked as used, then it is
     // definitely unused, and compaction can remove it. Otherwise, the element
     // is used and must be retained, so we must mark everything it refers to.
+    //
+    // Function expression arenas are the exception: they may contain forward
+    // references (see this function's documentation). `ExpressionTracer` notes
+    // any expressions that the back-to-front pass would miss and traces them
+    // afterwards, and `FunctionMap` then chooses a new order for the
+    // function's expressions; see `reorder`.
     //
     // The final step is to mark the global expressions and types, which must be
     // traversed simultaneously; see `ModuleTracer::type_expression_tandem`'s
@@ -412,6 +431,12 @@ struct ModuleTracer<'module> {
     constants_used: HandleSet<crate::Constant>,
     overrides_used: HandleSet<crate::Override>,
     global_expressions_used: HandleSet<crate::Expression>,
+
+    /// Forward references among global expressions. A valid module has none,
+    /// and since global expressions are traced on demand rather than by
+    /// `trace_expressions`, none can be detected; this only exists to satisfy
+    /// `ExpressionTracer`.
+    global_forward_refs: expressions::ForwardRefs,
 }
 
 impl<'module> ModuleTracer<'module> {
@@ -425,6 +450,7 @@ impl<'module> ModuleTracer<'module> {
             constants_used: HandleSet::for_arena(&module.constants),
             overrides_used: HandleSet::for_arena(&module.overrides),
             global_expressions_used: HandleSet::for_arena(&module.global_expressions),
+            global_forward_refs: Default::default(),
         }
     }
 
@@ -545,6 +571,8 @@ impl<'module> ModuleTracer<'module> {
             expressions_used: &mut self.global_expressions_used,
             overrides_used: &mut self.overrides_used,
             global_expressions_used: None,
+            visited_from: usize::MAX,
+            forward_refs: &mut self.global_forward_refs,
         }
     }
 
@@ -564,6 +592,7 @@ impl<'module> ModuleTracer<'module> {
             overrides_used: &mut self.overrides_used,
             global_expressions_used: &mut self.global_expressions_used,
             expressions_used: HandleSet::for_arena(&function.expressions),
+            forward_refs: Default::default(),
         }
     }
 }
@@ -682,14 +711,10 @@ impl ModuleMap {
 
 struct FunctionMap {
     expressions: HandleMap<crate::Expression>,
-}
 
-impl From<FunctionTracer<'_>> for FunctionMap {
-    fn from(used: FunctionTracer) -> Self {
-        FunctionMap {
-            expressions: HandleMap::from_set(used.expressions_used),
-        }
-    }
+    /// The new order of the function's expressions, if compaction has to
+    /// reorder them to eliminate forward references. See [`reorder`].
+    reorder: Option<reorder::Reorder>,
 }
 
 #[test]
