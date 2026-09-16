@@ -130,6 +130,16 @@ webgpu:shader,validation,parse,blankspace:* // 95%, null in comments, https://gi
 webgpu:shader,validation,parse,comments:* // 93%, unterminated block comments, https://github.com/gfx-rs/wgpu/issues/8877
 webgpu:shader,validation,parse,diagnostic:* // 50%, https://github.com/gfx-rs/wgpu/issues/6458
 webgpu:shader,validation,parse,literal:* // 96%, https://github.com/gfx-rs/wgpu/issues/7046
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="buffer_view"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="fragment_depth"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="linear_indexing"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="subgroup_id"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="subgroup_uniformity"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="swizzle_assignment"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="texture_and_sampler_let"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="texture_formats_tier1"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="uniform_buffer_standard_layout"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="unrestricted_pointer_parameters"
 webgpu:shader,validation,parse,shadow_builtins:* // 83%, function param shadowing parser issue; determinant const-eval; texture_external capability missing
 webgpu:shader,validation,shader_io,align:* // 98%, @align(2^31) accepted but exceeds i32::MAX per WGSL spec
 webgpu:shader,validation,shader_io,id:* // 97%, @id on const
