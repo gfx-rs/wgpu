@@ -1,9 +1,16 @@
-use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
+use alloc::{
+    boxed::Box,
+    string::String,
+    sync::{Arc, Weak},
+    vec::Vec,
+};
 use core::{
     error, fmt,
+    hash::{Hash, Hasher},
     num::NonZero,
     ops::{Bound, Range, RangeBounds},
 };
+use hashbrown::HashSet;
 
 use crate::util::Mutex;
 use crate::*;
@@ -778,6 +785,40 @@ pub(crate) struct MapContext {
     /// [`BufferViewMut`]s. These are non-overlapping, and are all contained
     /// within `mapped_range`.
     sub_ranges: Vec<Subrange>,
+
+    /// The set of buffers that are currently alive on the device.
+    /// This is used to ensure that all buffers are unmapped before the device is destroyed.
+    ///
+    /// We keep it here
+    device_buffers: Arc<Mutex<HashSet<WeakMapContext>>>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct WeakMapContext(Weak<Mutex<MapContext>>);
+
+impl Eq for WeakMapContext {}
+impl PartialEq for WeakMapContext {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.ptr_eq(&other.0)
+    }
+}
+
+impl Hash for WeakMapContext {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.as_ptr().hash(state);
+    }
+}
+
+impl WeakMapContext {
+    fn alive(&self) -> bool {
+        self.0.strong_count() > 0
+    }
+
+    pub(crate) fn unmap(&self) {
+        if let Some(map_context) = self.0.upgrade() {
+            map_context.lock().reset();
+        }
+    }
 }
 
 impl MapContext {
@@ -787,11 +828,19 @@ impl MapContext {
     /// `mapped_range` argument. For other buffers, pass `None`.
     ///
     /// [`mapped_at_creation`]: BufferDescriptor::mapped_at_creation
-    pub(crate) fn new(mapped_range: Option<Range<BufferAddress>>) -> Self {
-        Self {
+    pub(crate) fn new(
+        mapped_range: Option<Range<BufferAddress>>,
+        device_buffers: &Arc<Mutex<HashSet<WeakMapContext>>>,
+    ) -> Arc<Mutex<Self>> {
+        let result = Arc::new(Mutex::new(Self {
             mapped_range,
             sub_ranges: Vec::new(),
-        }
+            device_buffers: Arc::clone(device_buffers),
+        }));
+        device_buffers
+            .lock()
+            .insert(WeakMapContext(Arc::downgrade(&result)));
+        result
     }
 
     /// Record that the buffer is no longer mapped.
@@ -863,6 +912,12 @@ impl MapContext {
     }
 }
 
+impl Drop for MapContext {
+    fn drop(&mut self) {
+        self.device_buffers.lock().retain(|f| f.alive());
+    }
+}
+
 /// Describes a [`Buffer`].
 ///
 /// For use with [`Device::create_buffer`].
@@ -922,10 +977,10 @@ static_assertions::assert_impl_all!(MapMode: Send, Sync);
 /// `AsRef<[u8]>`, if that's more convenient.
 ///
 /// Before the buffer can be unmapped, all `BufferView`s observing it
-/// must be dropped. Otherwise, the call to [`Buffer::unmap`]
-/// or [`Buffer::destroy`] will panic. On native buffer destruction on device lost will
+/// must be dropped. Otherwise, the call to [`Buffer::unmap`] or [`Buffer::destroy`]
+/// or [`Device::destroy`] will panic. On native buffer destruction on device lost will
 /// block until all views are dropped, thus it's recommended to not keep views alive
-/// across [`Device::poll`] to prevent deadlocks.
+/// across [`Device::poll`], [`Queue::submit`] or [`Surface::configure`] to prevent deadlocks.
 ///
 /// For example code, see the documentation on [mapping buffers][map].
 ///
@@ -954,10 +1009,10 @@ pub struct BufferView {
 /// and there are also a few convenience methods such as [`BufferViewMut::copy_from_slice()`].
 ///
 /// Before the buffer can be unmapped, all `BufferViewMut`s observing it
-/// must be dropped. Otherwise, the call to [`Buffer::unmap`] or
-/// [`Buffer::destroy`] will panic. On native buffer destruction on device lost will
+/// must be dropped. Otherwise, the call to [`Buffer::unmap`] or [`Buffer::destroy`]
+/// or [`Device::destroy`] will panic. On native buffer destruction on device lost will
 /// block until all views are dropped, thus it's recommended to not keep views alive
-/// across [`Device::poll`] to prevent deadlocks.
+/// across [`Device::poll`], [`Queue::submit`] or [`Surface::configure`] to prevent deadlocks.
 ///
 /// For example code, see the documentation on [mapping buffers][map].
 ///
