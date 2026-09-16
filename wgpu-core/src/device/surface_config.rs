@@ -199,6 +199,7 @@ mod surface_configuration_tests {
             usage: wgt::TextureUses::COLOR_TARGET,
             present_modes: vec![wgt::PresentMode::Fifo],
             composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
+            native_view_formats: true,
         }
     }
 

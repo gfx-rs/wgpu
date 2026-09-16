@@ -529,6 +529,7 @@ impl crate::Adapter for super::Adapter {
                 | wgt::TextureUses::STORAGE_READ_ONLY
                 | wgt::TextureUses::STORAGE_WRITE_ONLY
                 | wgt::TextureUses::STORAGE_READ_WRITE,
+            native_view_formats: true,
         })
     }
 

@@ -710,11 +710,9 @@ impl PhysicalDeviceFeatures {
                 || caps.supports_extension(khr::maintenance2::NAME),
         );
 
-        dl_flags.set(
-            Df::SURFACE_VIEW_FORMATS,
-            caps.supports_extension(khr::swapchain_mutable_format::NAME)
-                || !caps.supports_extension(khr::swapchain::NAME),
-        );
+        // `wgpu-core` emulates surface view formats with an intermediate texture when the
+        // swapchain doesn't support them natively, so they are always supported here.
+        dl_flags.set(Df::SURFACE_VIEW_FORMATS, true);
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
         dl_flags.set(

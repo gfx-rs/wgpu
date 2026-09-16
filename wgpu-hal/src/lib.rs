@@ -2221,6 +2221,13 @@ pub struct SurfaceCapabilities {
     ///
     /// Must be at least one.
     pub composite_alpha_modes: Vec<wgt::CompositeAlphaMode>,
+
+    /// Whether the swapchain images can be used to create views whose format
+    /// differs from [`SurfaceConfiguration::format`].
+    ///
+    /// When this is `false`, the caller can still support extra view formats by
+    /// copying a separate texture into the swapchain image before presenting.
+    pub native_view_formats: bool,
 }
 
 impl SurfaceCapabilities {

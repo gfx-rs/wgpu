@@ -6,6 +6,11 @@ publish = false
 
 [dependencies]
 env_logger.workspace = true
+log.workspace = true
 pollster.workspace = true
+raw-window-handle.workspace = true
 wgpu.workspace = true
+wgpu-core.workspace = true
+wgpu-hal.workspace = true
+wgpu-types.workspace = true
 winit.workspace = true

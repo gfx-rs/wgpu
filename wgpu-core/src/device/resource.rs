@@ -2016,13 +2016,29 @@ impl Device {
         Ok((format_features, hal_view_formats))
     }
 
+    /// Creates a texture from `desc`.
     fn create_texture_inner(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
+        self.create_texture_with_extra_hal_usage(desc, wgt::TextureUses::empty())
+    }
+
+    /// Creates a texture from `desc`, additionally creating it with
+    /// `extra_hal_usage` on the backend.
+    ///
+    /// `extra_hal_usage` is internal usage that must not show up in
+    /// [`Texture::descriptor`], like `COPY_SRC` for the surface view format
+    /// fallback.
+    pub(crate) fn create_texture_with_extra_hal_usage(
+        self: &Arc<Self>,
+        desc: &resource::TextureDescriptor,
+        extra_hal_usage: wgt::TextureUses,
+    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
         let (format_features, hal_view_formats) = self.validate_texture_descriptor_inner(desc)?;
 
-        let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
+        let hal_usage =
+            conv::map_texture_usage_for_texture(desc, &format_features) | extra_hal_usage;
 
         let hal_desc = hal::TextureDescriptor {
             label: desc.label.to_hal(self.instance_flags),

@@ -935,6 +935,20 @@ impl Surface {
             .get_hal_capabilities(&device.adapter)
             .map_err(|_| E::UnsupportedQueueFamily)?;
 
+        self.configure_with_caps(device, config, caps)
+    }
+
+    /// [`Self::configure`] with the surface capabilities already resolved.
+    ///
+    /// Split out so that tests can pass in mock capabilities.
+    pub(crate) fn configure_with_caps(
+        self: &Arc<Self>,
+        device: &Arc<Device>,
+        config: &wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
+        caps: hal::SurfaceCapabilities,
+    ) -> Result<(), ConfigureSurfaceError> {
+        use ConfigureSurfaceError as E;
+
         let mut hal_view_formats = Vec::new();
         for format in config.view_formats.iter() {
             if *format == config.format {
@@ -952,8 +966,34 @@ impl Surface {
             hal_view_formats.push(*format);
         }
 
-        if !hal_view_formats.is_empty() {
-            device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)?;
+        let mapped_usage = crate::conv::map_texture_usage(
+            config.usage,
+            hal::FormatAspects::COLOR,
+            wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
+                | wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
+                | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+        );
+
+        // A view with the surface format itself is always allowed, so only a
+        // requested view format that actually differs needs special handling.
+        let has_differing_view_format = config
+            .view_formats
+            .iter()
+            .any(|format| *format != config.format);
+
+        // If the swapchain images can't carry the differing view formats, hand
+        // out a separate texture and copy it into the swapchain image at present
+        // time.
+        let emulate_view_formats = has_differing_view_format && !caps.native_view_formats;
+        if emulate_view_formats {
+            device.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
+            // The swapchain image is the destination of the copy done when
+            // presenting, so the surface has to support being copied into.
+            if !caps.usage.contains(wgt::TextureUses::COPY_DST) {
+                return Err(E::UnsupportedViewFormats {
+                    view_formats: hal_view_formats,
+                });
+            }
         }
 
         let maximum_frame_latency = config.desired_maximum_frame_latency.clamp(
@@ -971,15 +1011,16 @@ impl Surface {
                 height: config.height,
                 depth_or_array_layers: 1,
             },
-            usage: crate::conv::map_texture_usage(
-                config.usage,
-                hal::FormatAspects::COLOR,
-                wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
-                    | wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
-                    | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
-            ),
-            view_formats: hal_view_formats,
+            usage: mapped_usage,
+            view_formats: if emulate_view_formats {
+                Vec::new()
+            } else {
+                hal_view_formats
+            },
         };
+        if emulate_view_formats {
+            hal_config.usage |= wgt::TextureUses::COPY_DST;
+        }
 
         crate::device::surface_config::validate_surface_configuration(
             &mut hal_config,
@@ -1021,6 +1062,8 @@ impl Surface {
                 device: Arc::clone(device),
                 config: config.clone(),
                 acquired_texture: None,
+                acquired_surface_texture: None,
+                emulate_view_formats,
             });
         }
         user_callbacks.fire();

@@ -34,7 +34,18 @@ const FRAME_TIMEOUT_MS: u32 = 1000;
 pub(crate) struct Presentation {
     pub(crate) device: Arc<Device>,
     pub(crate) config: wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
+    /// The texture handed out by [`Surface::get_current_texture`].
+    ///
+    /// This is the swapchain image itself, unless surface view formats are
+    /// emulated, in which case it is a separate texture that is copied into the
+    /// swapchain image when presenting.
     pub(crate) acquired_texture: Option<Arc<resource::Texture>>,
+    /// The actual swapchain image, only set when surface view formats are
+    /// emulated.
+    pub(crate) acquired_surface_texture: Option<Arc<resource::Texture>>,
+    /// Whether surface view formats are emulated with an intermediate texture
+    /// and a copy at present time.
+    pub(crate) emulate_view_formats: bool,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -118,6 +129,14 @@ pub enum ConfigureSurfaceError {
         requested: wgt::TextureUses,
         available: wgt::TextureUses,
     },
+    #[error(
+        "The surface cannot present the requested view formats {view_formats:?}: the backend does \
+         not support them on its swapchain images, and the surface does not support `COPY_DST`, \
+         which would be needed to emulate them with an intermediate texture"
+    )]
+    UnsupportedViewFormats {
+        view_formats: Vec<wgt::TextureFormat>,
+    },
 }
 
 impl From<WaitIdleError> for ConfigureSurfaceError {
@@ -146,7 +165,8 @@ impl WebGpuError for ConfigureSurfaceError {
             | Self::UnsupportedColorSpace { .. }
             | Self::UnsupportedPresentMode { .. }
             | Self::UnsupportedAlphaMode { .. }
-            | Self::UnsupportedUsage { .. } => ErrorType::Validation,
+            | Self::UnsupportedUsage { .. }
+            | Self::UnsupportedViewFormats { .. } => ErrorType::Validation,
         }
     }
 }
@@ -178,12 +198,17 @@ impl Surface {
     pub(crate) fn get_current_texture_inner(&self) -> Result<SurfaceOutput, SurfaceError> {
         profiling::scope!("Surface::get_current_texture");
 
-        let (device, config) = if let Some(ref present) = *self.presentation.lock() {
-            present.device.check_is_valid()?;
-            (present.device.clone(), present.config.clone())
-        } else {
-            return Err(SurfaceError::NotConfigured);
-        };
+        let (device, config, emulate_view_formats) =
+            if let Some(ref present) = *self.presentation.lock() {
+                present.device.check_is_valid()?;
+                (
+                    present.device.clone(),
+                    present.config.clone(),
+                    present.emulate_view_formats,
+                )
+            } else {
+                return Err(SurfaceError::NotConfigured);
+            };
 
         let suf = self.raw(device.backend()).unwrap();
         let (texture, status) = match unsafe {
@@ -193,6 +218,12 @@ impl Surface {
             )
         } {
             Ok(ast) => {
+                let status = if ast.suboptimal {
+                    Status::Suboptimal
+                } else {
+                    Status::Good
+                };
+
                 let texture_desc = wgt::TextureDescriptor {
                     label: hal_label(
                         Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
@@ -208,69 +239,121 @@ impl Surface {
                     format: config.format,
                     dimension: wgt::TextureDimension::D2,
                     usage: config.usage,
-                    view_formats: config.view_formats,
+                    view_formats: config.view_formats.clone(),
                 };
                 let format_features = wgt::TextureFormatFeatures {
                     allowed_usages: wgt::TextureUsages::RENDER_ATTACHMENT,
                     flags: wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4
                         | wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE,
                 };
-                let hal_usage = conv::map_texture_usage(
-                    config.usage,
-                    config.format.into(),
-                    format_features.flags,
-                );
-                let clear_view_desc = hal::TextureViewDescriptor {
-                    label: hal_label(
-                        Some("(wgpu internal) clear surface texture view"),
-                        device.instance_flags,
-                    ),
-                    format: config.format,
-                    dimension: wgt::TextureViewDimension::D2,
-                    usage: wgt::TextureUses::COLOR_TARGET,
-                    range: wgt::ImageSubresourceRange::default(),
-                    swizzle: wgt::TextureComponentSwizzle::default(),
-                };
-                let clear_view = unsafe {
+
+                if emulate_view_formats {
+                    // The swapchain image can't carry the requested view formats, so hand
+                    // out a separate texture and copy it into the swapchain image when
+                    // presenting.
+                    let mut presentation = self.presentation.lock();
+                    let present = presentation.as_mut().unwrap();
+                    if present.acquired_texture.is_some() {
+                        return Err(SurfaceError::AlreadyAcquired);
+                    }
+
+                    let surface_hal_usage = conv::map_texture_usage(
+                        config.usage | wgt::TextureUsages::COPY_DST,
+                        config.format.into(),
+                        format_features.flags,
+                    );
+                    let surface_texture = Arc::new(resource::Texture::new(
+                        &device,
+                        resource::TextureInner::Surface { raw: ast.texture },
+                        surface_hal_usage,
+                        &texture_desc,
+                        format_features,
+                        resource::TextureClearMode::None,
+                        // The whole image is written by the copy done when
+                        // presenting, so it never needs a lazy clear.
+                        false,
+                    ));
                     device
-                        .raw()
-                        .create_texture_view(ast.texture.as_ref().borrow(), &clear_view_desc)
-                }
-                .map_err(|e| device.handle_hal_error(e))?;
+                        .trackers
+                        .lock()
+                        .textures
+                        .insert_single(&surface_texture, wgt::TextureUses::UNINITIALIZED);
 
-                let mut presentation = self.presentation.lock();
-                let present = presentation.as_mut().unwrap();
-                let texture = resource::Texture::new(
-                    &device,
-                    resource::TextureInner::Surface { raw: ast.texture },
-                    hal_usage,
-                    &texture_desc,
-                    format_features,
-                    resource::TextureClearMode::Surface {
-                        clear_view: ManuallyDrop::new(clear_view),
-                    },
-                    true,
-                );
+                    // `COPY_SRC` is not part of the descriptor the application
+                    // sees, but the texture has to be created with it on the
+                    // backend so that it can be copied into the swapchain image.
+                    let intermediate = device
+                        .create_texture_with_extra_hal_usage(
+                            &texture_desc,
+                            wgt::TextureUses::COPY_SRC,
+                        )
+                        .map_err(|error| {
+                            log::error!("failed to create the surface texture: {error}");
+                            match error {
+                                resource::CreateTextureError::Device(error) => {
+                                    SurfaceError::Device(error)
+                                }
+                                _ => SurfaceError::Device(DeviceError::Lost),
+                            }
+                        })?;
 
-                let texture = Arc::new(texture);
+                    present.acquired_surface_texture = Some(surface_texture);
+                    present.acquired_texture = Some(intermediate.clone());
 
-                device
-                    .trackers
-                    .lock()
-                    .textures
-                    .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
-
-                if present.acquired_texture.is_some() {
-                    return Err(SurfaceError::AlreadyAcquired);
-                }
-                present.acquired_texture = Some(texture.clone());
-
-                let status = if ast.suboptimal {
-                    Status::Suboptimal
+                    (Some(intermediate), status)
                 } else {
-                    Status::Good
-                };
-                (Some(texture), status)
+                    let hal_usage = conv::map_texture_usage(
+                        config.usage,
+                        config.format.into(),
+                        format_features.flags,
+                    );
+                    let clear_view_desc = hal::TextureViewDescriptor {
+                        label: hal_label(
+                            Some("(wgpu internal) clear surface texture view"),
+                            device.instance_flags,
+                        ),
+                        format: config.format,
+                        dimension: wgt::TextureViewDimension::D2,
+                        usage: wgt::TextureUses::COLOR_TARGET,
+                        range: wgt::ImageSubresourceRange::default(),
+                        swizzle: wgt::TextureComponentSwizzle::default(),
+                    };
+                    let clear_view = unsafe {
+                        device
+                            .raw()
+                            .create_texture_view(ast.texture.as_ref().borrow(), &clear_view_desc)
+                    }
+                    .map_err(|e| device.handle_hal_error(e))?;
+
+                    let mut presentation = self.presentation.lock();
+                    let present = presentation.as_mut().unwrap();
+                    let texture = resource::Texture::new(
+                        &device,
+                        resource::TextureInner::Surface { raw: ast.texture },
+                        hal_usage,
+                        &texture_desc,
+                        format_features,
+                        resource::TextureClearMode::Surface {
+                            clear_view: ManuallyDrop::new(clear_view),
+                        },
+                        true,
+                    );
+
+                    let texture = Arc::new(texture);
+
+                    device
+                        .trackers
+                        .lock()
+                        .textures
+                        .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
+
+                    if present.acquired_texture.is_some() {
+                        return Err(SurfaceError::AlreadyAcquired);
+                    }
+                    present.acquired_texture = Some(texture.clone());
+
+                    (Some(texture), status)
+                }
             }
             Err(err) => (
                 None,
@@ -327,7 +410,7 @@ impl Queue {
     pub fn present(&self, surface: &Surface) -> Result<Status, SurfaceError> {
         profiling::scope!("Queue::present");
 
-        let texture = {
+        let (texture, surface_texture, emulate_view_formats) = {
             let mut presentation = surface.presentation.lock();
             let present = match presentation.as_mut() {
                 Some(present) => present,
@@ -348,21 +431,23 @@ impl Queue {
                 ))));
             }
 
-            present
-                .acquired_texture
-                .take()
-                .ok_or(SurfaceError::NothingToPresent)?
+            (
+                present
+                    .acquired_texture
+                    .take()
+                    .ok_or(SurfaceError::NothingToPresent)?,
+                present.acquired_surface_texture.take(),
+                present.emulate_view_formats,
+            )
         };
-
-        // If the texture was never rendered to, clear it and transition to
-        // PRESENT state before presenting.
-        // Fixes <https://github.com/gfx-rs/wgpu/issues/6748>
-        self.prepare_surface_texture_for_present(&texture)?;
 
         let device = &self.device;
 
+        let presented_texture =
+            self.prepare_present_texture(texture, surface_texture, emulate_view_formats)?;
+
         let mut exclusive_snatch_guard = device.snatchable_lock.write();
-        let inner = texture
+        let inner = presented_texture
             .state()
             .ok()
             .and_then(|state| state.inner.snatch(&mut exclusive_snatch_guard));
@@ -399,6 +484,38 @@ impl Queue {
             },
         }
     }
+
+    /// Gets `texture` ready to be handed to the backend's present call.
+    ///
+    /// When surface view formats are emulated, `texture` is copied into
+    /// `surface_texture` and the latter is returned.
+    fn prepare_present_texture(
+        &self,
+        texture: Arc<resource::Texture>,
+        surface_texture: Option<Arc<resource::Texture>>,
+        emulate_view_formats: bool,
+    ) -> Result<Arc<resource::Texture>, SurfaceError> {
+        if emulate_view_formats {
+            let surface_texture = surface_texture.ok_or(SurfaceError::NothingToPresent)?;
+
+            // The application may never have rendered to the texture, in which
+            // case it is presented as transparent black; either way it is copied
+            // into the swapchain image, which is never the application's render
+            // target in this path. The submission that does the copy also
+            // transitions the swapchain image to PRESENT.
+            // Fixes <https://github.com/gfx-rs/wgpu/issues/6748>
+            self.prepare_surface_texture_copy_for_present(&texture, &surface_texture)?;
+
+            Ok(surface_texture)
+        } else {
+            // If the texture was never rendered to, clear it and transition to
+            // PRESENT state before presenting.
+            // Fixes <https://github.com/gfx-rs/wgpu/issues/6748>
+            self.prepare_surface_texture_for_present(&texture, wgt::TextureUses::PRESENT)?;
+
+            Ok(texture)
+        }
+    }
 }
 
 impl Surface {
@@ -429,9 +546,10 @@ impl Surface {
             .acquired_texture
             .take()
             .ok_or(SurfaceError::NothingToPresent)?;
+        let presented_texture = present.acquired_surface_texture.take().unwrap_or(texture);
 
         let mut exclusive_snatch_guard = device.snatchable_lock.write();
-        let inner = texture
+        let inner = presented_texture
             .state()
             .ok()
             .and_then(|state| state.inner.snatch(&mut exclusive_snatch_guard));
@@ -477,7 +595,274 @@ impl Surface {
             .acquired_texture
             .take()
             .ok_or(SurfaceError::NothingToPresent)?;
+        _ = present.acquired_surface_texture.take();
 
         Ok(())
+    }
+}
+
+#[cfg(all(test, feature = "noop", feature = "wgsl"))]
+mod tests {
+    use super::*;
+    use crate::hal;
+    use alloc::vec;
+    use core::any::Any;
+    use core::sync::atomic::{AtomicBool, Ordering};
+
+    const FORMAT: wgt::TextureFormat = wgt::TextureFormat::Rgba8UnormSrgb;
+    const VIEW_FORMAT: wgt::TextureFormat = wgt::TextureFormat::Rgba8Unorm;
+
+    #[derive(Default)]
+    struct RecordedSurfaceConfig {
+        view_formats: AtomicBool,
+        copy_dst: AtomicBool,
+    }
+
+    struct MockHalSurface {
+        recorded: Arc<RecordedSurfaceConfig>,
+    }
+
+    impl hal::DynResource for MockHalSurface {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+    }
+
+    impl hal::Surface for MockHalSurface {
+        type A = hal::noop::Api;
+
+        unsafe fn configure(
+            &self,
+            _device: &hal::noop::Context,
+            config: &hal::SurfaceConfiguration,
+        ) -> Result<(), hal::SurfaceError> {
+            self.recorded
+                .view_formats
+                .store(!config.view_formats.is_empty(), Ordering::Relaxed);
+            self.recorded.copy_dst.store(
+                config.usage.contains(wgt::TextureUses::COPY_DST),
+                Ordering::Relaxed,
+            );
+            Ok(())
+        }
+
+        unsafe fn unconfigure(&self, _device: &hal::noop::Context) {}
+
+        unsafe fn acquire_texture(
+            &self,
+            _timeout: Option<core::time::Duration>,
+            _fence: &hal::noop::Fence,
+        ) -> Result<hal::AcquiredSurfaceTexture<hal::noop::Api>, hal::SurfaceError> {
+            Ok(hal::AcquiredSurfaceTexture {
+                texture: hal::noop::Resource,
+                suboptimal: false,
+            })
+        }
+
+        unsafe fn discard_texture(&self, _texture: hal::noop::Resource) {}
+    }
+
+    fn mock_surface_capabilities(
+        native_view_formats: bool,
+        copy_dst_supported: bool,
+    ) -> hal::SurfaceCapabilities {
+        let mut usage = wgt::TextureUses::COLOR_TARGET | wgt::TextureUses::COPY_SRC;
+        usage.set(wgt::TextureUses::COPY_DST, copy_dst_supported);
+
+        hal::SurfaceCapabilities {
+            formats: vec![wgt::SurfaceFormatCapabilities {
+                format: FORMAT,
+                color_spaces: wgt::SurfaceColorSpaces::SRGB,
+            }],
+            maximum_frame_latency: 1..=4,
+            current_extent: None,
+            usage,
+            present_modes: vec![wgt::PresentMode::Fifo],
+            composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
+            native_view_formats,
+        }
+    }
+
+    fn mock_surface_config(
+        view_formats: Vec<wgt::TextureFormat>,
+    ) -> wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>> {
+        wgt::SurfaceConfiguration {
+            usage: wgt::TextureUsages::RENDER_ATTACHMENT,
+            format: FORMAT,
+            color_space: wgt::SurfaceColorSpace::Auto,
+            width: 4,
+            height: 4,
+            present_mode: wgt::PresentMode::Fifo,
+            desired_maximum_frame_latency: 2,
+            alpha_mode: wgt::CompositeAlphaMode::Opaque,
+            view_formats,
+        }
+    }
+
+    fn new_noop_device_and_queue() -> (Arc<Device>, Arc<Queue>) {
+        let instance = crate::instance::Instance::new(
+            "surface-view-formats",
+            wgt::InstanceDescriptor {
+                backends: wgt::Backends::NOOP,
+                backend_options: wgt::BackendOptions {
+                    noop: wgt::NoopBackendOptions::enabled(),
+                    ..Default::default()
+                },
+                ..wgt::InstanceDescriptor::new_without_display_handle()
+            },
+            None,
+        );
+        let adapter = instance
+            .enumerate_adapters(wgt::Backends::NOOP, false)
+            .into_iter()
+            .next()
+            .expect("the noop backend has no adapter");
+        adapter
+            .request_device(&crate::device::DeviceDescriptor::default())
+            .expect("failed to create the noop device")
+    }
+
+    fn new_surface_with_mock_hal_surface(recorded: Arc<RecordedSurfaceConfig>) -> Arc<Surface> {
+        let mock: Box<dyn hal::DynSurface> = Box::new(MockHalSurface { recorded });
+        Arc::new(Surface {
+            presentation: crate::lock::Mutex::new(crate::lock::rank::SURFACE_PRESENTATION, None),
+            surface_per_backend: core::iter::once((wgt::Backend::Noop, mock)).collect(),
+        })
+    }
+
+    #[test]
+    fn surface_view_formats_fast_path() {
+        // The swapchain image can expose the differing view format itself.
+        check_surface_view_formats(true, vec![VIEW_FORMAT], false);
+    }
+
+    #[test]
+    fn surface_view_formats_polyfill() {
+        // The swapchain image can't expose the differing view format, so a
+        // separate texture is copied into it when presenting.
+        check_surface_view_formats(false, vec![VIEW_FORMAT], true);
+    }
+
+    #[test]
+    fn surface_view_formats_same_format_is_not_emulated() {
+        // A view format equal to the surface format is always allowed, so it
+        // never needs a separate texture.
+        check_surface_view_formats(false, vec![FORMAT], false);
+    }
+
+    #[test]
+    fn surface_view_formats_without_copy_dst_is_rejected() {
+        // Emulating the differing view format requires copying into the
+        // swapchain image, which a surface without `COPY_DST` can't do.
+        let (device, _queue) = new_noop_device_and_queue();
+        let surface = new_surface_with_mock_hal_surface(Arc::new(RecordedSurfaceConfig::default()));
+        let config = mock_surface_config(vec![VIEW_FORMAT]);
+
+        let error = surface
+            .configure_with_caps(&device, &config, mock_surface_capabilities(false, false))
+            .expect_err("configuring emulated view formats without `COPY_DST` should fail");
+
+        assert!(
+            matches!(
+                error,
+                ConfigureSurfaceError::UnsupportedViewFormats { ref view_formats }
+                    if *view_formats == vec![VIEW_FORMAT]
+            ),
+            "unexpected error: {error:?}"
+        );
+    }
+
+    /// Checks one combination of surface capabilities and requested view
+    /// formats, where `emulate` is whether a separate texture is expected.
+    fn check_surface_view_formats(
+        native_view_formats: bool,
+        view_formats: Vec<wgt::TextureFormat>,
+        emulate: bool,
+    ) {
+        let (device, queue) = new_noop_device_and_queue();
+        let recorded = Arc::new(RecordedSurfaceConfig::default());
+        let surface = new_surface_with_mock_hal_surface(recorded.clone());
+        let config = mock_surface_config(view_formats);
+        let has_differing_view_format = config
+            .view_formats
+            .iter()
+            .any(|format| *format != config.format);
+
+        surface
+            .configure_with_caps(
+                &device,
+                &config,
+                mock_surface_capabilities(native_view_formats, true),
+            )
+            .expect("failed to configure the surface");
+
+        // The fast path hands the differing view formats to the swapchain, the
+        // polyfill keeps them off the swapchain and makes it a copy destination.
+        assert_eq!(
+            recorded.view_formats.load(Ordering::Relaxed),
+            has_differing_view_format && !emulate
+        );
+        assert_eq!(recorded.copy_dst.load(Ordering::Relaxed), emulate);
+
+        let output = surface
+            .get_current_texture()
+            .expect("failed to acquire a surface texture");
+        let texture = output.texture.expect("no surface texture");
+
+        // Whatever path is taken, the application sees a texture with exactly
+        // the properties it configured.
+        assert_eq!(texture.desc.format, FORMAT);
+        assert_eq!(texture.desc.usage, config.usage);
+        assert_eq!(texture.desc.view_formats, config.view_formats);
+
+        let surface_texture = {
+            let presentation = surface.presentation.lock();
+            presentation
+                .as_ref()
+                .unwrap()
+                .acquired_surface_texture
+                .clone()
+        };
+        assert_eq!(surface_texture.is_some(), emulate);
+
+        let handed_out_is_surface = {
+            let snatch_guard = device.snatchable_lock.read();
+            matches!(
+                texture.try_inner(&snatch_guard).unwrap(),
+                resource::TextureInner::Surface { .. }
+            )
+        };
+        assert_eq!(handed_out_is_surface, !emulate);
+
+        // The application never rendered to the texture, so presenting has to
+        // clear it (to transparent black, see #6748).
+        let cleared_texture = texture.clone();
+        let presented = queue
+            .prepare_present_texture(texture, surface_texture, emulate)
+            .expect("failed to prepare the texture for presentation");
+
+        let initialized = cleared_texture
+            .initialization_status
+            .read()
+            .mips
+            .first()
+            .is_some_and(|mip| mip.check(0..1).is_none());
+        assert!(initialized, "the texture was not cleared before presenting");
+
+        let presented_is_surface = {
+            let snatch_guard = device.snatchable_lock.read();
+            matches!(
+                presented
+                    .state()
+                    .ok()
+                    .and_then(|state| state.inner.get(&snatch_guard)),
+                Some(resource::TextureInner::Surface { .. })
+            )
+        };
+        assert!(presented_is_surface);
     }
 }

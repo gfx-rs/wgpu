@@ -190,6 +190,14 @@ impl Surface for NativeSurface {
                 .flat_map(conv::map_vk_present_mode)
                 .collect(),
             composite_alpha_modes: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
+            // Without the `VK_KHR_swapchain` extension the surface is not used for presentation
+            // at all, so there is nothing to work around.
+            native_view_formats: !adapter
+                .phd_capabilities
+                .supports_extension(khr::swapchain::NAME)
+                || adapter
+                    .phd_capabilities
+                    .supports_extension(khr::swapchain_mutable_format::NAME),
         })
     }
 

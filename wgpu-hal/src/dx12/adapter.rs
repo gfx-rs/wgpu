@@ -1379,6 +1379,7 @@ impl crate::Adapter for super::Adapter {
                     wgt::CompositeAlphaMode::PreMultiplied,
                 ],
             },
+            native_view_formats: true,
         })
     }
 

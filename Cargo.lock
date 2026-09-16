@@ -4844,8 +4844,13 @@ name = "wgpu-bug-repro-02-present-bugs"
 version = "0.0.0"
 dependencies = [
  "env_logger",
+ "log",
  "pollster",
+ "raw-window-handle",
  "wgpu",
+ "wgpu-core",
+ "wgpu-hal",
+ "wgpu-types",
  "winit",
 ]
 

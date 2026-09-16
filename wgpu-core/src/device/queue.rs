@@ -120,13 +120,14 @@ impl Queue {
         self.life_tracker.lock()
     }
 
-    /// Ensure the surface texture is in the PRESENT state, clearing it if it was never rendered to.
+    /// Ensure the surface texture is in the `usage` state, clearing it if it was never rendered to.
     /// Submits any necessary work to the GPU before the HAL present call.
     ///
     /// See <https://github.com/gfx-rs/wgpu/issues/6748>
     pub(crate) fn prepare_surface_texture_for_present(
         &self,
         texture: &Arc<Texture>,
+        usage: wgt::TextureUses,
     ) -> Result<(), DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
         let submission = self
@@ -134,45 +135,13 @@ impl Queue {
             .map_err(|(_index, e)| e)?;
         let device = &self.device;
 
-        // If the texture is uninitialized it needs to be cleared before presenting
-        let needs_clear = {
-            let status = texture.initialization_status.read();
-            status
-                .mips
-                .first()
-                .is_some_and(|mip| mip.check(0..1).is_some())
-        };
-
         let mut pending_writes = self.pending_writes.lock();
 
-        if needs_clear {
-            // After encoding the clear operation, we must not return without
-            // adding the texture to `pending_writes`.
-            let encoder = pending_writes.activate();
-            let mut trackers = device.trackers.lock();
-            crate::command::clear_texture(
-                texture,
-                TextureInitRange {
-                    mip_range: 0..1,
-                    layer_range: 0..1,
-                },
-                None,
-                encoder,
-                &mut trackers.textures,
-                &device.alignments,
-                device.zero_buffer.as_ref(),
-                &submission.snatch_guard,
-                device.instance_flags,
-            )
-            .map_err(|e| match e {
-                ClearError::Device(e) => e,
-                _ => DeviceError::Lost,
-            })?;
-            texture.initialization_status.write().mips[0].drain(0..1);
-        }
+        let needs_clear =
+            self.clear_texture_if_uninitialized(texture, &mut pending_writes, &submission)?;
 
-        // Transition the texture to PRESENT in the device tracker.
-        // If it's already in PRESENT, this produces no barriers and we can skip the submission.
+        // Transition the texture to `usage` in the device tracker.
+        // If it's already in that state, this produces no barriers and we can skip the submission.
         //
         // This has to be after any clear_texture call because clear_texture modifies the tracker state internally.
         // Computing transitions afterward ensures they reflect the actual current state.
@@ -180,11 +149,7 @@ impl Queue {
             let mut trackers = device.trackers.lock();
             let pending: Vec<track::PendingTransition<wgt::TextureUses>> = trackers
                 .textures
-                .set_single(
-                    texture,
-                    texture.full_range.clone(),
-                    wgt::TextureUses::PRESENT,
-                )
+                .set_single(texture, texture.full_range.clone(), usage)
                 .collect();
             pending
         };
@@ -194,12 +159,12 @@ impl Queue {
             // clear operation for the texture, which would be a problem since
             // we haven't done anything yet to ensure it stays alive. If we
             // cleared the texture, then we must have produced a barrier to put
-            // it in PRESENT state, so `pending` will not be empty.
+            // it in its destination state, so `pending` will not be empty.
             debug_assert!(!needs_clear);
             return Ok(());
         }
 
-        // Emit the transition barriers to PRESENT.
+        // Emit the transition barriers.
         {
             let raw_texture = texture
                 .raw(&submission.snatch_guard)
@@ -225,6 +190,138 @@ impl Queue {
         //   destroyed before the GPU finishes the `clear_texture` operation
         //   encoded above.
         pending_writes.insert_texture(texture);
+
+        submission.submit(pending_writes)?;
+
+        Ok(())
+    }
+
+    /// If `texture` was never rendered to, records a clear of its first mip and
+    /// layer into `pending_writes`, so that it is presented as transparent
+    /// black. Returns whether a clear was recorded.
+    ///
+    /// See <https://github.com/gfx-rs/wgpu/issues/6748>.
+    fn clear_texture_if_uninitialized(
+        &self,
+        texture: &Arc<Texture>,
+        pending_writes: &mut PendingWrites,
+        submission: &PendingSubmission<'_>,
+    ) -> Result<bool, DeviceError> {
+        let needs_clear = {
+            let status = texture.initialization_status.read();
+            status
+                .mips
+                .first()
+                .is_some_and(|mip| mip.check(0..1).is_some())
+        };
+        if !needs_clear {
+            return Ok(false);
+        }
+
+        // After encoding the clear operation, we must not return without
+        // adding the texture to `pending_writes`.
+        let encoder = pending_writes.activate();
+        let mut trackers = self.device.trackers.lock();
+        crate::command::clear_texture(
+            texture,
+            TextureInitRange {
+                mip_range: 0..1,
+                layer_range: 0..1,
+            },
+            None,
+            encoder,
+            &mut trackers.textures,
+            &self.device.alignments,
+            self.device.zero_buffer.as_ref(),
+            &submission.snatch_guard,
+            self.device.instance_flags,
+        )
+        .map_err(|e| match e {
+            ClearError::Device(e) => e,
+            _ => DeviceError::Lost,
+        })?;
+        texture.initialization_status.write().mips[0].drain(0..1);
+        Ok(true)
+    }
+
+    /// Copies `src` into the swapchain image `dst` for presentation, clearing
+    /// `src` first if it was never rendered to.
+    ///
+    /// Used when surface view formats are emulated: the application renders
+    /// into `src`, which is copied into the swapchain image before presenting.
+    /// The clear, the transitions and the copy are all recorded into a single
+    /// submission. The swapchain image is left in `COPY_DST`; the submission
+    /// then transitions it to `PRESENT` like it does for any surface texture.
+    pub(crate) fn prepare_surface_texture_copy_for_present(
+        &self,
+        src: &Arc<Texture>,
+        dst: &Arc<Texture>,
+    ) -> Result<(), DeviceError> {
+        let snatch_guard = self.device.snatchable_lock.read();
+        let submission = self
+            .allocate_submission(snatch_guard)
+            .map_err(|(_index, e)| e)?;
+        let device = &self.device;
+
+        let mut pending_writes = self.pending_writes.lock();
+
+        // The application may never have rendered to `src`, in which case it
+        // still has to be presented as transparent black.
+        self.clear_texture_if_uninitialized(src, &mut pending_writes, &submission)?;
+
+        let src_raw = src.raw(&submission.snatch_guard).ok_or(DeviceError::Lost)?;
+        let dst_raw = dst.raw(&submission.snatch_guard).ok_or(DeviceError::Lost)?;
+
+        // The two textures' transitions are emitted in a single barrier pass.
+        let mut barriers: Vec<hal::TextureBarrier<'_, dyn hal::DynTexture>> = Vec::new();
+        {
+            let mut trackers = device.trackers.lock();
+            barriers.extend(
+                trackers
+                    .textures
+                    .set_single(src, src.full_range.clone(), wgt::TextureUses::COPY_SRC)
+                    .map(|pending| pending.into_hal(src_raw)),
+            );
+            barriers.extend(
+                trackers
+                    .textures
+                    .set_single(dst, dst.full_range.clone(), wgt::TextureUses::COPY_DST)
+                    .map(|pending| pending.into_hal(dst_raw)),
+            );
+        }
+
+        {
+            let encoder = pending_writes.activate();
+            // SAFETY:
+            // - The encoder is in the recording state after `activate()`.
+            // - Both textures are kept alive by adding them to `PendingWrites` below.
+            unsafe {
+                encoder.transition_textures(&barriers);
+                encoder.copy_texture_to_texture(
+                    src_raw,
+                    wgt::TextureUses::COPY_SRC,
+                    dst_raw,
+                    &[hal::TextureCopy {
+                        src_base: hal::TextureCopyBase {
+                            mip_level: 0,
+                            array_layer: 0,
+                            origin: wgt::Origin3d::ZERO,
+                            aspect: hal::FormatAspects::COLOR,
+                        },
+                        dst_base: hal::TextureCopyBase {
+                            mip_level: 0,
+                            array_layer: 0,
+                            origin: wgt::Origin3d::ZERO,
+                            aspect: hal::FormatAspects::COLOR,
+                        },
+                        size: src.desc.size.into(),
+                    }],
+                );
+            }
+        }
+
+        pending_writes.insert_texture(src);
+        pending_writes.insert_texture(dst);
 
         submission.submit(pending_writes)?;
 
@@ -661,6 +758,10 @@ impl WebGpuError for QueueSubmitError {
 /// - [`Queue::prepare_surface_texture_for_present`] examines the surface
 ///   texture being presented, and submits deferred initialization commands and
 ///   barriers to get it ready.
+///
+/// - [`Queue::prepare_surface_texture_copy_for_present`] does the same for the
+///   intermediate texture used when surface view formats are emulated, and
+///   copies it into the swapchain image in the same submission.
 ///
 /// - [`Queue::flush_writes_for_buffer`] and [`Queue::flush_pending_writes`]
 ///   simply submit the operations already staged in [`Queue::pending_writes`].

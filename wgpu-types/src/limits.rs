@@ -1243,7 +1243,7 @@ bitflags::bitflags! {
 
         /// Supports specifying which view format values are allowed when create_view() is called on a texture.
         ///
-        /// The WebGL and GLES backends doesn't support this.
+        /// The WebGL and GLES backends don't support this.
         const VIEW_FORMATS = 1 << 19;
 
         /// With this feature not present, there are the following restrictions on `Queue::copy_external_image_to_texture`:
@@ -1256,10 +1256,10 @@ bitflags::bitflags! {
         /// WebGL doesn't support this. WebGPU does.
         const UNRESTRICTED_EXTERNAL_TEXTURE_COPIES = 1 << 20;
 
-        /// Supports specifying which view formats are allowed when calling create_view on the texture returned by
-        /// `Surface::get_current_texture`.
+        /// Supports specifying which view formats are allowed when calling `create_view` on the
+        /// texture returned by `Surface::get_current_texture`.
         ///
-        /// The GLES/WebGL and Vulkan on Android doesn't support this.
+        /// The GLES/WebGL doesn't support this.
         const SURFACE_VIEW_FORMATS = 1 << 21;
 
         /// If this is true, calls to `CommandEncoder::resolve_query_set` will be performed on the queue timeline.
