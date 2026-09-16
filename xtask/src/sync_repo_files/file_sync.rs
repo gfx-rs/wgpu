@@ -166,10 +166,6 @@ fn copy_file(root: &Path, source: &Path, target: &Path) -> anyhow::Result<()> {
 }
 
 /// Returns the subset of `paths` that git ignores.
-///
-/// `git check-ignore` exits 1 when it matches nothing, which is not an error.
-/// The `-z` form is necessary because the default output quotes any path that
-/// holds a backslash, which every relative path does on Windows.
 fn git_ignored_paths(root: &Path, paths: &[PathBuf]) -> anyhow::Result<BTreeSet<PathBuf>> {
     if paths.is_empty() {
         return Ok(BTreeSet::new());
@@ -184,6 +180,8 @@ fn git_ignored_paths(root: &Path, paths: &[PathBuf]) -> anyhow::Result<BTreeSet<
         input.push(0);
     }
 
+    // The `-z` form is necessary because the default output quotes any path that
+    // holds a backslash, which every relative path does on Windows.
     let mut child = Command::new("git")
         .args(["check-ignore", "--stdin", "-z"])
         .current_dir(root)
@@ -201,6 +199,7 @@ fn git_ignored_paths(root: &Path, paths: &[PathBuf]) -> anyhow::Result<BTreeSet<
     let output = child
         .wait_with_output()
         .context("could not read from `git check-ignore`")?;
+    // `git check-ignore` exits 1 when it matches nothing, which is not an error.
     if !matches!(output.status.code(), Some(0 | 1)) {
         bail!(
             "`git check-ignore` failed: {}",
