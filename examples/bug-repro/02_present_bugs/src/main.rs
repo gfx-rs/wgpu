@@ -28,7 +28,7 @@ fn main() {
     env_logger::init();
     let options = Options::from_args();
     if options.manual_close {
-        println!("The window stays open and presents until you close it");
+        log::info!("The window stays open and presents until you close it");
     }
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
@@ -204,7 +204,7 @@ impl WgpuState {
         }))
         .expect("No adapter");
 
-        println!("Adapter: {:?}", adapter.get_info().name);
+        log::info!("Adapter: {:?}", adapter.get_info().name);
 
         let (device, queue) =
             pollster::block_on(adapter.request_device(&Default::default())).unwrap();
@@ -218,7 +218,7 @@ impl WgpuState {
             (surface_format, surface_format.add_srgb_suffix())
         };
         if options.draw_before_present {
-            println!(
+            log::info!(
                 "Clearing the view format {view_format:?} of the surface format {surface_format:?}"
             );
         }

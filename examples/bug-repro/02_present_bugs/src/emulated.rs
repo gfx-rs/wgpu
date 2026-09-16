@@ -97,10 +97,10 @@ impl EmulatedState {
             .configure(&device, &surface_config)
             .expect("failed to configure the surface");
 
-        println!("Adapter: {:?}", adapter.get_info().name);
-        println!("Emulating the view format {view_format:?} of the surface format {format:?}");
+        log::info!("Adapter: {:?}", adapter.get_info().name);
+        log::info!("Emulating the view format {view_format:?} of the surface format {format:?}");
         if options.draw_before_present {
-            println!("Clearing the {view_format:?} view before presenting");
+            log::info!("Clearing the {view_format:?} view before presenting");
         }
 
         Self {
