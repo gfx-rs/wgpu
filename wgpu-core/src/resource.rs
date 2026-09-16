@@ -1115,10 +1115,6 @@ impl Buffer {
     /// <https://gpuweb.github.io/gpuweb/#dom-gpubuffer-unmap>
     fn unmap_inner(self: &Arc<Self>) -> Option<BufferMapPendingClosure> {
         let device = &self.device;
-        // We can stop here if the device is invalid because:
-        // - if the device was invalid from the start it couldn't have been mapped via `map_async` anyway
-        // - if the device becomes invalid it calls the callback in `poll`/`maintain`
-        self.device.check_is_valid().ok()?;
         let snatch_guard = device.snatchable_lock.read();
         // We can stop here if the buffer is invalid or destroyed because:
         // - if the device was invalid from the start it couldn't have been mapped via `map_async` anyway
@@ -1140,6 +1136,11 @@ impl Buffer {
                         size: self.size,
                         queued: true,
                     });
+                }
+
+                if !device.is_valid() {
+                    staging_buffer.dispose();
+                    return None;
                 }
 
                 let staging_buffer = staging_buffer.flush();
@@ -1209,7 +1210,7 @@ impl Buffer {
                             queued: false,
                         });
                     }
-                    if !mapping.is_coherent {
+                    if !mapping.is_coherent && device.is_valid() {
                         unsafe { device.raw().flush_mapped_ranges(raw_buf, &[range]) };
                     }
                 }
