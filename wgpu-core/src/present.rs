@@ -329,7 +329,7 @@ impl Surface {
                                     wgt::TextureUses::COPY_SRC,
                                 )
                                 .map_err(|error| {
-                                    log::error!("failed to create the surface texture: {error}");
+                                    log::error!("failed to create the intermediate texture for surface: {error}");
                                     match error {
                                         resource::CreateTextureError::Device(error) => {
                                             SurfaceError::Device(error)
