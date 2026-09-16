@@ -253,9 +253,8 @@ impl Queue {
     /// Used when surface view formats are emulated: the application renders
     /// into `src`, which is copied into the swapchain image before presenting.
     /// The clear, the transitions and the copy are all recorded into a single
-    /// submission. The swapchain image is left in `COPY_DST`;
-    /// [`Queue::submit_pending_submission`] then transitions it to `PRESENT`,
-    /// as it does for every surface texture in the submission.
+    /// submission, which leaves the swapchain image in `PRESENT`, like
+    /// [`Queue::prepare_surface_texture_for_present`] does.
     pub(crate) fn prepare_surface_texture_copy_for_present(
         &self,
         src: &Arc<Texture>,
@@ -321,6 +320,29 @@ impl Queue {
                         size: src.desc.size.into(),
                     }],
                 );
+            }
+        }
+
+        // The copy needs the swapchain image in `COPY_DST`, so the transition to
+        // `PRESENT` has to come after it, like `prepare_surface_texture_for_present`
+        // records it for the fast path.
+        {
+            barriers.clear();
+            {
+                let mut trackers = device.trackers.lock();
+                barriers.extend(
+                    trackers
+                        .textures
+                        .set_single(dst, dst.full_range.clone(), wgt::TextureUses::PRESENT)
+                        .map(|pending| pending.into_hal(dst_raw)),
+                );
+            }
+            let encoder = pending_writes.activate();
+            // SAFETY:
+            // - The encoder is in the recording state after `activate()`.
+            // - `dst` is kept alive by adding it to `PendingWrites` below.
+            unsafe {
+                encoder.transition_textures(&barriers);
             }
         }
 
