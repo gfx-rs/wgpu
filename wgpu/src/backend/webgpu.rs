@@ -2247,8 +2247,11 @@ impl dispatch::DeviceInterface for WebDevice {
             .entries
             .iter()
             .map(|bind| {
-                let mapped_entry =
-                    webgpu_sys::GpuBindGroupLayoutEntry::new(bind.binding, bind.visibility.bits());
+                assert!(bind.visibility.features_wgpu.is_empty());
+                let mapped_entry = webgpu_sys::GpuBindGroupLayoutEntry::new(
+                    bind.binding,
+                    bind.visibility.features_webgpu.bits(),
+                );
 
                 match bind.ty {
                     wgt::BindingType::Buffer {

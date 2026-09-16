@@ -8,6 +8,8 @@
 merge_queue:
   queued_label: "queue: queued"
   dequeued_label: "queue: dequeued"
+  status_comments: none
+  queue_controls_comment: false
 
 queue_rules:
   - name: rebase

@@ -72,7 +72,7 @@ ref_as_ptr = "warn"
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.93"
+rust-version = "1.95"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
@@ -140,7 +140,7 @@ exhaust = "0.2"
 fern = "0.7"
 flume = "0.12"
 futures-lite = "2"
-glam = "0.33.0"
+glam = "0.33.7"
 glob = "0.3"
 half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
 hashbrown = { version = "0.17", default-features = false, features = [
@@ -212,14 +212,14 @@ strum = { version = "0.28", default-features = false, features = ["derive"] }
 tempfile = "3"
 toml = "1.0.0"
 trybuild = "1"
-tracy-client = "0.18"
+tracy-client = "0.19"
 thiserror = { version = "2.0.12", default-features = false }
 ureq = { version = "3.2.0", default-features = false }
 unicode-ident = "1.0.5"
 walkdir = "2.3"
 winit = { version = "0.30.8", features = ["android-native-activity"] }
 which = "8"
-xshell = "0.2.2"
+xshell = "0.2.6"
 
 # Metal dependencies
 block2 = "0.6.2"
@@ -275,6 +275,7 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLAccelerationStructureTypes",
     "MTLAccelerationStructureCommandEncoder",
     "MTLResidencySet",
+    "MTLLogState",
 ] }
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "std",
@@ -292,7 +293,8 @@ ash = "0.38"
 
 # DX12 dependencies
 range-alloc = "0.1"
-mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
+# 0.1.5 requires a newer MSVC toolset than Visual Studio 2022 provides.
+mach-dxcompiler-rs = { version = ">=0.1.0,<=0.1.4", default-features = false } # remember to increase max_shader_model if applicable
 windows-core = { version = "0.62", default-features = false }
 windows-result = { version = "0.4", default-features = false }
 
