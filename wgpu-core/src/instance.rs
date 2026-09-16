@@ -1063,6 +1063,7 @@ impl Surface {
                 config: config.clone(),
                 acquired_texture: None,
                 acquired_surface_texture: None,
+                intermediate_texture: None,
                 emulate_view_formats,
             });
         }

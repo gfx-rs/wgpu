@@ -18,8 +18,9 @@ use crate::{
     conv,
     device::{queue::Queue, Device, DeviceError, MissingDownlevelFlags, WaitIdleError},
     hal_label,
+    init_tracker::TextureInitTracker,
     instance::Surface,
-    resource::{self, Labeled},
+    resource::{self, Labeled, RawResourceAccess},
 };
 
 use thiserror::Error;
@@ -29,6 +30,12 @@ use wgt::{
 };
 
 const FRAME_TIMEOUT_MS: u32 = 1000;
+
+/// Label of the texture that wraps the swapchain image.
+const SURFACE_TEXTURE_LABEL: &str = "<Surface Texture>";
+/// Label of the intermediate texture handed out when surface view formats are
+/// emulated.
+const INTERMEDIATE_TEXTURE_LABEL: &str = "<Intermediate Surface Texture>";
 
 #[derive(Debug)]
 pub(crate) struct Presentation {
@@ -43,6 +50,9 @@ pub(crate) struct Presentation {
     /// The actual swapchain image, only set when surface view formats are
     /// emulated.
     pub(crate) acquired_surface_texture: Option<Arc<resource::Texture>>,
+    /// The intermediate texture handed out by the previous
+    /// [`Surface::get_current_texture`], reused for the next one.
+    pub(crate) intermediate_texture: Option<Arc<resource::Texture>>,
     /// Whether surface view formats are emulated with an intermediate texture
     /// and a copy at present time.
     pub(crate) emulate_view_formats: bool,
@@ -226,7 +236,7 @@ impl Surface {
 
                 let texture_desc = wgt::TextureDescriptor {
                     label: hal_label(
-                        Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
+                        Some(alloc::borrow::Cow::Borrowed(SURFACE_TEXTURE_LABEL)),
                         device.instance_flags,
                     ),
                     size: wgt::Extent3d {
@@ -248,9 +258,6 @@ impl Surface {
                 };
 
                 if emulate_view_formats {
-                    // The swapchain image can't carry the requested view formats, so hand
-                    // out a separate texture and copy it into the swapchain image when
-                    // presenting.
                     let mut presentation = self.presentation.lock();
                     let present = presentation.as_mut().unwrap();
                     if present.acquired_texture.is_some() {
@@ -279,23 +286,60 @@ impl Surface {
                         .textures
                         .insert_single(&surface_texture, wgt::TextureUses::UNINITIALIZED);
 
-                    // `COPY_SRC` is not part of the descriptor the application
-                    // sees, but the texture has to be created with it on the
-                    // backend so that it can be copied into the swapchain image.
-                    let intermediate = device
-                        .create_texture_with_extra_hal_usage(
-                            &texture_desc,
-                            wgt::TextureUses::COPY_SRC,
-                        )
-                        .map_err(|error| {
-                            log::error!("failed to create the surface texture: {error}");
-                            match error {
-                                resource::CreateTextureError::Device(error) => {
-                                    SurfaceError::Device(error)
-                                }
-                                _ => SurfaceError::Device(DeviceError::Lost),
-                            }
-                        })?;
+                    // Reuse the intermediate texture of the previous frame. The
+                    // application has to present or discard a frame before
+                    // acquiring the next one, so the previous frame is done with
+                    // it; the queue ordering and the texture tracker take care of
+                    // synchronizing with the copy that read from it.
+                    let cached = {
+                        let snatch_guard = device.snatchable_lock.read();
+                        present
+                            .intermediate_texture
+                            .take()
+                            .filter(|texture| texture.raw(&snatch_guard).is_some())
+                    };
+
+                    let intermediate = match cached {
+                        Some(texture) => {
+                            // A new frame has nothing drawn into it yet, so it
+                            // has to be cleared again when presented without the
+                            // application rendering to it.
+                            *texture.initialization_status.write() = TextureInitTracker::new(
+                                texture_desc.mip_level_count,
+                                texture_desc.size.depth_or_array_layers,
+                            );
+                            texture
+                        }
+                        None => {
+                            // The intermediate is a texture of its own, so it
+                            // gets its own label.
+                            let mut desc = texture_desc.clone();
+                            desc.label = hal_label(
+                                Some(alloc::borrow::Cow::Borrowed(INTERMEDIATE_TEXTURE_LABEL)),
+                                device.instance_flags,
+                            );
+
+                            // `COPY_SRC` is not part of the descriptor the
+                            // application sees, but the texture has to be created
+                            // with it on the backend so that it can be copied into
+                            // the swapchain image.
+                            device
+                                .create_texture_with_extra_hal_usage(
+                                    &desc,
+                                    wgt::TextureUses::COPY_SRC,
+                                )
+                                .map_err(|error| {
+                                    log::error!("failed to create the surface texture: {error}");
+                                    match error {
+                                        resource::CreateTextureError::Device(error) => {
+                                            SurfaceError::Device(error)
+                                        }
+                                        _ => SurfaceError::Device(DeviceError::Lost),
+                                    }
+                                })?
+                        }
+                    };
+                    present.intermediate_texture = Some(intermediate.clone());
 
                     present.acquired_surface_texture = Some(surface_texture);
                     present.acquired_texture = Some(intermediate.clone());
@@ -818,6 +862,15 @@ mod tests {
         assert_eq!(texture.desc.format, FORMAT);
         assert_eq!(texture.desc.usage, config.usage);
         assert_eq!(texture.desc.view_formats, config.view_formats);
+        assert_eq!(
+            texture.desc.label,
+            if emulate {
+                INTERMEDIATE_TEXTURE_LABEL
+            } else {
+                SURFACE_TEXTURE_LABEL
+            },
+            "the handed out texture has an unexpected label"
+        );
 
         let surface_texture = {
             let presentation = surface.presentation.lock();
@@ -864,5 +917,136 @@ mod tests {
             )
         };
         assert!(presented_is_surface);
+    }
+
+    /// Configures `surface` to emulate the view format, so that its frames come
+    /// from an intermediate texture.
+    fn configure_with_intermediate_texture(surface: &Arc<Surface>, device: &Arc<Device>) {
+        surface
+            .configure_with_caps(
+                device,
+                &mock_surface_config(vec![VIEW_FORMAT]),
+                mock_surface_capabilities(false, true),
+            )
+            .expect("failed to configure the surface");
+    }
+
+    /// Presents the current frame like [`Queue::present`] does, without a real
+    /// backend present call, and returns the texture that was handed out.
+    fn present_frame(surface: &Arc<Surface>, queue: &Arc<Queue>) -> Arc<resource::Texture> {
+        let output = surface
+            .get_current_texture()
+            .expect("failed to acquire a surface texture");
+        let texture = output.texture.expect("no surface texture");
+
+        let (acquired, surface_texture, emulate_view_formats) = {
+            let mut presentation = surface.presentation.lock();
+            let present = presentation.as_mut().unwrap();
+            (
+                present.acquired_texture.take().unwrap(),
+                present.acquired_surface_texture.take(),
+                present.emulate_view_formats,
+            )
+        };
+        queue
+            .prepare_present_texture(acquired, surface_texture, emulate_view_formats)
+            .expect("failed to prepare the texture for presentation");
+
+        texture
+    }
+
+    #[test]
+    fn surface_view_formats_reuses_intermediate_texture() {
+        let (device, queue) = new_noop_device_and_queue();
+        let surface = new_surface_with_mock_hal_surface(Arc::new(RecordedSurfaceConfig::default()));
+        configure_with_intermediate_texture(&surface, &device);
+
+        let first = present_frame(&surface, &queue);
+        let second = present_frame(&surface, &queue);
+
+        assert!(
+            Arc::ptr_eq(&first, &second),
+            "the intermediate texture was not reused"
+        );
+    }
+
+    #[test]
+    fn surface_view_formats_reused_intermediate_texture_is_uninitialized() {
+        let (device, queue) = new_noop_device_and_queue();
+        let surface = new_surface_with_mock_hal_surface(Arc::new(RecordedSurfaceConfig::default()));
+        configure_with_intermediate_texture(&surface, &device);
+
+        // Presenting the first frame clears the texture.
+        let first = present_frame(&surface, &queue);
+        assert!(
+            first
+                .initialization_status
+                .read()
+                .mips
+                .first()
+                .is_some_and(|mip| mip.check(0..1).is_none()),
+            "the first frame was not cleared before presenting"
+        );
+
+        // The next frame starts out with nothing drawn into it, so presenting it
+        // without the application rendering to it has to clear it again.
+        let second = surface
+            .get_current_texture()
+            .expect("failed to acquire a surface texture")
+            .texture
+            .expect("no surface texture");
+        assert!(
+            second
+                .initialization_status
+                .read()
+                .mips
+                .first()
+                .is_some_and(|mip| mip.check(0..1).is_some()),
+            "the reused texture was not reset to uninitialized"
+        );
+    }
+
+    #[test]
+    fn surface_view_formats_destroyed_intermediate_texture_is_not_reused() {
+        let (device, queue) = new_noop_device_and_queue();
+        let surface = new_surface_with_mock_hal_surface(Arc::new(RecordedSurfaceConfig::default()));
+        configure_with_intermediate_texture(&surface, &device);
+
+        let first = present_frame(&surface, &queue);
+        first.destroy();
+
+        let second = present_frame(&surface, &queue);
+        assert!(
+            !Arc::ptr_eq(&first, &second),
+            "a destroyed intermediate texture was reused"
+        );
+    }
+
+    #[test]
+    fn surface_view_formats_reconfigure_does_not_reuse_intermediate_texture() {
+        let (device, queue) = new_noop_device_and_queue();
+        let surface = new_surface_with_mock_hal_surface(Arc::new(RecordedSurfaceConfig::default()));
+        configure_with_intermediate_texture(&surface, &device);
+
+        let first = present_frame(&surface, &queue);
+
+        let mut resized_config = mock_surface_config(vec![VIEW_FORMAT]);
+        resized_config.width = 8;
+        resized_config.height = 8;
+        surface
+            .configure_with_caps(
+                &device,
+                &resized_config,
+                mock_surface_capabilities(false, true),
+            )
+            .expect("failed to reconfigure the surface");
+
+        let second = present_frame(&surface, &queue);
+        assert!(
+            !Arc::ptr_eq(&first, &second),
+            "the intermediate texture of a previous configuration was reused"
+        );
+        assert_eq!(second.desc.size.width, 8);
+        assert_eq!(second.desc.size.height, 8);
     }
 }
