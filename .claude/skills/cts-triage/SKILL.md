@@ -218,15 +218,15 @@ The validation is triggering incorrectly. When `depthCompare` is undefined/missi
 
 The result lists have these purposes:
 
-- `cts_runner/test.lst` contains suites with no failures. It is not an
-  exhaustive list of passing suites.
-- `cts_runner/fail.lst` contains suites with failures. A comment can record the
-  pass rate, especially when the pass rate is high.
-- `cts_runner/skip.lst` contains suites in which at least 90% of the tests are
-  skipped.
+- `cts_runner/test.lst` contains sets of tests with no failures. It is not an
+  exhaustive list of passing sets of tests.
+- `cts_runner/fail.lst` contains sets of tests with failures. A comment can record
+  the pass rate, especially when the pass rate is high.
+- `cts_runner/skip.lst` contains sets of tests in which at least 90% of the tests
+  are skipped.
 
-If you fix a suite, add it to `cts_runner/test.lst` only when all of its tests
-pass or skip. Do not add a suite that has any failures.
+If you fix a set of tests, add it to `cts_runner/test.lst` only when all of its
+tests pass or skip. Do not add a set of tests that has any failures.
 
 Use wildcards to minimize the number of selectors:
 
