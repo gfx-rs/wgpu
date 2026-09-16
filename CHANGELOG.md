@@ -162,7 +162,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 #### Vulkan
 
-- `SURFACE_VIEW_FORMATS` is now supported without `VK_KHR_swapchain_mutable_format`: `wgpu-core` polyfills it by handing out an intermediate texture and copying it into the swapchain image when presenting. By @beicause in [#9999](https://github.com/gfx-rs/wgpu/issues/9999).
+- `SURFACE_VIEW_FORMATS` is now supported without `VK_KHR_swapchain_mutable_format`: `wgpu-core` polyfills it by handing out an intermediate texture and copying it into the swapchain image when presenting. By @beicause in [#10357](https://github.com/gfx-rs/wgpu/issues/10357).
 
 #### Metal
 
