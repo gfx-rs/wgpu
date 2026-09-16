@@ -555,7 +555,7 @@ impl Queue {
             // If the texture was never rendered to, clear it and transition to
             // PRESENT state before presenting.
             // Fixes <https://github.com/gfx-rs/wgpu/issues/6748>
-            self.prepare_surface_texture_for_present(&texture, wgt::TextureUses::PRESENT)?;
+            self.prepare_surface_texture_for_present(&texture)?;
 
             Ok(texture)
         }

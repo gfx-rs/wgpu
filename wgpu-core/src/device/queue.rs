@@ -120,14 +120,13 @@ impl Queue {
         self.life_tracker.lock()
     }
 
-    /// Ensure the surface texture is in the `usage` state, clearing it if it was never rendered to.
+    /// Ensure the surface texture is in the `PRESENT` state, clearing it if it was never rendered to.
     /// Submits any necessary work to the GPU before the HAL present call.
     ///
     /// See <https://github.com/gfx-rs/wgpu/issues/6748>
     pub(crate) fn prepare_surface_texture_for_present(
         &self,
         texture: &Arc<Texture>,
-        usage: wgt::TextureUses,
     ) -> Result<(), DeviceError> {
         let snatch_guard = self.device.snatchable_lock.read();
         let submission = self
@@ -140,7 +139,7 @@ impl Queue {
         let needs_clear =
             self.clear_texture_if_uninitialized(texture, &mut pending_writes, &submission)?;
 
-        // Transition the texture to `usage` in the device tracker.
+        // Transition the texture to `PRESENT` in the device tracker.
         // If it's already in that state, this produces no barriers and we can skip the submission.
         //
         // This has to be after any clear_texture call because clear_texture modifies the tracker state internally.
@@ -149,7 +148,11 @@ impl Queue {
             let mut trackers = device.trackers.lock();
             let pending: Vec<track::PendingTransition<wgt::TextureUses>> = trackers
                 .textures
-                .set_single(texture, texture.full_range.clone(), usage)
+                .set_single(
+                    texture,
+                    texture.full_range.clone(),
+                    wgt::TextureUses::PRESENT,
+                )
                 .collect();
             pending
         };
@@ -250,8 +253,9 @@ impl Queue {
     /// Used when surface view formats are emulated: the application renders
     /// into `src`, which is copied into the swapchain image before presenting.
     /// The clear, the transitions and the copy are all recorded into a single
-    /// submission. The swapchain image is left in `COPY_DST`; the submission
-    /// then transitions it to `PRESENT` like it does for any surface texture.
+    /// submission. The swapchain image is left in `COPY_DST`;
+    /// [`Queue::submit_pending_submission`] then transitions it to `PRESENT`,
+    /// as it does for every surface texture in the submission.
     pub(crate) fn prepare_surface_texture_copy_for_present(
         &self,
         src: &Arc<Texture>,
