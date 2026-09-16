@@ -182,7 +182,7 @@ Do not use "LLM generated" as a justification for low quality code.
 Additionally, please write Issue and PR descriptions and large explanatory
 comment blocks yourself. These need to be read by maintainers and maintainer
 time is at a premium, so be respectful of maintainers time by not giving
-them unadultered LLM content to read.
+them unadulterated LLM content to read.
 
 #### Undue Burden
 
