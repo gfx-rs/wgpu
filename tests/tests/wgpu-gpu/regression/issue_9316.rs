@@ -101,15 +101,15 @@ fn dynamic_offset_bounds_with_unordered_entries(ctx: TestingContext) {
         (
             &[0],
             concat!(
-                "BindGroup with 'bg' label 0 expects 2 dynamic offsets. ",
-                "However 1 dynamic offset were provided.",
+                "BindGroup with 'bg' label at index 0 expects 2 dynamic offsets, but ",
+                "1 dynamic offset was provided",
             ),
         ),
         (
             &[0, align32, 0],
             concat!(
-                "BindGroup with 'bg' label 0 expects 2 dynamic offsets. ",
-                "However 3 dynamic offsets were provided.",
+                "BindGroup with 'bg' label at index 0 expects 2 dynamic offsets, but ",
+                "3 dynamic offsets were provided",
             ),
         ),
     ];
