@@ -144,3 +144,5 @@ pub struct ShaderModuleDescriptor<'a> {
 }
 
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
+
+pub use naga_types::wgsl::language_extension::ImplementedLanguageExtension;
