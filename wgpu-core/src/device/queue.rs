@@ -279,14 +279,8 @@ impl Drop for Queue {
 
         // On Vulkan, pending presents are not tracked by fences.
         // wait_for_idle covers both fence-tracked submissions and pending presents.
-        match unsafe { self.raw.wait_for_idle() } {
-            Ok(()) => {}
-            Err(hal::DeviceError::Lost) => {
-                self.device.handle_hal_error(hal::DeviceError::Lost);
-            }
-            Err(e) => {
-                panic!("Unexpected error while waiting for queue idle on drop: {e:?}");
-            }
+        if let Err(e) = unsafe { self.raw.wait_for_idle() } {
+            self.device.handle_hal_error(e);
         }
 
         let last_successful_submission_index = self
