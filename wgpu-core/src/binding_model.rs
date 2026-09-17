@@ -1609,7 +1609,7 @@ pub enum BindError {
     )]
     DynamicOffsetCountNotZero { group: u32, actual: usize },
     #[error(
-        "{bind_group} {group} expects {expected} dynamic offset{s0}. However {actual} dynamic offset{s1} {to_be} provided.",
+        "{bind_group} at index {group} expects {expected} dynamic offset{s0}, but {actual} dynamic offset{s1} {to_be} provided",
         s0 = if *.expected >= 2 { "s" } else { "" },
         s1 = if *.actual >= 2 { "s" } else { "" },
         to_be = if *.actual == 1 { "was" } else { "were" },
