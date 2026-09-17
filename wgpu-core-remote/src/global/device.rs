@@ -4,8 +4,9 @@ use core::ptr::NonNull;
 use wgpu_core_remote_types::{
     encoders::{RenderBundleDescriptor, RenderBundleEncoderDescriptor},
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
-    BufferDescriptor, ExternalTextureDescriptor, PipelineLayoutDescriptor, QuerySetDescriptor,
-    SamplerDescriptor, ShaderModuleDescriptor, TextureDescriptor, TextureViewDescriptor,
+    BufferDescriptor, ExternalTextureDescriptor, PipelineError, PipelineLayoutDescriptor,
+    QuerySetDescriptor, SamplerDescriptor, ShaderModuleDescriptor, TextureDescriptor,
+    TextureViewDescriptor,
 };
 
 use wgpu_core::{
@@ -998,7 +999,7 @@ impl Global {
         device_id: DeviceId,
         desc: &RenderPipelineDescriptor,
         id_in: id::RenderPipelineId,
-    ) -> Result<(), pipeline::CreateRenderPipelineError> {
+    ) -> Result<(), PipelineError> {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             render_pipelines,
@@ -1017,7 +1018,10 @@ impl Global {
                 render_pipelines.assign(id_in, pipeline);
                 Ok(())
             }
-            Err(e) => Err(e),
+            Err(e) if e.webgpu_error_type() == wgt::error::ErrorType::Validation => {
+                Err(PipelineError::Validation(e.to_string()))
+            }
+            Err(e) => Err(PipelineError::Internal(e.to_string())),
         }
     }
 
@@ -1102,7 +1106,7 @@ impl Global {
         device_id: DeviceId,
         desc: &ComputePipelineDescriptor,
         id_in: id::ComputePipelineId,
-    ) -> Result<(), pipeline::CreateComputePipelineError> {
+    ) -> Result<(), PipelineError> {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             compute_pipelines,
@@ -1137,7 +1141,10 @@ impl Global {
                 compute_pipelines.assign(id_in, pipeline);
                 Ok(())
             }
-            Err(e) => Err(e),
+            Err(e) if e.webgpu_error_type() == wgt::error::ErrorType::Validation => {
+                Err(PipelineError::Validation(e.to_string()))
+            }
+            Err(e) => Err(PipelineError::Internal(e.to_string())),
         }
     }
 

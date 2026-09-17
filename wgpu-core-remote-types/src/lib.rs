@@ -146,3 +146,12 @@ pub struct ShaderModuleDescriptor<'a> {
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 
 pub use naga_types::wgsl::language_extension::ImplementedLanguageExtension;
+
+/// Describes a pipeline creation error.
+///
+/// Corresponds to [WebGPU `GPUPipelineError`](https://www.w3.org/TR/webgpu/#gpupipelineerror).
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum PipelineError {
+    Validation(String),
+    Internal(String),
+}
