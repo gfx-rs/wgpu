@@ -18,6 +18,10 @@ float gain_x_10_ = 11.0;
 
 float store_override = 0.0;
 
+vec4 override_compose = vec4(vec2(1.1, 1.0), vec2(2.0, 3.0));
+
+vec4 override_compose_zero_value = vec4(vec2(0.0), 1.1, 1.0);
+
 
 void main() {
     float t = 23.0;
@@ -27,6 +31,8 @@ void main() {
     float _e9 = gain_x_10_;
     gain_x_100_ = (_e9 * 10.0);
     store_override = gain;
+    vec4 phony = override_compose;
+    vec4 phony_1 = override_compose_zero_value;
     return;
 }
 
