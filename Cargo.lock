@@ -2495,6 +2495,7 @@ dependencies = [
  "indexmap",
  "rustc-hash 1.1.0",
  "serde",
+ "strum 0.28.0",
  "thiserror 2.0.20",
 ]
 
