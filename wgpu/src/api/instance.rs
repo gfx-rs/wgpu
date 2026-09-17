@@ -409,6 +409,13 @@ impl Instance {
             inner: crate::backend::ContextWgpuCore::from_core_instance(core_instance).into(),
         }
     }
+
+    /// Get the [`wgpu_core`] instance from this `Instance`.
+    ///
+    /// Returns `None` if the instance is not from the `wgpu_core` backend
+    pub fn as_core(&self) -> Option<Arc<wgc::instance::Instance>> {
+        self.inner.as_core_opt().map(|instance| instance.as_core())
+    }
 }
 
 /// Interop with custom backends.

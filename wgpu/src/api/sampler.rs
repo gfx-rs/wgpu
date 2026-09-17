@@ -26,6 +26,25 @@ impl Sampler {
     }
 }
 
+#[cfg(wgpu_core)]
+impl Sampler {
+    /// Create a new sampler of wgpu from a wgpu-core sampler.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_sampler` - wgpu-core sampler.
+    pub fn from_core(core_sampler: alloc::sync::Arc<wgc::resource::Sampler>) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreSampler::from_core(core_sampler).into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core sampler if this `Sampler` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::resource::Sampler>> {
+        self.inner.as_core_opt().map(|s| s.as_core())
+    }
+}
+
 /// Describes a [`Sampler`].
 ///
 /// For use with [`Device::create_sampler`].

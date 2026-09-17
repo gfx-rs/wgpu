@@ -106,6 +106,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 - Zero-size vertex and index buffer bindings are now accepted by `set_vertex_buffer` and `set_index_buffer`. By @andyleiserson in [#9848](https://github.com/gfx-rs/wgpu/pull/9848).
 - Added the `snorm10-10-10-2` vertex format on Metal and Vulkan. Not yet supported on DX12. By @andyleiserson in [#10226](https://github.com/gfx-rs/wgpu/pull/10226).
+- Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
 
 #### Naga
 
