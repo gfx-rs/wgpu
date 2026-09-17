@@ -168,3 +168,9 @@ pub enum PipelineError {
     Validation(String),
     Internal(String),
 }
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum BufferMapError {
+    Aborted(String),
+    Operation(String),
+}
