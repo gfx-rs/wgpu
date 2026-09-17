@@ -94,6 +94,13 @@ webgpu:api,validation,capability_checks,limits,maxComputeWorkgroupsPerDimension:
 // https://github.com/gfx-rs/wgpu/issues/8945
 webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:*
 webgpu:api,validation,capability_checks,limits,maxStorageBufferBindingSize:validate,*
+webgpu:api,validation,capability_checks,limits,maxStorageBuffersInFragmentStage:*
+webgpu:api,validation,capability_checks,limits,maxStorageBuffersInVertexStage:*
+webgpu:api,validation,capability_checks,limits,maxStorageBuffersPerShaderStage:*
+webgpu:api,validation,capability_checks,limits,maxStorageTexturesInFragmentStage:*
+webgpu:api,validation,capability_checks,limits,maxStorageTexturesInVertexStage:*
+//FAIL: see <https://github.com/gfx-rs/wgpu/issues/10006>
+fails-if(metal) webgpu:api,validation,capability_checks,limits,maxStorageTexturesPerShaderStage:*
 webgpu:api,validation,capability_checks,limits,maxUniformBufferBindingSize:validate,*
 webgpu:api,validation,capability_checks,limits,maxVertexBufferArrayStride:validate,*
 webgpu:api,validation,capability_checks,limits,minStorageBufferOffsetAlignment:validate,*
