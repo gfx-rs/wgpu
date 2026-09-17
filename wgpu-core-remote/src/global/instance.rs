@@ -1,6 +1,9 @@
+use alloc::borrow::Cow;
+
 use alloc::sync::Arc;
 
 use wgpu_core_remote_types::DeviceDescriptor;
+use wgpu_core_remote_types::Label;
 use wgpu_core_remote_types::RequestAdapterOptions;
 use wgpu_core_remote_types::RequestDeviceError;
 use wgt::Backends;
@@ -126,11 +129,41 @@ fn map_request_device_error(err: wgpu_core::instance::RequestDeviceError) -> Req
     }
 }
 
+/// Accepts a `DeviceDescriptor` from the content process
+/// and accepts other parameters from trusted process.
+pub fn map_device_descriptor<'a>(
+    desc: &'a DeviceDescriptor<'a>,
+    trace: wgt::Trace,
+    additional_features: wgt::Features,
+) -> wgt::DeviceDescriptor<Label<'a>> {
+    wgt::DeviceDescriptor {
+        label: desc.label.as_ref().map(|l| Cow::Borrowed(l.as_ref())),
+        required_features: wgt::Features::from_internal_flags(
+            wgt::FeaturesWGPU::empty(),
+            desc.required_features,
+        )
+        .union(additional_features),
+        required_limits: desc.required_limits.clone(),
+        default_queue: wgt::QueueDescriptor {
+            label: desc
+                .default_queue
+                .label
+                .as_ref()
+                .map(|l| Cow::Borrowed(l.as_ref())),
+        },
+        experimental_features: wgt::ExperimentalFeatures::disabled(),
+        memory_hints: wgt::MemoryHints::MemoryUsage,
+        trace,
+    }
+}
+
 impl Global {
     pub fn adapter_request_device(
         &self,
         adapter_id: AdapterId,
         desc: &DeviceDescriptor,
+        trace: wgt::Trace,
+        additional_features: wgt::Features,
         device_id_in: DeviceId,
         queue_id_in: QueueId,
     ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
@@ -143,8 +176,9 @@ impl Global {
         } = &mut *hub;
 
         let adapter = adapters.get(adapter_id);
+        let desc = map_device_descriptor(desc, trace, additional_features);
         let (device, queue) = adapter
-            .request_device(desc)
+            .request_device(&desc)
             .map_err(map_request_device_error)?;
 
         let device_id = devices.assign(device_id_in, device);
@@ -154,10 +188,10 @@ impl Global {
         Ok((device_id, queue_id))
     }
 
-    pub fn adapter_validate_device_descriptor(
+    pub fn adapter_validate_device_descriptor<'a>(
         &self,
         adapter_id: AdapterId,
-        desc: &mut DeviceDescriptor,
+        desc: &mut wgt::DeviceDescriptor<Label<'a>>,
     ) -> Result<(), RequestDeviceError> {
         let hub = self.hub.borrow();
         let adapter = hub.adapters.get(adapter_id);
@@ -170,11 +204,11 @@ impl Global {
     ///
     /// - `hal_device` must be created from `adapter_id` or its internal handle.
     /// - `desc` must be a subset of `hal_device` features and limits.
-    pub unsafe fn create_device_from_hal(
+    pub unsafe fn create_device_from_hal<'a>(
         &self,
         adapter_id: AdapterId,
         hal_device: hal::DynOpenDevice,
-        desc: &DeviceDescriptor,
+        desc: &wgt::DeviceDescriptor<Label<'a>>,
         device_id_in: DeviceId,
         queue_id_in: QueueId,
     ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
