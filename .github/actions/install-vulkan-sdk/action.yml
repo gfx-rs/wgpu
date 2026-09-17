@@ -49,16 +49,21 @@ runs:
 
         echo "C:/VulkanSDK/${VULKAN_FULL_SDK_VERSION}/Bin" >> "$GITHUB_PATH"
 
-    - name: (Mac) Install Vulkan SDK
+    - name: (Mac) Cache Vulkan SDK
       if: runner.os == 'macOS'
+      id: mac-vulkan-cache
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: ~/VulkanSDK
+        key: vulkan-sdk-${{ runner.os }}-${{ runner.arch }}-${{ inputs.full-version }}-${{ env.ImageVersion }}
+
+    - name: (Mac) Install Vulkan SDK
+      if: runner.os == 'macOS' && steps.mac-vulkan-cache.outputs.cache-hit != 'true'
       shell: bash
       env:
         VULKAN_SDK_VERSION: ${{ inputs.version }}
         VULKAN_FULL_SDK_VERSION: ${{ inputs.full-version }}
-      # NOTE: We ignore the `github-env` lint because we trust:
-      #
-      # - The contents of the Vulkan SDK we are downloading.
-      run: | # zizmor: ignore[github-env]
+      run: |
         set -e
 
         curl -L --retry 5 https://sdk.lunarg.com/sdk/download/${VULKAN_FULL_SDK_VERSION}/mac/vulkansdk-macos-${VULKAN_FULL_SDK_VERSION}.zip -o vulkan-sdk.zip
@@ -67,4 +72,11 @@ runs:
         ls -l vulkan-sdk
         sudo ./vulkan-sdk/vulkansdk-macOS-${VULKAN_FULL_SDK_VERSION}.app/Contents/MacOS/vulkansdk-macOS-${VULKAN_FULL_SDK_VERSION} --root "$HOME/VulkanSDK" --accept-licenses --default-answer --confirm-command install
 
+    - name: (Mac) Add Vulkan SDK to PATH
+      if: runner.os == 'macOS'
+      shell: bash
+      # NOTE: We ignore the `github-env` lint because we trust:
+      #
+      # - The contents of the Vulkan SDK we are downloading.
+      run: | # zizmor: ignore[github-env]
         echo "$HOME/VulkanSDK/macOS/bin" >> "$GITHUB_PATH"

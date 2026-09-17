@@ -471,6 +471,15 @@ jobs:
           # check `wgpu` with all features.
           cargo check --target ${{ matrix.target }} --all-features -p wgpu
 
+      - name: Check core MSRV on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -e
+
+          rustup toolchain install ${{ env.CORE_MSRV }} --no-self-update --profile=minimal --target ${{ matrix.target }}
+          cargo +${{ env.CORE_MSRV }} check --target ${{ matrix.target }} --all-features -p wgpu-core -p wgpu-core-remote
+
   # We run minimal checks on the MSRV of the core crates, ensuring that
   # its dependency tree does not cause issues for firefox.
   #
@@ -487,11 +496,6 @@ jobs:
           - name: Windows x86_64
             os: windows-2022
             target: x86_64-pc-windows-msvc
-
-          # MacOS
-          - name: MacOS x86_64
-            os: macos-14
-            target: x86_64-apple-darwin
 
           # Linux
           - name: Linux x86_64
@@ -755,7 +759,7 @@ jobs:
 
       - name: Check Naga snapshots
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
-        run: git add . && git diff --exit-code HEAD naga/tests/out
+        run: git add -- naga/tests/out && git diff --exit-code HEAD -- naga/tests/out
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         name: Upload comparison images
