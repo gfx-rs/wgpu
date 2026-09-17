@@ -2,7 +2,6 @@
 
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::num::NonZeroU64;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -16,7 +15,6 @@ use wgpu_core::binding_model::BindingResource;
 use wgpu_core::error::EmptyErrorScopeStack;
 use wgpu_core::pipeline::ProgrammableStageDescriptor;
 use wgpu_core::resource::Labeled;
-use wgpu_types::BindingType;
 
 use super::bind_group::GPUBindGroup;
 use super::bind_group::GPUBindingResource;
@@ -225,7 +223,7 @@ impl GPUDevice {
       mip_level_count: descriptor.mip_level_count,
       sample_count: descriptor.sample_count,
       dimension: descriptor.dimension.clone().into(),
-      format: descriptor.format.clone().into(),
+      format: descriptor.format.into(),
       usage,
       view_formats: descriptor
         .view_formats
@@ -289,65 +287,9 @@ impl GPUDevice {
     #[webidl]
     descriptor: super::bind_group_layout::GPUBindGroupLayoutDescriptor,
   ) -> Result<GPUBindGroupLayout, JsErrorBox> {
-    let mut entries = Vec::with_capacity(descriptor.entries.len());
-
-    for entry in descriptor.entries {
-      let n_entries = [
-        entry.buffer.is_some(),
-        entry.sampler.is_some(),
-        entry.texture.is_some(),
-        entry.storage_texture.is_some(),
-        entry.external_texture.is_some(),
-      ]
-      .into_iter()
-      .filter(|t| *t)
-      .count();
-
-      if n_entries != 1 {
-        return Err(JsErrorBox::type_error(
-          "Only one of 'buffer', 'sampler', 'texture' and 'storageTexture' may be specified",
-        ));
-      }
-
-      let ty = if let Some(buffer) = entry.buffer {
-        BindingType::Buffer {
-          ty: buffer.r#type.into(),
-          has_dynamic_offset: buffer.has_dynamic_offset,
-          min_binding_size: NonZeroU64::new(buffer.min_binding_size),
-        }
-      } else if let Some(sampler) = entry.sampler {
-        BindingType::Sampler(sampler.r#type.into())
-      } else if let Some(texture) = entry.texture {
-        BindingType::Texture {
-          sample_type: texture.sample_type.into(),
-          view_dimension: texture.view_dimension.into(),
-          multisampled: texture.multisampled,
-        }
-      } else if let Some(storage_texture) = entry.storage_texture {
-        let format = storage_texture.format.into();
-        self.validate_texture_format_required_feature(format)?;
-        BindingType::StorageTexture {
-          access: storage_texture.access.into(),
-          format,
-          view_dimension: storage_texture.view_dimension.into(),
-        }
-      } else if entry.external_texture.is_some() {
-        BindingType::ExternalTexture
-      } else {
-        unreachable!()
-      };
-
-      entries.push(wgpu_types::BindGroupLayoutEntry {
-        binding: entry.binding,
-        visibility: entry.visibility.into(),
-        ty,
-        count: None, // native-only
-      });
-    }
-
     let wgpu_descriptor = wgpu_core::binding_model::BindGroupLayoutDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
-      entries: Cow::Owned(entries),
+      entries: Cow::Borrowed(&descriptor.entries),
     };
 
     let wgpu_bind_group_layout =
