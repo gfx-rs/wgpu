@@ -1,8 +1,8 @@
 use alloc::sync::Arc;
 
-use wgpu_core::instance::RequestDeviceError;
 use wgpu_core_remote_types::DeviceDescriptor;
 use wgpu_core_remote_types::RequestAdapterOptions;
+use wgpu_core_remote_types::RequestDeviceError;
 use wgt::Backends;
 
 use crate::global::Global;
@@ -114,6 +114,18 @@ impl Global {
     }
 }
 
+fn map_request_device_error(err: wgpu_core::instance::RequestDeviceError) -> RequestDeviceError {
+    match err {
+        e @ wgpu_core::instance::RequestDeviceError::LimitsExceeded(_) => {
+            RequestDeviceError::FailedLimit(e.to_string())
+        }
+        e @ wgpu_core::instance::RequestDeviceError::UnsupportedFeature(_) => {
+            RequestDeviceError::UnsupportedFeature(e.to_string())
+        }
+        e => RequestDeviceError::Other(e.to_string()),
+    }
+}
+
 impl Global {
     pub fn adapter_request_device(
         &self,
@@ -131,7 +143,9 @@ impl Global {
         } = &mut *hub;
 
         let adapter = adapters.get(adapter_id);
-        let (device, queue) = adapter.request_device(desc)?;
+        let (device, queue) = adapter
+            .request_device(desc)
+            .map_err(map_request_device_error)?;
 
         let device_id = devices.assign(device_id_in, device);
 
@@ -147,7 +161,9 @@ impl Global {
     ) -> Result<(), RequestDeviceError> {
         let hub = self.hub.borrow();
         let adapter = hub.adapters.get(adapter_id);
-        adapter.validate_device_descriptor(desc)
+        adapter
+            .validate_device_descriptor(desc)
+            .map_err(map_request_device_error)
     }
 
     /// # Safety
@@ -171,8 +187,8 @@ impl Global {
         } = &mut *hub;
 
         let adapter = adapters.get(adapter_id);
-        let (device, queue) =
-            unsafe { adapter.create_device_and_queue_from_hal(hal_device, desc) }?;
+        let (device, queue) = unsafe { adapter.create_device_and_queue_from_hal(hal_device, desc) }
+            .map_err(map_request_device_error)?;
 
         let device_id = devices.assign(device_id_in, device);
 
