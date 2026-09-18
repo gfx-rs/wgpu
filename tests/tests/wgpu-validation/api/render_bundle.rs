@@ -1,49 +1,14 @@
-use std::{borrow::Cow, sync::Arc};
-
-use wgpu_core::{
-    command as c,
-    device::{queue::Queue, Device},
-    instance::Instance,
-    resource,
-};
-use wgpu_types::{error::ErrorFilter, *};
-
-/// The public wgpu render bundle encoder has no debug methods yet, so these tests
-/// need a core device rather than the public device provided by the test helpers.
-fn core_device(discard_labels: bool) -> (Arc<Device>, Arc<Queue>) {
-    let mut desc = InstanceDescriptor::new_without_display_handle();
-    desc.backends = Backends::NOOP;
-    desc.flags = InstanceFlags::VALIDATION;
-    desc.flags
-        .set(InstanceFlags::DISCARD_HAL_LABELS, discard_labels);
-    desc.backend_options.noop.enable = true;
-    Instance::new("bundle debug validation", desc, None)
-        .request_adapter(&Default::default(), Backends::NOOP)
-        .unwrap()
-        .request_device(&Default::default())
-        .unwrap()
-}
-
-/// Checks one validation error scope, matching a diagnostic substring or expecting no error.
-#[track_caller]
-fn check_error<T>(device: &Device, expected: Option<&str>, f: impl FnOnce() -> T) -> T {
-    device.push_error_scope(ErrorFilter::Validation);
-    let result = f();
-    let error = device.pop_error_scope().unwrap();
-    assert_eq!(error.is_some(), expected.is_some(), "{error:?}");
-    if let Some(expected) = expected {
-        assert!(format!("{error:?}").contains(expected), "{error:?}");
-    }
-    result
-}
+use wgpu::*;
+use wgpu_test::{fail, fail_if, valid};
 
 /// Encodes `+` (push), `-` (pop), and `m` (marker), asserting no encoding-time error.
-fn encode(device: &Arc<Device>, ops: &str) -> Box<c::RenderBundleEncoder> {
-    let mut encoder = device.create_render_bundle_encoder(&c::RenderBundleEncoderDescriptor {
-        color_formats: Cow::Borrowed(&[Some(TextureFormat::Rgba8Unorm)]),
+fn encode<'a>(device: &'a Device, ops: &str) -> RenderBundleEncoder<'a> {
+    let mut encoder = device.create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
+        color_formats: &[Some(TextureFormat::Rgba8Unorm)],
+        sample_count: 1,
         ..Default::default()
     });
-    check_error(device, None, || {
+    valid(device, || {
         for op in ops.chars() {
             match op {
                 '+' => encoder.push_debug_group("group\0\u{1f31e}"),
@@ -60,54 +25,98 @@ fn encode(device: &Arc<Device>, ops: &str) -> Box<c::RenderBundleEncoder> {
 #[test]
 fn debug_group_balance() {
     for discard_labels in [false, true] {
-        let (device, _queue) = core_device(discard_labels);
+        let params = wgpu_test::TestParameters::default();
+        let params = if discard_labels {
+            params.instance_flags(InstanceFlags::DISCARD_HAL_LABELS)
+        } else {
+            params.remove_instance_flags(InstanceFlags::DISCARD_HAL_LABELS)
+        };
+        let instance = wgpu_test::initialize_instance(Backends::NOOP, &params);
+        let adapter = pollster::block_on(instance.request_adapter(&Default::default())).unwrap();
+        let (device, _queue) =
+            pollster::block_on(adapter.request_device(&Default::default())).unwrap();
         for (ops, expected) in [
             ("", None),
             ("m", None),
             ("+-", None),
             ("++m--", None),
             ("+-+-", None),
-            ("-", Some("InvalidPop")),
-            ("+", Some("MissingPop")),
+            ("-", Some("Cannot pop debug group")),
+            ("+", Some("A debug group was not popped")),
             // Equal push/pop counts must not hide an earlier underflow.
-            ("-+", Some("InvalidPop")),
-            ("+--+", Some("InvalidPop")),
-            ("+--", Some("InvalidPop")),
+            ("-+", Some("Cannot pop debug group")),
+            ("+--+", Some("Cannot pop debug group")),
+            ("+--", Some("Cannot pop debug group")),
         ] {
             eprintln!("ops={ops:?}, discard_labels={discard_labels}");
-            let mut encoder = encode(&device, ops);
-            check_error(&device, expected, || encoder.finish(&Default::default()));
+            let encoder = encode(&device, ops);
+            fail_if(
+                &device,
+                expected.is_some(),
+                || encoder.finish(&Default::default()),
+                expected,
+            );
         }
     }
 }
 
 /// Both successful and failed finish calls permanently end the encoder.
+/// Uses core directly because the public Rust API consumes the encoder at finish.
 #[test]
 fn finish_ends_encoder() {
-    let (device, _queue) = core_device(false);
-    for (ops, expected) in [
-        ("", None),
-        ("-", Some("InvalidPop")),
-        ("+", Some("MissingPop")),
-    ] {
-        let mut encoder = encode(&device, ops);
-        check_error(&device, expected, || encoder.finish(&Default::default()));
-        check_error(&device, Some("Ended"), || encoder.push_debug_group("ended"));
-        check_error(&device, Some("Ended"), || encoder.pop_debug_group());
-        check_error(&device, Some("Ended"), || {
-            encoder.insert_debug_marker("ended")
+    use wgpu_core::{command as c, instance::Instance};
+
+    let mut desc = InstanceDescriptor::new_without_display_handle();
+    desc.backends = Backends::NOOP;
+    desc.backend_options.noop.enable = true;
+    let (device, _queue) = Instance::new("bundle debug validation", desc, None)
+        .request_adapter(&Default::default(), Backends::NOOP)
+        .unwrap()
+        .request_device(&Default::default())
+        .unwrap();
+    for op in [None, Some('-'), Some('+')] {
+        let mut encoder = device.create_render_bundle_encoder(&c::RenderBundleEncoderDescriptor {
+            color_formats: std::borrow::Cow::Borrowed(&[Some(TextureFormat::Rgba8Unorm)]),
+            ..Default::default()
         });
-        check_error(&device, Some("Ended"), || {
-            encoder.finish(&Default::default())
-        });
+        match op {
+            Some('-') => encoder.pop_debug_group(),
+            Some('+') => encoder.push_debug_group("unclosed"),
+            _ => {}
+        }
+        device.push_error_scope(ErrorFilter::Validation);
+        encoder.finish(&Default::default());
+        assert_eq!(device.pop_error_scope().unwrap().is_some(), op.is_some());
+        for operation in ["push", "pop", "marker", "finish"] {
+            device.push_error_scope(ErrorFilter::Validation);
+            match operation {
+                "push" => encoder.push_debug_group("ended"),
+                "pop" => encoder.pop_debug_group(),
+                "marker" => encoder.insert_debug_marker("ended"),
+                "finish" => {
+                    encoder.finish(&Default::default());
+                }
+                _ => unreachable!(),
+            }
+            let error = device.pop_error_scope().unwrap().unwrap();
+            let expected = if operation == "finish" {
+                "Render bundle encoder has already ended"
+            } else {
+                "Encoding must not have ended"
+            };
+            assert!(
+                error.to_string().contains(expected),
+                "{operation} after {op:?}: {error}"
+            );
+        }
     }
 }
 
 /// Using an invalid bundle reports an error at command encoder finish, not pass end.
 #[test]
 fn invalid_bundle_rejected_by_pass() {
-    let (device, _queue) = core_device(false);
-    let texture = device.create_texture(&resource::TextureDescriptor {
+    let (device, _queue) = Device::noop(&Default::default());
+    let texture = device.create_texture(&TextureDescriptor {
         label: None,
         size: Extent3d {
             width: 1,
@@ -119,39 +128,43 @@ fn invalid_bundle_rejected_by_pass() {
         dimension: TextureDimension::D2,
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::RENDER_ATTACHMENT,
-        view_formats: vec![],
+        view_formats: &[],
     });
-    for (ops, expected) in [("-", "InvalidPop"), ("+", "MissingPop")] {
-        let bundle = check_error(&device, Some(expected), || {
-            encode(&device, ops).finish(&Default::default())
-        });
-        let commands = device.create_command_encoder(&Default::default());
-        check_error(&device, None, || {
-            let mut pass = commands.begin_render_pass(c::ResolvedRenderPassDescriptor {
-                color_attachments: Cow::Owned(vec![Some(c::RenderPassColorAttachment {
-                    view: texture.create_view(&Default::default()),
+    let view = texture.create_view(&Default::default());
+    for (ops, expected) in [
+        ("-", "Cannot pop debug group"),
+        ("+", "A debug group was not popped"),
+    ] {
+        let bundle = fail(
+            &device,
+            || encode(&device, ops).finish(&Default::default()),
+            Some(expected),
+        );
+        let mut commands = device.create_command_encoder(&Default::default());
+        valid(&device, || {
+            let mut pass = commands.begin_render_pass(&RenderPassDescriptor {
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &view,
                     depth_slice: None,
                     resolve_target: None,
-                    load_op: LoadOp::Clear(Color::BLACK),
-                    store_op: StoreOp::Store,
-                })]),
+                    ops: Operations::default(),
+                })],
                 ..Default::default()
             });
-            pass.push_debug_group("independent pass group", 0);
-            pass.execute_bundles(&[bundle]);
+            pass.push_debug_group("independent pass group");
+            pass.execute_bundles([&bundle]);
             pass.pop_debug_group();
-            pass.end();
         });
-        check_error(
+        fail(
             &device,
+            || commands.finish(),
             Some("RenderBundle with '' label is invalid"),
-            || commands.finish(&Default::default()),
         );
     }
 }
 
 #[test]
 fn dropping_invalid_encoder_does_not_report_error() {
-    let (device, _queue) = core_device(false);
-    check_error(&device, None, || drop(encode(&device, "-")));
+    let (device, _queue) = Device::noop(&Default::default());
+    valid(&device, || drop(encode(&device, "-")));
 }
