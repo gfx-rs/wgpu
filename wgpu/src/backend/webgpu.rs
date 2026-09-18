@@ -1764,15 +1764,35 @@ impl dispatch::AdapterInterface for WebAdapter {
         let required_limits = map_js_sys_limits(&desc.required_limits);
         mapped_desc.set_required_limits(&required_limits);
 
-        let required_features = desc
+        let blocked_features = wgt::FeaturesWebGPU::ALLOWED_ON_WEB_BACKEND
+            .complement()
+            .into();
+        let required_features = match desc
             .required_features
             .iter()
             .map(|feat| {
-                wasm_bindgen::JsValue::from(feat.as_str())
-                    .dyn_into::<js_sys::JsString>()
-                    .unwrap()
+                let name = feat.as_str().unwrap();
+                if feat.intersects(blocked_features) {
+                    Err(crate::RequestDeviceError {
+                        inner: crate::RequestDeviceErrorKind::WebGpu(format!(
+                            "Requested unsupported feature `{name}`. \
+                            This feature is unsupported by the WebGPU backend, even \
+                            if the underlying implementation supports it."
+                        )),
+                    })
+                } else {
+                    // Any other name is handed to the implementation, which rejects the
+                    // features it does not support.
+                    Ok(js_sys::JsString::from(name))
+                }
             })
-            .collect::<Vec<js_sys::JsString>>();
+            .collect::<Result<Vec<js_sys::JsString>, _>>()
+        {
+            Ok(features) => features,
+            Err(err) => {
+                return Box::pin(core::future::ready(Err(err)));
+            }
+        };
         mapped_desc.set_required_features(&required_features);
 
         if let Some(label) = desc.label {
@@ -1799,7 +1819,16 @@ impl dispatch::AdapterInterface for WebAdapter {
     }
 
     fn features(&self) -> crate::Features {
-        map_wgt_features(self.inner.features())
+        // We generally want to expose WebGPU features offered by the underlying
+        // implementation if we know about them, and not if we don't (because in that case
+        // we don't know if changes are needed in the WebGPU backend to correctly pass them
+        // through). Cleared bits in the `ALLOWED_ON_WEB_BACKEND` mask specify individual
+        // features that should never be exposed by the WebGPU backend regardless of
+        // underlying support. This may be appropriate in cases where missing logic in the
+        // WebGPU backend means the feature will not work via `wgpu` even though it is
+        // supported by the underlying backend, or where there is concern about interactions
+        // or confusion with `wgpu` native features having subtly different API or behavior.
+        map_wgt_features(self.inner.features()) & wgt::FeaturesWebGPU::ALLOWED_ON_WEB_BACKEND.into()
     }
 
     fn limits(&self) -> crate::Limits {
