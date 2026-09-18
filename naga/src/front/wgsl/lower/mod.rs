@@ -1521,7 +1521,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let init = ectx
                     .try_automatic_conversions(init, &ty_res, name.span)
                     .map_err(|error| match *error {
+                        // Both of these mean the same thing to the reader of a
+                        // `var`/`let` declaration: the initializer's type isn't
+                        // the declared one.
                         Error::AutoConversion(e) => Box::new(Error::InitializationTypeMismatch {
+                            name: name.span,
+                            expected: e.dest_type,
+                            got: e.source_type,
+                        }),
+                        Error::TypeMismatch(e) => Box::new(Error::InitializationTypeMismatch {
                             name: name.span,
                             expected: e.dest_type,
                             got: e.source_type,
@@ -1529,17 +1537,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         _ => error,
                     })?;
 
-                let init_ty = ectx.register_type(init)?;
-                if !ectx.module.compare_types(
-                    &proc::TypeResolution::Handle(explicit_ty),
-                    &proc::TypeResolution::Handle(init_ty),
-                ) {
-                    return Err(Box::new(Error::InitializationTypeMismatch {
-                        name: name.span,
-                        expected: ectx.type_to_string(explicit_ty),
-                        got: ectx.type_to_string(init_ty),
-                    }));
-                }
                 ty = explicit_ty;
                 initializer = Some(init);
             }
@@ -2148,6 +2145,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                 let value;
                 if let Some(ast_expr) = ast_value {
+                    let value_span = ctx.ast_expressions.get_span(ast_expr);
                     let result_ty = ctx.function.result.as_ref().map(|r| r.ty);
                     let mut ectx = ctx.as_expression(block, &mut emitter);
                     let expr = self.expression_for_abstract(ast_expr, &mut ectx)?;
@@ -2156,7 +2154,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         let mut ectx = ctx.as_expression(block, &mut emitter);
                         let resolution = proc::TypeResolution::Handle(result_ty);
                         let converted =
-                            ectx.try_automatic_conversions(expr, &resolution, Span::default())?;
+                            ectx.try_automatic_conversions(expr, &resolution, value_span)?;
                         value = Some(converted);
                     } else {
                         value = Some(expr);
@@ -2596,6 +2594,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 };
 
                 access
+            }
+            ast::Expression::String(_) => {
+                return Err(Box::new(Error::InvalidStringLiteral {
+                    span,
+                    description: "String literals are only supported in debugPrintf",
+                }))
             }
         };
 
@@ -3932,6 +3936,61 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .push(ir::Statement::RayPipelineFunction(fun), function_span);
                     return Ok(None);
                 }
+                "debugPrintf" => {
+                    if !ctx
+                        .enable_extensions
+                        .contains(crate::front::wgsl::ImplementedEnableExtension::WgpuDebugPrintf)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: function_span,
+                            kind: crate::front::wgsl::ImplementedEnableExtension::WgpuDebugPrintf
+                                .into(),
+                        }));
+                    }
+
+                    if arguments.is_empty() {
+                        return Err(Box::new(Error::WrongArgumentCount {
+                            expected: 1..u32::MAX,
+                            found: 0,
+                            span: function_span,
+                        }));
+                    }
+
+                    // extract the format string
+                    let format_handle = arguments[0];
+                    let format = match ctx.ast_expressions[format_handle] {
+                        ast::Expression::String(s) => s.to_string(),
+                        _ => {
+                            return Err(Box::new(Error::ExpectedStringLiteral {
+                                span: ctx.ast_expressions.get_span(format_handle),
+                                description:
+                                    "debugPrintf's first argument must be a string literal",
+                            }))
+                        }
+                    };
+
+                    // extract remaining arguments (if any)
+                    let mut ir_arguments = Vec::with_capacity(arguments.len().saturating_sub(1));
+
+                    for &ast_handle in &arguments[1..] {
+                        let ir_handle = self.expression(ast_handle, ctx)?;
+                        ir_arguments.push(ir_handle);
+                    }
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block
+                        .extend(rctx.emitter.finish(&rctx.function.expressions));
+                    rctx.emitter.start(&rctx.function.expressions);
+                    rctx.block.push(
+                        ir::Statement::DebugPrintf {
+                            format,
+                            arguments: ir_arguments,
+                        },
+                        function_span,
+                    );
+
+                    return Ok(None);
+                }
                 _ => return Err(Box::new(Error::UnknownIdent(function_span, function_name))),
             }
         };
@@ -4799,6 +4858,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 doc_comments.push(Some(
                     member.doc_comments.iter().map(|s| s.to_string()).collect(),
                 ));
+            } else {
+                doc_comments.push(None);
             }
             members.push(ir::StructMember {
                 name: Some(member.name.name.to_owned()),

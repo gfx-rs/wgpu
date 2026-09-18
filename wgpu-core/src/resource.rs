@@ -11,6 +11,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
+    math::align_to,
     TextureSelector,
 };
 
@@ -25,7 +26,7 @@ use crate::{
     },
     hal_label,
     init_tracker::{BufferInitTracker, TextureInitTracker},
-    lock::{rank, Mutex, RwLock},
+    lock::{rank, Mutex, MutexGuard, RwLock},
     ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -597,36 +598,73 @@ impl Buffer {
     ///
     /// If the binding would overflow the buffer, then an error is returned.
     ///
-    /// Zero-size bindings are permitted here for historical reasons. Although
-    /// zero-size bindings are permitted by WebGPU, they are not permitted by
-    /// some backends. See [`Buffer::binding`] and
-    /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
-    pub fn resolve_binding_size(
+    /// `S` is `wgt::BufferSize` (`NonZeroU64`) when called from [`Buffer::binding`]
+    /// for a storage or uniform buffer binding. `S` is `wgt::BufferAddress` (`u64`)
+    /// when called from `resolve_vertex_or_index_binding_range` for a vertex or
+    /// index buffer binding.
+    fn resolve_binding_size<S: Copy + Into<wgt::BufferAddress> + TryFrom<wgt::BufferAddress>>(
         &self,
         offset: wgt::BufferAddress,
-        binding_size: Option<wgt::BufferSize>,
-    ) -> Result<u64, BindingError> {
+        binding_size: Option<S>,
+    ) -> Result<S, BindingError> {
         let buffer_size = self.size;
 
         match binding_size {
-            Some(binding_size) => match offset.checked_add(binding_size.get()) {
-                Some(end) if end <= buffer_size => Ok(binding_size.get()),
+            Some(binding_size) => match offset.checked_add(binding_size.into()) {
+                Some(end) if end <= buffer_size => Ok(binding_size),
                 _ => Err(BindingError::BindingRangeTooLarge {
                     buffer: self.error_ident(),
                     offset,
-                    binding_size: binding_size.get(),
+                    binding_size: binding_size.into(),
                     buffer_size,
                 }),
             },
-            None => {
-                buffer_size
-                    .checked_sub(offset)
-                    .ok_or_else(|| BindingError::BindingOffsetTooLarge {
-                        buffer: self.error_ident(),
-                        offset,
-                        buffer_size,
-                    })
-            }
+            None => buffer_size
+                .checked_sub(offset)
+                .and_then(|remaining| S::try_from(remaining).ok())
+                .ok_or_else(|| {
+                    if offset <= buffer_size {
+                        debug_assert_eq!(offset, buffer_size);
+                        BindingError::BindingOffsetEqualsSize {
+                            buffer: self.error_ident(),
+                            offset,
+                            buffer_size,
+                        }
+                    } else {
+                        BindingError::BindingOffsetTooLarge {
+                            buffer: self.error_ident(),
+                            offset,
+                            buffer_size,
+                        }
+                    }
+                }),
+        }
+    }
+
+    /// Resolve the binding range for a vertex or index buffer.
+    ///
+    /// This function is for vertex and index buffer bindings, which WebGPU
+    /// allows to have zero size. For storage and uniform buffer bindings,
+    /// which must have non-zero size, use [`Buffer::binding`].
+    ///
+    /// Returns an error if the binding would overflow the buffer.
+    pub fn resolve_vertex_or_index_binding_range(
+        &self,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
+    ) -> Result<Range<wgt::BufferAddress>, BindingError> {
+        let resolved_size = self.resolve_binding_size(offset, size)?;
+        if resolved_size != 0 {
+            Ok(offset..offset + resolved_size)
+        } else {
+            // Relocate zero-size binding to end of buffer, because hal does not support
+            // zero-size bindings (ignores end offsets). `create_buffer` must have
+            // ensured sufficient padding.
+            const _: () = {
+                assert!(wgt::VERTEX_ALIGNMENT == wgt::COPY_BUFFER_ALIGNMENT);
+            };
+            let target = align_to(self.size, wgt::VERTEX_ALIGNMENT);
+            Ok(target..target)
         }
     }
 
@@ -636,32 +674,24 @@ impl Buffer {
     /// If `binding_size` is `None`, then the remainder of the buffer starting
     /// from `offset` is used.
     ///
-    /// If the binding would overflow the buffer, then an error is returned.
+    /// Returns an error if the binding would overflow the buffer.
     ///
-    /// A zero-size binding at the end of the buffer is permitted here for historical reasons. Although
-    /// zero-size bindings are permitted by WebGPU, they are not permitted by
-    /// some backends. The zero-size binding need to be quashed or remapped to a
-    /// non-zero size, either universally in wgpu-core, or in specific backends
-    /// that do not support them. See
-    /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
-    ///
-    /// Although it seems like it would be simpler and safer to use the resolved
-    /// size in the returned [`hal::BufferBinding`], doing this (and removing
-    /// redundant logic in backends to resolve the implicit size) was observed
-    /// to cause problems in certain CTS tests, so an implicit size
-    /// specification is preserved in the output.
+    /// This function is for storage and uniform buffer bindings, which must have
+    /// non-zero size. For vertex and index buffer bindings, which may have zero
+    /// size, use [`Buffer::resolve_vertex_or_index_binding_range`].
     pub fn binding<'a>(
         &'a self,
         offset: wgt::BufferAddress,
         binding_size: Option<wgt::BufferSize>,
         snatch_guard: &'a SnatchGuard,
-    ) -> Result<(hal::BufferBinding<'a, dyn hal::DynBuffer>, u64), BindingError> {
+    ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer, wgt::BufferSize>, BindingError> {
         let buf_raw = self.try_raw(snatch_guard)?;
         let resolved_size = self.resolve_binding_size(offset, binding_size)?;
         // SAFETY: The offset and size passed to hal::BufferBinding::new_unchecked must
         // define a binding contained within the buffer.
-        Ok((
-            hal::BufferBinding::new_unchecked(buf_raw, offset, binding_size),
+        Ok(hal::BufferBinding::new_unchecked(
+            buf_raw,
+            offset,
             resolved_size,
         ))
     }
@@ -945,23 +975,30 @@ impl Buffer {
     /// Other errors are returned within `BufferMapPendingClosure`.
     #[must_use]
     pub(crate) fn map(&self, snatch_guard: &SnatchGuard) -> Option<BufferMapPendingClosure> {
-        // This _cannot_ be inlined into the match. If it is, the lock will be held
-        // open through the whole match, resulting in a deadlock when we try to re-lock
-        // the buffer back to active.
-        let mapping = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
-        let pending_mapping = match mapping {
+        // Hold the lock on `map_state` until we have updated it with the
+        // outcome of the mapping, to prevent concurrent activity from
+        // observing an intermediate state.
+        //
+        // Unfortunately this does mean that we hold the guard across
+        // `crate::device::map_buffer` and the associated call to
+        // `handle_hal_error`, which may invoke a device loss callback.
+        // See <https://github.com/gfx-rs/wgpu/issues/10031>.
+        let mut map_state = self.map_state.lock();
+        let pending_mapping = match mem::replace(&mut *map_state, BufferMapState::Idle) {
             BufferMapState::Waiting(pending_mapping) => pending_mapping,
             // Mapping cancelled
             BufferMapState::Idle => return None,
             // Mapping queued at least twice by map -> unmap -> map
             // and was already successfully mapped below
-            BufferMapState::Active { .. } => {
-                *self.map_state.lock() = mapping;
+            mapping @ BufferMapState::Active { .. } => {
+                *map_state = mapping;
                 return None;
             }
             _ => panic!("No pending mapping."),
         };
-        let status = if pending_mapping.range.start != pending_mapping.range.end {
+        let status = if let Err(error) = self.device.check_is_valid() {
+            Err(error.into())
+        } else if pending_mapping.range.start != pending_mapping.range.end {
             let host = pending_mapping.op.host;
             let size = pending_mapping.range.end - pending_mapping.range.start;
             match crate::device::map_buffer(
@@ -972,7 +1009,7 @@ impl Buffer {
                 snatch_guard,
             ) {
                 Ok(mapping) => {
-                    *self.map_state.lock() = BufferMapState::Active {
+                    *map_state = BufferMapState::Active {
                         mapping,
                         range: pending_mapping.range.clone(),
                         host,
@@ -982,7 +1019,7 @@ impl Buffer {
                 Err(e) => Err(e),
             }
         } else {
-            *self.map_state.lock() = BufferMapState::Active {
+            *map_state = BufferMapState::Active {
                 mapping: hal::BufferMapping {
                     ptr: NonNull::dangling(),
                     is_coherent: true,
@@ -1336,7 +1373,7 @@ impl StagingBuffer {
             memory_flags: hal::MemoryFlags::TRANSIENT,
         };
 
-        let raw = unsafe { device.raw().create_buffer(&stage_desc) }
+        let (raw, _) = unsafe { device.raw().create_buffer(&stage_desc) }
             .map_err(|e| device.handle_hal_error(e))?;
         let mapping = unsafe { device.raw().map_buffer(raw.as_ref(), 0..size.get()) }
             .map_err(|e| device.handle_hal_error(e))?;
@@ -1367,8 +1404,13 @@ impl StagingBuffer {
         unsafe { core::ptr::write_bytes(self.ptr.as_ptr(), 0, self.size.get() as usize) };
     }
 
-    pub(crate) fn write(&mut self, data: &[u8]) {
-        assert!(data.len() >= self.size.get() as usize);
+    /// Write the entire staging buffer.
+    ///
+    /// # Panics
+    ///
+    /// If `data.len()` is not equal to the size of the staging buffer.
+    pub(crate) fn write_exact(&mut self, data: &[u8]) {
+        assert_eq!(data.len(), self.size.get() as usize);
         // SAFETY: With the assert above, all of `copy_nonoverlapping`'s
         // requirements are satisfied.
         unsafe {
@@ -1376,6 +1418,25 @@ impl StagingBuffer {
                 data.as_ptr(),
                 self.ptr.as_ptr(),
                 self.size.get() as usize,
+            );
+        }
+    }
+
+    /// Write `data` to the staging buffer, filling any remainder with zeros.
+    ///
+    /// # Panics
+    ///
+    /// If `data` exceeds the size of the staging buffer.
+    pub(crate) fn write_with_zero_padding(&mut self, data: &[u8]) {
+        assert!(data.len() <= self.size.get() as usize);
+        // SAFETY: The assert ensures the requirements of `copy_nonoverlapping`
+        // and `write_bytes` are satisfied.
+        unsafe {
+            core::ptr::copy_nonoverlapping(data.as_ptr(), self.ptr.as_ptr(), data.len());
+            core::ptr::write_bytes(
+                self.ptr.as_ptr().add(data.len()),
+                0,
+                self.size.get() as usize - data.len(),
             );
         }
     }
@@ -1968,36 +2029,34 @@ impl Texture {
         match resolved_dimension {
             wgt::TextureViewDimension::D1
             | wgt::TextureViewDimension::D2
-            | wgt::TextureViewDimension::D3 => {
-                if resolved_array_layer_count != 1 {
-                    return Err(CreateTextureViewError::InvalidArrayLayerCount {
-                        requested: resolved_array_layer_count,
-                        dim: resolved_dimension,
-                    });
-                }
+            | wgt::TextureViewDimension::D3
+                if resolved_array_layer_count != 1 =>
+            {
+                return Err(CreateTextureViewError::InvalidArrayLayerCount {
+                    requested: resolved_array_layer_count,
+                    dim: resolved_dimension,
+                });
             }
-            wgt::TextureViewDimension::Cube => {
-                if resolved_array_layer_count != 6 {
-                    return Err(CreateTextureViewError::InvalidCubemapTextureDepth {
-                        depth: resolved_array_layer_count,
-                    });
-                }
+            wgt::TextureViewDimension::Cube if resolved_array_layer_count != 6 => {
+                return Err(CreateTextureViewError::InvalidCubemapTextureDepth {
+                    depth: resolved_array_layer_count,
+                });
             }
-            wgt::TextureViewDimension::CubeArray => {
-                if !resolved_array_layer_count.is_multiple_of(6) {
-                    return Err(CreateTextureViewError::InvalidCubemapArrayTextureDepth {
-                        depth: resolved_array_layer_count,
-                    });
-                }
+            wgt::TextureViewDimension::CubeArray
+                if !resolved_array_layer_count.is_multiple_of(6) =>
+            {
+                return Err(CreateTextureViewError::InvalidCubemapArrayTextureDepth {
+                    depth: resolved_array_layer_count,
+                });
             }
             _ => {}
         }
 
         match resolved_dimension {
-            wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
-                if self.desc.size.width != self.desc.size.height {
-                    return Err(CreateTextureViewError::InvalidCubeTextureViewSize);
-                }
+            wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray
+                if self.desc.size.width != self.desc.size.height =>
+            {
+                return Err(CreateTextureViewError::InvalidCubeTextureViewSize);
             }
             _ => {}
         }
@@ -3439,10 +3498,11 @@ impl Blas {
         };
 
         let submit_index = if let Some(queue) = device.get_queue() {
+            drop(state);
             queue.lock_life().prepare_compact(self).unwrap_or(0) // '0' means no wait is necessary
         } else {
             // We can safely unwrap below since we just set the `compacted_state` to `BlasCompactState::Waiting`.
-            let (mut callback, status) = self.read_back_compact_size().unwrap();
+            let (mut callback, status) = self.read_back_compact_size(state).unwrap();
             if let Some(callback) = callback.take() {
                 callback(status);
             }
@@ -3454,8 +3514,10 @@ impl Blas {
 
     /// This function returns [`None`] only if [`Self::compacted_state`] is not [`BlasCompactState::Waiting`].
     #[must_use]
-    pub(crate) fn read_back_compact_size(&self) -> Option<BlasCompactReadyPendingClosure> {
-        let mut state = self.compacted_state.lock();
+    pub(crate) fn read_back_compact_size(
+        &self,
+        mut state: MutexGuard<'_, BlasCompactState>,
+    ) -> Option<BlasCompactReadyPendingClosure> {
         let pending_compact = match mem::replace(&mut *state, BlasCompactState::Idle) {
             BlasCompactState::Waiting(pending_mapping) => pending_mapping,
             // Compaction cancelled e.g. by rebuild

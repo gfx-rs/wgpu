@@ -997,7 +997,7 @@ impl crate::Device for super::Device {
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,
-    ) -> Result<super::Buffer, crate::DeviceError> {
+    ) -> Result<(super::Buffer, wgt::BufferAddress), crate::DeviceError> {
         let vk_info = vk::BufferCreateInfo::default()
             .size(desc.size)
             .usage(conv::map_buffer_usage(desc.usage))
@@ -1073,12 +1073,15 @@ impl crate::Device for super::Device {
         self.counters.buffer_memory.add(allocation.size() as isize);
         self.counters.buffers.add(1);
 
-        Ok(super::Buffer {
-            raw,
-            ownership: super::BufferOwnership::Managed(Mutex::new(
-                super::BufferMemoryBacking::Managed(allocation),
-            )),
-        })
+        Ok((
+            super::Buffer {
+                raw,
+                ownership: super::BufferOwnership::Managed(Mutex::new(
+                    super::BufferMemoryBacking::Managed(allocation),
+                )),
+            },
+            desc.size,
+        ))
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         match buffer.ownership {
@@ -1826,9 +1829,7 @@ impl crate::Device for super::Device {
                                 vk::DescriptorBufferInfo::default()
                                     .buffer(binding.buffer.raw)
                                     .offset(binding.offset)
-                                    .range(
-                                        binding.size.map_or(vk::WHOLE_SIZE, wgt::BufferSize::get),
-                                    )
+                                    .range(binding.size.get())
                             },
                         ));
                     writes.push(

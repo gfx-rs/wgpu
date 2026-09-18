@@ -5,6 +5,7 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 use crate::common::wgsl::{TryToWgsl, TypeContext};
 use crate::front::wgsl::error::{
     AutoConversionError, AutoConversionLeafScalarError, ConcretizationFailedError,
+    TypeMismatchError,
 };
 use crate::front::wgsl::Result;
 use crate::{Handle, Span};
@@ -14,13 +15,15 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
     ///
     /// If no conversions are necessary, return `expr` unchanged.
     ///
-    /// If automatic conversions cannot convert `expr` to `goal_ty`, return an
-    /// [`AutoConversion`] error.
+    /// If `expr`'s type is concrete and differs from `goal_ty`, return a
+    /// [`TypeMismatch`] error. If it is abstract but automatic conversions
+    /// cannot convert it to `goal_ty`, return an [`AutoConversion`] error.
     ///
     /// Although the Load Rule is one of the automatic conversions, this
     /// function assumes it has already been applied if appropriate, as
     /// indicated by the fact that the Rust type of `expr` is not `Typed<_>`.
     ///
+    /// [`TypeMismatch`]: super::Error::TypeMismatch
     /// [`AutoConversion`]: super::Error::AutoConversion
     pub fn try_automatic_conversions(
         &mut self,
@@ -36,18 +39,29 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         let expr_inner = expr_resolution.inner_with(types);
         let goal_inner = goal_ty.inner_with(types);
 
-        // We can only convert abstract types, so if `expr` is not abstract do not even
-        // attempt conversion. This allows the validator to catch type errors correctly
-        // rather than them being misreported as type conversion errors.
-        // If the type is an array (of an array, etc) then we must check whether the
-        // type of the innermost array's base type is abstract.
-        if !expr_inner.is_abstract(types) {
-            return Ok(expr);
-        }
-
         // If `expr` already has the requested type, we're done.
         if self.module.compare_types(expr_resolution, goal_ty) {
             return Ok(expr);
+        }
+
+        // We can only convert abstract types, so if `expr` is not abstract then this
+        // is a plain type mismatch, not a failed conversion. Report it as such, rather
+        // than misreporting it as a conversion error, or leaving it to the IR
+        // validator, which can only name the operands by handle index.
+        // If the type is an array (of an array, etc) then we must check whether the
+        // type of the innermost array's base type is abstract.
+        if !expr_inner.is_abstract(types) {
+            let source_type = self.type_resolution_to_string(expr_resolution);
+            let dest_type = self.type_resolution_to_string(goal_ty);
+
+            return Err(Box::new(super::Error::TypeMismatch(Box::new(
+                TypeMismatchError {
+                    dest_span: goal_span,
+                    dest_type,
+                    source_span: expr_span,
+                    source_type,
+                },
+            ))));
         }
 
         let (_expr_scalar, goal_scalar) =
