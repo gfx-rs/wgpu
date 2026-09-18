@@ -4157,6 +4157,18 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
+    }
+
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.inner.push_debug_group(group_label);
+    }
+
+    fn pop_debug_group(&mut self) {
+        self.inner.pop_debug_group();
+    }
+
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         self.inner
             .draw_with_instance_count_and_first_vertex_and_first_instance(

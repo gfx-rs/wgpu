@@ -3606,9 +3606,6 @@ fn execute_bundle(
         ExecutionError::InvalidResource(e) => {
             RenderPassErrorInner::RenderCommand(RenderCommandError::InvalidResource(e))
         }
-        ExecutionError::Unimplemented(what) => {
-            RenderPassErrorInner::RenderCommand(RenderCommandError::Unimplemented(what))
-        }
     })?;
 
     unsafe {
