@@ -48,7 +48,32 @@ pub struct RequestAdapterOptions {
 
 assert_ffi_safe!(RequestAdapterOptions);
 
-pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
+/// Describes a `Device`.
+///
+/// Corresponds to [WebGPU `GPUDeviceDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#gpudevicedescriptor).
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct DeviceDescriptor<'a> {
+    /// Debug label for the device.
+    pub label: Label<'a>,
+    /// Specifies the features that are required by the device request.
+    /// The request will fail if the adapter cannot provide these features.
+    ///
+    /// Exactly the specified set of features, and no more or less,
+    /// will be allowed in validation of API calls on the resulting device.
+    pub required_features: wgt::FeaturesWebGPU,
+    /// Specifies the limits that are required by the device request.
+    /// The request will fail if the adapter cannot provide these limits.
+    ///
+    /// Exactly the specified limits, and no better or worse,
+    /// will be allowed in validation of API calls on the resulting device.
+    pub required_limits: wgt::Limits,
+    /// Specifies the descriptor of the default queue for the device request.
+    ///
+    /// Corresponds to [WebGPU `GPUDeviceDescriptor.defaultQueue`](https://gpuweb.github.io/gpuweb/#dom-gpudevicedescriptor-defaultqueue).
+    pub default_queue: QueueDescriptor<'a>,
+}
+
 pub type QueueDescriptor<'a> = wgt::QueueDescriptor<Label<'a>>;
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>, wgt::BufferUsagesWebGPU>;
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
