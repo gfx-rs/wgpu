@@ -38,7 +38,18 @@ The first argument must be a string literal. String literals are currently only 
 
 Remaining arguments must currently be scalar values. Vector and matrix arguments may be supported in the future, but for now vector components should be passed individually.
 
-Format string interpretation follows the active backend's shader logging implementation. The supported format syntax is therefore intentionally limited to the common C-style debug printf forms accepted by Metal shader logging and Vulkan shader debug printf.
+Format string interpretation follows the active backend's shader logging implementation. The supported format syntax is therefore intentionally limited to the common C-style debug printf forms accepted by both Metal shader logging and Vulkan shader debug printf.
+
+Format specifiers have the form `%[width][.precision]specifier`. The supported specifiers and length-modifier combinations are:
+
+| specifiers             |  WGSL scalar type |
+| ---------------------- | ----------------- |
+| %d, %i                 | i32 (and u32)     |
+| %o, %u, %x, %X         | u32 (and i32)     |
+| %e, %E, %f, %F, %g, %G | f32               |
+| %lu, %lx               | u64 (and i64)     |
+
+The number and types of the format specifiers must match the provided arguments.
 
 ## Backend Notes
 
@@ -49,6 +60,7 @@ Format string interpretation follows the active backend's shader logging impleme
 
 - [Apple Metal shader logging](https://developer.apple.com/documentation/metal/logging-shader-debug-messages)
 - [Vulkan shader debug printf sample](https://docs.vulkan.org/samples/latest/samples/extensions/shader_debugprintf/README.html)
+- [Vulkan using debug printf](https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/main/docs/debug_printf.md)
 */
 
 use crate::{Features, InstanceFlags};
