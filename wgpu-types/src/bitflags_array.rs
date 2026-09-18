@@ -69,61 +69,6 @@ macro_rules! bitflags_array {
                 $vis:vis struct $inner_name:ident $lower_inner_name:ident {
                     $(
                         $(#[doc $($args:tt)*])*
-                        #[name($str_name:literal $(, $alias:literal)*)]
-                        const $Flag:tt = $value:expr;
-                    )*
-                }
-            )*
-        ) => {
-            crate::bitflags_array! {
-                $(#[$outer])*
-                pub struct ($name, $name_bits): [$T; $Len];
-
-                $(
-                    $(#[$bit_outer])*
-                    $vis struct $inner_name $lower_inner_name {
-                        $(
-                            $(#[doc $($args)*])*
-                            const $Flag = $value;
-                        )*
-                    }
-                )*
-            }
-
-            // Parses kebab-case feature names (i.e. the names given in the spec, for features
-            // in FeaturesWebGPU, and otherwise the `wgpu-` prefixed names).
-            impl FromStr for $name {
-                type Err = ();
-
-                fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    Ok(match s {
-                        $($($str_name $(| $alias)* => Self::$Flag,)*)*
-                        _ => return Err(()),
-                    })
-                }
-            }
-
-            impl $name {
-                #[doc = concat!("If the argument is a single [`", stringify!($name), "`] flag,")]
-                /// returns the corresponding `kebab-case` flag name, otherwise `None`.
-                #[must_use]
-                pub fn as_str(&self) -> Option<&'static str> {
-                    Some(match *self {
-                        $($(Self::$Flag => $str_name,)*)*
-                        _ => return None,
-                    })
-                }
-            }
-        };
-        (
-            $(#[$outer:meta])*
-            pub struct ($name:ident, $name_bits:ident): [$T:ty; $Len:expr];
-
-            $(
-                $(#[$bit_outer:meta])*
-                $vis:vis struct $inner_name:ident $lower_inner_name:ident {
-                    $(
-                        $(#[doc $($args:tt)*])*
                         const $Flag:tt = $value:expr;
                     )*
                 }
