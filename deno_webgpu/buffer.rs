@@ -39,8 +39,8 @@ pub enum BufferError {
   #[error(transparent)]
   Access(wgpu_core::resource::BufferAccessError),
   #[class("DOMExceptionAbortError")]
-  #[error("{0}")]
-  Aborted(&'static str),
+  #[error(transparent)]
+  Aborted(wgpu_core::resource::BufferAccessError),
   #[class("DOMExceptionOperationError")]
   #[error("{0}")]
   Operation(&'static str),
@@ -52,10 +52,14 @@ pub enum BufferError {
 impl From<wgpu_core::resource::BufferAccessError> for BufferError {
   fn from(err: wgpu_core::resource::BufferAccessError) -> Self {
     match err {
-      wgpu_core::resource::BufferAccessError::Device(
+      e @ wgpu_core::resource::BufferAccessError::InvalidResource(_)
+      | e @ wgpu_core::resource::BufferAccessError::Device(
         wgpu_core::device::DeviceError::Lost,
-      ) => BufferError::Aborted("Device lost"),
-      err => BufferError::Access(err),
+      )
+      | e @ wgpu_core::resource::BufferAccessError::MapAborted => {
+        BufferError::Aborted(e)
+      }
+      e => BufferError::Access(e),
     }
   }
 }
