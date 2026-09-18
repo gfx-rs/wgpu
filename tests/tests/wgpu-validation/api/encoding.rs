@@ -51,7 +51,7 @@ fn mix_apis_hal_then_wgpu() {
 
 /// Test that the command encoder’s label is remembered and used in errors.
 #[test]
-#[should_panic = "In a CommandEncoder, label = 'my encoder'"]
+#[should_panic = "In CommandEncoder::finish, label = 'my encoder'"]
 fn encoding_error_contains_label_of_encoder() {
     let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {

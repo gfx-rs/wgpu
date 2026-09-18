@@ -3,7 +3,7 @@ use wgpu::{
     vertex_attr_array,
 };
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -16,22 +16,22 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DRAW_TO_2D_VIEW: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_async(|ctx| run_test(ctx, wgpu::TextureViewDimension::D2, false));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DRAW_TO_2D_ARRAY_VIEW: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_async(|ctx| run_test(ctx, wgpu::TextureViewDimension::D2Array, false));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static RESOLVE_TO_2D_VIEW: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_async(|ctx| run_test(ctx, wgpu::TextureViewDimension::D2, true));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static RESOLVE_TO_2D_ARRAY_VIEW: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_async(|ctx| run_test(ctx, wgpu::TextureViewDimension::D2Array, true));
@@ -184,6 +184,7 @@ async fn run_test(
                 mip_level_count: Some(1),
                 base_array_layer: layer,
                 array_layer_count: Some(1),
+                swizzle: wgpu::TextureComponentSwizzle::default(),
             });
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
@@ -249,7 +250,7 @@ async fn run_test(
     assert!(succeeded);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DRAW_TO_3D_VIEW: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

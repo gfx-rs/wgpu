@@ -4,8 +4,8 @@ use std::io::Write as _;
 
 use crate::{
     command::{
-        ArcCommand, ArcComputeCommand, ArcPassTimestampWrites, ArcReferences, ArcRenderCommand,
-        BasePass, ColorAttachments, Command, ComputeCommand, PointerReferences, RenderCommand,
+        ArcCommand, ArcComputeCommand, ArcReferences, ArcRenderCommand, BasePass, ColorAttachments,
+        Command, ComputeCommand, PassTimestampWrites, PointerReferences, RenderCommand,
         RenderPassColorAttachment, ResolvedRenderPassDepthStencilAttachment,
     },
     device::trace::{Data, DataKind},
@@ -313,10 +313,10 @@ impl<T: IntoTrace> IntoTrace for wgt::TexelCopyTextureInfo<T> {
     }
 }
 
-impl IntoTrace for ArcPassTimestampWrites {
-    type Output = crate::command::PassTimestampWrites<PointerId<markers::QuerySet>>;
+impl IntoTrace for PassTimestampWrites {
+    type Output = PassTimestampWrites<PointerId<markers::QuerySet>>;
     fn into_trace(self) -> Self::Output {
-        crate::command::PassTimestampWrites {
+        PassTimestampWrites {
             query_set: self.query_set.into_trace(),
             beginning_of_pass_write_index: self.beginning_of_pass_write_index,
             end_of_pass_write_index: self.end_of_pass_write_index,
@@ -449,7 +449,6 @@ impl<C: IntoTrace> IntoTrace for BasePass<C, Infallible> {
                 .collect(),
             dynamic_offsets: self.dynamic_offsets,
             string_data: self.string_data,
-            immediates_data: self.immediates_data,
         }
     }
 }
@@ -469,15 +468,7 @@ impl IntoTrace for ArcComputeCommand {
                 bind_group: bind_group.map(|bg| bg.into_trace()),
             },
             C::SetPipeline(id) => C::SetPipeline(id.into_trace()),
-            C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            },
+            C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::DispatchWorkgroups(groups) => C::DispatchWorkgroups(groups),
             C::DispatchWorkgroupsIndirect { buffer, offset } => C::DispatchWorkgroupsIndirect {
                 buffer: buffer.into_trace(),
@@ -574,15 +565,7 @@ impl IntoTrace for ArcRenderCommand {
                 depth_max,
             },
             C::SetScissor(rect) => C::SetScissor(rect),
-            C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            } => C::SetImmediate {
-                offset,
-                size_bytes,
-                values_offset,
-            },
+            C::SetImmediate { offset, data } => C::SetImmediate { offset, data },
             C::Draw {
                 vertex_count,
                 instance_count,
@@ -671,7 +654,7 @@ impl IntoTrace for ArcRenderCommand {
     }
 }
 
-impl IntoTrace for crate::binding_model::ResolvedPipelineLayoutDescriptor<'_> {
+impl IntoTrace for crate::binding_model::PipelineLayoutDescriptor<'_> {
     type Output = crate::binding_model::PipelineLayoutDescriptor<
         'static,
         PointerId<markers::BindGroupLayout>,
@@ -689,13 +672,11 @@ impl IntoTrace for crate::binding_model::ResolvedPipelineLayoutDescriptor<'_> {
     }
 }
 
-impl<'a> IntoTrace for &'_ crate::binding_model::ResolvedBindGroupDescriptor<'a> {
+impl<'a> IntoTrace for &'_ crate::binding_model::BindGroupDescriptor<'a> {
     type Output = TraceBindGroupDescriptor<'a>;
 
     fn into_trace(self) -> Self::Output {
-        use crate::binding_model::{
-            BindGroupEntry, BindingResource, BufferBinding, ResolvedBindingResource,
-        };
+        use crate::binding_model::{BindGroupEntry, BindingResource, BufferBinding};
         TraceBindGroupDescriptor {
             label: self.label.clone(),
             layout: self.layout.to_trace(),
@@ -704,14 +685,14 @@ impl<'a> IntoTrace for &'_ crate::binding_model::ResolvedBindGroupDescriptor<'a>
                     .iter()
                     .map(|entry| {
                         let resource = match &entry.resource {
-                            ResolvedBindingResource::Buffer(buffer_binding) => {
+                            BindingResource::Buffer(buffer_binding) => {
                                 BindingResource::Buffer(BufferBinding {
                                     buffer: buffer_binding.buffer.to_trace(),
                                     offset: buffer_binding.offset,
                                     size: buffer_binding.size,
                                 })
                             }
-                            ResolvedBindingResource::BufferArray(buffer_bindings) => {
+                            BindingResource::BufferArray(buffer_bindings) => {
                                 let resolved_buffers: Vec<_> = buffer_bindings
                                     .iter()
                                     .map(|bb| BufferBinding {
@@ -722,31 +703,31 @@ impl<'a> IntoTrace for &'_ crate::binding_model::ResolvedBindGroupDescriptor<'a>
                                     .collect();
                                 BindingResource::BufferArray(Cow::Owned(resolved_buffers))
                             }
-                            ResolvedBindingResource::Sampler(sampler_id) => {
+                            BindingResource::Sampler(sampler_id) => {
                                 BindingResource::Sampler(sampler_id.to_trace())
                             }
-                            ResolvedBindingResource::SamplerArray(sampler_ids) => {
+                            BindingResource::SamplerArray(sampler_ids) => {
                                 let resolved: Vec<_> =
                                     sampler_ids.iter().map(|id| id.to_trace()).collect();
                                 BindingResource::SamplerArray(Cow::Owned(resolved))
                             }
-                            ResolvedBindingResource::TextureView(texture_view_id) => {
+                            BindingResource::TextureView(texture_view_id) => {
                                 BindingResource::TextureView(texture_view_id.to_trace())
                             }
-                            ResolvedBindingResource::TextureViewArray(texture_view_ids) => {
+                            BindingResource::TextureViewArray(texture_view_ids) => {
                                 let resolved: Vec<_> =
                                     texture_view_ids.iter().map(|id| id.to_trace()).collect();
                                 BindingResource::TextureViewArray(Cow::Owned(resolved))
                             }
-                            ResolvedBindingResource::AccelerationStructure(tlas_id) => {
+                            BindingResource::AccelerationStructure(tlas_id) => {
                                 BindingResource::AccelerationStructure(tlas_id.to_trace())
                             }
-                            ResolvedBindingResource::AccelerationStructureArray(tlas_ids) => {
+                            BindingResource::AccelerationStructureArray(tlas_ids) => {
                                 let resolved: Vec<_> =
                                     tlas_ids.iter().map(|id| id.to_trace()).collect();
                                 BindingResource::AccelerationStructureArray(Cow::Owned(resolved))
                             }
-                            ResolvedBindingResource::ExternalTexture(external_texture_id) => {
+                            BindingResource::ExternalTexture(external_texture_id) => {
                                 BindingResource::ExternalTexture(external_texture_id.to_trace())
                             }
                         };
@@ -779,7 +760,7 @@ impl<'a> IntoTrace for crate::pipeline::ResolvedGeneralRenderPipelineDescriptor<
     }
 }
 
-impl<'a> IntoTrace for crate::pipeline::ResolvedComputePipelineDescriptor<'a> {
+impl<'a> IntoTrace for crate::pipeline::ComputePipelineDescriptor<'a> {
     type Output = TraceComputePipelineDescriptor<'a>;
 
     fn into_trace(self) -> Self::Output {
@@ -792,7 +773,7 @@ impl<'a> IntoTrace for crate::pipeline::ResolvedComputePipelineDescriptor<'a> {
     }
 }
 
-impl<'a> IntoTrace for crate::pipeline::ResolvedProgrammableStageDescriptor<'a> {
+impl<'a> IntoTrace for crate::pipeline::ProgrammableStageDescriptor<'a> {
     type Output =
         crate::pipeline::ProgrammableStageDescriptor<'a, PointerId<markers::ShaderModule>>;
     fn into_trace(self) -> Self::Output {
@@ -825,7 +806,7 @@ impl<'a> IntoTrace
     }
 }
 
-impl<'a> IntoTrace for crate::pipeline::ResolvedTaskState<'a> {
+impl<'a> IntoTrace for crate::pipeline::TaskState<'a> {
     type Output = crate::pipeline::TaskState<'a, PointerId<markers::ShaderModule>>;
     fn into_trace(self) -> Self::Output {
         crate::pipeline::TaskState {
@@ -834,7 +815,7 @@ impl<'a> IntoTrace for crate::pipeline::ResolvedTaskState<'a> {
     }
 }
 
-impl<'a> IntoTrace for crate::pipeline::ResolvedMeshState<'a> {
+impl<'a> IntoTrace for crate::pipeline::MeshState<'a> {
     type Output = crate::pipeline::MeshState<'a, PointerId<markers::ShaderModule>>;
     fn into_trace(self) -> Self::Output {
         crate::pipeline::MeshState {
@@ -843,7 +824,7 @@ impl<'a> IntoTrace for crate::pipeline::ResolvedMeshState<'a> {
     }
 }
 
-impl<'a> IntoTrace for crate::pipeline::ResolvedVertexState<'a> {
+impl<'a> IntoTrace for crate::pipeline::VertexState<'a> {
     type Output = crate::pipeline::VertexState<'a, PointerId<markers::ShaderModule>>;
     fn into_trace(self) -> Self::Output {
         crate::pipeline::VertexState {
@@ -853,7 +834,7 @@ impl<'a> IntoTrace for crate::pipeline::ResolvedVertexState<'a> {
     }
 }
 
-impl<'a> IntoTrace for crate::pipeline::ResolvedFragmentState<'a> {
+impl<'a> IntoTrace for crate::pipeline::FragmentState<'a> {
     type Output = crate::pipeline::FragmentState<'a, PointerId<markers::ShaderModule>>;
     fn into_trace(self) -> Self::Output {
         crate::pipeline::FragmentState {
@@ -867,6 +848,24 @@ impl<T: IntoTrace> IntoTrace for Option<T> {
     type Output = Option<T::Output>;
     fn into_trace(self) -> Self::Output {
         self.map(|v| v.into_trace())
+    }
+}
+
+impl<'a, BGLE> IntoTrace for crate::binding_model::BindGroupLayoutDescriptor<'a, BGLE>
+where
+    BGLE: Copy,
+    BGLE: Into<crate::binding_model::BindGroupLayoutEntry>,
+{
+    type Output = crate::binding_model::BindGroupLayoutDescriptor<
+        'static,
+        crate::binding_model::BindGroupLayoutEntry,
+    >;
+
+    fn into_trace(self) -> Self::Output {
+        crate::binding_model::BindGroupLayoutDescriptor {
+            label: self.label.map(|l| Cow::Owned(l.into_owned())),
+            entries: Cow::Owned(self.entries.iter().map(|&e| e.into()).collect()),
+        }
     }
 }
 
@@ -970,6 +969,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
                 dimension: desc.dimension,
                 usage: desc.usage,
                 range: desc.range,
+                swizzle: desc.swizzle,
             },
         },
         A::CreateExternalTexture { id, desc, planes } => A::CreateExternalTexture {

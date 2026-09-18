@@ -300,7 +300,7 @@ impl<A: hal::Api> Example<A> {
             usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
         };
-        let staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
+        let (staging_buffer, _) = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
         unsafe {
             let mapping = device
                 .map_buffer(&staging_buffer, 0..staging_buffer_desc.size)
@@ -352,6 +352,7 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::TextureUses::UNINITIALIZED,
                     to: wgpu_types::TextureUses::COPY_DST,
                 },
+                queue_family_ownership_transfer: None,
             };
             let texture_barrier2 = hal::TextureBarrier {
                 texture: &texture,
@@ -360,6 +361,7 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::TextureUses::COPY_DST,
                     to: wgpu_types::TextureUses::RESOURCE,
                 },
+                queue_family_ownership_transfer: None,
             };
             let copy = hal::BufferTextureCopy {
                 buffer_layout: wgpu_types::TexelCopyBufferLayout {
@@ -419,7 +421,7 @@ impl<A: hal::Api> Example<A> {
             memory_flags: hal::MemoryFlags::PREFER_COHERENT,
         };
         let global_buffer = unsafe {
-            let buffer = device.create_buffer(&global_buffer_desc).unwrap();
+            let (buffer, _) = device.create_buffer(&global_buffer_desc).unwrap();
             let mapping = device
                 .map_buffer(&buffer, 0..global_buffer_desc.size)
                 .unwrap();
@@ -444,7 +446,7 @@ impl<A: hal::Api> Example<A> {
             usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::UNIFORM,
             memory_flags: hal::MemoryFlags::PREFER_COHERENT,
         };
-        let local_buffer = unsafe { device.create_buffer(&local_buffer_desc).unwrap() };
+        let (local_buffer, _) = unsafe { device.create_buffer(&local_buffer_desc).unwrap() };
 
         let view_desc = hal::TextureViewDescriptor {
             label: None,
@@ -452,6 +454,7 @@ impl<A: hal::Api> Example<A> {
             dimension: wgpu_types::TextureViewDimension::D2,
             usage: wgpu_types::TextureUses::RESOURCE,
             range: wgpu_types::ImageSubresourceRange::default(),
+            swizzle: wgpu_types::TextureComponentSwizzle::default(),
         };
         let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
 
@@ -460,7 +463,7 @@ impl<A: hal::Api> Example<A> {
             let global_buffer_binding = hal::BufferBinding::new_unchecked(
                 &global_buffer,
                 0,
-                NonZeroU64::new(global_buffer_desc.size),
+                NonZeroU64::new(global_buffer_desc.size).unwrap(),
             );
             let texture_binding = hal::TextureBinding {
                 view: &texture_view,
@@ -500,7 +503,7 @@ impl<A: hal::Api> Example<A> {
             let local_buffer_binding = hal::BufferBinding::new_unchecked(
                 &local_buffer,
                 0,
-                wgpu_types::BufferSize::new(size_of::<Locals>() as _),
+                wgpu_types::BufferSize::new(size_of::<Locals>() as _).unwrap(),
             );
             let local_group_desc = hal::BindGroupDescriptor {
                 label: Some("local"),
@@ -691,6 +694,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::UNINITIALIZED,
                 to: wgpu_types::TextureUses::COLOR_TARGET,
             },
+            queue_family_ownership_transfer: None,
         };
         unsafe {
             ctx.encoder.begin_encoding(Some("frame")).unwrap();
@@ -703,6 +707,7 @@ impl<A: hal::Api> Example<A> {
             dimension: wgpu_types::TextureViewDimension::D2,
             usage: wgpu_types::TextureUses::COLOR_TARGET,
             range: wgpu_types::ImageSubresourceRange::default(),
+            swizzle: wgpu_types::TextureComponentSwizzle::default(),
         };
         let surface_tex_view = unsafe {
             self.device
@@ -763,6 +768,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::COLOR_TARGET,
                 to: wgpu_types::TextureUses::PRESENT,
             },
+            queue_family_ownership_transfer: None,
         };
         unsafe {
             ctx.encoder.end_render_pass();
@@ -885,7 +891,7 @@ impl ApplicationHandler for App {
                     self.accum_time += self.last_frame_inst.elapsed().as_secs_f32();
                     self.last_frame_inst = Instant::now();
                     self.frame_count += 1;
-                    if self.frame_count == 100 && !ex.is_empty() {
+                    if self.frame_count >= 100 && !ex.is_empty() {
                         println!(
                             "Avg frame time {}ms",
                             self.accum_time * 1000.0 / self.frame_count as f32

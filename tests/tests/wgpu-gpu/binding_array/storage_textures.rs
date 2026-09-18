@@ -2,8 +2,8 @@ use std::num::NonZeroU32;
 
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer, TestParameters,
-    TestingContext,
+    apply, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters, TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
@@ -13,7 +13,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -27,11 +27,17 @@ static BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
             .limits(Limits {
                 max_binding_array_elements_per_shader_stage: 17,
                 ..Limits::default()
-            }),
+            })
+            .expect_fail(
+                // https://github.com/gfx-rs/wgpu/issues/9849 and/or https://github.com/gfx-rs/wgpu/issues/6745
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline"),
+            ),
     )
     .run_async(|ctx| async move { binding_array_storage_textures(ctx, false).await });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PARTIAL_BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -46,7 +52,13 @@ static PARTIAL_BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestCon
             .limits(Limits {
                 max_binding_array_elements_per_shader_stage: 33,
                 ..Limits::default()
-            }),
+            })
+            .expect_fail(
+                // https://github.com/gfx-rs/wgpu/issues/9849 and/or https://github.com/gfx-rs/wgpu/issues/6745
+                wgpu_test::FailureCase::molten_vk()
+                    .validation_error("Shader library compile failed")
+                    .validation_error("could not be compiled into pipeline"),
+            ),
     )
     .run_async(|ctx| async move { binding_array_storage_textures(ctx, true).await });
 

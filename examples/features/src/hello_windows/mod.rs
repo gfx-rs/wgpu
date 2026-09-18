@@ -147,6 +147,7 @@ impl ApplicationHandler for App {
                     label: None,
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::downlevel_defaults(),
+                    default_queue: wgpu::QueueDescriptor { label: None },
                     experimental_features: wgpu::ExperimentalFeatures::disabled(),
                     memory_hints: wgpu::MemoryHints::MemoryUsage,
                     trace: wgpu::Trace::Off,
@@ -258,11 +259,9 @@ impl ApplicationHandler for App {
                     queue.present(frame);
                 }
             }
-            WindowEvent::Occluded(is_occluded) => {
-                if !is_occluded {
-                    if let Some(viewport) = viewports.get(&window_id) {
-                        viewport.desc.window.request_redraw();
-                    }
+            WindowEvent::Occluded(false) => {
+                if let Some(viewport) = viewports.get(&window_id) {
+                    viewport.desc.window.request_redraw();
                 }
             }
             WindowEvent::CloseRequested => {

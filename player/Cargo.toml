@@ -1,7 +1,6 @@
 [package]
 name = "player"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "WebGPU trace player"
 homepage.workspace = true
@@ -34,6 +33,7 @@ bytemuck.workspace = true
 # We are a non-wasm only crate, and this allows us to compile.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgpu-core]
 workspace = true
+default-features = true
 features = [
     "replay",
     "strict_asserts",

@@ -130,6 +130,7 @@ impl crate::framework::Example for Example {
             mip_level_count: None,
             base_array_layer: 0,
             array_layer_count: None,
+            swizzle: wgpu::TextureComponentSwizzle::default(),
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -144,9 +145,12 @@ impl crate::framework::Example for Example {
         });
 
         let uniforms = {
-            let view =
-                Mat4::look_at_rh(Vec3::new(0.0, 0.5, 5.0), Vec3::new(0.0, 0.0, 0.0), Vec3::Y);
-            let proj = Mat4::perspective_rh(
+            let view = glam::camera::rh::view::look_at_mat4(
+                Vec3::new(0.0, 0.5, 5.0),
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::Y,
+            );
+            let proj = glam::camera::rh::proj::directx::perspective(
                 59.0_f32.to_radians(),
                 config.width as f32 / config.height as f32,
                 0.001,
@@ -389,7 +393,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "ray_aabb_compute",
     image_path: "/examples/features/src/ray_aabb_compute/screenshot.png",

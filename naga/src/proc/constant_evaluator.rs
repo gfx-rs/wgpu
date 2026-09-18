@@ -2725,7 +2725,7 @@ impl<'a> ConstantEvaluator<'a> {
                 components: ref src_components,
             } => {
                 match self.types[ty].inner {
-                    TypeInner::Vector { .. } | TypeInner::Matrix { .. } => (),
+                    TypeInner::Vector { .. } => (),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
                 }
 
@@ -3677,8 +3677,8 @@ impl<'a> ConstantEvaluator<'a> {
                     components: reject_components
                         .clone()
                         .into_iter()
-                        .zip(accept_components.clone().into_iter())
-                        .zip(condition_components.into_iter())
+                        .zip(accept_components.clone())
+                        .zip(condition_components)
                         .map(|((reject, accept), condition)| {
                             let reject_scalar = match &self.expressions[reject] {
                                 &Expression::Literal(lit) => lit.scalar(),

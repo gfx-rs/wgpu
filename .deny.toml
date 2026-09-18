@@ -21,16 +21,15 @@ skip = [
 
     # wgpu-hal -> drm -> drm-sys uses an older version, while wgpu-hal -> drm -> rustix uses a newer one
     { name = "linux-raw-sys", version = "0.9.4" },
+
+    # Derive macros use both syn 2 and syn 3.
+    { name = "syn", version = "3" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true
 
 [advisories]
 ignore = [
-    # `paste` crate is no longer maintained https://rustsec.org/advisories/RUSTSEC-2024-0436
-    # It's a transitive dependency of `wgpu-core` via `macro_rules_attribute`.
-    # https://github.com/gfx-rs/wgpu/issues/7873
-    "RUSTSEC-2024-0436",
     # `bincode` is no longer maintained https://rustsec.org/advisories/RUSTSEC-2025-0141
     # We only use it directly for tests and tools. It is also used indirectly via deno.
     "RUSTSEC-2025-0141",
@@ -49,10 +48,6 @@ allow = [
 private = { ignore = true }
 
 [sources]
-allow-git = [
-    # Pending a release for https://github.com/rust-cli/env_logger/commit/143fa647ab33ed3acc9f160dfa3cb075cc62b5a3
-    "https://github.com/rust-cli/env_logger",
-]
 unknown-registry = "deny"
 unknown-git = "deny"
 required-git-spec = "rev"

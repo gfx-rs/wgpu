@@ -5,10 +5,6 @@ disallowed-types = [
     { path = "std::collections::HashSet", reason = "use hashbrown::HashSet instead" },
 ]
 
-# The default large-error-threshold is 128. We have a bunch of complex error
-# types that are slightly larger than that.
-large-error-threshold = 192
-
 # This relatively small stack frame limit is set to avoid problems in several deeply
 # recursive functions in naga. If your function has a genuine need for a larger stack frame,
 # and is not at risk of deep recursion based on shader structure, it is okay to waive the

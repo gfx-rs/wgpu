@@ -11,7 +11,7 @@ use objc2_core_graphics::CGColorSpace;
 use objc2_foundation::NSObjectProtocol;
 use objc2_metal::MTLTextureType;
 use objc2_quartz_core::{CAMetalDrawable, CAMetalLayer};
-use parking_lot::{Mutex, RwLock};
+use wgpu_sync::{Lazy, Mutex, RwLock};
 
 use super::OsFeatures;
 
@@ -77,15 +77,15 @@ impl super::Surface {
                 // environmental), so leave a breadcrumb instead of failing
                 // silently. Warn once per process so a caller that polls this
                 // per frame is not spammed.
-                static WARN_ONCE: std::sync::Once = std::sync::Once::new();
-                WARN_ONCE.call_once(|| {
+                static WARN_ONCE: wgpu_sync::OnceCell<()> = wgpu_sync::OnceCell::new();
+                if WARN_ONCE.set(()).is_ok() {
                     log::warn!(
                         "Surface::display_hdr_info() was called from thread {:?} \
                          and will return None. On the Metal backend, it must be \
                          called from the main thread to succeed.",
                         std::thread::current().id()
                     );
-                });
+                }
                 return None;
             }
 
@@ -204,6 +204,44 @@ impl super::Surface {
     }
 }
 
+// objc2 strings are not, in general, thread-safe, but these should be constants.
+unsafe impl Send for ColorSpaces {}
+unsafe impl Sync for ColorSpaces {}
+
+struct ColorSpaces {
+    extended_display_p3: &'static CFString,
+    itur_bt2100_pq: &'static CFString,
+    itur_bt2100_hlg: &'static CFString,
+}
+
+static COLOR_SPACES: Lazy<Result<ColorSpaces, crate::SurfaceError>> = Lazy::new(|| {
+    // Stable Rust doesn't support weak linkage, so objc2 doesn't
+    // offer it. To avoid link errors on old OS versions, resolve
+    // these dynamically.
+    let lib = unsafe {
+        libloading::Library::new("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+            .map_err(|_| crate::SurfaceError::Other("error loading CoreGraphics"))?
+    };
+    fn lookup(
+        lib: &libloading::Library,
+        name: &core::ffi::CStr,
+    ) -> Result<&'static CFString, crate::SurfaceError> {
+        // The symbol is the address of the global holding the `CFString`
+        // pointer, so an extra dereference is needed to read it.
+        let sym = unsafe { lib.get::<*const &'static CFString>(name.to_bytes_with_nul()) }
+            .map_err(|_| crate::SurfaceError::Other("error resolving symbol in CoreGraphics"))?;
+        Ok(unsafe { **sym })
+    }
+    let extended_display_p3 = lookup(&lib, c"kCGColorSpaceExtendedDisplayP3")?;
+    let itur_bt2100_pq = lookup(&lib, c"kCGColorSpaceITUR_2100_PQ")?;
+    let itur_bt2100_hlg = lookup(&lib, c"kCGColorSpaceITUR_2100_HLG")?;
+    Ok(ColorSpaces {
+        extended_display_p3,
+        itur_bt2100_pq,
+        itur_bt2100_hlg,
+    })
+});
+
 impl crate::Surface for super::Surface {
     type A = super::Api;
 
@@ -219,7 +257,12 @@ impl crate::Surface for super::Surface {
         *self.extent.write() = config.extent;
 
         let render_layer = self.render_layer.lock();
-        let framebuffer_only = config.usage == wgt::TextureUses::COLOR_TARGET;
+        // Metal forbids creating alternate-format views of framebuffer-only textures.
+        let framebuffer_only = config.usage == wgt::TextureUses::COLOR_TARGET
+            && config
+                .view_formats
+                .iter()
+                .all(|format| *format == config.format);
         let display_sync = match config.present_mode {
             wgt::PresentMode::Fifo => true,
             wgt::PresentMode::Immediate => false,
@@ -230,8 +273,8 @@ impl crate::Surface for super::Surface {
 
         match config.composite_alpha_mode {
             wgt::CompositeAlphaMode::Opaque => render_layer.setOpaque(true),
-            wgt::CompositeAlphaMode::PostMultiplied => render_layer.setOpaque(false),
-            _ => (),
+            wgt::CompositeAlphaMode::PreMultiplied => render_layer.setOpaque(false),
+            m => unreachable!("Unsupported alpha mode: {m:?}"),
         }
 
         let device_raw = &device.shared.device;
@@ -240,9 +283,14 @@ impl crate::Surface for super::Surface {
         render_layer.setFramebufferOnly(framebuffer_only);
         // Opt into Metal EDR for the HDR color spaces (more display power, memory,
         // and bandwidth). The HDR spaces are exactly those `is_hdr()` classifies.
-        let wants_edr = config.color_space.is_hdr();
-        if wants_edr != render_layer.wantsExtendedDynamicRangeContent() {
-            render_layer.setWantsExtendedDynamicRangeContent(wants_edr);
+        //
+        // `wantsExtendedDynamicRangeContent` is iOS 16+. On older iOS calling it
+        // throws an unrecognized selector exception and the app aborts.
+        if available!(macos = 10.11, ios = 16.0, visionos = 1.0) {
+            let wants_edr = config.color_space.is_hdr();
+            if wants_edr != render_layer.wantsExtendedDynamicRangeContent() {
+                render_layer.setWantsExtendedDynamicRangeContent(wants_edr);
+            }
         }
 
         let colorspace_name: Option<&'static CFString> = match config.color_space {
@@ -258,7 +306,16 @@ impl crate::Surface for super::Surface {
                 Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedSRGB })
             }
             wgt::SurfaceColorSpace::ExtendedDisplayP3 => {
-                Some(unsafe { objc2_core_graphics::kCGColorSpaceExtendedDisplayP3 })
+                // Only reported by `surface_capabilities` on macOS 11.0+/iOS 14.0+.
+                if !available!(macos = 11.0, ios = 14.0, tvos = 14.0, visionos = 1.0) {
+                    unreachable!("ExtendedDisplayP3 color space is only reported on macOS 11.0+/iOS 14.0+/tvOS 14.0+");
+                }
+                Some(
+                    COLOR_SPACES
+                        .as_ref()
+                        .map_err(|e| e.clone())?
+                        .extended_display_p3,
+                )
             }
             wgt::SurfaceColorSpace::DisplayP3 => {
                 Some(unsafe { objc2_core_graphics::kCGColorSpaceDisplayP3 })
@@ -270,9 +327,12 @@ impl crate::Surface for super::Surface {
                     unreachable!("BT.2100 PQ/HLG color spaces are only reported on macOS 11.0+/iOS 14.0+/tvOS 14.0+");
                 }
                 Some(if config.color_space == wgt::SurfaceColorSpace::Bt2100Pq {
-                    unsafe { objc2_core_graphics::kCGColorSpaceITUR_2100_PQ }
+                    COLOR_SPACES.as_ref().map_err(|e| e.clone())?.itur_bt2100_pq
                 } else {
-                    unsafe { objc2_core_graphics::kCGColorSpaceITUR_2100_HLG }
+                    COLOR_SPACES
+                        .as_ref()
+                        .map_err(|e| e.clone())?
+                        .itur_bt2100_hlg
                 })
             }
         };

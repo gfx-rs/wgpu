@@ -1,5 +1,5 @@
 use wgpu::util::DeviceExt;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.push(PER_VERTEX);
@@ -30,7 +30,7 @@ pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
 //     return vec4(z[0], z[1], z[2], 1.0);
 //
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PER_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

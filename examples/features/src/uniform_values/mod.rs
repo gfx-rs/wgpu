@@ -132,6 +132,7 @@ impl WgpuContext {
                 label: None,
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                default_queue: wgpu::QueueDescriptor { label: None },
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: wgpu::Trace::Off,
@@ -483,11 +484,9 @@ impl ApplicationHandler<UniformAction> for App {
                 }
                 wgpu_ctx.queue.present(frame);
             }
-            WindowEvent::Occluded(is_occluded) => {
-                if !is_occluded {
-                    if let Some(window) = &self.window {
-                        window.request_redraw();
-                    }
+            WindowEvent::Occluded(false) => {
+                if let Some(window) = &self.window {
+                    window.request_redraw();
                 }
             }
             _ => {}

@@ -167,8 +167,15 @@ impl FailureCase {
     }
 
     /// Tests running on either Vulkan driver on macOS.
-    pub fn mac_vulkan(f: impl Fn(FailureCase) -> FailureCase) -> Vec<Self> {
-        vec![f(FailureCase::molten_vk()), f(FailureCase::kosmic_krisp())]
+    pub fn mac_vulkan() -> Vec<Self> {
+        vec![FailureCase::molten_vk(), FailureCase::kosmic_krisp()]
+    }
+
+    /// Tests running on macOS (both Vulkan and Metal).
+    pub fn mac() -> Vec<Self> {
+        let mut cases = Self::mac_vulkan();
+        cases.push(FailureCase::backend(wgpu::Backends::METAL));
+        cases
     }
 
     pub fn lvp_poison_memory(message: &'static str) -> Self {
@@ -348,7 +355,10 @@ impl FailureReason {
         message: None,
     };
 
-    /// Match a validation error.
+    /// Match an error caught by [`wgpu_hal::VALIDATION_CANARY`].
+    ///
+    /// These are errors from platform debug/validation layers, _not_
+    /// WebGPU validation errors.
     #[allow(dead_code, reason = "Not constructed on wasm")]
     pub fn validation_error() -> Self {
         Self {
@@ -358,6 +368,9 @@ impl FailureReason {
     }
 
     /// Match a panic.
+    ///
+    /// This includes WebGPU validation errors caught by the default (panicking)
+    /// error handler.
     pub fn panic() -> Self {
         Self {
             kind: Some(FailureResultKind::Panic),

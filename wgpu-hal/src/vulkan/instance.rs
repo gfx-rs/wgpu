@@ -9,7 +9,11 @@ use std::thread;
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
-use parking_lot::RwLock;
+use wgpu_sync::RwLock;
+
+/// Name of the `VK_OHOS_surface` extension. Used with [`super::Instance::create_surface_ohos`].
+#[cfg(target_env = "ohos")]
+const OHOS_SURFACE_EXTENSION_NAME: &CStr = c"VK_OHOS_surface";
 
 unsafe extern "system" fn debug_utils_messenger_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -76,6 +80,22 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     // https://github.com/gfx-rs/wgpu/issues/7696
     const VUID_STANDALONESPIRV_NONE_10684: i32 = 0xb210f7c2_u32 as i32;
     if cd.message_id_number == VUID_STANDALONESPIRV_NONE_10684 {
+        return vk::FALSE;
+    }
+
+    // The validation layers deliver the output of a shader's `debugPrintf` through the
+    // regular debug messenger callback, rather than through a dedicated channel.
+    //the layers tag them with this magic `messageIdNumber`, which they document precisely so that
+    // callbacks like this one can pick them out.
+    // See https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/main/docs/debug_printf.md
+    const DEBUG_PRINTF_MESSAGE_ID: i32 = 0x4fe1fef9;
+    if cd.message_id_number == DEBUG_PRINTF_MESSAGE_ID {
+        // SAFETY: Vulkan keeps the null-terminated message valid for this callback.
+        let message =
+            unsafe { cd.message_as_c_str() }.map_or(Cow::Borrowed(""), CStr::to_string_lossy);
+
+        log::info!("[shader debugPrintf] {}", message);
+
         return vk::FALSE;
     }
 
@@ -158,7 +178,69 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         crate::VALIDATION_CANARY.add(message.to_string());
     }
 
+    // We disable this on Apple because there are numerous issues, some of
+    // which raise generic errors that we can't match by VUID. See
+    // <https://github.com/gfx-rs/wgpu/issues/9184> and
+    // <https://github.com/gfx-rs/wgpu/issues/9187>.
+    #[cfg(all(
+        debug_assertions,
+        feature = "internal_error_panic",
+        not(target_vendor = "apple")
+    ))]
+    if level == log::Level::Error
+        && message_type.contains(vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION)
+        && !cts_error_is_waived(cd.message_id_number)
+    {
+        use alloc::string::ToString as _;
+        panic!("{}", message.to_string());
+    }
+
     vk::FALSE
+}
+
+/// Validation errors known to fire when running the CTS.
+///
+/// These waivers are keyed off the `WGPU_CTS_XTASK` environment variable, which
+/// is set in `xtask/src/cts.rs`.
+#[cfg(all(
+    debug_assertions,
+    feature = "internal_error_panic",
+    not(target_vendor = "apple")
+))]
+fn cts_error_is_waived(message_id_number: i32) -> bool {
+    use wgpu_sync::Lazy;
+
+    static WGPU_CTS_XTASK: Lazy<bool> = Lazy::new(|| std::env::var_os("WGPU_CTS_XTASK").is_some());
+
+    if !*WGPU_CTS_XTASK {
+        return false;
+    }
+
+    const WAIVED_MESSAGE_IDS: &[i32] = &[
+        // VUID-SampleMask-SampleMask-04359
+        // e.g. webgpu:api,validation,render_pipeline,inter_stage:max_variables_count,*
+        0x34d444b2_u32 as i32,
+        // VUID-vkCmdCopyImage-srcImage-01728
+        // e.g. webgpu:api,validation,encoding,cmds,copyTextureToTexture:*
+        0x6b654496_u32 as i32,
+        // VUID-StandaloneSpirv-OpImageQuerySizeLod-04659
+        // e.g. webgpu:shader,execution,expression,call,builtin,textureNumLayers:*
+        0x82396078_u32 as i32,
+        // VUID-RuntimeSpirv-Location-06272
+        // e.g. webgpu:api,validation,render_pipeline,inter_stage:max_variables_count,*
+        0xa3614f8b_u32 as i32,
+        // VUID-VkViewport-width-01770
+        // e.g. webgpu:api,validation,encoding,cmds,render,dynamic_state:*
+        0xa4164ba5_u32 as i32,
+        // VUID-VkImageViewCreateInfo-image-04441
+        // e.g. webgpu:api,validation,createView:texture_view_usage:*
+        0xb75da543_u32 as i32,
+        // VUID-VkBufferCreateInfo-None-09500
+        // e.g. webgpu:api,validation,buffer,create:usage,*
+        0xf6d454db_u32 as i32,
+    ];
+
+    WAIVED_MESSAGE_IDS.contains(&message_id_number)
 }
 
 impl super::DebugUtilsCreateInfo {
@@ -241,7 +323,10 @@ impl super::Instance {
         if cfg!(all(
             unix,
             not(target_os = "android"),
-            not(target_os = "macos")
+            not(target_os = "macos"),
+            // NOTE: OpenHarmony (`target_env = "ohos"`) reports `target_os = "linux"` and is
+            // unix, but has neither X11 nor Wayland.
+            not(target_env = "ohos")
         )) {
             // VK_KHR_xlib_surface
             extensions.push(khr::xlib_surface::NAME);
@@ -253,6 +338,11 @@ impl super::Instance {
         if cfg!(target_os = "android") {
             // VK_KHR_android_surface
             extensions.push(khr::android_surface::NAME);
+        }
+        #[cfg(target_env = "ohos")]
+        {
+            // VK_OHOS_surface: surfaces are created from an XComponent's `OHNativeWindow`.
+            extensions.push(OHOS_SURFACE_EXTENSION_NAME);
         }
         if cfg!(target_os = "windows") {
             // VK_KHR_win32_surface
@@ -272,7 +362,7 @@ impl super::Instance {
             extensions.push(khr::get_display_properties2::NAME);
         }
 
-        if flags.contains(wgt::InstanceFlags::DEBUG) {
+        if flags.intersects(wgt::InstanceFlags::DEBUG | wgt::InstanceFlags::DEBUG_PRINTF) {
             // VK_EXT_debug_utils
             extensions.push(ext::debug_utils::NAME);
         }
@@ -404,8 +494,13 @@ impl super::Instance {
                 .dpy(dpy);
 
             unsafe { xlib_loader.create_xlib_surface(&info, None) }
-                .expect("XlibSurface::create_xlib_surface() failed")
-        };
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(
+                String::from("XlibSurface::create_xlib_surface() failed"),
+                err,
+            )
+        })?;
 
         Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
@@ -429,8 +524,13 @@ impl super::Instance {
                 .connection(connection);
 
             unsafe { xcb_loader.create_xcb_surface(&info, None) }
-                .expect("XcbSurface::create_xcb_surface() failed")
-        };
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(
+                String::from("XcbSurface::create_xcb_surface() failed"),
+                err,
+            )
+        })?;
 
         Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
@@ -454,8 +554,11 @@ impl super::Instance {
                 .display(display)
                 .surface(surface);
 
-            unsafe { w_loader.create_wayland_surface(&info, None) }.expect("WaylandSurface failed")
-        };
+            unsafe { w_loader.create_wayland_surface(&info, None) }
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(String::from("WaylandSurface failed"), err)
+        })?;
 
         Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
@@ -477,8 +580,101 @@ impl super::Instance {
                 .flags(vk::AndroidSurfaceCreateFlagsKHR::empty())
                 .window(window);
 
-            unsafe { a_loader.create_android_surface(&info, None) }.expect("AndroidSurface failed")
+            unsafe { a_loader.create_android_surface(&info, None) }
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(String::from("AndroidSurface failed"), err)
+        })?;
+
+        Ok(self.create_surface_from_vk_surface_khr(surface, None))
+    }
+
+    /// OpenHarmony window-system integration, using the `VK_OHOS_surface` extension.
+    ///
+    /// `ash` has no bindings for this, so we create bindings ad-hoc as needed. See also:
+    ///
+    /// - <https://docs.vulkan.org/refpages/latest/refpages/source/VK_OHOS_surface.html>
+    /// - [`vulkan_ohos.h`](https://github.com/KhronosGroup/Vulkan-Headers/blob/e3b1eec08173d6b825cd3ac88c885a63b621504a/include/vulkan/vulkan_ohos.h)
+    ///
+    /// `window` is the `OHNativeWindow*` handed out by an XComponent.
+    #[cfg(target_env = "ohos")]
+    fn create_surface_ohos(
+        &self,
+        window: *mut c_void,
+    ) -> Result<super::Surface, crate::InstanceError> {
+        // - Upstream docs:
+        // <https://docs.vulkan.org/refpages/latest/refpages/source/VkSurfaceCreateInfoOHOS.html>
+        #[repr(C)]
+        struct VkSurfaceCreateInfoOHOS {
+            s_type: vk::StructureType,
+            p_next: *const c_void,
+            flags: vk::Flags,
+            window: *mut c_void,
+        }
+
+        // - Upstream docs: Search for term `VK_STRUCTURE_TYPE_SURFACE_CREATE_INFO_OHOS` in
+        // <https://docs.vulkan.org/refpages/latest/refpages/source/VkStructureType.html>.
+        const S_TYPE_SURFACE_CREATE_INFO_OHOS: vk::StructureType =
+            vk::StructureType::from_raw(1000685000);
+
+        // - Upstream docs:
+        // <https://docs.vulkan.org/refpages/latest/refpages/source/vkCreateSurfaceOHOS.html>
+        type PfnCreateSurfaceOHOS = unsafe extern "system" fn(
+            vk::Instance,
+            *const VkSurfaceCreateInfoOHOS,
+            *const vk::AllocationCallbacks,
+            *mut vk::SurfaceKHR,
+        ) -> vk::Result;
+
+        if !self
+            .shared
+            .extensions
+            .contains(&OHOS_SURFACE_EXTENSION_NAME)
+        {
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_OHOS_surface",
+            )));
+        }
+
+        let raw_instance = self.shared.raw.handle();
+
+        // SAFETY: This is safe because:
+        //
+        // - `raw_instance` is a valid Vulkan instance, and the string we're asking for is
+        //   properly encoded and NUL-terminated.
+        let create = unsafe {
+            self.shared
+                .entry
+                .get_instance_proc_addr(raw_instance, c"vkCreateSurfaceOHOS".as_ptr())
         };
+        let create =
+            // SAFETY: This function is safe, because we `transmute` between two function pointers
+            // with the same ABI, with the same validity, size, and alignment before and after.
+            unsafe { core::mem::transmute::<vk::PFN_vkVoidFunction, Option<PfnCreateSurfaceOHOS>>(create) };
+        let Some(create) = create else {
+            return Err(crate::InstanceError::new(String::from(
+                "vkCreateSurfaceOHOS not exposed by Vulkan driver",
+            )));
+        };
+
+        let info = VkSurfaceCreateInfoOHOS {
+            s_type: S_TYPE_SURFACE_CREATE_INFO_OHOS,
+            p_next: core::ptr::null(),
+            flags: 0,
+            window,
+        };
+        let mut surface = vk::SurfaceKHR::null();
+        // SAFETY: This is safe because:
+        //
+        // - This function signature is specced to match the signature we casted it to.
+        // - During the previous `transmute` operation, we took care to keep the same ABI (see also
+        // <https://doc.rust-lang.org/nightly/std/primitive.fn.html#abi-compatibility>).
+        let result = unsafe { create(raw_instance, &info, core::ptr::null(), &mut surface) };
+        if result != vk::Result::SUCCESS {
+            return Err(crate::InstanceError::new(format!(
+                "vkCreateSurfaceOHOS failed: {result:?}"
+            )));
+        }
 
         Ok(self.create_surface_from_vk_surface_khr(surface, None))
     }
@@ -501,12 +697,11 @@ impl super::Instance {
                 .hwnd(hwnd);
             let win32_loader =
                 khr::win32_surface::Instance::new(&self.shared.entry, &self.shared.raw);
-            unsafe {
-                win32_loader
-                    .create_win32_surface(&info, None)
-                    .expect("Unable to create Win32 surface")
-            }
-        };
+            unsafe { win32_loader.create_win32_surface(&info, None) }
+        }
+        .map_err(|err| {
+            crate::InstanceError::with_source(String::from("Unable to create Win32 surface"), err)
+        })?;
 
         // Wrap ash's `isize` `HWND` in `WindowHandle`; on Windows the
         // `NativeSurface` builds its DXGI HDR source from it.
@@ -682,6 +877,20 @@ impl super::Instance {
             .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
             && validation_features_are_enabled;
 
+        // Debug printf is implemented on top of the same shader instrumentation as
+        // GPU-assisted validation, so it needs the validation layers to be present. Older
+        // validation layers refused to run the two at once; current ones don't, so we ask
+        // for both if both were requested and let the layers sort it out.
+        let should_enable_debug_printf = desc.flags.intersects(wgt::InstanceFlags::DEBUG_PRINTF)
+            && validation_features_are_enabled;
+
+        if desc.flags.intersects(wgt::InstanceFlags::DEBUG_PRINTF) && !should_enable_debug_printf {
+            log::warn!(
+                "InstanceFlags::DEBUG_PRINTF was requested, but shader debug printf output will \
+                 not be captured: it requires the validation layers, which are not available."
+            );
+        }
+
         let has_nv_optimus = find_layer(&instance_layers, c"VK_LAYER_NV_optimus").is_some();
 
         let has_obs_layer = find_layer(&instance_layers, c"VK_LAYER_OBS_HOOK").is_some();
@@ -810,7 +1019,7 @@ impl super::Instance {
 
             // Enable explicit validation features if available
             let mut validation_features;
-            let mut validation_feature_list: ArrayVec<_, 3>;
+            let mut validation_feature_list: ArrayVec<_, 4>;
             if validation_features_are_enabled {
                 validation_feature_list = ArrayVec::new();
 
@@ -823,6 +1032,11 @@ impl super::Instance {
                     validation_feature_list.push(vk::ValidationFeatureEnableEXT::GPU_ASSISTED);
                     validation_feature_list
                         .push(vk::ValidationFeatureEnableEXT::GPU_ASSISTED_RESERVE_BINDING_SLOT);
+                }
+
+                // Only capture shader `debugPrintf` output if requested.
+                if should_enable_debug_printf {
+                    validation_feature_list.push(vk::ValidationFeatureEnableEXT::DEBUG_PRINTF);
                 }
 
                 validation_features = vk::ValidationFeaturesEXT::default()
@@ -909,6 +1123,8 @@ impl crate::Instance for super::Instance {
             (Rwh::AndroidNdk(handle), _) => {
                 self.create_surface_android(handle.a_native_window.as_ptr())
             }
+            #[cfg(target_env = "ohos")]
+            (Rwh::OhosNdk(handle), _) => self.create_surface_ohos(handle.native_window.as_ptr()),
             (Rwh::Win32(handle), _) => {
                 let hinstance = handle.hinstance.ok_or_else(|| {
                     crate::InstanceError::new(String::from(

@@ -211,6 +211,7 @@ async fn run() {
             label: None,
             required_features: features,
             required_limits: wgpu::Limits::downlevel_defaults(),
+            default_queue: wgpu::QueueDescriptor { label: None },
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
@@ -431,11 +432,11 @@ pub fn main() {
 #[cfg(test)]
 pub mod tests {
     use wgpu::Backends;
-    use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration};
+    use wgpu_test::{apply, gpu_test, FailureCase, GpuTestConfiguration};
 
     use super::{submit_render_and_compute_pass_with_queries, QueryResults};
 
-    #[gpu_test]
+    #[apply(gpu_test!)]
     pub static TIMESTAMPS_PASS_BOUNDARIES: GpuTestConfiguration = GpuTestConfiguration::new()
         .parameters(
             wgpu_test::TestParameters::default()
@@ -444,7 +445,7 @@ pub mod tests {
         )
         .run_sync(|ctx| test_timestamps(ctx, false, false));
 
-    #[gpu_test]
+    #[apply(gpu_test!)]
     pub static TIMESTAMPS_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new()
         .parameters(
             wgpu_test::TestParameters::default()
@@ -456,7 +457,7 @@ pub mod tests {
         )
         .run_sync(|ctx| test_timestamps(ctx, true, false));
 
-    #[gpu_test]
+    #[apply(gpu_test!)]
     pub static TIMESTAMPS_PASSES: GpuTestConfiguration = GpuTestConfiguration::new()
         .parameters(
             wgpu_test::TestParameters::default()

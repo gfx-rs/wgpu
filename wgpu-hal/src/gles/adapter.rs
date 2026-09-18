@@ -1,8 +1,7 @@
 use alloc::{borrow::ToOwned as _, format, string::String, sync::Arc, vec, vec::Vec};
-use core::sync::atomic::AtomicU8;
 
 use glow::HasContext;
-use parking_lot::Mutex;
+use wgpu_sync::{atomic::AtomicU8, Mutex};
 use wgt::AstcChannel;
 
 use crate::auxil::db;
@@ -439,6 +438,13 @@ impl super::Adapter {
             wgt::DownlevelFlags::MULTISAMPLED_SHADING,
             supported((3, 2), (4, 0)) || extensions.contains("OES_sample_variables"),
         );
+        // GLSL ES has no `noperspective` qualifier, so `@interpolate(linear)` is only
+        // expressible on desktop GLSL (where we require at least 330, well past the 130
+        // that introduced `noperspective`).
+        downlevel_flags.set(
+            wgt::DownlevelFlags::LINEAR_INTERPOLATION,
+            !shading_language_version.is_es(),
+        );
         let query_buffers = extensions.contains("GL_ARB_query_buffer_object")
             || extensions.contains("GL_AMD_query_buffer_object");
         if query_buffers {
@@ -784,7 +790,11 @@ impl super::Adapter {
             max_sampled_textures_per_shader_stage: super::MAX_TEXTURE_SLOTS as u32,
             max_samplers_per_shader_stage: super::MAX_SAMPLERS as u32,
             max_storage_buffers_per_shader_stage,
+            max_storage_buffers_in_vertex_stage: 0,
+            max_storage_buffers_in_fragment_stage: 0,
             max_storage_textures_per_shader_stage,
+            max_storage_textures_in_vertex_stage: 0,
+            max_storage_textures_in_fragment_stage: 0,
             max_uniform_buffers_per_shader_stage,
             max_binding_array_elements_per_shader_stage: 0,
             max_binding_array_sampler_elements_per_shader_stage: 0,
@@ -941,7 +951,7 @@ impl super::Adapter {
         // Drop the GL guard so we can move the context into AdapterShared
         // ( on Wasm the gl handle is just a ref so we tell clippy to allow
         // dropping the ref )
-        #[cfg_attr(target_arch = "wasm32", allow(dropping_references))]
+        #[cfg_attr(target_family = "wasm", allow(dropping_references))]
         drop(gl);
 
         Some(crate::ExposedAdapter {
@@ -1395,7 +1405,8 @@ impl crate::Adapter for super::Adapter {
     fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
         wgt::TextureUses::INCLUSIVE
             | wgt::TextureUses::COLOR_TARGET
-            | wgt::TextureUses::DEPTH_STENCIL_WRITE
+            | wgt::TextureUses::DEPTH_WRITE
+            | wgt::TextureUses::STENCIL_WRITE
     }
 }
 

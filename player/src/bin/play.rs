@@ -68,7 +68,6 @@ fn main() {
     #[cfg(feature = "winit")]
     let instance_desc =
         instance_desc.with_display_handle(Box::new(event_loop.owned_display_handle()));
-    let instance_flags = instance_desc.flags;
     let instance = wgc::instance::Instance::new("player", instance_desc, None);
 
     let (backends, device_desc) =
@@ -96,9 +95,7 @@ fn main() {
     let info = adapter.get_info();
     log::info!("Using '{}'", info.name);
 
-    let (device, queue) = adapter
-        .create_device_and_queue(&device_desc, instance_flags)
-        .unwrap();
+    let (device, queue) = adapter.request_device(&device_desc).unwrap();
 
     let mut player = Player::default();
 
@@ -118,7 +115,8 @@ fn main() {
     {
         struct App<'a> {
             window: Option<Arc<Window>>,
-            surface: Option<wgc::instance::Surface>,
+            occluded: bool,
+            surface: Option<Arc<wgc::instance::Surface>>,
             configured_surface_id: Option<wgc::id::PointerId<wgc::id::markers::Surface>>,
             instance: &'a wgc::instance::Instance,
             device: &'a Arc<wgc::device::Device>,
@@ -173,67 +171,97 @@ fn main() {
                 let surface = self.surface.as_ref().unwrap();
 
                 match event {
-                    WindowEvent::RedrawRequested if self.resize_config.is_none() => loop {
-                        match self.actions.pop() {
-                            Some(trace::Action::ConfigureSurface(surface_id, config)) => {
-                                log::info!("Configuring the surface");
-                                let current_size: (u32, u32) = window.inner_size().into();
-                                let size = (config.width, config.height);
-                                if current_size != size {
-                                    let _ = window.request_inner_size(
-                                        winit::dpi::PhysicalSize::new(config.width, config.height),
-                                    );
-                                    self.resize_config = Some(config);
-                                    break;
-                                } else {
-                                    let error = self.device.configure_surface(surface, &config);
-                                    self.configured_surface_id = Some(surface_id);
-                                    if let Some(e) = error {
-                                        panic!("{e:?}");
+                    WindowEvent::RedrawRequested => {
+                        if self.resize_config.is_some() || self.occluded {
+                            return;
+                        }
+                        loop {
+                            match self.actions.pop() {
+                                Some(trace::Action::ConfigureSurface(surface_id, config)) => {
+                                    log::info!("Configuring the surface");
+                                    let current_size: (u32, u32) = window.inner_size().into();
+                                    let size = (config.width, config.height);
+                                    if current_size != size {
+                                        let _ = window.request_inner_size(
+                                            winit::dpi::PhysicalSize::new(
+                                                config.width,
+                                                config.height,
+                                            ),
+                                        );
+                                        self.resize_config = Some(config);
+                                        break;
+                                    } else {
+                                        let result = surface.configure(self.device, &config);
+                                        self.configured_surface_id = Some(surface_id);
+                                        if let Err(e) = result {
+                                            panic!("{e:?}");
+                                        }
                                     }
                                 }
-                            }
-                            Some(trace::Action::GetSurfaceTexture { id, parent }) => {
-                                log::debug!("Get surface texture for frame {}", self.frame_count);
-                                assert!(
-                                    self.configured_surface_id == Some(parent),
-                                    "rendering to an unexpected surface"
-                                );
-                                self.player.get_surface_texture(id, surface);
-                            }
-                            Some(trace::Action::Present(_id)) => {
-                                self.frame_count += 1;
-                                log::debug!("Presenting frame {}", self.frame_count);
-                                surface.present().unwrap();
-                                break;
-                            }
-                            Some(trace::Action::DiscardSurfaceTexture(_id)) => {
-                                log::debug!("Discarding frame {}", self.frame_count);
-                                surface.discard().unwrap();
-                                break;
-                            }
-                            Some(action) => {
-                                self.player.process(
-                                    self.device,
-                                    self.queue,
-                                    action,
-                                    trace::DiskTraceLoader::new(self.dir),
-                                );
-                            }
-                            None => {
-                                if !self.done {
-                                    println!("Finished the end at frame {}", self.frame_count);
-                                    self.done = true;
+                                Some(action @ trace::Action::GetSurfaceTexture { id, parent }) => {
+                                    log::debug!(
+                                        "Get surface texture for frame {}",
+                                        self.frame_count
+                                    );
+                                    assert!(
+                                        self.configured_surface_id == Some(parent),
+                                        "rendering to an unexpected surface"
+                                    );
+                                    let status = self.player.get_surface_texture(id, surface);
+                                    if !matches!(
+                                        status,
+                                        wgt::SurfaceStatus::Good | wgt::SurfaceStatus::Suboptimal
+                                    ) {
+                                        // Process other window messages and retry
+                                        self.actions.push(action);
+                                        break;
+                                    }
                                 }
-                                break;
+                                Some(trace::Action::Present(_id)) => {
+                                    self.frame_count += 1;
+                                    log::debug!("Presenting frame {}", self.frame_count);
+                                    surface.present().unwrap();
+                                    window.request_redraw();
+                                    break;
+                                }
+                                Some(trace::Action::DiscardSurfaceTexture(_id)) => {
+                                    log::debug!("Discarding frame {}", self.frame_count);
+                                    surface.discard().unwrap();
+                                    break;
+                                }
+                                Some(action) => {
+                                    self.player.process(
+                                        self.device,
+                                        self.queue,
+                                        action,
+                                        trace::DiskTraceLoader::new(self.dir),
+                                    );
+                                }
+                                None => {
+                                    if !self.done {
+                                        println!("Finished the end at frame {}", self.frame_count);
+                                        self.done = true;
+                                    }
+                                    break;
+                                }
                             }
                         }
-                    },
+                    }
                     WindowEvent::Resized(_) => {
                         if let Some(config) = self.resize_config.take() {
-                            let error = self.device.configure_surface(surface, &config);
-                            if let Some(e) = error {
+                            let result = surface.configure(self.device, &config);
+                            if let Err(e) = result {
                                 panic!("{e:?}");
+                            }
+                        }
+                        window.request_redraw();
+                    }
+                    WindowEvent::Occluded(is_occluded) => {
+                        self.occluded = is_occluded;
+                        // Resume rendering when un-occluded.
+                        if !is_occluded {
+                            if let Some(window) = &self.window {
+                                window.request_redraw();
                             }
                         }
                     }
@@ -254,6 +282,7 @@ fn main() {
 
         let mut app = App {
             window: None,
+            occluded: false,
             surface: None,
             configured_surface_id: None,
             instance: &instance,

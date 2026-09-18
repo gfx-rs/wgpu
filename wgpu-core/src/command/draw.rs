@@ -128,6 +128,15 @@ pub enum RenderCommandError {
     InvalidViewportDepth(f32, f32),
     #[error("Scissor {0:?} is not contained in the render target {1:?}")]
     InvalidScissorRect(Rect<u32>, wgt::Extent3d),
+    #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
+    UnalignedIndirectBufferOffset(wgt::BufferAddress),
+    #[error("Indirect draw arguments of {args_size} bytes (count = {count}) starting at {offset} would overrun buffer size of {buffer_size}")]
+    IndirectBufferOverrun {
+        count: u32,
+        offset: u64,
+        args_size: u64,
+        buffer_size: u64,
+    },
     #[error("Support for {0} is not implemented yet")]
     Unimplemented(&'static str),
 }
@@ -154,6 +163,8 @@ impl WebGpuError for RenderCommandError {
             | Self::InvalidViewportRectPosition { .. }
             | Self::InvalidViewportDepth(..)
             | Self::InvalidScissorRect(..)
+            | Self::UnalignedIndirectBufferOffset(..)
+            | Self::IndirectBufferOverrun { .. }
             | Self::Unimplemented(..) => ErrorType::Validation,
         }
     }

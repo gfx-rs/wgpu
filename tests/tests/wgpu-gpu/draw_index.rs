@@ -4,7 +4,8 @@ use wgpu::{
     TextureFormat, VertexState,
 };
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
@@ -64,7 +65,7 @@ fn fragment() -> @location(0) vec4<f32> {
         });
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DRAW_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -187,17 +188,17 @@ fn mesh_params() -> TestParameters {
         .limits(Limits::defaults().using_recommended_minimum_mesh_shader_values())
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DRAW_INDEX_TASK_NO_MESH: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(mesh_params())
     .run_async(async |ctx| test_mesh(ctx, true, false).await);
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DRAW_INDEX_MESH_NO_TASK: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(mesh_params())
     .run_async(async |ctx| test_mesh(ctx, false, true).await);
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DRAW_INDEX_MESH_TASK: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(mesh_params().expect_fail(FailureCase::always()))
     .run_async(async |ctx| test_mesh(ctx, true, true).await);

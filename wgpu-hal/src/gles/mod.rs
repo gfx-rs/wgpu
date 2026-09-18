@@ -1,7 +1,9 @@
 /*!
 # OpenGL ES3 API (aka GLES3).
 
-Designed to work on Linux and Android, with context provided by EGL.
+Designed to work on platforms with context provided by EGL or WGL, including
+Linux and Android via EGL, and Windows via WGL by default or ANGLE/EGL with
+`cfg(windows_angle)`.
 
 ## Texture views
 
@@ -79,47 +81,40 @@ we don't bother with that combination.
 
 */
 
-///cbindgen:ignore
-#[cfg(not(any(windows, webgl)))]
-mod egl;
-#[cfg(Emscripten)]
-mod emscripten;
-#[cfg(webgl)]
-mod web;
-#[cfg(windows)]
-mod wgl;
-
 mod adapter;
 mod command;
 mod conv;
 mod device;
+///cbindgen:ignore
+#[cfg(all(not(webgl), any(not(windows), windows_angle)))]
+mod egl;
+#[cfg(all(not(webgl), any(not(windows), windows_angle)))]
+pub use self::egl::{AdapterContext, AdapterContextLock, Instance, Surface};
+
+#[cfg(Emscripten)]
+mod emscripten;
+
 mod fence;
 mod queue;
 
+#[cfg(webgl)]
+mod web;
+#[cfg(webgl)]
+pub use self::web::{AdapterContext, Instance, Surface};
+
+#[cfg(all(windows, not(webgl), not(windows_angle)))]
+mod wgl;
+#[cfg(all(windows, not(webgl), not(windows_angle)))]
+pub use self::wgl::{AdapterContext, AdapterContextLock, Instance, Surface};
+
 pub use fence::Fence;
 
-#[cfg(not(any(windows, webgl)))]
-pub use self::egl::{AdapterContext, AdapterContextLock};
-#[cfg(not(any(windows, webgl)))]
-pub use self::egl::{Instance, Surface};
-
-#[cfg(webgl)]
-pub use self::web::AdapterContext;
-#[cfg(webgl)]
-pub use self::web::{Instance, Surface};
-
-#[cfg(windows)]
-use self::wgl::AdapterContext;
-#[cfg(windows)]
-pub use self::wgl::{Instance, Surface};
-
 use alloc::{boxed::Box, string::String, string::ToString as _, sync::Arc, vec::Vec};
-use core::{
-    fmt,
-    ops::Range,
-    sync::atomic::{AtomicU32, AtomicU8},
+use core::{fmt, ops::Range};
+use wgpu_sync::{
+    atomic::{AtomicU32, AtomicU8},
+    Mutex,
 };
-use parking_lot::Mutex;
 
 use arrayvec::ArrayVec;
 use glow::HasContext;
@@ -389,13 +384,12 @@ impl Drop for Queue {
 pub struct Buffer {
     raw: Option<glow::Buffer>,
     target: BindTarget,
-    size: wgt::BufferAddress,
     /// Flags to use within calls to [`Device::map_buffer`](crate::Device::map_buffer).
     map_flags: u32,
     /// Buffer mapping state.
     ///
     /// If locked concurrently with the GL context, the GL context should be locked first.
-    map_state: Arc<MaybeMutex<BufferMapState>>,
+    map_state: Arc<Mutex<BufferMapState>>,
     /// Set when the buffer wraps an externally-owned GL name created via
     /// [`Device::buffer_from_raw`](crate::gles::Device::buffer_from_raw).
     ///
@@ -475,8 +469,15 @@ pub struct Texture {
     pub format_desc: TextureFormatDesc,
     pub copy_size: CopyExtent,
 
-    // The `drop_guard` field must be the last field of this struct so it is dropped last.
-    // Do not add new fields after it.
+    /// `Some` marks the underlying GL object as externally owned: wgpu-hal
+    /// never deletes it (the guard's callback, if any, fires instead).
+    ///
+    /// On WebGL every handle also holds a slot in glow's resource tracker.
+    /// `destroy_texture` always releases that slot: by deleting the texture
+    /// when we own it, or by `unregister_external_texture` when we don't.
+    ///
+    /// The `drop_guard` field must be the last field of this struct so it is
+    /// dropped last. Do not add new fields after it.
     pub drop_guard: Option<crate::DropGuard>,
 }
 
@@ -529,16 +530,23 @@ impl Texture {
         }
     }
 
-    /// More information can be found in issues #1614 and #1574
-    fn log_failing_target_heuristics(view_dimension: wgt::TextureViewDimension, target: u32) {
-        let expected_target = match view_dimension {
-            wgt::TextureViewDimension::D1 => glow::TEXTURE_2D,
-            wgt::TextureViewDimension::D2 => glow::TEXTURE_2D,
+    /// GL bind target corresponding to a view dimension.
+    ///
+    /// 1D collapses to `TEXTURE_2D`: WebGL (1 and 2) as well as some GLES
+    /// versions do not have 1D textures.
+    fn target_for_view_dimension(view_dimension: wgt::TextureViewDimension) -> BindTarget {
+        match view_dimension {
+            wgt::TextureViewDimension::D1 | wgt::TextureViewDimension::D2 => glow::TEXTURE_2D,
             wgt::TextureViewDimension::D2Array => glow::TEXTURE_2D_ARRAY,
             wgt::TextureViewDimension::Cube => glow::TEXTURE_CUBE_MAP,
             wgt::TextureViewDimension::CubeArray => glow::TEXTURE_CUBE_MAP_ARRAY,
             wgt::TextureViewDimension::D3 => glow::TEXTURE_3D,
-        };
+        }
+    }
+
+    /// More information can be found in issues #1614 and #1574
+    fn log_failing_target_heuristics(view_dimension: wgt::TextureViewDimension, target: u32) {
+        let expected_target = Self::target_for_view_dimension(view_dimension);
 
         if expected_target == target {
             return;
@@ -1188,28 +1196,5 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
     if cfg!(debug_assertions) && log_severity == log::Level::Error {
         // Set canary and continue
         crate::VALIDATION_CANARY.add(message.to_string());
-    }
-}
-
-// If we are using `std`, then use `Mutex` to provide `Send` and `Sync`
-cfg_if::cfg_if! {
-    if #[cfg(gles_with_std)] {
-        type MaybeMutex<T> = std::sync::Mutex<T>;
-
-        fn lock<T>(mutex: &MaybeMutex<T>) -> std::sync::MutexGuard<'_, T> {
-            mutex.lock().unwrap()
-        }
-    } else {
-        // It should be impossible for any build configuration to trigger this error
-        // It is intended only as a guard against changes elsewhere causing the use of
-        // `RefCell` here to become unsound.
-        #[cfg(all(send_sync, not(feature = "fragile-send-sync-non-atomic-wasm")))]
-        compile_error!("cannot provide non-fragile Send+Sync without std");
-
-        type MaybeMutex<T> = core::cell::RefCell<T>;
-
-        fn lock<T>(mutex: &MaybeMutex<T>) -> core::cell::RefMut<'_, T> {
-            mutex.borrow_mut()
-        }
     }
 }

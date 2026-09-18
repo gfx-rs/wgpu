@@ -1,5 +1,7 @@
 //! Tests of [`wgpu::Texture`] and related.
 
+use std::sync::Arc;
+
 use wgpu_test::{fail, valid};
 
 /// Ensures that submitting a command buffer referencing an already destroyed texture
@@ -686,4 +688,31 @@ fn transient_invalid_storeop() {
         },
       Some("Color attachment with `TRANSIENT_ATTACHMENT` usage can only be used with `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `(Clear(Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }), Store)` were provided")
     );
+}
+
+/// <https://bugzilla.mozilla.org/show_bug.cgi?id=2053860>
+#[test]
+fn no_overflow_in_texture_selector() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    // ignore validation errors to not panic before reaching `TextureView::invalid`
+    device.on_uncaptured_error(Arc::new(|_| {}));
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 59,
+            height: 401,
+            depth_or_array_layers: 1948,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let _view = texture.create_view(&wgpu::TextureViewDescriptor {
+        base_array_layer: 3385121660,
+        array_layer_count: Some(3815184380),
+        ..Default::default()
+    });
 }

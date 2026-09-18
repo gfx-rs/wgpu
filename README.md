@@ -24,9 +24,9 @@ Additionally, [WebGPU Fundamentals] is a tutorial for WebGPU which is very simil
 [Learn Wgpu]: https://sotrh.github.io/learn-wgpu/
 [WebGPU Fundamentals]: https://webgpufundamentals.org/
 
-### Wiki
+### Documentation Guides
 
-We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) which has information on useful architecture patterns, debugging tips, and more getting started information.
+We ship a set of [documentation modules](https://docs.rs/wgpu/latest/wgpu/documentation/index.html) with information on useful architecture patterns, debugging tips, and more getting started information.
 
 ### Need Help? Want to Contribute?
 
@@ -65,17 +65,17 @@ Contributors are welcome! See [CONTRIBUTING.md][contrib] for more information.
 
 ## Supported Platforms
 
-| API    | Windows      | Linux/Android   | macOS/iOS | Web (wasm)  |
-| ------ | ------------ | --------------- | --------- | ----------- |
-| Vulkan | ✅           | ✅              | 🌋        |             |
-| Metal  |              |                 | ✅        |             |
-| DX12   | ✅           |                 |           |             |
-| OpenGL | 🆗 (GL 3.3+) | 🆗 (GL ES 3.0+) | 📐        | 🆗 (WebGL2) |
-| WebGPU |              |                 |           | ✅          |
+| API    | Windows             | Linux/Android   | macOS/iOS | Web (wasm)  |
+| ------ | ------------------- | --------------- | --------- | ----------- |
+| Vulkan | ✅                  | ✅              | 🌋        |             |
+| Metal  |                     |                 | ✅        |             |
+| DX12   | ✅                  |                 |           |             |
+| OpenGL | 🆗 (GL 3.3+), or 📐 | 🆗 (GL ES 3.0+) | 📐        | 🆗 (WebGL2) |
+| WebGPU |                     |                 |           | ✅          |
 
 ✅ = First Class Support  
 🆗 = Downlevel/Best Effort Support  
-📐 = Requires the [ANGLE](https://github.com/gfx-rs/wgpu/wiki/Running-on-ANGLE) translation layer (GL ES 3.0 only)  
+📐 = Requires the [ANGLE](https://docs.rs/wgpu/latest/wgpu/documentation/platforms/angle/index.html) translation layer (GL ES 3.0 only). On macOS/iOS, use the `angle` feature. On Windows, `gles` uses WGL by default; build with `cfg(windows_angle)` to use ANGLE instead.
 🌋 = Requires the [MoltenVK](https://vulkan.lunarg.com/sdk/home#mac) translation layer  
 🛠️ = Unsupported, though open to contributions
 
@@ -93,11 +93,11 @@ When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU
 
 ## Repo Overview
 
-For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./docs/big-picture.png).
+For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./wgpu/src/documentation/images/big-picture.webp).
 
 ## MSRV policy
 
-TL;DR: If you're using `wgpu`, our MSRV is **1.87**. If you're running our tests or examples, our MSRV is **1.93**.
+TL;DR: If you're using `wgpu`, our MSRV is **1.87**. If you're running our tests or examples, our MSRV is **1.95**.
 
 We will avoid bumping the MSRV of `wgpu` without good reason, and such a change is considered breaking.
 
@@ -108,7 +108,7 @@ Due to complex dependants, we have three MSRV policies:
 
 - `wgpu`'s MSRV is **1.87**
 - `wgpu-core` (and hence `wgpu-hal`, `naga`, `naga-types` and `wgpu-types`)'s MSRV is **1.87**.
-- The rest of the workspace has an MSRV of **1.93**.
+- The rest of the workspace has an MSRV of **1.95**.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `WGPU_MSRV`, `CORE_MSRV`, and `REPO_MSRV` variables, respectively.
 This version can only be upgraded in breaking releases, though we release a breaking version every three months.

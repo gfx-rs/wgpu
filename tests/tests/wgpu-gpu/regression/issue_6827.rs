@@ -1,19 +1,20 @@
 use std::sync::Arc;
 
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.extend([TEST_SINGLE_WRITE, TEST_SCATTER]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static TEST_SINGLE_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_async(|ctx| async move { run_test(ctx, false).await });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static TEST_SCATTER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

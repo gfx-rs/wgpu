@@ -1,13 +1,14 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
 use std::cell::RefCell;
+use std::sync::Arc;
 
-use deno_core::GarbageCollected;
-use deno_core::WebIDL;
 use deno_core::_ops::make_cppgc_object;
 use deno_core::cppgc::Ptr;
 use deno_core::op2;
 use deno_core::v8;
+use deno_core::GarbageCollected;
+use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 use wgpu_types::SurfaceStatus;
 
@@ -39,7 +40,7 @@ pub struct Configuration {
 }
 
 pub struct GPUCanvasContext {
-  pub surface_id: wgpu_core::id::SurfaceId,
+  pub wgpu_surface: Arc<wgpu_core::instance::Surface>,
   pub width: RefCell<u32>,
   pub height: RefCell<u32>,
 
@@ -69,6 +70,7 @@ impl GPUCanvasContext {
     self.canvas.clone()
   }
 
+  #[reentrant]
   #[undefined]
   fn configure(
     &self,
@@ -83,7 +85,7 @@ impl GPUCanvasContext {
         "`GPUCanvasConfiguration.usage` must not include `TRANSIENT_ATTACHMENT`",
       ));
     }
-    let format = configuration.format.clone().into();
+    let format = configuration.format.into();
     let conf = wgpu_types::SurfaceConfiguration {
       usage: configuration.usage.into(),
       format,
@@ -105,12 +107,9 @@ impl GPUCanvasContext {
 
     let device = configuration.device;
 
-    let err =
-      device
-        .instance
-        .surface_configure(self.surface_id, device.id, &conf);
+    let result = self.wgpu_surface.configure(&device.wgpu_device, &conf);
 
-    device.error_handler.push_error(err);
+    device.error_handler.push_error(result.err());
 
     self.config.borrow_mut().replace(Configuration {
       device,
@@ -144,30 +143,15 @@ impl GPUCanvasContext {
       }
     }
 
-    let output = config
-      .device
-      .instance
-      .surface_get_current_texture(self.surface_id, None)?;
+    let output = self.wgpu_surface.get_current_texture()?;
 
     match output.status {
       SurfaceStatus::Good | SurfaceStatus::Suboptimal => {
-        let id = output.texture.unwrap();
-
         let texture = GPUTexture {
-          instance: config.device.instance.clone(),
-          error_handler: config.device.error_handler.clone(),
-          id,
-          default_view_id: Default::default(),
-          label: "".to_string(),
-          size: wgpu_types::Extent3d {
-            width: *self.width.borrow(),
-            height: *self.height.borrow(),
-            depth_or_array_layers: 1,
-          },
-          mip_level_count: 0,
-          sample_count: 0,
+          wgpu_texture: output.texture.unwrap(),
+          default_view: Default::default(),
           dimension: crate::texture::GPUTextureDimension::D2,
-          format: config.format.clone(),
+          format: config.format,
           usage: config.usage,
         };
         let obj = make_cppgc_object(scope, texture);
@@ -184,11 +168,11 @@ impl GPUCanvasContext {
 impl GPUCanvasContext {
   pub fn present(&self) -> Result<(), SurfaceError> {
     let config = self.config.borrow();
-    let Some(config) = config.as_ref() else {
+    if config.is_none() {
       return Err(SurfaceError::UnconfiguredContext);
     };
 
-    config.device.instance.surface_present(self.surface_id)?;
+    self.wgpu_surface.present()?;
 
     // next `get_current_texture` call would get a new texture
     *self.texture.borrow_mut() = None;
@@ -208,13 +192,11 @@ impl GPUCanvasContext {
     config.surface_config.width = width;
     config.surface_config.height = height;
 
-    let err = config.device.instance.surface_configure(
-      self.surface_id,
-      config.device.id,
-      &config.surface_config,
-    );
+    let result = self
+      .wgpu_surface
+      .configure(&config.device.wgpu_device, &config.surface_config);
 
-    config.device.error_handler.push_error(err);
+    config.device.error_handler.push_error(result.err());
   }
 }
 

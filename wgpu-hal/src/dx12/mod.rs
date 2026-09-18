@@ -93,12 +93,13 @@ mod types;
 mod view;
 
 use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
-use core::{ffi, fmt, mem, ops::Deref, sync::atomic::AtomicU64};
+use core::{ffi, fmt, mem, ops::Deref};
 
 use arrayvec::ArrayVec;
 use hashbrown::HashMap;
-use parking_lot::{Mutex, RwLock};
 use suballocation::Allocator;
+use wgpu_sync::atomic::AtomicU64;
+use wgpu_sync::{Mutex, RwLock};
 use windows::{
     core::{Free as _, Interface},
     Win32::{
@@ -116,39 +117,12 @@ use self::dcomp::DCompLib;
 use crate::auxil::{
     self,
     dxgi::{
+        dxgi_lib::DxgiLib,
         factory::{DxgiAdapter, DxgiFactory},
         result::HResult,
     },
+    dyn_lib::DynLib,
 };
-
-#[derive(Debug)]
-struct DynLib {
-    inner: libloading::Library,
-}
-
-impl DynLib {
-    unsafe fn new<P>(filename: P) -> Result<Self, libloading::Error>
-    where
-        P: AsRef<std::ffi::OsStr>,
-    {
-        unsafe { libloading::Library::new(filename) }.map(|inner| Self { inner })
-    }
-
-    unsafe fn get<T>(
-        &self,
-        symbol: &[u8],
-    ) -> Result<libloading::Symbol<'_, T>, crate::DeviceError> {
-        unsafe { self.inner.get(symbol) }.map_err(|e| match e {
-            libloading::Error::GetProcAddress { .. } | libloading::Error::GetProcAddressUnknown => {
-                crate::DeviceError::Unexpected
-            }
-            libloading::Error::IncompatibleSize
-            | libloading::Error::CreateCString { .. }
-            | libloading::Error::CreateCStringWithTrailing { .. } => crate::hal_internal_error(e),
-            _ => crate::DeviceError::Unexpected, // could be unreachable!() but we prefer to be more robust
-        })
-    }
-}
 
 #[derive(Debug)]
 struct D3D12Lib {
@@ -320,91 +294,6 @@ impl fmt::Display for GetInterfaceError {
 }
 
 impl core::error::Error for GetInterfaceError {}
-
-#[derive(Debug)]
-pub(super) struct DxgiLib {
-    lib: DynLib,
-}
-
-impl DxgiLib {
-    pub fn new() -> Result<Self, libloading::Error> {
-        unsafe { DynLib::new("dxgi.dll").map(|lib| Self { lib }) }
-    }
-
-    /// Will error with crate::DeviceError::Unexpected if DXGI 1.3 is not available.
-    pub fn debug_interface1(&self) -> Result<Option<Dxgi::IDXGIInfoQueue>, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Dxgi::DXGIGetDebugInterface1 on dxgi.dll
-        type Fun = extern "system" fn(
-            flags: u32,
-            riid: *const windows_core::GUID,
-            pdebug: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"DXGIGetDebugInterface1".to_bytes()) }?;
-
-        let mut result__ = None;
-
-        let res = (func)(0, &Dxgi::IDXGIInfoQueue::IID, <*mut _>::cast(&mut result__)).ok();
-
-        if let Err(ref err) = res {
-            match err.code() {
-                Dxgi::DXGI_ERROR_SDK_COMPONENT_MISSING => return Ok(None),
-                _ => {}
-            }
-        }
-
-        res.into_device_result("debug_interface1")?;
-
-        result__.ok_or(crate::DeviceError::Unexpected).map(Some)
-    }
-
-    /// Will error with crate::DeviceError::Unexpected if DXGI 1.4 is not available.
-    pub fn create_factory4(
-        &self,
-        factory_flags: Dxgi::DXGI_CREATE_FACTORY_FLAGS,
-    ) -> Result<Dxgi::IDXGIFactory4, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Dxgi::CreateDXGIFactory2 on dxgi.dll
-        type Fun = extern "system" fn(
-            flags: Dxgi::DXGI_CREATE_FACTORY_FLAGS,
-            riid: *const windows_core::GUID,
-            ppfactory: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"CreateDXGIFactory2".to_bytes()) }?;
-
-        let mut result__ = None;
-
-        (func)(
-            factory_flags,
-            &Dxgi::IDXGIFactory4::IID,
-            <*mut _>::cast(&mut result__),
-        )
-        .ok()
-        .into_device_result("create_factory4")?;
-
-        result__.ok_or(crate::DeviceError::Unexpected)
-    }
-
-    /// Will error with crate::DeviceError::Unexpected if DXGI 1.3 is not available.
-    pub fn create_factory_media(&self) -> Result<Dxgi::IDXGIFactoryMedia, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Dxgi::CreateDXGIFactory1 on dxgi.dll
-        type Fun = extern "system" fn(
-            riid: *const windows_core::GUID,
-            ppfactory: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"CreateDXGIFactory1".to_bytes()) }?;
-
-        let mut result__ = None;
-
-        // https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nn-dxgi1_3-idxgifactorymedia
-        (func)(&Dxgi::IDXGIFactoryMedia::IID, <*mut _>::cast(&mut result__))
-            .ok()
-            .into_device_result("create_factory_media")?;
-
-        result__.ok_or(crate::DeviceError::Unexpected)
-    }
-}
 
 /// Create a temporary "owned" copy inside a [`mem::ManuallyDrop`] without increasing the refcount or
 /// moving away the source variable.
@@ -1028,11 +917,20 @@ unsafe impl Sync for CommandBuffer {}
 #[derive(Debug)]
 pub struct Buffer {
     resource: Direct3D12::ID3D12Resource,
-    // While the allocation also has _a_ size, it may not
-    // be the same as the original size of the buffer,
-    // as the allocation size varies for assorted reasons.
-    size: wgt::BufferAddress,
+    /// The allocated size of the buffer.
+    ///
+    /// This may not be the same as the size the application requested.
+    //
+    // TODO(https://github.com/gfx-rs/wgpu/issues/9865): Consider removing this.
+    // The usage associated with the TODO is currently the only usage. Computing
+    // things from the allocated buffer size is usually incorrect.
+    allocated_size: wgt::BufferAddress,
     allocation: suballocation::Allocation,
+
+    // The `_drop_guard` field must be the last field of this struct so it is
+    // dropped last, after this buffer's reference to `resource` is released.
+    // Do not add new fields after it.
+    _drop_guard: Option<crate::DropGuard>,
 }
 
 impl Buffer {
@@ -1046,14 +944,7 @@ unsafe impl Sync for Buffer {}
 
 impl crate::DynBuffer for Buffer {}
 
-impl crate::BufferBinding<'_, Buffer> {
-    fn resolve_size(&self) -> wgt::BufferAddress {
-        match self.size {
-            Some(size) => size.get(),
-            None => self.buffer.size - self.offset,
-        }
-    }
-
+impl<S> crate::BufferBinding<'_, Buffer, S> {
     // TODO: Return GPU handle directly?
     fn resolve_address(&self) -> wgt::BufferAddress {
         (unsafe { self.buffer.resource.GetGPUVirtualAddress() }) + self.offset
@@ -1074,6 +965,11 @@ pub struct Texture {
     /// importers wrapping one plane of a multi-plane DXGI resource as a
     /// single-plane wgpu texture.
     plane_slice_override: Option<u32>,
+
+    // The `_drop_guard` field must be the last field of this struct so it is
+    // dropped last, after this texture's reference to `resource` is released.
+    // Do not add new fields after it.
+    _drop_guard: Option<crate::DropGuard>,
 }
 
 impl Texture {
@@ -1175,8 +1071,14 @@ pub struct TextureView {
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,
     handle_rtv: Option<descriptor::Handle>,
-    handle_dsv_ro: Option<descriptor::Handle>,
+    /// Depth write stencil read-only view.
+    handle_dsv_wr: Option<descriptor::Handle>,
+    /// Depth read-only stencil write view.
     handle_dsv_rw: Option<descriptor::Handle>,
+    /// Depth read-only stencil read-only view.
+    handle_dsv_rr: Option<descriptor::Handle>,
+    /// Depth write stencil write view.
+    handle_dsv_ww: Option<descriptor::Handle>,
 }
 
 impl crate::DynTextureView for TextureView {}
@@ -1755,6 +1657,7 @@ impl crate::Surface for Surface {
                 sc.format.theoretical_memory_footprint(sc.size),
             ),
             plane_slice_override: None,
+            _drop_guard: None,
         };
         Ok(crate::AcquiredSurfaceTexture {
             texture,

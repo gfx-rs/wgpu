@@ -8,7 +8,8 @@ use wgpu::{
     PipelineLayoutDescriptor, RenderPipelineDescriptor, VertexState,
 };
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 use wgpu_types::CreateShaderModuleDescriptorPassthrough;
 
@@ -95,7 +96,7 @@ fn metal_test(ctx: TestingContext) {
     test_with_module(ctx, module.clone(), module);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static METAL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -206,7 +207,7 @@ fn metallib_test(ctx: TestingContext) {
     test_with_module(ctx, module.clone(), module);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static METALLIB_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -240,7 +241,7 @@ fn hlsl_test(ctx: TestingContext) {
     test_with_module(ctx, module.clone(), module);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static HLSL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -268,7 +269,9 @@ fn compile_dxil(entry: &str, stage_str: &str, test_hash: u64) -> Cow<'static, [u
             &out_path,
         ])
         .output()
-        .unwrap();
+        .unwrap_or_else(|e| {
+            panic!("failed to run `dxc` (required to compile the passthrough test shaders; install the DirectX Shader Compiler and ensure `dxc` is on PATH): {e}")
+        });
     let file = std::fs::read(&out_path);
     let _ = std::fs::remove_file(out_path);
     // Remove the file before checking for status
@@ -326,7 +329,7 @@ fn dxil_test(ctx: TestingContext) {
     test_with_module(ctx, vertex, fragment);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DXIL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -357,7 +360,9 @@ fn spirv_source(test_hash: u64) -> Cow<'static, [u32]> {
             &out_path,
         ])
         .output()
-        .unwrap();
+        .unwrap_or_else(|e| {
+            panic!("failed to run `dxc` (required to compile the passthrough test shaders; install the DirectX Shader Compiler and ensure `dxc` is on PATH): {e}")
+        });
     let file = std::fs::read(&out_path);
     let _ = std::fs::remove_file(out_path);
     // Remove the file before checking for status
@@ -391,7 +396,7 @@ fn spirv_test(ctx: TestingContext) {
     test_with_module(ctx, module.clone(), module);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SPIRV_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -454,7 +459,7 @@ fn glsl_test(ctx: TestingContext) {
     test_with_module(ctx, vertex, fragment);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static GLSL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -478,7 +483,7 @@ fn wgsl_test(ctx: TestingContext) {
     test_with_module(ctx, module.clone(), module);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static WGSL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -520,7 +525,7 @@ fn all_passthrough_shaders_binary(ctx: TestingContext) {
     test_with_module(ctx, vertex, fragment);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ALL_PASSTHROUGH_SHADERS_BINARY: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(Features::PASSTHROUGH_SHADERS))
     .run_sync(all_passthrough_shaders_binary);
@@ -554,7 +559,7 @@ fn all_passthrough_shader_source(ctx: TestingContext) {
     test_with_module(ctx, vertex, fragment);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ALL_PASSTHROUGH_SHADERS_SOURCE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(Features::PASSTHROUGH_SHADERS))
     .run_sync(all_passthrough_shader_source);
@@ -615,7 +620,7 @@ fn explicit_layout_validation(ctx: TestingContext) {
         });
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PASSTHROUGH_SHADERS_EXPLICIT_LAYOUT_VALIDATION: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(

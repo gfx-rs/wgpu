@@ -88,7 +88,7 @@ behavior in the WebGPU or WGSL specification.
 
 # Overview of the Code
 
-See `docs/big-picture.png` for an overview of the system.
+See `wgpu/src/documentation/images/big-picture.webp` for an overview of the system.
 
 The major components are:
 
@@ -116,7 +116,7 @@ The major components are:
   apply to other clients, the issue should probably be fixed in `wgpu-core`.
 
 For a more detailed discussion of the `wgpu` architecture, refer to
-<https://github.com/gfx-rs/wgpu/wiki/Architecture>.
+wgpu/src/documentation/internals/architecture.rs
 
 ## Naga
 

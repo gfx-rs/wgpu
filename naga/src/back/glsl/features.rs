@@ -62,6 +62,13 @@ bitflags::bitflags! {
     }
 }
 
+impl core::fmt::Display for Features {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // `Debug` would print this as `Features(A | B)`; we only want `A | B`.
+        bitflags::parser::to_writer(self, f)
+    }
+}
+
 /// Helper structure used to store the required [`Features`] needed to output a
 /// [`Module`](crate::Module)
 ///
@@ -144,7 +151,7 @@ impl FeaturesManager {
         if missing.is_empty() {
             Ok(())
         } else {
-            Err(Error::MissingFeatures(missing))
+            Err(Error::MissingFeatures(missing, version))
         }
     }
 
@@ -535,15 +542,13 @@ impl<W> Writer<'_, W> {
                 // or level argument since this requires a feature
                 Expression::ImageLoad {
                     sample, level, ..
-                } => {
-                    if policies.image_load != crate::proc::BoundsCheckPolicy::Unchecked {
-                        if sample.is_some() {
-                            features.request(Features::TEXTURE_SAMPLES)
-                        }
+                } if policies.image_load != crate::proc::BoundsCheckPolicy::Unchecked => {
+                    if sample.is_some() {
+                        features.request(Features::TEXTURE_SAMPLES)
+                    }
 
-                        if level.is_some() {
-                            features.request(Features::TEXTURE_LEVELS)
-                        }
+                    if level.is_some() {
+                        features.request(Features::TEXTURE_LEVELS)
                     }
                 }
                 Expression::ImageSample { image, level, offset, .. } => {

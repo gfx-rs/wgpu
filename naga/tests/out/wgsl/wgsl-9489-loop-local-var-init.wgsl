@@ -1,9 +1,9 @@
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage> input: array<f32, 64>;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage, read_write> output: array<f32, 8>;
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     var t: u32 = 0u;
     var acc_noinit: vec4<f32>;

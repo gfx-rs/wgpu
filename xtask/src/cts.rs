@@ -72,6 +72,10 @@ pub fn run_cts(
     let llvm_cov = args.contains("--llvm-cov");
     let release = args.contains("--release");
 
+    // This is used in the Vulkan hal to waive pre-existing validation
+    // errors in the CTS, until they can be fixed.
+    shell.set_var("WGPU_CTS_XTASK", "1");
+
     let output_filter = args
         .opt_value_from_str::<_, String>("--print-output-when")?
         .map(|f| {

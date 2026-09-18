@@ -2,7 +2,7 @@ fn test_any_and_all_for_bool() -> bool {
     return true;
 }
 
-@fragment 
+@fragment
 fn derivatives(@builtin(position) foo: vec4<f32>) -> @location(0) vec4<f32> {
     var x: vec4<f32>;
     var y: vec4<f32>;

@@ -1,7 +1,9 @@
 use alloc::{borrow::Cow, string::String};
 use core::{fmt, mem};
 
-use crate::{link_to_wgc_docs, link_to_wgpu_docs, Backend, Backends};
+use macro_rules_attribute::derive;
+
+use crate::{link_to_wgc_docs, link_to_wgpu_docs, Backend, Backends, ConstDefault};
 
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
@@ -15,11 +17,11 @@ use crate::{Features, TextureUsages};
 /// https://gpuweb.github.io/gpuweb/#feature-level-string).
 ///
 /// `wgpu` does not support compatibility-level adapters per se.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, ConstDefault!)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum FeatureLevel {
-    #[default]
+    #[custom(default)]
     /// The `core` capability set
     Core,
     /// The `compatibility` capability set
@@ -72,11 +74,11 @@ impl<S> Default for RequestAdapterOptions<S> {
 /// Corresponds to [WebGPU `GPUPowerPreference`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpupowerpreference).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, ConstDefault!)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum PowerPreference {
-    #[default]
+    #[custom(default)]
     /// Power usage is not considered when choosing an adapter.
     None = 0,
     /// Adapter that uses the least possible power. This is often an integrated GPU.

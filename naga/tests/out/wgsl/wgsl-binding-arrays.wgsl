@@ -8,26 +8,26 @@ struct FragmentIn {
     @location(0) @interpolate(flat) index: u32,
 }
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var texture_array_unbounded: binding_array<texture_2d<f32>>;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var texture_array_bounded: binding_array<texture_2d<f32>, 5>;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var texture_array_2darray: binding_array<texture_2d_array<f32>, 5>;
-@group(0) @binding(3) 
+@group(0) @binding(3)
 var texture_array_multisampled: binding_array<texture_multisampled_2d<f32>, 5>;
-@group(0) @binding(4) 
+@group(0) @binding(4)
 var texture_array_depth: binding_array<texture_depth_2d, 5>;
-@group(0) @binding(5) 
+@group(0) @binding(5)
 var texture_array_storage: binding_array<texture_storage_2d<rgba32float,write>, 5>;
-@group(0) @binding(6) 
+@group(0) @binding(6)
 var samp: binding_array<sampler, 5>;
-@group(0) @binding(7) 
+@group(0) @binding(7)
 var samp_comp: binding_array<sampler_comparison, 5>;
-@group(0) @binding(8) 
+@group(0) @binding(8)
 var<uniform> uni: UniformIndex;
 
-@fragment 
+@fragment
 fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
     var u1_: u32 = 0u;
     var u2_: vec2<u32> = vec2(0u);

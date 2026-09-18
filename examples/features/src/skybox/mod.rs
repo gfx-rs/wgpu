@@ -29,13 +29,14 @@ const MODEL_CENTER_Y: f32 = 2.0;
 impl Camera {
     fn to_uniform_data(&self) -> [f32; 16 * 3 + 4] {
         let aspect = self.screen_size.0 as f32 / self.screen_size.1 as f32;
-        let proj = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect, 1.0, 50.0);
+        let proj =
+            glam::camera::rh::proj::directx::perspective(consts::FRAC_PI_4, aspect, 1.0, 50.0);
         let cam_pos = glam::Vec3::new(
             self.angle_xz.cos() * self.angle_y.sin() * self.dist,
             self.angle_xz.sin() * self.dist + MODEL_CENTER_Y,
             self.angle_xz.cos() * self.angle_y.cos() * self.dist,
         );
-        let view = glam::Mat4::look_at_rh(
+        let view = glam::camera::rh::view::look_at_mat4(
             cam_pos,
             glam::Vec3::new(0f32, MODEL_CENTER_Y, 0.0),
             glam::Vec3::Y,
@@ -470,7 +471,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox",
     image_path: "/examples/features/src/skybox/screenshot.png",
@@ -485,7 +486,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
 };
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-bc7",
     image_path: "/examples/features/src/skybox/screenshot_bc7.png",
@@ -498,7 +499,7 @@ pub static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::Exa
 };
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-etc2",
     image_path: "/examples/features/src/skybox/screenshot_etc2.png",
@@ -511,7 +512,7 @@ pub static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::Ex
 };
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST_ASTC: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-astc",
     image_path: "/examples/features/src/skybox/screenshot_astc.png",

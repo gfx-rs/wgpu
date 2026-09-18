@@ -9,6 +9,7 @@ use alloc::{borrow::Cow, string::String, vec::Vec};
 use macro_rules_attribute::apply;
 
 use crate::{
+    binding_model::BindGroupLayoutEntry,
     command::{serde_object_reference_struct, BasePass, Command, ReferenceType, RenderCommand},
     id::{markers, PointerId},
     pipeline::GeneralRenderPipelineDescriptor,
@@ -158,7 +159,7 @@ pub enum Action<'a, R: ReferenceType> {
     ReleaseSurfaceTexture(R::Surface),
     CreateBindGroupLayout(
         PointerId<markers::BindGroupLayout>,
-        crate::binding_model::BindGroupLayoutDescriptor<'a>,
+        crate::binding_model::BindGroupLayoutDescriptor<'a, BindGroupLayoutEntry>,
     ),
     GetRenderPipelineBindGroupLayout {
         id: PointerId<markers::BindGroupLayout>,
@@ -173,10 +174,7 @@ pub enum Action<'a, R: ReferenceType> {
     DropBindGroupLayout(PointerId<markers::BindGroupLayout>),
     CreatePipelineLayout(
         PointerId<markers::PipelineLayout>,
-        crate::binding_model::ResolvedPipelineLayoutDescriptor<
-            'a,
-            PointerId<markers::BindGroupLayout>,
-        >,
+        crate::binding_model::PipelineLayoutDescriptor<'a, PointerId<markers::BindGroupLayout>>,
     ),
     DropPipelineLayout(PointerId<markers::PipelineLayout>),
     CreateBindGroup(PointerId<markers::BindGroup>, TraceBindGroupDescriptor<'a>),

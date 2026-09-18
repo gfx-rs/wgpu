@@ -112,8 +112,8 @@ secondary backends, so the latter may impose more overhead.
 
 ## Debugging
 
-Most of the information on the wiki [Debugging wgpu Applications][wiki-debug]
-page still applies to this API, with the exception of API tracing/replay
-functionality, which is only available in `wgpu-core`.
+Most of the information in the [Debugging wgpu Applications][debug-docs]
+documentation still applies to this API, with the exception of API
+tracing/replay functionality, which is only available in `wgpu-core`.
 
-[wiki-debug]: https://github.com/gfx-rs/wgpu/wiki/Debugging-wgpu-Applications
+[debug-docs]: https://docs.rs/wgpu/latest/wgpu/documentation/debugging/debugging_applications/index.html

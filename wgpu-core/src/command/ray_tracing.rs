@@ -1,6 +1,7 @@
 use alloc::{sync::Arc, vec::Vec};
 use core::{
     cmp::max,
+    mem,
     num::NonZeroU64,
     ops::{Deref, Range},
 };
@@ -10,27 +11,25 @@ use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 use crate::{
     command::encoder::EncodingState,
     ray_tracing::{AsAction, AsBuild, TlasBuild, ValidateAsActionsError},
-    resource::InvalidResourceError,
+    resource::{Buffer, InvalidResourceError},
 };
 use crate::{command::EncoderStateError, device::resource::CommandIndices};
 use crate::{
     command::{ArcCommand, ArcReferences, CommandBufferMutable},
     device::queue::TempResource,
-    global::Global,
-    id::CommandEncoderId,
     init_tracker::MemoryInitKind,
     ray_tracing::{
         ArcBlasAabbGeometry, ArcBlasBuildEntry, ArcBlasGeometries, ArcBlasTriangleGeometry,
-        ArcTlasInstance, ArcTlasPackage, BlasBuildEntry, BlasGeometries,
-        BuildAccelerationStructureError, OwnedBlasBuildEntry, OwnedTlasPackage, TlasPackage,
+        ArcTlasPackage, BlasBuildEntry, BlasGeometries, BuildAccelerationStructureError,
+        OwnedBlasBuildEntry, OwnedTlasPackage,
     },
-    resource::{Blas, BlasCompactState, Labeled, StagingBuffer, Tlas},
+    resource::{Blas, BlasCompactState, Labeled, StagingBuffer, Tlas, Trackable},
     scratch::ScratchBuffer,
     snatch::SnatchGuard,
+    track::TrackerIndex,
+    FastHashSet,
 };
 use crate::{lock::RwLockWriteGuard, resource::RawResourceAccess};
-
-use crate::id::{BlasId, TlasId};
 
 struct BlasStore<'a> {
     blas: Arc<Blas>,
@@ -49,37 +48,32 @@ struct TlasStore<'a> {
     range: Range<usize>,
 }
 
-impl Global {
-    pub fn command_encoder_mark_acceleration_structures_built(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        blas_ids: &[BlasId],
-        tlas_ids: &[TlasId],
+impl super::CommandEncoder {
+    fn mark_acceleration_structures_built_inner(
+        self: &Arc<Self>,
+        blases: &[Arc<Blas>],
+        tlases: &[Arc<Tlas>],
     ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::mark_acceleration_structures_built");
 
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-
-        let mut cmd_buf_data = cmd_enc.data.lock();
+        let mut cmd_buf_data = self.data.lock();
         cmd_buf_data.with_buffer(
             crate::command::EncodingApi::Raw,
             |cmd_buf_data| -> Result<(), BuildAccelerationStructureError> {
-                let device = &cmd_enc.device;
+                let device = &self.device;
                 device.check_is_valid()?;
                 device.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
 
-                let mut build_command = AsBuild::with_capacity(blas_ids.len(), tlas_ids.len());
+                let mut build_command = AsBuild::with_capacity(blases.len(), tlases.len());
 
-                for blas in blas_ids {
-                    let blas = hub.blas_s.get(*blas);
+                for blas in blases {
+                    let blas = blas.clone();
                     blas.check_is_valid()?;
                     build_command.blas_s_built.push(blas);
                 }
 
-                for tlas in tlas_ids {
-                    let tlas = hub.tlas_s.get(*tlas);
+                for tlas in tlases {
+                    let tlas = tlas.clone();
                     tlas.check_is_valid()?;
                     build_command.tlas_s_built.push(TlasBuild {
                         tlas,
@@ -93,18 +87,28 @@ impl Global {
         )
     }
 
-    pub fn command_encoder_build_acceleration_structures<'a>(
-        &self,
-        command_encoder_id: CommandEncoderId,
-        blas_iter: impl Iterator<Item = BlasBuildEntry<'a>>,
-        tlas_iter: impl Iterator<Item = TlasPackage<'a>>,
+    pub fn mark_acceleration_structures_built(
+        self: &Arc<Self>,
+        blases: &[Arc<Blas>],
+        tlases: &[Arc<Tlas>],
+    ) {
+        if let Err(err) = self.mark_acceleration_structures_built_inner(blases, tlases) {
+            self.device.handle_error(
+                err,
+                Some(self.label()),
+                "CommandEncoder::mark_acceleration_structures_built",
+            );
+        }
+    }
+
+    fn build_acceleration_structures_inner<'a>(
+        self: &Arc<Self>,
+        blas_iter: impl Iterator<Item = BlasBuildEntry<'a, Arc<Blas>, Arc<Buffer>>>,
+        tlases: Vec<ArcTlasPackage>,
     ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::build_acceleration_structures");
 
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_enc.data.lock();
+        let mut cmd_buf_data = self.data.lock();
 
         cmd_buf_data.push_with(|| -> Result<_, BuildAccelerationStructureError> {
             let blas = blas_iter
@@ -113,23 +117,21 @@ impl Global {
                         BlasGeometries::TriangleGeometries(triangle_geometries) => {
                             let tri_geo = triangle_geometries
                                 .map(|tg| {
-                                    let vertex_buffer = self.resolve_buffer_id(tg.vertex_buffer);
+                                    let vertex_buffer = tg.vertex_buffer;
                                     vertex_buffer.check_is_valid()?;
                                     Ok(ArcBlasTriangleGeometry {
                                         size: tg.size.clone(),
                                         vertex_buffer,
                                         index_buffer: tg
                                             .index_buffer
-                                            .map(|id| -> Result<_, InvalidResourceError> {
-                                                let index_buffer = self.resolve_buffer_id(id);
+                                            .map(|index_buffer| -> Result<_, InvalidResourceError> {
                                                 index_buffer.check_is_valid()?;
                                                 Ok(index_buffer)
                                             })
                                             .transpose()?,
                                         transform_buffer: tg
                                             .transform_buffer
-                                            .map(|id| -> Result<_, InvalidResourceError> {
-                                                let transform_buffer = self.resolve_buffer_id(id);
+                                            .map(|transform_buffer| -> Result<_, InvalidResourceError> {
                                                 transform_buffer.check_is_valid()?;
                                                 Ok(transform_buffer)
                                             })
@@ -146,12 +148,11 @@ impl Global {
                         BlasGeometries::AabbGeometries(aabb_geometries) => {
                             let aabb_geo = aabb_geometries
                                 .map(|ag| {
-                                    let aabb_buffer = self.resolve_buffer_id(ag.aabb_buffer);
-                                    aabb_buffer.check_is_valid()?;
+                                    ag.aabb_buffer.check_is_valid()?;
                                     Ok(ArcBlasAabbGeometry {
                                         size: ag.size.clone(),
                                         stride: ag.stride,
-                                        aabb_buffer,
+                                        aabb_buffer: ag.aabb_buffer,
                                         primitive_offset: ag.primitive_offset,
                                     })
                                 })
@@ -159,62 +160,54 @@ impl Global {
                             ArcBlasGeometries::AabbGeometries(aabb_geo)
                         }
                     };
-                    let blas = hub.blas_s.get(blas_entry.blas_id);
+                    let blas = blas_entry.blas;
                     blas.check_is_valid()?;
                     Ok(ArcBlasBuildEntry { blas, geometries })
                 })
                 .collect::<Result<_, BuildAccelerationStructureError>>()?;
 
-            let tlas = tlas_iter
-                .map(|tlas_package| {
-                    let instances = tlas_package
-                        .instances
-                        .map(|instance| {
-                            instance
-                                .as_ref()
-                                .map(|instance| {
-                                    let blas = hub.blas_s.get(instance.blas_id);
-                                    blas.check_is_valid()?;
-                                    Ok(ArcTlasInstance {
-                                        blas,
-                                        transform: *instance.transform,
-                                        custom_data: instance.custom_data,
-                                        mask: instance.mask,
-                                    })
-                                })
-                                .transpose()
-                        })
-                        .collect::<Result<_, BuildAccelerationStructureError>>()?;
-                    let tlas = self.hub.tlas_s.get(tlas_package.tlas_id);
-                    tlas.check_is_valid()?;
-                    Ok(ArcTlasPackage {
-                        tlas,
-                        instances,
-                        lowest_unmodified: tlas_package.lowest_unmodified,
-                    })
-                })
-                .collect::<Result<_, BuildAccelerationStructureError>>()?;
+            for tlas_package in &tlases {
+                tlas_package.tlas.check_is_valid()?;
+                for instance in tlas_package.instances.iter().flatten() {
+                    instance.blas.check_is_valid()?;
+                }
+            }
 
-            Ok(ArcCommand::BuildAccelerationStructures { blas, tlas })
+            Ok(ArcCommand::BuildAccelerationStructures { blas, tlas: tlases })
         })
+    }
+
+    pub fn build_acceleration_structures<'a>(
+        self: &Arc<Self>,
+        blas_iter: impl Iterator<Item = BlasBuildEntry<'a, Arc<Blas>, Arc<Buffer>>>,
+        tlases: Vec<ArcTlasPackage>,
+    ) {
+        if let Err(err) = self.build_acceleration_structures_inner(blas_iter, tlases) {
+            self.device.handle_error(
+                err,
+                Some(self.label()),
+                "CommandEncoder::build_acceleration_structures",
+            );
+        }
     }
 }
 
 pub(crate) fn build_acceleration_structures(
     state: &mut EncodingState,
-    blas: Vec<OwnedBlasBuildEntry<ArcReferences>>,
-    tlas: Vec<OwnedTlasPackage<ArcReferences>>,
+    blases: Vec<OwnedBlasBuildEntry<ArcReferences>>,
+    mut tlases: Vec<OwnedTlasPackage<ArcReferences>>,
 ) -> Result<(), BuildAccelerationStructureError> {
+    profiling::scope!("build_acceleration_structures");
     state
         .device
         .require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
 
-    let mut build_command = AsBuild::with_capacity(blas.len(), tlas.len());
+    let mut build_command = AsBuild::with_capacity(blases.len(), tlases.len());
     let mut input_barriers = Vec::<hal::BufferBarrier<dyn hal::DynBuffer>>::new();
     let mut scratch_buffer_blas_size = 0;
-    let mut blas_storage = Vec::with_capacity(blas.len());
+    let mut blas_storage = Vec::with_capacity(blases.len());
     iter_blas(
-        blas.iter(),
+        blases.iter(),
         &mut build_command,
         &mut input_barriers,
         &mut scratch_buffer_blas_size,
@@ -223,10 +216,13 @@ pub(crate) fn build_acceleration_structures(
     )?;
 
     let mut scratch_buffer_tlas_size: u64 = 0;
-    let mut tlas_storage = Vec::<TlasStore>::with_capacity(tlas.len());
+    let mut tlas_storage = Vec::<TlasStore>::with_capacity(tlases.len());
     let mut instance_buffer_staging_source = Vec::<u8>::new();
 
-    for package in tlas.iter() {
+    // We cannot move out of `tlases` because it will be borrowed by `tlas_storage`,
+    // but each package’s `instances` is consumed by the `mem::take` below.
+    for package in tlases.iter_mut() {
+        profiling::scope!("tlas validation");
         let tlas = &package.tlas;
         state.tracker.tlas_s.insert_single(tlas.clone());
 
@@ -239,18 +235,23 @@ pub(crate) fn build_acceleration_structures(
         let first_byte_index = instance_buffer_staging_source.len();
 
         let mut dependencies = Vec::new();
+        let mut seen_dependencies = FastHashSet::<TrackerIndex>::default();
 
         let mut instance_count = 0;
-        for instance in package.instances.iter().flatten() {
+        for instance in mem::take(&mut package.instances).into_iter().flatten() {
             if instance.custom_data >= (1u32 << 24u32) {
                 return Err(BuildAccelerationStructureError::TlasInvalidCustomIndex(
                     tlas.error_ident(),
                 ));
             }
-            let blas = &instance.blas;
-            state.tracker.blas_s.insert_single(blas.clone());
+            let blas = instance.blas;
+            let is_new_dependency = seen_dependencies.insert(blas.tracker_index());
 
-            instance_buffer_staging_source.extend(state.device.raw().tlas_instance_to_bytes(
+            if is_new_dependency {
+                state.tracker.blas_s.insert_single(blas.clone());
+            }
+
+            state.device.raw().tlas_instance_to_bytes(
                 hal::TlasInstance {
                     transform: instance.transform,
                     custom_data: instance.custom_data,
@@ -258,7 +259,8 @@ pub(crate) fn build_acceleration_structures(
                     blas_address: blas.handle,
                     pipeline_intersection_data_offset: 0,
                 },
-            ));
+                &mut instance_buffer_staging_source,
+            );
 
             if tlas
                 .flags
@@ -277,7 +279,9 @@ pub(crate) fn build_acceleration_structures(
 
             instance_count += 1;
 
-            dependencies.push(blas.clone());
+            if is_new_dependency {
+                dependencies.push(blas);
+            }
         }
 
         build_command.tlas_s_built.push(TlasBuild {
@@ -362,7 +366,7 @@ pub(crate) fn build_acceleration_structures(
     let raw_encoder = &mut state.raw_encoder;
 
     let mut blas_s_compactable = Vec::new();
-    let mut descriptors = Vec::with_capacity(blas.len());
+    let mut descriptors = Vec::with_capacity(blases.len());
 
     for storage in &blas_storage {
         descriptors.push(map_blas(
@@ -389,7 +393,7 @@ pub(crate) fn build_acceleration_structures(
                 state.device,
                 wgt::BufferSize::new(instance_buffer_staging_source.len() as u64).unwrap(),
             )?;
-            staging_buffer.write(&instance_buffer_staging_source);
+            staging_buffer.write_exact(&instance_buffer_staging_source);
             let flushed = staging_buffer.flush();
             Some(flushed)
         } else {

@@ -64,7 +64,7 @@ fn switchLexicalScope(a_6: i32) {
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     blockLexicalScope(false);
     ifLexicalScope(true);

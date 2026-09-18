@@ -1,4 +1,4 @@
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage> asdf: f32;
 
 fn compute() -> f32 {
@@ -7,7 +7,7 @@ fn compute() -> f32 {
     return u03b8_2_;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     let _e0 = compute();
     return;

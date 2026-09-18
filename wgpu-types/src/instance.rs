@@ -1,6 +1,8 @@
 //! Types for dealing with Instances.
 
-use crate::{link_to_wgpu_docs, Backends};
+use macro_rules_attribute::derive;
+
+use crate::{link_to_wgpu_docs, Backends, ConstDefault};
 
 #[cfg(doc)]
 use crate::{Backend, DownlevelFlags};
@@ -238,6 +240,17 @@ bitflags::bitflags! {
         ///
         /// When `Self::from_env()` is used takes value from `WGPU_STRICT_WEBGPU_COMPLIANCE` environment variable.
         const STRICT_WEBGPU_COMPLIANCE = 1 << 7;
+
+        /// Enable capturing the output of shader `debugPrintf`.
+        ///
+        /// This flag is supported on all platforms. It is required on:
+        /// - Vulkan, via the `VK_LAYER_KHRONOS_validation` layer's
+        ///   ["debug printf"](https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/main/docs/debug_printf.md)
+        ///
+        /// Other backends, such as Metal, capture the output without needing this flag.
+        ///
+        /// When `Self::from_env()` is used takes value from `WGPU_DEBUG_PRINTF` environment variable.
+        const DEBUG_PRINTF = 1 << 8;
     }
 }
 
@@ -296,6 +309,7 @@ impl InstanceFlags {
     /// - `WGPU_GPU_BASED_VALIDATION`
     /// - `WGPU_VALIDATION_INDIRECT_CALL`
     /// - `WGPU_STRICT_WEBGPU_COMPLIANCE`
+    /// - `WGPU_DEBUG_PRINTF`
     #[must_use]
     pub fn with_env(mut self) -> Self {
         fn env(key: &str) -> Option<bool> {
@@ -327,6 +341,9 @@ impl InstanceFlags {
         if let Some(bit) = env("WGPU_STRICT_WEBGPU_COMPLIANCE") {
             self.set(Self::STRICT_WEBGPU_COMPLIANCE, bit);
         }
+        if let Some(bit) = env("WGPU_DEBUG_PRINTF") {
+            self.set(Self::DEBUG_PRINTF, bit);
+        }
 
         self
     }
@@ -335,7 +352,7 @@ impl InstanceFlags {
 /// Memory budget thresholds used by backends to try to avoid high memory pressure situations.
 ///
 /// Currently only the D3D12 and (optionally) Vulkan backends support these options.
-#[derive(Default, Clone, Debug, Copy)]
+#[derive(ConstDefault!, Clone, Debug, Copy, Eq, PartialEq)]
 pub struct MemoryBudgetThresholds {
     /// Threshold at which texture, buffer, query set and acceleration structure creation will start to return OOM errors.
     /// This is a percent of the memory budget reported by native APIs.

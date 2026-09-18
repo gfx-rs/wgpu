@@ -14,20 +14,32 @@ pub struct PipelineCompilationOptions<'a> {
     /// If the given constant is specified more than once, the last value specified is used.
     ///
     /// The value may represent any of WGSL's concrete scalar types.
+    ///
+    /// The default value is `&[]`.
     pub constants: &'a [(&'a str, f64)],
+
     /// Whether workgroup scoped memory will be initialized with zero values for this stage.
     ///
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
+    ///
+    /// The default value is `true`.
     pub zero_initialize_workgroup_memory: bool,
+}
+
+impl PipelineCompilationOptions<'_> {
+    /// This function is identical to [`Default::default()`] except that it is a `const fn`.
+    pub const fn default() -> Self {
+        Self {
+            constants: &[],
+            zero_initialize_workgroup_memory: true,
+        }
+    }
 }
 
 impl Default for PipelineCompilationOptions<'_> {
     fn default() -> Self {
-        Self {
-            constants: Default::default(),
-            zero_initialize_workgroup_memory: true,
-        }
+        Self::default() // call inherent function
     }
 }
 

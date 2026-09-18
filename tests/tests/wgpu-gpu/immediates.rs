@@ -4,7 +4,7 @@ use std::num::NonZeroU64;
 use wgpu::util::RenderEncoder;
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -18,7 +18,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 ///
 /// If the update code is working correctly, the values not written to by the second update
 /// will remain unchanged.
-#[gpu_test]
+#[apply(gpu_test!)]
 static PARTIAL_UPDATE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -159,7 +159,7 @@ async fn partial_update_test(ctx: TestingContext) {
     // second 4 floats the first update
     assert_eq!(floats, [1.0, 2.0, 3.0, 4.0, 1.0, 5.0, 3.0, 4.0]);
 }
-#[gpu_test]
+#[apply(gpu_test!)]
 static RENDER_PASS_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

@@ -162,7 +162,9 @@ fn pick_mode(caps: &wgpu::SurfaceCapabilities, forced: Option<&str>) -> ModeChoi
         Some("extended-display-p3") => cs == Cs::ExtendedDisplayP3,
         Some("srgb") => false,
         Some(other) => {
-            panic!("unknown mode {other:?} (use hdr10|hlg|scrgb|extended-srgb|extended-display-p3|srgb)")
+            panic!(
+                "unknown mode {other:?} (use hdr10|hlg|scrgb|extended-srgb|extended-display-p3|srgb)"
+            )
         }
     };
 
@@ -320,7 +322,7 @@ impl State {
         // mode, encode_srgb
         let params: [u32; 2] = [
             choice.shader_mode,
-            u32::from(choice.shader_mode == 0 && !choice.format.is_srgb()),
+            u32::from(choice.shader_mode == 0 && !choice.format.has_srgb_suffix()),
         ];
         let params_buffer = wgpu::util::DeviceExt::create_buffer_init(
             &device,

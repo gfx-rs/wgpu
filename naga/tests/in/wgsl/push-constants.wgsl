@@ -1,7 +1,14 @@
-struct ImmediateData {
-    multiplier: f32
+struct ImmediateDataVert {
+    position_clip: f32,
+    matrix: mat3x3<f32>,
 }
-var<immediate> im: ImmediateData;
+var<immediate> im_vert: ImmediateDataVert;
+
+struct ImmediateDataFrag {
+    multiplier: f32,
+    tint: vec4f,
+}
+var<immediate> im_frag: ImmediateDataFrag;
 
 struct FragmentIn {
     @location(0) color: vec4<f32>
@@ -13,10 +20,10 @@ fn vert_main(
   @builtin(instance_index) ii: u32,
   @builtin(vertex_index) vi: u32,
 ) -> @builtin(position) vec4<f32> {
-    return vec4<f32>(f32(ii) * f32(vi) * im.multiplier * pos, 0.0, 1.0);
+    return vec4<f32>(f32(ii) * f32(vi) * pos, 0.0, im_vert.position_clip);
 }
 
 @fragment
 fn main(in: FragmentIn) -> @location(0) vec4<f32> {
-    return in.color * im.multiplier;
+    return in.color * im_frag.tint;
 }

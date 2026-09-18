@@ -1,6 +1,6 @@
 use wgpu::*;
 use wgpu_test::{
-    fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -53,7 +53,7 @@ fn blend_state_with_dual_source_blending() -> BlendState {
     }
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DUAL_SOURCE_BLENDING_FEATURE_DISABLED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(dual_source_blending_disabled);
@@ -107,16 +107,33 @@ async fn dual_source_blending_disabled(ctx: TestingContext) {
     fail(
         &ctx.device,
         || {
-            let _ = ctx.device.create_shader_module(ShaderModuleDescriptor {
+            let module = ctx.device.create_shader_module(ShaderModuleDescriptor {
                 label: Some("shader"),
                 source: ShaderSource::Wgsl(FRAGMENT_SHADER_WITH_DUAL_SOURCE_BLENDING.into()),
             });
+            let info = pollster::block_on(module.get_compilation_info());
+            assert_eq!(
+                info.messages[0].message_type,
+                wgpu::CompilationMessageType::Error
+            );
+            assert_eq!(
+                info.messages[0].location,
+                Some(SourceLocation {
+                    line_number: 2,
+                    line_position: 8,
+                    offset: 8,
+                    length: 20
+                })
+            );
+            assert!(info.messages[0].message.contains(
+                "the `dual_source_blending` extension is not supported in the current environment"
+            ))
         },
-        Some("the `dual_source_blending` extension is not supported in the current environment"),
+        Some("Shader 'shader' parsing error"),
     );
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DUAL_SOURCE_BLENDING_FEATURE_ENABLED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

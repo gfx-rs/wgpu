@@ -4,7 +4,7 @@
 //! both query through a [`DxgiHdrSource`], so the same monitor reports identical
 //! numbers under either backend.
 
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 use windows::{
     core::Interface as _,
     Win32::{
@@ -12,6 +12,8 @@ use windows::{
         Graphics::{Dxgi, Gdi},
     },
 };
+
+use super::dxgi_lib::DxgiLib;
 
 /// The primary colors of a color space, in CIE 1931 xy:
 /// `[[red_x, red_y], [green_x, green_y], [blue_x, blue_y]]`.
@@ -114,6 +116,7 @@ fn display_hdr_info_from_desc1(
 pub struct DxgiHdrSource {
     hwnd: HWND,
     factory: Mutex<Option<Dxgi::IDXGIFactory1>>,
+    dxgi_lib: Option<DxgiLib>,
 }
 
 // SAFETY: `HWND` and `IDXGIFactory1` are `!Send`/`!Sync` in windows-rs. The `HWND`
@@ -131,6 +134,9 @@ impl DxgiHdrSource {
         Self {
             hwnd,
             factory: Mutex::new(None),
+            dxgi_lib: DxgiLib::new()
+                .inspect_err(|e| log::warn!("DxgiLib::new failed: {e}"))
+                .ok(),
         }
     }
 
@@ -161,7 +167,7 @@ impl DxgiHdrSource {
         if need_new {
             // SAFETY: `CreateDXGIFactory1` takes no caller pointers; the `windows`
             // binding fills the interface out-pointer itself.
-            match unsafe { Dxgi::CreateDXGIFactory1() } {
+            match self.dxgi_lib.as_ref()?.create_factory1() {
                 Ok(new) => *factory = Some(new),
                 Err(e) => {
                     log::warn!("CreateDXGIFactory1 failed: {e}");

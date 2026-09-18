@@ -1,6 +1,7 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use deno_core::cppgc::Ptr;
 use deno_core::op2;
@@ -13,6 +14,7 @@ use deno_core::webidl::WebIdlError;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
+use wgpu_core::resource::Labeled;
 
 use crate::buffer::GPUBuffer;
 use crate::error::GPUGenericError;
@@ -20,18 +22,9 @@ use crate::sampler::GPUSampler;
 use crate::texture::GPUExternalTexture;
 use crate::texture::GPUTexture;
 use crate::texture::GPUTextureView;
-use crate::Instance;
 
 pub struct GPUBindGroup {
-  pub instance: Instance,
-  pub id: wgpu_core::id::BindGroupId,
-  pub label: String,
-}
-
-impl Drop for GPUBindGroup {
-  fn drop(&mut self) {
-    self.instance.bind_group_drop(self.id);
-  }
+  pub wgpu_bind_group: Arc<wgpu_core::binding_model::BindGroup>,
 }
 
 impl WebIdlInterfaceConverter for GPUBindGroup {
@@ -55,7 +48,7 @@ impl GPUBindGroup {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_bind_group.label().to_string()
   }
   #[setter]
   #[string]

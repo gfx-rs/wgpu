@@ -416,9 +416,9 @@ pub enum Error {
     FmtError(#[from] FmtError),
     /// The specified [`Version`] doesn't have all required [`Features`].
     ///
-    /// Contains the missing [`Features`].
-    #[error("The selected version doesn't support {0:?}")]
-    MissingFeatures(Features),
+    /// Contains the missing [`Features`], and the version that lacks them.
+    #[error("GLSL {1} doesn't support the required feature(s): {0}")]
+    MissingFeatures(Features, Version),
     /// [`AddressSpace::Immediate`](crate::AddressSpace::Immediate) was used more than
     /// once in the entry point, which isn't supported.
     #[error("Multiple immediates aren't supported")]
@@ -506,4 +506,5 @@ pub fn supported_capabilities() -> valid::Capabilities {
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
+        | Caps::LINEAR_INTERPOLATION
 }

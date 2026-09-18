@@ -9,7 +9,7 @@ use itertools::Itertools;
 use strum::IntoEnumIterator;
 use wgpu::util::{BufferInitDescriptor, DeviceExt, RenderEncoder};
 use wgpu::RenderBundleDescriptor;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.push(VERTEX_INDICES);
@@ -467,7 +467,7 @@ async fn vertex_index_common(ctx: TestingContext) {
     assert!(!failed);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static VERTEX_INDICES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

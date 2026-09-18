@@ -89,6 +89,7 @@ const WEB_SYS_FEATURES_NEEDED: &[&str] = &[
     "gpu_map_mode",
     "GpuMipmapFilterMode",
     "GpuMultisampleState",
+    "GpuInternalError",
     "GpuObjectDescriptorBase",
     "GpuOrigin2dDict",
     "GpuOrigin3dDict",

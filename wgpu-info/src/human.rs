@@ -158,7 +158,11 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_sampled_textures_per_shader_stage,
         max_samplers_per_shader_stage,
         max_storage_buffers_per_shader_stage,
+        max_storage_buffers_in_vertex_stage,
+        max_storage_buffers_in_fragment_stage,
         max_storage_textures_per_shader_stage,
+        max_storage_textures_in_vertex_stage,
+        max_storage_textures_in_fragment_stage,
         max_uniform_buffers_per_shader_stage,
         max_binding_array_elements_per_shader_stage,
         max_binding_array_sampler_elements_per_shader_stage,
@@ -220,23 +224,27 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t              Max Sampled Textures Per Shader Stage: {max_sampled_textures_per_shader_stage}")?;
     writeln!(output, "\t\t                      Max Samplers Per Shader Stage: {max_samplers_per_shader_stage}")?;
     writeln!(output, "\t\t               Max Storage Buffers Per Shader Stage: {max_storage_buffers_per_shader_stage}")?;
+    writeln!(output, "\t\t                Max Storage Buffers In Vertex Stage: {max_storage_buffers_in_vertex_stage}")?;
+    writeln!(output, "\t\t              Max Storage Buffers In Fragment Stage: {max_storage_buffers_in_fragment_stage}")?;
     writeln!(output, "\t\t              Max Storage Textures Per Shader Stage: {max_storage_textures_per_shader_stage}")?;
+    writeln!(output, "\t\t               Max Storage Textures In Vertex Stage: {max_storage_textures_in_vertex_stage}")?;
+    writeln!(output, "\t\t             Max Storage Textures In Fragment Stage: {max_storage_textures_in_fragment_stage}")?;
     writeln!(output, "\t\t               Max Uniform Buffers Per Shader Stage: {max_uniform_buffers_per_shader_stage}")?;
     writeln!(output, "\t\t        Max Binding Array Elements Per Shader Stage: {max_binding_array_elements_per_shader_stage}")?;
     writeln!(output, "\t\tMax Binding Array Sampler Elements Per Shader Stage: {max_binding_array_sampler_elements_per_shader_stage}")?;
-    writeln!(output, "\t\t   Max Binding Array AS Elements Per Shader Stage: {max_binding_array_acceleration_structure_elements_per_shader_stage}")?;
+    writeln!(output, "\t\t     Max Binding Array AS Elements Per Shader Stage: {max_binding_array_acceleration_structure_elements_per_shader_stage}")?;
     writeln!(output, "\t\t                    Max Uniform Buffer Binding Size: {max_uniform_buffer_binding_size}")?;
     writeln!(output, "\t\t                    Max Storage Buffer Binding Size: {max_storage_buffer_binding_size}")?;
     writeln!(output, "\t\t                                    Max Buffer Size: {max_buffer_size}")?;
     writeln!(output, "\t\t                                 Max Vertex Buffers: {max_vertex_buffers}")?;
     writeln!(output, "\t\t                              Max Vertex Attributes: {max_vertex_attributes}")?;
     writeln!(output, "\t\t                     Max Vertex Buffer Array Stride: {max_vertex_buffer_array_stride}")?;
-    writeln!(output, "\t\t                            Max Immediate data Size: {max_immediate_size}")?;
+    writeln!(output, "\t\t                            Max Immediate Data Size: {max_immediate_size}")?;
     writeln!(output, "\t\t                   Max Inter-stage Shader Variables: {max_inter_stage_shader_variables}")?;
     writeln!(output, "\t\t                Min Uniform Buffer Offset Alignment: {min_uniform_buffer_offset_alignment}")?;
     writeln!(output, "\t\t                Min Storage Buffer Offset Alignment: {min_storage_buffer_offset_alignment}")?;
     writeln!(output, "\t\t                              Max Color Attachments: {max_color_attachments}")?;
-    writeln!(output, "\t\t              Max Color Attachment Bytes per sample: {max_color_attachment_bytes_per_sample}")?;
+    writeln!(output, "\t\t              Max Color Attachment Bytes Per Sample: {max_color_attachment_bytes_per_sample}")?;
     writeln!(output, "\t\t                 Max Compute Workgroup Storage Size: {max_compute_workgroup_storage_size}")?;
     writeln!(output, "\t\t              Max Compute Invocations Per Workgroup: {max_compute_invocations_per_workgroup}")?;
     writeln!(output, "\t\t                       Max Compute Workgroup Size X: {max_compute_workgroup_size_x}")?;
@@ -259,9 +267,9 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                             Max Mesh Output Layers: {max_mesh_output_layers}")?;
     writeln!(output, "\t\t                      Max Mesh Multiview View Count: {max_mesh_multiview_view_count}")?;
 
-    writeln!(output, "\t\t                           Max BLAS Primitive count: {max_blas_primitive_count}")?;
-    writeln!(output, "\t\t                            Max BLAS Geometry count: {max_blas_geometry_count}")?;
-    writeln!(output, "\t\t                            Max TLAS Instance count: {max_tlas_instance_count}")?;
+    writeln!(output, "\t\t                           Max BLAS Primitive Count: {max_blas_primitive_count}")?;
+    writeln!(output, "\t\t                            Max BLAS Geometry Count: {max_blas_geometry_count}")?;
+    writeln!(output, "\t\t                            Max TLAS Instance Count: {max_tlas_instance_count}")?;
     writeln!(output, "\t\t       Max Acceleration Structures Per Shader Stage: {max_acceleration_structures_per_shader_stage}")?;
     writeln!(output, "   Max Buffers And Acceleration Structures Per Shader Stage: {max_buffers_and_acceleration_structures_per_shader_stage}")?;
 

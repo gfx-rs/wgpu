@@ -287,7 +287,7 @@ impl crate::framework::Example for Example {
         });
 
         let globals = Globals {
-            mvp: glam::Mat4::orthographic_rh(
+            mvp: glam::camera::rh::proj::directx::orthographic(
                 0.0,
                 config.width as f32,
                 0.0,
@@ -390,7 +390,7 @@ impl crate::framework::Example for Example {
         self.extent = [sc_desc.width, sc_desc.height];
 
         let globals = Globals {
-            mvp: glam::Mat4::orthographic_rh(
+            mvp: glam::camera::rh::proj::directx::orthographic(
                 0.0,
                 sc_desc.width as f32,
                 0.0,
@@ -440,7 +440,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "bunnymark",
     image_path: "/examples/features/src/bunnymark/screenshot.png",

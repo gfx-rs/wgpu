@@ -1,8 +1,8 @@
 fn main() {
     cfg_aliases::cfg_aliases! {
-        native: { not(target_arch = "wasm32") },
-        Emscripten: { all(target_arch = "wasm32", target_os = "emscripten") },
-        web: { all(target_arch = "wasm32", not(Emscripten), feature = "web") },
+        native: { not(target_family = "wasm") },
+        Emscripten: { all(target_family = "wasm", target_os = "emscripten") },
+        web: { all(target_family = "wasm", not(Emscripten), feature = "web") },
 
         send_sync: { any(
             native,
@@ -28,9 +28,9 @@ fn main() {
         gles: { any(
             // The `gles` feature enables the OpenGL/GLES backend only on "native OpenGL" platforms, i.e. Windows, Linux, Android, and Emscripten.
             // (Note that WebGL is also not included here!)
-            all(any(windows, target_os = "linux", target_os = "android", target_os = "freebsd", Emscripten), feature = "gles"),
+            all(any(windows, target_os = "linux", target_os = "android", target_os = "freebsd", target_os = "netbsd", Emscripten), feature = "gles"),
             // On Apple platforms, however, we require the `angle` feature to explicitly opt-in to OpenGL
-            // since its meant to be used with ANGLE.
+            // since it's meant to be used with ANGLE.
             all(target_vendor = "apple", feature = "angle")
         ) },
         noop: { feature = "noop" },
@@ -50,7 +50,6 @@ fn main() {
         naga: { any(feature = "naga-ir", feature = "spirv", feature = "glsl") },
         // ⚠️ Keep in sync with target.cfg() definition in wgpu-hal/Cargo.toml and cfg_alias in `wgpu-hal` crate ⚠️
         static_dxc: { all(target_os = "windows", feature = "static-dxc", not(target_arch = "aarch64"), target_env = "msvc") },
-        supports_64bit_atomics: { target_has_atomic = "64" },
         custom: {any(feature = "custom")},
         std: { any(
             feature = "std",
@@ -63,4 +62,77 @@ fn main() {
         ) },
         no_std: { not(std) }
     }
+
+    // Expose a `file://` base URL pointing at the crate's
+    // `src/documentation/images/` directory so that local documentation builds
+    // resolve images from disk. Because these images live inside the crate, they
+    // are packaged on publish and this path also resolves when a downstream user
+    // builds the docs of `wgpu` as a dependency. `docsrs` builds ignore this and
+    // use an HTTP URL instead; see the `doc_image!` macro in `src/macros/mod.rs`.
+    // Resolving the path here lets us normalize to forward slashes and pick the
+    // right number of leading slashes for the host.
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let docs_dir = std::path::Path::new(&manifest_dir)
+        .join("src")
+        .join("documentation")
+        .join("images");
+    let docs_dir = docs_dir.to_string_lossy().replace('\\', "/");
+    let docs_url = if docs_dir.starts_with('/') {
+        format!("file://{docs_dir}")
+    } else {
+        format!("file:///{docs_dir}")
+    };
+    println!("cargo::rustc-env=WGPU_DOCS_URL_BASE={docs_url}");
+
+    // Pin hosted documentation image URLs (docs.rs and the self-hosted trunk
+    // docs) to the exact commit being built rather than the moving `trunk`
+    // branch, so the images never drift from the prose. Only the `docsrs` arm of
+    // the `doc_image!` macro reads this; local builds use the on-disk path above
+    // and ignore it, so we deliberately don't add a `rerun-if-changed` on the
+    // git HEAD — recomputing it on the build script's normal re-runs is enough.
+    println!(
+        "cargo::rustc-env=WGPU_DOCS_COMMIT={}",
+        docs_commit(&manifest_dir)
+    );
+}
+
+/// Best-effort lookup of the commit this build corresponds to, for pinning
+/// documentation image URLs.
+///
+/// Tries `git` first (a local checkout, and the self-hosted trunk docs CI), then
+/// the `.cargo_vcs_info.json` that `cargo publish` embeds in the packaged crate
+/// (the docs.rs case, where there is no `.git`), and finally falls back to
+/// `trunk` so the URLs still resolve.
+fn docs_commit(manifest_dir: &str) -> String {
+    commit_from_git(manifest_dir)
+        .or_else(|| commit_from_vcs_info(manifest_dir))
+        .unwrap_or_else(|| "trunk".to_owned())
+}
+
+fn commit_from_git(manifest_dir: &str) -> Option<String> {
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(manifest_dir)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let sha = String::from_utf8(output.stdout).ok()?.trim().to_owned();
+    (!sha.is_empty()).then_some(sha)
+}
+
+fn commit_from_vcs_info(manifest_dir: &str) -> Option<String> {
+    let path = std::path::Path::new(manifest_dir).join(".cargo_vcs_info.json");
+    let contents = std::fs::read_to_string(path).ok()?;
+    // Minimal extraction of `"sha1": "<hex>"`, to avoid pulling a JSON parser
+    // into the build script.
+    let sha = contents
+        .split_once("\"sha1\"")?
+        .1
+        .split_once('"')?
+        .1
+        .split_once('"')?
+        .0;
+    (!sha.is_empty()).then(|| sha.to_owned())
 }

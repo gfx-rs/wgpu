@@ -108,8 +108,9 @@ impl crate::framework::Example for Example {
         let side_count = 8;
 
         let uniforms = {
-            let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
-            let proj = Mat4::perspective_rh(
+            let view =
+                glam::camera::rh::view::look_at_mat4(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
+            let proj = glam::camera::rh::proj::directx::perspective(
                 59.0_f32.to_radians(),
                 config.width as f32 / config.height as f32,
                 0.001,
@@ -259,7 +260,7 @@ impl crate::framework::Example for Example {
         _device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) {
-        let proj = Mat4::perspective_rh(
+        let proj = glam::camera::rh::proj::directx::perspective(
             59.0_f32.to_radians(),
             config.width as f32 / config.height as f32,
             0.001,
@@ -348,7 +349,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "ray_cube_fragment",
     image_path: "/examples/features/src/ray_cube_fragment/screenshot.png",

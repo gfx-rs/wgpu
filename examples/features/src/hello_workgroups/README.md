@@ -31,10 +31,11 @@ cargo run --bin wgpu-examples hello_workgroups
 ### Introduction
 
 When you call `ComputePass::dispatch_workgroups`, the function dispatches multiple workgroups in a 3d grid defined by the `x`, `y`, and `z` parameters you pass to the function. For example, `dispatch_workgroups(5, 2, 1)` would create a dispatch grid like
-||||||
-|---|---|---|---|---|
-| W | W | W | W | W |
-| W | W | W | W | W |
+
+|     |     |     |     |     |
+| --- | --- | --- | --- | --- |
+| W   | W   | W   | W   | W   |
+| W   | W   | W   | W   | W   |
 
 Where each W is a workgroup. If you want your shader to consider what workgroup within the dispatch the current invocation is in, add a function argument with type `vec3<u32>` and with the attribute `@builtin(workgroup_id)`.
 

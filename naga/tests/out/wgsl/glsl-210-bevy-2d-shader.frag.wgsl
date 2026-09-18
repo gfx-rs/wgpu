@@ -8,7 +8,7 @@ struct FragmentOutput {
 
 var<private> v_Uv_1: vec2<f32>;
 var<private> o_Target: vec4<f32>;
-@group(1) @binding(0) 
+@group(1) @binding(0)
 var<uniform> global: ColorMaterial_color;
 
 fn main_1() {
@@ -21,7 +21,7 @@ fn main_1() {
     return;
 }
 
-@fragment 
+@fragment
 fn main(@location(0) v_Uv: vec2<f32>) -> FragmentOutput {
     v_Uv_1 = v_Uv;
     main_1();

@@ -1,5 +1,6 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+use std::sync::Arc;
 use std::sync::OnceLock;
 
 use deno_core::op2;
@@ -7,17 +8,18 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
+use wgpu_core::resource::Labeled;
+use wgpu_core::resource::ParentDevice;
 use wgpu_types::AstcBlock;
 use wgpu_types::AstcChannel;
-use wgpu_types::Extent3d;
 use wgpu_types::TextureAspect;
 use wgpu_types::TextureDimension;
 use wgpu_types::TextureFormat;
 use wgpu_types::TextureViewDimension;
 
+use crate::error::fmt_err;
 use crate::error::GPUGenericError;
 use crate::webidl::GPUTextureUsageFlags;
-use crate::Instance;
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
@@ -41,52 +43,20 @@ pub(crate) struct GPUTextureDescriptor {
 }
 
 pub struct GPUTexture {
-  pub instance: Instance,
-  pub error_handler: super::error::ErrorHandler,
+  pub wgpu_texture: Arc<wgpu_core::resource::Texture>,
+  pub default_view: OnceLock<Arc<wgpu_core::resource::TextureView>>,
 
-  pub id: wgpu_core::id::TextureId,
-  pub default_view_id: OnceLock<wgpu_core::id::TextureViewId>,
-
-  pub label: String,
-
-  pub size: Extent3d,
-  pub mip_level_count: u32,
-  pub sample_count: u32,
   pub dimension: GPUTextureDimension,
   pub format: GPUTextureFormat,
   pub usage: GPUTextureUsageFlags,
 }
 
 impl GPUTexture {
-  pub(crate) fn default_view_id(&self) -> wgpu_core::id::TextureViewId {
-    *self.default_view_id.get_or_init(|| {
-      let (id, err) =
-        self
-          .instance
-          .texture_create_view(self.id, &Default::default(), None);
-      if let Some(err) = err {
-        use wgpu_types::error::WebGpuError;
-        assert_ne!(
-          err.webgpu_error_type(),
-          wgpu_types::error::ErrorType::Validation,
-          concat!(
-            "getting default view for a texture ",
-            "caused a validation error (!?)"
-          )
-        );
-        self.error_handler.push_error(Some(err));
-      }
-      id
-    })
-  }
-}
-
-impl Drop for GPUTexture {
-  fn drop(&mut self) {
-    if let Some(id) = self.default_view_id.take() {
-      self.instance.texture_view_drop(id);
-    }
-    self.instance.texture_drop(self.id);
+  pub(crate) fn default_view(&self) -> Arc<wgpu_core::resource::TextureView> {
+    self
+      .default_view
+      .get_or_init(|| self.wgpu_texture.create_view(&Default::default()))
+      .clone()
   }
 }
 
@@ -111,7 +81,7 @@ impl GPUTexture {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_texture.label().to_string()
   }
   #[setter]
   #[string]
@@ -121,23 +91,23 @@ impl GPUTexture {
 
   #[getter]
   fn width(&self) -> u32 {
-    self.size.width
+    self.wgpu_texture.descriptor().size.width
   }
   #[getter]
   fn height(&self) -> u32 {
-    self.size.height
+    self.wgpu_texture.descriptor().size.height
   }
   #[getter]
   fn depth_or_array_layers(&self) -> u32 {
-    self.size.depth_or_array_layers
+    self.wgpu_texture.descriptor().size.depth_or_array_layers
   }
   #[getter]
   fn mip_level_count(&self) -> u32 {
-    self.mip_level_count
+    self.wgpu_texture.descriptor().mip_level_count
   }
   #[getter]
   fn sample_count(&self) -> u32 {
-    self.sample_count
+    self.wgpu_texture.descriptor().sample_count
   }
   #[getter]
   #[string]
@@ -156,9 +126,10 @@ impl GPUTexture {
   #[fast]
   #[undefined]
   fn destroy(&self) {
-    self.instance.texture_destroy(self.id);
+    self.wgpu_texture.destroy();
   }
 
+  #[reentrant]
   #[cppgc]
   fn create_view(
     &self,
@@ -176,20 +147,23 @@ impl GPUTexture {
         base_array_layer: descriptor.base_array_layer,
         array_layer_count: descriptor.array_layer_count,
       },
+      swizzle: crate::map_texture_component_swizzle(&descriptor.swizzle)?,
     };
 
-    let (id, err) =
+    if let Some(format) = wgpu_descriptor.format {
       self
-        .instance
-        .texture_create_view(self.id, &wgpu_descriptor, None);
+        .wgpu_texture
+        .device()
+        .require_features(format.required_features())
+        .map_err(|err| {
+          let err = fmt_err(&err);
+          JsErrorBox::type_error(err)
+        })?;
+    }
 
-    self.error_handler.push_error(err);
+    let wgpu_texture_view = self.wgpu_texture.create_view(&wgpu_descriptor);
 
-    Ok(GPUTextureView {
-      instance: self.instance.clone(),
-      id,
-      label: descriptor.label,
-    })
+    Ok(GPUTextureView { wgpu_texture_view })
   }
 }
 
@@ -215,9 +189,11 @@ struct GPUTextureViewDescriptor {
   base_array_layer: u32,
   #[options(enforce_range = true)]
   array_layer_count: Option<u32>,
+  #[webidl(default = String::from("rgba"))]
+  swizzle: String,
 }
 
-#[derive(WebIDL)]
+#[derive(WebIDL, Copy, Clone)]
 #[webidl(enum)]
 pub(crate) enum GPUTextureViewDimension {
   #[webidl(rename = "1d")]
@@ -266,15 +242,7 @@ impl From<GPUTextureAspect> for TextureAspect {
 }
 
 pub struct GPUTextureView {
-  pub instance: Instance,
-  pub id: wgpu_core::id::TextureViewId,
-  pub label: String,
-}
-
-impl Drop for GPUTextureView {
-  fn drop(&mut self) {
-    self.instance.texture_view_drop(self.id);
-  }
+  pub wgpu_texture_view: Arc<wgpu_core::resource::TextureView>,
 }
 
 impl WebIdlInterfaceConverter for GPUTextureView {
@@ -299,7 +267,7 @@ impl GPUTextureView {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_texture_view.label().to_string()
   }
   #[setter]
   #[string]
@@ -329,7 +297,7 @@ impl From<GPUTextureDimension> for TextureDimension {
   }
 }
 
-#[derive(WebIDL, Clone)]
+#[derive(WebIDL, Clone, Copy)]
 #[webidl(enum)]
 pub(crate) enum GPUTextureFormat {
   #[webidl(rename = "r8unorm")]
@@ -711,7 +679,7 @@ impl From<GPUTextureFormat> for TextureFormat {
 }
 
 pub struct GPUExternalTexture {
-  pub id: wgpu_core::id::ExternalTextureId,
+  pub wgpu_external_texture: Arc<wgpu_core::resource::ExternalTexture>,
 }
 
 impl WebIdlInterfaceConverter for GPUExternalTexture {

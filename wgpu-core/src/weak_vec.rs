@@ -22,6 +22,10 @@ impl<T> WeakVec<T> {
         Self { inner: Vec::new() }
     }
 
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &Weak<T>> {
+        self.inner.iter()
+    }
+
     /// Pushes a new element to this collection.
     ///
     /// If the inner Vec needs to be reallocated, we will first drop older elements that

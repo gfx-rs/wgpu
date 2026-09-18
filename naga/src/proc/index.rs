@@ -242,7 +242,7 @@ pub fn find_checked_indexes(
             // There's no need to handle `AccessIndex` expressions, as their
             // indices never need to be cached.
             match *expr {
-                Ex::Access { base, index } => {
+                Ex::Access { base, index }
                     if policies.choose_policy(base, &module.types, info)
                         == BoundsCheckPolicy::ReadZeroSkipWrite
                         && access_needs_check(
@@ -252,10 +252,9 @@ pub fn find_checked_indexes(
                             &function.expressions,
                             info,
                         )
-                        .is_some()
-                    {
-                        guarded_indices.insert(index);
-                    }
+                        .is_some() =>
+                {
+                    guarded_indices.insert(index);
                 }
                 Ex::ImageLoad {
                     coordinate,
@@ -263,18 +262,16 @@ pub fn find_checked_indexes(
                     sample,
                     level,
                     ..
-                } => {
-                    if policies.image_load == BoundsCheckPolicy::ReadZeroSkipWrite {
-                        guarded_indices.insert(coordinate);
-                        if let Some(array_index) = array_index {
-                            guarded_indices.insert(array_index);
-                        }
-                        if let Some(sample) = sample {
-                            guarded_indices.insert(sample);
-                        }
-                        if let Some(level) = level {
-                            guarded_indices.insert(level);
-                        }
+                } if policies.image_load == BoundsCheckPolicy::ReadZeroSkipWrite => {
+                    guarded_indices.insert(coordinate);
+                    if let Some(array_index) = array_index {
+                        guarded_indices.insert(array_index);
+                    }
+                    if let Some(sample) = sample {
+                        guarded_indices.insert(sample);
+                    }
+                    if let Some(level) = level {
+                        guarded_indices.insert(level);
                     }
                 }
                 _ => {}

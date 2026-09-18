@@ -1,27 +1,20 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+use std::sync::Arc;
+
 use deno_core::cppgc::make_cppgc_object;
 use deno_core::op2;
 use deno_core::v8;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
-use wgpu_core::pipeline;
+use wgpu_core::resource::Labeled;
 
 use crate::error::GPUGenericError;
-use crate::Instance;
 
 pub struct GPUShaderModule {
-  pub instance: Instance,
-  pub id: wgpu_core::id::ShaderModuleId,
-  pub label: String,
+  pub wgpu_shader_module: Arc<wgpu_core::pipeline::ShaderModule>,
   pub compilation_info: v8::Global<v8::Object>,
-}
-
-impl Drop for GPUShaderModule {
-  fn drop(&mut self) {
-    self.instance.shader_module_drop(self.id);
-  }
 }
 
 impl WebIdlInterfaceConverter for GPUShaderModule {
@@ -45,7 +38,7 @@ impl GPUShaderModule {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_shader_module.label().to_string()
   }
   #[setter]
   #[string]
@@ -129,16 +122,10 @@ impl GPUCompilationMessage {
 }
 
 impl GPUCompilationMessage {
-  fn new(error: &pipeline::CreateShaderModuleError, source: &str) -> Self {
-    let message = error.to_string();
+  fn new(error: &wgpu_types::CompilationMessage, source: &str) -> Self {
+    let message = error.message.clone();
 
-    let loc = match error {
-      pipeline::CreateShaderModuleError::Parsing(e) => e.inner.location(source),
-      pipeline::CreateShaderModuleError::Validation(e) => {
-        e.inner.location(source)
-      }
-      _ => None,
-    };
+    let loc = error.location.as_ref();
 
     match loc {
       Some(loc) => {
@@ -194,13 +181,14 @@ impl GPUCompilationInfo {
 impl GPUCompilationInfo {
   pub fn new<'args, 'scope>(
     scope: &mut v8::HandleScope<'scope>,
-    messages: impl ExactSizeIterator<
-      Item = &'args pipeline::CreateShaderModuleError,
-    >,
+    compilation_info: &wgpu_types::CompilationInfo,
     source: &'args str,
   ) -> Self {
-    let array = v8::Array::new(scope, messages.len().try_into().unwrap());
-    for (i, message) in messages.enumerate() {
+    let array = v8::Array::new(
+      scope,
+      compilation_info.messages.len().try_into().unwrap(),
+    );
+    for (i, message) in compilation_info.messages.iter().enumerate() {
       let message_object =
         make_cppgc_object(scope, GPUCompilationMessage::new(message, source));
       array.set_index(scope, i.try_into().unwrap(), message_object.into());

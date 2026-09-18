@@ -13,7 +13,7 @@ fn main_1() {
     return;
 }
 
-@fragment 
+@fragment
 fn main(@location(0) tex_coord: vec2<f32>, @location(1) @interpolate(flat) index: i32) -> FragmentOutput {
     tex_coord_1 = tex_coord;
     index_1 = index;

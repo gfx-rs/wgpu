@@ -9,8 +9,9 @@ use objc2_metal::{
     MTLInstanceAccelerationStructureDescriptor, MTLOrigin,
     MTLPrimitiveAccelerationStructureDescriptor, MTLPrimitiveTopologyClass, MTLPrimitiveType,
     MTLRenderStages, MTLResourceUsage, MTLSamplerAddressMode, MTLSamplerBorderColor,
-    MTLSamplerMinMagFilter, MTLSize, MTLStencilOperation, MTLStoreAction, MTLTextureType,
-    MTLTextureUsage, MTLVertexFormat, MTLVertexStepFunction, MTLWinding,
+    MTLSamplerMinMagFilter, MTLSize, MTLStencilOperation, MTLStoreAction, MTLTextureSwizzle,
+    MTLTextureSwizzleChannels, MTLTextureType, MTLTextureUsage, MTLVertexFormat,
+    MTLVertexStepFunction, MTLWinding,
 };
 
 pub fn map_texture_usage(format: wgt::TextureFormat, usage: wgt::TextureUses) -> MTLTextureUsage {
@@ -20,13 +21,17 @@ pub fn map_texture_usage(format: wgt::TextureFormat, usage: wgt::TextureUses) ->
 
     mtl_usage.set(
         MTLTextureUsage::RenderTarget,
-        usage.intersects(Tu::COLOR_TARGET | Tu::DEPTH_STENCIL_READ | Tu::DEPTH_STENCIL_WRITE),
+        usage.intersects(
+            Tu::COLOR_TARGET
+                | Tu::DEPTH_READ
+                | Tu::DEPTH_WRITE
+                | Tu::STENCIL_READ
+                | Tu::STENCIL_WRITE,
+        ),
     );
     mtl_usage.set(
         MTLTextureUsage::ShaderRead,
-        usage.intersects(
-            Tu::RESOURCE | Tu::DEPTH_STENCIL_READ | Tu::STORAGE_READ_ONLY | Tu::STORAGE_READ_WRITE,
-        ),
+        usage.intersects(Tu::RESOURCE | Tu::STORAGE_READ_ONLY | Tu::STORAGE_READ_WRITE),
     );
     mtl_usage.set(
         MTLTextureUsage::ShaderWrite,
@@ -236,6 +241,7 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> MTLVertexFormat {
         Vf::Sint32x4 => MTL::Int4,
         Vf::Float32x4 => MTL::Float4,
         Vf::Unorm10_10_10_2 => MTL::UInt1010102Normalized,
+        Vf::Snorm10_10_10_2 => MTL::Int1010102Normalized,
         Vf::Unorm8x4Bgra => MTL::UChar4Normalized_BGRA,
         Vf::Float64 | Vf::Float64x2 | Vf::Float64x3 | Vf::Float64x4 => unimplemented!(),
     }
@@ -491,4 +497,26 @@ pub fn map_acceleration_structure_descriptor<'a>(
     }
     descriptor.setUsage(usage);
     descriptor
+}
+
+pub fn map_component_swizzle(swizzle: wgt::ComponentSwizzle) -> MTLTextureSwizzle {
+    match swizzle {
+        wgt::ComponentSwizzle::Zero => MTLTextureSwizzle::Zero,
+        wgt::ComponentSwizzle::One => MTLTextureSwizzle::One,
+        wgt::ComponentSwizzle::R => MTLTextureSwizzle::Red,
+        wgt::ComponentSwizzle::G => MTLTextureSwizzle::Green,
+        wgt::ComponentSwizzle::B => MTLTextureSwizzle::Blue,
+        wgt::ComponentSwizzle::A => MTLTextureSwizzle::Alpha,
+    }
+}
+
+pub fn map_texture_component_swizzle(
+    swizzle: wgt::TextureComponentSwizzle,
+) -> MTLTextureSwizzleChannels {
+    MTLTextureSwizzleChannels {
+        red: map_component_swizzle(swizzle.r),
+        green: map_component_swizzle(swizzle.g),
+        blue: map_component_swizzle(swizzle.b),
+        alpha: map_component_swizzle(swizzle.a),
+    }
 }

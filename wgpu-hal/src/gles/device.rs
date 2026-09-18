@@ -12,8 +12,9 @@ use core::{cmp::max, convert::TryInto, num::NonZeroU32, ptr, sync::atomic::Order
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use naga::FastHashMap;
+use wgpu_sync::Mutex;
 
-use super::{conv, lock, MaybeMutex, PrivateCapabilities};
+use super::{conv, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
 use crate::TlasInstance;
 
@@ -176,6 +177,75 @@ impl super::Device {
         }
     }
 
+    /// Wrap an existing `WebGlTexture` as a wgpu-hal texture, without copying.
+    ///
+    /// The handle is always externally owned: unlike `texture_from_raw` (the
+    /// native import), where a [`None`] callback transfers ownership of the raw GL name,
+    /// wgpu-hal never deletes a `WebGlTexture` — it is a GC-managed JS handle,
+    /// like the `GpuTexture`s the WebGPU backend wraps. If `drop_callback` is
+    /// [`Some`], it fires once wgpu-hal is done with the handle; deleting the
+    /// texture at that point, if desired, is the callback's job.
+    ///
+    /// `view_dimension` selects the texture's bind target (`D2` →
+    /// `TEXTURE_2D`, `D2Array` → `TEXTURE_2D_ARRAY`, `Cube` →
+    /// `TEXTURE_CUBE_MAP`, `D3` → `TEXTURE_3D`) and must match the type
+    /// `handle` was created as; it cannot be inferred from `desc`.
+    ///
+    /// `handle` must have been created by this device's
+    /// `WebGl2RenderingContext`, match `desc`, and stay valid until wgpu-hal
+    /// is done with it. Violations yield GL errors rather than memory
+    /// unsafety, which is why this method is not `unsafe`.
+    #[cfg(webgl)]
+    pub fn texture_from_webgl_handle(
+        &self,
+        handle: web_sys::WebGlTexture,
+        desc: &crate::TextureDescriptor,
+        view_dimension: wgt::TextureViewDimension,
+        drop_callback: Option<crate::DropCallback>,
+    ) -> super::Texture {
+        assert_eq!(
+            view_dimension.compatible_texture_dimension(),
+            desc.dimension,
+            "view_dimension {view_dimension:?} is incompatible with the descriptor's dimension",
+        );
+
+        // SAFETY: glow marks this `unsafe` as it does all GL entry points, but
+        // it only inserts the handle into glow's slotmap; every later use of
+        // the key goes through browser-validated WebGL calls.
+        let raw = unsafe { self.shared.context.lock().register_external_texture(handle) };
+
+        super::Texture {
+            inner: super::TextureInner::Texture {
+                raw,
+                target: super::Texture::target_for_view_dimension(view_dimension),
+            },
+            // Always a guard, even without a callback: its presence is what
+            // marks the handle as externally owned in `destroy_texture`.
+            drop_guard: Some(crate::DropGuard::external(drop_callback)),
+            mip_level_count: desc.mip_level_count,
+            array_layer_count: desc.array_layer_count(),
+            format: desc.format,
+            format_desc: self.shared.describe_texture_format(desc.format),
+            copy_size: desc.copy_extent(),
+        }
+    }
+
+    /// Borrow the underlying `WebGlTexture` for a wgpu-hal texture, if it is a
+    /// plain GL texture on the WebGL backend.
+    ///
+    /// Works for both normally-created textures and textures imported via
+    /// [`Self::texture_from_webgl_handle`]. Returns `None` for renderbuffers /
+    /// framebuffers or if the glow slot is dead.
+    #[cfg(webgl)]
+    pub fn webgl_texture_handle(&self, texture: &super::Texture) -> Option<web_sys::WebGlTexture> {
+        match texture.inner {
+            super::TextureInner::Texture { raw, .. } => {
+                self.shared.context.lock().as_web_gl_texture(raw)
+            }
+            _ => None,
+        }
+    }
+
     /// # Safety
     ///
     /// - `name` must be a non-zero GL buffer name created respecting `desc`.
@@ -231,9 +301,8 @@ impl super::Device {
         super::Buffer {
             raw: Some(glow::NativeBuffer(name)),
             target,
-            size: desc.size,
             map_flags,
-            map_state: Arc::new(MaybeMutex::new(super::BufferMapState {
+            map_state: Arc::new(Mutex::new(super::BufferMapState {
                 mapped: false,
                 data: None,
                 offset_of_current_mapping: 0,
@@ -246,7 +315,7 @@ impl super::Device {
         gl: &glow::Context,
         shader: &str,
         naga_stage: naga::ShaderStage,
-        #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
+        #[cfg_attr(target_family = "wasm", allow(unused))] label: Option<&str>,
     ) -> Result<glow::Shader, crate::PipelineError> {
         let target = match naga_stage {
             naga::ShaderStage::Vertex => glow::VERTEX_SHADER,
@@ -400,7 +469,7 @@ impl super::Device {
         gl: &glow::Context,
         shaders: ArrayVec<ShaderStage<'a>, { crate::MAX_CONCURRENT_SHADER_STAGES }>,
         layout: &super::PipelineLayout,
-        #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
+        #[cfg_attr(target_family = "wasm", allow(unused))] label: Option<&str>,
         multiview_mask: Option<NonZeroU32>,
     ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
         let mut program_stages = ArrayVec::new();
@@ -462,7 +531,7 @@ impl super::Device {
         gl: &glow::Context,
         shaders: ArrayVec<ShaderStage<'a>, { crate::MAX_CONCURRENT_SHADER_STAGES }>,
         layout: &super::PipelineLayout,
-        #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
+        #[cfg_attr(target_family = "wasm", allow(unused))] label: Option<&str>,
         multiview_mask: Option<NonZeroU32>,
         glsl_version: naga::back::glsl::Version,
         private_caps: PrivateCapabilities,
@@ -615,7 +684,7 @@ impl crate::Device for super::Device {
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,
-    ) -> Result<super::Buffer, crate::DeviceError> {
+    ) -> Result<(super::Buffer, wgt::BufferAddress), crate::DeviceError> {
         let target = if desc.usage.contains(wgt::BufferUses::INDEX) {
             glow::ELEMENT_ARRAY_BUFFER
         } else {
@@ -632,18 +701,20 @@ impl crate::Device for super::Device {
                 .contains(PrivateCapabilities::BUFFER_ALLOCATION);
 
         if emulate_map && desc.usage.intersects(wgt::BufferUses::MAP_WRITE) {
-            return Ok(super::Buffer {
-                raw: None,
-                target,
-                size: desc.size,
-                map_flags: 0,
-                map_state: Arc::new(MaybeMutex::new(super::BufferMapState {
-                    mapped: false,
-                    data: Some(vec![0; desc.size as usize]),
-                    offset_of_current_mapping: 0,
-                })),
-                drop_guard: None,
-            });
+            return Ok((
+                super::Buffer {
+                    raw: None,
+                    target,
+                    map_flags: 0,
+                    map_state: Arc::new(Mutex::new(super::BufferMapState {
+                        mapped: false,
+                        data: Some(vec![0; desc.size as usize]),
+                        offset_of_current_mapping: 0,
+                    })),
+                    drop_guard: None,
+                },
+                desc.size,
+            ));
         }
 
         let gl = &self.shared.context.lock();
@@ -736,18 +807,20 @@ impl crate::Device for super::Device {
 
         self.counters.buffers.add(1);
 
-        Ok(super::Buffer {
-            raw,
-            target,
-            size: desc.size,
-            map_flags,
-            map_state: Arc::new(MaybeMutex::new(super::BufferMapState {
-                mapped: false,
-                data,
-                offset_of_current_mapping: 0,
-            })),
-            drop_guard: None,
-        })
+        Ok((
+            super::Buffer {
+                raw,
+                target,
+                map_flags,
+                map_state: Arc::new(Mutex::new(super::BufferMapState {
+                    mapped: false,
+                    data,
+                    offset_of_current_mapping: 0,
+                })),
+                drop_guard: None,
+            },
+            desc.size,
+        ))
     }
 
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
@@ -777,7 +850,7 @@ impl crate::Device for super::Device {
         let is_coherent = buffer.map_flags & glow::MAP_COHERENT_BIT != 0;
         let ptr = match buffer.raw {
             None => {
-                let mut map_state = lock(&buffer.map_state);
+                let mut map_state = buffer.map_state.lock();
                 let vec = map_state.data.as_mut().unwrap();
                 let slice = &mut vec.as_mut_slice()[range.start as usize..range.end as usize];
                 slice.as_mut_ptr()
@@ -785,7 +858,7 @@ impl crate::Device for super::Device {
             Some(raw) => {
                 let gl = &self.shared.context.lock();
                 unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
-                let mut map_state = lock(&buffer.map_state);
+                let mut map_state = buffer.map_state.lock();
                 let ptr = if let Some(map_read_allocation) = map_state.data.as_mut() {
                     let slice = map_read_allocation.as_mut_slice();
                     unsafe { self.shared.get_buffer_sub_data(gl, buffer.target, 0, slice) };
@@ -827,7 +900,7 @@ impl crate::Device for super::Device {
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
         let gl = &self.shared.context.lock();
-        let mut map_state = lock(&buffer.map_state);
+        let mut map_state = buffer.map_state.lock();
         if core::mem::replace(&mut map_state.mapped, false) {
             if let Some(raw) = buffer.raw {
                 if map_state.data.is_none() {
@@ -844,7 +917,7 @@ impl crate::Device for super::Device {
         I: Iterator<Item = crate::MemoryRange>,
     {
         let gl = &self.shared.context.lock();
-        let map_state = lock(&buffer.map_state);
+        let map_state = buffer.map_state.lock();
         if map_state.mapped {
             if let Some(raw) = buffer.raw {
                 if map_state.data.is_none() {
@@ -874,8 +947,10 @@ impl crate::Device for super::Device {
         let gl = &self.shared.context.lock();
 
         let render_usage = wgt::TextureUses::COLOR_TARGET
-            | wgt::TextureUses::DEPTH_STENCIL_WRITE
-            | wgt::TextureUses::DEPTH_STENCIL_READ
+            | wgt::TextureUses::DEPTH_WRITE
+            | wgt::TextureUses::DEPTH_READ
+            | wgt::TextureUses::STENCIL_WRITE
+            | wgt::TextureUses::STENCIL_READ
             | wgt::TextureUses::TRANSIENT;
         let format_desc = self.shared.describe_texture_format(desc.format);
 
@@ -1118,6 +1193,16 @@ impl crate::Device for super::Device {
                 super::TextureInner::ExternalFramebuffer { .. } => {}
                 #[cfg(native)]
                 super::TextureInner::ExternalNativeFramebuffer { .. } => {}
+            }
+        } else {
+            // Externally owned: never delete the underlying GL object. On
+            // WebGL an imported handle (from `texture_from_webgl_handle`)
+            // additionally occupies a slot in glow's resource tracker;
+            // reclaim it via `unregister_external_texture`, which does *not*
+            // `gl.deleteTexture`, so the caller's handle survives.
+            #[cfg(webgl)]
+            if let super::TextureInner::Texture { raw, .. } = texture.inner {
+                self.shared.context.lock().unregister_external_texture(raw);
             }
         }
 
@@ -1409,10 +1494,7 @@ impl crate::Device for super::Device {
                     super::RawBinding::Buffer {
                         raw: bb.buffer.raw.unwrap(),
                         offset: bb.offset as i32,
-                        size: match bb.size {
-                            Some(s) => s.get() as i32,
-                            None => (bb.buffer.size - bb.offset) as i32,
-                        },
+                        size: bb.size.get() as i32,
                     }
                 }
                 wgt::BindingType::Sampler { .. } => {
@@ -1680,7 +1762,7 @@ impl crate::Device for super::Device {
     }
     unsafe fn destroy_pipeline_cache(&self, _: super::PipelineCache) {}
 
-    #[cfg_attr(target_arch = "wasm32", allow(unused))]
+    #[cfg_attr(target_family = "wasm", allow(unused))]
     unsafe fn create_query_set(
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
@@ -1736,7 +1818,7 @@ impl crate::Device for super::Device {
         &self,
         fence: &super::Fence,
     ) -> Result<crate::FenceValue, crate::DeviceError> {
-        #[cfg_attr(target_arch = "wasm32", allow(clippy::needless_borrow))]
+        #[cfg_attr(target_family = "wasm", allow(clippy::needless_borrow))]
         Ok(fence.get_latest(&self.shared.context.lock()))
     }
     unsafe fn wait(
@@ -1804,7 +1886,7 @@ impl crate::Device for super::Device {
     ) {
     }
 
-    fn tlas_instance_to_bytes(&self, _instance: TlasInstance) -> Vec<u8> {
+    fn tlas_instance_to_bytes(&self, _instance: TlasInstance, _to_extend: &mut Vec<u8>) {
         unimplemented!()
     }
 

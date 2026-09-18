@@ -144,6 +144,7 @@ impl ApplicationHandler<TriangleAction> for App {
                     // so we can support images the size of the swapchain.
                     required_limits: wgpu::Limits::downlevel_webgl2_defaults()
                         .using_resolution(adapter.limits()),
+                    default_queue: wgpu::QueueDescriptor { label: None },
                     experimental_features: wgpu::ExperimentalFeatures::disabled(),
                     memory_hints: wgpu::MemoryHints::MemoryUsage,
                     trace: wgpu::Trace::Off,
@@ -315,11 +316,9 @@ impl ApplicationHandler<TriangleAction> for App {
                 }
                 wgpu_state.queue.present(frame);
             }
-            WindowEvent::Occluded(is_occluded) => {
-                if !is_occluded {
-                    if let Some(window) = &self.window {
-                        window.request_redraw();
-                    }
+            WindowEvent::Occluded(false) => {
+                if let Some(window) = &self.window {
+                    window.request_redraw();
                 }
             }
             WindowEvent::CloseRequested => event_loop.exit(),

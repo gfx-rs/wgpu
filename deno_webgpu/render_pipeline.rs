@@ -1,5 +1,7 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+use std::sync::Arc;
+
 use deno_core::cppgc::Ptr;
 use deno_core::op2;
 use deno_core::webidl::Nullable;
@@ -7,6 +9,7 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use indexmap::IndexMap;
+use wgpu_core::resource::Labeled;
 
 use crate::bind_group_layout::GPUBindGroupLayout;
 use crate::error::GPUGenericError;
@@ -15,20 +18,9 @@ use crate::shader::GPUShaderModule;
 use crate::texture::GPUTextureFormat;
 use crate::webidl::GPUColorWriteFlags;
 use crate::webidl::GPUPipelineLayoutOrGPUAutoLayoutMode;
-use crate::Instance;
 
 pub struct GPURenderPipeline {
-  pub instance: Instance,
-  pub error_handler: super::error::ErrorHandler,
-
-  pub id: wgpu_core::id::RenderPipelineId,
-  pub label: String,
-}
-
-impl Drop for GPURenderPipeline {
-  fn drop(&mut self) {
-    self.instance.render_pipeline_drop(self.id);
-  }
+  pub wgpu_render_pipeline: Arc<wgpu_core::pipeline::RenderPipeline>,
 }
 
 impl WebIdlInterfaceConverter for GPURenderPipeline {
@@ -52,7 +44,7 @@ impl GPURenderPipeline {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_render_pipeline.label().to_string()
   }
   #[setter]
   #[string]
@@ -62,17 +54,11 @@ impl GPURenderPipeline {
 
   #[cppgc]
   fn get_bind_group_layout(&self, #[webidl] index: u32) -> GPUBindGroupLayout {
-    let (id, err) = self
-      .instance
-      .render_pipeline_get_bind_group_layout(self.id, index, None);
+    let wgpu_bind_group_layout =
+      self.wgpu_render_pipeline.get_bind_group_layout(index);
 
-    self.error_handler.push_error(err);
-
-    // TODO(wgpu): needs to add a way to retrieve the label
     GPUBindGroupLayout {
-      instance: self.instance.clone(),
-      id,
-      label: "".to_string(),
+      wgpu_bind_group_layout,
     }
   }
 }
@@ -510,6 +496,8 @@ pub(crate) enum GPUVertexFormat {
   Unorm1010102,
   #[webidl(rename = "unorm8x4-bgra")]
   Unorm8x4Bgra,
+  #[webidl(rename = "snorm10-10-10-2")]
+  Snorm1010102,
 }
 
 impl From<GPUVertexFormat> for wgpu_types::VertexFormat {
@@ -556,6 +544,7 @@ impl From<GPUVertexFormat> for wgpu_types::VertexFormat {
       GPUVertexFormat::Sint32x4 => Self::Sint32x4,
       GPUVertexFormat::Unorm1010102 => Self::Unorm10_10_10_2,
       GPUVertexFormat::Unorm8x4Bgra => Self::Unorm8x4Bgra,
+      GPUVertexFormat::Snorm1010102 => Self::Snorm10_10_10_2,
     }
   }
 }

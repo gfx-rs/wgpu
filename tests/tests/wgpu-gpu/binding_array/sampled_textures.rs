@@ -2,8 +2,8 @@ use std::num::NonZeroU32;
 
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer, TestParameters,
-    TestingContext,
+    apply, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters, TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
@@ -14,7 +14,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -36,7 +36,7 @@ static BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
     )
     .run_async(|ctx| async move { binding_array_sampled_textures(ctx, false).await });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PARTIAL_BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -259,7 +259,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
     readback_buffers.assert_buffer_contents(&ctx, &image).await;
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static PARTIAL_BINDING_ARRAY_FOLLOWED_BY_STORAGE_BUFFER: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
@@ -273,7 +273,13 @@ static PARTIAL_BINDING_ARRAY_FOLLOWED_BY_STORAGE_BUFFER: GpuTestConfiguration =
                 .limits(Limits {
                     max_binding_array_elements_per_shader_stage: 32,
                     ..Limits::default()
-                }),
+                })
+                // https://github.com/gfx-rs/wgpu/issues/9184
+                .expect_fail(
+                    wgpu_test::FailureCase::molten_vk()
+                        .validation_error("Shader library compile failed")
+                        .validation_error("could not be compiled into pipeline"),
+                ),
         )
         .run_async(
             |ctx| async move { partial_binding_array_followed_by_storage_buffer(ctx).await },

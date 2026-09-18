@@ -62,6 +62,8 @@ fragment fs_mainOutput fs_main(
         metal::r_address::clamp_to_edge,
         metal::mag_filter::linear,
         metal::min_filter::linear,
+        metal::lod_clamp(0.5,10),
+        metal::max_anisotropy(8),
         metal::coord::normalized
     );
     const VertexOutput in = { position, varyings_1.uv };

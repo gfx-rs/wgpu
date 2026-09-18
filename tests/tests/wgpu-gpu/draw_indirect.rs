@@ -3,7 +3,7 @@ use wgpu::{
     vertex_attr_array,
 };
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -363,7 +363,7 @@ macro_rules! make_test {
         make_test!($name, $test_data, false, $features);
     };
     ($name:ident, $test_data:expr, $expect_noop:expr, $features:expr) => {
-        #[gpu_test]
+        #[apply(gpu_test!)]
         static $name: GpuTestConfiguration = GpuTestConfiguration::new()
             .parameters({
                 let params = TestParameters::default()
@@ -596,7 +596,7 @@ make_failing_test!(
     get_instanced_indexed_draw_test_data(0, 6, 0, 5)
 );
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static INDIRECT_BUFFER_OFFSETS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -816,7 +816,7 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
     assert!(succeeded);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDEXED_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -825,7 +825,7 @@ static MULTI_DRAW_INDEXED_INDIRECT: GpuTestConfiguration = GpuTestConfiguration:
     )
     .run_async(|ctx| run_test_inner(ctx, get_indexed_draw_test_data(0, 6), false, true));
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

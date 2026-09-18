@@ -2,6 +2,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use deno_core::cppgc::Ptr;
@@ -11,6 +12,7 @@ use deno_core::v8;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
+use wgpu_core::resource::Labeled;
 
 use crate::buffer::GPUBuffer;
 use crate::command_buffer::GPUCommandBuffer;
@@ -20,22 +22,10 @@ use crate::texture::GPUTexture;
 use crate::texture::GPUTextureAspect;
 use crate::webidl::GPUExtent3D;
 use crate::webidl::GPUOrigin3D;
-use crate::Instance;
 
 pub struct GPUQueue {
-  pub instance: Instance,
-  pub error_handler: super::error::ErrorHandler,
-
-  pub label: String,
-
-  pub id: wgpu_core::id::QueueId,
-  pub device: wgpu_core::id::DeviceId,
-}
-
-impl Drop for GPUQueue {
-  fn drop(&mut self) {
-    self.instance.queue_drop(self.id);
-  }
+  pub wgpu_queue: Arc<wgpu_core::device::queue::Queue>,
+  pub wgpu_device: Arc<wgpu_core::device::Device>,
 }
 
 impl GarbageCollected for GPUQueue {
@@ -55,7 +45,7 @@ impl GPUQueue {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_queue.label().to_string()
   }
   #[setter]
   #[string]
@@ -63,6 +53,7 @@ impl GPUQueue {
     // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
   }
 
+  #[reentrant]
   #[required(1)]
   #[undefined]
   fn submit(
@@ -71,14 +62,10 @@ impl GPUQueue {
   ) -> Result<(), JsErrorBox> {
     let ids = command_buffers
       .into_iter()
-      .map(|cb| cb.id)
+      .map(|cb| cb.wgpu_command_buffer.clone())
       .collect::<Vec<_>>();
 
-    let err = self.instance.queue_submit(self.id, &ids).err();
-
-    if let Some((_, err)) = err {
-      self.error_handler.push_error(Some(err));
-    }
+    self.wgpu_queue.submit(&ids);
 
     Ok(())
   }
@@ -94,9 +81,7 @@ impl GPUQueue {
       sender.send(()).unwrap();
     });
 
-    self
-      .instance
-      .queue_on_submitted_work_done(self.id, callback);
+    self.wgpu_queue.on_submitted_work_done(callback);
 
     let done = Rc::new(RefCell::new(false));
     let done_ = done.clone();
@@ -104,8 +89,8 @@ impl GPUQueue {
       while !*done.borrow() {
         {
           self
-            .instance
-            .device_poll(self.device, wgpu_types::PollType::wait_indefinitely())
+            .wgpu_device
+            .poll(wgpu_types::PollType::wait_indefinitely())
             .unwrap();
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -140,16 +125,16 @@ impl GPUQueue {
   ) -> Result<(), JsErrorBox> {
     let data = get_data_slice(scope, data_arg, data_offset, size)?;
 
-    let err = self
-      .instance
-      .queue_write_buffer(self.id, buffer.id, buffer_offset, data)
-      .err();
-
-    self.error_handler.push_error(err);
+    self.wgpu_queue.write_buffer(
+      buffer.wgpu_buffer.clone(),
+      buffer_offset,
+      data,
+    );
 
     Ok(())
   }
 
+  #[reentrant]
   #[required(4)]
   #[undefined]
   fn write_texture(
@@ -160,7 +145,7 @@ impl GPUQueue {
     #[webidl] size: GPUExtent3D,
   ) {
     let destination = wgpu_types::TexelCopyTextureInfo {
-      texture: destination.texture.id,
+      texture: destination.texture.wgpu_texture.clone(),
       mip_level: destination.mip_level,
       origin: destination.origin.into(),
       aspect: destination.aspect.into(),
@@ -172,18 +157,9 @@ impl GPUQueue {
       rows_per_image: data_layout.rows_per_image,
     };
 
-    let err = self
-      .instance
-      .queue_write_texture(
-        self.id,
-        &destination,
-        buf,
-        &data_layout,
-        &size.into(),
-      )
-      .err();
-
-    self.error_handler.push_error(err);
+    self
+      .wgpu_queue
+      .write_texture(destination, buf, &data_layout, &size.into());
   }
 }
 

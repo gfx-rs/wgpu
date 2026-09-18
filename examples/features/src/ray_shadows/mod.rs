@@ -65,8 +65,8 @@ struct Example {
 const CAM_LOOK_AT: Vec3 = Vec3::new(0.0, 1.0, -1.5);
 
 fn create_matrix(config: &wgpu::SurfaceConfiguration) -> Uniforms {
-    let view = Mat4::look_at_rh(CAM_LOOK_AT, Vec3::ZERO, Vec3::Y);
-    let proj = Mat4::perspective_rh(
+    let view = glam::camera::rh::view::look_at_mat4(CAM_LOOK_AT, Vec3::ZERO, Vec3::Y);
+    let proj = glam::camera::rh::proj::directx::perspective(
         59.0_f32.to_radians(),
         config.width as f32 / config.height as f32,
         0.1,
@@ -94,7 +94,7 @@ impl crate::framework::Example for Example {
 
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
-            max_immediate_size: 12,
+            max_immediate_size: 16,
             ..wgpu::Limits::default()
         }
         .using_minimum_supported_acceleration_structure_values()
@@ -186,7 +186,7 @@ impl crate::framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 12,
+            immediate_size: 16,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -345,7 +345,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "ray_shadows",
     image_path: "/examples/features/src/ray_shadows/screenshot.png",

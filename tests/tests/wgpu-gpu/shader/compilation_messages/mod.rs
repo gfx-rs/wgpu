@@ -1,6 +1,8 @@
 use wgpu::include_wgsl;
 
-use wgpu_test::{fail, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{
+    apply, fail, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -11,7 +13,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     ]);
 }
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SHADER_COMPILE_SUCCESS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -25,7 +27,7 @@ static SHADER_COMPILE_SUCCESS: GpuTestConfiguration = GpuTestConfiguration::new(
         }
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static SHADER_COMPILE_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -33,7 +35,33 @@ static SHADER_COMPILE_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
         let sm = ctx
             .device
             .create_shader_module(include_wgsl!("error_shader.wgsl"));
-        assert!(pollster::block_on(scope.pop()).is_some());
+
+        let Some(wgpu::Error::Validation {
+            source,
+            description,
+        }) = scope.pop().await
+        else {
+            panic!("Expected validation error not found")
+        };
+        // Description of validation error should not include detailed shader compilation message.
+        assert_eq!(
+            description,
+            "Validation Error\n\nCaused by:\n  \
+            In Device::create_shader_module, label = 'error_shader.wgsl'\n    \
+            Shader 'error_shader.wgsl' parsing error. Concrete error is available via `get_compilation_info`\n"
+        );
+
+        // The source of the validation error does not include detailed shader compilation message.
+        assert_eq!(
+            source.to_string(),
+            "In Device::create_shader_module, label = 'error_shader.wgsl'"
+        );
+        let source = source.source().expect("Expected source to be available");
+        assert_eq!(
+            source.to_string(),
+            "Shader 'error_shader.wgsl' parsing error. Concrete error is available via `get_compilation_info`"
+        );
+        assert!(source.source().is_none());
 
         let compilation_info = sm.get_compilation_info().await;
         let error_message = compilation_info
@@ -41,6 +69,7 @@ static SHADER_COMPILE_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
             .iter()
             .find(|message| message.message_type == wgpu::CompilationMessageType::Error)
             .expect("Expected error message not found");
+        assert!(error_message.message.contains("/*🐈🐈🐈🐈🐈🐈🐈*/?\n"));
         let span = error_message.location.expect("Expected span not found");
         assert_eq!(
             span.offset, 32,
@@ -64,7 +93,7 @@ const ENABLE_EXTENSION_SHADER_SOURCE: &str = r#"
     fn main() {}
 "#;
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ENABLE_EXTENSION_AVAILABLE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -85,7 +114,7 @@ static ENABLE_EXTENSION_AVAILABLE: GpuTestConfiguration = GpuTestConfiguration::
         });
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ENABLE_EXTENSION_UNAVAILABLE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -97,14 +126,32 @@ static ENABLE_EXTENSION_UNAVAILABLE: GpuTestConfiguration = GpuTestConfiguration
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let module = ctx
+                    .device
                     .create_shader_module(wgpu::ShaderModuleDescriptor {
                         label: Some("shader declaring enable extension"),
                         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
                             ENABLE_EXTENSION_SHADER_SOURCE,
                         )),
+                    });
+                let info = pollster::block_on(module.get_compilation_info());
+                assert_eq!(
+                    info.messages[0].message_type,
+                    wgpu::CompilationMessageType::Error
+                );
+                assert_eq!(
+                    info.messages[0].location,
+                    Some(wgpu::SourceLocation {
+                        line_number: 2,
+                        line_position: 12,
+                        offset: 12,
+                        length: 3
                     })
+                );
+                assert!(info.messages[0]
+                    .message
+                    .contains("the `f16` extension is not supported in the current environment"))
             },
-            Some("the `f16` extension is not supported in the current environment"),
+            Some("Shader 'shader declaring enable extension' parsing error"),
         );
     });

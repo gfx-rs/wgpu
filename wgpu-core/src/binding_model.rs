@@ -5,7 +5,12 @@ use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
 };
-use core::{fmt, mem::ManuallyDrop, num::Saturating, ops::Range};
+use core::{
+    fmt,
+    mem::ManuallyDrop,
+    num::{NonZeroU32, Saturating},
+    ops::Range,
+};
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
@@ -15,12 +20,12 @@ use serde::Deserialize;
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
+use wgpu_sync::OnceCell;
 use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
     api_log,
     device::{bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
-    id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId, TlasId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
@@ -38,9 +43,13 @@ use crate::{
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum BindGroupLayoutEntryError {
+    #[error("Multiple binding types provided, expected exactly one")]
+    MultipleBindingTypesProvided,
+    #[error("No binding types provided, expected exactly one")]
+    NoBindingTypesProvided,
     #[error("Cube dimension is not expected for texture storage")]
     StorageTextureCube,
-    #[error("Atomic storage textures are not allowed by baseline webgpu, they require the native only feature TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES")]
+    #[error("Atomic storage textures are not allowed by baseline webgpu, they require the native only feature TEXTURE_ATOMIC")]
     StorageTextureAtomic,
     #[error("Arrays of bindings unsupported for this type of binding")]
     ArrayUnsupported,
@@ -120,6 +129,17 @@ pub enum BindingError {
         offset: wgt::BufferAddress,
         buffer_size: u64,
     },
+    /// The supplied binding offset was equal to the buffer size.
+    ///
+    /// A binding offset equal to the buffer size is legal for vertex and index buffer
+    /// bindings, but not for storage/uniform buffer bindings, thus this error should only
+    /// be raised for the latter.
+    #[error("Buffer {buffer}: Binding offset {offset} must be strictly less than buffer size {buffer_size}")]
+    BindingOffsetEqualsSize {
+        buffer: ResourceErrorIdent,
+        offset: wgt::BufferAddress,
+        buffer_size: u64,
+    },
     #[error("Unbinding vertex buffer at slot {slot} expects offset to be 0. However an offset of {offset} was provided.")]
     UnbindingVertexBufferOffsetNotZero { slot: u32, offset: u64 },
     #[error("Unbinding vertex buffer at slot {slot} expects size to be 0. However a size of {size} was provided.")]
@@ -132,6 +152,7 @@ impl WebGpuError for BindingError {
             Self::DestroyedResource(e) => e.webgpu_error_type(),
             Self::BindingRangeTooLarge { .. }
             | Self::BindingOffsetTooLarge { .. }
+            | Self::BindingOffsetEqualsSize { .. }
             | BindingError::UnbindingVertexBufferOffsetNotZero { .. }
             | BindingError::UnbindingVertexBufferSizeNotZero { .. } => ErrorType::Validation,
         }
@@ -233,6 +254,10 @@ pub enum CreateBindGroupError {
     },
     #[error("Storage texture bindings must have a single mip level, but given a view with mip_level_count = {mip_level_count:?} at binding {binding}")]
     InvalidStorageTextureMipLevelCount { binding: u32, mip_level_count: u32 },
+    #[error("Storage texture bindings must have an identity swizzle, but given a view with swizzle = {swizzle:?}")]
+    InvalidStorageTextureSwizzle {
+        swizzle: wgt::TextureComponentSwizzle,
+    },
     #[error("External texture bindings must have a single mip level, but given a view with mip_level_count = {mip_level_count:?} at binding {binding}")]
     InvalidExternalTextureMipLevelCount { binding: u32, mip_level_count: u32 },
     #[error("External texture bindings must have a format of `rgba8unorm`, `bgra8unorm`, or `rgba16float, but given a view with format = {format:?} at binding {binding}")]
@@ -290,6 +315,7 @@ impl WebGpuError for CreateBindGroupError {
             | Self::InvalidTextureDimension { .. }
             | Self::InvalidStorageTextureFormat { .. }
             | Self::InvalidStorageTextureMipLevelCount { .. }
+            | Self::InvalidStorageTextureSwizzle { .. }
             | Self::WrongSamplerComparison { .. }
             | Self::WrongSamplerFiltering { .. }
             | Self::DepthStencilAspect
@@ -573,10 +599,18 @@ impl BindingTypeMaxCountValidator {
             limits.max_storage_buffers_per_shader_stage,
             BindingTypeMaxCountErrorKind::StorageBuffers,
         )?;
+        // NOTE: We don't explicitly check `max_storage_buffers_in_vertex_stage` or
+        // `max_storage_buffers_in_fragment_stage` because we don't assign different values between
+        // those and `max_storage_buffers_per_shader_stage`. If this changes, this needs to be
+        // fixed!
         self.storage_textures.validate(
             limits.max_storage_textures_per_shader_stage,
             BindingTypeMaxCountErrorKind::StorageTextures,
         )?;
+        // NOTE: We don't explicitly check `max_storage_textures_in_vertex_stage` or
+        // `max_storage_textures_in_fragment_stage` because we don't assign different values between
+        // those and `max_storage_textures_per_shader_stage`. If this changes, this needs to be
+        // fixed!
         self.uniform_buffers.validate(
             limits.max_uniform_buffers_per_shader_stage,
             BindingTypeMaxCountErrorKind::UniformBuffers,
@@ -645,11 +679,11 @@ impl BindingTypeMaxCountValidator {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BindGroupEntry<
     'a,
-    B = BufferId,
-    S = SamplerId,
-    TV = TextureViewId,
-    TLAS = TlasId,
-    ET = ExternalTextureId,
+    B = Arc<Buffer>,
+    S = Arc<Sampler>,
+    TV = Arc<TextureView>,
+    TLAS = Arc<Tlas>,
+    ET = Arc<ExternalTexture>,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -671,27 +705,18 @@ pub struct BindGroupEntry<
     pub resource: BindingResource<'a, B, S, TV, TLAS, ET>,
 }
 
-/// cbindgen:ignore
-pub type ResolvedBindGroupEntry<'a> = BindGroupEntry<
-    'a,
-    Arc<Buffer>,
-    Arc<Sampler>,
-    Arc<TextureView>,
-    Arc<Tlas>,
-    Arc<ExternalTexture>,
->;
-
 /// Describes a group of bindings and the resources to be bound.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// cbindgen:ignore
 pub struct BindGroupDescriptor<
     'a,
-    BGL = BindGroupLayoutId,
-    B = BufferId,
-    S = SamplerId,
-    TV = TextureViewId,
-    TLAS = TlasId,
-    ET = ExternalTextureId,
+    BGL = Arc<BindGroupLayout>,
+    B = Arc<Buffer>,
+    S = Arc<Sampler>,
+    TV = Arc<TextureView>,
+    TLAS = Arc<Tlas>,
+    ET = Arc<ExternalTexture>,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -721,27 +746,413 @@ pub struct BindGroupDescriptor<
     pub entries: Cow<'a, [BindGroupEntry<'a, B, S, TV, TLAS, ET>]>,
 }
 
-/// cbindgen:ignore
-pub type ResolvedBindGroupDescriptor<'a> = BindGroupDescriptor<
-    'a,
-    Arc<BindGroupLayout>,
-    Arc<Buffer>,
-    Arc<Sampler>,
-    Arc<TextureView>,
-    Arc<Tlas>,
-    Arc<ExternalTexture>,
->;
+/// A buffer binding.
+///
+/// Corresponds to [WebGPU `GPUBufferBindingLayout`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpubufferbindinglayout).
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct BufferBindingLayout {
+    /// Sub-type of the buffer binding.
+    pub ty: wgt::BufferBindingType,
+
+    /// Indicates that the binding has a dynamic offset.
+    ///
+    /// One offset must be passed to [`RenderPass::set_bind_group`](crate::command::RenderPass::set_bind_group)
+    /// for each dynamic binding in increasing order of binding number.
+    ///
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub has_dynamic_offset: bool,
+
+    /// The minimum size for a [`BufferBinding`] matching this entry, in bytes.
+    ///
+    /// If this is `Some(size)`:
+    ///
+    /// - When calling [`Device::create_bind_group`], the resource at this bind point
+    ///   must be a [`BindingResource::Buffer`] whose effective size is at
+    ///   least `size`.
+    ///
+    /// - When calling [`Device::create_render_pipeline`] or [`Device::create_compute_pipeline`],
+    ///   `size` must be at least the [minimum buffer binding size] for the
+    ///   shader module global at this bind point: large enough to hold the
+    ///   global's value, along with one element of a trailing runtime-sized
+    ///   array, if present.
+    ///
+    /// If this is `None`:
+    ///
+    /// - Each draw or dispatch command checks that the buffer range at this
+    ///   bind point satisfies the [minimum buffer binding size].
+    ///
+    /// [minimum buffer binding size]: https://www.w3.org/TR/webgpu/#minimum-buffer-binding-size
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub min_binding_size: Option<wgt::BufferSize>,
+}
+
+/// A sampler that can be used to sample a texture.
+///
+/// Example WGSL syntax:
+/// ```rust,ignore
+/// @group(0) @binding(0)
+/// var s: sampler;
+/// ```
+///
+/// Example GLSL syntax:
+/// ```cpp,ignore
+/// layout(binding = 0)
+/// uniform sampler s;
+/// ```
+///
+/// Corresponds to [WebGPU `GPUSamplerBindingLayout`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpusamplerbindinglayout).
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct SamplerBindingLayout {
+    /// Type of a sampler binding.
+    pub ty: wgt::SamplerBindingType,
+}
+
+/// A texture binding.
+///
+/// Example WGSL syntax:
+/// ```rust,ignore
+/// @group(0) @binding(0)
+/// var t: texture_2d<f32>;
+/// ```
+///
+/// Example GLSL syntax:
+/// ```cpp,ignore
+/// layout(binding = 0)
+/// uniform texture2D t;
+/// ```
+///
+/// Corresponds to [WebGPU `GPUTextureBindingLayout`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gputexturebindinglayout).
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct TextureBindingLayout {
+    /// Sample type of the texture binding.
+    pub sample_type: wgt::TextureSampleType,
+    /// Dimension of the texture view that is going to be sampled.
+    pub view_dimension: wgt::TextureViewDimension,
+    /// True if the texture has a sample count greater than 1. If this is true,
+    /// the texture must be declared as `texture_multisampled_2d` or
+    /// `texture_depth_multisampled_2d` in the shader, and read using `textureLoad`.
+    pub multisampled: bool,
+}
+
+/// A storage texture.
+///
+/// Example WGSL syntax:
+/// ```rust,ignore
+/// @group(0) @binding(0)
+/// var my_storage_image: texture_storage_2d<r32float, write>;
+/// ```
+///
+/// Example GLSL syntax:
+/// ```cpp,ignore
+/// layout(set=0, binding=0, r32f) writeonly uniform image2D myStorageImage;
+/// ```
+/// Note that the texture format must be specified in the shader, along with the
+/// access mode. For WGSL, the format must be one of the enumerants in the list
+/// of [storage texel formats](https://gpuweb.github.io/gpuweb/wgsl/#storage-texel-formats).
+///
+/// Corresponds to [WebGPU `GPUStorageTextureBindingLayout`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpustoragetexturebindinglayout).
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct StorageTextureBindingLayout {
+    /// Allowed access to this texture.
+    pub access: wgt::StorageTextureAccess,
+    /// Format of the texture.
+    pub format: wgt::TextureFormat,
+    /// Dimension of the texture view that is going to be sampled.
+    pub view_dimension: wgt::TextureViewDimension,
+}
+
+/// A ray-tracing acceleration structure binding.
+///
+/// Example WGSL syntax:
+/// ```rust,ignore
+/// @group(0) @binding(0)
+/// var as: acceleration_structure;
+/// ```
+///
+/// or with vertex return enabled
+/// ```rust,ignore
+/// @group(0) @binding(0)
+/// var as: acceleration_structure<vertex_return>;
+/// ```
+///
+/// Example GLSL syntax:
+/// ```cpp,ignore
+/// layout(binding = 0)
+/// uniform accelerationStructureEXT as;
+/// ```
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AccelerationStructureBindingLayout {
+    /// Whether this acceleration structure can be used to
+    /// create a ray query that has flag vertex return in the shader
+    ///
+    /// If enabled requires [`wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN`]
+    pub vertex_return: bool,
+}
+
+/// An external texture binding.
+///
+/// Example WGSL syntax:
+/// ```rust,ignore
+/// @group(0) @binding(0)
+/// var t: texture_external;
+/// ```
+///
+/// Corresponds to [WebGPU `GPUExternalTextureBindingLayout`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuexternaltexturebindinglayout).
+///
+/// Requires [`wgt::Features::EXTERNAL_TEXTURE`]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ExternalTextureBindingLayout;
+
+/// Describes a single binding inside a bind group.
+///
+/// Corresponds to [WebGPU `GPUBindGroupLayoutEntry`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct BindGroupLayoutEntry {
+    /// Binding index. Must match shader index and be unique inside a `BindGroupLayout`. A binding
+    /// of index 1, would be described as `@group(0) @binding(1)` in shaders.
+    pub binding: u32,
+    /// Which shader stages can see this binding.
+    pub visibility: wgt::ShaderStages,
+
+    // type of binding
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub buffer: Option<BufferBindingLayout>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub sampler: Option<SamplerBindingLayout>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub texture: Option<TextureBindingLayout>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub storage_texture: Option<StorageTextureBindingLayout>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub external_texture: Option<ExternalTextureBindingLayout>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub acceleration_structure: Option<AccelerationStructureBindingLayout>,
+
+    /// If the binding is an array of multiple resources. Corresponds to `binding_array<T>` in the shader.
+    ///
+    /// When this is `Some` the following validation applies:
+    /// - Count must be of value 1 or greater, this corresponds to the length of the array of resources that will be bound.
+    /// - When `ty == BindingType::Texture`, [`wgt::Features::TEXTURE_BINDING_ARRAY`] must be supported.
+    /// - When `ty == BindingType::Sampler`, [`wgt::Features::TEXTURE_BINDING_ARRAY`] must be supported.
+    /// - When `ty == BindingType::Buffer`, [`wgt::Features::BUFFER_BINDING_ARRAY`] must be supported.
+    /// - When `ty == BindingType::Buffer` and `ty.ty == BufferBindingType::Storage`, [`wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY`] must be supported.
+    /// - When `ty == BindingType::StorageTexture`, [`wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY`] must be supported.
+    /// - When any binding in the group is an array, no `BindingType::Buffer` in the group may have `has_dynamic_offset == true`
+    /// - When any binding in the group is an array, no `BindingType::Buffer` in the group may have `ty.ty == BufferBindingType::Uniform`.
+    /// - If [`wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY`] is enabled, the specified count becomes the upper bound instead.
+    ///
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub count: Option<NonZeroU32>,
+}
+
+impl From<core::convert::Infallible> for CreateBindGroupLayoutError {
+    fn from(_: core::convert::Infallible) -> Self {
+        unreachable!()
+    }
+}
+
+impl From<wgt::BindGroupLayoutEntry> for BindGroupLayoutEntry {
+    fn from(val: wgt::BindGroupLayoutEntry) -> Self {
+        let wgt::BindGroupLayoutEntry {
+            binding,
+            visibility,
+            ty,
+            count,
+        } = val;
+        BindGroupLayoutEntry {
+            binding,
+            visibility,
+            buffer: if let wgt::BindingType::Buffer {
+                ty,
+                has_dynamic_offset,
+                min_binding_size,
+            } = ty
+            {
+                Some(BufferBindingLayout {
+                    ty,
+                    has_dynamic_offset,
+                    min_binding_size,
+                })
+            } else {
+                None
+            },
+            sampler: if let wgt::BindingType::Sampler(ty) = ty {
+                Some(SamplerBindingLayout { ty })
+            } else {
+                None
+            },
+            texture: if let wgt::BindingType::Texture {
+                sample_type,
+                view_dimension,
+                multisampled,
+            } = ty
+            {
+                Some(TextureBindingLayout {
+                    sample_type,
+                    view_dimension,
+                    multisampled,
+                })
+            } else {
+                None
+            },
+            storage_texture: if let wgt::BindingType::StorageTexture {
+                access,
+                format,
+                view_dimension,
+            } = ty
+            {
+                Some(StorageTextureBindingLayout {
+                    access,
+                    format,
+                    view_dimension,
+                })
+            } else {
+                None
+            },
+            external_texture: if let wgt::BindingType::ExternalTexture = ty {
+                Some(ExternalTextureBindingLayout {})
+            } else {
+                None
+            },
+            acceleration_structure: if let wgt::BindingType::AccelerationStructure {
+                vertex_return,
+            } = ty
+            {
+                Some(AccelerationStructureBindingLayout { vertex_return })
+            } else {
+                None
+            },
+            count,
+        }
+    }
+}
+
+impl TryInto<wgt::BindGroupLayoutEntry> for BindGroupLayoutEntry {
+    type Error = CreateBindGroupLayoutError;
+
+    fn try_into(self) -> Result<wgt::BindGroupLayoutEntry, Self::Error> {
+        let BindGroupLayoutEntry {
+            binding,
+            visibility,
+            buffer,
+            sampler,
+            texture,
+            storage_texture,
+            external_texture,
+            acceleration_structure,
+            count,
+        } = self;
+        let mut binding_ty: Option<wgt::BindingType> = None;
+        if let Some(BufferBindingLayout {
+            ty,
+            has_dynamic_offset,
+            min_binding_size,
+        }) = buffer
+        {
+            binding_ty = Some(wgt::BindingType::Buffer {
+                ty,
+                has_dynamic_offset,
+                min_binding_size,
+            });
+        }
+        if let Some(SamplerBindingLayout { ty }) = sampler {
+            if binding_ty.is_some() {
+                return Err(CreateBindGroupLayoutError::Entry {
+                    binding,
+                    error: BindGroupLayoutEntryError::MultipleBindingTypesProvided,
+                });
+            }
+            binding_ty = Some(wgt::BindingType::Sampler(ty))
+        }
+        if let Some(TextureBindingLayout {
+            sample_type,
+            view_dimension,
+            multisampled,
+        }) = texture
+        {
+            if binding_ty.is_some() {
+                return Err(CreateBindGroupLayoutError::Entry {
+                    binding,
+                    error: BindGroupLayoutEntryError::MultipleBindingTypesProvided,
+                });
+            }
+            binding_ty = Some(wgt::BindingType::Texture {
+                sample_type,
+                view_dimension,
+                multisampled,
+            })
+        }
+        if let Some(StorageTextureBindingLayout {
+            access,
+            format,
+            view_dimension,
+        }) = storage_texture
+        {
+            if binding_ty.is_some() {
+                return Err(CreateBindGroupLayoutError::Entry {
+                    binding,
+                    error: BindGroupLayoutEntryError::MultipleBindingTypesProvided,
+                });
+            }
+            binding_ty = Some(wgt::BindingType::StorageTexture {
+                access,
+                format,
+                view_dimension,
+            })
+        }
+        if let Some(ExternalTextureBindingLayout) = external_texture {
+            if binding_ty.is_some() {
+                return Err(CreateBindGroupLayoutError::Entry {
+                    binding,
+                    error: BindGroupLayoutEntryError::MultipleBindingTypesProvided,
+                });
+            }
+            binding_ty = Some(wgt::BindingType::ExternalTexture)
+        }
+        if let Some(AccelerationStructureBindingLayout { vertex_return }) = acceleration_structure {
+            if binding_ty.is_some() {
+                return Err(CreateBindGroupLayoutError::Entry {
+                    binding,
+                    error: BindGroupLayoutEntryError::MultipleBindingTypesProvided,
+                });
+            }
+            binding_ty = Some(wgt::BindingType::AccelerationStructure { vertex_return })
+        }
+        Ok(wgt::BindGroupLayoutEntry {
+            binding,
+            visibility,
+            ty: binding_ty.ok_or(CreateBindGroupLayoutError::Entry {
+                binding,
+                error: BindGroupLayoutEntryError::NoBindingTypesProvided,
+            })?,
+            count,
+        })
+    }
+}
 
 /// Describes a [`BindGroupLayout`].
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BindGroupLayoutDescriptor<'a> {
+pub struct BindGroupLayoutDescriptor<'a, BGLE: Copy> {
     /// Debug label of the bind group layout.
     ///
     /// This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// Array of entries in this BindGroupLayout
-    pub entries: Cow<'a, [wgt::BindGroupLayoutEntry]>,
+    pub entries: Cow<'a, [BGLE]>,
 }
 
 /// Used by [`BindGroupLayout`]. It indicates whether the BGL must be
@@ -814,13 +1225,16 @@ pub struct BindGroupLayout {
     pub(crate) state: ResourceState<BindGroupLayoutState>,
     pub(crate) device: Arc<Device>,
     pub(crate) entries: bgl::EntryMap,
-    pub(crate) exclusive_pipeline: crate::OnceCellOrLock<ExclusivePipeline>,
+    pub(crate) exclusive_pipeline: OnceCell<ExclusivePipeline>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
 }
 
 impl Drop for BindGroupLayout {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("BindGroupLayout::drop");
+        api_log!("BindGroupLayout::drop {:?}", self as *const _);
         #[cfg(feature = "trace")]
         {
             let mut t = self.device.trace.lock();
@@ -892,17 +1306,17 @@ impl BindGroupLayout {
             }),
             device: device.clone(),
             entries: bgl::EntryMap::default(),
-            exclusive_pipeline: crate::OnceCellOrLock::from(exclusive_pipeline),
+            exclusive_pipeline: OnceCell::from(exclusive_pipeline),
             label: String::new(),
         })
     }
 
-    pub(crate) fn invalid(device: &Arc<Device>, label: String) -> Arc<Self> {
+    pub fn invalid(device: &Arc<Device>, label: String) -> Arc<Self> {
         Arc::new(Self {
             state: ResourceState::Invalid,
             device: device.clone(),
             entries: bgl::EntryMap::default(),
-            exclusive_pipeline: crate::OnceCellOrLock::from(ExclusivePipeline::None),
+            exclusive_pipeline: OnceCell::from(ExclusivePipeline::None),
             label,
         })
     }
@@ -952,8 +1366,6 @@ impl WebGpuError for CreatePipelineLayoutError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImmediateUploadError {
-    #[error("Ran out of immediate data space. Don't set 4gb of immediates per pass")]
-    ImmediateOutOfMemory,
     #[error(
         "Provided immediate data start offset {start_offset} overruns the range with a size of {immediate_size}"
     )]
@@ -972,18 +1384,17 @@ pub enum ImmediateUploadError {
         `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
         ida = wgt::IMMEDIATE_DATA_ALIGNMENT
     )]
-    SizeUnaligned(u32),
+    SizeUnaligned(usize),
     #[error(
-        "Provided immediate data start offset {} + size {} overruns the immediate data range \
-        with a size of {}",
+        "Provided immediate data start offset {} + size {} overruns `max_immediate_size` {}",
         start_offset,
-        size,
-        immediate_size
+        size_bytes,
+        limit
     )]
-    EndOffsetOverrun {
+    EndOffsetBeyondLimit {
         start_offset: u32,
-        size: u32,
-        immediate_size: u32,
+        size_bytes: usize,
+        limit: u32,
     },
 }
 
@@ -999,7 +1410,8 @@ impl WebGpuError for ImmediateUploadError {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(bound = "BGL: Serialize"))]
-pub struct PipelineLayoutDescriptor<'a, BGL = BindGroupLayoutId>
+/// cbindgen:ignore
+pub struct PipelineLayoutDescriptor<'a, BGL = Arc<BindGroupLayout>>
 where
     [Option<BGL>]: ToOwned,
     <[Option<BGL>] as ToOwned>::Owned: fmt::Debug,
@@ -1023,10 +1435,6 @@ where
     pub immediate_size: u32,
 }
 
-/// cbindgen:ignore
-pub type ResolvedPipelineLayoutDescriptor<'a, BGL = Arc<BindGroupLayout>> =
-    PipelineLayoutDescriptor<'a, BGL>;
-
 #[derive(Debug)]
 pub struct PipelineLayout {
     pub(crate) raw: ResourceState<Box<dyn hal::DynPipelineLayout>>,
@@ -1039,7 +1447,10 @@ pub struct PipelineLayout {
 }
 
 impl Drop for PipelineLayout {
+    #[allow(trivial_casts)]
     fn drop(&mut self) {
+        profiling::scope!("PipelineLayout::drop");
+        api_log!("PipelineLayout::drop {:?}", self as *const _);
         resource_log!("Destroy raw {}", self.error_ident());
         if let ResourceState::Valid(raw) = core::mem::replace(&mut self.raw, ResourceState::Invalid)
         {
@@ -1107,34 +1518,6 @@ impl PipelineLayout {
         bgl.entries.get(binding)
     }
 
-    /// Validate immediates match up with expected ranges.
-    pub(crate) fn validate_immediates_ranges(
-        &self,
-        offset: u32,
-        size_bytes: u32,
-    ) -> Result<(), ImmediateUploadError> {
-        // Don't need to validate size against the immediate data size limit here,
-        // as immediate data ranges are already validated to be within bounds,
-        // and we validate that they are within the ranges.
-
-        if offset > self.immediate_size {
-            return Err(ImmediateUploadError::StartOffsetOverrun {
-                start_offset: offset,
-                immediate_size: self.immediate_size,
-            });
-        }
-
-        if size_bytes > self.immediate_size - offset {
-            return Err(ImmediateUploadError::EndOffsetOverrun {
-                start_offset: offset,
-                size: size_bytes,
-                immediate_size: self.immediate_size,
-            });
-        }
-
-        Ok(())
-    }
-
     pub(crate) fn invalid(device: Arc<Device>, label: String) -> Arc<Self> {
         Arc::new(Self {
             raw: ResourceState::Invalid,
@@ -1155,7 +1538,7 @@ crate::impl_storage_item!(PipelineLayout);
 #[repr(C)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BufferBinding<B = BufferId> {
+pub struct BufferBinding<B = Arc<Buffer>> {
     pub buffer: B,
     pub offset: wgt::BufferAddress,
 
@@ -1169,19 +1552,17 @@ pub struct BufferBinding<B = BufferId> {
     pub size: Option<wgt::BufferAddress>,
 }
 
-pub type ResolvedBufferBinding = BufferBinding<Arc<Buffer>>;
-
 // Note: Duplicated in `wgpu-rs` as `BindingResource`
 // They're different enough that it doesn't make sense to share a common type
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BindingResource<
     'a,
-    B = BufferId,
-    S = SamplerId,
-    TV = TextureViewId,
-    TLAS = TlasId,
-    ET = ExternalTextureId,
+    B = Arc<Buffer>,
+    S = Arc<Sampler>,
+    TV = Arc<TextureView>,
+    TLAS = Arc<Tlas>,
+    ET = Arc<ExternalTexture>,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -1219,15 +1600,6 @@ pub enum BindingResource<
     ExternalTexture(ET),
 }
 
-pub type ResolvedBindingResource<'a> = BindingResource<
-    'a,
-    Arc<Buffer>,
-    Arc<Sampler>,
-    Arc<TextureView>,
-    Arc<Tlas>,
-    Arc<ExternalTexture>,
->;
-
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum BindError {
@@ -1237,9 +1609,10 @@ pub enum BindError {
     )]
     DynamicOffsetCountNotZero { group: u32, actual: usize },
     #[error(
-        "{bind_group} {group} expects {expected} dynamic offset{s0}. However {actual} dynamic offset{s1} were provided.",
+        "{bind_group} at index {group} expects {expected} dynamic offset{s0}, but {actual} dynamic offset{s1} {to_be} provided",
         s0 = if *.expected >= 2 { "s" } else { "" },
         s1 = if *.actual >= 2 { "s" } else { "" },
+        to_be = if *.actual == 1 { "was" } else { "were" },
     )]
     MismatchedDynamicOffsetCount {
         bind_group: ResourceErrorIdent,

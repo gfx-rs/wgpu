@@ -229,17 +229,13 @@ impl crate::framework::Example for Example {
             } => match logical_key {
                 // TODO: Switch back to full scans of possible options when we expose
                 //       supported sample counts to the user.
-                Key::Named(NamedKey::ArrowLeft) => {
-                    if self.sample_count == self.max_sample_count {
-                        self.sample_count = 1;
-                        self.rebuild_bundle = true;
-                    }
+                Key::Named(NamedKey::ArrowLeft) if self.sample_count == self.max_sample_count => {
+                    self.sample_count = 1;
+                    self.rebuild_bundle = true;
                 }
-                Key::Named(NamedKey::ArrowRight) => {
-                    if self.sample_count == 1 {
-                        self.sample_count = self.max_sample_count;
-                        self.rebuild_bundle = true;
-                    }
+                Key::Named(NamedKey::ArrowRight) if self.sample_count == 1 => {
+                    self.sample_count = self.max_sample_count;
+                    self.rebuild_bundle = true;
                 }
                 _ => {}
             },
@@ -322,7 +318,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "msaa-line",
     image_path: "/examples/features/src/msaa_line/screenshot.png",

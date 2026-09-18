@@ -1,5 +1,5 @@
 use wgpu::util::DeviceExt;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{apply, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.extend([DRAW, DRAW_INDEXED]);
@@ -40,7 +40,7 @@ pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
 // buffer [3, 4, 5, 0, 1, 2]. This also swaps the resulting pixel colors.
 //
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -64,7 +64,7 @@ static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
         .await;
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static DRAW_INDEXED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()

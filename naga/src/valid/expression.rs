@@ -6,6 +6,9 @@ use crate::{
     proc::{IndexableLengthError, ResolveError},
 };
 
+#[cfg(test)]
+use alloc::boxed::Box;
+
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum ExpressionError {
@@ -520,6 +523,9 @@ impl super::Validator {
             E::Constant(_) | E::Override(_) => ShaderStages::all(),
             E::ZeroValue(ty) => {
                 if !mod_info[ty].contains(TypeFlags::CONSTRUCTIBLE) {
+                    return Err(ExpressionError::InvalidZeroValue(ty));
+                }
+                if matches!(module.types[ty].inner, crate::TypeInner::RayQuery { .. }) {
                     return Err(ExpressionError::InvalidZeroValue(ty));
                 }
                 ShaderStages::all()
@@ -1487,7 +1493,7 @@ pub const fn check_literal_value(literal: crate::Literal) -> Result<(), LiteralE
 fn validate_with_expression(
     expr: crate::Expression,
     caps: super::Capabilities,
-) -> Result<ModuleInfo, crate::span::WithSpan<super::ValidationError>> {
+) -> Result<ModuleInfo, Box<crate::span::WithSpan<super::ValidationError>>> {
     use crate::span::Span;
 
     let mut function = crate::Function::default();
@@ -1510,7 +1516,7 @@ fn validate_with_expression(
 fn validate_with_const_expression(
     expr: crate::Expression,
     caps: super::Capabilities,
-) -> Result<ModuleInfo, crate::span::WithSpan<super::ValidationError>> {
+) -> Result<ModuleInfo, Box<crate::span::WithSpan<super::ValidationError>>> {
     use crate::span::Span;
 
     let mut module = crate::Module::default();

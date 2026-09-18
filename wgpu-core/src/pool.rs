@@ -2,7 +2,7 @@ use alloc::sync::{Arc, Weak};
 use core::hash::Hash;
 
 use hashbrown::{hash_map::Entry, HashMap};
-use once_cell::sync::OnceCell;
+use wgpu_sync::OnceCell;
 
 use crate::lock::{rank, Mutex};
 use crate::FastHashMap;

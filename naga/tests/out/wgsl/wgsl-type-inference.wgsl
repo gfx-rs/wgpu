@@ -4,7 +4,7 @@ const g4_: vec4<i32> = vec4<i32>();
 const g5_: vec4<i32> = vec4(1i);
 const g6_: mat2x2<f32> = mat2x2<f32>(vec2<f32>(0f, 0f), vec2<f32>(0f, 0f));
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     var g0x: i32 = 1i;
     var g2x: f32 = 1f;

@@ -1,17 +1,11 @@
 name: Shaders
 
 on:
-  push:
-    branches-ignore: [
-        # Renovate branches are always PRs, so they will be covered
-        # by the pull_request event.
-        "renovate/**",
-        # Branches with the `gh-readonly-queue` prefix are used by the
-        # merge queue, so they are already covered by the `merge_group` event.
-        "gh-readonly-queue/**",
-      ]
   pull_request:
-  merge_group:
+  # Runs on `trunk` to save the build caches that pull requests read.
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 # Every time a PR is pushed to, cancel any previous jobs. This
 # makes us behave nicer to github and get faster turnaround times
@@ -24,8 +18,11 @@ jobs:
   naga-validate-windows:
     name: "Validate: HLSL"
     runs-on: windows-latest
+    permissions: {}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Debug symbols to `line-tables-only`
         shell: bash
@@ -37,7 +34,7 @@ jobs:
             debug = "line-tables-only"
           EOF
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
@@ -55,7 +52,7 @@ jobs:
         shell: powershell
 
       - name: Setup DXC
-        uses: ./.github/actions/install-dxc
+        uses: $/.github/actions/install-dxc
 
       - name: Validate
         shell: bash
@@ -71,8 +68,11 @@ jobs:
   naga-validate-macos:
     name: "Validate: MSL"
     runs-on: macos-26
+    permissions: {}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Debug symbols to line-tables-only
         shell: bash
@@ -84,7 +84,7 @@ jobs:
             debug = "line-tables-only"
           EOF
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
@@ -101,11 +101,14 @@ jobs:
   naga-validate-linux:
     name: "Validate: SPIR-V/GLSL/DOT/WGSL"
     runs-on: ubuntu-24.04
+    permissions: {}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Vulkan SDK
-        uses: ./.github/actions/install-vulkan-sdk
+        uses: $/.github/actions/install-vulkan-sdk
 
       - name: Install Graphviz
         run: sudo apt-get install graphviz
@@ -120,7 +123,7 @@ jobs:
             debug = "line-tables-only"
           EOF
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}

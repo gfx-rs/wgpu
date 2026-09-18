@@ -1,7 +1,6 @@
 [package]
 name = "wgpu-benchmark"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "wgpu benchmarking suite"
 homepage.workspace = true

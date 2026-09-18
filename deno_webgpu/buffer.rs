@@ -2,6 +2,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use deno_core::futures::channel::oneshot;
@@ -12,9 +13,9 @@ use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 use wgpu_core::device::HostMap as MapMode;
+use wgpu_core::resource::Labeled as _;
 
 use crate::error::GPUGenericError;
-use crate::Instance;
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
@@ -36,7 +37,10 @@ pub enum BufferError {
   Canceled(#[from] oneshot::Canceled),
   #[class("DOMExceptionOperationError")]
   #[error(transparent)]
-  Access(#[from] wgpu_core::resource::BufferAccessError),
+  Access(wgpu_core::resource::BufferAccessError),
+  #[class("DOMExceptionAbortError")]
+  #[error("{0}")]
+  Aborted(&'static str),
   #[class("DOMExceptionOperationError")]
   #[error("{0}")]
   Operation(&'static str),
@@ -45,28 +49,27 @@ pub enum BufferError {
   Other(#[from] JsErrorBox),
 }
 
+impl From<wgpu_core::resource::BufferAccessError> for BufferError {
+  fn from(err: wgpu_core::resource::BufferAccessError) -> Self {
+    match err {
+      wgpu_core::resource::BufferAccessError::Device(
+        wgpu_core::device::DeviceError::Lost,
+      ) => BufferError::Aborted("Device lost"),
+      err => BufferError::Access(err),
+    }
+  }
+}
+
 pub struct GPUBuffer {
-  pub instance: Instance,
-  pub error_handler: super::error::ErrorHandler,
+  pub wgpu_buffer: Arc<wgpu_core::resource::Buffer>,
+  pub wgpu_device: Arc<wgpu_core::device::Device>,
 
-  pub id: wgpu_core::id::BufferId,
-  pub device: wgpu_core::id::DeviceId,
-
-  pub label: String,
-
-  pub size: u64,
   pub usage: u32,
 
   pub map_state: RefCell<&'static str>,
   pub map_mode: RefCell<Option<MapMode>>,
 
   pub mapped_js_buffers: RefCell<Vec<v8::Global<v8::ArrayBuffer>>>,
-}
-
-impl Drop for GPUBuffer {
-  fn drop(&mut self) {
-    self.instance.buffer_drop(self.id);
-  }
 }
 
 impl WebIdlInterfaceConverter for GPUBuffer {
@@ -90,7 +93,7 @@ impl GPUBuffer {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_buffer.label().to_string()
   }
   #[setter]
   #[string]
@@ -101,7 +104,7 @@ impl GPUBuffer {
   #[getter]
   #[number]
   fn size(&self) -> u64 {
-    self.size
+    self.wgpu_buffer.size()
   }
   #[getter]
   fn usage(&self) -> u32 {
@@ -151,23 +154,14 @@ impl GPUBuffer {
         sender.send(status).unwrap();
       });
 
-      let err = self
-        .instance
-        .buffer_map_async(
-          self.id,
-          offset,
-          size,
-          wgpu_core::resource::BufferMapOperation {
-            host: mode,
-            callback: Some(callback),
-          },
-        )
-        .err();
-
-      if err.is_some() {
-        self.error_handler.push_error(err);
-        return Err(BufferError::Operation("validation error occurred"));
-      }
+      self.wgpu_buffer.map_async(
+        offset,
+        size,
+        wgpu_core::resource::BufferMapOperation {
+          host: mode,
+          callback: Some(callback),
+        },
+      );
     }
 
     let done = Rc::new(RefCell::new(false));
@@ -176,8 +170,8 @@ impl GPUBuffer {
       while !*done.borrow() {
         {
           self
-            .instance
-            .device_poll(self.device, wgpu_types::PollType::wait_indefinitely())
+            .wgpu_device
+            .poll(wgpu_types::PollType::wait_indefinitely())
             .unwrap();
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -207,8 +201,8 @@ impl GPUBuffer {
     #[webidl] size: Option<u64>,
   ) -> Result<v8::Local<'s, v8::ArrayBuffer>, BufferError> {
     let (slice_pointer, range_size) = self
-      .instance
-      .buffer_get_mapped_range(self.id, offset, size)
+      .wgpu_buffer
+      .get_mapped_range(offset, size)
       .map_err(BufferError::Access)?;
 
     let mode = self.map_mode.borrow();
@@ -260,10 +254,7 @@ impl GPUBuffer {
       ab.detach(None);
     }
 
-    self
-      .instance
-      .buffer_unmap(self.id)
-      .map_err(BufferError::Access)?;
+    self.wgpu_buffer.unmap();
 
     *self.map_state.borrow_mut() = "unmapped";
 
@@ -273,6 +264,6 @@ impl GPUBuffer {
   #[fast]
   #[undefined]
   fn destroy(&self) {
-    self.instance.buffer_destroy(self.id);
+    self.wgpu_buffer.destroy();
   }
 }

@@ -27,8 +27,8 @@
 //!
 //! Otherwise, `wgpu-core` uses the [`vanilla`] module's locks.
 //!
-//! [`Mutex`]: parking_lot::Mutex
-//! [`RwLock`]: parking_lot::RwLock
+//! [`Mutex`]: wgpu_sync::Mutex
+//! [`RwLock`]: wgpu_sync::RwLock
 //! [`SnatchLock`]: crate::snatch::SnatchLock
 
 pub mod rank;

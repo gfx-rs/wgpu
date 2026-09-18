@@ -1,6 +1,6 @@
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var tex: texture_external;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var samp: sampler;
 
 fn test(t: texture_external) -> vec4<f32> {
@@ -24,19 +24,19 @@ fn test(t: texture_external) -> vec4<f32> {
     return (((_e16 + _e17) + _e19) + vec2<f32>(_e21).xyxy);
 }
 
-@fragment 
+@fragment
 fn fragment_main() -> @location(0) vec4<f32> {
     let _e1 = test(tex);
     return _e1;
 }
 
-@vertex 
+@vertex
 fn vertex_main() -> @builtin(position) vec4<f32> {
     let _e1 = test(tex);
     return _e1;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn compute_main() {
     let _e1 = test(tex);
     return;

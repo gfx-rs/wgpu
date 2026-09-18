@@ -1,6 +1,7 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use deno_core::cppgc::Ptr;
 use deno_core::v8;
@@ -327,12 +328,12 @@ pub(crate) enum GPUPipelineLayoutOrGPUAutoLayoutMode {
 }
 
 impl From<GPUPipelineLayoutOrGPUAutoLayoutMode>
-  for Option<wgpu_core::id::PipelineLayoutId>
+  for Option<Arc<wgpu_core::binding_model::PipelineLayout>>
 {
   fn from(value: GPUPipelineLayoutOrGPUAutoLayoutMode) -> Self {
     match value {
       GPUPipelineLayoutOrGPUAutoLayoutMode::PipelineLayout(layout) => {
-        Some(layout.id)
+        Some(layout.wgpu_pipeline_layout.clone())
       }
       GPUPipelineLayoutOrGPUAutoLayoutMode::AutoLayoutMode(
         GPUAutoLayoutMode::Auto,
@@ -474,14 +475,10 @@ impl<'a> WebIdlConverter<'a> for GPUShaderStageFlags {
       },
     )?;
 
-    let flags =
-      wgpu_types::ShaderStages::from_bits(flags_value).ok_or_else(|| {
-        WebIdlError::other(
-          prefix,
-          context,
-          JsErrorBox::type_error("shader stage is not valid"),
-        )
-      })?;
+    let flags = wgpu_types::ShaderStages::from_internal_flags(
+      wgpu_types::ShaderStagesWebGPU::from_bits_retain(flags_value),
+      wgpu_types::ShaderStagesWGPU::empty(),
+    );
 
     Ok(GPUShaderStageFlags(flags))
   }

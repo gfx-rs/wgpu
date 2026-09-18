@@ -10,7 +10,7 @@ use core::{ffi, num::NonZeroU32, ptr, time::Duration};
 use std::time::Instant;
 
 use bytemuck::TransparentWrapper;
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 use windows::{
     core::Interface as _,
     Win32::{
@@ -462,6 +462,22 @@ impl super::Device {
         &self.present_queue
     }
 
+    /// Wraps an existing D3D12 resource as a texture.
+    ///
+    /// D3D12 resources are reference counted, so this is not a hand-off of
+    /// ownership: the reference passed in belongs to the returned texture and
+    /// is released when wgpu-hal destroys it, while any reference the caller
+    /// kept stays valid. `drop_callback` is therefore a notification rather
+    /// than a destructor -- it runs after that release, once wgpu is done with
+    /// the texture, which is the point at which an importer can let whoever
+    /// produced the resource reuse it.
+    ///
+    /// # Safety
+    ///
+    /// - `resource` must be a texture whose dimensions, format, mip level
+    ///   count and sample count are the ones described here.
+    /// - If `drop_callback` is [`Some`], the callback must be safe to run from
+    ///   whichever thread drops the texture.
     pub unsafe fn texture_from_raw(
         resource: Direct3D12::ID3D12Resource,
         format: wgt::TextureFormat,
@@ -469,6 +485,7 @@ impl super::Device {
         size: wgt::Extent3d,
         mip_level_count: u32,
         sample_count: u32,
+        drop_callback: Option<crate::DropCallback>,
     ) -> super::Texture {
         super::Texture {
             resource,
@@ -482,20 +499,33 @@ impl super::Device {
                 format.theoretical_memory_footprint(size),
             ),
             plane_slice_override: None,
+            _drop_guard: crate::DropGuard::from_option(drop_callback),
         }
     }
 
+    /// Wraps an existing D3D12 resource as a buffer.
+    ///
+    /// Ownership and `drop_callback` work exactly as they do for
+    /// [`texture_from_raw`](Self::texture_from_raw).
+    ///
+    /// # Safety
+    ///
+    /// - `resource` must be a buffer at least `size` bytes long.
+    /// - If `drop_callback` is [`Some`], the callback must be safe to run from
+    ///   whichever thread drops the buffer.
     pub unsafe fn buffer_from_raw(
         resource: Direct3D12::ID3D12Resource,
         size: wgt::BufferAddress,
+        drop_callback: Option<crate::DropCallback>,
     ) -> super::Buffer {
         super::Buffer {
             resource,
-            size,
+            allocated_size: size,
             allocation: suballocation::Allocation::none(
                 suballocation::AllocationType::Buffer,
                 size,
             ),
+            _drop_guard: crate::DropGuard::from_option(drop_callback),
         }
     }
 }
@@ -506,7 +536,7 @@ impl crate::Device for super::Device {
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,
-    ) -> Result<super::Buffer, crate::DeviceError> {
+    ) -> Result<(super::Buffer, wgt::BufferAddress), crate::DeviceError> {
         let mut desc = desc.clone();
 
         if desc.usage.contains(wgt::BufferUses::UNIFORM) {
@@ -520,11 +550,15 @@ impl crate::Device for super::Device {
 
         self.counters.buffers.add(1);
 
-        Ok(super::Buffer {
-            resource,
-            size: desc.size,
-            allocation,
-        })
+        Ok((
+            super::Buffer {
+                resource,
+                allocated_size: desc.size,
+                allocation,
+                _drop_guard: None,
+            },
+            desc.size,
+        ))
     }
 
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
@@ -604,6 +638,7 @@ impl crate::Device for super::Device {
             sample_count: desc.sample_count,
             allocation,
             plane_slice_override: None,
+            _drop_guard: None,
         })
     }
 
@@ -693,8 +728,12 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
-            handle_dsv_ro: if desc.usage.intersects(wgt::TextureUses::DEPTH_STENCIL_READ) {
-                let raw_desc = unsafe { view_desc.to_dsv(true) };
+            handle_dsv_wr: if desc.format.is_combined_depth_stencil_format()
+                && desc
+                    .usage
+                    .contains(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_READ)
+            {
+                let raw_desc = unsafe { view_desc.to_dsv(false, true) };
                 let handle = self.dsv_pool.lock().alloc_handle()?;
                 unsafe {
                     self.raw
@@ -704,8 +743,40 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
-            handle_dsv_rw: if desc.usage.intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE) {
-                let raw_desc = unsafe { view_desc.to_dsv(false) };
+            handle_dsv_rw: if desc.format.is_combined_depth_stencil_format()
+                && desc
+                    .usage
+                    .contains(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_WRITE)
+            {
+                let raw_desc = unsafe { view_desc.to_dsv(true, false) };
+                let handle = self.dsv_pool.lock().alloc_handle()?;
+                unsafe {
+                    self.raw
+                        .CreateDepthStencilView(&texture.resource, Some(&raw_desc), handle.raw)
+                };
+                Some(handle)
+            } else {
+                None
+            },
+            handle_dsv_ww: if desc
+                .usage
+                .intersects(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE)
+            {
+                let raw_desc = unsafe { view_desc.to_dsv(false, false) };
+                let handle = self.dsv_pool.lock().alloc_handle()?;
+                unsafe {
+                    self.raw
+                        .CreateDepthStencilView(&texture.resource, Some(&raw_desc), handle.raw)
+                };
+                Some(handle)
+            } else {
+                None
+            },
+            handle_dsv_rr: if desc
+                .usage
+                .intersects(wgt::TextureUses::DEPTH_READ | wgt::TextureUses::STENCIL_READ)
+            {
+                let raw_desc = unsafe { view_desc.to_dsv(true, true) };
                 let handle = self.dsv_pool.lock().alloc_handle()?;
                 unsafe {
                     self.raw
@@ -731,12 +802,22 @@ impl crate::Device for super::Device {
         if let Some(handle) = view.handle_rtv {
             self.rtv_pool.lock().free_handle(handle);
         }
-        if view.handle_dsv_ro.is_some() || view.handle_dsv_rw.is_some() {
+        if view.handle_dsv_rr.is_some()
+            || view.handle_dsv_wr.is_some()
+            || view.handle_dsv_rw.is_some()
+            || view.handle_dsv_ww.is_some()
+        {
             let mut pool = self.dsv_pool.lock();
-            if let Some(handle) = view.handle_dsv_ro {
+            if let Some(handle) = view.handle_dsv_rr {
+                pool.free_handle(handle);
+            }
+            if let Some(handle) = view.handle_dsv_wr {
                 pool.free_handle(handle);
             }
             if let Some(handle) = view.handle_dsv_rw {
+                pool.free_handle(handle);
+            }
+            if let Some(handle) = view.handle_dsv_ww {
                 pool.free_handle(handle);
             }
         }
@@ -774,7 +855,9 @@ impl crate::Device for super::Device {
             MipLODBias: 0f32,
             MaxAnisotropy: desc.anisotropy_clamp as u32,
 
-            ComparisonFunc: conv::map_comparison(desc.compare.unwrap_or_default()),
+            ComparisonFunc: desc
+                .compare
+                .map_or(Direct3D12::D3D12_COMPARISON_FUNC_NONE, conv::map_comparison),
             BorderColor: border_color,
             MinLOD: desc.lod_clamp.start,
             MaxLOD: desc.lod_clamp.end,
@@ -1547,7 +1630,7 @@ impl crate::Device for super::Device {
                     let end = start + entry.count as usize;
                     for data in &desc.buffers[start..end] {
                         let gpu_address = data.resolve_address();
-                        let mut size = data.resolve_size().try_into().unwrap();
+                        let mut size = data.size.get().try_into().unwrap();
 
                         if has_dynamic_offset {
                             match ty {
@@ -1559,8 +1642,13 @@ impl crate::Device for super::Device {
                                     ));
                                     continue;
                                 }
+                                // TODO(https://github.com/gfx-rs/wgpu/issues/9865): There is not currently
+                                // any mechanism to check that shader accesses are within the valid range
+                                // of a dynamic offset binding, and while using the actual size of the buffer
+                                // here would be slightly closer to being correct, it isn't sufficient
+                                // (because the upper bound moves with the dynamic offset).
                                 wgt::BufferBindingType::Storage { .. } => {
-                                    size = (data.buffer.size - data.offset) as u32;
+                                    size = (data.buffer.allocated_size - data.offset) as u32;
                                     dynamic_buffers.push(super::DynamicBuffer::Storage);
                                 }
                             }
@@ -1741,7 +1829,7 @@ impl crate::Device for super::Device {
                         cpu_views.as_mut().unwrap().stage.push(plane_handle.raw);
                     }
                     let gpu_address = external_texture.params.resolve_address();
-                    let size = external_texture.params.resolve_size() as u32;
+                    let size = crate::EXTERNAL_TEXTURE_PARAMS_SIZE as u32;
                     let inner = cpu_views.as_mut().unwrap();
                     let cpu_index = inner.stage.len() as u32;
                     let params_handle = desc.layout.cpu_heap_views.as_ref().unwrap().at(cpu_index);
@@ -2088,6 +2176,14 @@ impl crate::Device for super::Device {
                         }
                     };
                     for attribute in vbuf.attributes {
+                        if attribute.format == nt::VertexFormat::Snorm10_10_10_2 {
+                            // Avoid `map_vertex_format` panic.
+                            // https://github.com/gfx-rs/wgpu/issues/10216
+                            return Err(crate::PipelineError::Linkage(
+                                wgt::ShaderStages::VERTEX,
+                                "HLSL: snorm-10-10-10-2 vertex format is not supported".into(),
+                            ));
+                        }
                         input_element_descs.push(Direct3D12::D3D12_INPUT_ELEMENT_DESC {
                             SemanticName: windows::core::PCSTR(NAGA_LOCATION_SEMANTIC.as_ptr()),
                             SemanticIndex: attribute.shader_location,
@@ -2644,7 +2740,7 @@ impl crate::Device for super::Device {
         Some(self.mem_allocator.generate_report())
     }
 
-    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {
         const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
         let temp = Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC {
             Transform: instance.transform,
@@ -2655,7 +2751,7 @@ impl crate::Device for super::Device {
 
         wgt::bytemuck_wrapper!(unsafe struct Desc(Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC));
 
-        bytemuck::bytes_of(&Desc::wrap(temp)).to_vec()
+        to_extend.extend_from_slice(bytemuck::bytes_of(&Desc::wrap(temp)))
     }
 
     fn check_if_oom(&self) -> Result<(), crate::DeviceError> {

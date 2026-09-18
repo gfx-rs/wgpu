@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
 
 use gpu_allocator::{d3d12::AllocationCreateDesc, MemoryLocation};
-use parking_lot::Mutex;
+use wgpu_sync::Mutex;
 use windows::Win32::Graphics::{Direct3D12, Dxgi};
 
 use crate::{

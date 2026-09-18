@@ -65,8 +65,13 @@ struct Example {
 
 impl Example {
     fn generate_matrix(aspect_ratio: f32) -> glam::Mat4 {
-        let projection = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect_ratio, 1.0, 1000.0);
-        let view = glam::Mat4::look_at_rh(
+        let projection = glam::camera::rh::proj::directx::perspective(
+            consts::FRAC_PI_4,
+            aspect_ratio,
+            1.0,
+            1000.0,
+        );
+        let view = glam::camera::rh::view::look_at_mat4(
             glam::Vec3::new(0f32, 0.0, 10.0),
             glam::Vec3::new(0f32, 50.0, 0.0),
             glam::Vec3::Z,
@@ -133,6 +138,7 @@ impl Example {
                     mip_level_count: Some(1),
                     base_array_layer: 0,
                     array_layer_count: None,
+                    swizzle: wgpu::TextureComponentSwizzle::default(),
                 })
             })
             .collect::<Vec<_>>();
@@ -511,7 +517,7 @@ pub fn main() {
 }
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "mipmap",
     image_path: "/examples/features/src/mipmap/screenshot.png",
@@ -524,7 +530,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
 };
 
 #[cfg(test)]
-#[wgpu_test::gpu_test]
+#[wgpu_test::apply(wgpu_test::gpu_test!)]
 pub static TEST_QUERY: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "mipmap-query",
     image_path: "/examples/features/src/mipmap/screenshot_query.png",

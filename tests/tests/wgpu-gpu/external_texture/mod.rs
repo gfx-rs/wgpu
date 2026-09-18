@@ -1,6 +1,6 @@
 use approx::assert_abs_diff_eq;
 use wgpu_test::{
-    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -13,6 +13,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         EXTERNAL_TEXTURE_SAMPLE,
         EXTERNAL_TEXTURE_SAMPLE_YUV,
         EXTERNAL_TEXTURE_SAMPLE_TRANSFORM,
+        EXTERNAL_TEXTURE_FROM_VIEW_ZERO_INIT_AFTER_DISCARD,
+        EXTERNAL_TEXTURE_ZERO_INIT_AFTER_DISCARD,
     ]);
 }
 
@@ -164,6 +166,59 @@ fn create_texture_and_view(
         );
     }
     texture.create_view(&wgpu::TextureViewDescriptor::default())
+}
+
+/// Helper function to create a 2x2 `Rgba8Unorm` texture whose contents are a non-zero
+/// sentinel in memory, but which is nonetheless uninitialized as far as `wgpu` is
+/// concerned, and return a view of it.
+///
+/// The texture is cleared to a non-zero sentinel and then discarded, rather than
+/// merely left freshly allocated: discarding returns it to the uninitialized state
+/// while leaving the sentinel in memory, so a missing init action is observable
+/// without relying on the allocator to hand back dirty pages.
+fn create_discarded_texture_and_view(ctx: &TestingContext) -> wgpu::TextureView {
+    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 2,
+            height: 2,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    // Store the sentinel, then discard it in a second pass. A single
+    // clear-and-discard pass would let the backend elide the write.
+    for (load, store) in [
+        (wgpu::LoadOp::Clear(wgpu::Color::RED), wgpu::StoreOp::Store),
+        (wgpu::LoadOp::Load, wgpu::StoreOp::Discard),
+    ] {
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations { load, store },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+    }
+    ctx.queue.submit(Some(encoder.finish()));
+
+    view
 }
 
 /// Helper function to perform textureDimensions() and return the result.
@@ -412,7 +467,7 @@ fn get_samples(
 
 /// Tests that `textureDimensions()` returns the correct value for both external textures
 /// and texture views bound to an external texture binding.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_DIMENSIONS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -463,7 +518,7 @@ static EXTERNAL_TEXTURE_DIMENSIONS: GpuTestConfiguration = GpuTestConfiguration:
 
 /// Tests that `textureLoad()` returns the correct values for both RGBA format external
 /// textures and texture views bound to an external texture binding.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_LOAD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -514,7 +569,7 @@ static EXTERNAL_TEXTURE_LOAD: GpuTestConfiguration = GpuTestConfiguration::new()
 
 /// Tests that `textureLoad()` returns the correct values for YUV format external
 /// textures.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_LOAD_YUV: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -585,7 +640,7 @@ static EXTERNAL_TEXTURE_LOAD_YUV: GpuTestConfiguration = GpuTestConfiguration::n
 
 /// Tests that `textureLoad()` returns the correct values for external textures with
 /// various load transforms.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_LOAD_TRANSFORM: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -761,7 +816,7 @@ static EXTERNAL_TEXTURE_LOAD_TRANSFORM: GpuTestConfiguration = GpuTestConfigurat
     });
 
 /// Tests that `textureLoad()` for an invalid address returns an allowed value.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_LOAD_INVALID_ADDRESS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -819,7 +874,7 @@ static EXTERNAL_TEXTURE_LOAD_INVALID_ADDRESS: GpuTestConfiguration = GpuTestConf
 
 /// Tests that `textureSampleBaseClampToEdge()` returns the correct values for both RGBA
 /// format external textures and texture views bound to an external texture binding.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_SAMPLE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -870,7 +925,7 @@ static EXTERNAL_TEXTURE_SAMPLE: GpuTestConfiguration = GpuTestConfiguration::new
 
 /// Tests that `textureSampleBaseClampToEdge()` returns the correct values for YUV
 /// format external textures.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_SAMPLE_YUV: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -946,7 +1001,7 @@ static EXTERNAL_TEXTURE_SAMPLE_YUV: GpuTestConfiguration = GpuTestConfiguration:
 
 /// Tests that `textureSampleBaseClampToEdge()` returns the correct values for external
 /// textures with various sample transforms.
-#[gpu_test]
+#[apply(gpu_test!)]
 static EXTERNAL_TEXTURE_SAMPLE_TRANSFORM: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
@@ -1124,4 +1179,71 @@ static EXTERNAL_TEXTURE_SAMPLE_TRANSFORM: GpuTestConfiguration = GpuTestConfigur
             wgpu::BindingResource::ExternalTexture(&crop_tex),
         );
         assert_eq!(&samples, &[RED_F32, GREEN_F32, BLUE_F32, YELLOW_F32]);
+    });
+
+/// Tests that a `TextureView` bound to an `external_texture` binding point reads as
+/// zero when the underlying texture is uninitialized.
+///
+/// This path must register the same `NeedsInitializedMemory` init action as the
+/// ordinary sampled-texture path. Without it, nothing clears the texture before the
+/// shader samples plane 0, and the load returns whatever the allocation held.
+#[apply(gpu_test!)]
+static EXTERNAL_TEXTURE_FROM_VIEW_ZERO_INIT_AFTER_DISCARD: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .features(wgpu::Features::EXTERNAL_TEXTURE),
+        )
+        .run_async(|ctx| async move {
+            let view = create_discarded_texture_and_view(&ctx);
+
+            let loads = get_loads(
+                &ctx,
+                &[[0, 0], [1, 0], [0, 1], [1, 1]],
+                wgpu::BindingResource::TextureView(&view),
+            );
+            assert_eq!(&loads, &[TRANSPARENT_BLACK_F32; 4]);
+        });
+
+/// Tests that an `ExternalTexture` reads as zero when the texture underlying one of
+/// its planes is uninitialized.
+///
+/// The same reasoning as [`EXTERNAL_TEXTURE_FROM_VIEW_ZERO_INIT_AFTER_DISCARD`]
+/// applies, but by way of `BindingResource::ExternalTexture` rather than a
+/// `TextureView` bound to the same binding point. The planes are ordinary textures
+/// owned by the caller, so they carry the same initialization state as any other
+/// texture; `Device::create_external_texture` does not write to them.
+#[apply(gpu_test!)]
+static EXTERNAL_TEXTURE_ZERO_INIT_AFTER_DISCARD: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::EXTERNAL_TEXTURE),
+    )
+    .run_async(|ctx| async move {
+        let view = create_discarded_texture_and_view(&ctx);
+
+        let external_texture = ctx.device.create_external_texture(
+            &wgpu::ExternalTextureDescriptor {
+                label: None,
+                width: 2,
+                height: 2,
+                format: wgpu::ExternalTextureFormat::Rgba,
+                yuv_conversion_matrix: IDENTITY_YUV_CONVERSION_MATRIX,
+                gamut_conversion_matrix: IDENTITY_GAMUT_CONVERSION_MATRIX,
+                src_transfer_function: Default::default(),
+                dst_transfer_function: Default::default(),
+                sample_transform: IDENTITY_SAMPLE_TRANSFORM,
+                load_transform: IDENTITY_LOAD_TRANSFORM,
+            },
+            &[&view],
+        );
+
+        let loads = get_loads(
+            &ctx,
+            &[[0, 0], [1, 0], [0, 1], [1, 1]],
+            wgpu::BindingResource::ExternalTexture(&external_texture),
+        );
+        assert_eq!(&loads, &[TRANSPARENT_BLACK_F32; 4]);
     });

@@ -1,30 +1,22 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+use std::sync::Arc;
+
 use deno_core::cppgc::Ptr;
 use deno_core::op2;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use indexmap::IndexMap;
+use wgpu_core::resource::Labeled as _;
 
 use crate::bind_group_layout::GPUBindGroupLayout;
 use crate::error::GPUGenericError;
 use crate::shader::GPUShaderModule;
 use crate::webidl::GPUPipelineLayoutOrGPUAutoLayoutMode;
-use crate::Instance;
 
 pub struct GPUComputePipeline {
-  pub instance: Instance,
-  pub error_handler: super::error::ErrorHandler,
-
-  pub id: wgpu_core::id::ComputePipelineId,
-  pub label: String,
-}
-
-impl Drop for GPUComputePipeline {
-  fn drop(&mut self) {
-    self.instance.compute_pipeline_drop(self.id);
-  }
+  pub wgpu_compute_pipeline: Arc<wgpu_core::pipeline::ComputePipeline>,
 }
 
 impl WebIdlInterfaceConverter for GPUComputePipeline {
@@ -48,7 +40,7 @@ impl GPUComputePipeline {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_compute_pipeline.label().to_string()
   }
   #[setter]
   #[string]
@@ -58,17 +50,12 @@ impl GPUComputePipeline {
 
   #[cppgc]
   fn get_bind_group_layout(&self, #[webidl] index: u32) -> GPUBindGroupLayout {
-    let (id, err) = self
-      .instance
-      .compute_pipeline_get_bind_group_layout(self.id, index, None);
-
-    self.error_handler.push_error(err);
+    let wgpu_bind_group_layout =
+      self.wgpu_compute_pipeline.get_bind_group_layout(index);
 
     // TODO(wgpu): needs to support retrieving the label
     GPUBindGroupLayout {
-      instance: self.instance.clone(),
-      id,
-      label: "".to_string(),
+      wgpu_bind_group_layout,
     }
   }
 }

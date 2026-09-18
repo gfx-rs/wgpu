@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use core::fmt;
+use core::mem::ManuallyDrop;
 use core::ops::RangeBounds;
 
 use crate::{api::DeferredCommandBufferActions, *};
@@ -70,7 +71,7 @@ pub struct QueueWriteBufferView {
     queue: Queue,
     buffer: Buffer,
     offset: BufferAddress,
-    inner: dispatch::DispatchQueueWriteBuffer,
+    inner: ManuallyDrop<dispatch::DispatchQueueWriteBuffer>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
@@ -96,7 +97,10 @@ impl Drop for QueueWriteBufferView {
     fn drop(&mut self) {
         self.queue
             .inner
-            .write_staging_buffer(&self.buffer.inner, self.offset, &self.inner);
+            .write_staging_buffer(&self.buffer.inner, self.offset, unsafe {
+                // SAFETY: We are in drop
+                ManuallyDrop::take(&mut self.inner)
+            });
     }
 }
 
@@ -225,7 +229,7 @@ impl Queue {
             queue: self.clone(),
             buffer: buffer.clone(),
             offset,
-            inner: staging_buffer,
+            inner: ManuallyDrop::new(staging_buffer),
         })
     }
 
@@ -361,7 +365,7 @@ impl Queue {
         &self,
     ) -> Option<impl core::ops::Deref<Target = A::Queue> + WasmNotSendSync> {
         let queue = self.inner.as_core_opt()?;
-        unsafe { queue.context.queue_as_hal::<A>(queue) }
+        unsafe { queue.as_hal::<A>() }
     }
 
     /// Schedule a surface texture to be presented on the owning surface.

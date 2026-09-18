@@ -21,12 +21,11 @@ use wgt::{
 };
 
 pub(crate) mod bgl;
-pub mod global;
 mod life;
 pub mod queue;
 pub mod ray_tracing;
 pub mod resource;
-mod surface_config;
+pub(crate) mod surface_config;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 pub use {life::WaitIdleError, resource::Device};
@@ -39,6 +38,7 @@ pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 pub(crate) const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Invalid";
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
+pub type QueueDescriptor<'a> = wgt::QueueDescriptor<Label<'a>>;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -173,6 +173,7 @@ impl RenderPassContext {
 
 pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
 
+#[must_use]
 #[derive(Default)]
 pub struct UserClosures {
     pub mappings: Vec<BufferMapPendingClosure>,
@@ -182,7 +183,7 @@ pub struct UserClosures {
 }
 
 impl UserClosures {
-    fn extend(&mut self, other: Self) {
+    pub(crate) fn extend(&mut self, other: Self) {
         self.mappings.extend(other.mappings);
         self.blas_compact_ready.extend(other.blas_compact_ready);
         self.submissions.extend(other.submissions);
@@ -190,7 +191,7 @@ impl UserClosures {
             .extend(other.device_lost_invocations);
     }
 
-    fn fire(self) {
+    pub(crate) fn fire(self) {
         // Note: this logic is specifically moved out of `handle_mapping()` in order to
         // have nothing locked by the time we execute users callback code.
 
