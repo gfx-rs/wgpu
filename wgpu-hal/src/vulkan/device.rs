@@ -12,7 +12,7 @@ use ash::{ext, vk};
 use hashbrown::hash_map::Entry;
 use wgpu_sync::{Mutex, RwLock};
 
-use super::{conv, descriptor::DescriptorCounts, RawTlasInstance};
+use super::{RawTlasInstance, conv, descriptor::DescriptorCounts};
 use crate::TlasInstance;
 
 impl super::DeviceShared {
@@ -391,6 +391,41 @@ impl super::Device {
         }
 
         let original_format = self.shared.private_caps.map_texture_format(desc.format);
+        let mut vk_usage = conv::map_texture_usage(desc.usage);
+        if tiling == vk::ImageTiling::OPTIMAL
+            && !vk_usage.intersects(
+                vk::ImageUsageFlags::SAMPLED
+                    | vk::ImageUsageFlags::STORAGE
+                    | vk::ImageUsageFlags::COLOR_ATTACHMENT
+                    | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+                    | vk::ImageUsageFlags::TRANSIENT_ATTACHMENT
+                    | vk::ImageUsageFlags::INPUT_ATTACHMENT,
+            )
+        {
+            // VUID-VkImageViewCreateInfo-image-04441 requires an image to have a
+            // view-compatible usage for vkCreateImageView to succeed. A transfer-only
+            // texture would otherwise fail validation as soon as a view is created,
+            // so add a supported view-compatible usage bit.
+            let props = unsafe {
+                self.shared
+                    .instance
+                    .raw
+                    .get_physical_device_format_properties(
+                        self.shared.physical_device,
+                        original_format,
+                    )
+            };
+            let features = props.optimal_tiling_features;
+            if features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE) {
+                vk_usage |= vk::ImageUsageFlags::SAMPLED;
+            } else if features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE) {
+                vk_usage |= vk::ImageUsageFlags::STORAGE;
+            } else if features.contains(vk::FormatFeatureFlags::COLOR_ATTACHMENT) {
+                vk_usage |= vk::ImageUsageFlags::COLOR_ATTACHMENT;
+            } else if features.contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT) {
+                vk_usage |= vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
+            }
+        }
         let mut vk_view_formats = vec![];
         if !desc.view_formats.is_empty() {
             raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
@@ -418,7 +453,7 @@ impl super::Device {
             .array_layers(desc.array_layer_count())
             .samples(vk::SampleCountFlags::from_raw(desc.sample_count))
             .tiling(tiling)
-            .usage(conv::map_texture_usage(desc.usage))
+            .usage(vk_usage)
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .initial_layout(vk::ImageLayout::UNDEFINED);
 
