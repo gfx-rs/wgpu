@@ -917,11 +917,20 @@ unsafe impl Sync for CommandBuffer {}
 #[derive(Debug)]
 pub struct Buffer {
     resource: Direct3D12::ID3D12Resource,
-    // While the allocation also has _a_ size, it may not
-    // be the same as the original size of the buffer,
-    // as the allocation size varies for assorted reasons.
-    size: wgt::BufferAddress,
+    /// The allocated size of the buffer.
+    ///
+    /// This may not be the same as the size the application requested.
+    //
+    // TODO(https://github.com/gfx-rs/wgpu/issues/9865): Consider removing this.
+    // The usage associated with the TODO is currently the only usage. Computing
+    // things from the allocated buffer size is usually incorrect.
+    allocated_size: wgt::BufferAddress,
     allocation: suballocation::Allocation,
+
+    // The `_drop_guard` field must be the last field of this struct so it is
+    // dropped last, after this buffer's reference to `resource` is released.
+    // Do not add new fields after it.
+    _drop_guard: Option<crate::DropGuard>,
 }
 
 impl Buffer {
@@ -935,14 +944,7 @@ unsafe impl Sync for Buffer {}
 
 impl crate::DynBuffer for Buffer {}
 
-impl crate::BufferBinding<'_, Buffer> {
-    fn resolve_size(&self) -> wgt::BufferAddress {
-        match self.size {
-            Some(size) => size.get(),
-            None => self.buffer.size - self.offset,
-        }
-    }
-
+impl<S> crate::BufferBinding<'_, Buffer, S> {
     // TODO: Return GPU handle directly?
     fn resolve_address(&self) -> wgt::BufferAddress {
         (unsafe { self.buffer.resource.GetGPUVirtualAddress() }) + self.offset
@@ -963,6 +965,11 @@ pub struct Texture {
     /// importers wrapping one plane of a multi-plane DXGI resource as a
     /// single-plane wgpu texture.
     plane_slice_override: Option<u32>,
+
+    // The `_drop_guard` field must be the last field of this struct so it is
+    // dropped last, after this texture's reference to `resource` is released.
+    // Do not add new fields after it.
+    _drop_guard: Option<crate::DropGuard>,
 }
 
 impl Texture {
@@ -1650,6 +1657,7 @@ impl crate::Surface for Surface {
                 sc.format.theoretical_memory_footprint(sc.size),
             ),
             plane_slice_override: None,
+            _drop_guard: None,
         };
         Ok(crate::AcquiredSurfaceTexture {
             texture,

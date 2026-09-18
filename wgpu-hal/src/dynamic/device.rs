@@ -21,7 +21,7 @@ pub trait DynDevice: DynResource {
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,
-    ) -> Result<Box<dyn DynBuffer>, DeviceError>;
+    ) -> Result<(Box<dyn DynBuffer>, wgt::BufferAddress), DeviceError>;
 
     unsafe fn destroy_buffer(&self, buffer: Box<dyn DynBuffer>);
     unsafe fn add_raw_buffer(&self, buffer: &dyn DynBuffer);
@@ -186,8 +186,9 @@ impl<D: Device + DynResource> DynDevice for D {
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,
-    ) -> Result<Box<dyn DynBuffer>, DeviceError> {
-        unsafe { D::create_buffer(self, desc) }.map(|b| -> Box<dyn DynBuffer> { Box::new(b) })
+    ) -> Result<(Box<dyn DynBuffer>, wgt::BufferAddress), DeviceError> {
+        unsafe { D::create_buffer(self, desc) }
+            .map(|(b, size)| -> (Box<dyn DynBuffer>, _) { (Box::new(b), size) })
     }
 
     unsafe fn destroy_buffer(&self, buffer: Box<dyn DynBuffer>) {

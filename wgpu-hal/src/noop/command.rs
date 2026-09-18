@@ -172,14 +172,14 @@ impl crate::CommandEncoder for CommandBuffer {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: crate::BufferBinding<'a, Buffer>,
+        binding: crate::BufferBinding<'a, Buffer, wgt::BufferAddress>,
         format: wgt::IndexFormat,
     ) {
     }
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: crate::BufferBinding<'a, Buffer>,
+        binding: crate::BufferBinding<'a, Buffer, wgt::BufferAddress>,
     ) {
     }
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {}

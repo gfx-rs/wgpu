@@ -300,7 +300,7 @@ impl<A: hal::Api> Example<A> {
             usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
         };
-        let staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
+        let (staging_buffer, _) = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
         unsafe {
             let mapping = device
                 .map_buffer(&staging_buffer, 0..staging_buffer_desc.size)
@@ -421,7 +421,7 @@ impl<A: hal::Api> Example<A> {
             memory_flags: hal::MemoryFlags::PREFER_COHERENT,
         };
         let global_buffer = unsafe {
-            let buffer = device.create_buffer(&global_buffer_desc).unwrap();
+            let (buffer, _) = device.create_buffer(&global_buffer_desc).unwrap();
             let mapping = device
                 .map_buffer(&buffer, 0..global_buffer_desc.size)
                 .unwrap();
@@ -446,7 +446,7 @@ impl<A: hal::Api> Example<A> {
             usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::UNIFORM,
             memory_flags: hal::MemoryFlags::PREFER_COHERENT,
         };
-        let local_buffer = unsafe { device.create_buffer(&local_buffer_desc).unwrap() };
+        let (local_buffer, _) = unsafe { device.create_buffer(&local_buffer_desc).unwrap() };
 
         let view_desc = hal::TextureViewDescriptor {
             label: None,
@@ -463,7 +463,7 @@ impl<A: hal::Api> Example<A> {
             let global_buffer_binding = hal::BufferBinding::new_unchecked(
                 &global_buffer,
                 0,
-                NonZeroU64::new(global_buffer_desc.size),
+                NonZeroU64::new(global_buffer_desc.size).unwrap(),
             );
             let texture_binding = hal::TextureBinding {
                 view: &texture_view,
@@ -503,7 +503,7 @@ impl<A: hal::Api> Example<A> {
             let local_buffer_binding = hal::BufferBinding::new_unchecked(
                 &local_buffer,
                 0,
-                wgpu_types::BufferSize::new(size_of::<Locals>() as _),
+                wgpu_types::BufferSize::new(size_of::<Locals>() as _).unwrap(),
             );
             let local_group_desc = hal::BindGroupDescriptor {
                 label: Some("local"),

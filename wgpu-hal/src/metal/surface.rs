@@ -257,7 +257,12 @@ impl crate::Surface for super::Surface {
         *self.extent.write() = config.extent;
 
         let render_layer = self.render_layer.lock();
-        let framebuffer_only = config.usage == wgt::TextureUses::COLOR_TARGET;
+        // Metal forbids creating alternate-format views of framebuffer-only textures.
+        let framebuffer_only = config.usage == wgt::TextureUses::COLOR_TARGET
+            && config
+                .view_formats
+                .iter()
+                .all(|format| *format == config.format);
         let display_sync = match config.present_mode {
             wgt::PresentMode::Fifo => true,
             wgt::PresentMode::Immediate => false,
@@ -278,9 +283,14 @@ impl crate::Surface for super::Surface {
         render_layer.setFramebufferOnly(framebuffer_only);
         // Opt into Metal EDR for the HDR color spaces (more display power, memory,
         // and bandwidth). The HDR spaces are exactly those `is_hdr()` classifies.
-        let wants_edr = config.color_space.is_hdr();
-        if wants_edr != render_layer.wantsExtendedDynamicRangeContent() {
-            render_layer.setWantsExtendedDynamicRangeContent(wants_edr);
+        //
+        // `wantsExtendedDynamicRangeContent` is iOS 16+. On older iOS calling it
+        // throws an unrecognized selector exception and the app aborts.
+        if available!(macos = 10.11, ios = 16.0, visionos = 1.0) {
+            let wants_edr = config.color_space.is_hdr();
+            if wants_edr != render_layer.wantsExtendedDynamicRangeContent() {
+                render_layer.setWantsExtendedDynamicRangeContent(wants_edr);
+            }
         }
 
         let colorspace_name: Option<&'static CFString> = match config.color_space {
