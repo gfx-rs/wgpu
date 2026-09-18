@@ -79,6 +79,7 @@ impl super::CommandEncoder {
                         tlas,
                         dependencies: Vec::new(),
                         max_intersection_idx: 0,
+                        required_intersection_types: Vec::new(),
                     });
                 }
 
@@ -236,6 +237,10 @@ pub(crate) fn build_acceleration_structures(
         let mut dependencies = Vec::new();
         let mut seen_dependencies = FastHashSet::<TrackerIndex>::default();
 
+        let mut required_intersection_types = Vec::new();
+        let mut seen_intersection_types =
+            FastHashSet::<crate::resource::TlasIntersectionType>::default();
+
         let mut instance_count = 0;
 
         let mut max_intersection_idx = 0;
@@ -302,6 +307,24 @@ pub(crate) fn build_acceleration_structures(
 
             instance_count += 1;
 
+            let intersection_ty = crate::resource::TlasIntersectionType {
+                index: instance.intersection_index,
+                required_intersection_ty: match blas.sizes {
+                    wgt::BlasGeometrySizeDescriptors::Triangles { .. } => {
+                        crate::pipeline::RayTracingIntersectionType::Triangle
+                    }
+                    wgt::BlasGeometrySizeDescriptors::AABBs { .. } => {
+                        crate::pipeline::RayTracingIntersectionType::AABB
+                    }
+                },
+            };
+
+            let new_intersection_ty = seen_intersection_types.insert(intersection_ty);
+
+            if new_intersection_ty {
+                required_intersection_types.push(intersection_ty);
+            }
+
             if is_new_dependency {
                 dependencies.push(blas);
             }
@@ -311,6 +334,7 @@ pub(crate) fn build_acceleration_structures(
             tlas: tlas.clone(),
             dependencies,
             max_intersection_idx,
+            required_intersection_types,
         });
 
         if instance_count > tlas.max_instance_count {
@@ -550,6 +574,8 @@ impl CommandBufferMutable {
                             .clone_from(&tlas_build.dependencies);
                         *tlas_build.tlas.max_intersection_index.write() =
                             tlas_build.max_intersection_idx;
+                        *tlas_build.tlas.required_intersection_types.write() =
+                            tlas_build.required_intersection_types.clone();
                     }
                 }
                 AsAction::BindTlas(tlas) => {
@@ -576,15 +602,50 @@ impl CommandBufferMutable {
                         blas.try_raw(snatch_guard)?;
                     }
                 }
-                AsAction::TraceTlas(tlas, intersection_len) => {
+                AsAction::TraceTlas(tlas, intersection_types) => {
                     let current_max = tlas.max_intersection_index.read();
 
-                    if *current_max >= *intersection_len {
+                    let max_intersection_len = u32::try_from(intersection_types.len())
+                        .expect("should be smaller than a u32");
+                    if *current_max >= max_intersection_len {
                         return Err(ValidateAsActionsError::TlasIntersectionInvalid(
                             tlas.error_ident(),
                             *current_max,
-                            *intersection_len,
+                            max_intersection_len,
                         ));
+                    }
+                    drop(current_max);
+
+                    let required_intersection_types = tlas.required_intersection_types.read();
+
+                    for intersection_ty in required_intersection_types.iter() {
+                        let Ok(index) = usize::try_from(intersection_ty.index) else {
+                            return Err(
+                                ValidateAsActionsError::TlasInstancesIntersectionIndicesDiffer(
+                                    tlas.error_ident(),
+                                    intersection_ty.required_intersection_ty,
+                                    intersection_ty.index,
+                                    None,
+                                ),
+                            );
+                        };
+                        match intersection_types.get(index) {
+                            Some(ty) => {
+                                if *ty != intersection_ty.required_intersection_ty {
+                                    return Err(ValidateAsActionsError::TlasInstancesIntersectionIndicesDiffer(tlas.error_ident(), intersection_ty.required_intersection_ty, intersection_ty.index, Some(*ty)));
+                                }
+                            }
+                            None => {
+                                return Err(
+                                    ValidateAsActionsError::TlasInstancesIntersectionIndicesDiffer(
+                                        tlas.error_ident(),
+                                        intersection_ty.required_intersection_ty,
+                                        intersection_ty.index,
+                                        None,
+                                    ),
+                                );
+                            }
+                        }
                     }
                 }
             }

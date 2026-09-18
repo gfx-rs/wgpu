@@ -201,6 +201,7 @@ define_lock_ranks! {
     rank TLAS_BUILT_INDEX "Tlas::built_index" followed by { }
     rank TLAS_DEPENDENCIES "Tlas::dependencies" followed by { }
     rank TLAS_MAX_INTERSECTION_IDX "Tlas::max_intersection_index" followed by { }
+    rank TLAS_REQUIRED_INTERSECTION_TYPES "Tlas::required_intersection_types" followed by { }
 
     #[cfg(test)]
     rank PAWN "pawn" followed by { ROOK, BISHOP }

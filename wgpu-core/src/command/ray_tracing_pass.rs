@@ -397,22 +397,17 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         // dropping `UsageScope`s is significant (even with the pool), we
         // add and then remove usage from a single usage scope.
 
-        let max_intersection_index = self
-            .pipeline
-            .as_ref()
-            .unwrap()
-            .shader_binding_data()?
-            .num_intersection_groups;
+        let intersection_types = self.pipeline.as_ref().unwrap().intersection_types()?;
 
         for bind_group in self.pass.binder.list_active() {
             self.intermediate_trackers
                 .set_and_remove_from_usage_scope_sparse(&mut self.pass.scope, &bind_group.used);
 
             for tlas in bind_group.used.acceleration_structures.into_iter() {
-                self.pass
-                    .base
-                    .as_actions
-                    .push(AsAction::TraceTlas(tlas.clone(), max_intersection_index));
+                self.pass.base.as_actions.push(AsAction::TraceTlas(
+                    tlas.clone(),
+                    intersection_types.to_vec(),
+                ));
             }
         }
 

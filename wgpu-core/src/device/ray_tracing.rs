@@ -351,6 +351,10 @@ impl Device {
             max_instance_count: desc.max_instances,
             tracking_data: TrackingData::new(self.tracker_indices.tlas_s.clone()),
             max_intersection_index: RwLock::new(rank::TLAS_MAX_INTERSECTION_IDX, 0),
+            required_intersection_types: RwLock::new(
+                rank::TLAS_REQUIRED_INTERSECTION_TYPES,
+                Vec::new(),
+            ),
         }))
     }
 
@@ -727,11 +731,12 @@ impl Device {
             })?
         };
 
-        let shader_modules = {
+        let (shader_modules, intersection_types) = {
             let mut shader_modules = Vec::new();
             shader_modules.push(desc.ray_generation.module);
             shader_modules.push(desc.miss.module);
             shader_modules.reserve(desc.intersections.len());
+            let mut intersection_types = Vec::with_capacity(desc.intersections.len());
             for intersection in &desc.intersections {
                 match intersection {
                     pipeline::RayTracingIntersectionDescriptor::Triangle {
@@ -742,10 +747,11 @@ impl Device {
                         if let Some(any) = any_hit {
                             shader_modules.push(any.module.clone());
                         }
+                        intersection_types.push(pipeline::RayTracingIntersectionType::Triangle);
                     }
                 }
             }
-            shader_modules
+            (shader_modules, intersection_types)
         };
 
         // Won't panic because `desc.intersections` is required to be below 2^24 - 1 (see `CreateRayTracingPipelineError::TooManyIntersectionGroups`)
@@ -776,6 +782,7 @@ impl Device {
                 layout: pipeline_layout.clone(),
                 _shader_modules: shader_modules,
                 shader_binding_data,
+                intersection_types,
             }),
             device: self.clone(),
             late_sized_buffer_groups,

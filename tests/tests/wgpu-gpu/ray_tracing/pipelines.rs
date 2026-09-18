@@ -16,6 +16,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.push(RAY_TRACING_PASS_NO_FEATURE);
     tests.push(PIPELINE_OUTPUT);
     tests.push(PIPELINE_SWAP);
+    tests.push(MISMATCHED_INTERSECTION_TYPES);
 }
 
 #[apply(gpu_test!)]
@@ -546,6 +547,220 @@ fn pipeline_swap(ctx: TestingContext) {
         pass.set_pipeline(&pipeline_to_swap);
         pass.set_bind_group(0, &bind_group, &[]);
         pass.trace_rays(1, 1, 2);
+    }
+
+    fail(
+        &ctx.device,
+        || {
+            ctx.queue.submit([encoder.finish()]);
+        },
+        None,
+    );
+}
+
+#[apply(gpu_test!)]
+static MISMATCHED_INTERSECTION_TYPES: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+            .limits(
+                Limits::defaults()
+                    .using_minimum_supported_acceleration_structure_values()
+                    .using_minimum_supported_ray_tracing_pipeline_values(),
+            ),
+    )
+    .run_sync(mismatched_intersection_types);
+
+fn mismatched_intersection_types(ctx: TestingContext) {
+    // test that a tlas that needs an AABB intersection group in index 0 doesn't
+    // trace when used with a ray tracing pipeline that has a triangle intersection
+    // group in index 0.
+
+    let aabb_buf = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        usage: wgpu::BufferUsages::BLAS_INPUT,
+        size: wgpu::AABB_GEOMETRY_MIN_STRIDE,
+        mapped_at_creation: false,
+    });
+
+    let blas_size = wgpu::BlasAABBGeometrySizeDescriptor {
+        primitive_count: 1,
+        flags: wgpu::AccelerationStructureGeometryFlags::empty(),
+    };
+    let blas = ctx.device.create_blas(
+        &wgpu::CreateBlasDescriptor {
+            label: Some("AABB BLAS"),
+            flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+        },
+        wgpu::BlasGeometrySizeDescriptors::AABBs {
+            descriptors: vec![blas_size.clone()],
+        },
+    );
+
+    let mut tlas = ctx.device.create_tlas(&wgpu::CreateTlasDescriptor {
+        label: Some("TLAS"),
+        max_instances: 1,
+        flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
+        update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+    });
+    tlas[0] = Some(wgpu::TlasInstance::new(
+        &blas,
+        [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+        0,
+        0xFF,
+        0,
+    ));
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("build"),
+        });
+    encoder.build_acceleration_structures(
+        [&wgpu::BlasBuildEntry {
+            blas: &blas,
+            geometry: wgpu::BlasGeometries::AabbGeometries(vec![wgpu::BlasAabbGeometry {
+                size: &blas_size,
+                stride: wgpu::AABB_GEOMETRY_MIN_STRIDE,
+                aabb_buffer: &aabb_buf,
+                primitive_offset: 0,
+            }]),
+        }],
+        [&tlas],
+    );
+    ctx.queue.submit([encoder.finish()]);
+
+    let ray_gen_source = "
+        enable wgpu_ray_tracing_pipeline;
+
+        @group(0) @binding(0) var acc_struct: acceleration_structure;
+
+        var<ray_payload> payload: u32;
+
+        @ray_generation
+        fn gen() {
+            traceRay(acc_struct, RayDesc(0u, 0xFFu, 0.001, 100.0, vec3f(0.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0)), &payload);
+        }
+    ";
+
+    let ray_closest_source = "
+        enable wgpu_ray_tracing_pipeline;
+
+        var<incoming_ray_payload> payload: u32;
+
+        @closest_hit
+        @incoming_payload(payload)
+        fn closest() {
+            
+        }
+    ";
+
+    let ray_any_source = "
+        enable wgpu_ray_tracing_pipeline;
+
+        var<incoming_ray_payload> payload: u32;
+
+        @any_hit
+        @incoming_payload(payload)
+        fn any() {
+            
+        }
+    ";
+
+    let ray_miss_source = "
+        enable wgpu_ray_tracing_pipeline;
+
+        var<incoming_ray_payload> payload: u32;
+
+        @miss
+        @incoming_payload(payload)
+        fn miss() {
+            
+        }
+    ";
+
+    let ray_gen = ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("ray generation shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(ray_gen_source)),
+    });
+
+    let ray_closest = ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("ray closest hit shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(ray_closest_source)),
+    });
+
+    let ray_any = ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("ray any hit shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(ray_any_source)),
+    });
+
+    let ray_miss = ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("ray miss shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(ray_miss_source)),
+    });
+
+    let pipeline = ctx
+        .device
+        .create_ray_tracing_pipeline(&RayTracingPipelineDescriptor {
+            label: None,
+            layout: None,
+            ray_generation: RayTracingStage {
+                module: &ray_gen,
+                entry_point: None,
+                compilation_options: Default::default(),
+            },
+            miss: RayTracingStage {
+                module: &ray_miss,
+                entry_point: None,
+                compilation_options: Default::default(),
+            },
+            intersection_descs: &[
+                RayTracingIntersectionDescriptor::Triangle {
+                    closest_hit: RayTracingStage {
+                        module: &ray_closest,
+                        entry_point: None,
+                        compilation_options: Default::default(),
+                    },
+                    any_hit: Some(RayTracingStage {
+                        module: &ray_any,
+                        entry_point: None,
+                        compilation_options: Default::default(),
+                    }),
+                },
+                RayTracingIntersectionDescriptor::Triangle {
+                    closest_hit: RayTracingStage {
+                        module: &ray_closest,
+                        entry_point: None,
+                        compilation_options: Default::default(),
+                    },
+                    any_hit: Some(RayTracingStage {
+                        module: &ray_any,
+                        entry_point: None,
+                        compilation_options: Default::default(),
+                    }),
+                },
+            ],
+            max_recursion_depth: 1,
+            cache: None,
+        });
+
+    let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+        label: Some("ray tracing pipeline bind group"),
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[BindGroupEntry {
+            binding: 0,
+            resource: tlas.as_binding(),
+        }],
+    });
+
+    let mut encoder = ctx.device.create_command_encoder(&Default::default());
+
+    {
+        let mut pass = encoder.begin_ray_tracing_pass(&RayTracingPassDescriptor::default());
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.trace_rays(1, 1, 1);
     }
 
     fail(

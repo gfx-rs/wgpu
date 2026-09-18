@@ -1418,6 +1418,15 @@ pub struct RayTracingPipelineDescriptor<
     pub cache: Option<PLC>,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+/// The type of intersection of a index into `RayTracingPipelineDescriptor::intersections`
+pub enum RayTracingIntersectionType {
+    /// The intersection is to be used for triangles.
+    Triangle,
+    /// The intersection is to be used for AABBs.
+    AABB,
+}
+
 /// Metal's shader binding data is opaque, but Vulkan's and DX12's has opaque data
 /// but a non-opaque storage mechanism, so each require separate codepaths.
 /// Therefore, this is a semi-opaque structure because if metal gets ray tracing pipelines,
@@ -1579,6 +1588,7 @@ pub(crate) struct RayTracingPipelineState {
     pub(crate) layout: Arc<PipelineLayout>,
     pub(crate) shader_binding_data: Arc<ShaderBindingData>,
     pub(crate) _shader_modules: Vec<Arc<ShaderModule>>,
+    pub(crate) intersection_types: Vec<RayTracingIntersectionType>,
 }
 
 #[derive(Debug)]
@@ -1662,6 +1672,15 @@ impl RayTracingPipeline {
             return Err(InvalidResourceError(self.error_ident()));
         };
         Ok(&state.shader_binding_data)
+    }
+
+    pub(crate) fn intersection_types(
+        &self,
+    ) -> Result<&[RayTracingIntersectionType], InvalidResourceError> {
+        let ResourceState::Valid(state) = &self.state else {
+            return Err(InvalidResourceError(self.error_ident()));
+        };
+        Ok(&state.intersection_types)
     }
 
     pub fn get_bind_group_layout_inner(

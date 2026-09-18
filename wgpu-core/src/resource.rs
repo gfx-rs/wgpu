@@ -3564,6 +3564,12 @@ crate::impl_parent_device!(Blas);
 crate::impl_storage_item!(Blas);
 crate::impl_trackable!(Blas);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct TlasIntersectionType {
+    pub(crate) index: u32,
+    pub(crate) required_intersection_ty: crate::pipeline::RayTracingIntersectionType,
+}
+
 #[derive(Debug)]
 pub(crate) struct TlasState {
     pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>,
@@ -3584,6 +3590,9 @@ pub struct Tlas {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
+    /// The intersections that are required to be of a certain type
+    /// if using a ray tracing pipeline.
+    pub(crate) required_intersection_types: RwLock<Vec<TlasIntersectionType>>,
 }
 
 impl Drop for Tlas {
@@ -3639,6 +3648,10 @@ impl Tlas {
             dependencies: RwLock::new(rank::TLAS_DEPENDENCIES, Vec::new()),
             device,
             max_intersection_index: RwLock::new(rank::TLAS_MAX_INTERSECTION_IDX, 0),
+            required_intersection_types: RwLock::new(
+                rank::TLAS_REQUIRED_INTERSECTION_TYPES,
+                Vec::new(),
+            ),
         })
     }
 }
