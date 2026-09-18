@@ -949,16 +949,17 @@ impl Surface {
     ) -> Result<(), ConfigureSurfaceError> {
         use ConfigureSurfaceError as E;
 
+        if !caps.formats.iter().any(|fc| fc.format == config.format) {
+            return Err(E::UnsupportedFormat {
+                requested: config.format,
+                available: caps.texture_formats().collect(),
+            });
+        }
+
         let mut hal_view_formats = Vec::new();
         for format in config.view_formats.iter() {
             if *format == config.format {
                 continue;
-            }
-            if !caps.formats.iter().any(|fc| fc.format == config.format) {
-                return Err(E::UnsupportedFormat {
-                    requested: config.format,
-                    available: caps.texture_formats().collect(),
-                });
             }
             if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
                 return Err(E::InvalidViewFormat(*format, config.format));
