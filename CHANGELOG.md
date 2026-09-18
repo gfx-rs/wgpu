@@ -149,6 +149,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 #### WebGPU
 
+- Map the `subgroups` feature to `Features::SUBGROUP`, so an adapter that has it reports it and a device can request it. By @vboussot in [#10441](https://github.com/gfx-rs/wgpu/pull/10441).
 - Add `Device::import_external_texture` to bind a `GPUExternalTexture` sampled from an `HTMLVideoElement` or WebCodecs `VideoFrame`, without a copy. By @AdrianEddy in [#9936](https://github.com/gfx-rs/wgpu/pull/9936).
 
 ### Changes
