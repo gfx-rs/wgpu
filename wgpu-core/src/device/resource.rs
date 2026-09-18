@@ -1448,6 +1448,7 @@ impl Device {
         buffer: &Arc<Buffer>,
         offset: wgt::BufferAddress,
         data: &[u8],
+        host: HostMap,
     ) -> resource::BufferAccessResult {
         use crate::resource::RawResourceAccess;
 
@@ -1500,7 +1501,7 @@ impl Device {
 
         unsafe { device.raw().unmap_buffer(raw_buf) };
 
-        Ok(())
+        Ok(host)
     }
 
     /// # Safety
