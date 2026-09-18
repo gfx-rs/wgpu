@@ -204,6 +204,85 @@ fn shader_compilation_message() {
 }
 
 #[test]
+fn create_compute_pipeline_async() -> Result<(), Error> {
+    check_js_stdout(
+        r#"
+            const adapter = await navigator.gpu.requestAdapter();
+            const device = await adapter.requestDevice();
+            const module = device.createShaderModule({
+                code: `@compute @workgroup_size(1) fn main() {}`,
+            });
+            const pipeline = await device.createComputePipelineAsync({
+                label: "async-compute",
+                layout: "auto",
+                compute: { module, entryPoint: "main" },
+            });
+            console.log(`${pipeline.constructor.name} ${pipeline.label}`);
+            try {
+                await device.createComputePipelineAsync({
+                    layout: "auto",
+                    compute: { module, entryPoint: "missing" },
+                });
+                console.log("no error");
+            } catch (e) {
+                if (!(e instanceof GPUPipelineError)) {
+                    throw new TypeError("expected GPUPipelineError");
+                }
+                console.log(`${e.constructor.name} ${e.name} ${e.reason}`);
+            }
+        "#,
+        "GPUComputePipeline async-compute\nGPUPipelineError GPUPipelineError validation\n",
+        "",
+    )
+}
+
+#[test]
+fn create_render_pipeline_async() -> Result<(), Error> {
+    check_js_stdout(
+        r#"
+            const adapter = await navigator.gpu.requestAdapter();
+            const device = await adapter.requestDevice();
+            const vsModule = device.createShaderModule({
+                code: `@vertex fn vs() -> @builtin(position) vec4f { return vec4f(); }`,
+            });
+            const fsModule = device.createShaderModule({
+                code: `@fragment fn fs() -> @location(0) vec4f { return vec4f(); }`,
+            });
+            const pipeline = await device.createRenderPipelineAsync({
+                label: "async-render",
+                layout: "auto",
+                vertex: { module: vsModule, entryPoint: "vs" },
+                fragment: {
+                    module: fsModule,
+                    entryPoint: "fs",
+                    targets: [{ format: "rgba8unorm" }],
+                },
+            });
+            console.log(`${pipeline.constructor.name} ${pipeline.label}`);
+            try {
+                await device.createRenderPipelineAsync({
+                    layout: "auto",
+                    vertex: { module: vsModule, entryPoint: "missing" },
+                    fragment: {
+                        module: fsModule,
+                        entryPoint: "fs",
+                        targets: [{ format: "rgba8unorm" }],
+                    },
+                });
+                console.log("no error");
+            } catch (e) {
+                if (!(e instanceof GPUPipelineError)) {
+                    throw new TypeError("expected GPUPipelineError");
+                }
+                console.log(`${e.constructor.name} ${e.name} ${e.reason}`);
+            }
+        "#,
+        "GPURenderPipeline async-render\nGPUPipelineError GPUPipelineError validation\n",
+        "",
+    )
+}
+
+#[test]
 fn lst_files_are_sorted() {
     let workspace_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
