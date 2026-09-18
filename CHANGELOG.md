@@ -106,6 +106,17 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 - Zero-size vertex and index buffer bindings are now accepted by `set_vertex_buffer` and `set_index_buffer`. By @andyleiserson in [#9848](https://github.com/gfx-rs/wgpu/pull/9848).
 - Added the `snorm10-10-10-2` vertex format on Metal and Vulkan. Not yet supported on DX12. By @andyleiserson in [#10226](https://github.com/gfx-rs/wgpu/pull/10226).
+- Added the following methods to `RenderBundleEncoder` for recording debug markers and groups:
+
+  - `insert_debug_marker(&mut self, label: &str)`
+  - `push_debug_group(&mut self, label: &str)`
+  - `pop_debug_group(&mut self)`
+
+  `wgpu-core` now validates debug group balance at `finish()` and replays debug annotations when executing render bundles. `InstanceFlags::DISCARD_HAL_LABELS` suppresses native debug annotations without disabling validation.
+
+  **Breaking for custom backends:** Implementations of `RenderBundleEncoderInterface` must implement these three new methods.
+
+  By @jinleili in [#10308](https://github.com/gfx-rs/wgpu/pull/10308).
 
 #### Naga
 
