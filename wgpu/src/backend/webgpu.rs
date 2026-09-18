@@ -2229,8 +2229,11 @@ impl dispatch::DeviceInterface for WebDevice {
             .entries
             .iter()
             .map(|bind| {
-                let mapped_entry =
-                    webgpu_sys::GpuBindGroupLayoutEntry::new(bind.binding, bind.visibility.bits());
+                assert!(bind.visibility.features_wgpu.is_empty());
+                let mapped_entry = webgpu_sys::GpuBindGroupLayoutEntry::new(
+                    bind.binding,
+                    bind.visibility.features_webgpu.bits(),
+                );
 
                 match bind.ty {
                     wgt::BindingType::Buffer {
@@ -4130,6 +4133,18 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
 
     fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
         panic!("IMMEDIATES feature must be enabled to call set_immediates")
+    }
+
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
+    }
+
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.inner.push_debug_group(group_label);
+    }
+
+    fn pop_debug_group(&mut self) {
+        self.inner.pop_debug_group();
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {

@@ -132,6 +132,23 @@ impl<'a> RenderBundleEncoder<'a> {
         }
     }
 
+    /// Inserts a debug marker into the recorded commands.
+    pub fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
+    }
+
+    /// Begins a debug group for the recorded commands.
+    ///
+    /// All debug groups must be popped before calling [`Self::finish`].
+    pub fn push_debug_group(&mut self, label: &str) {
+        self.inner.push_debug_group(label);
+    }
+
+    /// Ends the most recently pushed debug group.
+    pub fn pop_debug_group(&mut self) {
+        self.inner.pop_debug_group();
+    }
+
     /// Draws primitives from the active vertex buffer(s).
     ///
     /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
