@@ -8,11 +8,19 @@ use serde::{Deserialize, Serialize};
 ///
 /// Corresponds to [WebGPU `GPUCompilationInfo`](https://gpuweb.github.io/gpuweb/#gpucompilationinfo).
 /// The source locations use bytes, and index a UTF-8 or UTF-16 encoded string.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CompilationInfo<SL = SourceLocation> {
     /// The messages from the shader compilation process.
     pub messages: Vec<CompilationMessage<SL>>,
+}
+
+impl<SL> Default for CompilationInfo<SL> {
+    fn default() -> Self {
+        Self {
+            messages: Default::default(),
+        }
+    }
 }
 
 /// A single message from the shader compilation process.
@@ -53,7 +61,7 @@ pub enum CompilationMessageType {
 /// For UTF-16 code units, see [`Utf16SourceLocation`].
 ///
 /// [gcm]: https://www.w3.org/TR/webgpu/#gpucompilationmessage
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SourceLocation {
     /// 1-based line number.
@@ -77,7 +85,7 @@ pub struct SourceLocation {
 /// like the WebGPU specification.
 ///
 /// [gcm]: https://www.w3.org/TR/webgpu/#gpucompilationmessage
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Utf16SourceLocation {
     /// 1-based line number.
