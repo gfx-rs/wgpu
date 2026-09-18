@@ -21,7 +21,10 @@ use std::{
     slice,
     sync::Arc,
 };
-use wgc::{command::PointerReferences, device::trace::DiskTraceLoader};
+use wgc::{
+    command::PointerReferences,
+    device::{trace::DiskTraceLoader, HostMap},
+};
 
 #[derive(serde::Deserialize)]
 enum ExpectedData {
@@ -55,7 +58,7 @@ struct Test<'a> {
     actions: Vec<wgc::device::trace::Action<'a, PointerReferences>>,
 }
 
-fn map_callback(status: Result<(), wgc::resource::BufferAccessError>) {
+fn map_callback(status: Result<HostMap, wgc::resource::BufferAccessError>) {
     if let Err(e) = status {
         panic!("Buffer map error: {e}");
     }
