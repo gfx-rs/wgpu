@@ -50,6 +50,8 @@ pub enum CompilationMessageType {
 /// - `offset` and `length` are in bytes (UTF-8 code units), instead of UTF-16 code units.
 /// - `line_position` is in bytes (UTF-8 code units), and is usually not directly intended for humans.
 ///
+/// For UTF-16 code units, see [`Utf16SourceLocation`].
+///
 /// [gcm]: https://www.w3.org/TR/webgpu/#gpucompilationmessage
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -59,7 +61,7 @@ pub struct SourceLocation {
     /// 1-based column in code units (in bytes) of the start of the span.
     /// Remember to convert accordingly when displaying to the user.
     pub line_position: u32,
-    /// 0-based Offset in code units (in bytes) of the start of the span.
+    /// 0-based offset in code units (in bytes) of the start of the span.
     pub offset: u32,
     /// Length in code units (in bytes) of the span.
     pub length: u32,
@@ -70,8 +72,9 @@ pub struct SourceLocation {
 /// Corresponds to the positional members of [`GPUCompilationMessage`][gcm] from
 /// the WebGPU specification.
 ///
-/// Instead of using UTF-8 code units, this uses UTF-16 code units,
-/// which is what the WebGPU specification uses.
+/// Unlike [`SourceLocation`], which uses UTF-8 units as a convenience for the
+/// `wgpu` Rust API, this struct locates the span using UTF-16 code units, just
+/// like the WebGPU specification.
 ///
 /// [gcm]: https://www.w3.org/TR/webgpu/#gpucompilationmessage
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
@@ -79,12 +82,12 @@ pub struct SourceLocation {
 pub struct Utf16SourceLocation {
     /// 1-based line number.
     pub line_number: u32,
-    /// 1-based column in code units (in bytes) of the start of the span.
+    /// 1-based column in UTF-16 code units of the start of the span.
     /// Remember to convert accordingly when displaying to the user.
     pub line_position: u32,
-    /// 0-based Offset in code units (in bytes) of the start of the span.
+    /// 0-based offset in UTF-16 code units of the start of the span.
     pub offset: u32,
-    /// Length in code units (in bytes) of the span.
+    /// Length in UTF-16 code units of the span.
     pub length: u32,
 }
 
