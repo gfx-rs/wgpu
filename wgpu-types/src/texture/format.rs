@@ -1641,41 +1641,53 @@ impl TextureFormat {
     /// Actual memory usage may greatly exceed this value due to alignment and padding.
     #[must_use]
     pub fn theoretical_memory_footprint(&self, size: crate::Extent3d) -> u64 {
-        let (block_width, block_height) = self.block_dimensions();
+        let layers = size.depth_or_array_layers as u64;
 
-        let block_size = self.block_copy_size(None);
+        match self {
+            Self::NV12 => {
+                let luma = size.width as u64 * size.height as u64;
+                let chroma = size.width.div_ceil(2) as u64 * size.height.div_ceil(2) as u64 * 2;
+                (luma + chroma) * layers
+            }
+            Self::P010 => {
+                let luma = size.width as u64 * size.height as u64 * 2;
+                let chroma = size.width.div_ceil(2) as u64 * size.height.div_ceil(2) as u64 * 4;
+                (luma + chroma) * layers
+            }
+            _ => {
+                let (block_width, block_height) = self.block_dimensions();
 
-        let approximate_block_size = match block_size {
-            Some(size) => size,
-            None => match self {
-                // One f16 per pixel
-                Self::Depth16Unorm => 2,
-                // One u24 per pixel, padded to 4 bytes
-                Self::Depth24Plus => 4,
-                // One u24 per pixel, plus one u8 per pixel
-                Self::Depth24PlusStencil8 => 4,
-                // One f32 per pixel
-                Self::Depth32Float => 4,
-                // One f32 per pixel, plus one u8 per pixel, with 3 bytes intermediary padding
-                Self::Depth32FloatStencil8 => 8,
-                // One u8 per pixel
-                Self::Stencil8 => 1,
-                // Two chroma bytes per block, one luma byte per block
-                Self::NV12 => 3,
-                // Two chroma u16s and one luma u16 per block
-                Self::P010 => 6,
-                f => {
-                    unimplemented!("Memory footprint for format {f:?} is not implemented");
-                }
-            },
-        };
+                let block_size = self.block_copy_size(None);
 
-        let width_blocks = size.width.div_ceil(block_width) as u64;
-        let height_blocks = size.height.div_ceil(block_height) as u64;
+                let approximate_block_size = match block_size {
+                    Some(size) => size,
+                    None => match self {
+                        // One f16 per pixel
+                        Self::Depth16Unorm => 2,
+                        // One u24 per pixel, padded to 4 bytes
+                        Self::Depth24Plus => 4,
+                        // One u24 per pixel, plus one u8 per pixel
+                        Self::Depth24PlusStencil8 => 4,
+                        // One f32 per pixel
+                        Self::Depth32Float => 4,
+                        // One f32 per pixel, plus one u8 per pixel, with 3 bytes intermediary padding
+                        Self::Depth32FloatStencil8 => 8,
+                        // One u8 per pixel
+                        Self::Stencil8 => 1,
+                        f => {
+                            unimplemented!("Memory footprint for format {f:?} is not implemented");
+                        }
+                    },
+                };
 
-        let total_blocks = width_blocks * height_blocks * size.depth_or_array_layers as u64;
+                let width_blocks = size.width.div_ceil(block_width) as u64;
+                let height_blocks = size.height.div_ceil(block_height) as u64;
 
-        total_blocks * approximate_block_size as u64
+                let total_blocks = width_blocks * height_blocks * layers;
+
+                total_blocks * approximate_block_size as u64
+            }
+        }
     }
 }
 
