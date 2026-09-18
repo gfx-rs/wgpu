@@ -2881,30 +2881,44 @@ impl BlockContext<'_> {
                 r#type: Handle<crate::Type>,
             }
             let mut wrapped_load = None;
+            // If the pointee has a layoutless Workgroup type that differs from
+            // the decorated version, we need OpCopyLogical after loading.
+            let mut workgroup_load_type_id = None;
             if let crate::TypeInner::Pointer {
                 base: pointer_base_type,
-                space: crate::AddressSpace::Uniform,
+                space,
             } = *self.fun_info[pointer].ty.inner_with(&self.ir_module.types)
             {
-                if self
-                    .writer
-                    .std140_compat_uniform_types
-                    .contains_key(&pointer_base_type)
+                if space == crate::AddressSpace::Uniform
+                    && self
+                        .writer
+                        .std140_compat_uniform_types
+                        .contains_key(&pointer_base_type)
                 {
                     wrapped_load = Some(WrappedLoad {
                         access_type_adjustment: AccessTypeAdjustment::UseStd140CompatType,
                         r#type: pointer_base_type,
                     });
-                };
+                } else if space == crate::AddressSpace::WorkGroup {
+                    if let Some(&wg_type_id) =
+                        self.writer.workgroup_type_ids.get(&pointer_base_type)
+                    {
+                        if wg_type_id != self.writer.get_handle_type_id(pointer_base_type) {
+                            workgroup_load_type_id = Some(wg_type_id);
+                        }
+                    }
+                }
             };
 
-            let (load_type_id, access_type_adjustment) = match wrapped_load {
-                Some(ref wrapped_load) => (
-                    self.writer.std140_compat_uniform_types[&wrapped_load.r#type].type_id,
-                    wrapped_load.access_type_adjustment,
-                ),
-                None => (result_type_id, access_type_adjustment),
-            };
+            let (load_type_id, access_type_adjustment) =
+                match (wrapped_load.as_ref(), workgroup_load_type_id) {
+                    (Some(wrapped_load), _) => (
+                        self.writer.std140_compat_uniform_types[&wrapped_load.r#type].type_id,
+                        wrapped_load.access_type_adjustment,
+                    ),
+                    (None, Some(wg_type_id)) => (wg_type_id, access_type_adjustment),
+                    (None, None) => (result_type_id, access_type_adjustment),
+                };
 
             let load_id = match self.write_access_chain(pointer, block, access_type_adjustment)? {
                 ExpressionPointer::Ready { pointer_id } => {
@@ -2973,6 +2987,17 @@ impl BlockContext<'_> {
                         result_id,
                         function_id,
                         &[load_id],
+                    ));
+                    Ok(result_id)
+                }
+                None if workgroup_load_type_id.is_some() => {
+                    // Convert from layoutless Workgroup type to decorated type.
+                    let result_id = self.gen_id();
+                    block.body.push(Instruction::unary(
+                        spirv::Op::CopyLogical,
+                        result_type_id,
+                        result_id,
+                        load_id,
                     ));
                     Ok(result_id)
                 }

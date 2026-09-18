@@ -79,7 +79,9 @@ impl super::Writer {
         let Some(ref mesh_info) = iface.mesh_info else {
             return Ok(());
         };
-        // Collect the members in the output structs
+        // Collect the members in the output structs.
+        // Use layoutless workgroup type IDs when available, since the
+        // output variable is in the Workgroup storage class.
         let out_members: Vec<MeshReturnMember> =
             match &ir_module.types[ir_module.global_variables[mesh_info.output_variable].ty] {
                 &crate::Type {
@@ -88,7 +90,11 @@ impl super::Writer {
                 } => members
                     .iter()
                     .map(|a| MeshReturnMember {
-                        ty_id: self.get_handle_type_id(a.ty),
+                        ty_id: self
+                            .workgroup_type_ids
+                            .get(&a.ty)
+                            .copied()
+                            .unwrap_or_else(|| self.get_handle_type_id(a.ty)),
                         binding: a.binding.clone().unwrap(),
                     })
                     .collect(),
@@ -111,7 +117,11 @@ impl super::Writer {
             } => members
                 .iter()
                 .map(|a| MeshReturnMember {
-                    ty_id: self.get_handle_type_id(a.ty),
+                    ty_id: self
+                        .workgroup_type_ids
+                        .get(&a.ty)
+                        .copied()
+                        .unwrap_or_else(|| self.get_handle_type_id(a.ty)),
                     binding: a.binding.clone().unwrap(),
                 })
                 .collect(),
@@ -124,7 +134,11 @@ impl super::Writer {
             } => members
                 .iter()
                 .map(|a| MeshReturnMember {
-                    ty_id: self.get_handle_type_id(a.ty),
+                    ty_id: self
+                        .workgroup_type_ids
+                        .get(&a.ty)
+                        .copied()
+                        .unwrap_or_else(|| self.get_handle_type_id(a.ty)),
                     binding: a.binding.clone().unwrap(),
                 })
                 .collect(),
