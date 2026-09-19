@@ -2,6 +2,7 @@ use alloc::{boxed::Box, string::String, sync::Arc, vec};
 #[cfg(wgpu_core)]
 use core::ops::Deref;
 use core::{error, fmt, future::Future, marker::PhantomData};
+use hashbrown::HashSet;
 
 use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
@@ -20,6 +21,9 @@ pub use wgt::error::*;
 #[derive(Debug, Clone)]
 pub struct Device {
     pub(crate) inner: dispatch::DispatchDevice,
+    /// The set of buffers that are currently alive on the device.
+    /// This is used to ensure that all buffers are unmapped before the device is destroyed.
+    pub(crate) buffers: Arc<Mutex<HashSet<Buffer>>>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Device: Send, Sync);
@@ -53,9 +57,13 @@ impl Device {
 
     #[cfg(custom)]
     /// Creates Device from custom implementation
-    pub fn from_custom<T: custom::DeviceInterface>(device: T) -> Self {
+    pub fn from_custom<T: custom::DeviceInterface>(
+        device: T,
+        buffers: Arc<Mutex<HashSet<Buffer>>>,
+    ) -> Self {
         Self {
             inner: dispatch::DispatchDevice::custom(device),
+            buffers,
         }
     }
 
@@ -287,10 +295,15 @@ impl Device {
 
         let buffer = self.inner.create_buffer(desc);
 
-        Buffer {
+        let buffer = Buffer {
             inner: buffer,
+            device_buffers: self.buffers.clone(),
             map_context: Arc::new(Mutex::new(map_context)),
-        }
+        };
+
+        self.buffers.lock().insert(buffer.clone());
+
+        buffer
     }
 
     /// Creates a new [`Texture`].
@@ -620,6 +633,7 @@ impl Device {
 
         Buffer {
             inner: buffer.into(),
+            device_buffers: self.buffers.clone(),
             map_context: Arc::new(Mutex::new(map_context)),
         }
     }
@@ -814,7 +828,12 @@ impl Device {
     }
 
     /// Destroy this device.
+    ///
+    /// Panics if there is any [`BufferView`] or [`BufferViewMut`] alive.
     pub fn destroy(&self) {
+        for buffer in self.buffers.lock().iter() {
+            buffer.unmap();
+        }
         self.inner.destroy()
     }
 
