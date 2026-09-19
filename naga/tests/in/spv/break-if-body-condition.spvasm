@@ -1,0 +1,83 @@
+; SPIR-V
+; Version: 1.0
+
+;; Ensure that a conditional backedge whose condition is computed in the loop
+;; BODY — before the continuing block advances the variables the condition
+;; reads — breaks at the right iteration (gfx-rs/wgpu#4558).
+;;
+;; This is the loop shape rust-gpu (and LLVM-derived front ends generally)
+;; emit for `while`/`for` loops: the header computes `i < N` from the
+;; pre-increment counter, the continuing block increments the counter, and the
+;; backedge `OpBranchConditional` consumes the header's comparison. A backend
+;; that re-evaluates the condition after the continuing block sees the
+;; post-increment counter and exits one body-execution early:
+;;
+;;     i = 0; acc = 0;
+;;     do {
+;;         acc += i;
+;;         keep = i < 3;   // pre-increment
+;;         // continuing: i += 1;
+;;     } while(keep);
+;;
+;; must run the body for i = 0, 1, 2, 3 (acc = 6), not stop at i = 2 (acc = 3).
+
+               OpCapability Shader
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %main "main"
+               OpExecutionMode %main OriginUpperLeft
+               OpSource GLSL 450
+               OpName %main "main"
+               OpName %f_ "f("
+               OpName %i "i"
+               OpName %acc "acc"
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+       %bool = OpTypeBool
+        %int = OpTypeInt 32 1
+%_ptr_Function_int = OpTypePointer Function %int
+      %int_0 = OpConstant %int 0
+      %int_1 = OpConstant %int 1
+      %int_3 = OpConstant %int 3
+
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+         %20 = OpFunctionCall %void %f_
+               OpReturn
+               OpFunctionEnd
+
+         %f_ = OpFunction %void None %3
+         %11 = OpLabel
+          %i = OpVariable %_ptr_Function_int Function
+        %acc = OpVariable %_ptr_Function_int Function
+               OpStore %i %int_0
+               OpStore %acc %int_0
+               OpBranch %12
+
+;; Loop header; naga structurizes this into the `Loop`'s body.
+         %12 = OpLabel
+               OpLoopMerge %14 %15 None
+               OpBranch %13
+
+;; Loop body: accumulate, then compute the branch condition from the
+;; PRE-increment counter.
+         %13 = OpLabel
+         %16 = OpLoad %int %i
+         %17 = OpLoad %int %acc
+         %18 = OpIAdd %int %17 %16
+               OpStore %acc %18
+         %19 = OpSLessThan %bool %16 %int_3
+               OpBranch %15
+
+;; Continuing block: advance the counter the condition above already read,
+;; then take the conditional backedge on the body-computed condition.
+         %15 = OpLabel
+         %21 = OpLoad %int %i
+         %22 = OpIAdd %int %21 %int_1
+               OpStore %i %22
+               OpBranchConditional %19 %12 %14
+
+         %14 = OpLabel
+               OpReturn
+
+               OpFunctionEnd
