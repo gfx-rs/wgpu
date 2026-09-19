@@ -247,6 +247,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Report `DownlevelFlags::INDIRECT_EXECUTION` and a 256-byte `min_uniform_buffer_offset_alignment` on the iOS Simulator (`target_abi = "sim"`). The Simulator advertises only the Apple2 GPU family but executes indirect draw/dispatch on the host GPU, so compute renderers such as vello previously failed with "Downlevel flags DownlevelFlags(INDIRECT_EXECUTION) are required but not supported". Note that Metal API Validation still rejects indirect commands there. By @edTheGuy00 in [#10189](https://github.com/gfx-rs/wgpu/pull/10189).
 - Fix a crash in `Surface::configure` on iOS below 16. `wantsExtendedDynamicRangeContent` is iOS 16+ and is now only called there. By @VladasZ in [#10257](https://github.com/gfx-rs/wgpu/pull/10257).
 - Fix a crash when creating a declared alternate sRGB view of a render-attachment-only surface with Metal API Validation enabled. By @jinleili in [#10280](https://github.com/gfx-rs/wgpu/pull/10280).
+- Fix oversaturated sRGB surface colors on wide-gamut displays by explicitly setting the layer's sRGB color space. By @jinleili in [#10286](https://github.com/gfx-rs/wgpu/pull/10286).
 
 #### GLES
 
