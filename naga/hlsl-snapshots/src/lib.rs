@@ -1,20 +1,27 @@
-use std::{error::Error, fmt::Display, fs, io, path::Path};
+use std::{error::Error, fmt::Display, fs, io, path::Path, path::PathBuf};
 
-use anyhow::{anyhow, ensure};
+use anyhow::anyhow;
 use nanoserde::{self, DeRon, DeRonErr, SerRon};
 
 #[derive(Debug)]
-struct BadRonParse(BadRonParseKind);
+struct BadRonParse {
+    path: PathBuf,
+    kind: BadRonParseKind,
+}
 
 impl Display for BadRonParse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "failed to read RON configuration of HLSL snapshot test")
+        write!(
+            f,
+            "failed to read HLSL snapshot test RON configuration file `{}`",
+            self.path.display()
+        )
     }
 }
 
 impl Error for BadRonParse {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(&self.0)
+        Some(&self.kind)
     }
 }
 
@@ -67,13 +74,25 @@ impl Config {
     }
 
     pub fn from_path(path: impl AsRef<Path>) -> anyhow::Result<Config> {
+        fn catch(path: &Path) -> Result<Config, BadRonParseKind> {
+            let raw_config =
+                fs::read_to_string(path).map_err(|source| BadRonParseKind::Read { source })?;
+            let config = Config::deserialize_ron(&raw_config)
+                .map_err(|source| BadRonParseKind::Parse { source })?;
+            if config.is_empty() {
+                return Err(BadRonParseKind::Empty);
+            }
+            Ok(config)
+        }
+
         let path = path.as_ref();
-        let raw_config = fs::read_to_string(path)
-            .map_err(|source| BadRonParse(BadRonParseKind::Read { source }))?;
-        let config = Config::deserialize_ron(&raw_config)
-            .map_err(|source| BadRonParse(BadRonParseKind::Parse { source }))?;
-        ensure!(!config.is_empty(), BadRonParse(BadRonParseKind::Empty));
-        Ok(config)
+        catch(path).map_err(|kind| {
+            BadRonParse {
+                path: path.to_owned(),
+                kind,
+            }
+            .into()
+        })
     }
 
     pub fn to_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
