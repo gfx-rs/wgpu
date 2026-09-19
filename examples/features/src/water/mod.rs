@@ -94,8 +94,13 @@ impl Example {
     /// Creates the view matrices, and the corrected projection matrix.
     ///
     fn generate_matrices(aspect_ratio: f32) -> Matrices {
-        let projection = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect_ratio, 10.0, 400.0);
-        let reg_view = glam::Mat4::look_at_rh(
+        let projection = glam::camera::rh::proj::directx::perspective(
+            consts::FRAC_PI_4,
+            aspect_ratio,
+            10.0,
+            400.0,
+        );
+        let reg_view = glam::camera::rh::view::look_at_mat4(
             CAMERA,
             glam::Vec3::new(0f32, 0.0, 0.0),
             glam::Vec3::Y, //Note that y is up. Differs from other examples.
@@ -105,7 +110,7 @@ impl Example {
 
         let reg_view = reg_view * scale;
 
-        let flipped_view = glam::Mat4::look_at_rh(
+        let flipped_view = glam::camera::rh::view::look_at_mat4(
             glam::Vec3::new(CAMERA.x, -CAMERA.y, CAMERA.z),
             glam::Vec3::ZERO,
             glam::Vec3::Y,

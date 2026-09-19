@@ -170,8 +170,7 @@ webgpu:api,validation,encoding,cmds,copyBufferToBuffer:*
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:*
 webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="compute%20pass"
 webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="non-pass"
-//FAIL: webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="render%20bundle"
-// https://github.com/gfx-rs/wgpu/issues/8039
+webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="render%20bundle"
 webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="render%20pass"
 webgpu:api,validation,encoding,cmds,debug:debug_group:*
 webgpu:api,validation,encoding,cmds,debug:debug_marker:*
@@ -478,7 +477,12 @@ webgpu:shader,validation,parse,comments:unterminated_block_comment:terminated=fa
 webgpu:shader,validation,parse,enable:*
 webgpu:shader,validation,parse,identifiers:*
 webgpu:shader,validation,parse,must_use:*
-webgpu:shader,validation,parse,requires:*
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="immediate_address_space"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="packed_4x8_integer_dot_product"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="pointer_composite_access"
+webgpu:shader,validation,parse,requires:have_all_language_features:feature="readonly_and_readwrite_storage_textures"
+webgpu:shader,validation,parse,requires:requires:*
+webgpu:shader,validation,parse,requires:wgsl_matches_api:*
 webgpu:shader,validation,parse,semicolon:*
 webgpu:shader,validation,parse,shadow_builtins:function_param:*
 webgpu:shader,validation,parse,source:*

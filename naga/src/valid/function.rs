@@ -240,6 +240,8 @@ pub enum FunctionError {
     MismatchedPayloadType(Handle<crate::Type>, Handle<crate::Type>),
     #[error("The payload passed to `traceRay` must be a pointer directly to a global variable")]
     PayloadPointerNotGlobal,
+    #[error("Argument {0:?} for `debugPrintf` must be a supported scalar type")]
+    InvalidDebugPrintfArgument(Handle<crate::Expression>),
     #[error("Tried to store to pointer {0:?} which is a ray query and so cannot be assigned to")]
     RayQueryStore(Handle<crate::Expression>),
     #[error("Tried to store to pointer {0:?} which is a hit object and so cannot be assigned to")]
@@ -760,12 +762,12 @@ impl super::Validator {
             crate::GatherMode::QuadSwap(_) => {}
         }
         match *mode {
-            crate::GatherMode::Broadcast(index) | crate::GatherMode::QuadBroadcast(index) => {
-                if !context.local_expr_kind.is_const(index) {
-                    return Err(SubgroupError::InvalidInvocationIdExprType(index)
-                        .with_span_handle(index, context.expressions)
-                        .into_other());
-                }
+            crate::GatherMode::Broadcast(index) | crate::GatherMode::QuadBroadcast(index)
+                if !context.local_expr_kind.is_const(index) =>
+            {
+                return Err(SubgroupError::InvalidInvocationIdExprType(index)
+                    .with_span_handle(index, context.expressions)
+                    .into_other());
             }
             _ => {}
         }
@@ -1790,6 +1792,42 @@ impl super::Validator {
                         crate::HitObjectFunction::Reorder { hint } => {
                             stages &= super::ShaderStages::RAY_GENERATION;
                             self.validate_reorder_hint(hint, context)?;
+                        }
+                    }
+                }
+
+                // TODO: the format string itself is not validated, so a mismatch between the
+                // specifiers and the arguments is only caught by the backend's
+                // shader logging implementation.
+                S::DebugPrintf {
+                    format: _,
+                    ref arguments,
+                } => {
+                    if !self
+                        .capabilities
+                        .contains(super::Capabilities::DEBUG_PRINTF)
+                    {
+                        return Err(FunctionError::MissingCapability(
+                            super::Capabilities::DEBUG_PRINTF,
+                        )
+                        .with_span_static(
+                            span,
+                            "`debugPrintf` requires the DEBUG_PRINTF capability",
+                        ));
+                    }
+
+                    for &argument in arguments {
+                        let ty =
+                            context.resolve_type_inner(argument, &self.valid_expression_set)?;
+                        match *ty {
+                            // Only scalar arguments are supported for now. Vector and
+                            // matrix arguments could be supported in the future by
+                            // splatting them into their components in the backends.
+                            Ti::Scalar(_) => {}
+                            _ => {
+                                return Err(FunctionError::InvalidDebugPrintfArgument(argument)
+                                    .with_span_handle(argument, context.expressions));
+                            }
                         }
                     }
                 }

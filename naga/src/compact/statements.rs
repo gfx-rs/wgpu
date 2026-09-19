@@ -179,6 +179,14 @@ impl FunctionTracer<'_> {
                         self.expressions_used.insert(hit_object);
                         self.trace_hit_object_function(fun);
                     }
+                    St::DebugPrintf {
+                        format: _,
+                        ref arguments,
+                    } => {
+                        for &expr in arguments {
+                            self.expressions_used.insert(expr);
+                        }
+                    }
 
                     // Trivial statements.
                     St::Break
@@ -466,6 +474,14 @@ impl FunctionMap {
                     } => {
                         adjust(hit_object);
                         self.adjust_hit_object_function(fun);
+                    }
+                    St::DebugPrintf {
+                        format: _,
+                        ref mut arguments,
+                    } => {
+                        for expr in arguments {
+                            adjust(expr);
+                        }
                     }
 
                     // Trivial statements.

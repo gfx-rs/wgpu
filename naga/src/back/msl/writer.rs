@@ -2743,18 +2743,18 @@ impl<W: Write> Writer<W> {
                 };
 
                 match fun {
-                    Mf::ReverseBits | Mf::ExtractBits | Mf::InsertBits => {
-                        // reverse_bits is listed as requiring MSL 2.1 but that
-                        // is a copy/paste error. Looking at previous snapshots
-                        // on web.archive.org it's present in MSL 1.2.
-                        //
-                        // https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html
-                        // also talks about MSL 1.2 adding "New integer
-                        // functions to extract, insert, and reverse bits, as
-                        // described in Integer Functions."
-                        if context.lang_version < (1, 2) {
-                            return Err(Error::UnsupportedFunction(fun_name.to_string()));
-                        }
+                    // reverse_bits is listed as requiring MSL 2.1 but that
+                    // is a copy/paste error. Looking at previous snapshots
+                    // on web.archive.org it's present in MSL 1.2.
+                    //
+                    // https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html
+                    // also talks about MSL 1.2 adding "New integer
+                    // functions to extract, insert, and reverse bits, as
+                    // described in Integer Functions."
+                    Mf::ReverseBits | Mf::ExtractBits | Mf::InsertBits
+                        if context.lang_version < (1, 2) =>
+                    {
+                        return Err(Error::UnsupportedFunction(fun_name.to_string()));
                     }
                     _ => {}
                 }
@@ -3755,17 +3755,17 @@ impl<W: Write> Writer<W> {
                     crate::MathFunction::FirstLeadingBit => {
                         self.need_bake_expressions.insert(arg);
                     }
+                    // On MSL < 2.1, we emit a polyfill for these functions that uses the
+                    // argument multiple times. This is no longer necessary on MSL >= 2.1.
                     crate::MathFunction::Pack4xI8
                     | crate::MathFunction::Pack4xU8
                     | crate::MathFunction::Pack4xI8Clamp
                     | crate::MathFunction::Pack4xU8Clamp
                     | crate::MathFunction::Unpack4xI8
-                    | crate::MathFunction::Unpack4xU8 => {
-                        // On MSL < 2.1, we emit a polyfill for these functions that uses the
-                        // argument multiple times. This is no longer necessary on MSL >= 2.1.
-                        if context.lang_version < (2, 1) {
-                            self.need_bake_expressions.insert(arg);
-                        }
+                    | crate::MathFunction::Unpack4xU8
+                        if context.lang_version < (2, 1) =>
+                    {
+                        self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::ExtractBits => {
                         // Only argument 1 is re-used.
@@ -4475,6 +4475,26 @@ impl<W: Write> Writer<W> {
                 }
                 crate::Statement::RayPipelineFunction(_) | crate::Statement::HitObject { .. } => {
                     unreachable!()
+                }
+                crate::Statement::DebugPrintf {
+                    ref format,
+                    ref arguments,
+                } => {
+                    // Shader logging is only available in MSL 3.2 and later.
+                    if context.expression.lang_version < (3, 2) {
+                        return Err(Error::UnsupportedDebugPrintf);
+                    }
+
+                    write!(
+                        self.out,
+                        "{level}metal::os_log_default.log_info(\"{}\"",
+                        format
+                    )?;
+                    for &arg in arguments {
+                        write!(self.out, ", ")?;
+                        self.put_expression(arg, &context.expression, true)?;
+                    }
+                    writeln!(self.out, ");")?;
                 }
             }
         }
@@ -8252,10 +8272,8 @@ template <typename A>
                                     )?;
                                     continue;
                                 }
-                                Some(crate::Binding::Location { .. }) => {
-                                    if has_varyings {
-                                        write!(self.out, "{varyings_member_name}.")?;
-                                    }
+                                Some(crate::Binding::Location { .. }) if has_varyings => {
+                                    write!(self.out, "{varyings_member_name}.")?;
                                 }
                                 _ => (),
                             }
@@ -8284,17 +8302,17 @@ template <typename A>
                             )?;
                         }
                         Some(crate::Binding::Location { .. })
-                        | Some(crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. })) => {
-                            if has_varyings {
-                                writeln!(
-                                    self.out,
-                                    "{}const auto {} = {}.{};",
-                                    back::INDENT,
-                                    arg_name,
-                                    varyings_member_name,
-                                    arg_name
-                                )?;
-                            }
+                        | Some(crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. }))
+                            if has_varyings =>
+                        {
+                            writeln!(
+                                self.out,
+                                "{}const auto {} = {}.{};",
+                                back::INDENT,
+                                arg_name,
+                                varyings_member_name,
+                                arg_name
+                            )?;
                         }
                         _ => {}
                     },

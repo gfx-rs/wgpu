@@ -224,12 +224,14 @@ bitflags::bitflags! {
         ///
         /// [`Interpolation::Linear`]: crate::Interpolation::Linear
         const LINEAR_INTERPOLATION = 1 << 44;
+        /// Support for `debugPrintf`.
+        const DEBUG_PRINTF = 1 << 45;
         /// Support for ray tracing invocation reordering: the `hit_object` type,
         /// the `hitObject*` built-in functions, and `reorderThread`.
         ///
         /// Only useful together with [`Capabilities::RAY_TRACING_PIPELINE`], since
         /// hit objects exist only in ray tracing pipeline stages.
-        const RAY_TRACING_INVOCATION_REORDER = 1 << 45;
+        const RAY_TRACING_INVOCATION_REORDER = 1 << 46;
     }
 }
 
@@ -264,6 +266,7 @@ impl Capabilities {
             | Self::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING => {
                 Some(Ext::WgpuBindingArray)
             }
+            Self::DEBUG_PRINTF => Some(Ext::WgpuDebugPrintf),
             _ => None,
         }
     }

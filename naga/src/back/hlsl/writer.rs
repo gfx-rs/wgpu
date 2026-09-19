@@ -3068,6 +3068,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             Statement::CooperativeStore { .. } => unimplemented!(),
             Statement::RayPipelineFunction(_) | Statement::HitObject { .. } => unreachable!(),
+            Statement::DebugPrintf { .. } => unimplemented!(),
         }
 
         Ok(())
@@ -4704,10 +4705,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             TypeInner::Image {
                 class: crate::ImageClass::Storage { format, .. },
                 ..
-            } => {
-                if format.single_component() {
-                    wrapping_type = Some(Scalar::from(format));
-                }
+            } if format.single_component() => {
+                wrapping_type = Some(Scalar::from(format));
             }
             _ => {}
         }

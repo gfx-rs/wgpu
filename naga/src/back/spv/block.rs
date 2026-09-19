@@ -4288,6 +4288,19 @@ impl BlockContext<'_> {
                 } => {
                     self.write_hit_object_function(hit_object, fun, &mut block)?;
                 }
+                Statement::DebugPrintf {
+                    ref format,
+                    ref arguments,
+                } => {
+                    let mut format_params = Vec::with_capacity(arguments.len());
+                    for &arg in arguments {
+                        let word = self.cached[arg];
+                        format_params.push(word);
+                    }
+
+                    self.writer
+                        .write_debug_printf(&mut block, format, &format_params);
+                }
             }
         }
 
