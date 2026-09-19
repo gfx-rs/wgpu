@@ -140,6 +140,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 #### GLES
 
 - Add ANGLE as an opt-in OpenGL backend on Windows via `cfg(windows_angle)`, while keeping the `angle` feature for ANGLE on macOS/iOS. By @csmoe in [#9422](https://github.com/gfx-rs/wgpu/pull/9422).
+- Add support for `clamp` in `DepthBiasState` behind `DownlevelFlags::DEPTH_BIAS_CLAMP`. By @evilpie in [#10403](https://github.com/gfx-rs/wgpu/pull/10403).
 
 #### WebGL
 
