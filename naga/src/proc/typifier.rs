@@ -798,6 +798,20 @@ impl<'a> ResolveContext<'a> {
                     .ok_or(ResolveError::MissingSpecialType)?;
                 TypeResolution::Handle(result)
             }
+            crate::Expression::HitObjectQuery { query, .. } => match query {
+                crate::HitObjectQuery::IsEmpty
+                | crate::HitObjectQuery::IsHit
+                | crate::HitObjectQuery::IsMiss => {
+                    TypeResolution::Value(Ti::Scalar(crate::Scalar::BOOL))
+                }
+                crate::HitObjectQuery::Intersection => {
+                    let result = self
+                        .special_types
+                        .ray_intersection
+                        .ok_or(ResolveError::MissingSpecialType)?;
+                    TypeResolution::Handle(result)
+                }
+            },
             crate::Expression::SubgroupBallotResult => TypeResolution::Value(Ti::Vector {
                 scalar: crate::Scalar::U32,
                 size: crate::VectorSize::Quad,

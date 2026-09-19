@@ -400,6 +400,7 @@ impl crate::TypeInner {
             | Ti::Sampler { .. }
             | Ti::AccelerationStructure { .. }
             | Ti::RayQuery { .. }
+            | Ti::HitObject
             | Ti::BindingArray { .. } => None,
         }
     }
@@ -427,6 +428,7 @@ impl crate::TypeInner {
             | Ti::Sampler { .. }
             | Ti::AccelerationStructure { .. }
             | Ti::RayQuery { .. }
+            | Ti::HitObject
             | Ti::BindingArray { .. } => None,
         }
     }
