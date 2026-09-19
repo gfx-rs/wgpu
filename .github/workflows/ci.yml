@@ -34,7 +34,7 @@ env:
   RUST_LOG: debug,wasm_bindgen_wasm_interpreter=warn,wasm_bindgen_cli_support=warn,walrus=warn,naga=info
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
-  RUSTFLAGS: -D warnings
+  RUSTFLAGS: -D warnings --cfg wgpu_validate_locks_debug
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: e # cache busting
@@ -755,7 +755,7 @@ jobs:
 
       - name: Check Naga snapshots
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
-        run: git add . && git diff --exit-code HEAD naga/tests/out
+        run: git add --intent-to-add -- naga/tests/out && git diff --exit-code HEAD -- naga/tests/out
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         name: Upload comparison images
@@ -881,11 +881,20 @@ jobs:
         with:
           persist-credentials: false
 
+      # Only pull requests give a well-defined commit range. The merge queue
+      # runs the commits that this check already saw on the pull request.
+      - name: Check for AI-authored commits
+        if: github.event_name == 'pull_request'
+        uses: $/.github/actions/ai-commit-check
+
       - name: Install repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
+
+      - name: Check repository files
+        run: cargo --locked xtask sync-repo-files --check
 
       # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
       # files, even ones this step doesn't modify.
