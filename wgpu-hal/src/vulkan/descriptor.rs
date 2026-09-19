@@ -183,14 +183,6 @@ impl DescriptorAllocator {
             .iter()
             .position(|pool| !pool.fragmented && pool.available != 0);
 
-        // Some drivers (e.g. Mali) report fragmentation despite the same-shape
-        // guarantee the spec grants our per-bucket pools, in particular for
-        // update-after-bind pools which cannot be defragmented. Resetting a
-        // pool with no live sets restores that guarantee, so try that first;
-        // otherwise retire the offending pool and try the next one, falling
-        // back to a freshly created pool, as the spec prescribes. A retired
-        // pool is retried once a set is freed from it.
-        // https://docs.vulkan.org/refpages/latest/refpages/source/VkDescriptorPoolCreateInfo.html#_description
         let (raw, pool_index) = loop {
             let index = match candidate {
                 Some(index) => index,
@@ -202,27 +194,43 @@ impl DescriptorAllocator {
                 .descriptor_pool(bucket.pools[index].raw)
                 .set_layouts(core::slice::from_ref(&layout.raw));
 
+            // From https://docs.vulkan.org/refpages/latest/refpages/source/VkDescriptorPoolCreateInfo.html#_description
+            // > if all sets allocated from the pool since it was created or
+            // > most recently reset use the same number of descriptors
+            // > (of each type) and the requested allocation also uses that
+            // > same number of descriptors (of each type), then
+            // > fragmentation must not cause an allocation failure
+            //
+            // These pools satisfy that condition, but some drivers (e.g.
+            // Mali) fail such allocations anyway once a pool has served
+            // a number of allocations; freeing sets does not make the
+            // pool usable again, only resetting it does.
+            //
+            // Recover instead of failing: reset a pool that has no live sets,
+            // otherwise mark the pool `fragmented` so that allocations skip
+            // it. A fragmented pool is reset once its last set is freed.
+            //
+            // See https://github.com/gfx-rs/wgpu/pull/10264
             match unsafe { device.allocate_descriptor_sets(&vk_info) } {
                 Ok(sets) => break (sets[0], index),
                 Err(vk::Result::ERROR_FRAGMENTED_POOL) => {
                     // Resetting a pool restores the spec guarantee that
                     // fragmentation cannot cause an allocation failure, but it
                     // implicitly frees all of the pool's sets, so only reset
-                    // it when none are live.
-                    let empty = bucket.pools[index].available == bucket.pools[index].capacity;
-                    let reset = !created_pool
-                        && empty
-                        && unsafe {
-                            device
-                                .reset_descriptor_pool(
-                                    bucket.pools[index].raw,
-                                    vk::DescriptorPoolResetFlags::empty(),
-                                )
-                                .is_ok()
+                    // a pool that has no live sets and was not just created.
+                    let pool = &bucket.pools[index];
+                    let empty = pool.available == pool.capacity;
+                    if !created_pool && empty {
+                        let reset_result = unsafe {
+                            device.reset_descriptor_pool(
+                                pool.raw,
+                                vk::DescriptorPoolResetFlags::empty(),
+                            )
                         };
-                    if reset {
-                        if let Ok(sets) = unsafe { device.allocate_descriptor_sets(&vk_info) } {
-                            break (sets[0], index);
+                        if reset_result.is_ok() {
+                            if let Ok(sets) = unsafe { device.allocate_descriptor_sets(&vk_info) } {
+                                break (sets[0], index);
+                            }
                         }
                     }
 
@@ -233,7 +241,7 @@ impl DescriptorAllocator {
                         );
                         return Err(crate::DeviceError::OutOfMemory);
                     }
-                    log::warn!(
+                    log::debug!(
                         "Retiring fragmented descriptor pool ({}/{} sets free), retrying on another pool",
                         bucket.pools[index].available,
                         bucket.pools[index].capacity,
@@ -290,14 +298,13 @@ impl DescriptorAllocator {
         // On Mali, freeing descriptor sets from a fragmented pool does not
         // make it usable again; resetting it is what does. That is only safe
         // once no sets are live.
-        if pool.fragmented
-            && pool.available == pool.capacity
-            && unsafe {
+        if pool.fragmented && pool.available == pool.capacity {
+            let reset_result = unsafe {
                 device.reset_descriptor_pool(pool.raw, vk::DescriptorPoolResetFlags::empty())
+            };
+            if reset_result.is_ok() {
+                pool.fragmented = false;
             }
-            .is_ok()
-        {
-            pool.fragmented = false;
         }
         bucket.available_sets += 1;
         bucket.allocated_sets -= 1;
