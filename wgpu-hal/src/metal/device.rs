@@ -1,5 +1,5 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::{mem::align_of, ptr::NonNull};
+use core::{mem::align_of, ptr::NonNull, sync::atomic};
 
 use bytemuck::TransparentWrapper;
 use objc2::{
@@ -278,6 +278,10 @@ impl super::Device {
                     options.setPreserveInvariance(true);
                 }
 
+                if self.shared.use_debug_printf.load(atomic::Ordering::Relaxed) {
+                    options.setEnableLogging(true);
+                }
+
                 let library = self
                     .shared
                     .device
@@ -320,11 +324,9 @@ impl super::Device {
                 let mut immutable_buffer_mask = 0;
                 for (var_handle, var) in module.global_variables.iter() {
                     match var.space {
-                        naga::AddressSpace::WorkGroup => {
-                            if !ep_info[var_handle].is_empty() {
-                                let size = module.types[var.ty].inner.size(module.to_ctx());
-                                wg_memory_sizes.push(size);
-                            }
+                        naga::AddressSpace::WorkGroup if !ep_info[var_handle].is_empty() => {
+                            let size = module.types[var.ty].inner.size(module.to_ctx());
+                            wg_memory_sizes.push(size);
                         }
                         naga::AddressSpace::Uniform | naga::AddressSpace::Storage { .. } => {
                             let br = match var.binding {

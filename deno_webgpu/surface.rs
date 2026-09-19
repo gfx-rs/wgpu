@@ -3,12 +3,12 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use deno_core::GarbageCollected;
-use deno_core::WebIDL;
 use deno_core::_ops::make_cppgc_object;
 use deno_core::cppgc::Ptr;
 use deno_core::op2;
 use deno_core::v8;
+use deno_core::GarbageCollected;
+use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 use wgpu_types::SurfaceStatus;
 
@@ -85,7 +85,7 @@ impl GPUCanvasContext {
         "`GPUCanvasConfiguration.usage` must not include `TRANSIENT_ATTACHMENT`",
       ));
     }
-    let format = configuration.format.clone().into();
+    let format = configuration.format.into();
     let conf = wgpu_types::SurfaceConfiguration {
       usage: configuration.usage.into(),
       format,
@@ -151,7 +151,7 @@ impl GPUCanvasContext {
           wgpu_texture: output.texture.unwrap(),
           default_view: Default::default(),
           dimension: crate::texture::GPUTextureDimension::D2,
-          format: config.format.clone(),
+          format: config.format,
           usage: config.usage,
         };
         let obj = make_cppgc_object(scope, texture);

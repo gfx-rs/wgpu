@@ -484,11 +484,9 @@ impl ApplicationHandler<UniformAction> for App {
                 }
                 wgpu_ctx.queue.present(frame);
             }
-            WindowEvent::Occluded(is_occluded) => {
-                if !is_occluded {
-                    if let Some(window) = &self.window {
-                        window.request_redraw();
-                    }
+            WindowEvent::Occluded(false) => {
+                if let Some(window) = &self.window {
+                    window.request_redraw();
                 }
             }
             _ => {}
