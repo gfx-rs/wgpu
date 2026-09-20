@@ -84,6 +84,11 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 ### Added/New Features
 
+#### naga
+
+- Add the `wgpu_memory_fence` native enable-extension: `storageFence()` and `workgroupFence()` provide acquire/release memory ordering without execution synchronization or the uniform-control-flow requirement of the barrier built-ins. On SPIR-V this is `OpMemoryBarrier`. Metal does not support the extension: it has no fence-only barrier. By @kvark in [#10016](https://github.com/gfx-rs/wgpu/issues/10016).
+- The Metal backend now supports the `@volatile` memory decoration (`volatile` device pointers), and rejects `@coherent` below MSL 3.2 instead of emitting a qualifier older Metal cannot compile. By @kvark in [#10016](https://github.com/gfx-rs/wgpu/issues/10016).
+
 #### General
 
 - Support the `wasm64-unknown-unknown` target for the web backend. Building for wasm64 requires a nightly toolchain with `-Z build-std=std,panic_abort`. By @nickbabcock in [#9836](https://github.com/gfx-rs/wgpu/pull/9836).
@@ -196,6 +201,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 #### naga
 
+- Emit spec-compliant SPIR-V under the Vulkan memory model: storage and workgroup accesses carry `NonPrivatePointer` with availability/visibility scopes, barrier semantics include `MakeAvailable`/`MakeVisible`, atomics and storage barriers use `QueueFamily` scope instead of `Device`, and the `Coherent`/`Volatile` decorations (forbidden by the model) are replaced by per-access memory operands. The model is declared whenever the module requires it (cooperative matrices) or when `spv::Options::use_vulkan_memory_model` requests it. Accesses to storage globals that no entry point writes stay private. By @kvark in [#10016](https://github.com/gfx-rs/wgpu/issues/10016).
 - Fix panics when shader `var<immediate>` size is larger than 256 bytes. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
 - Fix a panic in the SPIR-V frontend when a subgroup collective operation (e.g. `OpGroupNonUniformUMin`) or `OpGroupNonUniformBallot` used an argument whose value needed to be spilled to a temporary variable, such as when the argument was computed inside a loop. By @nazar-pc in [#9957](https://github.com/gfx-rs/wgpu/issues/9957).
 - Lower `@builtin(instance_index)` in `@any_hit` and `@closest_hit` entry points to SPIR-V's `InstanceId` rather than `InstanceIndex`, which Vulkan only permits in the vertex stage. By @JMS55 in [10154](https://github.com/gfx-rs/wgpu/pull/10154).

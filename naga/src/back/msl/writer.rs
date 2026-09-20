@@ -411,7 +411,7 @@ struct TypedGlobalVariableParts {
 }
 
 impl TypedGlobalVariable<'_> {
-    fn to_parts(&self) -> Result<TypedGlobalVariableParts, Error> {
+    fn to_parts(&self) -> TypedGlobalVariableParts {
         let var = &self.module.global_variables[self.handle];
         let name = &self.names[&NameKey::GlobalVariable(self.handle)];
 
@@ -442,11 +442,11 @@ impl TypedGlobalVariable<'_> {
             first_time: false,
         };
 
-        let (coherent, space, access, reference) = if matches!(
+        let (volatile, coherent, space, access, reference) = if matches!(
             self.module.types[var.ty].inner,
             crate::TypeInner::BindingArray { .. }
         ) {
-            ("", "", "", "")
+            ("", "", "", "", "")
         } else {
             let access = if var.space.needs_access_qualifier()
                 && !self.usage.intersects(valid::GlobalUse::WRITE)
@@ -457,36 +457,36 @@ impl TypedGlobalVariable<'_> {
             };
             match (var.space.to_msl_name(), var.space) {
                 (Some(space), crate::AddressSpace::WorkGroup) => {
-                    ("", space, access, if self.reference { "&" } else { "" })
+                    ("", "", space, access, if self.reference { "&" } else { "" })
                 }
                 (Some(space), _) if self.reference => {
-                    let coherent = if var
+                    let is_coherent = var
                         .memory_decorations
-                        .contains(crate::MemoryDecorations::COHERENT)
-                    {
-                        "coherent "
-                    } else {
-                        ""
-                    };
-                    (coherent, space, access, "&")
+                        .contains(crate::MemoryDecorations::COHERENT);
+                    let is_volatile = var
+                        .memory_decorations
+                        .contains(crate::MemoryDecorations::VOLATILE);
+                    let volatile = if is_volatile { "volatile " } else { "" };
+                    let coherent = if is_coherent { "coherent " } else { "" };
+                    (volatile, coherent, space, access, "&")
                 }
-                _ => ("", "", "", ""),
+                _ => ("", "", "", "", ""),
             }
         };
 
         let ty = format!(
-            "{coherent}{space}{}{ty_name}{}{access}{reference}",
+            "{volatile}{coherent}{space}{}{ty_name}{}{access}{reference}",
             if space.is_empty() { "" } else { " " },
             if access.is_empty() { "" } else { " " },
         );
 
-        Ok(TypedGlobalVariableParts {
+        TypedGlobalVariableParts {
             ty_name: ty,
             var_name: name.clone(),
-        })
+        }
     }
     pub(super) fn try_fmt<W: Write>(&self, out: &mut W) -> BackendResult {
-        let parts = self.to_parts()?;
+        let parts = self.to_parts();
 
         Ok(write!(out, "{} {}", parts.ty_name, parts.var_name)?)
     }
@@ -4138,9 +4138,11 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Kill => {
                     writeln!(self.out, "{level}{NAMESPACE}::discard_fragment();")?;
                 }
-                crate::Statement::ControlBarrier(flags)
-                | crate::Statement::MemoryBarrier(flags) => {
+                crate::Statement::ControlBarrier(flags) => {
                     self.write_barrier(flags, level)?;
+                }
+                crate::Statement::MemoryBarrier(_) => {
+                    return Err(Error::UnsupportedMemoryFence);
                 }
                 crate::Statement::Store { pointer, value } => {
                     self.put_store(pointer, value, level, context)?
@@ -4596,6 +4598,14 @@ impl<W: Write> Writer<W> {
 
         if module.uses_mesh_shaders() && options.lang_version < (3, 0) {
             return Err(Error::UnsupportedMeshShader);
+        }
+        if options.lang_version < (3, 2)
+            && module.global_variables.iter().any(|(_, var)| {
+                var.memory_decorations
+                    .contains(crate::MemoryDecorations::COHERENT)
+            })
+        {
+            return Err(Error::UnsupportedCoherent);
         }
         self.needs_object_memory_barriers = module
             .entry_points
@@ -7845,7 +7855,7 @@ template <typename A>
                             usage,
                             reference: true,
                         };
-                        let parts = tyvar.to_parts()?;
+                        let parts = tyvar.to_parts();
                         let mut binding = String::new();
                         if let Some(resolved) = resolved {
                             resolved.try_fmt(&mut binding)?;

@@ -226,6 +226,9 @@ bitflags::bitflags! {
         const LINEAR_INTERPOLATION = 1 << 44;
         /// Support for `debugPrintf`.
         const DEBUG_PRINTF = 1 << 45;
+        /// Support for the `storageFence` and `workgroupFence` built-in
+        /// functions: memory ordering without execution synchronization.
+        const MEMORY_FENCE = 1 << 46;
     }
 }
 
@@ -260,6 +263,7 @@ impl Capabilities {
                 Some(Ext::WgpuBindingArray)
             }
             Self::DEBUG_PRINTF => Some(Ext::WgpuDebugPrintf),
+            Self::MEMORY_FENCE => Some(Ext::WgpuMemoryFence),
             _ => None,
         }
     }

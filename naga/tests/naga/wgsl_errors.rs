@@ -5496,6 +5496,42 @@ fn main() {
 }
 
 #[test]
+fn memory_fence_enable_extension() {
+    check(
+        r#"@compute @workgroup_size(1)
+fn main() {
+    storageFence();
+}
+"#,
+        r#"error: the `wgpu_memory_fence` enable extension is not enabled
+  ┌─ wgsl:3:5
+  │
+3 │     storageFence();
+  │     ^^^^^^^^^^^^ the `wgpu_memory_fence` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_memory_fence;` at the top of the shader, before any other items.
+
+"#,
+    );
+    check(
+        r#"@compute @workgroup_size(1)
+fn main() {
+    workgroupFence();
+}
+"#,
+        r#"error: the `wgpu_memory_fence` enable extension is not enabled
+  ┌─ wgsl:3:5
+  │
+3 │     workgroupFence();
+  │     ^^^^^^^^^^^^^^ the `wgpu_memory_fence` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_memory_fence;` at the top of the shader, before any other items.
+
+"#,
+    );
+}
+
+#[test]
 fn debug_printf_rejects_string_literal_outside_call() {
     check_error_matches(
         r#"enable wgpu_debug_printf;

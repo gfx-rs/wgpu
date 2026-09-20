@@ -129,6 +129,7 @@ pub struct SpirvOutParameters {
     pub ray_query_initialization_tracking: bool,
     pub use_storage_input_output_16: bool,
     pub emit_int_div_checks: bool,
+    pub use_vulkan_memory_model: bool,
 }
 impl Default for SpirvOutParameters {
     fn default() -> Self {
@@ -143,6 +144,7 @@ impl Default for SpirvOutParameters {
             ray_query_initialization_tracking: true,
             use_storage_input_output_16: true,
             emit_int_div_checks: true,
+            use_vulkan_memory_model: false,
             binding_map: naga::back::spv::BindingMap::default(),
         }
     }
@@ -182,6 +184,7 @@ impl SpirvOutParameters {
             mesh_shader_primitive_indices_clamp: shared_info.mesh_output_validation,
             trace_ray_argument_validation: true,
             emit_int_div_checks: self.emit_int_div_checks,
+            use_vulkan_memory_model: self.use_vulkan_memory_model,
         }
     }
 }
