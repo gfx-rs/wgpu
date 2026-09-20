@@ -12,7 +12,6 @@ OpMemberDecorate %5 1 Offset 16
 OpMemberDecorate %7 0 Offset 0
 OpMemberDecorate %7 1 Offset 4
 OpMemberDecorate %7 2 Offset 8
-OpDecorate %9 ArrayStride 4
 OpMemberDecorate %12 0 Offset 0
 OpMemberDecorate %13 0 Offset 0
 OpDecorate %17 BuiltIn GlobalInvocationId

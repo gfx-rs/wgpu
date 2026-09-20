@@ -32,11 +32,6 @@ OpName %12 "w_mem"
 OpName %14 "output"
 OpName %18 "main"
 OpDecorate %5 ArrayStride 4
-OpDecorate %8 ArrayStride 4
-OpDecorate %10 ArrayStride 32
-OpMemberDecorate %11 0 Offset 0
-OpMemberDecorate %11 1 Offset 2048
-OpMemberDecorate %11 2 Offset 2052
 OpDecorate %14 DescriptorSet 0
 OpDecorate %14 Binding 0
 OpDecorate %15 Block
