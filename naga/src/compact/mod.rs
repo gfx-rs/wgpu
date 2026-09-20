@@ -78,6 +78,9 @@ impl From<KeepUnused> for bool {
 /// # Panics
 ///
 /// If `module` would not pass validation, this may panic.
+///
+/// [`Function::expressions`]: crate::Function::expressions
+/// [`Emit`]: crate::Statement::Emit
 pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     compact_with_global_origins(module, keep_unused);
 }
