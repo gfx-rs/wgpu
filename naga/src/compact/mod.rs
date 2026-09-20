@@ -78,6 +78,9 @@ impl From<KeepUnused> for bool {
 /// # Panics
 ///
 /// If `module` would not pass validation, this may panic.
+///
+/// [`Function::expressions`]: crate::Function::expressions
+/// [`Emit`]: crate::Statement::Emit
 pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     // The trickiest part of compaction is determining what is used and what is
     // not. Once we have computed that correctly, it's easy enough to call
