@@ -762,8 +762,11 @@ impl Buffer {
 
         self.try_map_async(offset, size, op)
             .map_err(|(mut operation, err)| {
-                self.device
-                    .handle_error(err.clone(), Some(&self.label), "Buffer::map_async");
+                // invalid buffer should not raise validation error
+                if !matches!(err, BufferAccessError::InvalidResource(_)) {
+                    self.device
+                        .handle_error(err.clone(), Some(&self.label), "Buffer::map_async");
+                }
                 if let Some(callback) = operation.callback.take() {
                     callback(Err(err));
                 }
