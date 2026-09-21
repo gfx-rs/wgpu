@@ -751,7 +751,11 @@ jobs:
         run: |
           set -e
 
-          cargo --locked xtask test --llvm-cov
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a cargo --locked xtask test --llvm-cov
+          else
+            cargo --locked xtask test --llvm-cov
+          fi
 
       - name: Check Naga snapshots
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
