@@ -110,48 +110,52 @@ fn exec_js(script: &str) -> Result<(), Error> {
     check_js_stderr(script, "")
 }
 
-#[test]
-fn hello_compute_example() -> Result<(), Error> {
-    exec_js_file("examples/hello-compute.js")
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn features() -> Result<(), Error> {
-    // Check that we don't expose native-only features.
-    exec_js(
-        r#"
+    #[test]
+    fn hello_compute_example() -> Result<(), Error> {
+        exec_js_file("examples/hello-compute.js")
+    }
+
+    #[test]
+    fn features() -> Result<(), Error> {
+        // Check that we don't expose native-only features.
+        exec_js(
+            r#"
         const adapter = await navigator.gpu.requestAdapter();
 
         if (adapter.features.has("mappable-primary-buffers")) {
             throw new TypeError("Adapter should not report support for wgpu native-only features");
         }
     "#,
-    )?;
+        )?;
 
-    // Check for features tested by the CTS. Because these are optional
-    // features, the applicable CTS tests will pass (silently, without
-    // exercising the functionality) when support is not reported. This test
-    // serves to bridge the gap between the coverage provided by the CTS
-    // ("feature must work if available") and our desired coverage ("feature
-    // must be implemented and work"), in case we inadvertently stop reporting
-    // support for a feature. (There ought to also be relevant wgpu tests of the
-    // feature that would catch this, but better to be safe.)
-    exec_js(
-        r#"
+        // Check for features tested by the CTS. Because these are optional
+        // features, the applicable CTS tests will pass (silently, without
+        // exercising the functionality) when support is not reported. This test
+        // serves to bridge the gap between the coverage provided by the CTS
+        // ("feature must work if available") and our desired coverage ("feature
+        // must be implemented and work"), in case we inadvertently stop reporting
+        // support for a feature. (There ought to also be relevant wgpu tests of the
+        // feature that would catch this, but better to be safe.)
+        exec_js(
+            r#"
         const adapter = await navigator.gpu.requestAdapter();
 
         if (!adapter.features.has("primitive-index")) {
             throw new TypeError("Adapter should report support for primitive-index feature");
         }
     "#,
-    )?;
+        )?;
 
-    Ok(())
-}
+        Ok(())
+    }
 
-#[test]
-fn uncaptured_error() -> Result<(), Error> {
-    check_js_stderr(
+    #[test]
+    fn uncaptured_error() -> Result<(), Error> {
+        check_js_stderr(
         r#"
             const code = `const val: u32 = 1.1;`;
 
@@ -161,11 +165,11 @@ fn uncaptured_error() -> Result<(), Error> {
         "#,
         "cts_runner caught WebGPU error: Shader '' parsing error. Concrete error is available via `get_compilation_info`\n",
     )
-}
+    }
 
-#[test]
-fn shader_compilation_message() {
-    check_js_stdout(
+    #[test]
+    fn shader_compilation_message() {
+        check_js_stdout(
         r#"
             const code = `const val: u32 = 1.1;`;
 
@@ -201,66 +205,67 @@ fn shader_compilation_message() {
         "cts_runner caught WebGPU error: Shader '' parsing error. Concrete error is available via `get_compilation_info`\n",
     )
     .unwrap();
-}
+    }
 
-#[test]
-fn lst_files_are_sorted() {
-    let workspace_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .to_path_buf();
-    let files = ["test.lst", "fail.lst", "skip.lst"];
+    #[test]
+    fn lst_files_are_sorted() {
+        let workspace_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let files = ["test.lst", "fail.lst", "skip.lst"];
 
-    for file in &files {
-        let file_path = workspace_dir.join("cts_runner").join(file);
-        let contents = fs::read_to_string(&file_path).unwrap();
-        let selectors = contents
-            .lines()
-            .enumerate()
-            .filter_map(|(idx, line)| {
-                // Extract selectors (including in comments, removing fails-if annotations)
-                let trimmed = line.trim();
-                trimmed
-                    .find("webgpu:")
-                    .or_else(|| trimmed.find("unittests:"))
-                    .map(|pos| (idx, &trimmed[pos..]))
-            })
-            .map(|(idx, line)| {
-                // Crude en_US sort. '_' < ',' < ':' < digits < letters
-                let sort_key = line
-                    .chars()
-                    .map(|c| {
-                        if c.is_ascii_uppercase() {
-                            c.to_ascii_lowercase()
-                        } else if c == '_' {
-                            ' '
-                        } else if c == ':' {
-                            '-'
-                        } else {
-                            c
-                        }
-                    })
-                    .collect::<String>();
-                (idx, line, sort_key)
-            })
-            .collect::<Vec<_>>();
+        for file in &files {
+            let file_path = workspace_dir.join("cts_runner").join(file);
+            let contents = fs::read_to_string(&file_path).unwrap();
+            let selectors = contents
+                .lines()
+                .enumerate()
+                .filter_map(|(idx, line)| {
+                    // Extract selectors (including in comments, removing fails-if annotations)
+                    let trimmed = line.trim();
+                    trimmed
+                        .find("webgpu:")
+                        .or_else(|| trimmed.find("unittests:"))
+                        .map(|pos| (idx, &trimmed[pos..]))
+                })
+                .map(|(idx, line)| {
+                    // Crude en_US sort. '_' < ',' < ':' < digits < letters
+                    let sort_key = line
+                        .chars()
+                        .map(|c| {
+                            if c.is_ascii_uppercase() {
+                                c.to_ascii_lowercase()
+                            } else if c == '_' {
+                                ' '
+                            } else if c == ':' {
+                                '-'
+                            } else {
+                                c
+                            }
+                        })
+                        .collect::<String>();
+                    (idx, line, sort_key)
+                })
+                .collect::<Vec<_>>();
 
-        let mut sorted = selectors.clone();
-        sorted.sort_by_key(|(_, _, sort_key)| sort_key.clone());
+            let mut sorted = selectors.clone();
+            sorted.sort_by_key(|(_, _, sort_key)| sort_key.clone());
 
-        if selectors != sorted {
-            let (found, expected) = selectors
-                .iter()
-                .zip(sorted.iter())
-                .find(|(a, b)| a != b)
-                .unwrap();
-            panic!(
-                "{} is not sorted. First mismatch on line {}:\nFound: {}\nShould be: {}",
-                file,
-                found.0 + 1,
-                found.1,
-                expected.1,
-            );
+            if selectors != sorted {
+                let (found, expected) = selectors
+                    .iter()
+                    .zip(sorted.iter())
+                    .find(|(a, b)| a != b)
+                    .unwrap();
+                panic!(
+                    "{} is not sorted. First mismatch on line {}:\nFound: {}\nShould be: {}",
+                    file,
+                    found.0 + 1,
+                    found.1,
+                    expected.1,
+                );
+            }
         }
     }
 }
