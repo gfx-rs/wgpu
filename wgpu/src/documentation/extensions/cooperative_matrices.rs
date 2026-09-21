@@ -52,11 +52,11 @@ On the `Adapter`, `wgpu` exposes:
 
 Each `CooperativeMatrixProperties` describes a single supported configuration. Fields are:
 
-- `m_size`: height of matrices A and C (type: `naga::CooperativeSize`)
-- `n_size`: width of matrices B and C (type: `naga::CooperativeSize`)
-- `k_size`: shared inner dimension of A and B (type: `naga::CooperativeSize`)
-- `ab_type`: scalar element type for A and B (type: `naga::Scalar`)
-- `cr_type`: scalar element type for C and the result (type: `naga::Scalar`)
+- `m_size`: height of matrices A and C (type: `u32`)
+- `n_size`: width of matrices B and C (type: `u32`)
+- `k_size`: shared inner dimension of A and B (type: `u32`)
+- `ab_type`: scalar element type for A and B (type: [`CooperativeScalarType`])
+- `cr_type`: scalar element type for C and the result (type: [`CooperativeScalarType`])
 - `saturating_accumulation`: `bool` indicating whether overflow clamping on accumulation
   is supported for this configuration
 
@@ -130,15 +130,14 @@ Returns all cooperative matrix configurations supported by the adapter/backend.
 ### Structures
 
 - `CooperativeMatrixProperties`
-  - `m_size: naga::CooperativeSize`
-  - `n_size: naga::CooperativeSize`
-  - `k_size: naga::CooperativeSize`
-  - `ab_type: naga::Scalar`
-  - `cr_type: naga::Scalar`
+  - `m_size: u32`
+  - `n_size: u32`
+  - `k_size: u32`
+  - `ab_type: CooperativeScalarType`
+  - `cr_type: CooperativeScalarType`
   - `saturating_accumulation: bool`
 
-The `naga` types (`CooperativeSize`, `Scalar`) are part of the shader translation layer and
-determine the legal WGSL/cooperative matrix combinations.
+Only sizes that naga can express in WGSL are reported, which currently means 8 and 16.
 
 There are currently no dedicated `wgpu` buffer or texture types for cooperative matrices; they are
 expressed in WGSL as special value types accessed via pointers into ordinary `var<storage>` /
@@ -165,20 +164,21 @@ The shader is invalid if any cooperative matrix types or builtins are used witho
 
 A cooperative matrix is a value type parameterized by:
 
-- tile size (M×N),
+- tile size, spelled `coop_mat{columns}x{rows}`,
 - scalar element type `T`, and
 - role `R` indicating how the matrix participates in the multiply-accumulate:
   - `A`: left operand
   - `B`: right operand
   - `C`: accumulator / result
 
-Conceptually:
+Note that the columns come first, following WGSL's own `mat{c}x{r}` types. Since
+`A` is M×K, `B` is K×N and `C` is M×N in the rows×columns convention used by
+[`CooperativeMatrixProperties`], their WGSL spellings are:
 
 ```wgsl
-// A: MxK, B: KxN, C: MxN
-type coop_matMxN<T, A>;
-type coop_matMxN<T, B>;
-type coop_matMxN<T, C>;
+type coop_matKxM<T, A>;
+type coop_matNxK<T, B>;
+type coop_matNxM<T, C>;
 ```
 
 Concrete examples (sizes and types must match a supported configuration from
@@ -194,9 +194,16 @@ alias CoopMatC = coop_mat8x8<f32, C>;
 alias CoopMat16x16A = coop_mat16x16<f16, A>;
 alias CoopMat16x16B = coop_mat16x16<f16, B>;
 alias CoopMat16x16C = coop_mat16x16<f32, C>;
+
+// M=8, N=16, K=16 half-precision inputs with an f32 accumulator, as
+// advertised by Intel Battlemage. `A` is 8 rows by 16 columns, so it is
+// spelled `coop_mat16x8`.
+alias CoopMat8x16x16A = coop_mat16x8<f16, A>;
+alias CoopMat8x16x16B = coop_mat16x16<f16, B>;
+alias CoopMat8x16x16C = coop_mat16x8<f32, C>;
 ```
 
-The actual set of legal `(M, N, T, R)` combinations is defined by the cooperative matrix
+The actual set of legal `(M, N, K, T, R)` combinations is defined by the cooperative matrix
 properties returned at runtime; shaders must not use arbitrary combinations.
 
 ### Roles and semantics
@@ -236,12 +243,12 @@ select the memory layout:
 fn coopLoad<T, R>(
     ptr: ptr<STORAGE_CLASS, T>, // base pointer to scalar or vector elements
     stride: u32                  // elements between adjacent columns
-) -> coop_matMxN<T, R>;
+) -> coop_matCxR<T, R>;
 
 fn coopLoadT<T, R>(
     ptr: ptr<STORAGE_CLASS, T>, // base pointer to scalar or vector elements
     stride: u32                  // elements between adjacent rows
-) -> coop_matMxN<T, R>;
+) -> coop_matCxR<T, R>;
 ```
 
 - Loads an M×N tile (or M×K / K×N, depending on role and operation) from memory pointed to by `ptr`.
@@ -261,13 +268,13 @@ selection mirrors the load builtins:
 
 ```wgsl
 fn coopStore<T, R>(
-    value: coop_matMxN<T, R>,
+    value: coop_matCxR<T, R>,
     ptr: ptr<STORAGE_CLASS, T>,
     stride: u32
 );
 
 fn coopStoreT<T, R>(
-    value: coop_matMxN<T, R>,
+    value: coop_matCxR<T, R>,
     ptr: ptr<STORAGE_CLASS, T>,
     stride: u32
 );
@@ -283,10 +290,10 @@ Perform a matrix multiply-accumulate operation on cooperative matrices:
 
 ```wgsl
 fn coopMultiplyAdd<Tab, Tcr, MA, KA, KB, NB>(
-    a: coop_matMAxKA<Tab, A>, // A: MAxKA tile
-    b: coop_matKBxNB<Tab, B>, // B: KBxNB tile (KB == KA)
-    c: coop_matMAxNB<Tcr, C>  // C: MAxNB accumulator/result
-) -> coop_matMAxNB<Tcr, C>;
+    a: coop_matKAxMA<Tab, A>, // A: MA rows by KA columns
+    b: coop_matNBxKB<Tab, B>, // B: KB rows by NB columns (KB == KA)
+    c: coop_matNBxMA<Tcr, C>  // C: MA rows by NB columns, accumulator/result
+) -> coop_matNBxMA<Tcr, C>;
 ```
 
 Semantics:
@@ -407,13 +414,13 @@ Implementations must validate the following where possible:
   [`CooperativeMatrixProperties`] entry for the current adapter/backend.
 - Workgroup size, shader stage, and other pipeline configuration constraints required
   by the backend are satisfied.
+- The operands of `coopMultiplyAdd` have matching roles and are shaped M×K, K×N and M×N.
 
 The following are examples of **undefined behavior** (non-exhaustive):
 
 - Using cooperative matrix operations without enabling the WGSL extension.
 - Using a cooperative matrix type `(M, N, T, R)` not supported by
   [`Adapter::cooperative_matrix_properties()`].
-- Mismatching sizes or roles in `coopMultiplyAdd` (e.g. incompatible M/N/K, or incorrect roles).
 - Executing `coopLoad` / `coopLoadT`, `coopStore` / `coopStoreT`, or `coopMultiplyAdd` in divergent
   control flow within the cooperating execution group.
 - Providing invalid, misaligned, or out-of-bounds pointers to any of the load/store builtins.
@@ -468,4 +475,4 @@ Key points from the example:
 
 */
 
-use crate::{Adapter, CooperativeMatrixProperties, Features};
+use crate::{Adapter, CooperativeMatrixProperties, CooperativeScalarType, Features};

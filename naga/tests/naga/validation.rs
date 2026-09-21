@@ -1945,3 +1945,35 @@ fn functions_share_name() {
     .validate(&module)
     .expect("module should be valid");
 }
+
+#[test]
+fn no_rectangular_cooperative_matrix_in_msl() {
+    let module = naga::front::wgsl::parse_str(
+        "enable wgpu_cooperative_matrix;
+         @compute @workgroup_size(32)
+         fn main() {
+             var a: coop_mat16x8<f32, A>;
+         }",
+    )
+    .unwrap();
+
+    let module_info =
+        valid::Validator::new(ValidationFlags::default(), Capabilities::COOPERATIVE_MATRIX)
+            .validate(&module)
+            .unwrap();
+
+    let options = naga::back::msl::Options {
+        lang_version: (2, 3),
+        ..Default::default()
+    };
+    let err = naga::back::msl::write_string(&module, &module_info, &options, &Default::default())
+        .expect_err("Metal only has 8x8 simdgroup matrices");
+
+    assert!(matches!(
+        err,
+        naga::back::msl::Error::UnsupportedCooperativeMatrixShape {
+            columns: 16,
+            rows: 8
+        }
+    ));
+}

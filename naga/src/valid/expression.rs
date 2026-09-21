@@ -154,6 +154,15 @@ pub enum ExpressionError {
     UnsupportedWidth(crate::MathFunction, crate::ScalarKind, crate::Bytes),
     #[error("Invalid operand for cooperative op")]
     InvalidCooperativeOperand(Handle<crate::Expression>),
+    #[error("Cooperative multiply-add operands must be shaped MxK, KxN and MxN, but A is {a_rows}x{a_columns}, B is {b_rows}x{b_columns} and C is {c_rows}x{c_columns}")]
+    InvalidCooperativeShapes {
+        a_rows: u32,
+        a_columns: u32,
+        b_rows: u32,
+        b_columns: u32,
+        c_rows: u32,
+        c_columns: u32,
+    },
     #[error("Shift amount exceeds the bit width of {lhs_type:?}")]
     ShiftAmountTooLarge {
         lhs_type: crate::TypeInner,
@@ -1411,19 +1420,30 @@ impl super::Validator {
                 ShaderStages::COMPUTE
             }
             E::CooperativeMultiplyAdd { a, b, c } => {
-                let roles = [
-                    crate::CooperativeRole::A,
-                    crate::CooperativeRole::B,
-                    crate::CooperativeRole::C,
-                ];
-                for (operand, expected_role) in [a, b, c].into_iter().zip(roles) {
-                    match resolver[operand] {
-                        Ti::CooperativeMatrix { role, .. } if role == expected_role => {}
-                        ref other => {
-                            log::debug!("{expected_role:?} operand type: {other:?}");
-                            return Err(ExpressionError::InvalidCooperativeOperand(a));
-                        }
+                let shape = |operand, expected_role| match resolver[operand] {
+                    Ti::CooperativeMatrix {
+                        columns,
+                        rows,
+                        role,
+                        ..
+                    } if role == expected_role => Ok((rows as u32, columns as u32)),
+                    ref other => {
+                        log::debug!("{expected_role:?} operand type: {other:?}");
+                        Err(ExpressionError::InvalidCooperativeOperand(operand))
                     }
+                };
+                let (a_rows, a_columns) = shape(a, crate::CooperativeRole::A)?;
+                let (b_rows, b_columns) = shape(b, crate::CooperativeRole::B)?;
+                let (c_rows, c_columns) = shape(c, crate::CooperativeRole::C)?;
+                if a_columns != b_rows || a_rows != c_rows || b_columns != c_columns {
+                    return Err(ExpressionError::InvalidCooperativeShapes {
+                        a_rows,
+                        a_columns,
+                        b_rows,
+                        b_columns,
+                        c_rows,
+                        c_columns,
+                    });
                 }
                 ShaderStages::COMPUTE
             }

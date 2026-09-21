@@ -118,6 +118,22 @@ const fn scalar_is_int(scalar: crate::Scalar) -> bool {
     }
 }
 
+/// Metal only provides 8x8 `simdgroup_matrix` types, so reject any other shape
+/// rather than emitting a `simdgroup_float16x8` that does not exist.
+const fn check_cooperative_shape(
+    columns: crate::CooperativeSize,
+    rows: crate::CooperativeSize,
+) -> Result<(), Error> {
+    use crate::CooperativeSize::Eight;
+    match (columns, rows) {
+        (Eight, Eight) => Ok(()),
+        _ => Err(Error::UnsupportedCooperativeMatrixShape {
+            columns: columns as u32,
+            rows: rows as u32,
+        }),
+    }
+}
+
 /// Prefix for cached clamped level-of-detail values for `ImageLoad` expressions.
 const CLAMPED_LOD_LOAD_PREFIX: &str = "clamped_lod_e";
 
@@ -4738,6 +4754,9 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, "}};")?;
                     generated_external_texture_wrapper = true;
                 }
+                crate::TypeInner::CooperativeMatrix { columns, rows, .. } => {
+                    check_cooperative_shape(columns, rows)?;
+                }
                 _ => {}
             }
 
@@ -6673,6 +6692,7 @@ template <typename A>
         rows: crate::CooperativeSize,
         pointer: Handle<crate::Expression>,
     ) -> BackendResult {
+        check_cooperative_shape(columns, rows)?;
         let ptr_ty = func_ctx.resolve_type(pointer, &module.types);
         let space = ptr_ty.pointer_space().unwrap();
         let space_name = space.to_msl_name().unwrap_or_default();
