@@ -2733,6 +2733,18 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         self.encoder.set_immediates(offset, data);
     }
 
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.encoder.insert_debug_marker(label);
+    }
+
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.encoder.push_debug_group(group_label);
+    }
+
+    fn pop_debug_group(&mut self) {
+        self.encoder.pop_debug_group();
+    }
+
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         self.encoder.draw(
             vertices.end - vertices.start,

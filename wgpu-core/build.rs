@@ -25,5 +25,15 @@ fn main() {
             any(target_os = "linux", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd")
         ) },
         metal: { all(target_vendor = "apple", feature = "metal") },
+
+        // `wgpu_validate_locks` can also be set directly, if desired.
+        // See `wgpu-core/src/lock/mod.rs`.
+        wgpu_validate_locks: {
+            all(
+                debug_assertions,
+                wgpu_validate_locks_debug,
+                not(target_family = "wasm")
+            )
+        }
     }
 }

@@ -615,6 +615,10 @@ pub trait RenderBundleEncoderInterface: CommonTraits {
     );
     fn set_immediates(&mut self, offset: u32, data: &[u8]);
 
+    fn insert_debug_marker(&mut self, label: &str);
+    fn push_debug_group(&mut self, group_label: &str);
+    fn pop_debug_group(&mut self);
+
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
     fn draw_indirect(
