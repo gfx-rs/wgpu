@@ -236,7 +236,7 @@ define_lock_ranks! {
     rank TEXTURE_VIEWS "Texture::views" followed by { }
     rank TLAS_MAX_INTERSECTION_IDX "Tlas::max_intersection_index" followed by { }
     rank TLAS_REQUIRED_INTERSECTION_TYPES "Tlas::required_intersection_types" followed by { }
-    
+
     // Ranks not connected to the graph, alphabetical.
     rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
 
