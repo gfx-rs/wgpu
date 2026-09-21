@@ -1226,7 +1226,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1acbc46b960480c4959213714511e22f9a2e0d361520693bcf5057b5924f53e"
 dependencies = [
  "const_panic",
- "encase_derive",
+ "encase_derive 0.12.1",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "encase"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdf6312703f02e0625e1750eadf556054b6da5e44960a3a771e9127cb357dbd8"
+dependencies = [
+ "const_panic",
+ "encase_derive 0.13.0",
  "thiserror 2.0.20",
 ]
 
@@ -1236,7 +1247,16 @@ version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e30d38c47336a0afbdfde297b442944041cf6dccbb1a79eceea16abfb27a92a"
 dependencies = [
- "encase_derive_impl",
+ "encase_derive_impl 0.12.1",
+]
+
+[[package]]
+name = "encase_derive"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8429e24f02acf09b0fb3c4560c329a1a79fab14bbb9c2d632c073d0a61b0816a"
+dependencies = [
+ "encase_derive_impl 0.13.0",
 ]
 
 [[package]]
@@ -1248,6 +1268,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "encase_derive_impl"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ac3bf06563c72a9b64bc4d8da00ebcabd1d776ea4526c3b1461697142fe340f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
 ]
 
 [[package]]
@@ -1664,7 +1695,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0990707078259d76f65619a692e87c82645be66cbee224173cd1af151e54ba2"
 dependencies = [
  "bytemuck",
- "encase",
+ "encase 0.12.1",
 ]
 
 [[package]]
@@ -4998,7 +5029,7 @@ dependencies = [
  "cfg-if",
  "console_error_panic_hook",
  "console_log",
- "encase",
+ "encase 0.13.0",
  "env_logger",
  "fern",
  "flume",
