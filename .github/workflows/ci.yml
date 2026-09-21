@@ -738,6 +738,10 @@ jobs:
         if: matrix.os == 'ubuntu-24.04'
         uses: $/.github/actions/install-mesa
 
+      - name: (Linux) Install libxkbcommon
+        if: matrix.os == 'ubuntu-24.04'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon0 libxkbcommon-x11-0
+
       - name: Delete Naga snapshots
         shell: bash
         run: |
