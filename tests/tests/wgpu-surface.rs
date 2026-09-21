@@ -6,16 +6,27 @@
 //!
 //! For web, this is covered by an ordinary gpu test,
 //! `tests/tests/wgpu-gpu/surface_configure.rs`.
+//!
+//! This test builds only for native platforms, and not for iOS/tvOS/watchOS.
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(
+    target_arch = "wasm32",
+    all(target_vendor = "apple", not(target_os = "macos"))
+))]
 fn main() {}
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(not(target_vendor = "apple"), target_os = "macos")
+))]
 fn main() {
     native::main();
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    any(not(target_vendor = "apple"), target_os = "macos")
+))]
 mod native {
     use std::sync::Arc;
 
