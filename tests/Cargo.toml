@@ -30,6 +30,10 @@ harness = true
 name = "wgpu-validation"
 harness = true
 
+[[test]]
+name = "wgpu-surface"
+harness = false
+
 [features]
 webgl = ["wgpu/webgl"]
 exhaust = ["wgpu/exhaust"]
@@ -77,6 +81,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+winit.workspace = true
 approx.workspace = true
 glam.workspace = true
 half = { workspace = true, features = ["bytemuck", "std"] }
