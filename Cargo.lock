@@ -4816,6 +4816,7 @@ dependencies = [
  "anyhow",
  "bincode 2.0.1",
  "bytemuck",
+ "env_logger",
  "naga",
  "naga-test",
  "nanorand",

@@ -87,6 +87,13 @@ pub fn run_tests(
         &["nextest", "run"]
     };
 
+    // Test concurrency, and therefore how much contention the tests see, follows
+    // the CPU count. See <https://github.com/gfx-rs/wgpu/issues/9248>.
+    match std::thread::available_parallelism() {
+        Ok(n) => log::info!("Host reports {n} logical CPUs"),
+        Err(e) => log::info!("Could not determine the host CPU count: {e}"),
+    }
+
     log::info!("Generating .gpuconfig file based on gpus on the system");
 
     // We use a test to generate the .gpuconfig file instead of using the cli directly
