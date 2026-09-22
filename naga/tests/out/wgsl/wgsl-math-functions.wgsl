@@ -1,5 +1,8 @@
 @fragment
 fn main() {
+    var runtime_f32_: f32 = 1f;
+    var runtime_i32_: i32 = 1i;
+
     let v = vec4(0f);
     let a = degrees(1f);
     let b = radians(1f);
@@ -10,6 +13,12 @@ fn main() {
     let sign_b = vec4<i32>(-1i, -1i, -1i, -1i);
     let sign_d = vec4<f32>(-1f, -1f, -1f, -1f);
     let sign_e = vec4<f32>(0f, 0f, 0f, 0f);
+    let _e30 = runtime_f32_;
+    let sign_f = sign(_e30);
+    let _e32 = runtime_f32_;
+    let sign_g = sign(vec4(_e32));
+    let _e35 = runtime_i32_;
+    let sign_h = sign(_e35);
     let flb_b = vec2<i32>(-1i, -1i);
     let flb_c = vec2<u32>(0u, 0u);
     let ftb_c = vec2<i32>(0i, 0i);
