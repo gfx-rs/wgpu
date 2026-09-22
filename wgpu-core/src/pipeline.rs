@@ -77,8 +77,8 @@ pub struct PassthroughInterface {
 #[derive(Debug)]
 pub enum ShaderModuleState {
     NagaModule {
-        raw: Box<dyn hal::DynShaderModule>,
-        interface: validation::Interface,
+        hal: hal::NagaShader,
+        runtime_checks: wgt::ShaderRuntimeChecks,
     },
     Passthrough {
         raw: Box<dyn hal::DynShaderModule>,
@@ -113,8 +113,8 @@ impl Drop for ShaderModule {
             return;
         };
         match state {
-            ShaderModuleState::NagaModule { raw, .. }
-            | ShaderModuleState::Passthrough { raw, .. } => unsafe {
+            ShaderModuleState::NagaModule { .. } => (),
+            ShaderModuleState::Passthrough { raw, .. } => unsafe {
                 self.device.raw().destroy_shader_module(raw);
             },
         }
