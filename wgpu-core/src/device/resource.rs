@@ -45,7 +45,10 @@ use crate::{
     },
     instance::{Adapter, RequestDeviceError},
     lock::{rank, Mutex, RwLock},
-    pipeline::{self, shader_module_error_into_compilation_info, ColorStateError},
+    pipeline::{
+        self, shader_module_error_into_compilation_info, ColorStateError, PassthroughInterface,
+        ShaderMetaData,
+    },
     pool::ResourcePool,
     resource::{
         self, Buffer, BufferState, ExternalTexture, ExternalTextureState, Labeled, ParentDevice,
@@ -56,7 +59,7 @@ use crate::{
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
-    validation::{self, check_color_attachment_count, PassthroughInterface, ShaderMetaData},
+    validation::{self, check_color_attachment_count},
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers,
 };
