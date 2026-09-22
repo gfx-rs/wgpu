@@ -207,20 +207,27 @@ pub enum CreateShaderModuleError {
     #[cfg(feature = "wgsl")]
     #[error("Shader '{label}' parsing error. Concrete error is available via `get_compilation_info`", label = _0.label.as_deref().unwrap_or_default())]
     Parsing(ShaderError<naga::front::wgsl::ParseError>),
+
     #[cfg(feature = "glsl")]
     #[error("Shader '{label}' parsing error. Concrete error is available via `get_compilation_info`", label = _0.label.as_deref().unwrap_or_default())]
     ParsingGlsl(ShaderError<naga::front::glsl::ParseErrors>),
+
     #[cfg(feature = "spirv")]
     #[error("Shader '{label}' parsing error. Concrete error is available via `get_compilation_info`", label = _0.label.as_deref().unwrap_or_default())]
     ParsingSpirV(ShaderError<naga::front::spv::Error>),
+
     #[error("Failed to generate the backend-specific code")]
     Generation,
+
     #[error(transparent)]
     Device(#[from] DeviceError),
+
     #[error("Shader '{label}' validation error. Concrete error is available via `get_compilation_info`", label = _0.label.as_deref().unwrap_or_default())]
     Validation(ShaderError<naga::WithSpan<naga::valid::ValidationError>>),
+
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+
     #[error(
         "Shader global {bind:?} uses a group index {group} that exceeds the max_bind_groups limit of {limit}."
     )]
@@ -229,8 +236,10 @@ pub enum CreateShaderModuleError {
         group: u32,
         limit: u32,
     },
+
     #[error("Generic shader passthrough does not contain any code compatible with this backend.")]
     NotCompiledForBackend,
+
     #[error(
         "Generic passthrough shaders which use GLSL or DXIL must contain exactly one entry point."
     )]
