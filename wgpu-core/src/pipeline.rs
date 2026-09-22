@@ -161,10 +161,10 @@ impl ShaderModule {
     ) -> Result<String, validation::StageError> {
         let state = self.state()?;
         match state.interface {
-            ShaderMetaData::Interface(ref interface) => {
+            ShaderMetaData::NagaModule { ref interface } => {
                 interface.finalize_entry_point_name(stage, entry_point)
             }
-            ShaderMetaData::Passthrough(ref interface) => {
+            ShaderMetaData::Passthrough { ref interface } => {
                 finalize_passthrough_entry_point_name(interface, entry_point)
             }
         }
