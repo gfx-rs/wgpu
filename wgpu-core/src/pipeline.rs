@@ -75,15 +75,15 @@ pub struct PassthroughInterface {
 // box the standard interface though.
 #[expect(clippy::large_enum_variant)]
 #[derive(Debug)]
-pub enum ShaderMetaData {
-    NagaModule { interface: validation::Interface },
-    Passthrough { interface: PassthroughInterface },
-}
-
-#[derive(Debug)]
-pub(crate) struct ShaderModuleState {
-    pub(crate) raw: Box<dyn hal::DynShaderModule>,
-    pub(crate) interface: ShaderMetaData,
+pub enum ShaderModuleState {
+    NagaModule {
+        raw: Box<dyn hal::DynShaderModule>,
+        interface: validation::Interface,
+    },
+    Passthrough {
+        raw: Box<dyn hal::DynShaderModule>,
+        interface: PassthroughInterface,
+    },
 }
 
 #[derive(Debug)]
@@ -112,8 +112,11 @@ impl Drop for ShaderModule {
         else {
             return;
         };
-        unsafe {
-            self.device.raw().destroy_shader_module(state.raw);
+        match state {
+            ShaderModuleState::NagaModule { raw, .. }
+            | ShaderModuleState::Passthrough { raw, .. } => unsafe {
+                self.device.raw().destroy_shader_module(raw);
+            },
         }
     }
 }
@@ -173,11 +176,11 @@ impl ShaderModule {
         entry_point: Option<&str>,
     ) -> Result<String, validation::StageError> {
         let state = self.state()?;
-        match state.interface {
-            ShaderMetaData::NagaModule { ref interface } => {
+        match state {
+            ShaderModuleState::NagaModule { ref interface, .. } => {
                 interface.finalize_entry_point_name(stage, entry_point)
             }
-            ShaderMetaData::Passthrough { ref interface } => {
+            ShaderModuleState::Passthrough { ref interface, .. } => {
                 finalize_passthrough_entry_point_name(interface, entry_point)
             }
         }
