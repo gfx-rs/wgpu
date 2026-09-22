@@ -534,6 +534,7 @@ impl Writer {
                 descriptor_set: res_binding.group,
                 binding: res_binding.binding,
                 binding_array_size: None,
+                external_texture: false,
             }),
             None => Err(Error::MissingBinding(*res_binding)),
         }
