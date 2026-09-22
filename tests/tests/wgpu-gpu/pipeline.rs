@@ -7,6 +7,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE,
         RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX,
         NO_TARGETLESS_RENDER,
+        RENDER_PIPELINE_ASYNC_RESOLVES_A_USABLE_PIPELINE,
+        RENDER_PIPELINE_ASYNC_REPORTS_AN_INVALID_DESCRIPTOR_EXACTLY_ONCE,
     ]);
 }
 
@@ -226,3 +228,134 @@ static NO_TARGETLESS_RENDER: GpuTestConfiguration = GpuTestConfiguration::new()
             )),
         )
     });
+
+// A pipeline awaited from `create_render_pipeline_async` must be usable for drawing: on the
+// backends without an asynchronous form the future is already resolved, and on WebGPU it
+// resolves with the pipeline `createRenderPipelineAsync()` compiled.
+#[apply(gpu_test!)]
+static RENDER_PIPELINE_ASYNC_RESOLVES_A_USABLE_PIPELINE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().enable_noop())
+        .run_async(|ctx| async move {
+            let vs_module = ctx.device.create_shader_module(TRIVIAL_VERTEX_SHADER_DESC);
+            let fs_module = ctx
+                .device
+                .create_shader_module(TRIVIAL_FRAGMENT_SHADER_DESC);
+
+            let pipeline = ctx
+                .device
+                .create_render_pipeline_async(&wgpu::RenderPipelineDescriptor {
+                    label: Some("async render pipeline"),
+                    layout: None,
+                    vertex: wgpu::VertexState {
+                        module: &vs_module,
+                        entry_point: Some("main"),
+                        compilation_options: Default::default(),
+                        buffers: &[],
+                    },
+                    primitive: Default::default(),
+                    depth_stencil: None,
+                    multisample: Default::default(),
+                    fragment: Some(wgpu::FragmentState {
+                        module: &fs_module,
+                        entry_point: Some("main"),
+                        compilation_options: Default::default(),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: wgpu::TextureFormat::Rgba8Unorm,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                    }),
+                    multiview_mask: None,
+                    cache: None,
+                })
+                .await
+                .expect("async render pipeline creation failed");
+
+            let target = ctx.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("async render pipeline target"),
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            });
+            let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
+
+            let mut encoder = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("async render pipeline pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &target_view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations::default(),
+                    })],
+                    ..Default::default()
+                });
+                pass.set_pipeline(&pipeline);
+                pass.draw(0..3, 0..1);
+            }
+            ctx.queue.submit([encoder.finish()]);
+
+            ctx.async_poll(wgpu::PollType::wait_indefinitely())
+                .await
+                .unwrap();
+        });
+
+// An invalid descriptor has to be reported exactly once: WebGPU rejects the promise and
+// leaves the error scope empty, every other backend creates the pipeline synchronously and
+// reports through the error scope while the future resolves to `Ok`. Reporting through
+// both would make the caller handle the same failure twice; reporting through neither would
+// lose it.
+#[apply(gpu_test!)]
+static RENDER_PIPELINE_ASYNC_REPORTS_AN_INVALID_DESCRIPTOR_EXACTLY_ONCE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().enable_noop())
+        .run_async(|ctx| async move {
+            let vs_module = ctx.device.create_shader_module(TRIVIAL_VERTEX_SHADER_DESC);
+
+            let scope = ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            // Neither color targets nor a depth-stencil attachment: the pipeline has
+            // nothing to render to.
+            let pipeline =
+                ctx.device
+                    .create_render_pipeline_async(&wgpu::RenderPipelineDescriptor {
+                        label: Some("targetless async render pipeline"),
+                        layout: None,
+                        vertex: wgpu::VertexState {
+                            module: &vs_module,
+                            entry_point: Some("main"),
+                            compilation_options: Default::default(),
+                            buffers: &[],
+                        },
+                        primitive: Default::default(),
+                        depth_stencil: None,
+                        multisample: Default::default(),
+                        fragment: None,
+                        multiview_mask: None,
+                        cache: None,
+                    });
+            // Pop before awaiting: the guard is neither `Send` nor `Sync`, and a synchronous
+            // backend has already reported into the scope by now.
+            let scope_result = scope.pop();
+
+            let from_future = pipeline.await.err();
+            let from_scope = scope_result.await;
+
+            assert_ne!(
+                from_future.is_some(),
+                from_scope.is_some(),
+                "expected exactly one report of the invalid descriptor, \
+                 got future error {from_future:?} and scope error {from_scope:?}"
+            );
+        });
