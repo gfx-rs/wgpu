@@ -5,11 +5,11 @@ RWByteAddressBuffer ints : register(u1);
 void main()
 {
     float _e4 = asfloat(floats.Load(4));
-    floats.Store(0, asuint(sign(_e4)));
+    floats.Store(0, asuint(float(sign(_e4))));
     float _e8 = asfloat(floats.Load(8));
     float _e11 = asfloat(floats.Load(12));
     float2 v = float2(_e8, _e11);
-    float2 signs = sign(v);
+    float2 signs = float2(sign(v));
     floats.Store(8, asuint(signs.x));
     floats.Store(12, asuint(signs.y));
     int _e24 = asint(ints.Load(4));

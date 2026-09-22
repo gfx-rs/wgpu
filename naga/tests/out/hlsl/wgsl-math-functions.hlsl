@@ -79,9 +79,9 @@ void main()
     float4 sign_d = float4(-1.0, -1.0, -1.0, -1.0);
     float4 sign_e = float4(0.0, 0.0, 0.0, 0.0);
     float _e30 = runtime_f32_;
-    float sign_f = sign(_e30);
+    float sign_f = float(sign(_e30));
     float _e32 = runtime_f32_;
-    float4 sign_g = sign((_e32).xxxx);
+    float4 sign_g = float4(sign((_e32).xxxx));
     int _e35 = runtime_i32_;
     int sign_h = sign(_e35);
     int2 flb_b = int2(int(-1), int(-1));
