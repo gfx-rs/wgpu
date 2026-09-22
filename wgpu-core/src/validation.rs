@@ -7,7 +7,7 @@ use alloc::{
 use core::fmt;
 
 use arrayvec::ArrayVec;
-use hashbrown::{hash_map::Entry, HashSet};
+use hashbrown::hash_map::Entry;
 use shader_io_deductions::{display_deductions_as_optional_list, MaxVertexShaderOutputDeduction};
 use thiserror::Error;
 use wgt::{
@@ -399,21 +399,6 @@ pub struct Interface {
     /// allowed to contain multiple entry points with the same name, as long as
     /// they are for different shader stages.
     entry_points: FastHashMap<EntryPointKey, EntryPoint>,
-}
-
-#[derive(Debug)]
-pub struct PassthroughInterface {
-    pub entry_point_names: HashSet<String>,
-}
-
-// Most shaders will use a standard interface which is very large.
-// Passthrough shaders have a much smaller interface. No reason to
-// box the standard interface though.
-#[expect(clippy::large_enum_variant)]
-#[derive(Debug)]
-pub enum ShaderMetaData {
-    NagaModule { interface: Interface },
-    Passthrough { interface: PassthroughInterface },
 }
 
 #[derive(Clone, Debug, Error)]
