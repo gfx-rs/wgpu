@@ -412,16 +412,8 @@ pub struct PassthroughInterface {
 #[expect(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum ShaderMetaData {
-    Interface(Interface),
-    Passthrough(PassthroughInterface),
-}
-impl ShaderMetaData {
-    pub fn interface(&self) -> Option<&Interface> {
-        match self {
-            Self::Interface(i) => Some(i),
-            Self::Passthrough(_) => None,
-        }
-    }
+    NagaModule { interface: Interface },
+    Passthrough { interface: PassthroughInterface },
 }
 
 #[derive(Clone, Debug, Error)]

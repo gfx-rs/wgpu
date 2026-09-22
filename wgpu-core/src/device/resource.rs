@@ -2705,7 +2705,7 @@ impl Device {
         let module = pipeline::ShaderModule {
             state: ResourceState::Valid(pipeline::ShaderModuleState {
                 raw,
-                interface: ShaderMetaData::Interface(interface),
+                interface: ShaderMetaData::NagaModule { interface },
             }),
             device: self.clone(),
             label: desc.label.to_string(),
@@ -2865,13 +2865,15 @@ impl Device {
         let module = pipeline::ShaderModule {
             state: ResourceState::Valid(pipeline::ShaderModuleState {
                 raw,
-                interface: ShaderMetaData::Passthrough(PassthroughInterface {
-                    entry_point_names: descriptor
-                        .entry_points
-                        .iter()
-                        .map(|e| e.name.to_string())
-                        .collect(),
-                }),
+                interface: ShaderMetaData::Passthrough {
+                    interface: PassthroughInterface {
+                        entry_point_names: descriptor
+                            .entry_points
+                            .iter()
+                            .map(|e| e.name.to_string())
+                            .collect(),
+                    },
+                },
             }),
             device: self.clone(),
             label: descriptor.label.to_string(),
@@ -4548,10 +4550,12 @@ impl Device {
             None => None,
         };
 
-        if shader_module_state.interface.interface().is_none() && pipeline_layout.is_none() {
-            return Err(pipeline::CreatePipelineError::Implicit(
-                pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
-            ));
+        if let ShaderMetaData::Passthrough { .. } = shader_module_state.interface {
+            if pipeline_layout.is_none() {
+                return Err(pipeline::CreatePipelineError::Implicit(
+                    pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
+                ));
+            }
         }
 
         let mut binding_layout_source = match pipeline_layout {
@@ -4577,7 +4581,7 @@ impl Device {
                 )
                 .map_err(stage_err)?;
 
-            if let Some(interface) = shader_module_state.interface.interface() {
+            if let ShaderMetaData::NagaModule { ref interface } = shader_module_state.interface {
                 io = interface
                     .check_stage(
                         &mut binding_layout_source,
@@ -5168,7 +5172,8 @@ impl Device {
                         .map_err(stage_err)?;
                     vertex_shader_module.same_device(self)?;
 
-                    if vertex_shader_module_state.interface.interface().is_none() {
+                    if let ShaderMetaData::Passthrough { .. } = vertex_shader_module_state.interface
+                    {
                         passthrough_stages |= stage_bit;
                     }
 
@@ -5179,7 +5184,9 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = vertex_shader_module_state.interface.interface() {
+                    if let ShaderMetaData::NagaModule { ref interface } =
+                        vertex_shader_module_state.interface
+                    {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5220,7 +5227,7 @@ impl Device {
                         .map_err(stage_err)?;
                     task_shader_module.same_device(self)?;
 
-                    if task_shader_module_state.interface.interface().is_none() {
+                    if let ShaderMetaData::Passthrough { .. } = task_shader_module_state.interface {
                         passthrough_stages |= stage_bit;
                     }
 
@@ -5231,7 +5238,9 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = task_shader_module_state.interface.interface() {
+                    if let ShaderMetaData::NagaModule { ref interface } =
+                        task_shader_module_state.interface
+                    {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5270,7 +5279,7 @@ impl Device {
                         .map_err(stage_err)?;
                     mesh_shader_module.same_device(self)?;
 
-                    if mesh_shader_module_state.interface.interface().is_none() {
+                    if let ShaderMetaData::Passthrough { .. } = mesh_shader_module_state.interface {
                         passthrough_stages |= stage_bit;
                     }
 
@@ -5281,7 +5290,9 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = mesh_shader_module_state.interface.interface() {
+                    if let ShaderMetaData::NagaModule { ref interface } =
+                        mesh_shader_module_state.interface
+                    {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5325,7 +5336,7 @@ impl Device {
                     .map_err(stage_err)?;
                 shader_module.same_device(self)?;
 
-                if shader_module_state.interface.interface().is_none() {
+                if let ShaderMetaData::Passthrough { .. } = shader_module_state.interface {
                     passthrough_stages |= stage_bit;
                 }
 
@@ -5340,7 +5351,8 @@ impl Device {
                     )
                     .map_err(stage_err)?;
 
-                if let Some(interface) = shader_module_state.interface.interface() {
+                if let ShaderMetaData::NagaModule { ref interface } = shader_module_state.interface
+                {
                     io = interface
                         .check_stage(
                             &mut binding_layout_source,
