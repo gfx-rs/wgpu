@@ -47,7 +47,6 @@ use crate::{
     lock::{rank, Mutex, RwLock},
     pipeline::{
         self, shader_module_error_into_compilation_info, ColorStateError, PassthroughInterface,
-        ShaderMetaData,
     },
     pool::ResourcePool,
     resource::{
@@ -2706,10 +2705,7 @@ impl Device {
         };
 
         let module = pipeline::ShaderModule {
-            state: ResourceState::Valid(pipeline::ShaderModuleState {
-                raw,
-                interface: ShaderMetaData::NagaModule { interface },
-            }),
+            state: ResourceState::Valid(pipeline::ShaderModuleState::NagaModule { raw, interface }),
             device: self.clone(),
             label: desc.label.to_string(),
             compilation_info: wgt::CompilationInfo::default(),
@@ -2866,16 +2862,14 @@ impl Device {
         };
 
         let module = pipeline::ShaderModule {
-            state: ResourceState::Valid(pipeline::ShaderModuleState {
+            state: ResourceState::Valid(pipeline::ShaderModuleState::Passthrough {
                 raw,
-                interface: ShaderMetaData::Passthrough {
-                    interface: PassthroughInterface {
-                        entry_point_names: descriptor
-                            .entry_points
-                            .iter()
-                            .map(|e| e.name.to_string())
-                            .collect(),
-                    },
+                interface: PassthroughInterface {
+                    entry_point_names: descriptor
+                        .entry_points
+                        .iter()
+                        .map(|e| e.name.to_string())
+                        .collect(),
                 },
             }),
             device: self.clone(),
@@ -4557,6 +4551,7 @@ impl Device {
         let mut io = validation::StageIo::default();
         let mut binding_layout_source;
         let final_entry_point_name;
+        let module;
 
         {
             let stage = validation::ShaderStageForValidation::Compute;
@@ -4572,8 +4567,8 @@ impl Device {
                 )
                 .map_err(stage_err)?;
 
-            match shader_module_state.interface {
-                ShaderMetaData::NagaModule { ref interface } => {
+            match shader_module_state {
+                pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
                     binding_layout_source = match pipeline_layout {
                         Some(pipeline_layout) => {
                             validation::BindingLayoutSource::Provided(pipeline_layout)
@@ -4591,18 +4586,26 @@ impl Device {
                             None,
                         )
                         .map_err(stage_err)?;
+
+                    module = &**raw;
                 }
-                ShaderMetaData::Passthrough { .. } => match pipeline_layout {
-                    Some(pipeline_layout) => {
-                        binding_layout_source =
-                            validation::BindingLayoutSource::Provided(pipeline_layout);
+                pipeline::ShaderModuleState::Passthrough { raw, .. } => {
+                    match pipeline_layout {
+                        Some(pipeline_layout) => {
+                            binding_layout_source =
+                                validation::BindingLayoutSource::Provided(pipeline_layout);
+                        }
+                        None => {
+                            return Err(pipeline::CreatePipelineError::Implicit(
+                                pipeline::ImplicitLayoutError::Passthrough(
+                                    wgt::ShaderStages::COMPUTE,
+                                ),
+                            ));
+                        }
                     }
-                    None => {
-                        return Err(pipeline::CreatePipelineError::Implicit(
-                            pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
-                        ));
-                    }
-                },
+
+                    module = &**raw;
+                }
             }
         }
 
@@ -4637,7 +4640,7 @@ impl Device {
             label: desc.label.to_hal(self.instance_flags),
             layout: pipeline_layout.raw()?,
             stage: hal::ProgrammableStage {
-                module: shader_module_state.raw.as_ref(),
+                module,
                 entry_point: final_entry_point_name.as_ref(),
                 constants: &desc.stage.constants,
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
@@ -5190,8 +5193,9 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    match vertex_shader_module_state.interface {
-                        ShaderMetaData::NagaModule { ref interface } => {
+                    let module;
+                    match vertex_shader_module_state {
+                        pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
                             io = interface
                                 .check_stage(
                                     &mut binding_layout_source,
@@ -5203,14 +5207,16 @@ impl Device {
                                 )
                                 .map_err(stage_err)?;
                             validated_stages |= stage_bit;
+                            module = &**raw;
                         }
-                        ShaderMetaData::Passthrough { .. } => {
+                        pipeline::ShaderModuleState::Passthrough { raw, .. } => {
                             passthrough_stages |= stage_bit;
+                            module = &**raw;
                         }
                     }
 
                     Some(hal::ProgrammableStage {
-                        module: vertex_shader_module_state.raw.as_ref(),
+                        module,
                         entry_point: &_vertex_entry_point_name,
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
@@ -5244,8 +5250,9 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    match task_shader_module_state.interface {
-                        ShaderMetaData::NagaModule { ref interface } => {
+                    let module;
+                    match task_shader_module_state {
+                        pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
                             io = interface
                                 .check_stage(
                                     &mut binding_layout_source,
@@ -5257,14 +5264,16 @@ impl Device {
                                 )
                                 .map_err(stage_err)?;
                             validated_stages |= stage_bit;
+                            module = &**raw;
                         }
-                        ShaderMetaData::Passthrough { .. } => {
+                        pipeline::ShaderModuleState::Passthrough { raw, .. } => {
                             passthrough_stages |= stage_bit;
+                            module = &**raw;
                         }
                     }
 
                     Some(hal::ProgrammableStage {
-                        module: task_shader_module_state.raw.as_ref(),
+                        module,
                         entry_point: &_task_entry_point_name,
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
@@ -5296,8 +5305,9 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    match mesh_shader_module_state.interface {
-                        ShaderMetaData::NagaModule { ref interface } => {
+                    let module;
+                    match mesh_shader_module_state {
+                        pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
                             io = interface
                                 .check_stage(
                                     &mut binding_layout_source,
@@ -5309,14 +5319,16 @@ impl Device {
                                 )
                                 .map_err(stage_err)?;
                             validated_stages |= stage_bit;
+                            module = &**raw;
                         }
-                        ShaderMetaData::Passthrough { .. } => {
+                        pipeline::ShaderModuleState::Passthrough { raw, .. } => {
                             passthrough_stages |= stage_bit;
+                            module = &**raw;
                         }
                     }
 
                     Some(hal::ProgrammableStage {
-                        module: mesh_shader_module_state.raw.as_ref(),
+                        module,
                         entry_point: &_mesh_entry_point_name,
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
@@ -5357,8 +5369,9 @@ impl Device {
                     )
                     .map_err(stage_err)?;
 
-                match shader_module_state.interface {
-                    ShaderMetaData::NagaModule { ref interface } => {
+                let module;
+                match shader_module_state {
+                    pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5370,14 +5383,16 @@ impl Device {
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
+                        module = &**raw;
                     }
-                    ShaderMetaData::Passthrough { .. } => {
+                    pipeline::ShaderModuleState::Passthrough { raw, .. } => {
                         passthrough_stages |= stage_bit;
+                        module = &**raw;
                     }
                 }
 
                 Some(hal::ProgrammableStage {
-                    module: shader_module_state.raw.as_ref(),
+                    module,
                     entry_point: &fragment_entry_point_name,
                     constants: &fragment_state.stage.constants,
                     zero_initialize_workgroup_memory: fragment_state
