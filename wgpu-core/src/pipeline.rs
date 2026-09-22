@@ -27,9 +27,7 @@ use crate::{
     },
     pipeline_cache,
     resource::{InvalidResourceError, Labeled, ResourceState, TrackingData},
-    resource_log,
-    validation::{self, ShaderMetaData},
-    Label, LabelHelpers as _,
+    resource_log, validation, FastHashSet, Label, LabelHelpers as _,
 };
 
 /// Information about buffer bindings, which
@@ -66,6 +64,21 @@ pub struct ShaderModuleDescriptor<'a> {
 
 pub type ShaderModuleDescriptorPassthrough<'a> =
     wgt::CreateShaderModuleDescriptorPassthrough<'a, Label<'a>>;
+
+#[derive(Debug)]
+pub struct PassthroughInterface {
+    pub entry_point_names: FastHashSet<String>,
+}
+
+// Most shaders will use a standard interface which is very large.
+// Passthrough shaders have a much smaller interface. No reason to
+// box the standard interface though.
+#[expect(clippy::large_enum_variant)]
+#[derive(Debug)]
+pub enum ShaderMetaData {
+    NagaModule { interface: validation::Interface },
+    Passthrough { interface: PassthroughInterface },
+}
 
 #[derive(Debug)]
 pub(crate) struct ShaderModuleState {
@@ -172,7 +185,7 @@ impl ShaderModule {
 }
 
 fn finalize_passthrough_entry_point_name(
-    interface: &validation::PassthroughInterface,
+    interface: &PassthroughInterface,
     entry_point: Option<&str>,
 ) -> Result<String, validation::StageError> {
     if let Some(ep) = entry_point {
@@ -1289,8 +1302,8 @@ impl RenderPipeline {
 mod tests {
     use super::*;
 
-    fn passthrough_interface(entry_point_names: &[&str]) -> validation::PassthroughInterface {
-        validation::PassthroughInterface {
+    fn passthrough_interface(entry_point_names: &[&str]) -> PassthroughInterface {
+        PassthroughInterface {
             entry_point_names: entry_point_names
                 .iter()
                 .map(|name| (*name).to_owned())
