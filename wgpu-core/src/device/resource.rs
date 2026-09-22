@@ -4562,21 +4562,9 @@ impl Device {
             None => None,
         };
 
-        if let ShaderMetaData::Passthrough { .. } = shader_module_state.interface {
-            if pipeline_layout.is_none() {
-                return Err(pipeline::CreatePipelineError::Implicit(
-                    pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
-                ));
-            }
-        }
-
-        let mut binding_layout_source = match pipeline_layout {
-            Some(pipeline_layout) => validation::BindingLayoutSource::Provided(pipeline_layout),
-            None => validation::BindingLayoutSource::new_derived(&self.limits),
-        };
         let mut minimum_binding_sizes = FastHashMap::default();
         let mut io = validation::StageIo::default();
-
+        let mut binding_layout_source;
         let final_entry_point_name;
 
         {
@@ -4593,17 +4581,37 @@ impl Device {
                 )
                 .map_err(stage_err)?;
 
-            if let ShaderMetaData::NagaModule { ref interface } = shader_module_state.interface {
-                io = interface
-                    .check_stage(
-                        &mut binding_layout_source,
-                        &mut minimum_binding_sizes,
-                        &final_entry_point_name,
-                        stage,
-                        io,
-                        None,
-                    )
-                    .map_err(stage_err)?;
+            match shader_module_state.interface {
+                ShaderMetaData::NagaModule { ref interface } => {
+                    binding_layout_source = match pipeline_layout {
+                        Some(pipeline_layout) => {
+                            validation::BindingLayoutSource::Provided(pipeline_layout)
+                        }
+                        None => validation::BindingLayoutSource::new_derived(&self.limits),
+                    };
+
+                    io = interface
+                        .check_stage(
+                            &mut binding_layout_source,
+                            &mut minimum_binding_sizes,
+                            &final_entry_point_name,
+                            stage,
+                            io,
+                            None,
+                        )
+                        .map_err(stage_err)?;
+                }
+                ShaderMetaData::Passthrough { .. } => match pipeline_layout {
+                    Some(pipeline_layout) => {
+                        binding_layout_source =
+                            validation::BindingLayoutSource::Provided(pipeline_layout);
+                    }
+                    None => {
+                        return Err(pipeline::CreatePipelineError::Implicit(
+                            pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
+                        ));
+                    }
+                },
             }
         }
 
@@ -5184,11 +5192,6 @@ impl Device {
                         .map_err(stage_err)?;
                     vertex_shader_module.same_device(self)?;
 
-                    if let ShaderMetaData::Passthrough { .. } = vertex_shader_module_state.interface
-                    {
-                        passthrough_stages |= stage_bit;
-                    }
-
                     _vertex_entry_point_name = vertex_shader_module
                         .finalize_entry_point_name(
                             stage.to_naga(),
@@ -5196,21 +5199,25 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let ShaderMetaData::NagaModule { ref interface } =
-                        vertex_shader_module_state.interface
-                    {
-                        io = interface
-                            .check_stage(
-                                &mut binding_layout_source,
-                                &mut minimum_binding_sizes,
-                                &_vertex_entry_point_name,
-                                stage,
-                                io,
-                                Some(desc.primitive.topology),
-                            )
-                            .map_err(stage_err)?;
-                        validated_stages |= stage_bit;
+                    match vertex_shader_module_state.interface {
+                        ShaderMetaData::NagaModule { ref interface } => {
+                            io = interface
+                                .check_stage(
+                                    &mut binding_layout_source,
+                                    &mut minimum_binding_sizes,
+                                    &_vertex_entry_point_name,
+                                    stage,
+                                    io,
+                                    Some(desc.primitive.topology),
+                                )
+                                .map_err(stage_err)?;
+                            validated_stages |= stage_bit;
+                        }
+                        ShaderMetaData::Passthrough { .. } => {
+                            passthrough_stages |= stage_bit;
+                        }
                     }
+
                     Some(hal::ProgrammableStage {
                         module: vertex_shader_module_state.raw.as_ref(),
                         entry_point: &_vertex_entry_point_name,
@@ -5239,10 +5246,6 @@ impl Device {
                         .map_err(stage_err)?;
                     task_shader_module.same_device(self)?;
 
-                    if let ShaderMetaData::Passthrough { .. } = task_shader_module_state.interface {
-                        passthrough_stages |= stage_bit;
-                    }
-
                     _task_entry_point_name = task_shader_module
                         .finalize_entry_point_name(
                             stage.to_naga(),
@@ -5250,21 +5253,25 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let ShaderMetaData::NagaModule { ref interface } =
-                        task_shader_module_state.interface
-                    {
-                        io = interface
-                            .check_stage(
-                                &mut binding_layout_source,
-                                &mut minimum_binding_sizes,
-                                &_task_entry_point_name,
-                                stage,
-                                io,
-                                Some(desc.primitive.topology),
-                            )
-                            .map_err(stage_err)?;
-                        validated_stages |= stage_bit;
+                    match task_shader_module_state.interface {
+                        ShaderMetaData::NagaModule { ref interface } => {
+                            io = interface
+                                .check_stage(
+                                    &mut binding_layout_source,
+                                    &mut minimum_binding_sizes,
+                                    &_task_entry_point_name,
+                                    stage,
+                                    io,
+                                    Some(desc.primitive.topology),
+                                )
+                                .map_err(stage_err)?;
+                            validated_stages |= stage_bit;
+                        }
+                        ShaderMetaData::Passthrough { .. } => {
+                            passthrough_stages |= stage_bit;
+                        }
                     }
+
                     Some(hal::ProgrammableStage {
                         module: task_shader_module_state.raw.as_ref(),
                         entry_point: &_task_entry_point_name,
@@ -5291,10 +5298,6 @@ impl Device {
                         .map_err(stage_err)?;
                     mesh_shader_module.same_device(self)?;
 
-                    if let ShaderMetaData::Passthrough { .. } = mesh_shader_module_state.interface {
-                        passthrough_stages |= stage_bit;
-                    }
-
                     _mesh_entry_point_name = mesh_shader_module
                         .finalize_entry_point_name(
                             stage.to_naga(),
@@ -5302,21 +5305,25 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    if let ShaderMetaData::NagaModule { ref interface } =
-                        mesh_shader_module_state.interface
-                    {
-                        io = interface
-                            .check_stage(
-                                &mut binding_layout_source,
-                                &mut minimum_binding_sizes,
-                                &_mesh_entry_point_name,
-                                stage,
-                                io,
-                                Some(desc.primitive.topology),
-                            )
-                            .map_err(stage_err)?;
-                        validated_stages |= stage_bit;
+                    match mesh_shader_module_state.interface {
+                        ShaderMetaData::NagaModule { ref interface } => {
+                            io = interface
+                                .check_stage(
+                                    &mut binding_layout_source,
+                                    &mut minimum_binding_sizes,
+                                    &_mesh_entry_point_name,
+                                    stage,
+                                    io,
+                                    Some(desc.primitive.topology),
+                                )
+                                .map_err(stage_err)?;
+                            validated_stages |= stage_bit;
+                        }
+                        ShaderMetaData::Passthrough { .. } => {
+                            passthrough_stages |= stage_bit;
+                        }
                     }
+
                     Some(hal::ProgrammableStage {
                         module: mesh_shader_module_state.raw.as_ref(),
                         entry_point: &_mesh_entry_point_name,
@@ -5348,10 +5355,6 @@ impl Device {
                     .map_err(stage_err)?;
                 shader_module.same_device(self)?;
 
-                if let ShaderMetaData::Passthrough { .. } = shader_module_state.interface {
-                    passthrough_stages |= stage_bit;
-                }
-
                 fragment_entry_point_name = shader_module
                     .finalize_entry_point_name(
                         stage.to_naga(),
@@ -5363,19 +5366,23 @@ impl Device {
                     )
                     .map_err(stage_err)?;
 
-                if let ShaderMetaData::NagaModule { ref interface } = shader_module_state.interface
-                {
-                    io = interface
-                        .check_stage(
-                            &mut binding_layout_source,
-                            &mut minimum_binding_sizes,
-                            &fragment_entry_point_name,
-                            stage,
-                            io,
-                            Some(desc.primitive.topology),
-                        )
-                        .map_err(stage_err)?;
-                    validated_stages |= stage_bit;
+                match shader_module_state.interface {
+                    ShaderMetaData::NagaModule { ref interface } => {
+                        io = interface
+                            .check_stage(
+                                &mut binding_layout_source,
+                                &mut minimum_binding_sizes,
+                                &fragment_entry_point_name,
+                                stage,
+                                io,
+                                Some(desc.primitive.topology),
+                            )
+                            .map_err(stage_err)?;
+                        validated_stages |= stage_bit;
+                    }
+                    ShaderMetaData::Passthrough { .. } => {
+                        passthrough_stages |= stage_bit;
+                    }
                 }
 
                 Some(hal::ProgrammableStage {
