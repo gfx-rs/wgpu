@@ -120,6 +120,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 - Added `Utf16SourceLocation` which is analogue to `SourceLocation` but using UTF-16 code units. Added `Utf16SourceLocation::to_utf8` and `SourceLocation::to_utf16` to convert between them. By @sagudev in [#10294](https://github.com/gfx-rs/wgpu/pull/10294).
 - Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
+- Added `Device::create_render_pipeline_async` and `Device::create_compute_pipeline_async`. On the WebGPU backend they call `createRenderPipelineAsync()`/`createComputePipelineAsync()`, which let the browser compile the pipeline off the GPU process' main thread. On every backend, validation and internal failures are reported through the returned future instead of the error scope. On native backends the pipeline is still created synchronously and the returned future is already resolved. Resolves [#3794](https://github.com/gfx-rs/wgpu/issues/3794). By @abdymazhit in [#10438](https://github.com/gfx-rs/wgpu/pull/10438).
 
 #### Naga
 
