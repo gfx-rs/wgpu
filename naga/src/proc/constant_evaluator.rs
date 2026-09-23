@@ -3740,13 +3740,17 @@ impl<'a> ConstantEvaluator<'a> {
                 },
             ) => {
                 let ty_deets = |ty| {
-                    let (size, scalar) = self.types[ty].inner.vector_size_and_scalar().unwrap();
-                    (size.unwrap(), scalar)
+                    self.types[ty]
+                        .inner
+                        .vector_size_and_scalar()
+                        .map(|(size, scalar)| {
+                            (size.expect("expected vector type, not scalar type"), scalar)
+                        })
                 };
 
                 let expected_vec_size = {
                     let [(reject_vec_size, _), (accept_vec_size, _)] =
-                        [reject_ty, accept_ty].map(ty_deets);
+                        [reject_ty, accept_ty].map(|ty| ty_deets(ty).unwrap());
 
                     if reject_vec_size != accept_vec_size {
                         return Err(ConstantEvaluatorError::SelectVecRejectAcceptSizeMismatch {
@@ -3765,7 +3769,10 @@ impl<'a> ConstantEvaluator<'a> {
                         ty: condition_ty,
                         components: ref condition_components,
                     } => {
-                        let (condition_vec_size, condition_scalar) = ty_deets(condition_ty);
+                        let Some((condition_vec_size, condition_scalar)) = ty_deets(condition_ty)
+                        else {
+                            return Err(ConstantEvaluatorError::SelectConditionNotAVecBool);
+                        };
                         if condition_scalar.kind != ScalarKind::Bool {
                             return Err(ConstantEvaluatorError::SelectConditionNotAVecBool);
                         }
