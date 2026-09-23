@@ -2786,6 +2786,80 @@ error: type mismatch for reject and accept values in `select` call
 
 ",
         ),
+        (
+            "
+        const cond: array<u32, 4> = array<u32, 4>();
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: `cond` is an `array`, not a `bool` or a `vecN<bool>`.
+            _ = select(vec4(0u), vec4(1u), cond);
+        }
+        ",
+            "\
+error: Expected boolean vector for condition arg., got something else
+  ┌─ wgsl:6:17
+  │
+6 │             _ = select(vec4(0u), vec4(1u), cond);
+  │                 ^^^^^^ see msg
+
+",
+        ),
+        (
+            "
+        struct S { member: bool }
+        const cond: S = S(true);
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: `cond` is a `struct`, not a `bool` or a `vecN<bool>`.
+            _ = select(vec2(0u), vec2(1u), cond);
+        }
+        ",
+            "\
+error: Expected boolean vector for condition arg., got something else
+  ┌─ wgsl:7:17
+  │
+7 │             _ = select(vec2(0u), vec2(1u), cond);
+  │                 ^^^^^^ see msg
+
+",
+        ),
+        (
+            "
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: the condition is a matrix, not a `bool` or a `vecN<bool>`.
+            _ = select(vec2(0.0f), vec2(1.0f), mat2x2f(1, 1, 1, 1));
+        }
+        ",
+            "\
+error: Expected boolean vector for condition arg., got something else
+  ┌─ wgsl:5:17
+  │
+5 │             _ = select(vec2(0.0f), vec2(1.0f), mat2x2f(1, 1, 1, 1));
+  │                 ^^^^^^ see msg
+
+",
+        ),
+        (
+            "
+        const values: array<i32, 4> = array<i32, 4>(1, 2, 3, 4);
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: `array` reject and accept values, even as const-expressions.
+            _ = select(values, values, true);
+        }
+        ",
+            "\
+error: unexpected argument type for `select` call
+  ┌─ wgsl:6:24
+  │
+6 │             _ = select(values, values, true);
+  │                        ^^^^^^ this value of type `array<i32, 4>`
+  │
+  = note: expected a scalar or a `vecN` of scalars
+
+",
+        ),
     ];
 
     for (input, snapshot) in snapshots {
