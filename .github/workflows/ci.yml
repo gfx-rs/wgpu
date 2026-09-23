@@ -738,10 +738,6 @@ jobs:
         if: matrix.os == 'ubuntu-24.04'
         uses: $/.github/actions/install-mesa
 
-      - name: (Linux) Install libxkbcommon
-        if: matrix.os == 'ubuntu-24.04'
-        run: sudo apt-get update && sudo apt-get install -y libxkbcommon0 libxkbcommon-x11-0
-
       - name: Delete Naga snapshots
         shell: bash
         run: |
@@ -755,11 +751,7 @@ jobs:
         run: |
           set -e
 
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a cargo --locked xtask test --llvm-cov
-          else
-            cargo --locked xtask test --llvm-cov
-          fi
+          cargo --locked xtask test --llvm-cov
 
       - name: Check Naga snapshots
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
