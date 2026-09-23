@@ -211,10 +211,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         for bar in barriers {
             let (src_stage, src_access) =
-                conv::map_buffer_usage_to_barrier(bar.usage.from, self.device.queue_flags);
+                conv::map_buffer_usage_to_barrier(bar.usage.from, self.device.queue_flags, self.device.features);
             src_stages |= src_stage;
             let (dst_stage, dst_access) =
-                conv::map_buffer_usage_to_barrier(bar.usage.to, self.device.queue_flags);
+                conv::map_buffer_usage_to_barrier(bar.usage.to, self.device.queue_flags, self.device.features);
             dst_stages |= dst_stage;
 
             vk_barriers.push(
@@ -260,6 +260,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 bar.usage.from,
                 self.device.queue_flags,
                 self.device.private_caps.store_op_none,
+                self.device.features,
             );
             let src_layout = conv::derive_image_layout(bar.usage.from, bar.texture.format);
             src_stages |= src_stage;
@@ -267,6 +268,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 bar.usage.to,
                 self.device.queue_flags,
                 self.device.private_caps.store_op_none,
+                self.device.features,
             );
             let dst_layout = conv::derive_image_layout(bar.usage.to, bar.texture.format);
             dst_stages |= dst_stage;
