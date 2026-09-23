@@ -235,10 +235,7 @@ impl GPUBuffer {
         )
       }
     } else {
-      // SAFETY: buffer is mapped for read
-      // FIXME: but there are overlapping views
-      let slice = unsafe { mapping.slice() };
-      let vec = slice.to_vec();
+      let vec = mapping.read_into_vec(0);
       drop(mapping);
 
       v8::ArrayBuffer::new_backing_store_from_vec(vec)
