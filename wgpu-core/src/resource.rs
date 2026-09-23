@@ -1,4 +1,10 @@
-use alloc::{borrow::Cow, borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec::Vec};
+use alloc::{
+    borrow::{Cow, ToOwned as _},
+    boxed::Box,
+    string::String,
+    sync::Arc,
+    vec::Vec,
+};
 use core::{
     borrow::Borrow,
     fmt,
@@ -12,7 +18,7 @@ use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
     math::align_to,
-    MapMode, TextureSelector,
+    MapMode, TextureSelector, WriteOnly,
 };
 
 #[cfg(feature = "trace")]
@@ -274,19 +280,21 @@ unsafe impl Sync for BufferMapState {}
 pub struct BufferMapping {
     ptr: NonNull<u8>,
     len: u64,
+    mode: MapMode,
     // guard needs to be dropped before the lock
     _guard: wgpu_sync::RwLockReadGuard<'static, BufferMapState>,
     _lock: Arc<RwLock<BufferMapState>>,
 }
 
 impl BufferMapping {
-    fn new(ptr: NonNull<u8>, len: u64, lock: Arc<RwLock<BufferMapState>>) -> Self {
+    fn new(ptr: NonNull<u8>, len: u64, mode: MapMode, lock: Arc<RwLock<BufferMapState>>) -> Self {
         // SAFETY: We want to bypass the lock ranking system here,
         // because the lock is exposed to users.
         let guard = unsafe { lock.underlying() }.read();
         Self {
             ptr,
             len,
+            mode,
             // SAFETY: Guard is tied to the lifetime of the lock,
             // and it will be dropped before the lock.
             _guard: unsafe {
@@ -301,13 +309,16 @@ impl BufferMapping {
 
     /// ### How to safely use the pointer
     ///
-    /// - No other overlapping mapped range should be accessed simultaneously.
     /// - Pointer is only accessed for the length returned by [`BufferMapping::len`].
-    /// - Writing to a [`wgt::BufferUsages::MAP_READ`] buffer can have unexpected results (visible in GPU only if it's coherent).
-    /// - Reading [`wgt::BufferUsages::MAP_WRITE`] buffer with [`wgt::Features::MAPPABLE_PRIMARY_BUFFERS`] feature enabled
-    ///   can have unexpected results due to write combing.
+    /// - Pointer is only accessed while [`BufferMapping`] is alive.
+    /// - Reading is allowed if [`BufferMapping::mode`] is [`MapMode::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set).
+    /// - Writing is allowed if [`BufferMapping::mode`] is [`MapMode::Write`] (buffer has [`wgt::BufferUsages::MAP_WRITE`] set).
     pub fn ptr(&self) -> NonNull<u8> {
         self.ptr
+    }
+
+    pub fn mode(&self) -> MapMode {
+        self.mode
     }
 
     #[expect(clippy::len_without_is_empty)]
@@ -315,13 +326,36 @@ impl BufferMapping {
         self.len
     }
 
-    /// # Safety
-    ///
-    /// - No other overlapping mapped range should be accessed simultaneously.
-    /// - Buffer was mapped with [`wgt::BufferUsages::MAP_READ`] or with [`wgt::BufferUsages::MAP_WRITE`] but without [`wgt::Features::MAPPABLE_PRIMARY_BUFFERS`],
-    ///   otherwise one can have unexpected results due to write combing
-    pub unsafe fn slice(&self) -> &[u8] {
-        unsafe { core::slice::from_raw_parts(self.ptr().as_ptr(), self.len() as usize) }
+    /// Read the contents of the mapped buffer from `offset` into a `Vec<u8>`.
+    /// [`BufferMapping::mode`] must be [`MapMode::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set) otherwise it will panic.
+    pub fn read_into_vec(&self, offset: usize) -> Vec<u8> {
+        assert!(self.mode == MapMode::Read);
+        assert!(offset <= self.len as usize);
+        let mut vec = alloc::vec![0u8; self.len as usize - offset];
+        self.read(&mut vec, offset);
+        vec
+    }
+
+    /// Read the contents of the mapped buffer into `dst` starting from `offset`.
+    /// [`BufferMapping::mode`] must be [`MapMode::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set) otherwise it will panic.
+    pub fn read(&self, dst: &mut [u8], offset: usize) {
+        assert!(self.mode == MapMode::Read);
+        let size = self.len - offset as u64;
+        assert!(dst.len() <= size as usize);
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                self.ptr.as_ptr().add(offset),
+                dst.as_mut_ptr(),
+                dst.len(),
+            )
+        };
+    }
+
+    /// Returns a write-only slice to the mapped buffer.
+    /// [`BufferMapping::mode`] must be [`MapMode::Write`] (buffer has [`wgt::BufferUsages::MAP_WRITE`] set) otherwise it will panic.
+    pub fn write_slice(&'_ self) -> WriteOnly<'_, [u8]> {
+        assert!(self.mode == MapMode::Write);
+        unsafe { WriteOnly::new(NonNull::slice_from_raw_parts(self.ptr, self.len as usize)) }
     }
 }
 
@@ -995,12 +1029,17 @@ impl Buffer {
                 }
                 let ptr = unsafe { staging_buffer.ptr() };
                 let ptr = unsafe { NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)) };
-                Ok(BufferMapping::new(ptr, range_size, self.map_state.clone()))
+                Ok(BufferMapping::new(
+                    ptr,
+                    range_size,
+                    MapMode::Write,
+                    self.map_state.clone(),
+                ))
             }
             BufferMapState::Active {
                 ref mapping,
                 ref range,
-                ..
+                ref host,
             } => {
                 if offset > range.end {
                     return Err(BufferAccessError::OutOfBoundsStartOffsetOverrun {
@@ -1028,6 +1067,7 @@ impl Buffer {
                     Ok(BufferMapping::new(
                         NonNull::new_unchecked(mapping.ptr.as_ptr().offset(relative_offset)),
                         range_size,
+                        *host,
                         self.map_state.clone(),
                     ))
                 }

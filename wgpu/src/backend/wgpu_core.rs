@@ -2976,6 +2976,8 @@ impl dispatch::BufferMappedRangeInterface for CoreBufferMappedRange {
 
     #[inline]
     unsafe fn read_slice(&self) -> &[u8] {
+        // FIXME: We currently tolerate this
+        // https://github.com/gfx-rs/wgpu/pull/10307#discussion_r4093841117
         unsafe { slice::from_raw_parts(self.ptr.as_ptr(), self.size) }
     }
 
