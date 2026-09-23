@@ -138,7 +138,7 @@ impl Test<'_> {
             };
 
             // SAFETY: Buffer is mapped for read and this is only mapping
-            let contents = unsafe { mapping.slice() };
+            let contents = mapping.slice();
             if &expected_data[..] != contents {
                 panic!(
                     "Test expectation is not met!\nBuffer content was:\n{contents:?}\nbut expected:\n{expected_data:?}"

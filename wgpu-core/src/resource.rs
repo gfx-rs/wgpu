@@ -12,7 +12,7 @@ use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
     math::align_to,
-    TextureSelector,
+    TextureSelector, WriteOnly,
 };
 
 #[cfg(feature = "trace")]
@@ -274,19 +274,21 @@ unsafe impl Sync for BufferMapState {}
 pub struct BufferMapping {
     ptr: NonNull<u8>,
     len: u64,
+    mode: HostMap,
     // guard needs to be dropped before the lock
     _guard: wgpu_sync::RwLockReadGuard<'static, BufferMapState>,
     _lock: Arc<RwLock<BufferMapState>>,
 }
 
 impl BufferMapping {
-    fn new(ptr: NonNull<u8>, len: u64, lock: Arc<RwLock<BufferMapState>>) -> Self {
+    fn new(ptr: NonNull<u8>, len: u64, mode: HostMap, lock: Arc<RwLock<BufferMapState>>) -> Self {
         // SAFETY: We want to bypass the lock ranking system here,
         // because the lock is exposed to users.
         let guard = unsafe { lock.underlying() }.read();
         Self {
             ptr,
             len,
+            mode,
             // SAFETY: Guard is tied to the lifetime of the lock,
             // and it will be dropped before the lock.
             _guard: unsafe {
@@ -301,13 +303,16 @@ impl BufferMapping {
 
     /// ### How to safely use the pointer
     ///
-    /// - No other overlapping mapped range should be accessed simultaneously.
     /// - Pointer is only accessed for the length returned by [`BufferMapping::len`].
-    /// - Writing to a [`wgt::BufferUsages::MAP_READ`] buffer can have unexpected results (visible in GPU only if it's coherent).
-    /// - Reading [`wgt::BufferUsages::MAP_WRITE`] buffer with [`wgt::Features::MAPPABLE_PRIMARY_BUFFERS`] feature enabled
-    ///   can have unexpected results due to write combing.
+    /// - Pointer is only accessed while [`BufferMapping`] is alive.
+    /// - Reading is allowed if [`BufferMapping::mode`] is [`HostMap::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set).
+    /// - Writing is allowed if [`BufferMapping::mode`] is [`HostMap::Write`] (buffer has [`wgt::BufferUsages::MAP_WRITE`] set).
     pub fn ptr(&self) -> NonNull<u8> {
         self.ptr
+    }
+
+    pub fn mode(&self) -> HostMap {
+        self.mode
     }
 
     #[expect(clippy::len_without_is_empty)]
@@ -315,13 +320,16 @@ impl BufferMapping {
         self.len
     }
 
-    /// # Safety
-    ///
-    /// - No other overlapping mapped range should be accessed simultaneously.
-    /// - Buffer was mapped with [`wgt::BufferUsages::MAP_READ`] or with [`wgt::BufferUsages::MAP_WRITE`] but without [`wgt::Features::MAPPABLE_PRIMARY_BUFFERS`],
-    ///   otherwise one can have unexpected results due to write combing
-    pub unsafe fn slice(&self) -> &[u8] {
+    /// [`BufferMapping::mode`] is [`HostMap::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set) otherwise it will panic.
+    pub fn slice(&self) -> &[u8] {
+        assert!(self.mode == HostMap::Read);
         unsafe { core::slice::from_raw_parts(self.ptr().as_ptr(), self.len() as usize) }
+    }
+
+    /// [`BufferMapping::mode`] is [`HostMap::Write`] (buffer has [`wgt::BufferUsages::MAP_WRITE`] set) otherwise it will panic.
+    pub fn write_only(&'_ self) -> WriteOnly<'_, [u8]> {
+        assert!(self.mode == HostMap::Write);
+        unsafe { WriteOnly::new(NonNull::slice_from_raw_parts(self.ptr, self.len as usize)) }
     }
 }
 
@@ -995,12 +1003,17 @@ impl Buffer {
                 }
                 let ptr = unsafe { staging_buffer.ptr() };
                 let ptr = unsafe { NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)) };
-                Ok(BufferMapping::new(ptr, range_size, self.map_state.clone()))
+                Ok(BufferMapping::new(
+                    ptr,
+                    range_size,
+                    HostMap::Write,
+                    self.map_state.clone(),
+                ))
             }
             BufferMapState::Active {
                 ref mapping,
                 ref range,
-                ..
+                ref host,
             } => {
                 if offset > range.end {
                     return Err(BufferAccessError::OutOfBoundsStartOffsetOverrun {
@@ -1028,6 +1041,7 @@ impl Buffer {
                     Ok(BufferMapping::new(
                         NonNull::new_unchecked(mapping.ptr.as_ptr().offset(relative_offset)),
                         range_size,
+                        *host,
                         self.map_state.clone(),
                     ))
                 }
