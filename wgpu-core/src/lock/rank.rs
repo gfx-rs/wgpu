@@ -119,28 +119,22 @@ define_lock_ranks! {
         DEVICE_DEFERRED_DESTROY,
         DEVICE_LOST_CLOSURE,
     }
+    // Includes stuff from INSTANCE_DEVICES to cover Device::maintain
+    // and SHARED_TRACKER_INDEX_ALLOCATOR_INNER to cover Texture::new.
+    // We do not expect all of these to be exercised in CI.
     rank SURFACE_PRESENTATION "Surface::presentation" followed by {
         DEVICE_SNATCHABLE_LOCK,
-        BUFFER_MAP_STATE,
-        COMMAND_BUFFER_DATA,
-        DEVICE_COMMAND_INDICES,
         QUEUE_PENDING_WRITES,
         DEVICE_TRACKERS,
         QUEUE_LIFE_TRACKER,
-        BLAS_COMPACTION_STATE,
-        COMMAND_ALLOCATOR_FREE_ENCODERS,
         BUFFER_BIND_GROUPS,
-        BUFFER_INITIALIZATION_STATUS,
-        BUFFER_POOL,
-        DEVICE_LOST_CLOSURE,
         DEVICE_TRACE,
-        DEVICE_USAGE_SCOPES,
-        QUERY_SET_INITIALIZED_SLOTS,
-        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         TEXTURE_BIND_GROUPS,
         TEXTURE_CLEAR_MODE,
-        TEXTURE_INITIALIZATION_STATUS,
         TEXTURE_VIEWS,
+        DEVICE_DEFERRED_DESTROY,
+        DEVICE_LOST_CLOSURE,
+        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
     }
     rank DEVICE_SNATCHABLE_LOCK "Device::snatchable_lock" followed by {
         BUFFER_MAP_STATE,
