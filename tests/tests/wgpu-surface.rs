@@ -5,9 +5,13 @@
 //! forces `libtest-mimic` to run trials inline on the main thread.
 //!
 //! For web, this is covered by an ordinary gpu test,
-//! `tests/tests/wgpu-gpu/surface_configure.rs`.
+//! `tests/tests/wgpu-gpu/surface_configure_web.rs`.
 //!
-//! This test builds only for native platforms, and not for iOS/tvOS/watchOS.
+//! This test:
+//!  - only builds for native platforms,
+//!  - does not build for iOS/tvOS/watchOS,
+//!  - marks itself as "ignored" on Linux if none of `WAYLAND_DISPLAY`, `WAYLAND_SOCKET`, or
+//!    `DISPLAY` is set.
 
 #[cfg(any(
     target_arch = "wasm32",
@@ -150,6 +154,22 @@ mod native {
                 None => Ok(()),
             }
         });
+        // Similar to logic in [`winit::event_loop::EventLoop::new`][winit], but we do it
+        // up front so we can mark the test as ignored if there is no display.
+        //
+        // [winit]: <https://github.com/rust-windowing/winit/blob/2fd05d48b521846c5ae22c6f0a66e10bc0c91ca6/winit/src/platform_impl/linux/mod.rs#L89>.
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "netbsd",
+            target_os = "openbsd"
+        ))]
+        let trial = {
+            let have_display = ["WAYLAND_DISPLAY", "WAYLAND_SOCKET", "DISPLAY"]
+                .iter()
+                .any(|var| std::env::var(var).is_ok_and(|s| !s.is_empty()));
+            trial.with_ignored_flag(!have_display)
+        };
 
         libtest_mimic::run(&args, vec![trial]).exit_if_failed();
     }
