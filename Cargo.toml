@@ -135,7 +135,9 @@ codespan-reporting = { version = "0.13", default-features = false }
 diff = "0.1"
 document-features = "0.2.10"
 encase = "0.12"
-env_logger = { version = "0.11", default-features = false }
+env_logger = { version = "0.11", default-features = false, features = [
+    "humantime",
+] }
 exhaust = "0.2"
 fern = "0.7"
 flume = "0.12"

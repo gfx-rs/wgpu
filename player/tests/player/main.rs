@@ -212,7 +212,8 @@ impl Corpus {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn test_api() {
-    env_logger::init();
+    // Millisecond timestamps; see <https://github.com/gfx-rs/wgpu/issues/9248>.
+    env_logger::builder().format_timestamp_millis().init();
 
     Corpus::run_from(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/player/data/all.ron"))
 }
