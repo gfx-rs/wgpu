@@ -12,8 +12,7 @@
 //! Portions of this code and documentation have been copied from the Rust standard library.
 
 use core::{
-    any::TypeId,
-    fmt,
+    fmt, iter,
     marker::PhantomData,
     mem,
     ops::{Bound, RangeBounds},
@@ -22,7 +21,7 @@ use core::{
 
 use crate::link_to_wgpu_item;
 
-/// Like `&'a mut T`, but allows only write operations.
+/// Like `&'a mut T`, but allows only volatile write operations.
 ///
 /// This pointer type is obtained from [`BufferViewMut`] and
 /// [`QueueWriteBufferView`].
@@ -84,9 +83,8 @@ impl<'a, T: ?Sized> WriteOnly<'a, T> {
     /// By calling [`WriteOnly::new()`], you are giving safe code the opportunity to write to
     /// this memory if it is given the resulting [`WriteOnly`]. Therefore:
     ///
-    /// * `ptr` must be valid for ordinary, non-`volatile`, writes.
-    ///   (It need not be valid for reads, including reads that occur as part of atomic operations
-    ///   — that’s the whole point.)
+    /// * `ptr` must be valid for volatile writes.
+    ///   (It need not be valid for reads, ordinary writes, or atomic writes.)
     /// * `ptr` must be aligned to at least the alignment of the type `T`.
     /// * No other accesses to the memory pointed to by `ptr` may be performed until the
     ///   lifetime `'a` ends. (Similar to
@@ -137,7 +135,7 @@ impl<'a, T: ?Sized> WriteOnly<'a, T> {
     /// For slices, use [`copy_from_slice()`][Self::copy_from_slice] or
     /// [`write_iter()`][Self::write_iter] instead.
     #[inline]
-    pub const fn write(self, value: T)
+    pub fn write(self, value: T)
     where
         // Ideally, we want "does not have a destructor" to avoid any need for dropping (which
         // would imply reading) or forgetting the values that write operations overwrite.
@@ -145,12 +143,13 @@ impl<'a, T: ?Sized> WriteOnly<'a, T> {
         T: Copy,
     {
         // SAFETY:
-        // `self.ptr` is valid for writes, and `self`’s lifetime ensures the write cannot alias.
+        // `self.ptr` is valid for volatile writes, and `self`’s lifetime ensures the write cannot
+        // alias.
         //
         // Not forgetting values:
         // `T` is `Copy`, so overwriting the old value of `*self.ptr` is trivial and does not
         // forget anything.
-        unsafe { self.ptr.write(value) }
+        unsafe { self.ptr.write_volatile(value) }
     }
 
     /// Returns a raw pointer to the memory this [`WriteOnly`] refers to.
@@ -160,6 +159,8 @@ impl<'a, T: ?Sized> WriteOnly<'a, T> {
     ///
     /// You must take care when using this pointer:
     ///
+    /// * You may only perform volatile writes, unless you know additional facts about the memory
+    ///   this particular `WriteOnly` points to.
     /// * The `WriteOnly` type makes no guarantee that the memory pointed to by this pointer is
     ///   readable or initialized. Therefore, it must not be converted to `&mut T`, nor read any
     ///   other way.
@@ -326,36 +327,11 @@ impl<'a, T> WriteOnly<'a, [T]> {
     #[inline]
     pub fn fill(&mut self, value: T)
     where
-        // Ideally, we want "does not have a destructor" to avoid any need for dropping (which
-        // would imply reading) or forgetting the values that write operations overwrite.
-        // However, there is no such trait bound and `T: Copy` is the closest approximation.
-        T: Copy + 'static,
+        T: Copy,
     {
-        let ty = TypeId::of::<T>();
-        if ty == TypeId::of::<u8>() || ty == TypeId::of::<i8>() || ty == TypeId::of::<bool>() {
-            // The type consists of a single _initialized_ byte, so we can call out to
-            // `write_bytes()` (a.k.a. `memset` in C).
-            //
-            // Note that we cannot just check that the size is 1, because some types may allow
-            // uninitialized bytes (trivially, `MaybeUninit<u8>`)
-
-            // SAFETY:
-            // * We just checked that `T` can soundly be transmuted to `u8`.
-            // * `T` is `Copy` so we don’t need to worry about duplicating it with `transmute_copy`.
-            // * `write_bytes()` is given a pointer which is guaranteed by our own invariants
-            //   to be valid to write to.
-            unsafe {
-                let value_as_byte = mem::transmute_copy::<T, u8>(&value);
-                self.as_raw_element_ptr()
-                    .cast::<u8>()
-                    .write_bytes(value_as_byte, self.len());
-            }
-        } else {
-            // Generic loop for all other types.
-            self.slice(..)
-                .into_iter()
-                .for_each(|elem| elem.write(value));
-        }
+        self.slice(..)
+            .into_iter()
+            .for_each(|elem| elem.write(value));
     }
 
     /// Copies all elements from src into `self`.
@@ -394,17 +370,10 @@ impl<'a, T> WriteOnly<'a, [T]> {
             );
         }
 
-        let src_ptr: *const T = src.as_ptr();
-        let dst_ptr: *mut T = self.as_raw_element_ptr().as_ptr();
-
-        // SAFETY:
-        // * `src_ptr` is readable because it was constructed from a reference.
-        // * `dst_ptr` is writable because that is an invariant of `WriteOnly`.
-        // * `dst_ptr` cannot alias `src_ptr` because `self` is exclusive *and*
-        //   because `src_ptr` is immutable.
-        // * We checked that the byte lengths match.
-        // * Lack of data races will be enforced by the type
-        unsafe { dst_ptr.copy_from_nonoverlapping(src_ptr, src.len()) }
+        // Ideally this would be a “volatile memcpy” operation, but Rust’s standard library does not
+        // offer that yet.
+        iter::zip(src.iter(), self.slice(..))
+            .for_each(|(src_item, dst_item)| dst_item.write(*src_item));
     }
 
     /// Splits this slice reference into `N`-element arrays, starting at the beginning of the slice,
@@ -917,25 +886,6 @@ mod tests {
     /// Test that we can construct an empty `WriteOnly` in const eval.
     const _: WriteOnly<'static, [u8]> = WriteOnly::from_mut(&mut []);
 
-    /// Test that we can use a non-empty `WriteOnly` in const eval.
-    #[test]
-    fn const_write() {
-        let output = const {
-            let mut array = [0u8; 4];
-            let mut wo = WriteOnly::from_mut(array.as_mut_slice());
-
-            // We can't use iterators in const yet, but we can do this.
-            wo.split_off_first().unwrap().write(1);
-            wo.split_off_first().unwrap().write(2);
-            wo.split_off_first().unwrap().write(3);
-            wo.split_off_first().unwrap().write(4);
-
-            array
-        };
-
-        assert_eq!(output, [1, 2, 3, 4]);
-    }
-
     #[test]
     #[should_panic = "iterator given to write_iter() produced 3 elements but must produce 4 elements"]
     fn write_iter_too_short() {
@@ -960,7 +910,7 @@ mod tests {
         let wo = WriteOnly::from_mut(buf.as_mut_slice());
 
         // does nothing, but shouldn’t panic
-        wo.write_iter(core::iter::empty());
+        wo.write_iter(iter::empty());
     }
 
     #[test]
@@ -968,7 +918,7 @@ mod tests {
     fn write_iter_to_empty_slice_too_long() {
         let mut buf: [u8; 0] = [];
         let wo = WriteOnly::from_mut(buf.as_mut_slice());
-        wo.write_iter(core::iter::once(1));
+        wo.write_iter(iter::once(1));
     }
 
     /// Tests that the slice length from `into_chunks()` is correct and that iteration works.
