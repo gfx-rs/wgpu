@@ -166,6 +166,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - `wgpu::Error::Validation::description` from `Device::create_shader_module` no longer include the shader source text and detailed compiler messages, per the WebGPU specification. These details remain accessible via `ShaderModule::get_compilation_info`. By @beicause and @sagudev in [#10173](https://github.com/gfx-rs/wgpu/pull/10173).
 - `BufferUsages` is now composed of `BufferUsagesWebGPU` and `BufferUsagesWGPU`, similarly to `Features`. In most cases this is not expected to be a breaking change, but changes might be required for converting `BufferUsages` to/from `u32`. By @sagudev in [#10195](https://github.com/gfx-rs/wgpu/pull/10195).
 - `ShaderStages` is now composed of `ShaderStagesWebGPU` and `ShaderStagesWGPU`, similarly to `Features`. In most cases this is not expected to be a breaking change, but changes might be required for converting `ShaderStages` to/from `u32`. By @sagudev in [#10313](https://github.com/gfx-rs/wgpu/pull/10313).
+- `request_adapter` will return error on `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` if the adapter has already been consumed by a previous `request_device`. By @sagudev in [#10444](https://github.com/gfx-rs/wgpu/pull/10444).
 
 #### naga
 
