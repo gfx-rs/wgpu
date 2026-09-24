@@ -2987,12 +2987,7 @@ impl dispatch::BufferMappedRangeInterface for CoreBufferMappedRange {
 
     #[inline]
     unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
-        unsafe {
-            WriteOnly::new(NonNull::slice_from_raw_parts(
-                self.0.ptr(),
-                self.0.len() as usize,
-            ))
-        }
+        self.0.write_slice()
     }
 
     #[cfg(webgpu)]

@@ -127,9 +127,13 @@ fn overlapping_ref_binding() {
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 1024,
-        usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: true,
+        usage: wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
     });
+
+    buffer.map_async(wgpu::MapMode::Read, .., |_| {});
+
+    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
     let _mapping0 = buffer.slice(0..512).get_mapped_range().unwrap();
     let _mapping1 = buffer.slice(256..768).get_mapped_range().unwrap();
