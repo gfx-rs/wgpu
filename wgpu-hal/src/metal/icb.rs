@@ -43,10 +43,12 @@ const ICB_MIN_DRAW_COUNT: u32 = 512;
 /// inherited, and Apple3, Apple7, Apple8 and Apple9 GPUs (A10X, A14, A18 Pro,
 /// M4 Max) do accept 0. An A12 (Apple5, iOS 18.7) does not: with a count of
 /// 0, 16 or 30 -- anything that leaves out a vertex-buffer slot the inherited
-/// pipeline reads -- the GPU faults on execution with no error and no
-/// validation-layer assertion, and Metal silently stops executing every later
-/// command buffer; 31 is healthy. wgpu binds vertex buffers from the top of
-/// the 31-slot argument table, so only the full table covers every layout.
+/// pipeline reads -- executing the ICB fails its command buffer with a GPU
+/// address fault (`kIOGPUCommandBufferCallbackErrorPageFault`). No validation
+/// layer catches it and this backend does not surface command-buffer errors,
+/// so the pass's draws silently vanish; 31 is healthy. wgpu binds vertex
+/// buffers from the top of the 31-slot argument table, so only the full table
+/// covers every layout.
 const ICB_MAX_INHERITED_BUFFER_BIND_COUNT: usize = 31;
 
 /// Upper bound on the memory one indirect command buffer may take, and so on
