@@ -289,7 +289,10 @@ impl Device {
     #[must_use]
     pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Buffer {
         let map_context = MapContext::new(
-            desc.mapped_at_creation.then_some(0..desc.size),
+            desc.mapped_at_creation.then_some(Mapped {
+                range: 0..desc.size,
+                kind: MapMode::Write,
+            }),
             &self.buffers,
         );
 
@@ -620,7 +623,10 @@ impl Device {
         desc: &BufferDescriptor<'_>,
     ) -> Buffer {
         let map_context = MapContext::new(
-            desc.mapped_at_creation.then_some(0..desc.size),
+            desc.mapped_at_creation.then_some(Mapped {
+                range: 0..desc.size,
+                kind: MapMode::Write,
+            }),
             &self.buffers,
         );
 
