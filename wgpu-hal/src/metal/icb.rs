@@ -609,6 +609,10 @@ impl super::CommandEncoder {
         if self.deferred_multi_draws.is_empty() {
             return;
         }
+        // wgpu-core records this right after the pass's texture-init fix-ups,
+        // which may have left a blit encoder open; Metal aborts the process if
+        // a second encoder is created while one is encoding.
+        self.leave_blit();
         // The pipelines were resolved when each request was queued and the
         // adapter-level cache is never cleared, so these lookups cannot fail.
         let pipelines = self.get_icb_command_pipelines().unwrap();

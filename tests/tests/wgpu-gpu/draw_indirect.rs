@@ -37,6 +37,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         MULTI_DRAW_INDIRECT_COUNT_READBACK,
         MULTI_DRAW_INDEXED_INDIRECT_COUNT_READBACK,
         MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP,
+        MULTI_DRAW_INDIRECT_AFTER_DISCARDED_3D_ATTACHMENT,
         MULTI_DRAW_INDIRECT_FIRST_VERTEX_AND_INSTANCE,
         MULTI_DRAW_INDIRECT_MIXED_SEQUENCE,
         MULTI_DRAW_INDIRECT_WITH_BIND_GROUPS,
@@ -647,6 +648,86 @@ async fn run_multi_draw_indirect_over_icb_workgroup(ctx: TestingContext) {
     assert_all_white(&ctx, encoder, &out_texture).await;
 }
 
+/// A discarded 3D attachment that the next pass loads is re-initialized by a
+/// buffer-to-texture copy in that pass's internal pre-pass command buffer.
+/// On Metal that copy leaves a blit encoder open, and the ICB generation
+/// encoded right after it must end that encoder before starting its own, or
+/// Metal aborts the process.
+async fn run_multi_draw_indirect_after_discarded_3d_attachment(ctx: TestingContext) {
+    let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline(&ctx, false);
+    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 256,
+            height: 256,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D3,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let args = vec![
+        wgpu::util::DrawIndirectArgs {
+            vertex_count: 6,
+            instance_count: 1,
+            first_vertex: 0,
+            first_instance: 0,
+        };
+        ICB_MULTI_DRAW_TEST_COUNT
+    ];
+    let indirect_buffer = create_draw_indirect_buffer(&ctx, &args);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        // Discard the slice so the next pass has to re-initialize it.
+        let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Discard,
+                },
+                resolve_target: None,
+                view: &view,
+                depth_slice: Some(0),
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+    }
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+                resolve_target: None,
+                view: &view,
+                depth_slice: Some(0),
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        rpass.set_pipeline(&pipeline);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        rpass.multi_draw_indirect(&indirect_buffer, 0, args.len() as u32);
+    }
+
+    assert_all_white(&ctx, encoder, &texture).await;
+}
+
 async fn run_multi_draw_indirect_first_vertex_and_instance(ctx: TestingContext) {
     let shader = ctx
         .device
@@ -1215,6 +1296,20 @@ static MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP: GpuTestConfiguration = GpuTestCon
             .limits(wgpu::Limits::downlevel_defaults()),
     )
     .run_async(run_multi_draw_indirect_over_icb_workgroup);
+
+#[apply(gpu_test!)]
+static MULTI_DRAW_INDIRECT_AFTER_DISCARDED_3D_ATTACHMENT: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+                .limits(wgpu::Limits::downlevel_defaults())
+                // With indirect validation on, its compute pass would sit
+                // between the attachment's re-initialization and the
+                // multi-draw's own pre-pass work and hide the case under test.
+                .remove_instance_flags(wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL),
+        )
+        .run_async(run_multi_draw_indirect_after_discarded_3d_attachment);
 
 #[apply(gpu_test!)]
 static MULTI_DRAW_INDIRECT_FIRST_VERTEX_AND_INSTANCE: GpuTestConfiguration =
