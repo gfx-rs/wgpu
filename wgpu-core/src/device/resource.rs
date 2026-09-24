@@ -3709,8 +3709,8 @@ impl Device {
         let mut texture_init_actions = Vec::new();
         let snatch_guard = self.snatchable_lock.read();
         let mut hal_entries = SmallVec::<[_; 4]>::with_capacity(desc.entries.len());
-        let mut hal_buffers = SmallVec::<[_; 1]>::new();
-        let mut hal_samplers = SmallVec::<[_; 1]>::new();
+        let mut hal_buffers = SmallVec::<[_; 4]>::new();
+        let mut hal_samplers = SmallVec::<[_; 4]>::new();
         let mut hal_textures = SmallVec::<[_; 8]>::new();
         let mut hal_tlas_s = SmallVec::<[_; 1]>::new();
         let mut hal_external_textures = SmallVec::<[_; 1]>::new();
