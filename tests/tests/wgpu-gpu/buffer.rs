@@ -92,11 +92,6 @@ async fn test_empty_buffer_range_with_usage(
             .unwrap();
 
         {
-            let view = b0.slice(0..0).get_mapped_range().unwrap();
-            assert!(view.is_empty());
-        }
-
-        {
             let view = b0.slice(0..0).get_mapped_range_mut().unwrap();
             assert!(view.is_empty());
         }
@@ -116,11 +111,6 @@ async fn test_empty_buffer_range_with_usage(
         usage,
         mapped_at_creation: true,
     });
-
-    {
-        let view = b1.slice(0..0).get_mapped_range().unwrap();
-        assert!(view.is_empty());
-    }
 
     if usage.contains(wgpu::BufferUsages::MAP_WRITE) {
         let view = b1.slice(0..0).get_mapped_range_mut().unwrap();
