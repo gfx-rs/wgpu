@@ -95,6 +95,12 @@ as it could trigger buffer destruction and thus unmapping in case the device is 
 
 By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
+#### `BufferView` are not supported on `MapMode::Write` mapped buffers
+
+`MapMode::Write` mapped buffers are not supported to create `BufferView`s (read only mapping) from them.
+
+By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
+
 ### Added/New Features
 
 #### General

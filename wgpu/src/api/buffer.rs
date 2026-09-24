@@ -483,7 +483,7 @@ impl Buffer {
     /// # Arguments
     ///
     /// - `core_buffer` - wgpu-core buffer.
-    /// - `mapped_range` - The range of the buffer that is currently mapped. If the buffer is not mapped, this should be `None`.
+    /// - `mapped_range` - Current state of mapped buffer if any.
     /// - `device` - The device that owns the buffer.
     ///
     /// # Panics
@@ -496,7 +496,7 @@ impl Buffer {
     /// Changes to the wgpu-core buffer's state after this call may lead to undefined behavior if they are not compatible with the provided `mapped_range`.
     pub unsafe fn from_core(
         core_buffer: alloc::sync::Arc<wgc::resource::Buffer>,
-        mapped_range: Option<Range<BufferAddress>>,
+        mapped: Option<MappingInfo>,
         device: &Device,
     ) -> Self {
         use wgc::resource::ParentDevice;
@@ -504,7 +504,7 @@ impl Buffer {
         core_buffer.same_device(&device.as_core().unwrap()).unwrap();
         Self {
             inner: crate::backend::wgpu_core::CoreBuffer::from_core(core_buffer).into(),
-            map_context: MapContext::new(mapped_range, &device.buffers),
+            map_context: MapContext::new(mapped, &device.buffers),
         }
     }
 
@@ -637,7 +637,7 @@ impl<'a> BufferSlice<'a> {
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
     ) {
         let mut mc = self.buffer.map_context.lock();
-        if mc.mapped_range.is_some() {
+        if mc.mapped.is_some() {
             // Buffer is already mapped; fail
             drop(mc);
             callback(Err(BufferAsyncError));
@@ -645,7 +645,10 @@ impl<'a> BufferSlice<'a> {
         }
 
         let end = self.offset + self.size;
-        mc.mapped_range = Some(self.offset..end);
+        mc.mapped = Some(MappingInfo {
+            range: self.offset..end,
+            kind: mode,
+        });
         drop(mc); // release the lock of map_context as callback can call lock it again
 
         self.buffer
@@ -812,19 +815,26 @@ impl fmt::Display for Subrange {
     }
 }
 
+/// Represents information about current mapping.
+#[derive(Debug)]
+pub struct MappingInfo {
+    /// The range of the buffer that is mapped.
+    ///
+    /// All [`BufferView`]s and [`BufferViewMut`]s must fall within this range.
+    pub(crate) range: Range<BufferAddress>,
+    /// The mode in which the buffer is mapped.
+    pub(crate) kind: MapMode,
+}
+
 /// The mapped portion of a buffer, if any, and its outstanding views.
 ///
 /// This ensures that views fall within the mapped range and don't overlap.
 #[derive(Debug)]
 pub(crate) struct MapContext {
-    /// The range of the buffer that is mapped.
-    ///
     /// This becomes Some(...) when the buffer is mapped at creation time, and
     /// when you call `map_async` on some [`BufferSlice`] (so technically, it
-    /// indicates the portion that is *or has been requested to be* mapped.)
-    ///
-    /// All [`BufferView`]s and [`BufferViewMut`]s must fall within this range.
-    mapped_range: Option<Range<BufferAddress>>,
+    /// indicates the data that is *or has been requested to be* mapped.)
+    mapped: Option<MappingInfo>,
 
     /// The ranges covered by all outstanding [`BufferView`]s and
     /// [`BufferViewMut`]s. These are non-overlapping, and are all contained
@@ -866,6 +876,15 @@ impl WeakMapContext {
     }
 }
 
+impl RangeMappingKind {
+    fn mode(&self) -> MapMode {
+        match self {
+            RangeMappingKind::Immutable => MapMode::Read,
+            RangeMappingKind::Mutable => MapMode::Write,
+        }
+    }
+}
+
 impl MapContext {
     /// Creates a new `MapContext`.
     ///
@@ -874,11 +893,11 @@ impl MapContext {
     ///
     /// [`mapped_at_creation`]: BufferDescriptor::mapped_at_creation
     pub(crate) fn new(
-        mapped_range: Option<Range<BufferAddress>>,
+        mapped: Option<MappingInfo>,
         device_buffers: &Arc<Mutex<HashSet<WeakMapContext>>>,
     ) -> Arc<Mutex<Self>> {
         let result = Arc::new(Mutex::new(Self {
-            mapped_range,
+            mapped,
             sub_ranges: Vec::new(),
             device_buffers: Arc::clone(device_buffers),
         }));
@@ -890,7 +909,7 @@ impl MapContext {
 
     /// Record that the buffer is no longer mapped.
     fn reset(&mut self) {
-        self.mapped_range = None;
+        self.mapped = None;
 
         assert!(
             self.sub_ranges.is_empty(),
@@ -904,19 +923,26 @@ impl MapContext {
     ///
     /// This returns an error if the given range is invalid.
     fn validate_and_add(&mut self, new_sub: Subrange) -> Result<(), MapRangeError> {
-        if self.mapped_range.is_none() {
+        let Some(mapped) = self.mapped.as_ref() else {
             return Err(MapRangeError(
                 "tried to call get_mapped_range(_mut) on an unmapped buffer".into(),
             ));
+        };
+        if mapped.kind != new_sub.kind.mode() {
+            return Err(MapRangeError(alloc::format!(
+                "tried to call get_mapped_range(_mut) on a buffer that was mapped for {:?}, \
+                 but the requested range is for {:?}",
+                mapped.kind,
+                new_sub.kind.mode()
+            )));
         }
-        let mapped_range = self.mapped_range.as_ref().unwrap();
-        if !range_contains(mapped_range, &new_sub.index) {
+        if !range_contains(&mapped.range, &new_sub.index) {
             return Err(MapRangeError(alloc::format!(
                 "tried to call get_mapped_range(_mut) on a range that is not entirely mapped. \
                  Attempted to get range {}, but the mapped range is {}..{}",
                 new_sub,
-                mapped_range.start,
-                mapped_range.end
+                mapped.range.start,
+                mapped.range.end
             )));
         }
         // This check is essential for avoiding undefined behavior: it is the
