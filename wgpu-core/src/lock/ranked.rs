@@ -373,80 +373,76 @@ impl<'a, T> ops::DerefMut for RwLockWriteGuard<'a, T> {
     }
 }
 
-/// Locks can be acquired in the order indicated by their ranks.
-#[test]
-fn permitted() {
-    use super::rank;
+#[cfg(test)]
+mod tests {
+    use super::Mutex;
+    use crate::lock::rank;
 
-    let lock1 = Mutex::new(rank::PAWN, ());
-    let lock2 = Mutex::new(rank::ROOK, ());
+    /// Locks can be acquired in the order indicated by their ranks.
+    #[test]
+    fn permitted() {
+        let lock1 = Mutex::new(rank::PAWN, ());
+        let lock2 = Mutex::new(rank::ROOK, ());
 
-    let _guard1 = lock1.lock();
-    let _guard2 = lock2.lock();
-}
+        let _guard1 = lock1.lock();
+        let _guard2 = lock2.lock();
+    }
 
-/// Locks can only be acquired in the order indicated by their ranks.
-#[test]
-#[should_panic(expected = "Locking pawn after locking rook")]
-fn forbidden_unrelated() {
-    use super::rank;
+    /// Locks can only be acquired in the order indicated by their ranks.
+    #[test]
+    #[should_panic(expected = "Locking pawn after locking rook")]
+    fn forbidden_unrelated() {
+        let lock1 = Mutex::new(rank::ROOK, ());
+        let lock2 = Mutex::new(rank::PAWN, ());
 
-    let lock1 = Mutex::new(rank::ROOK, ());
-    let lock2 = Mutex::new(rank::PAWN, ());
+        let _guard1 = lock1.lock();
+        let _guard2 = lock2.lock();
+    }
 
-    let _guard1 = lock1.lock();
-    let _guard2 = lock2.lock();
-}
+    /// Lock acquisitions can't skip ranks.
+    ///
+    /// These two locks *could* be acquired in this order, but only if other locks
+    /// are acquired in between them. Skipping ranks isn't allowed.
+    #[test]
+    #[should_panic(expected = "Locking knight after locking pawn")]
+    fn forbidden_skip() {
+        let lock1 = Mutex::new(rank::PAWN, ());
+        let lock2 = Mutex::new(rank::KNIGHT, ());
 
-/// Lock acquisitions can't skip ranks.
-///
-/// These two locks *could* be acquired in this order, but only if other locks
-/// are acquired in between them. Skipping ranks isn't allowed.
-#[test]
-#[should_panic(expected = "Locking knight after locking pawn")]
-fn forbidden_skip() {
-    use super::rank;
+        let _guard1 = lock1.lock();
+        let _guard2 = lock2.lock();
+    }
 
-    let lock1 = Mutex::new(rank::PAWN, ());
-    let lock2 = Mutex::new(rank::KNIGHT, ());
+    /// Locks can be acquired and released in a stack-like order.
+    #[test]
+    fn stack_like() {
+        let lock1 = Mutex::new(rank::PAWN, ());
+        let lock2 = Mutex::new(rank::ROOK, ());
+        let lock3 = Mutex::new(rank::BISHOP, ());
 
-    let _guard1 = lock1.lock();
-    let _guard2 = lock2.lock();
-}
+        let guard1 = lock1.lock();
+        let guard2 = lock2.lock();
+        drop(guard2);
 
-/// Locks can be acquired and released in a stack-like order.
-#[test]
-fn stack_like() {
-    use super::rank;
+        let guard3 = lock3.lock();
+        drop(guard3);
+        drop(guard1);
+    }
 
-    let lock1 = Mutex::new(rank::PAWN, ());
-    let lock2 = Mutex::new(rank::ROOK, ());
-    let lock3 = Mutex::new(rank::BISHOP, ());
+    /// Locks can only be acquired and released in a stack-like order.
+    #[test]
+    #[should_panic(expected = "Lock not released in stacking order")]
+    fn non_stack_like() {
+        let lock1 = Mutex::new(rank::PAWN, ());
+        let lock2 = Mutex::new(rank::ROOK, ());
 
-    let guard1 = lock1.lock();
-    let guard2 = lock2.lock();
-    drop(guard2);
+        let guard1 = lock1.lock();
+        let guard2 = lock2.lock();
 
-    let guard3 = lock3.lock();
-    drop(guard3);
-    drop(guard1);
-}
+        // Avoid a double panic from dropping this while unwinding due to the panic
+        // we're testing for.
+        core::mem::forget(guard2);
 
-/// Locks can only be acquired and released in a stack-like order.
-#[test]
-#[should_panic(expected = "Lock not released in stacking order")]
-fn non_stack_like() {
-    use super::rank;
-
-    let lock1 = Mutex::new(rank::PAWN, ());
-    let lock2 = Mutex::new(rank::ROOK, ());
-
-    let guard1 = lock1.lock();
-    let guard2 = lock2.lock();
-
-    // Avoid a double panic from dropping this while unwinding due to the panic
-    // we're testing for.
-    core::mem::forget(guard2);
-
-    drop(guard1);
+        drop(guard1);
+    }
 }
