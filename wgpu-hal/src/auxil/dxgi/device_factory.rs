@@ -4,15 +4,15 @@ use core::ops::Deref;
 use windows::core::Interface as _;
 use windows::Win32::Graphics::{Direct3D, Direct3D12};
 
-use super::D3D12Lib;
-use crate::auxil::dxgi::factory::DxgiAdapter;
+use super::d3d12_lib::{CreateDeviceError, D3D12Lib, GetInterfaceError};
+use super::factory::DxgiAdapter;
 
 /// Abstraction over D3D12 device creation.
 ///
 /// Supports two paths:
 /// - **Independent**: Uses `ID3D12DeviceFactory` from the Agility SDK's Independent Devices API.
 /// - **Legacy**: Uses the traditional `D3D12CreateDevice` export.
-pub(super) enum DeviceFactory {
+pub(crate) enum DeviceFactory {
     /// Uses `ID3D12DeviceFactory` from the Independent Devices API.
     Independent(Direct3D12::ID3D12DeviceFactory),
     /// Uses the traditional `D3D12CreateDevice` export.
@@ -28,7 +28,7 @@ impl DeviceFactory {
     /// - [`Fallback`](wgt::Dx12AgilitySDKLoadFailure::Fallback): logs a warning and
     ///   returns `Ok(Legacy)`.
     /// - [`Error`](wgt::Dx12AgilitySDKLoadFailure::Error): returns an `Err`.
-    pub(super) fn new(
+    pub(crate) fn new(
         lib: &D3D12Lib,
         agility_sdk: Option<&wgt::Dx12AgilitySDK>,
     ) -> Result<Self, crate::InstanceError> {
@@ -93,7 +93,7 @@ impl DeviceFactory {
     /// - **Legacy**: configures debug globally via `D3D12GetDebugInterface`.
     /// - **Independent**: uses `GetConfigurationInterface` to get an
     ///   `ID3D12Debug` scoped to the factory.
-    pub(super) fn enable_debug_layer(&self, lib: &D3D12Lib, flags: wgt::InstanceFlags) {
+    pub(crate) fn enable_debug_layer(&self, lib: &D3D12Lib, flags: wgt::InstanceFlags) {
         if !flags
             .intersects(wgt::InstanceFlags::VALIDATION | wgt::InstanceFlags::GPU_BASED_VALIDATION)
         {
@@ -137,19 +137,19 @@ impl DeviceFactory {
     }
 
     /// Create a D3D12 device using the appropriate method.
-    pub(super) fn create_device(
+    pub(crate) fn create_device(
         &self,
         lib: &Arc<D3D12Lib>,
         adapter: &DxgiAdapter,
         feature_level: Direct3D::D3D_FEATURE_LEVEL,
-    ) -> Result<Direct3D12::ID3D12Device, super::CreateDeviceError> {
+    ) -> Result<Direct3D12::ID3D12Device, CreateDeviceError> {
         match self {
             Self::Independent(factory) => {
                 let mut result__: Option<Direct3D12::ID3D12Device> = None;
                 unsafe { factory.CreateDevice(adapter.deref(), feature_level, &mut result__) }
-                    .map_err(|e| super::CreateDeviceError::D3D12CreateDevice(e.into()))?;
+                    .map_err(|e| CreateDeviceError::D3D12CreateDevice(e.into()))?;
 
-                result__.ok_or(super::CreateDeviceError::RetDeviceIsNull)
+                result__.ok_or(CreateDeviceError::RetDeviceIsNull)
             }
             Self::Legacy => lib.create_device(adapter, feature_level),
         }
@@ -168,7 +168,7 @@ impl core::fmt::Debug for DeviceFactory {
 #[derive(Debug, thiserror::Error)]
 enum DeviceFactoryError {
     #[error("failed to get ID3D12SDKConfiguration1: {0}")]
-    GetInterface(super::GetInterfaceError),
+    GetInterface(GetInterfaceError),
     #[error("SDK path contains null bytes")]
     InvalidPath,
     #[error("CreateDeviceFactory failed: {0}")]

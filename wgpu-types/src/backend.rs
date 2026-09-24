@@ -230,6 +230,8 @@ pub struct BackendOptions {
     pub gl: GlBackendOptions,
     /// Options for the DX12 backend, [`Backend::Dx12`].
     pub dx12: Dx12BackendOptions,
+    /// Options for the Vulkan backend, [`Backend::Vulkan`].
+    pub vulkan: VulkanBackendOptions,
     /// Options for the noop backend, [`Backend::Noop`].
     pub noop: NoopBackendOptions,
 }
@@ -243,6 +245,7 @@ impl BackendOptions {
         Self {
             gl: GlBackendOptions::from_env_or_default(),
             dx12: Dx12BackendOptions::from_env_or_default(),
+            vulkan: VulkanBackendOptions::from_env_or_default(),
             noop: NoopBackendOptions::from_env_or_default(),
         }
     }
@@ -255,6 +258,7 @@ impl BackendOptions {
         Self {
             gl: self.gl.with_env(),
             dx12: self.dx12.with_env(),
+            vulkan: self.vulkan.with_env(),
             noop: self.noop.with_env(),
         }
     }
@@ -733,6 +737,126 @@ impl Dx12SwapchainKind {
     pub fn with_env(self) -> Self {
         if let Some(presentation_system) = Self::from_env() {
             presentation_system
+        } else {
+            self
+        }
+    }
+}
+
+/// Configuration for the Vulkan backend.
+///
+/// Part of [`BackendOptions`].
+#[derive(Clone, Debug, Eq, PartialEq, ConstDefault!)]
+pub struct VulkanBackendOptions {
+    /// Which kind of swapchain to use.
+    pub swapchain_kind: VulkanSwapchainKind,
+    /// D3D12 Agility SDK to load for the interop device backing a DXGI [`swapchain_kind`].
+    ///
+    /// A `Dxgi*` swapchain kind presents through an interop D3D12 device; this is the same
+    /// [`Dx12AgilitySDK`] configuration the DX12 backend uses, applied to that device. Ignored for
+    /// [`VulkanSwapchainKind::Native`].
+    ///
+    /// [`swapchain_kind`]: Self::swapchain_kind
+    pub agility_sdk: Option<Dx12AgilitySDK>,
+}
+
+impl VulkanBackendOptions {
+    /// Choose Vulkan backend options by calling `from_env` on every field.
+    ///
+    /// See those methods for more information.
+    #[must_use]
+    pub fn from_env_or_default() -> Self {
+        let swapchain_kind = VulkanSwapchainKind::from_env().unwrap_or_default();
+        let agility_sdk = Dx12AgilitySDK::from_env();
+        Self {
+            swapchain_kind,
+            agility_sdk,
+        }
+    }
+
+    /// Takes the given options, modifies them based on the environment variables, and returns the result.
+    ///
+    /// This is equivalent to calling `with_env` on every field.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        let swapchain_kind = self.swapchain_kind.with_env();
+        let agility_sdk = self
+            .agility_sdk
+            .map(|sdk| sdk.with_env())
+            .or_else(Dx12AgilitySDK::from_env);
+        Self {
+            swapchain_kind,
+            agility_sdk,
+        }
+    }
+}
+
+/// Selects which kind of swapchain to use on Vulkan.
+#[derive(Clone, Copy, Debug, ConstDefault!, PartialEq, Eq)]
+pub enum VulkanSwapchainKind {
+    /// Use a native vulkan swapchain via `VK_KHR_swapchain`.
+    #[custom(default)]
+    Native,
+    /// Use a DXGI/D3D12 swapchain presenting directly to a HWND.
+    ///
+    /// This mode may give better frame pacing, lower latency, and more predictable performance than
+    /// the native swapchain on Windows.
+    ///
+    /// When using RenderDoc, this mode will cause RenderDoc to only capture the work on the D3D12 interop device,
+    /// not the work on the Vulkan device. However [`Device::start_graphics_debugger_capture`] will still function
+    /// correctly and result in a vulkan capture.
+    ///
+    /// Nsight and RGP profiling continue to work.
+    ///
+    /// To have a transparent window with DXGI, use [`Self::DxgiFromVisual`] instead.
+    ///
+    #[doc = link_to_wgpu_docs!(["`Device::start_graphics_debugger_capture`"]: "struct.Device.html#method.start_graphics_debugger_capture")]
+    DxgiFromHwnd,
+    /// Use a DXGI/D3D12 swapchain presenting to a DirectComposition visual created from the HWND.
+    ///
+    /// This mode may give better frame pacing, lower latency, and more predictable performance than
+    /// the native swapchain on Windows.
+    ///
+    /// When using RenderDoc, this mode will cause RenderDoc to only capture the work on the D3D12 interop device,
+    /// not the work on the Vulkan device. However [`Device::start_graphics_debugger_capture`] will still function
+    /// correctly and result in a vulkan capture.
+    ///
+    /// Nsight and RGP profiling continue to work.
+    ///
+    /// This mode supports transparent windows, but does not have support from RenderDoc and may have memory overhead
+    /// compared to [`Self::DxgiFromHwnd`].
+    ///
+    #[doc = link_to_wgpu_docs!(["`Device::start_graphics_debugger_capture`"]: "struct.Device.html#method.start_graphics_debugger_capture")]
+    DxgiFromVisual,
+}
+
+impl VulkanSwapchainKind {
+    /// Choose which swapchain kind to use from the environment variable `WGPU_VULKAN_SWAPCHAIN_KIND`.
+    ///
+    /// Valid values, case insensitive:
+    /// - `native`
+    /// - `dxgi-hwnd`
+    /// - `dxgi-visual`
+    #[must_use]
+    pub fn from_env() -> Option<Self> {
+        let value = crate::env::var("WGPU_VULKAN_SWAPCHAIN_KIND")
+            .as_deref()?
+            .to_lowercase();
+        match value.as_str() {
+            "native" => Some(Self::Native),
+            "dxgi-hwnd" => Some(Self::DxgiFromHwnd),
+            "dxgi-visual" => Some(Self::DxgiFromVisual),
+            _ => None,
+        }
+    }
+
+    /// Takes the given swapchain kind, modifies it based on the `WGPU_VULKAN_SWAPCHAIN_KIND` environment variable, and returns the result.
+    ///
+    /// See [`from_env`](Self::from_env) for more information.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        if let Some(swapchain_kind) = Self::from_env() {
+            swapchain_kind
         } else {
             self
         }
