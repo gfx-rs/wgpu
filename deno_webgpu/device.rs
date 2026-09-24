@@ -204,6 +204,7 @@ impl GPUDevice {
         if usage.contains(wgpu_types::BufferUsages::MAP_WRITE)
           || usage.contains(wgpu_types::BufferUsages::MAP_READ)
           || descriptor.mapped_at_creation
+          || descriptor.size < self.wgpu_device.limits().max_buffer_size
         {
           fn try_zeroed_vec(n: usize) -> Option<Vec<u8>> {
             let mut v = Vec::new();
