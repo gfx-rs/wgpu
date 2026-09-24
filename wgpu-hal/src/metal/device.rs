@@ -1490,9 +1490,6 @@ impl crate::Device for super::Device {
                 unsafe fn setMaxVertexAmplificationCount(&self, count: NSUInteger) {
                     unsafe { descriptor_fn!(self.setMaxVertexAmplificationCount(count)) }
                 }
-                fn setSupportIndirectCommandBuffers(&self, enabled: bool) {
-                    descriptor_fn!(self.setSupportIndirectCommandBuffers(enabled));
-                }
             }
 
             // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
@@ -1859,7 +1856,10 @@ impl crate::Device for super::Device {
             }
             // Keep the ordinary pipeline state for direct draws. On some
             // drivers, using an ICB-capable pipeline directly changes render
-            // behavior. Multiview pipelines also fail with the ICB flag.
+            // behavior. Multiview pipelines also fail with the ICB flag. The
+            // ICB-capable twin is compiled lazily, by the first multi-draw
+            // that lowers to an ICB under this pipeline; see
+            // `icb::IcbRenderPipeline`.
             let request_icb_support = self.shared.private_caps.indirect_command_buffers_rendering
                 && match descriptor {
                     MetalGenericRenderPipelineDescriptor::Standard(_) => {
@@ -1890,23 +1890,23 @@ impl crate::Device for super::Device {
                     format!("new_render_pipeline_state: {e:?}"),
                 )
             })?;
-            let icb_raw = request_icb_support.then(|| {
-                descriptor.setSupportIndirectCommandBuffers(true);
-                create(&descriptor).map_err(|e| {
-                    log::debug!(
-                        "could not create ICB-capable render pipeline {:?}; \
-                         multi-draws recorded with it won't use ICBs: {e:?}",
-                        desc.label,
-                    );
-                })
+            let icb = request_icb_support.then(|| {
+                let descriptor = match descriptor {
+                    MetalGenericRenderPipelineDescriptor::Standard(inner) => {
+                        super::icb::IcbPipelineDescriptor::Standard(inner)
+                    }
+                    MetalGenericRenderPipelineDescriptor::Mesh(inner) => {
+                        super::icb::IcbPipelineDescriptor::Mesh(inner)
+                    }
+                };
+                Arc::new(super::icb::IcbRenderPipeline::new(descriptor, desc.label))
             });
-            let icb_raw = icb_raw.and_then(Result::ok);
 
             self.counters.render_pipelines.add(1);
 
             Ok(super::RenderPipeline {
                 raw,
-                icb_raw,
+                icb,
                 vs_info,
                 fs_info,
                 ts_info,

@@ -1248,7 +1248,9 @@ impl PipelineStageInfo {
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: Retained<ProtocolObject<dyn MTLRenderPipelineState>>,
-    icb_raw: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
+    /// ICB-capable twin of `raw`, compiled on first use; `None` when the
+    /// pipeline can never execute inside an ICB.
+    icb: Option<Arc<icb::IcbRenderPipeline>>,
     vs_info: Option<PipelineStageInfo>,
     fs_info: Option<PipelineStageInfo>,
     ts_info: Option<PipelineStageInfo>,
@@ -1365,7 +1367,7 @@ struct CommandState {
     render: Option<Retained<ProtocolObject<dyn MTLRenderCommandEncoder>>>,
     compute: Option<Retained<ProtocolObject<dyn MTLComputeCommandEncoder>>>,
     render_pipeline: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
-    render_pipeline_icb: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
+    render_pipeline_icb: Option<Arc<icb::IcbRenderPipeline>>,
     raw_primitive_type: MTLPrimitiveType,
     index: Option<IndexState>,
     stage_infos: MultiStageData<PipelineStageInfo>,

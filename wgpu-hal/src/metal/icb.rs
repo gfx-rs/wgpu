@@ -7,8 +7,12 @@
 //!
 //! [`encode_deferred_icb_generation`]: super::CommandEncoder::encode_deferred_icb_generation
 
-use alloc::sync::Arc;
+use alloc::{
+    string::{String, ToString},
+    sync::Arc,
+};
 use core::ptr::NonNull;
+use wgpu_sync::OnceCell;
 
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_foundation::{NSRange, NSString};
@@ -16,8 +20,9 @@ use objc2_metal::{
     MTLArgumentEncoder, MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandEncoder,
     MTLComputeCommandEncoder, MTLComputePipelineState, MTLDevice, MTLFunction, MTLIndexType,
     MTLIndirectCommandBuffer, MTLIndirectCommandBufferDescriptor, MTLIndirectCommandType,
-    MTLLibrary, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderStages, MTLResource,
-    MTLResourceOptions, MTLResourceUsage, MTLSize,
+    MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLPipelineOption, MTLPrimitiveType,
+    MTLRenderCommandEncoder, MTLRenderPipelineDescriptor, MTLRenderPipelineState, MTLRenderStages,
+    MTLResource, MTLResourceOptions, MTLResourceUsage, MTLSize,
 };
 
 /// Minimum `draw_count` for which lowering a fixed-count multi-draw to an
@@ -330,6 +335,99 @@ impl Drop for IcbExecutionResources {
     }
 }
 
+/// Descriptor of a render pipeline, kept so the pipeline's ICB-capable twin
+/// can be compiled on first use.
+pub(super) enum IcbPipelineDescriptor {
+    Standard(Retained<MTLRenderPipelineDescriptor>),
+    Mesh(Retained<MTLMeshRenderPipelineDescriptor>),
+}
+
+/// The ICB-capable twin of a render pipeline, compiled the first time a
+/// multi-draw recorded under the pipeline lowers to an ICB.
+///
+/// `executeCommandsInBuffer:` needs a pipeline state created with
+/// `supportIndirectCommandBuffers`, and on some drivers that flag changes how
+/// direct draws render, so the twin has to be a second pipeline state. Building
+/// it eagerly would double pipeline compilation for every application on
+/// Metal, most of which never multi-draw at all, so the descriptor is kept
+/// instead (it retains the shader functions, which the pipeline keeps alive
+/// anyway) and the state is compiled on demand. A failed compilation is
+/// remembered so the multi-draw falls back to the per-draw loop without
+/// retrying.
+pub(super) struct IcbRenderPipeline {
+    descriptor: IcbPipelineDescriptor,
+    label: Option<String>,
+    state: OnceCell<Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>>,
+}
+
+// SAFETY: the descriptor is never mutated after `IcbRenderPipeline::new`;
+// Metal pipeline descriptors are plain objects, and `MTLDevice` pipeline
+// creation is thread-safe, so reading it from any thread is sound.
+#[cfg(send_sync)]
+unsafe impl Send for IcbRenderPipeline {}
+#[cfg(send_sync)]
+unsafe impl Sync for IcbRenderPipeline {}
+
+impl core::fmt::Debug for IcbRenderPipeline {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("IcbRenderPipeline")
+            .field("label", &self.label)
+            .field("compiled", &self.state.get().is_some())
+            .finish_non_exhaustive()
+    }
+}
+
+impl IcbRenderPipeline {
+    /// Takes the descriptor the ordinary pipeline state was created from.
+    pub(super) fn new(descriptor: IcbPipelineDescriptor, label: Option<&str>) -> Self {
+        match descriptor {
+            IcbPipelineDescriptor::Standard(ref inner) => {
+                inner.setSupportIndirectCommandBuffers(true)
+            }
+            IcbPipelineDescriptor::Mesh(ref inner) => inner.setSupportIndirectCommandBuffers(true),
+        }
+        Self {
+            descriptor,
+            label: label.map(ToString::to_string),
+            state: OnceCell::new(),
+        }
+    }
+
+    /// The compiled twin, compiling it on the first call; `None` once that
+    /// has failed.
+    fn state(
+        &self,
+        device: &ProtocolObject<dyn MTLDevice>,
+    ) -> Option<&Retained<ProtocolObject<dyn MTLRenderPipelineState>>> {
+        self.state
+            .get_or_init(|| {
+                let result = match self.descriptor {
+                    IcbPipelineDescriptor::Standard(ref inner) => {
+                        device.newRenderPipelineStateWithDescriptor_error(inner)
+                    }
+                    IcbPipelineDescriptor::Mesh(ref inner) => device
+                        .newRenderPipelineStateWithMeshDescriptor_options_reflection_error(
+                            inner,
+                            MTLPipelineOption::empty(),
+                            None,
+                        ),
+                };
+                match result {
+                    Ok(state) => Some(state),
+                    Err(error) => {
+                        log::debug!(
+                            "could not create ICB-capable render pipeline {:?}; \
+                             multi-draws recorded with it won't use ICBs: {error:?}",
+                            self.label,
+                        );
+                        None
+                    }
+                }
+            })
+            .as_ref()
+    }
+}
+
 impl super::AdapterShared {
     /// Whether this device actually executes GPU-generated render ICBs.
     ///
@@ -421,12 +519,16 @@ impl super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) -> bool {
-        if draw_count < ICB_MIN_DRAW_COUNT
-            || !self.supports_icb_multi_draw()
-            || self.state.render_pipeline_icb.is_none()
-        {
+        if draw_count < ICB_MIN_DRAW_COUNT || !self.supports_icb_multi_draw() {
             return false;
         }
+        // The bound pipeline's ICB-capable twin is compiled on first use.
+        let Some(icb_pipeline) = self.state.render_pipeline_icb.clone() else {
+            return false;
+        };
+        let Some(icb_pipeline_state) = icb_pipeline.state(&self.shared.device) else {
+            return false;
+        };
 
         // Resolve the generation pipeline now: once execution is recorded
         // there is no falling back, so `encode_deferred_multi_draws` must not
@@ -562,9 +664,8 @@ impl super::CommandEncoder {
         // defined when the deferred generation runs, in a command buffer the
         // queue executes before this one.
         let pipeline = self.state.render_pipeline.as_ref().unwrap();
-        let icb_pipeline = self.state.render_pipeline_icb.as_ref().unwrap();
         let encoder = self.state.render.as_ref().unwrap();
-        encoder.setRenderPipelineState(icb_pipeline);
+        encoder.setRenderPipelineState(icb_pipeline_state);
         #[expect(deprecated)]
         unsafe {
             encoder.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
