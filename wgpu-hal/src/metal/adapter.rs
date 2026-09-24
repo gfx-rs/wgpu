@@ -805,6 +805,11 @@ impl super::CapabilitiesQuery {
         // first multi-draw that could use an ICB rather than at adapter
         // creation, so adapters that never multi-draw never pay for it.
         //
+        // No feature or downlevel flag depends on the probe: multi-draws are
+        // exposed exactly as they were before ICBs existed, and a failed probe
+        // only means they keep taking the per-draw indirect loop. The probe
+        // chooses a lowering, never a capability.
+        //
         // Apple's paravirtual device is excluded up front because its driver
         // aborts the process instead of failing the probe.
         let indirect_command_buffers_rendering = !is_virtual

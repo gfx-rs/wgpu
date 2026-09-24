@@ -35,12 +35,13 @@ const ICB_MIN_DRAW_COUNT: u32 = 512;
 /// buffers.
 ///
 /// Metal's documentation makes the count irrelevant when buffers are
-/// inherited, and Apple3, Apple7 and Apple9 GPUs do accept 0. An A12 (Apple5,
-/// iOS 18.7) does not: an ICB whose count leaves out a vertex-buffer slot the
-/// inherited pipeline reads faults the GPU on execution -- no error, no
-/// validation-layer assertion, Metal just stops executing every later command
-/// buffer. wgpu binds vertex buffers from the top of the 31-slot argument
-/// table, so only the full table covers every layout.
+/// inherited, and Apple3, Apple7, Apple8 and Apple9 GPUs (A10X, A14, A18 Pro,
+/// M4 Max) do accept 0. An A12 (Apple5, iOS 18.7) does not: with a count of
+/// 0, 16 or 30 -- anything that leaves out a vertex-buffer slot the inherited
+/// pipeline reads -- the GPU faults on execution with no error and no
+/// validation-layer assertion, and Metal silently stops executing every later
+/// command buffer; 31 is healthy. wgpu binds vertex buffers from the top of
+/// the 31-slot argument table, so only the full table covers every layout.
 const ICB_MAX_INHERITED_BUFFER_BIND_COUNT: usize = 31;
 
 /// Bounds on the per-adapter pool of indirect command buffers: entries kept,
@@ -336,7 +337,9 @@ impl super::AdapterShared {
     /// `PrivateCapabilities::indirect_command_buffers_rendering`), so it is
     /// established by running a one-draw ICB and reading the pixel back. The
     /// probe runs once, the first time a multi-draw could use an ICB, so
-    /// adapters that never multi-draw never pay for it.
+    /// adapters that never multi-draw never pay for it. It decides only which
+    /// lowering multi-draws get, never a feature: a failed probe leaves them
+    /// on the per-draw loop.
     pub(super) fn render_icb_executes(&self) -> bool {
         let mut probe = self.render_icb_probe.lock();
         *probe.get_or_insert_with(|| {
@@ -721,8 +724,11 @@ impl super::CommandEncoder {
         // This halves ICB execution time on Apple3 and costs 5-10% on every
         // later Apple GPU measured, so it runs only where it pays.
         if self.shared.private_caps.indirect_command_buffers_optimize {
+            let group = self.shared.hal_label("wgpu optimize multi-draw ICBs");
             let blit = self.enter_blit();
-            blit.pushDebugGroup(&NSString::from_str("wgpu optimize multi-draw ICBs"));
+            if let Some(ref group) = group {
+                blit.pushDebugGroup(group);
+            }
             for request in &self.deferred_multi_draws {
                 unsafe {
                     blit.optimizeIndirectCommandBuffer_withRange(
@@ -734,7 +740,9 @@ impl super::CommandEncoder {
                     );
                 }
             }
-            blit.popDebugGroup();
+            if group.is_some() {
+                blit.popDebugGroup();
+            }
         }
         self.leave_blit();
 
