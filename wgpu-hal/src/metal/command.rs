@@ -1300,7 +1300,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.state.raw_primitive_type = pipeline.raw_primitive_type;
         self.state.render_pipeline = Some(pipeline.raw.clone());
-        self.state.render_pipeline_icb = pipeline.icb_raw.clone();
+        self.state.render_pipeline_icb = pipeline.icb.clone();
         match pipeline.vs_info {
             Some(ref info) => self.state.stage_infos.vs.assign_from(info),
             None => self.state.stage_infos.vs.clear(),

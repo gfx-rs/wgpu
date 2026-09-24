@@ -1,14 +1,12 @@
 name: CI
 
 on:
-  push:
-    branches-ignore: [
-        # Branches with the `gh-readonly-queue` prefix are used by the
-        # merge queue, so they are already covered by the `merge_group` event.
-        "gh-readonly-queue/**",
-      ]
   pull_request:
-  merge_group:
+  # Runs on `trunk` to save the build caches that pull requests read
+  # and to upload the coverage baseline.
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 env:
   #
@@ -20,7 +18,7 @@ env:
   #
 
   # This is the MSRV used by all repository infrastructure.
-  REPO_MSRV: "1.93"
+  REPO_MSRV: "1.95"
   # This is the MSRV used by `wgpu` itself.
   WGPU_MSRV: "1.87"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, `wgpu-sync`, and `wgpu-types` crates,
@@ -36,7 +34,7 @@ env:
   RUST_LOG: debug,wasm_bindgen_wasm_interpreter=warn,wasm_bindgen_cli_support=warn,walrus=warn,naga=info
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
-  RUSTFLAGS: -D warnings
+  RUSTFLAGS: -D warnings --cfg wgpu_validate_locks_debug
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: e # cache busting
@@ -259,7 +257,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -450,7 +448,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: wgpu-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -528,7 +526,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: core-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -636,7 +634,7 @@ jobs:
         run: cargo +stable install wasm-bindgen-cli --version=$WASM_BINDGEN_VERSION
 
       - name: Install `cargo-nextest`
-        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2.83.2
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: cargo-nextest
 
@@ -681,7 +679,7 @@ jobs:
           cargo -V
 
       - name: Install `cargo-nextest` and `cargo-llvm-cov`
-        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2.83.2
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
@@ -698,7 +696,7 @@ jobs:
         # Cache step must go before warp and mesa install on windows as they write into the
         # target directory, and rust-cache will overwrite the entirety of the target directory.
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -757,7 +755,7 @@ jobs:
 
       - name: Check Naga snapshots
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
-        run: git add . && git diff --exit-code HEAD naga/tests/out
+        run: git add --intent-to-add -- naga/tests/out && git diff --exit-code HEAD -- naga/tests/out
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         name: Upload comparison images
@@ -787,8 +785,10 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
-        if: steps.coverage.outcome == 'success'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+        # Mergify draft pull requests re-run the tests of already-reported
+        # pull requests, so their coverage is not uploaded.
+        if: steps.coverage.outcome == 'success' && !startsWith(github.head_ref, 'mergify/merge-queue/')
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -815,7 +815,7 @@ jobs:
           cargo -V
 
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: doctests-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -852,7 +852,7 @@ jobs:
           cargo -V
 
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: miri-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -881,11 +881,20 @@ jobs:
         with:
           persist-credentials: false
 
+      # Only pull requests give a well-defined commit range. The merge queue
+      # runs the commits that this check already saw on the pull request.
+      - name: Check for AI-authored commits
+        if: github.event_name == 'pull_request'
+        uses: $/.github/actions/ai-commit-check
+
       - name: Install repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
+
+      - name: Check repository files
+        run: cargo --locked xtask sync-repo-files --check
 
       # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
       # files, even ones this step doesn't modify.
@@ -897,7 +906,7 @@ jobs:
           cargo --locked fmt -- --check
 
       - name: Install Tombi
-        uses: tombi-toml/setup-tombi@fa8fb98ef9af2d3b9da565edc15935d523bca7e9 # v1.2.0
+        uses: tombi-toml/setup-tombi@ea139001852855a7f1cf30a9b60c71ebb6446a99 # v1.5.5
         with:
           version: "1.1.3"
 
@@ -905,7 +914,7 @@ jobs:
         run: tombi format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@8a48f81b6c64dcfea44b3633223084c4be58ac5f # v1.49.0
+        uses: crate-ci/typos@512fc24f32f44ab01972217aaaf3dc86ec234d53 # v1.50.2
 
   check-cts-runner:
     # runtime is normally 2 minutes
@@ -937,7 +946,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: cts-runner-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -1005,4 +1014,4 @@ jobs:
           persist-credentials: false
 
       - name: Run `zizmor`
-        uses: zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99 # v0.6.3
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4

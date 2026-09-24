@@ -17,7 +17,8 @@ pub(super) fn supports_render_icb(
     device: &ProtocolObject<dyn MTLDevice>,
     msl_version: MTLLanguageVersion,
 ) -> bool {
-    let library = match super::device::compile_msl_library(device, msl_version, PROBE_SHADER) {
+    let library = match super::device::compile_msl_library(device, msl_version, false, PROBE_SHADER)
+    {
         Ok(library) => library,
         Err(error) => {
             log::debug!("Metal render ICB probe shader compilation failed: {error}");

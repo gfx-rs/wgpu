@@ -8,8 +8,13 @@
 //! [`encode_deferred_icb_generation`]: super::CommandEncoder::encode_deferred_icb_generation
 
 use super::command::WORD_SIZE;
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    sync::Arc,
+    vec::Vec,
+};
 use core::ptr::NonNull;
+use wgpu_sync::OnceCell;
 
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_foundation::{NSRange, NSString};
@@ -17,9 +22,10 @@ use objc2_metal::{
     MTLArgumentEncoder, MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandEncoder,
     MTLComputeCommandEncoder, MTLComputePipelineState, MTLDevice, MTLFunction, MTLIndexType,
     MTLIndirectCommandBuffer, MTLIndirectCommandBufferDescriptor,
-    MTLIndirectCommandBufferExecutionRange, MTLIndirectCommandType, MTLLibrary, MTLPrimitiveType,
-    MTLRenderCommandEncoder, MTLRenderStages, MTLResource, MTLResourceOptions, MTLResourceUsage,
-    MTLSize,
+    MTLIndirectCommandBufferExecutionRange, MTLIndirectCommandType, MTLLibrary,
+    MTLMeshRenderPipelineDescriptor, MTLPipelineOption, MTLPrimitiveType, MTLRenderCommandEncoder,
+    MTLRenderPipelineDescriptor, MTLRenderPipelineState, MTLRenderStages, MTLResource,
+    MTLResourceOptions, MTLResourceUsage, MTLSize,
 };
 
 /// Minimum `draw_count` for which lowering a fixed-count multi-draw to an
@@ -37,18 +43,38 @@ const ICB_MIN_DRAW_COUNT: u32 = 512;
 /// buffers.
 ///
 /// Metal's documentation makes the count irrelevant when buffers are
-/// inherited, and Apple3, Apple7 and Apple9 GPUs do accept 0. An A12 (Apple5,
-/// iOS 18.7) does not: an ICB whose count leaves out a vertex-buffer slot the
-/// inherited pipeline reads faults the GPU on execution -- no error, no
-/// validation-layer assertion, Metal just stops executing every later command
-/// buffer. wgpu binds vertex buffers from the top of the 31-slot argument
-/// table, so only the full table covers every layout.
+/// inherited, and Apple3, Apple7, Apple8 and Apple9 GPUs (A10X, A14, A18 Pro,
+/// M4 Max) do accept 0. An A12 (Apple5, iOS 18.7) does not: with a count of
+/// 0, 16 or 30 -- anything that leaves out a vertex-buffer slot the inherited
+/// pipeline reads -- the GPU faults on execution with no error and no
+/// validation-layer assertion, and Metal silently stops executing every later
+/// command buffer; 31 is healthy. wgpu binds vertex buffers from the top of
+/// the 31-slot argument table, so only the full table covers every layout.
 const ICB_MAX_INHERITED_BUFFER_BIND_COUNT: usize = 31;
 
+/// Upper bound on the memory one indirect command buffer may take, and so on
+/// the draw count the ICB path accepts: larger multi-draws take the per-draw
+/// loop. Metal's feature tables list no ICB size limit, but every command is
+/// sized for the full inherited state, measured with `allocatedSize`:
+///
+/// | GPU                         | draw   | indexed |
+/// |-----------------------------|--------|---------|
+/// | A10X (Apple3, tvOS 26.6)    | 1477 B | 1489 B  |
+/// | A12 (Apple5, iOS 18.7)      | 1609 B | 1621 B  |
+/// | A14 (Apple7, iOS 26.5)      |  656 B |  672 B  |
+/// | M4 Max (Apple9, macOS 27)   |  673 B |  693 B  |
+///
+/// (mesh-task commands cost 1277 B on the M4 Max), so 64 MiB holds about 40K
+/// commands on Apple3 and Apple5 and 100K on Apple7 and later. The bound is
+/// checked before allocating because the driver does not fail gracefully at
+/// its own limit: an allocation past ~4 GiB returns nil on iOS and tvOS but
+/// crashes the process on macOS 27.
+const ICB_MAX_BYTES: u64 = 64 << 20;
+
 /// Bounds on the per-adapter pool of indirect command buffers: entries kept,
-/// and the total command capacity they may hold (256K commands).
+/// and the total memory they may retain.
 const ICB_POOL_MAX_ENTRIES: usize = 8;
-const ICB_POOL_MAX_COMMANDS: u32 = 1 << 18;
+const ICB_POOL_MAX_BYTES: u64 = 128 << 20;
 
 // Primitive-topology tags passed to the ICB generation kernels.
 // `render_command` in MSL needs the topology per draw, and `MTLPrimitiveType`
@@ -163,11 +189,16 @@ impl IcbCommandPipelines {
         shared: &super::AdapterShared,
         source: &str,
     ) -> Result<Retained<ProtocolObject<dyn MTLLibrary>>, crate::DeviceError> {
-        super::device::compile_msl_library(&shared.device, shared.private_caps.msl_version, source)
-            .map_err(|err| {
-                log::error!("failed to compile Metal ICB generation shader: {err}");
-                crate::DeviceError::Unexpected
-            })
+        super::device::compile_msl_library(
+            &shared.device,
+            shared.private_caps.msl_version,
+            false,
+            source,
+        )
+        .map_err(|err| {
+            log::error!("failed to compile Metal ICB generation shader: {err}");
+            crate::DeviceError::Unexpected
+        })
     }
 
     fn new(shared: &super::AdapterShared) -> Result<Self, crate::DeviceError> {
@@ -243,6 +274,8 @@ pub(super) struct IcbGenerationRequest {
     kind_tag: u8,
     /// Command capacity the ICB was created with; at least `draw_count`.
     capacity: u32,
+    /// Memory the ICB and its argument buffer occupy.
+    bytes: u64,
 }
 
 /// One deferred piece of pre-pass work queued by a multi-draw.
@@ -260,7 +293,7 @@ pub(super) enum DeferredMultiDraw {
     },
     /// Clamp/zero indirect args into a private buffer that a fixed-length
     /// per-draw loop consumes: the count-draw fallback for pipelines that
-    /// can't execute inside an ICB.
+    /// can't execute inside an ICB, and for counts past the ICB memory bound.
     ClampedArgs {
         dst_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
         src_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
@@ -308,6 +341,7 @@ impl IcbDrawKind {
 pub(super) struct PooledIcb {
     kind_tag: u8,
     capacity: u32,
+    bytes: u64,
     icb: Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>,
     argument_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
 }
@@ -324,6 +358,7 @@ pub(super) struct IcbExecutionResources {
     shared: Arc<super::AdapterShared>,
     kind_tag: u8,
     capacity: u32,
+    bytes: u64,
     icb: Option<Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>>,
     argument_buffer: Option<Retained<ProtocolObject<dyn MTLBuffer>>>,
     /// Other buffers the executed commands read: an execution range, or
@@ -336,6 +371,7 @@ impl core::fmt::Debug for IcbExecutionResources {
         f.debug_struct("IcbExecutionResources")
             .field("kind_tag", &self.kind_tag)
             .field("capacity", &self.capacity)
+            .field("bytes", &self.bytes)
             .finish_non_exhaustive()
     }
 }
@@ -346,23 +382,23 @@ impl Drop for IcbExecutionResources {
         else {
             return;
         };
-        if self.capacity > ICB_POOL_MAX_COMMANDS {
+        if self.bytes > ICB_POOL_MAX_BYTES {
             return;
         }
         let mut pool = self.shared.icb_pool.lock();
-        let mut total: u32 = pool.iter().map(|entry| entry.capacity).sum();
-        while pool.len() >= ICB_POOL_MAX_ENTRIES || total + self.capacity > ICB_POOL_MAX_COMMANDS {
+        let mut total: u64 = pool.iter().map(|entry| entry.bytes).sum();
+        while pool.len() >= ICB_POOL_MAX_ENTRIES || total + self.bytes > ICB_POOL_MAX_BYTES {
             // Make room by evicting the smallest entry, unless this one is
             // smaller still: large ICBs are the expensive ones to recreate.
             let Some((index, smallest)) = pool
                 .iter()
                 .enumerate()
-                .min_by_key(|(_, entry)| entry.capacity)
-                .map(|(index, entry)| (index, entry.capacity))
+                .min_by_key(|(_, entry)| entry.bytes)
+                .map(|(index, entry)| (index, entry.bytes))
             else {
                 break;
             };
-            if smallest >= self.capacity {
+            if smallest >= self.bytes {
                 return;
             }
             total -= smallest;
@@ -371,9 +407,103 @@ impl Drop for IcbExecutionResources {
         pool.push(PooledIcb {
             kind_tag: self.kind_tag,
             capacity: self.capacity,
+            bytes: self.bytes,
             icb,
             argument_buffer,
         });
+    }
+}
+
+/// Descriptor of a render pipeline, kept so the pipeline's ICB-capable twin
+/// can be compiled on first use.
+pub(super) enum IcbPipelineDescriptor {
+    Standard(Retained<MTLRenderPipelineDescriptor>),
+    Mesh(Retained<MTLMeshRenderPipelineDescriptor>),
+}
+
+/// The ICB-capable twin of a render pipeline, compiled the first time a
+/// multi-draw recorded under the pipeline lowers to an ICB.
+///
+/// `executeCommandsInBuffer:` needs a pipeline state created with
+/// `supportIndirectCommandBuffers`, and on some drivers that flag changes how
+/// direct draws render, so the twin has to be a second pipeline state. Building
+/// it eagerly would double pipeline compilation for every application on
+/// Metal, most of which never multi-draw at all, so the descriptor is kept
+/// instead (it retains the shader functions, which the pipeline keeps alive
+/// anyway) and the state is compiled on demand. A failed compilation is
+/// remembered so the multi-draw falls back to the per-draw loop without
+/// retrying.
+pub(super) struct IcbRenderPipeline {
+    descriptor: IcbPipelineDescriptor,
+    label: Option<String>,
+    state: OnceCell<Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>>,
+}
+
+// SAFETY: the descriptor is never mutated after `IcbRenderPipeline::new`;
+// Metal pipeline descriptors are plain objects, and `MTLDevice` pipeline
+// creation is thread-safe, so reading it from any thread is sound.
+#[cfg(send_sync)]
+unsafe impl Send for IcbRenderPipeline {}
+#[cfg(send_sync)]
+unsafe impl Sync for IcbRenderPipeline {}
+
+impl core::fmt::Debug for IcbRenderPipeline {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("IcbRenderPipeline")
+            .field("label", &self.label)
+            .field("compiled", &self.state.get().is_some())
+            .finish_non_exhaustive()
+    }
+}
+
+impl IcbRenderPipeline {
+    /// Takes the descriptor the ordinary pipeline state was created from.
+    pub(super) fn new(descriptor: IcbPipelineDescriptor, label: Option<&str>) -> Self {
+        match descriptor {
+            IcbPipelineDescriptor::Standard(ref inner) => {
+                inner.setSupportIndirectCommandBuffers(true)
+            }
+            IcbPipelineDescriptor::Mesh(ref inner) => inner.setSupportIndirectCommandBuffers(true),
+        }
+        Self {
+            descriptor,
+            label: label.map(ToString::to_string),
+            state: OnceCell::new(),
+        }
+    }
+
+    /// The compiled twin, compiling it on the first call; `None` once that
+    /// has failed.
+    fn state(
+        &self,
+        device: &ProtocolObject<dyn MTLDevice>,
+    ) -> Option<&Retained<ProtocolObject<dyn MTLRenderPipelineState>>> {
+        self.state
+            .get_or_init(|| {
+                let result = match self.descriptor {
+                    IcbPipelineDescriptor::Standard(ref inner) => {
+                        device.newRenderPipelineStateWithDescriptor_error(inner)
+                    }
+                    IcbPipelineDescriptor::Mesh(ref inner) => device
+                        .newRenderPipelineStateWithMeshDescriptor_options_reflection_error(
+                            inner,
+                            MTLPipelineOption::empty(),
+                            None,
+                        ),
+                };
+                match result {
+                    Ok(state) => Some(state),
+                    Err(error) => {
+                        log::debug!(
+                            "could not create ICB-capable render pipeline {:?}; \
+                             multi-draws recorded with it won't use ICBs: {error:?}",
+                            self.label,
+                        );
+                        None
+                    }
+                }
+            })
+            .as_ref()
     }
 }
 
@@ -384,12 +514,45 @@ impl super::AdapterShared {
     /// `PrivateCapabilities::indirect_command_buffers_rendering`), so it is
     /// established by running a one-draw ICB and reading the pixel back. The
     /// probe runs once, the first time a multi-draw could use an ICB, so
-    /// adapters that never multi-draw never pay for it.
+    /// adapters that never multi-draw never pay for it. It decides only which
+    /// lowering multi-draws get, never a feature: a failed probe leaves them
+    /// on the per-draw loop.
     pub(super) fn render_icb_executes(&self) -> bool {
         let mut probe = self.render_icb_probe.lock();
         *probe.get_or_insert_with(|| {
             super::icb_probe::supports_render_icb(&self.device, self.private_caps.msl_version)
         })
+    }
+
+    /// Bytes Metal allocates per command in ICBs created from `descriptor`,
+    /// measured once per draw kind from a small sample allocation since no API
+    /// reports it ahead of time (see [`ICB_MAX_BYTES`]). `None` if even the
+    /// sample cannot be allocated.
+    fn icb_bytes_per_command(
+        &self,
+        kind_tag: u8,
+        descriptor: &MTLIndirectCommandBufferDescriptor,
+    ) -> Option<u64> {
+        const SAMPLE_COMMANDS: usize = 512;
+        let mut cache = self.icb_bytes_per_command.lock();
+        let slot = &mut cache[usize::from(kind_tag)];
+        if let Some(bytes) = *slot {
+            return Some(bytes);
+        }
+        let sample = unsafe {
+            self.device
+                .newIndirectCommandBufferWithDescriptor_maxCommandCount_options(
+                    descriptor,
+                    SAMPLE_COMMANDS,
+                    MTLResourceOptions::StorageModePrivate,
+                )
+        }?;
+        // Rounding up keeps the bound conservative.
+        let bytes = (sample.allocatedSize() as u64)
+            .div_ceil(SAMPLE_COMMANDS as u64)
+            .max(1);
+        *slot = Some(bytes);
+        Some(bytes)
     }
 }
 
@@ -460,34 +623,46 @@ impl super::CommandEncoder {
     /// returns `false` with nothing recorded when the ICB path is unavailable,
     /// leaving the caller to record the per-draw indirect loop instead.
     /// Everything fallible about lowering `draw_count` commands to an ICB:
-    /// resolve the generation pipeline, take an ICB from the pool or create
-    /// one, and encode its argument buffer. `None` means the caller must
-    /// record the per-draw loop instead; nothing has been recorded.
+    /// compile the bound pipeline's ICB twin if needed, resolve the generation
+    /// pipeline, bound the ICB's memory, take an ICB from the pool or create
+    /// one, and encode its argument buffer. Returns the request and the
+    /// pipeline state to execute it under; `None` means the caller must
+    /// record a per-draw loop instead, and nothing has been recorded.
     unsafe fn prepare_icb_request(
         &mut self,
         kind: IcbDrawKind,
         buffer: &super::Buffer,
         offset: wgt::BufferAddress,
         draw_count: u32,
-    ) -> Option<IcbGenerationRequest> {
-        if !self.supports_icb_multi_draw() || self.state.render_pipeline_icb.is_none() {
+    ) -> Option<(
+        IcbGenerationRequest,
+        Retained<ProtocolObject<dyn MTLRenderPipelineState>>,
+    )> {
+        if !self.supports_icb_multi_draw() {
             return None;
         }
+        // The bound pipeline's ICB-capable twin is compiled on first use.
+        let icb_pipeline = self.state.render_pipeline_icb.clone()?;
+        let icb_pipeline_state = icb_pipeline.state(&self.shared.device)?.clone();
 
         // Resolve the generation pipeline now: once execution is recorded
-        // there is no falling back, so `encode_deferred_icb_generation` must
-        // not be able to fail. The adapter-level cache is never cleared, which
+        // there is no falling back, so `encode_deferred_multi_draws` must not
+        // be able to fail. The adapter-level cache is never cleared, which
         // makes the later lookups infallible.
         let (argument_encoder, label) = match kind {
             IcbDrawKind::Draw => {
-                let pipelines = self.get_icb_command_pipelines().ok()?;
+                let Ok(pipelines) = self.get_icb_command_pipelines() else {
+                    return None;
+                };
                 (
                     self.temp.icb_argument_encoders.draw(&pipelines.draw),
                     "wgpu multi_draw_indirect ICB",
                 )
             }
             IcbDrawKind::DrawIndexed { raw_index_type, .. } => {
-                let pipelines = self.get_icb_command_pipelines().ok()?;
+                let Ok(pipelines) = self.get_icb_command_pipelines() else {
+                    return None;
+                };
                 let cache = &mut self.temp.icb_argument_encoders;
                 let state = match raw_index_type {
                     MTLIndexType::UInt16 => cache.indexed_u16(&pipelines.indexed_u16),
@@ -507,10 +682,25 @@ impl super::CommandEncoder {
 
         let primitive_type_value = match kind {
             IcbDrawKind::DrawMeshTasks { .. } => 0,
-            _ => Self::icb_primitive_type_value(self.state.raw_primitive_type).ok()?,
+            _ => match Self::icb_primitive_type_value(self.state.raw_primitive_type) {
+                Ok(value) => value,
+                Err(_) => return None,
+            },
         };
 
+        // Bound the ICB's memory before touching the pool or the allocator:
+        // Metal sizes every command for the full inherited state, so a large
+        // draw count is a large allocation on every GPU (see `ICB_MAX_BYTES`).
         let kind_tag = kind.tag();
+        let descriptor = Self::icb_descriptor(&kind);
+        let bytes_per_command = self.shared.icb_bytes_per_command(kind_tag, &descriptor)?;
+        let max_commands = u32::try_from(ICB_MAX_BYTES / bytes_per_command).unwrap_or(u32::MAX);
+        if draw_count > max_commands {
+            return None;
+        }
+
+        // Prefer a pooled ICB of the same kind with enough capacity, taking the
+        // smallest that fits so large ones stay available for large draws.
         let pooled = {
             let mut pool = self.shared.icb_pool.lock();
             let mut best: Option<usize> = None;
@@ -524,36 +714,21 @@ impl super::CommandEncoder {
             }
             best.map(|index| pool.swap_remove(index))
         };
-        let (icb, argument_buffer, capacity) = match pooled {
-            Some(entry) => (entry.icb, entry.argument_buffer, entry.capacity),
+        let (icb, argument_buffer, capacity, bytes) = match pooled {
+            Some(entry) => (
+                entry.icb,
+                entry.argument_buffer,
+                entry.capacity,
+                entry.bytes,
+            ),
             None => {
-                let descriptor = MTLIndirectCommandBufferDescriptor::new();
-                descriptor.setInheritPipelineState(true);
-                descriptor.setInheritBuffers(true);
-                match kind {
-                    IcbDrawKind::Draw => {
-                        descriptor.setCommandTypes(MTLIndirectCommandType::Draw);
-                        descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
-                        descriptor.setMaxFragmentBufferBindCount(0);
-                    }
-                    IcbDrawKind::DrawIndexed { .. } => {
-                        descriptor.setCommandTypes(MTLIndirectCommandType::DrawIndexed);
-                        descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
-                        descriptor.setMaxFragmentBufferBindCount(0);
-                    }
-                    IcbDrawKind::DrawMeshTasks { .. } => {
-                        descriptor.setCommandTypes(MTLIndirectCommandType::DrawMeshThreadgroups);
-                        descriptor.setMaxFragmentBufferBindCount(0);
-                        unsafe {
-                            descriptor.setMaxObjectBufferBindCount(0);
-                            descriptor.setMaxMeshBufferBindCount(0);
-                        }
-                    }
-                }
                 // Power-of-two capacities keep the pool reusable across
-                // nearby draw counts; only the first `draw_count` commands are
-                // ever generated or executed.
-                let capacity = draw_count.next_power_of_two();
+                // nearby draw counts, within the memory bound; only the first
+                // `draw_count` commands are ever generated or executed.
+                let capacity = draw_count
+                    .checked_next_power_of_two()
+                    .unwrap_or(u32::MAX)
+                    .min(max_commands);
                 let icb = unsafe {
                     self.shared
                         .device
@@ -587,13 +762,15 @@ impl super::CommandEncoder {
                         .encoder
                         .setIndirectCommandBuffer_atIndex(Some(&icb), 0);
                 }
-                (icb, argument_buffer, capacity)
+                let bytes = icb.allocatedSize() as u64 + argument_buffer.allocatedSize() as u64;
+                (icb, argument_buffer, capacity, bytes)
             }
         };
 
-        Some(IcbGenerationRequest {
+        let request = IcbGenerationRequest {
             kind_tag,
             capacity,
+            bytes,
             kind,
             icb,
             argument_buffer,
@@ -601,7 +778,8 @@ impl super::CommandEncoder {
             args_offset: offset,
             draw_count,
             primitive_type_value,
-        })
+        };
+        Some((request, icb_pipeline_state))
     }
 
     /// Record the `useResource` calls every ICB execution path needs.
@@ -657,7 +835,8 @@ impl super::CommandEncoder {
         if draw_count < ICB_MIN_DRAW_COUNT {
             return false;
         }
-        let Some(request) = (unsafe { self.prepare_icb_request(kind, buffer, offset, draw_count) })
+        let Some((request, icb_pipeline_state)) =
+            (unsafe { self.prepare_icb_request(kind, buffer, offset, draw_count) })
         else {
             return false;
         };
@@ -666,9 +845,8 @@ impl super::CommandEncoder {
         // defined when the deferred generation runs, in a command buffer the
         // queue executes before this one.
         let pipeline = self.state.render_pipeline.as_ref().unwrap();
-        let icb_pipeline = self.state.render_pipeline_icb.as_ref().unwrap();
         let encoder = self.state.render.as_ref().unwrap();
-        encoder.setRenderPipelineState(icb_pipeline);
+        encoder.setRenderPipelineState(&icb_pipeline_state);
         Self::use_icb_resources(encoder, &request);
         unsafe {
             encoder.executeCommandsInBuffer_withRange(
@@ -704,7 +882,8 @@ impl super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) -> bool {
-        let Some(request) = (unsafe { self.prepare_icb_request(kind, buffer, offset, max_count) })
+        let Some((request, icb_pipeline_state)) =
+            (unsafe { self.prepare_icb_request(kind, buffer, offset, max_count) })
         else {
             return false;
         };
@@ -717,9 +896,8 @@ impl super::CommandEncoder {
         range_buffer.setLabel(self.shared.hal_label("wgpu ICB execution range").as_deref());
 
         let pipeline = self.state.render_pipeline.as_ref().unwrap();
-        let icb_pipeline = self.state.render_pipeline_icb.as_ref().unwrap();
         let encoder = self.state.render.as_ref().unwrap();
-        encoder.setRenderPipelineState(icb_pipeline);
+        encoder.setRenderPipelineState(&icb_pipeline_state);
         Self::use_icb_resources(encoder, &request);
         #[expect(deprecated)]
         encoder.useResource_usage(
@@ -744,11 +922,11 @@ impl super::CommandEncoder {
         true
     }
 
-    /// Count-draw fallback for pipelines that can't execute inside an ICB:
-    /// queue a kernel that copies `min(count, max_count)` argument structs
-    /// from `buffer` into a private buffer and zeroes the rest, so a fixed
-    /// `max_count`-length per-draw loop over the result is correct. Returns
-    /// that buffer.
+    /// Count-draw fallback for pipelines that can't execute inside an ICB and
+    /// for counts past the ICB memory bound: queue a kernel that copies
+    /// `min(count, max_count)` argument structs from `buffer` into a private
+    /// buffer and zeroes the rest, so a fixed `max_count`-length per-draw loop
+    /// over the result is correct. Returns that buffer.
     pub(super) unsafe fn defer_clamped_count_args(
         &mut self,
         buffer: &super::Buffer,
@@ -790,12 +968,45 @@ impl super::CommandEncoder {
         dst_buffer
     }
 
+    /// The descriptor for ICBs that execute `kind` draws. ICBs are only reused
+    /// across draws whose descriptors match, which [`IcbDrawKind::tag`] tracks.
+    fn icb_descriptor(kind: &IcbDrawKind) -> Retained<MTLIndirectCommandBufferDescriptor> {
+        let descriptor = MTLIndirectCommandBufferDescriptor::new();
+        descriptor.setInheritPipelineState(true);
+        descriptor.setInheritBuffers(true);
+        match kind {
+            IcbDrawKind::Draw => {
+                descriptor.setCommandTypes(MTLIndirectCommandType::Draw);
+                descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
+                descriptor.setMaxFragmentBufferBindCount(0);
+            }
+            IcbDrawKind::DrawIndexed { .. } => {
+                descriptor.setCommandTypes(MTLIndirectCommandType::DrawIndexed);
+                descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
+                descriptor.setMaxFragmentBufferBindCount(0);
+            }
+            IcbDrawKind::DrawMeshTasks { .. } => {
+                descriptor.setCommandTypes(MTLIndirectCommandType::DrawMeshThreadgroups);
+                descriptor.setMaxFragmentBufferBindCount(0);
+                unsafe {
+                    descriptor.setMaxObjectBufferBindCount(0);
+                    descriptor.setMaxMeshBufferBindCount(0);
+                }
+            }
+        }
+        descriptor
+    }
+
     /// Encode the generation (and, where it pays, optimize) work for every
     /// multi-draw queued since the last call; see the module documentation.
     pub(super) unsafe fn encode_deferred_icb_generation(&mut self) {
         if self.deferred_multi_draws.is_empty() {
             return;
         }
+        // wgpu-core records this right after the pass's texture-init fix-ups,
+        // which may have left a blit encoder open; Metal aborts the process if
+        // a second encoder is created while one is encoding.
+        self.leave_blit();
 
         // The pipelines were resolved when each request was queued and the
         // adapter-level cache is never cleared, so these lookups cannot fail.
@@ -994,8 +1205,11 @@ impl super::CommandEncoder {
                 .iter()
                 .any(|draw| draw.icb_request().is_some())
         {
+            let group = self.shared.hal_label("wgpu optimize multi-draw ICBs");
             let blit = self.enter_blit();
-            blit.pushDebugGroup(&NSString::from_str("wgpu optimize multi-draw ICBs"));
+            if let Some(ref group) = group {
+                blit.pushDebugGroup(group);
+            }
             for draw in &self.deferred_multi_draws {
                 let Some(request) = draw.icb_request() else {
                     continue;
@@ -1010,9 +1224,11 @@ impl super::CommandEncoder {
                     );
                 }
             }
-            blit.popDebugGroup();
-            self.leave_blit();
+            if group.is_some() {
+                blit.popDebugGroup();
+            }
         }
+        self.leave_blit();
 
         // Drain rather than take so the request vector keeps its allocation
         // for the next pass.
@@ -1023,6 +1239,7 @@ impl super::CommandEncoder {
                     shared: shared.clone(),
                     kind_tag: request.kind_tag,
                     capacity: request.capacity,
+                    bytes: request.bytes,
                     icb: Some(request.icb),
                     argument_buffer: Some(request.argument_buffer),
                     _extra: Vec::new(),
@@ -1035,6 +1252,7 @@ impl super::CommandEncoder {
                     shared: shared.clone(),
                     kind_tag: request.kind_tag,
                     capacity: request.capacity,
+                    bytes: request.bytes,
                     icb: Some(request.icb),
                     argument_buffer: Some(request.argument_buffer),
                     _extra: alloc::vec![range_buffer],
@@ -1043,6 +1261,7 @@ impl super::CommandEncoder {
                     shared: shared.clone(),
                     kind_tag: 0,
                     capacity: 0,
+                    bytes: 0,
                     icb: None,
                     argument_buffer: None,
                     _extra: alloc::vec![dst_buffer],

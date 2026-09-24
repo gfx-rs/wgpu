@@ -337,6 +337,7 @@ struct CapabilitiesQuery {
     indirect_command_buffers_mesh: bool,
     /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
     indirect_command_buffers_optimize: bool,
+    supports_debug_printf: bool,
     texture_component_swizzle: bool,
 }
 
@@ -356,6 +357,7 @@ struct PrivateCapabilities {
     indirect_command_buffers_mesh: bool,
     /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
     indirect_command_buffers_optimize: bool,
+    supports_debug_printf: bool,
     texture_component_swizzle: bool,
 }
 
@@ -421,6 +423,10 @@ struct AdapterShared {
     instance_flags: wgt::InstanceFlags,
     /// Indirect command buffers awaiting reuse; see [`icb::PooledIcb`].
     icb_pool: Mutex<Vec<icb::PooledIcb>>,
+    /// Bytes per ICB command for each `icb::IcbDrawKind` tag, measured on
+    /// first use.
+    icb_bytes_per_command: Mutex<[Option<u64>; 3]>,
+    use_debug_printf: atomic::AtomicBool,
 }
 
 #[cfg(send_sync)]
@@ -448,6 +454,8 @@ impl AdapterShared {
             render_icb_probe: Mutex::new(None),
             instance_flags,
             icb_pool: Mutex::new(Vec::new()),
+            icb_bytes_per_command: Mutex::new([None; 3]),
+            use_debug_printf: atomic::AtomicBool::new(false),
         }
     }
 
@@ -1244,7 +1252,9 @@ impl PipelineStageInfo {
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: Retained<ProtocolObject<dyn MTLRenderPipelineState>>,
-    icb_raw: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
+    /// ICB-capable twin of `raw`, compiled on first use; `None` when the
+    /// pipeline can never execute inside an ICB.
+    icb: Option<Arc<icb::IcbRenderPipeline>>,
     vs_info: Option<PipelineStageInfo>,
     fs_info: Option<PipelineStageInfo>,
     ts_info: Option<PipelineStageInfo>,
@@ -1361,7 +1371,7 @@ struct CommandState {
     render: Option<Retained<ProtocolObject<dyn MTLRenderCommandEncoder>>>,
     compute: Option<Retained<ProtocolObject<dyn MTLComputeCommandEncoder>>>,
     render_pipeline: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
-    render_pipeline_icb: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
+    render_pipeline_icb: Option<Arc<icb::IcbRenderPipeline>>,
     raw_primitive_type: MTLPrimitiveType,
     index: Option<IndexState>,
     stage_infos: MultiStageData<PipelineStageInfo>,
