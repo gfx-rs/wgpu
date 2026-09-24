@@ -24,6 +24,8 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+mod icb;
+mod icb_probe;
 mod library_from_metallib;
 mod surface;
 mod time;
@@ -43,7 +45,7 @@ use objc2::{
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
 };
-use objc2_foundation::ns_string;
+use objc2_foundation::{ns_string, NSString};
 use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLArgumentBuffersTier,
     MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandQueue,
@@ -331,6 +333,10 @@ struct CapabilitiesQuery {
     supports_raytracing: bool,
     shader_per_vertex: bool,
     supports_multisample_array: bool,
+    indirect_command_buffers_rendering: bool,
+    indirect_command_buffers_mesh: bool,
+    /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
+    indirect_command_buffers_optimize: bool,
     supports_debug_printf: bool,
     texture_component_swizzle: bool,
 }
@@ -344,6 +350,13 @@ struct PrivateCapabilities {
     timestamp_query_support: TimestampQuerySupport,
     supports_memoryless_storage: bool,
     mesh_shaders: bool,
+    /// Metal ICB rendering is intentionally tracked separately from
+    /// `MULTI_DRAW_INDIRECT_COUNT`: this backend uses render ICBs to lower
+    /// fixed-count multi-draws even when the count feature isn't exposed.
+    indirect_command_buffers_rendering: bool,
+    indirect_command_buffers_mesh: bool,
+    /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
+    indirect_command_buffers_optimize: bool,
     supports_debug_printf: bool,
     texture_component_swizzle: bool,
 }
@@ -403,6 +416,16 @@ struct AdapterShared {
     private_texture_format_caps: PrivateTextureFormatCapabilities,
     settings: Settings,
     presentation_timer: time::PresentationTimer,
+    icb_command_pipelines: Mutex<Option<Result<icb::IcbCommandPipelines, crate::DeviceError>>>,
+    /// Result of the render-ICB execution probe, filled in by
+    /// [`AdapterShared::render_icb_executes`] the first time it is needed.
+    render_icb_probe: Mutex<Option<bool>>,
+    instance_flags: wgt::InstanceFlags,
+    /// Indirect command buffers awaiting reuse; see [`icb::PooledIcb`].
+    icb_pool: Mutex<Vec<icb::PooledIcb>>,
+    /// Bytes per ICB command for each `icb::IcbDrawKind` tag, measured on
+    /// first use.
+    icb_bytes_per_command: Mutex<[Option<u64>; 3]>,
     use_debug_printf: atomic::AtomicBool,
 }
 
@@ -413,6 +436,7 @@ impl AdapterShared {
     fn new(
         device: Retained<ProtocolObject<dyn MTLDevice>>,
         capabilities_query: &CapabilitiesQuery,
+        instance_flags: wgt::InstanceFlags,
     ) -> Self {
         let private_caps = capabilities_query.private_capabilities();
         let private_texture_format_caps = capabilities_query.private_texture_format_capabilities();
@@ -426,8 +450,24 @@ impl AdapterShared {
             device,
             settings: Settings::default(),
             presentation_timer: time::PresentationTimer::new(),
+            icb_command_pipelines: Mutex::new(None),
+            render_icb_probe: Mutex::new(None),
+            instance_flags,
+            icb_pool: Mutex::new(Vec::new()),
+            icb_bytes_per_command: Mutex::new([None; 3]),
             use_debug_printf: atomic::AtomicBool::new(false),
         }
+    }
+
+    /// Label for a Metal object this backend creates on its own behalf.
+    /// wgpu-core already drops the labels it hands down under
+    /// [`wgt::InstanceFlags::DISCARD_HAL_LABELS`]; this applies the same flag
+    /// to the backend's own.
+    fn hal_label(&self, label: &str) -> Option<Retained<NSString>> {
+        (!self
+            .instance_flags
+            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS))
+        .then(|| NSString::from_str(label))
     }
 
     fn expose(
@@ -437,7 +477,7 @@ impl AdapterShared {
         autoreleasepool(|_| {
             let name = device.name().to_string();
             let capabilities_query = CapabilitiesQuery::new(&device);
-            let shared = AdapterShared::new(device, &capabilities_query);
+            let shared = AdapterShared::new(device, &capabilities_query, instance_flags);
             let features = capabilities_query.features();
             let capabilities = capabilities_query.capabilities(instance_flags);
             crate::ExposedAdapter {
@@ -1212,6 +1252,9 @@ impl PipelineStageInfo {
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: Retained<ProtocolObject<dyn MTLRenderPipelineState>>,
+    /// ICB-capable twin of `raw`, compiled on first use; `None` when the
+    /// pipeline can never execute inside an ICB.
+    icb: Option<Arc<icb::IcbRenderPipeline>>,
     vs_info: Option<PipelineStageInfo>,
     fs_info: Option<PipelineStageInfo>,
     ts_info: Option<PipelineStageInfo>,
@@ -1316,6 +1359,7 @@ struct IndexState {
 #[derive(Default)]
 struct Temp {
     binding_sizes: Vec<u32>,
+    icb_argument_encoders: icb::IcbArgumentEncoderCache,
 }
 
 // Any state in this struct that may be dirty after an abandoned encoding must
@@ -1326,6 +1370,8 @@ struct CommandState {
         Option<Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>>>,
     render: Option<Retained<ProtocolObject<dyn MTLRenderCommandEncoder>>>,
     compute: Option<Retained<ProtocolObject<dyn MTLComputeCommandEncoder>>>,
+    render_pipeline: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
+    render_pipeline_icb: Option<Arc<icb::IcbRenderPipeline>>,
     raw_primitive_type: MTLPrimitiveType,
     index: Option<IndexState>,
     stage_infos: MultiStageData<PipelineStageInfo>,
@@ -1371,6 +1417,16 @@ pub struct CommandEncoder {
     state: CommandState,
     temp: Temp,
     counters: Arc<wgt::HalCounters>,
+    /// Indirect-command-buffer generation work queued by multi-draw calls
+    /// during render-pass recording, encoded (into the command buffer wgpu-core
+    /// schedules before the pass) by
+    /// [`encode_deferred_multi_draws`](crate::CommandEncoder::encode_deferred_multi_draws).
+    deferred_multi_draws: Vec<icb::IcbGenerationRequest>,
+    /// Objects that must stay alive until the command buffers recorded by this
+    /// encoder finish executing; drained into the next finished
+    /// [`CommandBuffer`] so submission keep-alive doesn't depend on
+    /// [`Settings::retain_command_buffer_references`].
+    deferred_multi_draw_resources: Vec<icb::IcbExecutionResources>,
 }
 
 impl fmt::Debug for CommandEncoder {
@@ -1388,6 +1444,9 @@ unsafe impl Sync for CommandEncoder {}
 pub struct CommandBuffer {
     raw: Retained<ProtocolObject<dyn MTLCommandBuffer>>,
     queue_shared: Arc<QueueShared>,
+    /// Keeps ICBs and their argument buffers alive for the lifetime of this
+    /// command buffer even when Metal is not retaining encoded references.
+    _icb_resources: Vec<icb::IcbExecutionResources>,
 }
 
 impl crate::DynCommandBuffer for CommandBuffer {}
