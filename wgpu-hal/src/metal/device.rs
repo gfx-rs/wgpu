@@ -1,5 +1,5 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::{mem::align_of, ptr::NonNull};
+use core::{mem::align_of, ptr::NonNull, sync::atomic};
 
 use bytemuck::TransparentWrapper;
 use objc2::{
@@ -147,6 +147,7 @@ const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> nt::VertexF
         wgt::VertexFormat::Sint32x3 => nt::VertexFormat::Sint32x3,
         wgt::VertexFormat::Sint32x4 => nt::VertexFormat::Sint32x4,
         wgt::VertexFormat::Unorm10_10_10_2 => nt::VertexFormat::Unorm10_10_10_2,
+        wgt::VertexFormat::Snorm10_10_10_2 => nt::VertexFormat::Snorm10_10_10_2,
         wgt::VertexFormat::Unorm8x4Bgra => nt::VertexFormat::Unorm8x4Bgra,
 
         wgt::VertexFormat::Float64
@@ -163,6 +164,7 @@ const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> nt::VertexF
 pub(super) fn compile_msl_library(
     device: &ProtocolObject<dyn MTLDevice>,
     msl_version: MTLLanguageVersion,
+    enable_logging: bool,
     source: &str,
 ) -> Result<Retained<ProtocolObject<dyn MTLLibrary>>, Retained<NSError>> {
     let options = MTLCompileOptions::new();
@@ -171,6 +173,11 @@ pub(super) fn compile_msl_library(
     // https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance
     if available!(macos = 11.0, ios = 13.0, tvos = 14.0, visionos = 1.0) {
         options.setPreserveInvariance(true);
+    }
+
+    // Shader logging (`debugPrintf`) is only wanted for user shaders.
+    if enable_logging {
+        options.setEnableLogging(true);
     }
 
     device.newLibraryWithSource_options_error(&NSString::from_str(source), Some(&options))
@@ -290,6 +297,7 @@ impl super::Device {
                 let library = compile_msl_library(
                     &self.shared.device,
                     self.shared.private_caps.msl_version,
+                    self.shared.use_debug_printf.load(atomic::Ordering::Relaxed),
                     &source,
                 )
                 .map_err(|err| {
@@ -327,11 +335,9 @@ impl super::Device {
                 let mut immutable_buffer_mask = 0;
                 for (var_handle, var) in module.global_variables.iter() {
                     match var.space {
-                        naga::AddressSpace::WorkGroup => {
-                            if !ep_info[var_handle].is_empty() {
-                                let size = module.types[var.ty].inner.size(module.to_ctx());
-                                wg_memory_sizes.push(size);
-                            }
+                        naga::AddressSpace::WorkGroup if !ep_info[var_handle].is_empty() => {
+                            let size = module.types[var.ty].inner.size(module.to_ctx());
+                            wg_memory_sizes.push(size);
                         }
                         naga::AddressSpace::Uniform | naga::AddressSpace::Storage { .. } => {
                             let br = match var.binding {

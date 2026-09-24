@@ -2910,10 +2910,15 @@ impl Device {
             .collect()
     }
 
-    pub fn create_bind_group_layout(
+    pub fn create_bind_group_layout<BGLE>(
         self: &Arc<Self>,
-        desc: &binding_model::BindGroupLayoutDescriptor,
-    ) -> Arc<BindGroupLayout> {
+        desc: &binding_model::BindGroupLayoutDescriptor<BGLE>,
+    ) -> Arc<BindGroupLayout>
+    where
+        BGLE: TryInto<wgt::BindGroupLayoutEntry> + Copy,
+        CreateBindGroupLayoutError: From<<BGLE as TryInto<wgt::BindGroupLayoutEntry>>::Error>,
+        BGLE: Into<binding_model::BindGroupLayoutEntry>,
+    {
         profiling::scope!("Device::create_bind_group_layout");
 
         let bgl = self
@@ -2933,7 +2938,7 @@ impl Device {
 
             trace.add(trace::Action::CreateBindGroupLayout(
                 bgl.to_trace(),
-                desc.clone(),
+                desc.to_trace(),
             ));
         }
         api_log!(
@@ -2943,10 +2948,14 @@ impl Device {
         bgl
     }
 
-    fn create_bind_group_layout_inner(
+    fn create_bind_group_layout_inner<BGLE>(
         self: &Arc<Device>,
-        desc: &binding_model::BindGroupLayoutDescriptor,
-    ) -> Result<Arc<BindGroupLayout>, CreateBindGroupLayoutError> {
+        desc: &binding_model::BindGroupLayoutDescriptor<BGLE>,
+    ) -> Result<Arc<BindGroupLayout>, CreateBindGroupLayoutError>
+    where
+        BGLE: TryInto<wgt::BindGroupLayoutEntry> + Copy,
+        CreateBindGroupLayoutError: From<<BGLE as TryInto<wgt::BindGroupLayoutEntry>>::Error>,
+    {
         self.check_is_valid()?;
 
         let entry_map = bgl::EntryMap::from_entries(&desc.entries)?;
@@ -3545,6 +3554,7 @@ impl Device {
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         external_texture: &'a Arc<ExternalTexture>,
+        texture_init_actions: &mut Vec<TextureInitTrackerAction>,
         used: &mut BindGroupStates,
         snatch_guard: &'a SnatchGuard,
     ) -> Result<
@@ -3592,6 +3602,23 @@ impl Device {
             .collect::<Result<Vec<_>, Error>>()?;
         let planes = planes.try_into().unwrap();
 
+        // Iterate over the distinct planes, rather than the three bindings produced
+        // above, so that a plane repeated to fill the bindings is only recorded once.
+        for plane in external_texture.planes.iter() {
+            let texture = &plane.parent;
+            texture_init_actions.push(TextureInitTrackerAction {
+                texture: texture.clone(),
+                range: TextureInitRange {
+                    mip_range: plane.desc.range.mip_range(texture.desc.mip_level_count),
+                    layer_range: plane
+                        .desc
+                        .range
+                        .layer_range(texture.desc.array_layer_count()),
+                },
+                kind: MemoryInitKind::NeedsInitializedMemory,
+            });
+        }
+
         used.buffers.insert_single(
             external_texture_state.params.clone(),
             wgt::BufferUses::UNIFORM,
@@ -3608,6 +3635,7 @@ impl Device {
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         view: &'a Arc<TextureView>,
+        texture_init_actions: &mut Vec<TextureInitTrackerAction>,
         used: &mut BindGroupStates,
         snatch_guard: &'a SnatchGuard,
     ) -> Result<
@@ -3653,6 +3681,18 @@ impl Device {
             0,
             NonZeroU64::new(size_of::<ExternalTextureParams>() as u64).unwrap(),
         );
+
+        texture_init_actions.push(TextureInitTrackerAction {
+            texture: view.parent.clone(),
+            range: TextureInitRange {
+                mip_range: view.desc.range.mip_range(view.parent.desc.mip_level_count),
+                layer_range: view
+                    .desc
+                    .range
+                    .layer_range(view.parent.desc.array_layer_count()),
+            },
+            kind: MemoryInitKind::NeedsInitializedMemory,
+        });
 
         Ok(hal::ExternalTextureBinding { planes, params })
     }
@@ -3711,7 +3751,6 @@ impl Device {
             }
         }
 
-        // TODO: arrayvec/smallvec, or re-use allocations
         // Record binding info for dynamic offset validation
         let mut dynamic_binding_info = Vec::new();
         // Map of binding -> shader reflected size
@@ -3723,13 +3762,13 @@ impl Device {
 
         let mut buffer_init_actions = Vec::new();
         let mut texture_init_actions = Vec::new();
-        let mut hal_entries = Vec::with_capacity(desc.entries.len());
-        let mut hal_buffers = Vec::new();
-        let mut hal_samplers = Vec::new();
-        let mut hal_textures = Vec::new();
-        let mut hal_tlas_s = Vec::new();
-        let mut hal_external_textures = Vec::new();
         let snatch_guard = self.snatchable_lock.read();
+        let mut hal_entries = SmallVec::<[_; 4]>::with_capacity(desc.entries.len());
+        let mut hal_buffers = SmallVec::<[_; 4]>::new();
+        let mut hal_samplers = SmallVec::<[_; 4]>::new();
+        let mut hal_textures = SmallVec::<[_; 8]>::new();
+        let mut hal_tlas_s = SmallVec::<[_; 1]>::new();
+        let mut hal_external_textures = SmallVec::<[_; 1]>::new();
         for entry in desc.entries.iter() {
             let binding = entry.binding;
             // Find the corresponding declaration in the layout
@@ -3801,6 +3840,7 @@ impl Device {
                             binding,
                             decl,
                             view,
+                            &mut texture_init_actions,
                             &mut used,
                             &snatch_guard,
                         )?;
@@ -3874,6 +3914,7 @@ impl Device {
                         binding,
                         decl,
                         et,
+                        &mut texture_init_actions,
                         &mut used,
                         &snatch_guard,
                     )?;

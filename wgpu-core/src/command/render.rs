@@ -1972,6 +1972,10 @@ impl CommandEncoder {
                     ));
                 }
 
+                #[allow(
+                    clippy::collapsible_match,
+                    reason = "Match guards change which attachment error is returned."
+                )]
                 if view
                     .desc
                     .usage
@@ -3606,9 +3610,6 @@ fn execute_bundle(
         }
         ExecutionError::InvalidResource(e) => {
             RenderPassErrorInner::RenderCommand(RenderCommandError::InvalidResource(e))
-        }
-        ExecutionError::Unimplemented(what) => {
-            RenderPassErrorInner::RenderCommand(RenderCommandError::Unimplemented(what))
         }
     })?;
 

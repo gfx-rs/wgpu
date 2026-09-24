@@ -337,6 +337,7 @@ struct CapabilitiesQuery {
     indirect_command_buffers_mesh: bool,
     /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
     indirect_command_buffers_optimize: bool,
+    supports_debug_printf: bool,
     texture_component_swizzle: bool,
 }
 
@@ -356,6 +357,7 @@ struct PrivateCapabilities {
     indirect_command_buffers_mesh: bool,
     /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
     indirect_command_buffers_optimize: bool,
+    supports_debug_printf: bool,
     texture_component_swizzle: bool,
 }
 
@@ -421,6 +423,7 @@ struct AdapterShared {
     instance_flags: wgt::InstanceFlags,
     /// Indirect command buffers awaiting reuse; see [`icb::PooledIcb`].
     icb_pool: Mutex<Vec<icb::PooledIcb>>,
+    use_debug_printf: atomic::AtomicBool,
 }
 
 #[cfg(send_sync)]
@@ -448,6 +451,7 @@ impl AdapterShared {
             render_icb_probe: Mutex::new(None),
             instance_flags,
             icb_pool: Mutex::new(Vec::new()),
+            use_debug_printf: atomic::AtomicBool::new(false),
         }
     }
 

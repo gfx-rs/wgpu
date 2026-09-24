@@ -157,11 +157,16 @@ impl IcbCommandPipelines {
         shared: &super::AdapterShared,
         source: &str,
     ) -> Result<Retained<ProtocolObject<dyn MTLLibrary>>, crate::DeviceError> {
-        super::device::compile_msl_library(&shared.device, shared.private_caps.msl_version, source)
-            .map_err(|err| {
-                log::error!("failed to compile Metal ICB generation shader: {err}");
-                crate::DeviceError::Unexpected
-            })
+        super::device::compile_msl_library(
+            &shared.device,
+            shared.private_caps.msl_version,
+            false,
+            source,
+        )
+        .map_err(|err| {
+            log::error!("failed to compile Metal ICB generation shader: {err}");
+            crate::DeviceError::Unexpected
+        })
     }
 
     fn new(shared: &super::AdapterShared) -> Result<Self, crate::DeviceError> {

@@ -26,7 +26,7 @@ use crate::{
     },
     hal_label,
     init_tracker::{BufferInitTracker, TextureInitTracker},
-    lock::{rank, Mutex, RwLock},
+    lock::{rank, Mutex, MutexGuard, RwLock},
     ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -996,7 +996,9 @@ impl Buffer {
             }
             _ => panic!("No pending mapping."),
         };
-        let status = if pending_mapping.range.start != pending_mapping.range.end {
+        let status = if let Err(error) = self.device.check_is_valid() {
+            Err(error.into())
+        } else if pending_mapping.range.start != pending_mapping.range.end {
             let host = pending_mapping.op.host;
             let size = pending_mapping.range.end - pending_mapping.range.start;
             match crate::device::map_buffer(
@@ -2027,36 +2029,34 @@ impl Texture {
         match resolved_dimension {
             wgt::TextureViewDimension::D1
             | wgt::TextureViewDimension::D2
-            | wgt::TextureViewDimension::D3 => {
-                if resolved_array_layer_count != 1 {
-                    return Err(CreateTextureViewError::InvalidArrayLayerCount {
-                        requested: resolved_array_layer_count,
-                        dim: resolved_dimension,
-                    });
-                }
+            | wgt::TextureViewDimension::D3
+                if resolved_array_layer_count != 1 =>
+            {
+                return Err(CreateTextureViewError::InvalidArrayLayerCount {
+                    requested: resolved_array_layer_count,
+                    dim: resolved_dimension,
+                });
             }
-            wgt::TextureViewDimension::Cube => {
-                if resolved_array_layer_count != 6 {
-                    return Err(CreateTextureViewError::InvalidCubemapTextureDepth {
-                        depth: resolved_array_layer_count,
-                    });
-                }
+            wgt::TextureViewDimension::Cube if resolved_array_layer_count != 6 => {
+                return Err(CreateTextureViewError::InvalidCubemapTextureDepth {
+                    depth: resolved_array_layer_count,
+                });
             }
-            wgt::TextureViewDimension::CubeArray => {
-                if !resolved_array_layer_count.is_multiple_of(6) {
-                    return Err(CreateTextureViewError::InvalidCubemapArrayTextureDepth {
-                        depth: resolved_array_layer_count,
-                    });
-                }
+            wgt::TextureViewDimension::CubeArray
+                if !resolved_array_layer_count.is_multiple_of(6) =>
+            {
+                return Err(CreateTextureViewError::InvalidCubemapArrayTextureDepth {
+                    depth: resolved_array_layer_count,
+                });
             }
             _ => {}
         }
 
         match resolved_dimension {
-            wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
-                if self.desc.size.width != self.desc.size.height {
-                    return Err(CreateTextureViewError::InvalidCubeTextureViewSize);
-                }
+            wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray
+                if self.desc.size.width != self.desc.size.height =>
+            {
+                return Err(CreateTextureViewError::InvalidCubeTextureViewSize);
             }
             _ => {}
         }
@@ -3498,10 +3498,11 @@ impl Blas {
         };
 
         let submit_index = if let Some(queue) = device.get_queue() {
+            drop(state);
             queue.lock_life().prepare_compact(self).unwrap_or(0) // '0' means no wait is necessary
         } else {
             // We can safely unwrap below since we just set the `compacted_state` to `BlasCompactState::Waiting`.
-            let (mut callback, status) = self.read_back_compact_size().unwrap();
+            let (mut callback, status) = self.read_back_compact_size(state).unwrap();
             if let Some(callback) = callback.take() {
                 callback(status);
             }
@@ -3513,8 +3514,10 @@ impl Blas {
 
     /// This function returns [`None`] only if [`Self::compacted_state`] is not [`BlasCompactState::Waiting`].
     #[must_use]
-    pub(crate) fn read_back_compact_size(&self) -> Option<BlasCompactReadyPendingClosure> {
-        let mut state = self.compacted_state.lock();
+    pub(crate) fn read_back_compact_size(
+        &self,
+        mut state: MutexGuard<'_, BlasCompactState>,
+    ) -> Option<BlasCompactReadyPendingClosure> {
         let pending_compact = match mem::replace(&mut *state, BlasCompactState::Idle) {
             BlasCompactState::Waiting(pending_mapping) => pending_mapping,
             // Compaction cancelled e.g. by rebuild
