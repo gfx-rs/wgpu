@@ -1117,10 +1117,6 @@ impl Buffer {
     /// <https://gpuweb.github.io/gpuweb/#dom-gpubuffer-unmap>
     fn unmap_inner(self: &Arc<Self>) -> Option<BufferMapPendingClosure> {
         let device = &self.device;
-        // We can stop here if the device is invalid because:
-        // - if the device was invalid from the start it couldn't have been mapped via `map_async` anyway
-        // - if the device becomes invalid it calls the callback in `poll`/`maintain`
-        self.device.check_is_valid().ok()?;
         let snatch_guard = device.snatchable_lock.read();
         // We can stop here if the buffer is invalid or destroyed because:
         // - if the device was invalid from the start it couldn't have been mapped via `map_async` anyway
@@ -1129,6 +1125,10 @@ impl Buffer {
         let map_state = mem::replace(&mut *self.map_state.write(), BufferMapState::Idle);
         match map_state {
             BufferMapState::Init { staging_buffer } => {
+                if !self.device.is_valid() {
+                    staging_buffer.dispose();
+                    return None;
+                }
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
                     use crate::device::trace::{DataKind, IntoTrace};
@@ -1194,6 +1194,7 @@ impl Buffer {
                 range,
                 host,
             } => {
+                self.device.check_is_valid().ok()?;
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
