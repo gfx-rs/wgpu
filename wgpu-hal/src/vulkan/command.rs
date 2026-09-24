@@ -1558,10 +1558,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 }
 
-#[test]
-fn check_dst_image_layout() {
-    assert_eq!(
-        conv::derive_image_layout(wgt::TextureUses::COPY_DST, wgt::TextureFormat::Rgba8Unorm),
-        DST_IMAGE_LAYOUT
-    );
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_dst_image_layout() {
+        assert_eq!(
+            conv::derive_image_layout(wgt::TextureUses::COPY_DST, wgt::TextureFormat::Rgba8Unorm),
+            DST_IMAGE_LAYOUT
+        );
+    }
 }
