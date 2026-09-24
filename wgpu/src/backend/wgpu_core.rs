@@ -13,7 +13,6 @@ use core::{
     ops::{Deref, Range},
     pin::Pin,
     ptr::NonNull,
-    slice,
 };
 use wgc::resource::{BufferMapping, ParentDevice as _};
 use wgt::error::WebGpuError;
@@ -25,7 +24,7 @@ use wgt::WasmNotSendSync;
 
 use crate::{
     api,
-    dispatch::{self, BlasCompactCallback, BufferMappedRangeInterface},
+    dispatch::{self, BlasCompactCallback},
     BindingResource, Blas, BufferBinding, BufferDescriptor, Features, LoadOp, MapMode, Operations,
     ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas, WriteOnly,
 };
@@ -479,16 +478,10 @@ impl fmt::Debug for CoreSurfaceOutputDetail {
 #[derive(Debug)]
 pub struct CoreQueueWriteBuffer {
     wgpu_staging_buffer: wgc::resource::StagingBuffer,
-    mapping: CoreBufferMappedRange,
 }
 
 #[derive(Debug)]
-pub struct CoreBufferMappedRange {
-    ptr: NonNull<u8>,
-    size: usize,
-    // Stagging
-    _guard: Option<BufferMapping>,
-}
+pub struct CoreBufferMappedRange(BufferMapping);
 
 #[cfg(send_sync)]
 unsafe impl Send for CoreBufferMappedRange {}
@@ -529,8 +522,32 @@ crate::cmp::impl_eq_ord_hash_box_address!(CoreRenderBundleEncoder => .encoder);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreRenderBundle => .wgpu_render_bundle);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreSurface => .wgpu_surface);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreSurfaceOutputDetail => .wgpu_surface);
-crate::cmp::impl_eq_ord_hash_proxy!(CoreQueueWriteBuffer => .mapping.ptr);
-crate::cmp::impl_eq_ord_hash_proxy!(CoreBufferMappedRange => .ptr);
+impl PartialEq for CoreQueueWriteBuffer {
+    fn eq(&self, other: &Self) -> bool {
+        unsafe { self.wgpu_staging_buffer.ptr() == other.wgpu_staging_buffer.ptr() }
+    }
+}
+impl Eq for CoreQueueWriteBuffer {}
+impl PartialOrd for CoreQueueWriteBuffer {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for CoreQueueWriteBuffer {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        unsafe {
+            self.wgpu_staging_buffer
+                .ptr()
+                .cmp(&other.wgpu_staging_buffer.ptr())
+        }
+    }
+}
+impl core::hash::Hash for CoreQueueWriteBuffer {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        unsafe { self.wgpu_staging_buffer.ptr().hash(state) }
+    }
+}
+crate::cmp::impl_eq_ord_hash_proxy!(CoreBufferMappedRange => .0.ptr());
 
 impl dispatch::InstanceInterface for ContextWgpuCore {
     fn new(desc: wgt::InstanceDescriptor) -> Self
@@ -1426,16 +1443,9 @@ impl dispatch::QueueInterface for CoreQueue {
         size: crate::BufferSize,
     ) -> Option<dispatch::DispatchQueueWriteBuffer> {
         match self.wgpu_queue.create_staging_buffer(size) {
-            Ok((wgpu_staging_buffer, ptr)) => Some(
+            Ok((wgpu_staging_buffer, _)) => Some(
                 CoreQueueWriteBuffer {
                     wgpu_staging_buffer,
-                    mapping: CoreBufferMappedRange {
-                        ptr,
-                        size: size.get() as usize,
-                        // stagging buffer is the one keeping the mapping alive
-                        // so no guard is needed here
-                        _guard: None,
-                    },
                 }
                 .into(),
             ),
@@ -1639,14 +1649,7 @@ impl dispatch::BufferInterface for CoreBuffer {
         let size = sub_range.end - sub_range.start;
         self.wgpu_buffer
             .get_mapped_range(sub_range.start, Some(size))
-            .map(|mapping| {
-                CoreBufferMappedRange {
-                    ptr: mapping.ptr(),
-                    size: mapping.len() as usize,
-                    _guard: Some(mapping),
-                }
-                .into()
-            })
+            .map(|mapping| CoreBufferMappedRange(mapping).into())
             .map_err(|err| crate::MapRangeError(format_error(&err)))
     }
 
@@ -2768,29 +2771,29 @@ impl dispatch::SurfaceOutputDetailInterface for CoreSurfaceOutputDetail {
 impl dispatch::QueueWriteBufferInterface for CoreQueueWriteBuffer {
     #[inline]
     fn len(&self) -> usize {
-        self.mapping.len()
+        self.wgpu_staging_buffer.size().get() as usize
     }
 
     #[inline]
     unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
-        unsafe { self.mapping.write_slice() }
+        unsafe {
+            WriteOnly::new(NonNull::slice_from_raw_parts(
+                self.wgpu_staging_buffer.ptr(),
+                self.len(),
+            ))
+        }
     }
 }
 
 impl dispatch::BufferMappedRangeInterface for CoreBufferMappedRange {
     #[inline]
-    fn len(&self) -> usize {
-        self.size
-    }
-
-    #[inline]
     unsafe fn read_slice(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.ptr.as_ptr(), self.size) }
+        self.0.read_slice()
     }
 
     #[inline]
     unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
-        unsafe { WriteOnly::new(NonNull::slice_from_raw_parts(self.ptr, self.size)) }
+        self.0.write_slice()
     }
 
     #[cfg(webgpu)]

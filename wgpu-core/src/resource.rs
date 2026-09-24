@@ -321,13 +321,13 @@ impl BufferMapping {
     }
 
     /// [`BufferMapping::mode`] is [`HostMap::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set) otherwise it will panic.
-    pub fn slice(&self) -> &[u8] {
+    pub fn read_slice(&self) -> &[u8] {
         assert!(self.mode == HostMap::Read);
         unsafe { core::slice::from_raw_parts(self.ptr().as_ptr(), self.len() as usize) }
     }
 
     /// [`BufferMapping::mode`] is [`HostMap::Write`] (buffer has [`wgt::BufferUsages::MAP_WRITE`] set) otherwise it will panic.
-    pub fn write_only(&'_ self) -> WriteOnly<'_, [u8]> {
+    pub fn write_slice(&'_ self) -> WriteOnly<'_, [u8]> {
         assert!(self.mode == HostMap::Write);
         unsafe { WriteOnly::new(NonNull::slice_from_raw_parts(self.ptr, self.len as usize)) }
     }
@@ -1468,10 +1468,15 @@ impl StagingBuffer {
         Ok(staging_buffer)
     }
 
-    /// SAFETY: You must not call any functions of `self`
+    /// # Safety
+    /// You must not call any functions of `self`
     /// until you stopped using the returned pointer.
-    pub(crate) unsafe fn ptr(&self) -> NonNull<u8> {
+    pub unsafe fn ptr(&self) -> NonNull<u8> {
         self.ptr
+    }
+
+    pub fn size(&self) -> wgt::BufferSize {
+        self.size
     }
 
     #[cfg(feature = "trace")]
