@@ -1496,10 +1496,15 @@ impl StagingBuffer {
         Ok(staging_buffer)
     }
 
-    /// SAFETY: You must not call any functions of `self`
+    /// # Safety
+    /// You must not call any functions of `self`
     /// until you stopped using the returned pointer.
-    pub(crate) unsafe fn ptr(&self) -> NonNull<u8> {
+    pub unsafe fn ptr(&self) -> NonNull<u8> {
         self.ptr
+    }
+
+    pub fn size(&self) -> wgt::BufferSize {
+        self.size
     }
 
     #[cfg(feature = "trace")]
