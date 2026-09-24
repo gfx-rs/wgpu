@@ -228,13 +228,14 @@ impl GPUBuffer {
     let mapping = self.wgpu_buffer.get_mapped_range(offset, size)?;
 
     if mode == MapMode::Read {
-      let slice = mapping.read_slice();
       let mut data = self.data.borrow_mut();
       let data = data
         .as_mut()
         .ok_or(JsErrorBox::range_error("Buffer failed allocating"))?;
-      data[offset as usize..(offset + slice.len() as u64) as usize]
-        .clone_from_slice(slice);
+      mapping.read(
+        &mut data[offset as usize..(offset + mapping.len()) as usize],
+        0,
+      );
     }
 
     self.map_state.replace(BufferMapState::Mapped {

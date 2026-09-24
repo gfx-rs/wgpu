@@ -1,4 +1,10 @@
-use alloc::{borrow::Cow, borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec::Vec};
+use alloc::{
+    borrow::{Cow, ToOwned as _},
+    boxed::Box,
+    string::String,
+    sync::Arc,
+    vec::Vec,
+};
 use core::{
     borrow::Borrow,
     fmt,
@@ -321,9 +327,25 @@ impl BufferMapping {
     }
 
     /// [`BufferMapping::mode`] is [`HostMap::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set) otherwise it will panic.
-    pub fn read_slice(&self) -> &[u8] {
+    pub fn read_into_vec(&self) -> Vec<u8> {
         assert!(self.mode == HostMap::Read);
-        unsafe { core::slice::from_raw_parts(self.ptr().as_ptr(), self.len() as usize) }
+        let mut vec = alloc::vec![0u8; self.len as usize];
+        self.read(&mut vec, 0);
+        vec
+    }
+
+    /// [`BufferMapping::mode`] is [`HostMap::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set) otherwise it will panic.
+    pub fn read(&self, dst: &mut [u8], offset: usize) {
+        assert!(self.mode == HostMap::Read);
+        let size = self.len - offset as u64;
+        assert!(dst.len() <= size as usize);
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                self.ptr.as_ptr().add(offset),
+                dst.as_mut_ptr(),
+                dst.len(),
+            )
+        };
     }
 
     /// [`BufferMapping::mode`] is [`HostMap::Write`] (buffer has [`wgt::BufferUsages::MAP_WRITE`] set) otherwise it will panic.

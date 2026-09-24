@@ -137,9 +137,8 @@ impl Test<'_> {
                     .collect::<Vec<u8>>(),
             };
 
-            // SAFETY: Buffer is mapped for read and this is only mapping
-            let contents = mapping.read_slice();
-            if &expected_data[..] != contents {
+            let contents = mapping.read_into_vec();
+            if expected_data[..] != contents {
                 panic!(
                     "Test expectation is not met!\nBuffer content was:\n{contents:?}\nbut expected:\n{expected_data:?}"
                 );

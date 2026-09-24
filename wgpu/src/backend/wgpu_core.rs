@@ -2788,7 +2788,9 @@ impl dispatch::QueueWriteBufferInterface for CoreQueueWriteBuffer {
 impl dispatch::BufferMappedRangeInterface for CoreBufferMappedRange {
     #[inline]
     unsafe fn read_slice(&self) -> &[u8] {
-        self.0.read_slice()
+        // FIXME: We currently tolerate this
+        // https://github.com/gfx-rs/wgpu/pull/10307#discussion_r4093841117
+        unsafe { core::slice::from_raw_parts(self.0.ptr().as_ptr(), self.0.len() as usize) }
     }
 
     #[inline]
