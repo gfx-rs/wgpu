@@ -98,16 +98,19 @@ pub mod language_extension {
         }
     }
 
-    #[test]
-    /// Asserts that the manual implementation of VARIANTS is the same as the derived strum version would be
-    /// while still allowing strum to be a dev-only dependency
-    fn test_manual_variants_array_is_correct() {
-        assert_eq!(
-            <ImplementedLanguageExtension as strum::VariantArray>::VARIANTS,
-            ImplementedLanguageExtension::VARIANTS
-        );
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[test]
+        /// Asserts that the manual implementation of VARIANTS is the same as the derived strum version would be
+        /// while still allowing strum to be a dev-only dependency
+        fn test_manual_variants_array_is_correct() {
+            assert_eq!(
+                <ImplementedLanguageExtension as strum::VariantArray>::VARIANTS,
+                ImplementedLanguageExtension::VARIANTS
+            );
+        }
     }
-
     /// A variant of [`LanguageExtension::Unimplemented`].
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     pub enum UnimplementedLanguageExtension {
