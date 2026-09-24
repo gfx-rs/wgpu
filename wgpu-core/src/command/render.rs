@@ -951,6 +951,12 @@ pub enum RenderPassErrorInner {
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error(
+        "Indirect draw count buffer offset {offset:?} is not a multiple of {alignment}",
+        offset = .0,
+        alignment = wgt::INDIRECT_BUFFER_OFFSET_ALIGNMENT
+    )]
+    UnalignedIndirectCountBufferOffset(BufferAddress),
     #[error("Indirect draw count of {count_bytes} bytes starting at {begin_count_offset} would overrun buffer of size {count_buffer_size}")]
     IndirectCountBufferOverrun {
         count_bytes: u64,
@@ -1088,6 +1094,7 @@ impl WebGpuError for RenderPassError {
             | RenderPassErrorInner::MismatchedResolveTextureFormat { .. }
             | RenderPassErrorInner::InvalidDepthOps
             | RenderPassErrorInner::InvalidStencilOps
+            | RenderPassErrorInner::UnalignedIndirectCountBufferOffset(..)
             | RenderPassErrorInner::IndirectCountBufferOverrun { .. }
             | RenderPassErrorInner::ResourceUsageCompatibility(..)
             | RenderPassErrorInner::IncompatibleBundleReadOnlyDepthStencil { .. }
@@ -2732,6 +2739,11 @@ pub(super) fn encode_render_pass(
                 )
                 .map_pass_err(pass_scope)?;
         }
+
+        // Backends may have deferred setup work for the pass's indirect
+        // multi-draws (e.g. Metal indirect-command-buffer generation); encode
+        // it after indirect validation so it reads validated draw arguments.
+        unsafe { transit.encode_deferred_multi_draws() };
     }
 
     encoder.close_and_swap().map_pass_err(pass_scope)?;
@@ -3241,7 +3253,7 @@ fn multi_draw_indirect(
     indirect_buffer.check_usage(BufferUsages::INDIRECT)?;
     indirect_buffer.check_destroyed(state.pass.base.snatch_guard)?;
 
-    if !offset.is_multiple_of(4) {
+    if !offset.is_multiple_of(wgt::INDIRECT_BUFFER_OFFSET_ALIGNMENT) {
         return Err(RenderCommandError::UnalignedIndirectBufferOffset(offset).into());
     }
 
@@ -3462,8 +3474,13 @@ fn multi_draw_indirect_count(
     count_buffer.check_usage(BufferUsages::INDIRECT)?;
     let count_raw = count_buffer.try_raw(state.pass.base.snatch_guard)?;
 
-    if !offset.is_multiple_of(4) {
+    if !offset.is_multiple_of(wgt::INDIRECT_BUFFER_OFFSET_ALIGNMENT) {
         return Err(RenderCommandError::UnalignedIndirectBufferOffset(offset).into());
+    }
+    if !count_buffer_offset.is_multiple_of(wgt::INDIRECT_BUFFER_OFFSET_ALIGNMENT) {
+        return Err(RenderPassErrorInner::UnalignedIndirectCountBufferOffset(
+            count_buffer_offset,
+        ));
     }
 
     let args_size = match stride.checked_mul(u64::from(max_count)) {
