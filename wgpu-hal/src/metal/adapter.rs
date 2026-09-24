@@ -124,6 +124,13 @@ impl crate::Adapter for super::Adapter {
                 }
             }
 
+            // Count draws have no lowering without the multi-draw support
+            // kernels (see `icb::DeferredMultiDraw::ClampedArgs`), so compile
+            // them now and fail device creation rather than a later draw call.
+            if features.contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT) {
+                self.shared.icb_command_pipelines()?;
+            }
+
             let queue = device.newCommandQueueWithDescriptor(&cq_desc).unwrap();
 
             // Acquiring the meaning of timestamp ticks is hard with Metal!

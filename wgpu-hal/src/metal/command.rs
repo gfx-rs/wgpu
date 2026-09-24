@@ -1724,7 +1724,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             return;
         }
         let words_per_draw = (size_of::<wgt::DrawIndirectArgs>() / WORD_SIZE) as u32;
-        let clamped = unsafe {
+        let Some(clamped) = (unsafe {
             self.defer_clamped_count_args(
                 buffer,
                 offset,
@@ -1733,6 +1733,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 max_count,
                 words_per_draw,
             )
+        }) else {
+            return;
         };
         let encoder = self.state.render.as_ref().unwrap();
         let mut clamped_offset = 0;
@@ -1779,7 +1781,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             return;
         }
         let words_per_draw = (size_of::<wgt::DrawIndexedIndirectArgs>() / WORD_SIZE) as u32;
-        let clamped = unsafe {
+        let Some(clamped) = (unsafe {
             self.defer_clamped_count_args(
                 buffer,
                 offset,
@@ -1788,6 +1790,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 max_count,
                 words_per_draw,
             )
+        }) else {
+            return;
         };
         let encoder = self.state.render.as_ref().unwrap();
         let index = self.state.index.as_ref().unwrap();
@@ -1845,7 +1849,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             return;
         }
         let words_per_draw = (size_of::<wgt::DispatchIndirectArgs>() / WORD_SIZE) as u32;
-        let clamped = unsafe {
+        let Some(clamped) = (unsafe {
             self.defer_clamped_count_args(
                 buffer,
                 offset,
@@ -1854,6 +1858,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 max_count,
                 words_per_draw,
             )
+        }) else {
+            return;
         };
         let encoder = self.state.render.as_ref().unwrap();
         let mut clamped_offset = 0;

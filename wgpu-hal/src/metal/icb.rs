@@ -524,6 +524,20 @@ impl super::AdapterShared {
         })
     }
 
+    /// The multi-draw support kernels, compiled on first use and cached for
+    /// the adapter's lifetime. A compile failure is cached too, so a broken
+    /// driver doesn't recompile the library on every multi-draw call.
+    ///
+    /// Devices created with `MULTI_DRAW_INDIRECT_COUNT` compile them in
+    /// `Adapter::open`: count draws have no lowering without them, so a
+    /// failure is reported there rather than at a draw call.
+    pub(super) fn icb_command_pipelines(&self) -> Result<IcbCommandPipelines, crate::DeviceError> {
+        let mut pipelines = self.icb_command_pipelines.lock();
+        pipelines
+            .get_or_insert_with(|| IcbCommandPipelines::new(self))
+            .clone()
+    }
+
     /// Bytes Metal allocates per command in ICBs created from `descriptor`,
     /// measured once per draw kind from a small sample allocation since no API
     /// reports it ahead of time (see [`ICB_MAX_BYTES`]). `None` if even the
@@ -563,12 +577,7 @@ impl super::CommandEncoder {
     }
 
     fn get_icb_command_pipelines(&self) -> Result<IcbCommandPipelines, crate::DeviceError> {
-        let mut pipelines = self.shared.icb_command_pipelines.lock();
-        // A compile failure is cached so a broken driver doesn't recompile
-        // the generation library on every multi-draw call.
-        pipelines
-            .get_or_insert_with(|| IcbCommandPipelines::new(&self.shared))
-            .clone()
+        self.shared.icb_command_pipelines()
     }
 
     fn get_icb_mesh_command_pipeline(&self) -> Option<IcbCommandPipeline> {
@@ -926,7 +935,9 @@ impl super::CommandEncoder {
     /// for counts past the ICB memory bound: queue a kernel that copies
     /// `min(count, max_count)` argument structs from `buffer` into a private
     /// buffer and zeroes the rest, so a fixed `max_count`-length per-draw loop
-    /// over the result is correct. Returns that buffer.
+    /// over the result is correct. Returns that buffer, or `None` (with the
+    /// reason logged) when the draw cannot be recorded at all; nothing has
+    /// been queued in that case, and the caller records no draws.
     pub(super) unsafe fn defer_clamped_count_args(
         &mut self,
         buffer: &super::Buffer,
@@ -935,20 +946,29 @@ impl super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
         words_per_draw: u32,
-    ) -> Retained<ProtocolObject<dyn MTLBuffer>> {
-        // Resolve now so `encode_deferred_icb_generation` cannot fail later.
-        self.get_icb_command_pipelines().expect(
-            "Metal MULTI_DRAW_INDIRECT_COUNT is enabled but the multi-draw \
-             support kernels failed to compile",
-        );
-        let dst_buffer = self
+    ) -> Option<Retained<ProtocolObject<dyn MTLBuffer>>> {
+        // The kernels were compiled when the device was created with
+        // `MULTI_DRAW_INDIRECT_COUNT`, so this only fails on a driver that has
+        // since broken; there is no lowering without them.
+        if let Err(error) = self.get_icb_command_pipelines() {
+            log::error!(
+                "Metal multi-draw support kernels are unavailable ({error}); \
+                 a multi_draw_*_indirect_count call is not recorded"
+            );
+            return None;
+        }
+        let length = max_count as usize * words_per_draw as usize * WORD_SIZE;
+        let Some(dst_buffer) = self
             .shared
             .device
-            .newBufferWithLength_options(
-                max_count as usize * words_per_draw as usize * WORD_SIZE,
-                MTLResourceOptions::StorageModePrivate,
-            )
-            .expect("failed to allocate Metal buffer for clamped multi-draw arguments");
+            .newBufferWithLength_options(length, MTLResourceOptions::StorageModePrivate)
+        else {
+            log::error!(
+                "Metal could not allocate {length} bytes for clamped multi-draw \
+                 arguments; a multi_draw_*_indirect_count call is not recorded"
+            );
+            return None;
+        };
         dst_buffer.setLabel(
             self.shared
                 .hal_label("wgpu clamped multi-draw args")
@@ -965,7 +985,7 @@ impl super::CommandEncoder {
                 max_count,
                 words_per_draw,
             });
-        dst_buffer
+        Some(dst_buffer)
     }
 
     /// The descriptor for ICBs that execute `kind` draws. ICBs are only reused
