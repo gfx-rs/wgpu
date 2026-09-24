@@ -37,6 +37,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         MULTI_DRAW_INDIRECT_COUNT_READBACK,
         MULTI_DRAW_INDEXED_INDIRECT_COUNT_READBACK,
         MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP,
+        MULTI_DRAW_INDIRECT_OVER_ICB_MEMORY_LIMIT,
         MULTI_DRAW_INDIRECT_AFTER_DISCARDED_3D_ATTACHMENT,
         MULTI_DRAW_INDIRECT_FIRST_VERTEX_AND_INSTANCE,
         MULTI_DRAW_INDIRECT_MIXED_SEQUENCE,
@@ -728,6 +729,53 @@ async fn run_multi_draw_indirect_after_discarded_3d_attachment(ctx: TestingConte
     assert_all_white(&ctx, encoder, &texture).await;
 }
 
+/// More draws than the Metal ICB path's memory bound admits on any GPU
+/// measured so far (2^17 commands exceed 64 MiB once a command costs more than
+/// 512 bytes), so the multi-draw has to take the per-draw loop instead. Every
+/// draw covers the target, which is kept tiny so software rasterizers finish
+/// quickly.
+async fn run_multi_draw_indirect_over_icb_memory_limit(ctx: TestingContext) {
+    let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline(&ctx, false);
+    let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 16, 16);
+    let args = vec![
+        wgpu::util::DrawIndirectArgs {
+            vertex_count: 6,
+            instance_count: 1,
+            first_vertex: 0,
+            first_instance: 0,
+        };
+        1 << 17
+    ];
+    let indirect_buffer = create_draw_indirect_buffer(&ctx, &args);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+                resolve_target: None,
+                view: &out_texture_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        rpass.set_pipeline(&pipeline);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        rpass.multi_draw_indirect(&indirect_buffer, 0, args.len() as u32);
+    }
+
+    assert_all_white(&ctx, encoder, &out_texture).await;
+}
+
 async fn run_multi_draw_indirect_first_vertex_and_instance(ctx: TestingContext) {
     let shader = ctx
         .device
@@ -1310,6 +1358,20 @@ static MULTI_DRAW_INDIRECT_AFTER_DISCARDED_3D_ATTACHMENT: GpuTestConfiguration =
                 .remove_instance_flags(wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL),
         )
         .run_async(run_multi_draw_indirect_after_discarded_3d_attachment);
+
+#[apply(gpu_test!)]
+static MULTI_DRAW_INDIRECT_OVER_ICB_MEMORY_LIMIT: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+                .limits(wgpu::Limits::downlevel_defaults())
+                // Indirect validation splits a multi-draw into batches of at
+                // most 65535 draws before the backend sees it; without it the
+                // whole call reaches the backend at once.
+                .remove_instance_flags(wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL),
+        )
+        .run_async(run_multi_draw_indirect_over_icb_memory_limit);
 
 #[apply(gpu_test!)]
 static MULTI_DRAW_INDIRECT_FIRST_VERTEX_AND_INSTANCE: GpuTestConfiguration =

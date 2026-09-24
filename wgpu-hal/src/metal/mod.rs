@@ -423,6 +423,9 @@ struct AdapterShared {
     instance_flags: wgt::InstanceFlags,
     /// Indirect command buffers awaiting reuse; see [`icb::PooledIcb`].
     icb_pool: Mutex<Vec<icb::PooledIcb>>,
+    /// Bytes per ICB command for each `icb::IcbDrawKind` tag, measured on
+    /// first use.
+    icb_bytes_per_command: Mutex<[Option<u64>; 3]>,
     use_debug_printf: atomic::AtomicBool,
 }
 
@@ -451,6 +454,7 @@ impl AdapterShared {
             render_icb_probe: Mutex::new(None),
             instance_flags,
             icb_pool: Mutex::new(Vec::new()),
+            icb_bytes_per_command: Mutex::new([None; 3]),
             use_debug_printf: atomic::AtomicBool::new(false),
         }
     }

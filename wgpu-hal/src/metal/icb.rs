@@ -49,10 +49,29 @@ const ICB_MIN_DRAW_COUNT: u32 = 512;
 /// the 31-slot argument table, so only the full table covers every layout.
 const ICB_MAX_INHERITED_BUFFER_BIND_COUNT: usize = 31;
 
+/// Upper bound on the memory one indirect command buffer may take, and so on
+/// the draw count the ICB path accepts: larger multi-draws take the per-draw
+/// loop. Metal's feature tables list no ICB size limit, but every command is
+/// sized for the full inherited state, measured with `allocatedSize`:
+///
+/// | GPU                         | draw   | indexed |
+/// |-----------------------------|--------|---------|
+/// | A10X (Apple3, tvOS 26.6)    | 1477 B | 1489 B  |
+/// | A12 (Apple5, iOS 18.7)      | 1609 B | 1621 B  |
+/// | A14 (Apple7, iOS 26.5)      |  656 B |  672 B  |
+/// | M4 Max (Apple9, macOS 27)   |  673 B |  693 B  |
+///
+/// (mesh-task commands cost 1277 B on the M4 Max), so 64 MiB holds about 40K
+/// commands on Apple3 and Apple5 and 100K on Apple7 and later. The bound is
+/// checked before allocating because the driver does not fail gracefully at
+/// its own limit: an allocation past ~4 GiB returns nil on iOS and tvOS but
+/// crashes the process on macOS 27.
+const ICB_MAX_BYTES: u64 = 64 << 20;
+
 /// Bounds on the per-adapter pool of indirect command buffers: entries kept,
-/// and the total command capacity they may hold (256K commands).
+/// and the total memory they may retain.
 const ICB_POOL_MAX_ENTRIES: usize = 8;
-const ICB_POOL_MAX_COMMANDS: u32 = 1 << 18;
+const ICB_POOL_MAX_BYTES: u64 = 128 << 20;
 
 // Primitive-topology tags passed to the ICB generation kernels.
 // `render_command` in MSL needs the topology per draw, and `MTLPrimitiveType`
@@ -242,6 +261,8 @@ pub(super) struct IcbGenerationRequest {
     kind_tag: u8,
     /// Command capacity the ICB was created with; at least `draw_count`.
     capacity: u32,
+    /// Memory the ICB and its argument buffer occupy.
+    bytes: u64,
 }
 
 impl IcbDrawKind {
@@ -269,6 +290,7 @@ impl IcbDrawKind {
 pub(super) struct PooledIcb {
     kind_tag: u8,
     capacity: u32,
+    bytes: u64,
     icb: Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>,
     argument_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
 }
@@ -285,6 +307,7 @@ pub(super) struct IcbExecutionResources {
     shared: Arc<super::AdapterShared>,
     kind_tag: u8,
     capacity: u32,
+    bytes: u64,
     icb: Option<Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>>,
     argument_buffer: Option<Retained<ProtocolObject<dyn MTLBuffer>>>,
 }
@@ -294,6 +317,7 @@ impl core::fmt::Debug for IcbExecutionResources {
         f.debug_struct("IcbExecutionResources")
             .field("kind_tag", &self.kind_tag)
             .field("capacity", &self.capacity)
+            .field("bytes", &self.bytes)
             .finish_non_exhaustive()
     }
 }
@@ -304,23 +328,23 @@ impl Drop for IcbExecutionResources {
         else {
             return;
         };
-        if self.capacity > ICB_POOL_MAX_COMMANDS {
+        if self.bytes > ICB_POOL_MAX_BYTES {
             return;
         }
         let mut pool = self.shared.icb_pool.lock();
-        let mut total: u32 = pool.iter().map(|entry| entry.capacity).sum();
-        while pool.len() >= ICB_POOL_MAX_ENTRIES || total + self.capacity > ICB_POOL_MAX_COMMANDS {
+        let mut total: u64 = pool.iter().map(|entry| entry.bytes).sum();
+        while pool.len() >= ICB_POOL_MAX_ENTRIES || total + self.bytes > ICB_POOL_MAX_BYTES {
             // Make room by evicting the smallest entry, unless this one is
             // smaller still: large ICBs are the expensive ones to recreate.
             let Some((index, smallest)) = pool
                 .iter()
                 .enumerate()
-                .min_by_key(|(_, entry)| entry.capacity)
-                .map(|(index, entry)| (index, entry.capacity))
+                .min_by_key(|(_, entry)| entry.bytes)
+                .map(|(index, entry)| (index, entry.bytes))
             else {
                 break;
             };
-            if smallest >= self.capacity {
+            if smallest >= self.bytes {
                 return;
             }
             total -= smallest;
@@ -329,6 +353,7 @@ impl Drop for IcbExecutionResources {
         pool.push(PooledIcb {
             kind_tag: self.kind_tag,
             capacity: self.capacity,
+            bytes: self.bytes,
             icb,
             argument_buffer,
         });
@@ -443,6 +468,37 @@ impl super::AdapterShared {
         *probe.get_or_insert_with(|| {
             super::icb_probe::supports_render_icb(&self.device, self.private_caps.msl_version)
         })
+    }
+
+    /// Bytes Metal allocates per command in ICBs created from `descriptor`,
+    /// measured once per draw kind from a small sample allocation since no API
+    /// reports it ahead of time (see [`ICB_MAX_BYTES`]). `None` if even the
+    /// sample cannot be allocated.
+    fn icb_bytes_per_command(
+        &self,
+        kind_tag: u8,
+        descriptor: &MTLIndirectCommandBufferDescriptor,
+    ) -> Option<u64> {
+        const SAMPLE_COMMANDS: usize = 512;
+        let mut cache = self.icb_bytes_per_command.lock();
+        let slot = &mut cache[usize::from(kind_tag)];
+        if let Some(bytes) = *slot {
+            return Some(bytes);
+        }
+        let sample = unsafe {
+            self.device
+                .newIndirectCommandBufferWithDescriptor_maxCommandCount_options(
+                    descriptor,
+                    SAMPLE_COMMANDS,
+                    MTLResourceOptions::StorageModePrivate,
+                )
+        }?;
+        // Rounding up keeps the bound conservative.
+        let bytes = (sample.allocatedSize() as u64)
+            .div_ceil(SAMPLE_COMMANDS as u64)
+            .max(1);
+        *slot = Some(bytes);
+        Some(bytes)
     }
 }
 
@@ -575,7 +631,22 @@ impl super::CommandEncoder {
             },
         };
 
+        // Bound the ICB's memory before touching the pool or the allocator:
+        // Metal sizes every command for the full inherited state, so a large
+        // draw count is a large allocation on every GPU (see `ICB_MAX_BYTES`).
         let kind_tag = kind.tag();
+        let descriptor = Self::icb_descriptor(&kind);
+        let Some(bytes_per_command) = self.shared.icb_bytes_per_command(kind_tag, &descriptor)
+        else {
+            return false;
+        };
+        let max_commands = u32::try_from(ICB_MAX_BYTES / bytes_per_command).unwrap_or(u32::MAX);
+        if draw_count > max_commands {
+            return false;
+        }
+
+        // Prefer a pooled ICB of the same kind with enough capacity, taking the
+        // smallest that fits so large ones stay available for large draws.
         let pooled = {
             let mut pool = self.shared.icb_pool.lock();
             let mut best: Option<usize> = None;
@@ -589,36 +660,21 @@ impl super::CommandEncoder {
             }
             best.map(|index| pool.swap_remove(index))
         };
-        let (icb, argument_buffer, capacity) = match pooled {
-            Some(entry) => (entry.icb, entry.argument_buffer, entry.capacity),
+        let (icb, argument_buffer, capacity, bytes) = match pooled {
+            Some(entry) => (
+                entry.icb,
+                entry.argument_buffer,
+                entry.capacity,
+                entry.bytes,
+            ),
             None => {
-                let descriptor = MTLIndirectCommandBufferDescriptor::new();
-                descriptor.setInheritPipelineState(true);
-                descriptor.setInheritBuffers(true);
-                match kind {
-                    IcbDrawKind::Draw => {
-                        descriptor.setCommandTypes(MTLIndirectCommandType::Draw);
-                        descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
-                        descriptor.setMaxFragmentBufferBindCount(0);
-                    }
-                    IcbDrawKind::DrawIndexed { .. } => {
-                        descriptor.setCommandTypes(MTLIndirectCommandType::DrawIndexed);
-                        descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
-                        descriptor.setMaxFragmentBufferBindCount(0);
-                    }
-                    IcbDrawKind::DrawMeshTasks { .. } => {
-                        descriptor.setCommandTypes(MTLIndirectCommandType::DrawMeshThreadgroups);
-                        descriptor.setMaxFragmentBufferBindCount(0);
-                        unsafe {
-                            descriptor.setMaxObjectBufferBindCount(0);
-                            descriptor.setMaxMeshBufferBindCount(0);
-                        }
-                    }
-                }
                 // Power-of-two capacities keep the pool reusable across
-                // nearby draw counts; only the first `draw_count` commands are
-                // ever generated or executed.
-                let capacity = draw_count.next_power_of_two();
+                // nearby draw counts, within the memory bound; only the first
+                // `draw_count` commands are ever generated or executed.
+                let capacity = draw_count
+                    .checked_next_power_of_two()
+                    .unwrap_or(u32::MAX)
+                    .min(max_commands);
                 let Some(icb) = (unsafe {
                     self.shared
                         .device
@@ -656,7 +712,8 @@ impl super::CommandEncoder {
                         .encoder
                         .setIndirectCommandBuffer_atIndex(Some(&icb), 0);
                 }
-                (icb, argument_buffer, capacity)
+                let bytes = icb.allocatedSize() as u64 + argument_buffer.allocatedSize() as u64;
+                (icb, argument_buffer, capacity, bytes)
             }
         };
 
@@ -696,6 +753,7 @@ impl super::CommandEncoder {
         self.deferred_multi_draws.push(IcbGenerationRequest {
             kind_tag,
             capacity,
+            bytes,
             kind,
             icb,
             argument_buffer,
@@ -705,6 +763,35 @@ impl super::CommandEncoder {
             primitive_type_value,
         });
         true
+    }
+
+    /// The descriptor for ICBs that execute `kind` draws. ICBs are only reused
+    /// across draws whose descriptors match, which [`IcbDrawKind::tag`] tracks.
+    fn icb_descriptor(kind: &IcbDrawKind) -> Retained<MTLIndirectCommandBufferDescriptor> {
+        let descriptor = MTLIndirectCommandBufferDescriptor::new();
+        descriptor.setInheritPipelineState(true);
+        descriptor.setInheritBuffers(true);
+        match kind {
+            IcbDrawKind::Draw => {
+                descriptor.setCommandTypes(MTLIndirectCommandType::Draw);
+                descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
+                descriptor.setMaxFragmentBufferBindCount(0);
+            }
+            IcbDrawKind::DrawIndexed { .. } => {
+                descriptor.setCommandTypes(MTLIndirectCommandType::DrawIndexed);
+                descriptor.setMaxVertexBufferBindCount(ICB_MAX_INHERITED_BUFFER_BIND_COUNT);
+                descriptor.setMaxFragmentBufferBindCount(0);
+            }
+            IcbDrawKind::DrawMeshTasks { .. } => {
+                descriptor.setCommandTypes(MTLIndirectCommandType::DrawMeshThreadgroups);
+                descriptor.setMaxFragmentBufferBindCount(0);
+                unsafe {
+                    descriptor.setMaxObjectBufferBindCount(0);
+                    descriptor.setMaxMeshBufferBindCount(0);
+                }
+            }
+        }
+        descriptor
     }
 
     /// Encode the reset/generate/optimize work for every multi-draw queued
@@ -857,6 +944,7 @@ impl super::CommandEncoder {
                         shared: self.shared.clone(),
                         kind_tag: request.kind_tag,
                         capacity: request.capacity,
+                        bytes: request.bytes,
                         icb: Some(request.icb),
                         argument_buffer: Some(request.argument_buffer),
                     }),
