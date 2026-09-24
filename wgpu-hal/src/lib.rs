@@ -1107,6 +1107,12 @@ pub trait Device: WasmNotSendSync {
     ) -> Result<<Self::A as Api>::ShaderModule, ShaderError>;
     unsafe fn destroy_shader_module(&self, module: <Self::A as Api>::ShaderModule);
 
+    /// Create a render pipeline according to `desc`.
+    ///
+    /// The returned pipeline's lifetime is independent of that of
+    /// `desc.layout`, `desc.cache`, and all the shader modules in any
+    /// [`ProgrammableStage`] values in `desc`. The pipeline is safe to use even
+    /// after those resources have been destroyed.
     #[allow(clippy::type_complexity)]
     unsafe fn create_render_pipeline(
         &self,
@@ -1118,6 +1124,11 @@ pub trait Device: WasmNotSendSync {
     ) -> Result<<Self::A as Api>::RenderPipeline, PipelineError>;
     unsafe fn destroy_render_pipeline(&self, pipeline: <Self::A as Api>::RenderPipeline);
 
+    /// Create a compute pipeline according to `desc`.
+    ///
+    /// The returned pipeline's lifetime is independent of that of
+    /// `desc.layout`, `desc.stage.module`, and `desc.cache`. The pipeline is
+    /// safe to use even after those resources have been destroyed.
     #[allow(clippy::type_complexity)]
     unsafe fn create_compute_pipeline(
         &self,
@@ -1129,6 +1140,12 @@ pub trait Device: WasmNotSendSync {
     ) -> Result<<Self::A as Api>::ComputePipeline, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: <Self::A as Api>::ComputePipeline);
 
+    /// Create a ray tracing pipeline according to `desc`.
+    ///
+    /// The returned pipeline's lifetime is independent of that of
+    /// `desc.layout`, `desc.cache`, and all the shader modules in any
+    /// [`ProgrammableStage`] values in `desc`. The pipeline is safe to use even
+    /// after those resources have been destroyed.
     #[allow(clippy::type_complexity)]
     unsafe fn create_ray_tracing_pipeline(
         &self,

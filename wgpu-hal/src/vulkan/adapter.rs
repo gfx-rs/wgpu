@@ -2385,6 +2385,13 @@ impl super::Instance {
                 super::Workarounds::FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16,
                 phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
             );
+            workarounds.set(
+                super::Workarounds::IGNORED_NEGATIVE_VIEWPORT_HEIGHT,
+                phd_capabilities
+                    .driver
+                    .as_ref()
+                    .is_some_and(|driver| driver.driver_id == vk::DriverId::ARM_PROPRIETARY),
+            );
         };
 
         if let Some(driver) = phd_capabilities.driver {
@@ -2876,6 +2883,11 @@ impl super::Adapter {
             flags.set(
                 spv::WriterFlags::LABEL_VARYINGS,
                 self.phd_capabilities.properties.vendor_id != crate::auxil::db::qualcomm::VENDOR,
+            );
+            flags.set(
+                spv::WriterFlags::ADJUST_COORDINATE_SPACE,
+                self.workarounds
+                    .contains(super::Workarounds::IGNORED_NEGATIVE_VIEWPORT_HEIGHT),
             );
             flags.set(
                 spv::WriterFlags::FORCE_POINT_SIZE,
@@ -3417,7 +3429,7 @@ fn is_float32_blendable_supported(instance: &ash::Instance, phd: vk::PhysicalDev
     })
 }
 
-fn supports_format(
+pub(super) fn supports_format(
     instance: &ash::Instance,
     phd: vk::PhysicalDevice,
     format: vk::Format,
