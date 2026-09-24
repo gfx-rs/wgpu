@@ -193,7 +193,7 @@ struct GPUTextureViewDescriptor {
   swizzle: String,
 }
 
-#[derive(WebIDL)]
+#[derive(WebIDL, Copy, Clone)]
 #[webidl(enum)]
 pub(crate) enum GPUTextureViewDimension {
   #[webidl(rename = "1d")]
@@ -297,7 +297,7 @@ impl From<GPUTextureDimension> for TextureDimension {
   }
 }
 
-#[derive(WebIDL, Clone)]
+#[derive(WebIDL, Clone, Copy)]
 #[webidl(enum)]
 pub(crate) enum GPUTextureFormat {
   #[webidl(rename = "r8unorm")]

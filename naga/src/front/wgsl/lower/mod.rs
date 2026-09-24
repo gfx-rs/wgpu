@@ -2595,6 +2595,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                 access
             }
+            ast::Expression::String(_) => {
+                return Err(Box::new(Error::InvalidStringLiteral {
+                    span,
+                    description: "String literals are only supported in debugPrintf",
+                }))
+            }
         };
 
         expr.try_map(|handle| ctx.append_expression(handle, span))
@@ -3930,6 +3936,61 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .push(ir::Statement::RayPipelineFunction(fun), function_span);
                     return Ok(None);
                 }
+                "debugPrintf" => {
+                    if !ctx
+                        .enable_extensions
+                        .contains(crate::front::wgsl::ImplementedEnableExtension::WgpuDebugPrintf)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: function_span,
+                            kind: crate::front::wgsl::ImplementedEnableExtension::WgpuDebugPrintf
+                                .into(),
+                        }));
+                    }
+
+                    if arguments.is_empty() {
+                        return Err(Box::new(Error::WrongArgumentCount {
+                            expected: 1..u32::MAX,
+                            found: 0,
+                            span: function_span,
+                        }));
+                    }
+
+                    // extract the format string
+                    let format_handle = arguments[0];
+                    let format = match ctx.ast_expressions[format_handle] {
+                        ast::Expression::String(s) => s.to_string(),
+                        _ => {
+                            return Err(Box::new(Error::ExpectedStringLiteral {
+                                span: ctx.ast_expressions.get_span(format_handle),
+                                description:
+                                    "debugPrintf's first argument must be a string literal",
+                            }))
+                        }
+                    };
+
+                    // extract remaining arguments (if any)
+                    let mut ir_arguments = Vec::with_capacity(arguments.len().saturating_sub(1));
+
+                    for &ast_handle in &arguments[1..] {
+                        let ir_handle = self.expression(ast_handle, ctx)?;
+                        ir_arguments.push(ir_handle);
+                    }
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block
+                        .extend(rctx.emitter.finish(&rctx.function.expressions));
+                    rctx.emitter.start(&rctx.function.expressions);
+                    rctx.block.push(
+                        ir::Statement::DebugPrintf {
+                            format,
+                            arguments: ir_arguments,
+                        },
+                        function_span,
+                    );
+
+                    return Ok(None);
+                }
                 _ => return Err(Box::new(Error::UnknownIdent(function_span, function_name))),
             }
         };
@@ -4141,6 +4202,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let rule = self.resolve_overloads(span, fun, fun_overloads, &lowered_arguments, ctx)?;
         self.apply_automatic_conversions_for_call(&rule, &mut lowered_arguments, ctx)?;
 
+        self.check_bitfield_range(span, fun, &rule, &lowered_arguments, ctx)?;
+
         // If this function returns a predeclared type, register it
         // in `Module::special_types`. The typifier will expect to
         // be able to find it there.
@@ -4155,6 +4218,48 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             arg2: lowered_arguments.get(2).cloned(),
             arg3: lowered_arguments.get(3).cloned(),
         })
+    }
+
+    /// Check the `offset` and `count` arguments of a call to [`ExtractBits`]
+    /// or [`InsertBits`] to make sure it fits inside the number's `width`.
+    ///
+    /// If `offset` and `count` are fixed numbers and they pick bits outside
+    /// the range we must return a shader creation error.
+    ///
+    /// If the pipeline overrides the numbers, we do not check them here.
+    /// [`get_const_val`] reports them as non-const, so they fall through
+    /// this check.
+    ///
+    /// [`ExtractBits`]: ir::MathFunction::ExtractBits
+    /// [`InsertBits`]: ir::MathFunction::InsertBits
+    /// [`get_const_val`]: ExpressionContext::get_const_val
+    fn check_bitfield_range(
+        &mut self,
+        span: Span,
+        fun: ir::MathFunction,
+        rule: &proc::Rule,
+        arguments: &[Handle<ir::Expression>],
+        ctx: &ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, ()> {
+        let (builtin, offset, count) = match fun {
+            ir::MathFunction::ExtractBits => ("extractBits", 1, 2),
+            ir::MathFunction::InsertBits => ("insertBits", 2, 3),
+            _ => return Ok(()),
+        };
+
+        let (Ok(offset), Ok(count)) = (
+            ctx.get_const_val::<u32>(arguments[offset]),
+            ctx.get_const_val::<u32>(arguments[count]),
+        ) else {
+            return Ok(());
+        };
+
+        let Some(scalar) = rule.arguments[0].inner_with(&ctx.module.types).scalar() else {
+            return Ok(());
+        };
+
+        proc::check_bitfield_range(builtin, offset, count, u32::from(scalar.width) * 8)
+            .map_err(|e| Box::new(Error::ConstantEvaluatorError(Box::new(e), span)))
     }
 
     /// Choose the right overload for a function call.

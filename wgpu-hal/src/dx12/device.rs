@@ -462,6 +462,22 @@ impl super::Device {
         &self.present_queue
     }
 
+    /// Wraps an existing D3D12 resource as a texture.
+    ///
+    /// D3D12 resources are reference counted, so this is not a hand-off of
+    /// ownership: the reference passed in belongs to the returned texture and
+    /// is released when wgpu-hal destroys it, while any reference the caller
+    /// kept stays valid. `drop_callback` is therefore a notification rather
+    /// than a destructor -- it runs after that release, once wgpu is done with
+    /// the texture, which is the point at which an importer can let whoever
+    /// produced the resource reuse it.
+    ///
+    /// # Safety
+    ///
+    /// - `resource` must be a texture whose dimensions, format, mip level
+    ///   count and sample count are the ones described here.
+    /// - If `drop_callback` is [`Some`], the callback must be safe to run from
+    ///   whichever thread drops the texture.
     pub unsafe fn texture_from_raw(
         resource: Direct3D12::ID3D12Resource,
         format: wgt::TextureFormat,
@@ -469,6 +485,7 @@ impl super::Device {
         size: wgt::Extent3d,
         mip_level_count: u32,
         sample_count: u32,
+        drop_callback: Option<crate::DropCallback>,
     ) -> super::Texture {
         super::Texture {
             resource,
@@ -482,12 +499,24 @@ impl super::Device {
                 format.theoretical_memory_footprint(size),
             ),
             plane_slice_override: None,
+            _drop_guard: crate::DropGuard::from_option(drop_callback),
         }
     }
 
+    /// Wraps an existing D3D12 resource as a buffer.
+    ///
+    /// Ownership and `drop_callback` work exactly as they do for
+    /// [`texture_from_raw`](Self::texture_from_raw).
+    ///
+    /// # Safety
+    ///
+    /// - `resource` must be a buffer at least `size` bytes long.
+    /// - If `drop_callback` is [`Some`], the callback must be safe to run from
+    ///   whichever thread drops the buffer.
     pub unsafe fn buffer_from_raw(
         resource: Direct3D12::ID3D12Resource,
         size: wgt::BufferAddress,
+        drop_callback: Option<crate::DropCallback>,
     ) -> super::Buffer {
         super::Buffer {
             resource,
@@ -496,6 +525,7 @@ impl super::Device {
                 suballocation::AllocationType::Buffer,
                 size,
             ),
+            _drop_guard: crate::DropGuard::from_option(drop_callback),
         }
     }
 }
@@ -525,6 +555,7 @@ impl crate::Device for super::Device {
                 resource,
                 allocated_size: desc.size,
                 allocation,
+                _drop_guard: None,
             },
             desc.size,
         ))
@@ -607,6 +638,7 @@ impl crate::Device for super::Device {
             sample_count: desc.sample_count,
             allocation,
             plane_slice_override: None,
+            _drop_guard: None,
         })
     }
 

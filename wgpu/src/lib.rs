@@ -18,6 +18,8 @@
 //!
 //! Most types and functions are documented, but for more general guides and explanations, see the [documentation modules][documentation].
 //!
+//! - [Shader `debugPrintf`](documentation::extensions::debug_printf).
+//!
 //! There are examples for this version [available on GitHub](https://github.com/gfx-rs/wgpu/tree/v30/examples#readme).
 //!
 //! The API is refcounted, so all handles are cloneable, and if you create a resource which references another,
@@ -33,6 +35,7 @@
 //!
 //! [Learn Wgpu]: https://sotrh.github.io/learn-wgpu/
 //! [WebGPU Fundamentals]: https://webgpufundamentals.org/
+//!
 #![doc = crate::macros::doc_image!("render_coordinates.webp")]
 #![doc = crate::macros::doc_image!("texture_coordinates.webp")]
 #![no_std]

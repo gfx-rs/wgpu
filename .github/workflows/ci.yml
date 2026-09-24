@@ -18,7 +18,7 @@ env:
   #
 
   # This is the MSRV used by all repository infrastructure.
-  REPO_MSRV: "1.93"
+  REPO_MSRV: "1.95"
   # This is the MSRV used by `wgpu` itself.
   WGPU_MSRV: "1.87"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, `wgpu-sync`, and `wgpu-types` crates,
@@ -34,7 +34,7 @@ env:
   RUST_LOG: debug,wasm_bindgen_wasm_interpreter=warn,wasm_bindgen_cli_support=warn,walrus=warn,naga=info
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
-  RUSTFLAGS: -D warnings
+  RUSTFLAGS: -D warnings --cfg wgpu_validate_locks_debug
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: e # cache busting
@@ -634,7 +634,7 @@ jobs:
         run: cargo +stable install wasm-bindgen-cli --version=$WASM_BINDGEN_VERSION
 
       - name: Install `cargo-nextest`
-        uses: taiki-e/install-action@3f74d7c16a4242f1c95561e98edc25d36adb4375 # v2.87.12
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: cargo-nextest
 
@@ -679,7 +679,7 @@ jobs:
           cargo -V
 
       - name: Install `cargo-nextest` and `cargo-llvm-cov`
-        uses: taiki-e/install-action@3f74d7c16a4242f1c95561e98edc25d36adb4375 # v2.87.12
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
@@ -755,7 +755,7 @@ jobs:
 
       - name: Check Naga snapshots
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
-        run: git add . && git diff --exit-code HEAD naga/tests/out
+        run: git add --intent-to-add -- naga/tests/out && git diff --exit-code HEAD -- naga/tests/out
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         name: Upload comparison images
@@ -785,7 +785,7 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         # Mergify draft pull requests re-run the tests of already-reported
         # pull requests, so their coverage is not uploaded.
         if: steps.coverage.outcome == 'success' && !startsWith(github.head_ref, 'mergify/merge-queue/')
@@ -881,11 +881,20 @@ jobs:
         with:
           persist-credentials: false
 
+      # Only pull requests give a well-defined commit range. The merge queue
+      # runs the commits that this check already saw on the pull request.
+      - name: Check for AI-authored commits
+        if: github.event_name == 'pull_request'
+        uses: $/.github/actions/ai-commit-check
+
       - name: Install repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
+
+      - name: Check repository files
+        run: cargo --locked xtask sync-repo-files --check
 
       # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
       # files, even ones this step doesn't modify.
@@ -905,7 +914,7 @@ jobs:
         run: tombi format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@d43b6c087ac471e2ea7b8af622ff15f05c0c365b # v1.50.1
+        uses: crate-ci/typos@512fc24f32f44ab01972217aaaf3dc86ec234d53 # v1.50.2
 
   check-cts-runner:
     # runtime is normally 2 minutes

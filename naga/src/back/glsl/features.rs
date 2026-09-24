@@ -542,15 +542,13 @@ impl<W> Writer<'_, W> {
                 // or level argument since this requires a feature
                 Expression::ImageLoad {
                     sample, level, ..
-                } => {
-                    if policies.image_load != crate::proc::BoundsCheckPolicy::Unchecked {
-                        if sample.is_some() {
-                            features.request(Features::TEXTURE_SAMPLES)
-                        }
+                } if policies.image_load != crate::proc::BoundsCheckPolicy::Unchecked => {
+                    if sample.is_some() {
+                        features.request(Features::TEXTURE_SAMPLES)
+                    }
 
-                        if level.is_some() {
-                            features.request(Features::TEXTURE_LEVELS)
-                        }
+                    if level.is_some() {
+                        features.request(Features::TEXTURE_LEVELS)
                     }
                 }
                 Expression::ImageSample { image, level, offset, .. } => {

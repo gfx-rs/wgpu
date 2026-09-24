@@ -851,6 +851,24 @@ impl<T: IntoTrace> IntoTrace for Option<T> {
     }
 }
 
+impl<'a, BGLE> IntoTrace for crate::binding_model::BindGroupLayoutDescriptor<'a, BGLE>
+where
+    BGLE: Copy,
+    BGLE: Into<crate::binding_model::BindGroupLayoutEntry>,
+{
+    type Output = crate::binding_model::BindGroupLayoutDescriptor<
+        'static,
+        crate::binding_model::BindGroupLayoutEntry,
+    >;
+
+    fn into_trace(self) -> Self::Output {
+        crate::binding_model::BindGroupLayoutDescriptor {
+            label: self.label.map(|l| Cow::Owned(l.into_owned())),
+            entries: Cow::Owned(self.entries.iter().map(|&e| e.into()).collect()),
+        }
+    }
+}
+
 /// Return a copy of [`Action`] with `'static` lifetime.
 ///
 /// This is used for in-memory tracing.
