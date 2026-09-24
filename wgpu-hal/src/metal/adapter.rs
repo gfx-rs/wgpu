@@ -1253,7 +1253,8 @@ impl super::CapabilitiesQuery {
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE
             | F::PASSTHROUGH_SHADERS
-            | F::EXTERNAL_TEXTURE;
+            | F::EXTERNAL_TEXTURE
+            | F::TEXTURE_COMPRESSION_UNALIGNED;
 
         features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
@@ -1285,7 +1286,6 @@ impl super::CapabilitiesQuery {
         features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);
         features.set(F::TEXTURE_COMPRESSION_BC_SLICED_3D, self.format_bc); // BC guarantees Sliced 3D
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
-        features.set(F::TEXTURE_COMPRESSION_UNALIGNED, true);
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
         features.set(F::PRIMITIVE_INDEX, self.supports_shader_primitive_index);

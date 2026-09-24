@@ -682,7 +682,8 @@ impl PhysicalDeviceFeatures {
             | F::TEXTURE_ATOMIC
             | F::PASSTHROUGH_SHADERS
             | F::MEMORY_DECORATION_COHERENT
-            | F::MEMORY_DECORATION_VOLATILE;
+            | F::MEMORY_DECORATION_VOLATILE
+            | F::TEXTURE_COMPRESSION_UNALIGNED;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
@@ -762,7 +763,6 @@ impl PhysicalDeviceFeatures {
             F::TEXTURE_COMPRESSION_BC_SLICED_3D,
             self.core.texture_compression_bc != 0, // BC guarantees Sliced 3D
         );
-        features.set(F::TEXTURE_COMPRESSION_UNALIGNED, true);
         features.set(
             F::PIPELINE_STATISTICS_QUERY,
             self.core.pipeline_statistics_query != 0,
