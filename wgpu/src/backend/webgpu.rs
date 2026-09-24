@@ -4636,10 +4636,6 @@ impl WebBufferMappedRange {
     }
 }
 impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
-    fn len(&self) -> usize {
-        self.get_temporary_mapping().len()
-    }
-
     #[inline]
     unsafe fn read_slice(&self) -> &[u8] {
         self.get_temporary_mapping()
