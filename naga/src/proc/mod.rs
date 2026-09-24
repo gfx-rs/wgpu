@@ -14,7 +14,8 @@ mod type_methods;
 mod typifier;
 
 pub use constant_evaluator::{
-    ConstantEvaluator, ConstantEvaluatorError, ExpressionKind, ExpressionKindTracker,
+    check_bitfield_range, ConstantEvaluator, ConstantEvaluatorError, ExpressionKind,
+    ExpressionKindTracker,
 };
 pub use emitter::Emitter;
 pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, IndexableLengthError};
