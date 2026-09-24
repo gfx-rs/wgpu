@@ -556,11 +556,12 @@ bitflags::bitflags!(
         /// if they cover a range of 4096 bytes or more.
         const FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16 = 0x4;
         /// Arm's proprietary driver (observed on r54p2, Mali-G715 / Pixel 9 Pro,
-        /// Android 16) rasterizes as if the viewport height were positive even when
-        /// a negative-height viewport is submitted, undoing the Y-flip wgpu relies
-        /// on to map WebGPU clip space onto Vulkan's. Flip Y in the vertex shader
-        /// epilogue instead, submit positive-height viewports, and invert the
-        /// front-face winding to keep culling and stencil facing correct.
+        /// Android 16) ignores negative viewport heights, so it does not do the
+        /// Y-flip that maps WebGPU clip space to Vulkan's.
+        ///
+        /// We flip Y in the vertex shader and use positive-height viewports instead.
+        /// This gives the same framebuffer coordinates, so facing does not change.
+        /// SPIR-V passthrough shaders do not get this flip.
         const IGNORED_NEGATIVE_VIEWPORT_HEIGHT = 0x8;
     }
 );
