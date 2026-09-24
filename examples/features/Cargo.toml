@@ -31,7 +31,7 @@ bytemuck.workspace = true
 cfg-if.workspace = true
 encase = { workspace = true }
 flume.workspace = true
-glam = { workspace = true, features = ["bytemuck", "encase"] }
+glam = { workspace = true, features = ["bytemuck", "encase-013"] }
 half = { workspace = true, features = ["bytemuck"] }
 ktx2.workspace = true
 log.workspace = true
