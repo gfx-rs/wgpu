@@ -1208,19 +1208,24 @@ mod tests {
     fn buffer_shader_stages_follow_queue_flags() {
         let usage = wgt::BufferUses::UNIFORM;
 
-        let (stages, access) = map_buffer_usage_to_barrier(usage, vk::QueueFlags::GRAPHICS, wgt::Features::empty());
+        let (stages, access) =
+            map_buffer_usage_to_barrier(usage, vk::QueueFlags::GRAPHICS, wgt::Features::empty());
         assert_eq!(
             stages,
             vk::PipelineStageFlags::VERTEX_SHADER | vk::PipelineStageFlags::FRAGMENT_SHADER
         );
         assert_eq!(access, vk::AccessFlags::UNIFORM_READ);
 
-        let (stages, access) = map_buffer_usage_to_barrier(usage, vk::QueueFlags::COMPUTE, wgt::Features::empty());
+        let (stages, access) =
+            map_buffer_usage_to_barrier(usage, vk::QueueFlags::COMPUTE, wgt::Features::empty());
         assert_eq!(stages, vk::PipelineStageFlags::COMPUTE_SHADER);
         assert_eq!(access, vk::AccessFlags::UNIFORM_READ);
 
-        let (stages, access) =
-            map_buffer_usage_to_barrier(usage, vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE, wgt::Features::empty());
+        let (stages, access) = map_buffer_usage_to_barrier(
+            usage,
+            vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE,
+            wgt::Features::empty(),
+        );
         assert_eq!(
             stages,
             vk::PipelineStageFlags::VERTEX_SHADER
@@ -1252,14 +1257,24 @@ mod tests {
     fn texture_shader_stages_follow_queue_flags() {
         let usage = wgt::TextureUses::RESOURCE;
 
-        let (stages, access) = map_texture_usage_to_barrier(usage, vk::QueueFlags::GRAPHICS, false, wgt::Features::empty());
+        let (stages, access) = map_texture_usage_to_barrier(
+            usage,
+            vk::QueueFlags::GRAPHICS,
+            false,
+            wgt::Features::empty(),
+        );
         assert_eq!(
             stages,
             vk::PipelineStageFlags::VERTEX_SHADER | vk::PipelineStageFlags::FRAGMENT_SHADER
         );
         assert_eq!(access, vk::AccessFlags::SHADER_READ);
 
-        let (stages, access) = map_texture_usage_to_barrier(usage, vk::QueueFlags::COMPUTE, false, wgt::Features::empty());
+        let (stages, access) = map_texture_usage_to_barrier(
+            usage,
+            vk::QueueFlags::COMPUTE,
+            false,
+            wgt::Features::empty(),
+        );
         assert_eq!(stages, vk::PipelineStageFlags::COMPUTE_SHADER);
         assert_eq!(access, vk::AccessFlags::SHADER_READ);
 
@@ -1317,9 +1332,15 @@ mod tests {
         assert_eq!(stages, vk::PipelineStageFlags::COMPUTE_SHADER);
         assert_eq!(access, vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR);
 
-        let (stages, access) =
-            map_acceleration_structure_usage_to_barrier(usage, features | wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES, vk::QueueFlags::COMPUTE);
-        assert_eq!(stages, vk::PipelineStageFlags::COMPUTE_SHADER | vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR);
+        let (stages, access) = map_acceleration_structure_usage_to_barrier(
+            usage,
+            features | wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES,
+            vk::QueueFlags::COMPUTE,
+        );
+        assert_eq!(
+            stages,
+            vk::PipelineStageFlags::COMPUTE_SHADER | vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR
+        );
         assert_eq!(access, vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR);
 
         let (stages, access) = map_acceleration_structure_usage_to_barrier(
