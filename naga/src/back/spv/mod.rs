@@ -754,6 +754,9 @@ struct GlobalVariable {
     ///
     /// [`var_id`]: GlobalVariable::var_id
     access_id: Word,
+
+    /// Whether any entry point being written stores to this global.
+    written: bool,
 }
 
 impl GlobalVariable {
@@ -762,14 +765,16 @@ impl GlobalVariable {
             var_id: 0,
             handle_id: 0,
             access_id: 0,
+            written: false,
         }
     }
 
-    const fn new(id: Word) -> Self {
+    const fn new(id: Word, written: bool) -> Self {
         Self {
             var_id: id,
             handle_id: 0,
             access_id: 0,
+            written,
         }
     }
 
@@ -893,6 +898,58 @@ impl BlockContext<'_> {
             .get_constant_scalar(crate::Literal::I32(scope as _))
     }
 
+    /// Memory decorations of the global variable `pointer` refers into,
+    /// or empty if the pointer cannot be traced back to a global.
+    fn memory_decorations_for(
+        &self,
+        pointer: Handle<crate::Expression>,
+    ) -> crate::MemoryDecorations {
+        match self.fun_info[pointer].assignable_global {
+            Some(handle) => self.ir_module.global_variables[handle].memory_decorations,
+            None => crate::MemoryDecorations::empty(),
+        }
+    }
+
+    /// Memory operands for a non-atomic access through `pointer`.
+    ///
+    /// Storage globals that no entry point writes keep fully private
+    /// accesses: there is nothing an availability or visibility operation
+    /// could propagate, since the API-side domain operation before the
+    /// dispatch already made their contents visible, and private accesses
+    /// preserve first-level caching. Globals carrying explicit memory
+    /// decorations are exempt from this elision: `@volatile` in particular
+    /// exists for data modified from outside the dispatch.
+    fn access_memory_operands(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        space: crate::AddressSpace,
+        kind: AccessKind,
+    ) -> Option<MemoryOperands> {
+        let global = self.fun_info[pointer].assignable_global;
+        let decorations = self.memory_decorations_for(pointer);
+        if decorations.is_empty() {
+            if let (crate::AddressSpace::Storage { .. }, Some(global)) = (space, global) {
+                if !self.writer.global_variables[global].written {
+                    return None;
+                }
+            }
+        }
+        self.writer.access_memory_operands(space, decorations, kind)
+    }
+
+    /// Memory operands for a cooperative matrix load or store through `pointer`.
+    fn coop_memory_operands(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        kind: AccessKind,
+    ) -> Option<MemoryOperands> {
+        let space = self.fun_info[pointer]
+            .ty
+            .inner_with(&self.ir_module.types)
+            .pointer_space()?;
+        self.access_memory_operands(pointer, space, kind)
+    }
+
     fn get_pointer_type_id(&mut self, base: Word, class: spirv::StorageClass) -> Word {
         self.writer.get_pointer_type_id(base, class)
     }
@@ -915,6 +972,25 @@ pub struct Std140CompatTypeInfo {
     /// For structs, a mapping of Naga IR struct member indices to the indices
     /// used in the generated SPIR-V. For non-struct types this will be empty.
     member_indices: Vec<u32>,
+}
+
+/// Whether a non-atomic pointer access is a load or a store.
+#[derive(Clone, Copy, Debug)]
+enum AccessKind {
+    Load,
+    Store,
+}
+
+/// Memory operands attached to a load or store instruction.
+///
+/// Under the Vulkan memory model, non-atomic accesses to memory that other
+/// invocations can observe carry `NonPrivatePointer` together with a
+/// `MakePointerAvailable` (stores) or `MakePointerVisible` (loads) scope.
+#[derive(Clone, Copy, Debug)]
+struct MemoryOperands {
+    access: spirv::MemoryAccess,
+    /// Scope id operand required by `MakePointerAvailable`/`MakePointerVisible`.
+    scope_id: Option<Word>,
 }
 
 #[expect(missing_debug_implementations, reason = "would be way too verbose?")]
@@ -946,6 +1022,8 @@ pub struct Writer {
     force_loop_bounding: bool,
     use_storage_input_output_16: bool,
     emit_int_div_checks: bool,
+    /// From [`Options::use_vulkan_memory_model`]; `write` upgrades this for cooperative matrices.
+    memory_model: spirv::MemoryModel,
     void_type: Word,
     tuple_of_u32s_ty_id: Option<Word>,
     //TODO: convert most of these into vectors, addressable by handle indices
@@ -1117,6 +1195,22 @@ pub struct Options<'a> {
     /// implementation-defined results when the divisor is zero. Appropriate
     /// for compute shaders where the developer guarantees non-zero divisors.
     pub emit_int_div_checks: bool,
+
+    /// If true, declare the Vulkan memory model
+    /// (`SPV_KHR_vulkan_memory_model`) instead of GLSL450.
+    ///
+    /// The Vulkan memory model is also declared, regardless of this option,
+    /// whenever the module requires a capability that depends on it (for
+    /// example cooperative matrices). Under the Vulkan memory model, the
+    /// writer annotates storage and workgroup accesses with the memory
+    /// operands the model requires (`NonPrivatePointer` with availability or
+    /// visibility scopes) and widens barrier semantics with
+    /// `MakeAvailable`/`MakeVisible`; the `Coherent` and `Volatile`
+    /// decorations, which the model forbids, are replaced by per-access
+    /// operands.
+    ///
+    /// Requires the device to enable the `vulkanMemoryModel` feature.
+    pub use_vulkan_memory_model: bool,
 }
 
 impl Default for Options<'_> {
@@ -1143,6 +1237,7 @@ impl Default for Options<'_> {
             task_dispatch_limits: None,
             mesh_shader_primitive_indices_clamp: true,
             emit_int_div_checks: true,
+            use_vulkan_memory_model: false,
         }
     }
 }
@@ -1228,4 +1323,5 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::MEMORY_DECORATION_VOLATILE
         | Caps::LINEAR_INTERPOLATION
         | Caps::DEBUG_PRINTF
+        | Caps::MEMORY_FENCE
 }

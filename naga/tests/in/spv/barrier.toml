@@ -1,4 +1,1 @@
-targets = "WGSL | SPIRV | GLSL | HLSL | METAL"
-
-[msl]
-lang_version = [2, 0]
+targets = "WGSL | SPIRV | GLSL | HLSL"

@@ -179,7 +179,7 @@ pub struct ExpressionInfo {
     /// [`Access`]: crate::Expression::Access
     /// [`AccessIndex`]: crate::Expression::AccessIndex
     /// [`Load`]: crate::Expression::Load
-    assignable_global: Option<Handle<crate::GlobalVariable>>,
+    pub(crate) assignable_global: Option<Handle<crate::GlobalVariable>>,
 
     /// The type of this expression.
     pub ty: TypeResolution,
@@ -935,10 +935,20 @@ impl FunctionInfo {
                         ExitFlags::empty()
                     },
                 },
-                S::ControlBarrier(_) | S::MemoryBarrier(_) => FunctionUniformity {
+                S::ControlBarrier(_) => FunctionUniformity {
                     result: Uniformity {
                         non_uniform_result: None,
                         requirements: UniformityRequirements::WORK_GROUP_BARRIER,
+                    },
+                    exit: ExitFlags::empty(),
+                },
+                // A memory fence orders this invocation's own accesses and
+                // needs no execution synchronization, so it may be executed
+                // in non-uniform control flow (e.g. a leaderless spin loop).
+                S::MemoryBarrier(_) => FunctionUniformity {
+                    result: Uniformity {
+                        non_uniform_result: None,
+                        requirements: UniformityRequirements::empty(),
                     },
                     exit: ExitFlags::empty(),
                 },

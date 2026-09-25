@@ -1,0 +1,5 @@
+capabilities = "MEMORY_FENCE"
+targets = "SPIRV | WGSL"
+
+[spv]
+version = [1, 3]
