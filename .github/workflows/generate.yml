@@ -91,14 +91,14 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: cargo-generate-${{ matrix.name }}
           env-vars: ImageVersion
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
 
       - name: Install `cargo-generate`
-        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2.83.2
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: cargo-generate
 

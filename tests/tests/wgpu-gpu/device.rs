@@ -1,5 +1,6 @@
 use std::sync::atomic::AtomicBool;
 
+use wgpu::InstanceFlags;
 use wgpu_test::{
     apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
     TestingContext,
@@ -50,6 +51,34 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
         }
 
         ctx.async_poll(wgpu::PollType::Poll).await.unwrap();
+    });
+
+#[apply(gpu_test!)]
+static SINGLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .instance_flags(InstanceFlags::STRICT_WEBGPU_COMPLIANCE)
+            .enable_noop(),
+    )
+    .run_sync(|ctx| {
+        use pollster::FutureExt as _;
+        ctx.adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_webgl2_defaults(),
+                ..Default::default()
+            })
+            .block_on()
+            .expect("failed to create device");
+        assert!(ctx
+            .adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_webgl2_defaults(),
+                ..Default::default()
+            })
+            .block_on()
+            .is_err());
     });
 
 #[cfg(not(wasm_test))]

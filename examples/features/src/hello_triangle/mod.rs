@@ -316,11 +316,9 @@ impl ApplicationHandler<TriangleAction> for App {
                 }
                 wgpu_state.queue.present(frame);
             }
-            WindowEvent::Occluded(is_occluded) => {
-                if !is_occluded {
-                    if let Some(window) = &self.window {
-                        window.request_redraw();
-                    }
+            WindowEvent::Occluded(false) => {
+                if let Some(window) = &self.window {
+                    window.request_redraw();
                 }
             }
             WindowEvent::CloseRequested => event_loop.exit(),
