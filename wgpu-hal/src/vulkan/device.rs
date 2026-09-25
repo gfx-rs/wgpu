@@ -2908,8 +2908,6 @@ impl crate::Device for super::Device {
                 .label
                 .unwrap_or("Unlabeled acceleration structure buffer");
 
-            // Requesting compaction declares this structure a placeholder that will be
-            // replaced by its compacted copy and dropped, so back it with transient memory.
             let pool = if desc.allow_compaction {
                 super::MemoryPool::Transient
             } else {

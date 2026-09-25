@@ -181,7 +181,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 #### Vulkan
 
 - Sub-allocate `wgpu_hal::MemoryFlags::TRANSIENT` buffers and acceleration structure build scratch from a separate Vulkan memory pool, so short-lived allocations no longer pin memory blocks shared with long-lived resources. By @stuartparmenter in [#10232](https://github.com/gfx-rs/wgpu/pull/10232).
-- Back acceleration structures created with `allow_compaction` with the transient Vulkan memory pool, keeping build-sized structures that will be replaced by their compacted copies out of long-lived memory blocks. By @stuartparmenter in [#10233](https://github.com/gfx-rs/wgpu/pull/10233).
+- Allocate acceleration structures created with `AccelerationStructureFlags::ALLOW_COMPACTION` from the transient Vulkan memory pool, since they are usually replaced by their compacted copies. By @stuartparmenter in [#10233](https://github.com/gfx-rs/wgpu/pull/10233).
 
 ### Bug Fixes
 

@@ -3048,6 +3048,8 @@ pub struct AccelerationStructureDescriptor<'a> {
     pub label: Label<'a>,
     pub size: wgt::BufferAddress,
     pub format: AccelerationStructureFormat,
+    /// Backends may allocate the structure as a short-lived resource, since it is
+    /// usually replaced by its compacted copy.
     pub allow_compaction: bool,
 }
 
