@@ -1602,6 +1602,20 @@ mod tests {
     }
 
     #[test]
+    fn missing_surface_view_formats_allowed_with_strict_compliance() {
+        let downlevel = wgt::DownlevelCapabilities {
+            flags: wgt::DownlevelFlags::all() - wgt::DownlevelFlags::SURFACE_VIEW_FORMATS,
+            ..Default::default()
+        };
+        assert!(adapter_allowed(
+            InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
+            &"",
+            &wgt::Limits::defaults(),
+            &downlevel
+        ));
+    }
+
+    #[test]
     fn fully_compliant_adapter_always_allowed() {
         assert!(adapter_allowed(
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,

@@ -1310,7 +1310,11 @@ impl DownlevelFlags {
         // We use manual bit twiddling to make this a const fn as `Sub` and `.remove` aren't const
 
         // WebGPU doesn't actually require aniso
-        Self::from_bits_truncate(Self::all().bits() & !Self::ANISOTROPIC_FILTERING.bits())
+        // or surface view formats, which only apply to `wgpu::Surface`
+        Self::from_bits_truncate(
+            Self::all().bits()
+                & !(Self::ANISOTROPIC_FILTERING.bits() | Self::SURFACE_VIEW_FORMATS.bits()),
+        )
     }
 }
 
