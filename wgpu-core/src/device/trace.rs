@@ -171,6 +171,11 @@ pub enum Action<'a, R: ReferenceType> {
         pipeline: PointerId<markers::ComputePipeline>,
         index: u32,
     },
+    GetRayTracingPipelineBindGroupLayout {
+        id: PointerId<markers::BindGroupLayout>,
+        pipeline: PointerId<markers::RayTracingPipeline>,
+        index: u32,
+    },
     DropBindGroupLayout(PointerId<markers::BindGroupLayout>),
     CreatePipelineLayout(
         PointerId<markers::PipelineLayout>,
@@ -202,6 +207,11 @@ pub enum Action<'a, R: ReferenceType> {
         desc: TraceGeneralRenderPipelineDescriptor<'a>,
     },
     DropRenderPipeline(PointerId<markers::RenderPipeline>),
+    CreateRayTracingPipeline {
+        id: PointerId<markers::RayTracingPipeline>,
+        desc: TraceRayTracingPipelineDescriptor<'a>,
+    },
+    DropRayTracingPipeline(PointerId<markers::RayTracingPipeline>),
     CreatePipelineCache {
         id: PointerId<markers::PipelineCache>,
         desc: crate::pipeline::PipelineCacheDescriptor<'a>,
@@ -281,6 +291,17 @@ pub type TraceGeneralRenderPipelineDescriptor<'a> = GeneralRenderPipelineDescrip
 /// cbindgen:ignore
 #[doc(hidden)]
 pub type TraceComputePipelineDescriptor<'a> = crate::pipeline::ComputePipelineDescriptor<
+    'a,
+    PointerId<markers::PipelineLayout>,
+    PointerId<markers::ShaderModule>,
+    PointerId<markers::PipelineCache>,
+>;
+
+/// Not a public API. For use by `player` only.
+///
+/// cbindgen:ignore
+#[doc(hidden)]
+pub type TraceRayTracingPipelineDescriptor<'a> = crate::pipeline::RayTracingPipelineDescriptor<
     'a,
     PointerId<markers::PipelineLayout>,
     PointerId<markers::ShaderModule>,

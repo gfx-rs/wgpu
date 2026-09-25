@@ -176,10 +176,8 @@ pub enum BuildAccelerationStructureError {
     #[error("Blas {0:?} build sizes require index buffer but none was provided")]
     MissingIndexBuffer(ResourceErrorIdent),
 
-    #[error(
-        "Tlas {0:?} an associated instances contains an invalid custom index (more than 24bits)"
-    )]
-    TlasInvalidCustomIndex(ResourceErrorIdent),
+    #[error("Tlas {0:?} instance {1} contains an invalid custom data (more than 24bits)")]
+    TlasInvalidCustomData(ResourceErrorIdent, usize),
 
     #[error(
         "Tlas {0:?} has {1} active instances but only {2} are allowed as specified by the descriptor at creation"
@@ -209,6 +207,10 @@ pub enum BuildAccelerationStructureError {
 
     #[error("Blas {0:?} AABB stride is invalid (must be >= {1} and a multiple of 8)")]
     InvalidAabbStride(ResourceErrorIdent, BufferAddress),
+    #[error(
+        "Tlas {0:?} instance {1} contains an intersection index {2} which is greater than 2^24 - 1"
+    )]
+    TlasInvalidIntersectionIndex(ResourceErrorIdent, usize, u32),
 }
 
 impl WebGpuError for BuildAccelerationStructureError {
@@ -237,11 +239,12 @@ impl WebGpuError for BuildAccelerationStructureError {
             | Self::DifferentBlasIndexFormats(..)
             | Self::CompactedBlas(..)
             | Self::MissingIndexBuffer(..)
-            | Self::TlasInvalidCustomIndex(..)
+            | Self::TlasInvalidCustomData(..)
             | Self::TlasInstanceCountExceeded(..)
             | Self::TransformMissing(..)
             | Self::UseTransformMissing(..)
             | Self::TlasDependentMissingVertexReturn(..)
+            | Self::TlasInvalidIntersectionIndex(..)
             | Self::BlasGeometryKindMismatch(..)
             | Self::IncompatibleBlasAabbPrimitiveCount(..)
             | Self::UnalignedAabbPrimitiveOffset(..)
@@ -263,15 +266,28 @@ pub enum ValidateAsActionsError {
 
     #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
     BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),
+
+    #[error("Tlas {0:?} has an intersection index {1:?} out of bounds of the length of the intersection array {2:?}")]
+    TlasIntersectionInvalid(ResourceErrorIdent, u32, u32),
+
+    #[error("An instance Tlas {0:?} has a requires an intersection type of {1:?} for index {2}, but got {3:?}")]
+    TlasInstancesIntersectionIndicesDiffer(
+        ResourceErrorIdent,
+        crate::pipeline::RayTracingIntersectionType,
+        u32,
+        Option<crate::pipeline::RayTracingIntersectionType>,
+    ),
 }
 
 impl WebGpuError for ValidateAsActionsError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
             Self::DestroyedResource(e) => e.webgpu_error_type(),
-            Self::UsedUnbuiltTlas(..) | Self::UsedUnbuiltBlas(..) | Self::BlasNewerThenTlas(..) => {
-                ErrorType::Validation
-            }
+            Self::UsedUnbuiltTlas(..)
+            | Self::UsedUnbuiltBlas(..)
+            | Self::BlasNewerThenTlas(..)
+            | Self::TlasIntersectionInvalid(..)
+            | Self::TlasInstancesIntersectionIndicesDiffer(..) => ErrorType::Validation,
         }
     }
 }
@@ -320,6 +336,7 @@ pub struct TlasInstance<'a, Blas = Arc<resource::Blas>> {
     pub transform: &'a [f32; 12],
     pub custom_data: u32,
     pub mask: u8,
+    pub intersection_index: u32,
 }
 
 pub struct TlasPackage<'a, Tlas = Arc<resource::Tlas>, Blas = Arc<resource::Blas>> {
@@ -332,6 +349,8 @@ pub struct TlasPackage<'a, Tlas = Arc<resource::Tlas>, Blas = Arc<resource::Blas
 pub(crate) struct TlasBuild {
     pub tlas: Arc<Tlas>,
     pub dependencies: Vec<Arc<Blas>>,
+    pub max_intersection_idx: u32,
+    pub required_intersection_types: Vec<resource::TlasIntersectionType>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -352,7 +371,19 @@ impl AsBuild {
 #[derive(Debug, Clone)]
 pub(crate) enum AsAction {
     Build(AsBuild),
-    UseTlas(Arc<Tlas>),
+    /// A [`Tlas`] has been bound and used by any pass. The [`Blas`]es it
+    /// was built with must be validated to have not been built after the
+    /// [`Tlas`] as backends have undefined behaviour on this (it would
+    /// cause AABBs to be incorrect, etc.)
+    BindTlas(Arc<Tlas>),
+    /// A [`RayTracingPipeline`] has had a `dispatch_rays` call on it.
+    /// This [`Tlas`] has been put in a bindgroup, and so the validation
+    /// must ensure that the maximum intersection index in the [`Tlas`] is
+    /// less than the length of the intersection group array and that the
+    /// types of the [`Blas`]es
+    ///
+    /// [`RayTracingPipeline`]: crate::pipeline::RayTracingPipeline
+    TraceTlas(Arc<Tlas>, Vec<crate::pipeline::RayTracingIntersectionType>),
 }
 
 /// Like [`BlasTriangleGeometry`], but with owned data.
@@ -407,6 +438,7 @@ pub struct OwnedTlasInstance<R: ReferenceType> {
     pub transform: [f32; 12],
     pub custom_data: u32,
     pub mask: u8,
+    pub intersection_index: u32,
 }
 
 pub type ArcTlasInstance = OwnedTlasInstance<ArcReferences>;
