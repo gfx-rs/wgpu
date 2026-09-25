@@ -4288,7 +4288,7 @@ impl<W: Write> Writer<W> {
                     self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
 
                     write!(self.out, "{level}")?;
-                    let name = self.namer.call("");
+                    let name = Baked(result).to_string();
                     self.start_baking_expression(result, &context.expression, &name)?;
                     self.put_load(pointer, &context.expression, true)?;
                     self.named_expressions.insert(result, name);
@@ -4301,7 +4301,7 @@ impl<W: Write> Writer<W> {
                 }
                 crate::Statement::SubgroupBallot { result, predicate } => {
                     write!(self.out, "{level}")?;
-                    let name = self.namer.call("");
+                    let name = Baked(result).to_string();
                     self.start_baking_expression(result, &context.expression, &name)?;
                     self.named_expressions.insert(result, name);
                     write!(
@@ -4322,7 +4322,7 @@ impl<W: Write> Writer<W> {
                     result,
                 } => {
                     write!(self.out, "{level}")?;
-                    let name = self.namer.call("");
+                    let name = Baked(result).to_string();
                     self.start_baking_expression(result, &context.expression, &name)?;
                     self.named_expressions.insert(result, name);
                     match (collective_op, op) {
@@ -4380,7 +4380,7 @@ impl<W: Write> Writer<W> {
                     result,
                 } => {
                     write!(self.out, "{level}")?;
-                    let name = self.namer.call("");
+                    let name = Baked(result).to_string();
                     self.start_baking_expression(result, &context.expression, &name)?;
                     self.named_expressions.insert(result, name);
                     match mode {
