@@ -12,6 +12,103 @@ use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestP
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(ZERO_INIT_WORKGROUP_MEMORY);
+    vec.push(ZERO_INIT_WORKGROUP_MEMORY_PARALLEL);
+    vec.push(ZERO_INIT_WORKGROUP_MEMORY_PARALLEL_F16);
+}
+
+#[apply(gpu_test!)]
+static ZERO_INIT_WORKGROUP_MEMORY_PARALLEL: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .limits(Limits::default())
+            .skip(wgpu_test::FailureCase::backend(!wgpu::Backends::DX12)),
+    )
+    .run_async(parallel_zero_init);
+
+#[apply(gpu_test!)]
+static ZERO_INIT_WORKGROUP_MEMORY_PARALLEL_F16: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .limits(Limits::default())
+            .features(wgpu::Features::SHADER_F16)
+            .skip(wgpu_test::FailureCase::backend(!wgpu::Backends::DX12)),
+    )
+    .run_async(parallel_zero_init);
+
+async fn parallel_zero_init(ctx: wgpu_test::TestingContext) {
+    let source = include_str!("../../../../naga/tests/in/wgsl/workgroup-init-compute.wgsl");
+    let source = if ctx.device.features().contains(wgpu::Features::SHADER_F16) {
+        std::borrow::Cow::Owned(format!("enable f16;\n{}", source.replace("f32", "f16")))
+    } else {
+        std::borrow::Cow::Borrowed(source)
+    };
+    let module = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(source),
+        });
+    for (width, height, count) in [(1, 1, 1), (8, 2, 37), (32, 2, 67)] {
+        let pipeline = ctx
+            .device
+            .create_compute_pipeline(&ComputePipelineDescriptor {
+                label: None,
+                layout: None,
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[
+                        ("width", width as f64),
+                        ("height", height as f64),
+                        ("count", count as f64),
+                    ],
+                    ..Default::default()
+                },
+                cache: None,
+            });
+        let size = 32 * width * height * 4;
+        let output = ctx.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let readback = ctx.device.create_buffer(&BufferDescriptor {
+            label: None,
+            size,
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: output.as_entire_binding(),
+            }],
+        });
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor::default());
+        {
+            let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            for _ in 0..32 {
+                pass.dispatch_workgroups(32, 1, 1);
+            }
+        }
+        encoder.copy_buffer_to_buffer(&output, 0, &readback, 0, size);
+        ctx.queue.submit([encoder.finish()]);
+        readback.slice(..).map_async(MapMode::Read, |_| ());
+        ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+        let mapped = readback.slice(..).get_mapped_range().unwrap();
+        let values: &[u32] = bytemuck::cast_slice(&mapped);
+        assert!(
+            values.iter().all(|&value| value == 2),
+            "workgroup {width}x{height}, array size {count}: {values:?}"
+        );
+    }
 }
 
 #[apply(gpu_test!)]

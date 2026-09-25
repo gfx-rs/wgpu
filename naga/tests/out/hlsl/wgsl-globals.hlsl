@@ -112,8 +112,12 @@ uint NagaBufferLength(ByteAddressBuffer buffer)
 [numthreads(1, 1, 1)]
 void main(uint local_invocation_index : SV_GroupIndex)
 {
+    [loop]
+    for (uint zero_flat_index = local_invocation_index; zero_flat_index < 10u; zero_flat_index += 1u) {
+        uint zero_index = (zero_flat_index / 1u) % 10u;
+        wg[zero_index] = (float)0;
+    }
     if (local_invocation_index == 0) {
-        wg = (float[10])0;
         at_1 = (uint)0;
     }
     GroupMemoryBarrierWithGroupSync();
