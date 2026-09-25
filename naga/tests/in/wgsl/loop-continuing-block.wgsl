@@ -26,7 +26,7 @@ fn call_result() {
         let v = f(a);
         a += 1;
         continuing {
-            // break if v > 10;
+            break if v > 10;
         }
     }
 }
@@ -80,7 +80,7 @@ fn dead_use() {
         a += 1;
         continuing {
             if a > 5 {
-                // let dead = v + w;
+                let dead = v + w;
             }
             break if a > 10;
         }
@@ -118,7 +118,7 @@ fn call_result_as_index() {
     loop {
         let v1 = v0[one()];
         continuing {
-            // break if v1 > 0.0;
+            break if v1 > 0.0;
         }
     }
 }

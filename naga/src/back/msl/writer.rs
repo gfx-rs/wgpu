@@ -545,7 +545,33 @@ pub(super) enum WrappedFunction {
 pub struct Writer<W> {
     pub(super) out: W,
     pub(super) names: FastHashMap<NameKey, String>,
+    /// Expressions we have given a value to, mapped to the names of the
+    /// temporaries holding it.
+    ///
+    /// An entry appears when we write out the expression's definition, and is
+    /// dropped only when we move on to the next function. There is no need to
+    /// drop it when the enclosing block ends: an expression goes out of scope
+    /// at the end of the block that defines it, so nothing later can name it
+    /// anyway. The one exception is that a [`Loop`]'s `continuing` block and
+    /// `break_if` may name what its `body` defined, which we rely on rather
+    /// than work around; see [the `hoist` module](super::hoist).
+    ///
+    /// [`Loop`]: crate::Statement::Loop
     pub(super) named_expressions: crate::NamedExpressions,
+    /// Expressions whose temporaries have been declared ahead of an enclosing
+    /// loop but not yet given a value, mapped to the names of those
+    /// temporaries.
+    ///
+    /// This is the counterpart to [`Self::named_expressions`], and is disjoint
+    /// from it: writing an expression's definition moves its entry from here to
+    /// there, and writes `name = value` rather than `T name = value`.
+    ///
+    /// [`Self::put_expression`] consults both, so that the `continuing` block,
+    /// which we write before the loop body, can read the value the body left in
+    /// the temporary on the previous pass.
+    ///
+    /// See [the `hoist` module](super::hoist) for why this is needed.
+    pub(super) hoisted_loop_expressions: FastHashMap<Handle<crate::Expression>, String>,
     /// Set of expressions that need to be baked to avoid unnecessary repetition in output
     need_bake_expressions: back::NeedBakeExpressions,
     pub(super) namer: proc::Namer,
@@ -950,6 +976,7 @@ impl<W: Write> Writer<W> {
             out,
             names: FastHashMap::default(),
             named_expressions: Default::default(),
+            hoisted_loop_expressions: FastHashMap::default(),
             need_bake_expressions: Default::default(),
             namer: proc::Namer::default(),
             wrapped_functions: FastHashSet::default(),
@@ -2137,7 +2164,14 @@ impl<W: Write> Writer<W> {
         context: &ExpressionContext,
         is_scoped: bool,
     ) -> BackendResult {
-        if let Some(name) = self.named_expressions.get(&expr_handle) {
+        // A hoisted temporary has no value yet at the point it was declared,
+        // but it does hold one by the time anything reads it: the `continuing`
+        // block sees what the loop body left there on the previous pass.
+        let stored = self
+            .named_expressions
+            .get(&expr_handle)
+            .or_else(|| self.hoisted_loop_expressions.get(&expr_handle));
+        if let Some(name) = stored {
             write!(self.out, "{name}")?;
             return Ok(());
         }
@@ -3021,14 +3055,19 @@ impl<W: Write> Writer<W> {
                     )))
                 }
             },
-            // has to be a named expression
+            // These have no inline form, so they are only ever read through
+            // the temporary the statement that produced them stored them in,
+            // which one of the two tables above names. The one place that is
+            // not obviously true is a loop's `continuing` block, which we write
+            // out above the body that defines what it reads; see the `hoist`
+            // module for how those temporaries get declared in time.
             crate::Expression::CallResult(_)
             | crate::Expression::AtomicResult { .. }
             | crate::Expression::WorkGroupUniformLoadResult { .. }
             | crate::Expression::SubgroupBallotResult
             | crate::Expression::SubgroupOperationResult { .. }
             | crate::Expression::RayQueryProceedResult => {
-                unreachable!()
+                unreachable!("statement result {expr_handle:?} has no temporary holding it")
             }
             crate::Expression::ArrayLength(expr) => {
                 let global = context.function.originating_global(expr).ok_or_else(|| {
@@ -3786,11 +3825,12 @@ impl<W: Write> Writer<W> {
         }
     }
 
-    pub(super) fn start_baking_expression(
+    /// Write the type of `handle`'s value, as used when declaring a temporary
+    /// to hold it.
+    pub(super) fn put_baked_type(
         &mut self,
         handle: Handle<crate::Expression>,
         context: &ExpressionContext,
-        name: &str,
     ) -> BackendResult {
         match context.info[handle].ty {
             TypeResolution::Handle(ty_handle) => {
@@ -3837,10 +3877,55 @@ impl<W: Write> Writer<W> {
             }
         }
 
-        //TODO: figure out the naming scheme that wouldn't collide with user names.
+        Ok(())
+    }
+
+    /// Declare a temporary named `name` to hold `handle`'s value, writing
+    /// everything up to and including the `=`.
+    ///
+    /// `name` must be unique within the function. Take it from either
+    /// [`Baked`], which derives a name from the expression's handle, or
+    /// [`Self::namer`], which tracks the names it hands out.
+    pub(super) fn start_baking_expression(
+        &mut self,
+        handle: Handle<crate::Expression>,
+        context: &ExpressionContext,
+        name: &str,
+    ) -> BackendResult {
+        self.put_baked_type(handle, context)?;
         write!(self.out, " {name} = ")?;
 
         Ok(())
+    }
+
+    /// Write the left-hand side of the assignment that stores a statement's
+    /// `result`, and register the name of the temporary holding it in
+    /// [`Self::named_expressions`].
+    ///
+    /// Normally this declares the temporary. If it was instead declared ahead
+    /// of an enclosing loop by [`Self::hoist_continuing_dependencies`], we only
+    /// assign to it, and move it from [`Self::hoisted_loop_expressions`] to
+    /// [`Self::named_expressions`] now that it has a value.
+    ///
+    /// Returns the name, for statements that need to refer to it again.
+    pub(super) fn write_result_assignment(
+        &mut self,
+        result: Handle<crate::Expression>,
+        context: &ExpressionContext,
+    ) -> Result<String, Error> {
+        let name = match self.hoisted_loop_expressions.remove(&result) {
+            Some(hoisted) => {
+                write!(self.out, "{hoisted} = ")?;
+                hoisted
+            }
+            None => {
+                let name = Baked(result).to_string();
+                self.start_baking_expression(result, context, &name)?;
+                name
+            }
+        };
+        self.named_expressions.insert(result, name.clone());
+        Ok(name)
     }
 
     /// Cache a clamped level of detail value, if necessary.
@@ -3920,6 +4005,59 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Whether writing `handle` out stores its value in a temporary.
+    pub(super) fn bakes_expression(
+        &self,
+        handle: Handle<crate::Expression>,
+        context: &ExpressionContext,
+    ) -> bool {
+        // There is no way to write the result of a statement inline, so it
+        // always gets a temporary, whether or not anything asked for one.
+        if super::hoist::is_statement_result(&context.function.expressions[handle]) {
+            return true;
+        }
+
+        // If this expression is an index that we're going to first compare
+        // against a limit, and then actually use as an index, then we may
+        // want to cache it in a temporary, to avoid evaluating it twice.
+        if context.guarded_indices.contains(handle) {
+            return true;
+        }
+
+        if self.need_bake_expressions.contains(&handle) {
+            return true;
+        }
+
+        // Don't bake pointer expressions
+        if context.resolve_type(handle).pointer_space().is_some() {
+            return false;
+        }
+
+        // The `crate::Function::named_expressions` table holds expressions that
+        // should be saved in temporaries once they are `Emit`ted.
+        context.function.named_expressions.contains_key(&handle)
+    }
+
+    /// The name of the temporary to store `handle`'s value in, if writing it
+    /// out introduces one.
+    ///
+    /// This reserves the name, so call it at most once per expression.
+    pub(super) fn baked_name(
+        &mut self,
+        handle: Handle<crate::Expression>,
+        context: &ExpressionContext,
+    ) -> Option<String> {
+        if !self.bakes_expression(handle, context) {
+            return None;
+        }
+        Some(match context.function.named_expressions.get(&handle) {
+            // Don't assume the names in `named_expressions` are unique, or even
+            // valid. Use the `Namer`.
+            Some(name) => self.namer.call(name),
+            None => Baked(handle).to_string(),
+        })
+    }
+
     fn put_block(
         &mut self,
         level: back::Level,
@@ -3972,43 +4110,24 @@ impl<W: Write> Writer<W> {
                             _ => (),
                         }
 
-                        let ptr_class = context.expression.resolve_type(handle).pointer_space();
-                        let expr_name = if ptr_class.is_some() {
-                            None // don't bake pointer expressions (just yet)
-                        } else if let Some(name) =
-                            context.expression.function.named_expressions.get(&handle)
-                        {
-                            // The `crate::Function::named_expressions` table holds
-                            // expressions that should be saved in temporaries once they
-                            // are `Emit`ted. We only add them to `self.named_expressions`
-                            // when we reach the `Emit` that covers them, so that we don't
-                            // try to use their names before we've actually initialized
-                            // the temporary that holds them.
-                            //
-                            // Don't assume the names in `named_expressions` are unique,
-                            // or even valid. Use the `Namer`.
-                            Some(self.namer.call(name))
-                        } else {
-                            // If this expression is an index that we're going to first compare
-                            // against a limit, and then actually use as an index, then we may
-                            // want to cache it in a temporary, to avoid evaluating it twice.
-                            let bake = if context.expression.guarded_indices.contains(handle) {
-                                true
-                            } else {
-                                self.need_bake_expressions.contains(&handle)
-                            };
-
-                            if bake {
-                                Some(Baked(handle).to_string())
-                            } else {
-                                None
-                            }
-                        };
+                        // A temporary already declared ahead of an enclosing
+                        // loop just needs assigning to; otherwise, decide
+                        // whether this expression needs one at all.
+                        let hoisted = self.hoisted_loop_expressions.remove(&handle);
+                        let declare = hoisted.is_none();
+                        let expr_name =
+                            hoisted.or_else(|| self.baked_name(handle, &context.expression));
 
                         if let Some(name) = expr_name {
                             write!(self.out, "{level}")?;
-                            self.start_baking_expression(handle, &context.expression, &name)?;
+                            if declare {
+                                self.start_baking_expression(handle, &context.expression, &name)?;
+                            } else {
+                                write!(self.out, "{name} = ")?;
+                            }
                             self.put_expression(handle, &context.expression, true)?;
+                            // The temporary only counts as holding this
+                            // expression's value once we have written it.
                             self.named_expressions.insert(handle, name);
                             writeln!(self.out, ";")?;
                         }
@@ -4085,6 +4204,14 @@ impl<W: Write> Writer<W> {
                         self.gen_force_bounded_loop_statements(level, context);
                     let gate_name = (!continuing.is_empty() || break_if.is_some())
                         .then(|| self.namer.call("loop_init"));
+
+                    // We generate `continuing` above `body`, so the temporaries
+                    // it needs from `body` must be declared outside the loop.
+                    if gate_name.is_some() {
+                        self.hoist_continuing_dependencies(
+                            level, body, continuing, break_if, context,
+                        )?;
+                    }
 
                     if let Some((ref decl, _)) = force_loop_bound_statements {
                         writeln!(self.out, "{decl}")?;
@@ -4166,9 +4293,7 @@ impl<W: Write> Writer<W> {
                 } => {
                     write!(self.out, "{level}")?;
                     if let Some(expr) = result {
-                        let name = Baked(expr).to_string();
-                        self.start_baking_expression(expr, &context.expression, &name)?;
-                        self.named_expressions.insert(expr, name);
+                        self.write_result_assignment(expr, &context.expression)?;
                     }
                     let fun_name = &self.names[&NameKey::Function(function)];
                     write!(self.out, "{fun_name}(")?;
@@ -4224,9 +4349,7 @@ impl<W: Write> Writer<W> {
                     // operating on a 64-bit value, `result` is `None`.
                     write!(self.out, "{level}")?;
                     let fun_key = if let Some(result) = result {
-                        let res_name = Baked(result).to_string();
-                        self.start_baking_expression(result, context, &res_name)?;
-                        self.named_expressions.insert(result, res_name);
+                        self.write_result_assignment(result, context)?;
                         fun.to_msl()
                     } else if context.resolve_type(value).scalar_width() == Some(8) {
                         fun.to_msl_64_bit()?
@@ -4296,10 +4419,8 @@ impl<W: Write> Writer<W> {
                     self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
 
                     write!(self.out, "{level}")?;
-                    let name = Baked(result).to_string();
-                    self.start_baking_expression(result, &context.expression, &name)?;
+                    self.write_result_assignment(result, &context.expression)?;
                     self.put_load(pointer, &context.expression, true)?;
-                    self.named_expressions.insert(result, name);
 
                     writeln!(self.out, ";")?;
                     self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
@@ -4309,9 +4430,7 @@ impl<W: Write> Writer<W> {
                 }
                 crate::Statement::SubgroupBallot { result, predicate } => {
                     write!(self.out, "{level}")?;
-                    let name = Baked(result).to_string();
-                    self.start_baking_expression(result, &context.expression, &name)?;
-                    self.named_expressions.insert(result, name);
+                    self.write_result_assignment(result, &context.expression)?;
                     write!(
                         self.out,
                         "{NAMESPACE}::uint4((uint64_t){NAMESPACE}::simd_ballot("
@@ -4330,9 +4449,7 @@ impl<W: Write> Writer<W> {
                     result,
                 } => {
                     write!(self.out, "{level}")?;
-                    let name = Baked(result).to_string();
-                    self.start_baking_expression(result, &context.expression, &name)?;
-                    self.named_expressions.insert(result, name);
+                    self.write_result_assignment(result, &context.expression)?;
                     match (collective_op, op) {
                         (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::All) => {
                             write!(self.out, "{NAMESPACE}::simd_all(")?
@@ -4388,9 +4505,7 @@ impl<W: Write> Writer<W> {
                     result,
                 } => {
                     write!(self.out, "{level}")?;
-                    let name = Baked(result).to_string();
-                    self.start_baking_expression(result, &context.expression, &name)?;
-                    self.named_expressions.insert(result, name);
+                    self.write_result_assignment(result, &context.expression)?;
                     match mode {
                         crate::GatherMode::BroadcastFirst => {
                             write!(self.out, "{NAMESPACE}::simd_broadcast_first(")?;
@@ -4492,15 +4607,6 @@ impl<W: Write> Writer<W> {
             }
         }
 
-        // un-emit expressions
-        //TODO: take care of loop/continuing?
-        for statement in statements {
-            if let crate::Statement::Emit(ref range) = *statement {
-                for handle in range.clone() {
-                    self.named_expressions.shift_remove(&handle);
-                }
-            }
-        }
         Ok(())
     }
 
@@ -7116,6 +7222,7 @@ template <typename A>
             self.put_block(back::Level(1), &fun.body, &context)?;
             writeln!(self.out, "}}")?;
             self.named_expressions.clear();
+            self.hoisted_loop_expressions.clear();
         }
 
         let ep_range = get_entry_points(module, pipeline_options.entry_point.as_ref())
@@ -8347,6 +8454,7 @@ template <typename A>
                 writeln!(self.out)?;
             }
             self.named_expressions.clear();
+            self.hoisted_loop_expressions.clear();
 
             if is_wrapped {
                 self.write_wrapper_function(NestedFunctionInfo {
