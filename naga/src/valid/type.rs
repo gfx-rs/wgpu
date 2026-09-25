@@ -970,13 +970,7 @@ impl super::Validator {
                         _ => return Err(TypeError::BindingArrayBaseTypeNotStruct(base)),
                     };
                 }
-                if matches!(
-                    gctx.types[base].inner,
-                    crate::TypeInner::Image {
-                        class: crate::ImageClass::External,
-                        ..
-                    }
-                ) {
+                if gctx.types[base].inner.is_external_image() {
                     // Binding arrays of external textures are not yet supported.
                     // See <https://github.com/gfx-rs/wgpu/issues/8027>. Note that
                     // `validate_global_var` relies on this error being raised here.

@@ -1037,14 +1037,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // External textures are handled entirely differently, so defer entirely to that method.
         // We do so prior to calling resolve_resource_binding() below, as we even need to resolve
         // their bindings separately.
-        let is_external_texture = matches!(
-            *handle_ty,
-            TypeInner::Image {
-                class: crate::ImageClass::External,
-                ..
-            }
-        );
-        if is_external_texture {
+        if handle_ty.is_external_image() {
             return self.write_global_external_texture(module, handle, global);
         }
 
@@ -1935,11 +1928,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         // External texture arguments must be expanded into separate
         // arguments for each plane and the params buffer.
-        if let TypeInner::Image {
-            class: crate::ImageClass::External,
-            ..
-        } = module.types[arg.ty].inner
-        {
+        if module.types[arg.ty].inner.is_external_image() {
             return self.write_function_external_texture_argument(module, handle, index);
         }
 
@@ -4130,11 +4119,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // also know that external textures can only ever be used as an argument to another
                 // function. Therefore we can simply emit each of the expanded arguments in a
                 // consecutive comma-separated list.
-                if let TypeInner::Image {
-                    class: crate::ImageClass::External,
-                    ..
-                } = *ty
-                {
+                if ty.is_external_image() {
                     let plane_names = [0, 1, 2].map(|i| {
                         &self.names[&func_ctx
                             .external_texture_argument_key(pos, ExternalTextureNameKey::Plane(i))]
@@ -4330,11 +4315,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // will have been expanded to separate consecutive arguments for each
                 // plane and the parameters buffer. Therefore we can simply emit each of
                 // the expanded global variables in a consecutive comma-separated list.
-                if let TypeInner::Image {
-                    class: crate::ImageClass::External,
-                    ..
-                } = *ty
-                {
+                if ty.is_external_image() {
                     let plane_names = [0, 1, 2].map(|i| {
                         &self.names[&NameKey::ExternalTextureGlobalVariable(
                             handle,
