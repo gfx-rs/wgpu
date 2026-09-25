@@ -5159,6 +5159,7 @@ dependencies = [
  "wgpu-hal",
  "wgpu-sync",
  "wgpu-types",
+ "winit",
 ]
 
 [[package]]
