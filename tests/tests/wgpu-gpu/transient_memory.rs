@@ -1,10 +1,9 @@
 //! Tests that `wgpu_hal::MemoryFlags::TRANSIENT` buffers do not pin the memory
 //! blocks of long-lived resources.
 
-use wgpu::{Backend, Backends};
+use wgpu::Backends;
 use wgpu_test::{
     apply, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
-    TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -27,7 +26,7 @@ static TRANSIENT_BUFFERS_RELEASE_MEMORY_BLOCKS: GpuTestConfiguration = GpuTestCo
                 target_os = "freebsd",
                 target_os = "macos"
             ))]
-            Backend::Vulkan => check_transient_buffers_release_memory_blocks(&ctx),
+            wgpu::Backend::Vulkan => check_transient_buffers_release_memory_blocks(&ctx),
             other => unreachable!(
                 "test is configured to skip all backends except Vulkan, but ran on {other:?}"
             ),
@@ -41,7 +40,7 @@ static TRANSIENT_BUFFERS_RELEASE_MEMORY_BLOCKS: GpuTestConfiguration = GpuTestCo
     target_os = "freebsd",
     target_os = "macos"
 ))]
-fn check_transient_buffers_release_memory_blocks(ctx: &TestingContext) {
+fn check_transient_buffers_release_memory_blocks(ctx: &wgpu_test::TestingContext) {
     use wgpu::hal::{self, Device as _};
 
     const MB: u64 = 1024 * 1024;
