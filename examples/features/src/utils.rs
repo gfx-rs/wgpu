@@ -203,7 +203,8 @@ pub(crate) async fn get_adapter_with_capabilities_or_from_env(
             );
         adapter
     } else {
-        let adapters = instance.enumerate_adapters(Backends::all()).await;
+        let mut adapters = instance.enumerate_adapters(Backends::all()).await;
+        adapters.sort_by_key(|adapter| adapter.get_info().device_type == wgpu::DeviceType::Cpu);
 
         let mut chosen_adapter = None;
         for adapter in adapters {
