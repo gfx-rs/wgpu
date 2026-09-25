@@ -123,6 +123,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 #### Naga
 
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
+- Add `coop_mat8x16` and `coop_mat16x8`, named columns-first like `matCxR`. `coopMultiplyAdd` requires A and B to share a component type and the operands to be shaped K×M, N×K, and N×M. Shader validation accepts only the tile shapes reported by `Adapter::cooperative_matrix_properties`. By @kvark in [#10414](https://github.com/gfx-rs/wgpu/pull/10414).
 
 #### Hal
 

@@ -5503,7 +5503,12 @@ fn binding_array_requires_capability() {
 
 #[test]
 fn cooperative_matrix_enable_extension() {
-    for ty in ["coop_mat8x8", "coop_mat16x16"] {
+    for ty in [
+        "coop_mat8x8",
+        "coop_mat8x16",
+        "coop_mat16x8",
+        "coop_mat16x16",
+    ] {
         let carets = "^".repeat(ty.len());
 
         check_extension_validation!(
@@ -5558,6 +5563,93 @@ fn cooperative_matrix_enable_extension() {
             })
         );
     }
+}
+
+#[test]
+fn cooperative_matrix_shape_mismatch() {
+    // `A` is MxK, `B` is KxN and `C` is MxN, so each of these disagrees with
+    // the others on exactly one of M, N or K.
+    check_validation! {
+        // K: A has 8 columns, B has 16 rows.
+        "enable wgpu_cooperative_matrix;
+         @compute @workgroup_size(32)
+         fn main() {
+             var a: coop_mat8x8<f32, A>;
+             var b: coop_mat16x16<f32, B>;
+             var c: coop_mat16x8<f32, C>;
+             c = coopMultiplyAdd(a, b, c);
+         }",
+        // M: A has 8 rows, C has 16 rows.
+        "enable wgpu_cooperative_matrix;
+         @compute @workgroup_size(32)
+         fn main() {
+             var a: coop_mat16x8<f32, A>;
+             var b: coop_mat16x16<f32, B>;
+             var c: coop_mat16x16<f32, C>;
+             c = coopMultiplyAdd(a, b, c);
+         }",
+        // N: B has 16 columns, C has 8 columns.
+        "enable wgpu_cooperative_matrix;
+         @compute @workgroup_size(32)
+         fn main() {
+             var a: coop_mat16x8<f32, A>;
+             var b: coop_mat16x16<f32, B>;
+             var c: coop_mat8x8<f32, C>;
+             c = coopMultiplyAdd(a, b, c);
+         }":
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::Expression {
+                    source: naga::valid::ExpressionError::InvalidCooperativeShapes { .. },
+                    ..
+                },
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::COOPERATIVE_MATRIX
+    }
+}
+
+#[test]
+fn cooperative_matrix_component_type_mismatch() {
+    check_validation! {
+        "enable f16;
+         enable wgpu_cooperative_matrix;
+         @compute @workgroup_size(32)
+         fn main() {
+             var a: coop_mat8x8<f16, A>;
+             var b: coop_mat8x8<f32, B>;
+             var c: coop_mat8x8<f32, C>;
+             c = coopMultiplyAdd(a, b, c);
+         }":
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::Expression {
+                    source: naga::valid::ExpressionError::InvalidCooperativeComponentType { .. },
+                    ..
+                },
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::COOPERATIVE_MATRIX | naga::valid::Capabilities::SHADER_FLOAT16
+    }
+}
+
+#[test]
+fn cooperative_matrix_mixed_accumulator_type() {
+    // C may be a wider accumulator than A and B.
+    no_validation_error(
+        "enable f16;
+         enable wgpu_cooperative_matrix;
+         @compute @workgroup_size(32)
+         fn main() {
+             var a: coop_mat16x8<f16, A>;
+             var b: coop_mat16x16<f16, B>;
+             var c: coop_mat16x8<f32, C>;
+             c = coopMultiplyAdd(a, b, c);
+         }",
+        naga::valid::Capabilities::COOPERATIVE_MATRIX | naga::valid::Capabilities::SHADER_FLOAT16,
+    );
 }
 
 /// Tests for mesh shader extension validation via WGSL parsing.
