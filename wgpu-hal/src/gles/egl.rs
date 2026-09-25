@@ -1117,6 +1117,8 @@ pub struct Swapchain {
     format_desc: super::TextureFormatDesc,
     #[allow(unused)]
     sample_type: wgt::TextureSampleType,
+    #[cfg_attr(Emscripten, allow(unused))]
+    swap_interval: khronos_egl::Int,
 }
 
 #[derive(Debug)]
@@ -1156,6 +1158,15 @@ impl Surface {
             .map_err(|e| {
                 log::error!("make_current(surface) failed: {e}");
                 crate::SurfaceError::Lost
+            })?;
+
+        #[cfg(not(Emscripten))]
+        self.egl
+            .instance
+            .swap_interval(self.egl.display, sc.swap_interval)
+            .map_err(|e| {
+                log::error!("swap_interval failed: {e}");
+                crate::SurfaceError::Other("unable to set swap interval")
             })?;
 
         unsafe { gl.disable(glow::SCISSOR_TEST) };
@@ -1235,6 +1246,19 @@ impl Surface {
             _ => true,
         }
     }
+
+    pub fn supports_immediate_present(&self) -> bool {
+        !cfg!(Emscripten)
+            && self
+                .egl
+                .instance
+                .get_config_attrib(
+                    self.egl.display,
+                    self.config,
+                    khronos_egl::MIN_SWAP_INTERVAL,
+                )
+                .is_ok_and(|min| min == 0)
+    }
 }
 
 impl crate::Surface for Surface {
@@ -1246,6 +1270,15 @@ impl crate::Surface for Surface {
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
+
+        let swap_interval = match config.present_mode {
+            wgt::PresentMode::Immediate => 0,
+            wgt::PresentMode::Fifo => 1,
+            _ => {
+                log::error!("unsupported present mode: {:?}", config.present_mode);
+                return Err(crate::SurfaceError::Other("unsupported present mode"));
+            }
+        };
 
         let (surface, wl_window) = match unsafe { self.unconfigure_impl(device) } {
             Some((sc, wl_window)) => {
@@ -1441,6 +1474,7 @@ impl crate::Surface for Surface {
             format: config.format,
             format_desc,
             sample_type: wgt::TextureSampleType::Float { filterable: false },
+            swap_interval,
         });
 
         Ok(())
