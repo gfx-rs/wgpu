@@ -1,5 +1,8 @@
 use alloc::{borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec, vec::Vec};
-use core::fmt;
+use core::{
+    fmt,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use hashbrown::HashMap;
 use thiserror::Error;
@@ -880,6 +883,11 @@ impl Surface {
                     Err(WaitIdleError::Device(_)) => {
                         // we can ignore device lost errors here, since we are just cleaning up
                     }
+                    Err(WaitIdleError::Timeout) if cfg!(target_arch = "wasm32") => {
+                        // On wasm, you cannot actually successfully wait for the surface.
+                        // However WebGL does not actually require you do this, so ignoring
+                        // the failure is totally fine. See https://github.com/gfx-rs/wgpu/issues/7363
+                    }
                     Err(WaitIdleError::Timeout) => {
                         unreachable!("wait_indefinitely() should never timeout")
                     }
@@ -1042,11 +1050,16 @@ impl Drop for Surface {
 pub struct Adapter {
     pub(crate) raw: hal::DynExposedAdapter,
     pub(crate) instance: Arc<Instance>,
+    consumed: AtomicBool,
 }
 
 impl Adapter {
     pub(crate) fn new(raw: hal::DynExposedAdapter, instance: Arc<Instance>) -> Arc<Self> {
-        Arc::new(Self { raw, instance })
+        Arc::new(Self {
+            raw,
+            instance,
+            consumed: AtomicBool::new(false),
+        })
     }
 
     /// Returns the backend this adapter is using.
@@ -1188,6 +1201,15 @@ impl Adapter {
         profiling::scope!("Adapter::create_device_and_queue_from_hal");
         api_log!("Adapter::create_device_and_queue_from_hal");
 
+        if self
+            .instance
+            .flags
+            .contains(InstanceFlags::STRICT_WEBGPU_COMPLIANCE)
+            && self.consumed.load(Ordering::SeqCst)
+        {
+            return Err(RequestDeviceError::AdapterConsumed);
+        }
+
         let default_queue_desc = desc.default_queue.clone();
 
         let device = Device::new(hal_device.device, self, desc, self.instance.flags)?;
@@ -1208,6 +1230,8 @@ impl Adapter {
         resource_log!("Created Queue {:?}", Arc::as_ptr(&queue));
 
         self.instance.devices.push(&device);
+
+        self.consumed.store(true, Ordering::SeqCst);
 
         Ok((device, queue))
     }
@@ -1339,6 +1363,8 @@ pub enum RequestDeviceError {
         "Some experimental features, {0}, were requested, but experimental features are not enabled"
     )]
     ExperimentalFeaturesNotEnabled(wgt::Features),
+    #[error("The adapter has already been consumed.")]
+    AdapterConsumed,
 }
 
 #[derive(Clone, Debug, Error)]

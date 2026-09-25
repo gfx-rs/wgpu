@@ -5,9 +5,26 @@
 # A pull request goes to the first queue rule whose `queue_conditions`
 # match. Required checks and approvals come from branch protection.
 
+merge_protections_settings:
+  post_comment: false
+
 merge_queue:
   queued_label: "queue: queued"
   dequeued_label: "queue: dequeued"
+  status_comments: none
+  queue_controls_comment: false
+
+pull_request_rules:
+  - name: Notify the author when Mergify removes a pull request from the queue
+    conditions:
+      - 'label = "queue: dequeued"'
+      - queue-dequeue-reason != pr-manually-dequeued
+    actions:
+      comment:
+        message: >-
+          @{{ author }} Mergify removed this PR from the merge queue.
+          Reason: `{{ queue_dequeue_reason }}`.
+          See the Mergify check for details.
 
 queue_rules:
   - name: rebase

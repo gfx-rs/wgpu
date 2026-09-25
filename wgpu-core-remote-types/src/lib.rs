@@ -48,7 +48,32 @@ pub struct RequestAdapterOptions {
 
 assert_ffi_safe!(RequestAdapterOptions);
 
-pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
+/// Describes a `Device`.
+///
+/// Corresponds to [WebGPU `GPUDeviceDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#gpudevicedescriptor).
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct DeviceDescriptor<'a> {
+    /// Debug label for the device.
+    pub label: Label<'a>,
+    /// Specifies the features that are required by the device request.
+    /// The request will fail if the adapter cannot provide these features.
+    ///
+    /// Exactly the specified set of features, and no more or less,
+    /// will be allowed in validation of API calls on the resulting device.
+    pub required_features: wgt::FeaturesWebGPU,
+    /// Specifies the limits that are required by the device request.
+    /// The request will fail if the adapter cannot provide these limits.
+    ///
+    /// Exactly the specified limits, and no better or worse,
+    /// will be allowed in validation of API calls on the resulting device.
+    pub required_limits: wgt::Limits,
+    /// Specifies the descriptor of the default queue for the device request.
+    ///
+    /// Corresponds to [WebGPU `GPUDeviceDescriptor.defaultQueue`](https://gpuweb.github.io/gpuweb/#dom-gpudevicedescriptor-defaultqueue).
+    pub default_queue: QueueDescriptor<'a>,
+}
+
 pub type QueueDescriptor<'a> = wgt::QueueDescriptor<Label<'a>>;
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>, wgt::BufferUsagesWebGPU>;
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
@@ -144,3 +169,33 @@ pub struct ShaderModuleDescriptor<'a> {
 }
 
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
+
+/// Errors of <https://gpuweb.github.io/gpuweb/#dom-gpuadapter-requestdevice>
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum RequestDeviceError {
+    /// This should be mapped to a `TypeError`
+    UnsupportedFeature(String),
+    /// This should be mapped to a `OperationError`
+    FailedLimit(String),
+    /// We should return invalid device here,
+    /// but wgpu is currently not able to do that:
+    /// <https://github.com/gfx-rs/wgpu/issues/9535>
+    Other(String),
+}
+
+pub use naga_types::wgsl::language_extension::ImplementedLanguageExtension;
+
+/// Describes a pipeline creation error.
+///
+/// Corresponds to [WebGPU `GPUPipelineError`](https://www.w3.org/TR/webgpu/#gpupipelineerror).
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum PipelineError {
+    Validation(String),
+    Internal(String),
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum BufferMapError {
+    Aborted(String),
+    Operation(String),
+}

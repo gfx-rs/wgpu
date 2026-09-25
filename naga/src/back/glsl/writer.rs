@@ -2287,6 +2287,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             Statement::CooperativeStore { .. } => unimplemented!(),
             Statement::RayPipelineFunction(_) => unimplemented!(),
+            Statement::DebugPrintf { .. } => unimplemented!(),
         }
 
         Ok(())
