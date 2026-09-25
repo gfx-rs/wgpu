@@ -983,6 +983,34 @@ impl crate::Module {
         false
     }
 
+    /// Whether this module uses ray tracing invocation reordering: either the
+    /// [`HitObject`] type, or a [`ReorderThread`] statement.
+    ///
+    /// [`HitObject`]: crate::TypeInner::HitObject
+    /// [`ReorderThread`]: crate::RayPipelineFunction::ReorderThread
+    pub fn uses_invocation_reorder(&self) -> bool {
+        if self
+            .types
+            .iter()
+            .any(|(_, ty)| matches!(ty.inner, crate::TypeInner::HitObject))
+        {
+            return true;
+        }
+
+        let functions = self.functions.iter().map(|(_, f)| f);
+        let entry_points = self.entry_points.iter().map(|ep| &ep.function);
+        functions.chain(entry_points).any(|func| {
+            any_statement(&func.body, &mut |stmt| {
+                matches!(
+                    *stmt,
+                    crate::Statement::RayPipelineFunction(
+                        crate::RayPipelineFunction::ReorderThread { .. },
+                    )
+                )
+            })
+        })
+    }
+
     /// Returns `true` if any function or entry point in the module uses
     /// [`Statement::DebugPrintf`].
     ///
@@ -1002,7 +1030,10 @@ impl crate::Module {
         // Whether this uses ray tracing (unknown whether the usage is pipelines or ray queries).
         let mut uses_ray_tracing = self.special_types.ray_desc.is_some();
 
-        uses.queries |= self.special_types.ray_intersection.is_some();
+        // NOTE: `ray_intersection` alone does not imply ray queries: it is also
+        // the result type of `hitObjectGetIntersection`, which is a ray tracing
+        // pipeline feature. Modules that really use ray queries are caught by
+        // the `RayQuery` type below, or by the per-entry-point check further on.
 
         for (_, &crate::Type { ref inner, .. }) in self.types.iter() {
             // Backends do not know whether these have vertex return - that is done by us
@@ -1011,6 +1042,8 @@ impl crate::Module {
                     uses_ray_tracing = true;
                 }
                 crate::TypeInner::RayQuery { .. } => uses.queries = true,
+                // Hit objects are only available in ray tracing pipelines.
+                crate::TypeInner::HitObject => uses.pipelines = true,
                 _ => {}
             }
         }

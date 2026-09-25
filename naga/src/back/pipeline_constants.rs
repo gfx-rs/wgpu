@@ -692,6 +692,12 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
         } => {
             adjust(query);
         }
+        Expression::HitObjectQuery {
+            ref mut hit_object,
+            query: _,
+        } => {
+            adjust(hit_object);
+        }
         Expression::CooperativeLoad { ref mut data, .. } => {
             adjust(&mut data.pointer);
             adjust(&mut data.stride);
@@ -718,6 +724,20 @@ fn adjust_block(new_pos: &HandleVec<Expression, Handle<Expression>>, block: &mut
 
 /// Replace every expression handle in `stmt` with its counterpart
 /// given by `new_pos`.
+fn adjust_reorder_hint(
+    hint: &mut Option<crate::ReorderHint>,
+    adjust: impl Fn(&mut Handle<Expression>),
+) {
+    if let Some(crate::ReorderHint {
+        ref mut hint,
+        ref mut bits,
+    }) = *hint
+    {
+        adjust(hint);
+        adjust(bits);
+    }
+}
+
 fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut Statement) {
     let adjust = |expr: &mut Handle<Expression>| {
         *expr = new_pos[*expr];
@@ -908,6 +928,36 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 crate::RayQueryFunction::Begin => {}
             }
         }
+        Statement::HitObject {
+            ref mut hit_object,
+            ref mut fun,
+        } => {
+            adjust(hit_object);
+            match *fun {
+                crate::HitObjectFunction::TraceRay {
+                    ref mut acceleration_structure,
+                    ref mut descriptor,
+                    ref mut payload,
+                } => {
+                    adjust(acceleration_structure);
+                    adjust(descriptor);
+                    adjust(payload);
+                }
+                crate::HitObjectFunction::RecordMiss { ref mut descriptor } => {
+                    adjust(descriptor);
+                }
+                crate::HitObjectFunction::RecordFromQuery { ref mut query } => {
+                    adjust(query);
+                }
+                crate::HitObjectFunction::RecordEmpty => {}
+                crate::HitObjectFunction::ExecuteShader { ref mut payload } => {
+                    adjust(payload);
+                }
+                crate::HitObjectFunction::Reorder { ref mut hint } => {
+                    adjust_reorder_hint(hint, adjust);
+                }
+            }
+        }
         Statement::CooperativeStore {
             ref mut target,
             ref mut data,
@@ -917,6 +967,13 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
             adjust(&mut data.stride);
         }
         Statement::RayPipelineFunction(ref mut func) => match *func {
+            crate::RayPipelineFunction::ReorderThread {
+                ref mut hint,
+                ref mut bits,
+            } => {
+                adjust(hint);
+                adjust(bits);
+            }
             crate::RayPipelineFunction::TraceRay {
                 ref mut acceleration_structure,
                 ref mut descriptor,

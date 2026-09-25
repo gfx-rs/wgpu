@@ -395,6 +395,7 @@ where
             let caps = if vertex_return { "<vertex_return>" } else { "" };
             write!(out, "ray_query{caps}")?
         }
+        TypeInner::HitObject => write!(out, "hit_object")?,
     }
 
     Ok(())

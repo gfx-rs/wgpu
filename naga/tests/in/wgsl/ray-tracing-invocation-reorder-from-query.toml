@@ -1,0 +1,6 @@
+capabilities = "RAY_TRACING_PIPELINE | RAY_TRACING_INVOCATION_REORDER | RAY_QUERY"
+targets = "SPIRV"
+
+[spv]
+version = [1, 4]
+capabilities = ["RayTracingKHR", "ShaderInvocationReorderEXT", "RayQueryKHR"]
