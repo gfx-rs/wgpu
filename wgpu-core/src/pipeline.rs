@@ -27,9 +27,7 @@ use crate::{
     },
     pipeline_cache,
     resource::{InvalidResourceError, Labeled, ResourceState, TrackingData},
-    resource_log,
-    validation::{self, ShaderMetaData},
-    Label, LabelHelpers as _,
+    resource_log, validation, FastHashSet, Label, LabelHelpers as _,
 };
 
 /// Information about buffer bindings, which
@@ -68,9 +66,24 @@ pub type ShaderModuleDescriptorPassthrough<'a> =
     wgt::CreateShaderModuleDescriptorPassthrough<'a, Label<'a>>;
 
 #[derive(Debug)]
-pub(crate) struct ShaderModuleState {
-    pub(crate) raw: Box<dyn hal::DynShaderModule>,
-    pub(crate) interface: ShaderMetaData,
+pub struct PassthroughInterface {
+    pub entry_point_names: FastHashSet<String>,
+}
+
+// Most shaders will use a standard interface which is very large.
+// Passthrough shaders have a much smaller interface. No reason to
+// box the standard interface though.
+#[expect(clippy::large_enum_variant)]
+#[derive(Debug)]
+pub enum ShaderModuleState {
+    NagaModule {
+        hal: hal::NagaShader,
+        runtime_checks: wgt::ShaderRuntimeChecks,
+    },
+    Passthrough {
+        raw: Box<dyn hal::DynShaderModule>,
+        interface: PassthroughInterface,
+    },
 }
 
 #[derive(Debug)]
@@ -99,8 +112,11 @@ impl Drop for ShaderModule {
         else {
             return;
         };
-        unsafe {
-            self.device.raw().destroy_shader_module(state.raw);
+        match state {
+            ShaderModuleState::NagaModule { .. } => (),
+            ShaderModuleState::Passthrough { raw, .. } => unsafe {
+                self.device.raw().destroy_shader_module(raw);
+            },
         }
     }
 }
@@ -160,11 +176,11 @@ impl ShaderModule {
         entry_point: Option<&str>,
     ) -> Result<String, validation::StageError> {
         let state = self.state()?;
-        match state.interface {
-            ShaderMetaData::Interface(ref interface) => {
+        match state {
+            ShaderModuleState::NagaModule { ref interface, .. } => {
                 interface.finalize_entry_point_name(stage, entry_point)
             }
-            ShaderMetaData::Passthrough(ref interface) => {
+            ShaderModuleState::Passthrough { ref interface, .. } => {
                 finalize_passthrough_entry_point_name(interface, entry_point)
             }
         }
@@ -172,7 +188,7 @@ impl ShaderModule {
 }
 
 fn finalize_passthrough_entry_point_name(
-    interface: &validation::PassthroughInterface,
+    interface: &PassthroughInterface,
     entry_point: Option<&str>,
 ) -> Result<String, validation::StageError> {
     if let Some(ep) = entry_point {
@@ -1289,8 +1305,8 @@ impl RenderPipeline {
 mod tests {
     use super::*;
 
-    fn passthrough_interface(entry_point_names: &[&str]) -> validation::PassthroughInterface {
-        validation::PassthroughInterface {
+    fn passthrough_interface(entry_point_names: &[&str]) -> PassthroughInterface {
+        PassthroughInterface {
             entry_point_names: entry_point_names
                 .iter()
                 .map(|name| (*name).to_owned())
