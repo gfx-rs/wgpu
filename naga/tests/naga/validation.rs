@@ -415,6 +415,76 @@ fn builtin_cross_product_args() {
 }
 
 #[test]
+fn builtin_sign_unsigned_arg() {
+    use naga::{MathFunction, Type, TypeInner, VectorSize};
+
+    fn variant(scalar: Scalar) -> Result<ModuleInfo, Box<valid::ValidationError>> {
+        let span = naga::Span::default();
+        let mut module = Module::default();
+        let ty_vec4 = module.types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Vector {
+                    size: VectorSize::Quad,
+                    scalar,
+                },
+            },
+            span,
+        );
+
+        let mut fun = Function {
+            result: Some(naga::ir::FunctionResult {
+                ty: ty_vec4,
+                binding: None,
+            }),
+            ..Function::default()
+        };
+        let ex_zero = fun.expressions.append(Expression::ZeroValue(ty_vec4), span);
+        let ex_sign = fun.expressions.append(
+            Expression::Math {
+                fun: MathFunction::Sign,
+                arg: ex_zero,
+                arg1: None,
+                arg2: None,
+                arg3: None,
+            },
+            span,
+        );
+
+        fun.body.push(
+            naga::Statement::Emit(naga::Range::new_from_bounds(ex_sign, ex_sign)),
+            span,
+        );
+        fun.body.push(
+            naga::Statement::Return {
+                value: Some(ex_sign),
+            },
+            span,
+        );
+
+        module.functions.append(fun, span);
+
+        valid::Validator::new(ValidationFlags::default(), Capabilities::all())
+            .validate(&module)
+            .map_err(|err| Box::new(err.into_inner()))
+    }
+
+    variant(Scalar::I32).expect("module should validate");
+    assert!(matches!(
+        variant(Scalar::U32).map_err(|e| *e),
+        Err(valid::ValidationError::Function {
+            source: valid::FunctionError::Expression {
+                source: valid::ExpressionError::Type(
+                    naga::proc::ResolveError::BuiltinArgumentsInvalid(_)
+                ),
+                ..
+            },
+            ..
+        })
+    ));
+}
+
+#[test]
 fn incompatible_interpolation_and_sampling_types() {
     use dummy_interpolation_shader::DummyInterpolationShader;
 
