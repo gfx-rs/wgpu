@@ -1,0 +1,6 @@
+targets = "METAL"
+
+# `restricted_image_load` needs this to exercise the `clamped_lod` temporary
+# that `put_cache_restricted_level` emits alongside the load.
+[bounds_check_policies]
+image_load = "Restrict"
