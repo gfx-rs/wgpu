@@ -1057,24 +1057,22 @@ impl crate::Device for super::Device {
                 .max(self.shared.private_caps.scratch_buffer_alignment as u64);
         }
 
-        let transient = desc.memory_flags.contains(crate::MemoryFlags::TRANSIENT);
-        let allocator = if transient {
-            &self.transient_mem_allocator
-        } else {
-            &self.mem_allocator
-        };
-        let allocation = allocator
-            .lock()
-            .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-                name,
-                requirements: vk::MemoryRequirements {
-                    memory_type_bits: requirements.memory_type_bits & self.valid_ash_memory_types,
-                    ..requirements
+        let allocation = self
+            .mem_allocator
+            .allocate(
+                super::MemoryPool::from_memory_flags(desc.memory_flags),
+                &gpu_allocator::vulkan::AllocationCreateDesc {
+                    name,
+                    requirements: vk::MemoryRequirements {
+                        memory_type_bits: requirements.memory_type_bits
+                            & self.valid_ash_memory_types,
+                        ..requirements
+                    },
+                    location,
+                    linear: true, // Buffers are always linear
+                    allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
                 },
-                location,
-                linear: true, // Buffers are always linear
-                allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
-            })
+            )
             .inspect_err(|_| {
                 unsafe { self.shared.raw.destroy_buffer(raw, None) };
             })?;
@@ -1096,15 +1094,12 @@ impl crate::Device for super::Device {
         self.counters.buffer_memory.add(allocation.size() as isize);
         self.counters.buffers.add(1);
 
-        let backing = if transient {
-            super::BufferMemoryBacking::ManagedTransient(allocation)
-        } else {
-            super::BufferMemoryBacking::Managed(allocation)
-        };
         Ok((
             super::Buffer {
                 raw,
-                ownership: super::BufferOwnership::Managed(Mutex::new(backing)),
+                ownership: super::BufferOwnership::Managed(Mutex::new(
+                    super::BufferMemoryBacking::Managed(allocation),
+                )),
             },
             desc.size,
         ))
@@ -1117,13 +1112,7 @@ impl crate::Device for super::Device {
                 self.counters.buffer_memory.sub(allocation.size() as isize);
                 match allocation {
                     super::BufferMemoryBacking::Managed(allocation) => {
-                        let result = self.mem_allocator.lock().free(allocation);
-                        if let Err(err) = result {
-                            log::warn!("Failed to free buffer allocation: {err}");
-                        }
-                    }
-                    super::BufferMemoryBacking::ManagedTransient(allocation) => {
-                        let result = self.transient_mem_allocator.lock().free(allocation);
+                        let result = self.mem_allocator.free(allocation);
                         if let Err(err) = result {
                             log::warn!("Failed to free buffer allocation: {err}");
                         }
@@ -1158,9 +1147,7 @@ impl crate::Device for super::Device {
             crate::hal_usage_error("tried to map external buffer")
         };
         let mut allocation = allocation.lock();
-        let (super::BufferMemoryBacking::Managed(ref mut allocation)
-        | super::BufferMemoryBacking::ManagedTransient(ref mut allocation)) = *allocation
-        else {
+        let super::BufferMemoryBacking::Managed(ref mut allocation) = *allocation else {
             crate::hal_usage_error("tried to map externally created buffer")
         };
         let is_coherent = allocation
@@ -1238,18 +1225,20 @@ impl crate::Device for super::Device {
 
         let allocation = self
             .mem_allocator
-            .lock()
-            .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-                name,
-                requirements: vk::MemoryRequirements {
-                    memory_type_bits: image.requirements.memory_type_bits
-                        & self.valid_ash_memory_types,
-                    ..image.requirements
+            .allocate(
+                super::MemoryPool::from_memory_flags(desc.memory_flags),
+                &gpu_allocator::vulkan::AllocationCreateDesc {
+                    name,
+                    requirements: vk::MemoryRequirements {
+                        memory_type_bits: image.requirements.memory_type_bits
+                            & self.valid_ash_memory_types,
+                        ..image.requirements
+                    },
+                    location: gpu_allocator::MemoryLocation::GpuOnly,
+                    linear: false,
+                    allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
                 },
-                location: gpu_allocator::MemoryLocation::GpuOnly,
-                linear: false,
-                allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
-            })
+            )
             .inspect_err(|_| {
                 unsafe { self.shared.raw.destroy_image(image.raw, None) };
             })?;
@@ -1285,7 +1274,7 @@ impl crate::Device for super::Device {
         match texture.memory {
             super::TextureMemory::Allocation(allocation) => {
                 self.counters.texture_memory.sub(allocation.size() as isize);
-                let result = self.mem_allocator.lock().free(allocation);
+                let result = self.mem_allocator.free(allocation);
                 if let Err(err) = result {
                     log::warn!("Failed to free texture allocation: {err}");
                 }
@@ -2921,14 +2910,17 @@ impl crate::Device for super::Device {
 
             let allocation = self
                 .mem_allocator
-                .lock()
-                .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-                    name,
-                    requirements,
-                    location: gpu_allocator::MemoryLocation::GpuOnly,
-                    linear: true, // Buffers are always linear
-                    allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
-                })
+                .allocate(
+                    super::MemoryPool::General,
+                    &gpu_allocator::vulkan::AllocationCreateDesc {
+                        name,
+                        requirements,
+                        location: gpu_allocator::MemoryLocation::GpuOnly,
+                        linear: true, // Buffers are always linear
+                        allocation_scheme:
+                            gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
+                    },
+                )
                 .inspect_err(|_| {
                     self.shared.raw.destroy_buffer(raw_buffer, None);
                 })?;
@@ -3012,10 +3004,7 @@ impl crate::Device for super::Device {
             self.shared
                 .raw
                 .destroy_buffer(acceleration_structure.buffer, None);
-            let result = self
-                .mem_allocator
-                .lock()
-                .free(acceleration_structure.allocation);
+            let result = self.mem_allocator.free(acceleration_structure.allocation);
             if let Err(err) = result {
                 log::warn!("Failed to free buffer acceleration structure: {err}");
             }
@@ -3034,46 +3023,7 @@ impl crate::Device for super::Device {
     }
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
-        let mut allocations = Vec::new();
-        let mut blocks = Vec::new();
-        let mut total_allocated_bytes = 0;
-        let mut total_reserved_bytes = 0;
-
-        for allocator in [&self.mem_allocator, &self.transient_mem_allocator] {
-            let report = allocator.lock().generate_report();
-
-            // Each block's range indexes into its own report's allocation list.
-            let allocation_base = allocations.len();
-            allocations.extend(
-                report
-                    .allocations
-                    .into_iter()
-                    .map(|alloc| wgt::AllocationReport {
-                        name: alloc.name,
-                        offset: alloc.offset,
-                        size: alloc.size,
-                    }),
-            );
-            blocks.extend(
-                report
-                    .blocks
-                    .into_iter()
-                    .map(|block| wgt::MemoryBlockReport {
-                        size: block.size,
-                        allocations: (block.allocations.start + allocation_base)
-                            ..(block.allocations.end + allocation_base),
-                    }),
-            );
-            total_allocated_bytes += report.total_allocated_bytes;
-            total_reserved_bytes += report.total_capacity_bytes;
-        }
-
-        Some(wgt::AllocatorReport {
-            allocations,
-            blocks,
-            total_allocated_bytes,
-            total_reserved_bytes,
-        })
+        Some(self.mem_allocator.generate_report())
     }
 
     fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>) {

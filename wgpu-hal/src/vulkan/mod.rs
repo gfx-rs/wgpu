@@ -31,6 +31,7 @@ mod descriptor;
 mod device;
 mod drm;
 mod instance;
+mod memory;
 mod pnext_chain;
 mod sampler;
 mod semaphore_list;
@@ -59,6 +60,9 @@ use naga::FastHashMap;
 use wgt::InternalCounter;
 
 use semaphore_list::SemaphoreList;
+
+pub use memory::MemoryAllocation;
+use memory::{MemoryAllocators, MemoryPool};
 
 use crate::vulkan::semaphore_list::{SemaphoreListMode, SemaphoreType};
 
@@ -661,8 +665,7 @@ impl Drop for DeviceShared {
     reason = "needs work to not be disastrously verbose"
 )]
 pub struct Device {
-    mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
-    transient_mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
+    mem_allocator: MemoryAllocators,
     desc_allocator: Mutex<descriptor::DescriptorAllocator>,
     valid_ash_memory_types: u32,
     naga_options: naga::back::spv::Options<'static>,
@@ -797,9 +800,7 @@ impl Drop for Queue {
 }
 #[derive(Debug)]
 enum BufferMemoryBacking {
-    Managed(gpu_allocator::vulkan::Allocation),
-    /// Like [`Self::Managed`], but from [`Device::transient_mem_allocator`].
-    ManagedTransient(gpu_allocator::vulkan::Allocation),
+    Managed(MemoryAllocation),
     VulkanMemory {
         memory: vk::DeviceMemory,
         offset: u64,
@@ -809,19 +810,19 @@ enum BufferMemoryBacking {
 impl BufferMemoryBacking {
     fn memory(&self) -> vk::DeviceMemory {
         match self {
-            Self::Managed(m) | Self::ManagedTransient(m) => unsafe { m.memory() },
+            Self::Managed(m) => unsafe { m.memory() },
             Self::VulkanMemory { memory, .. } => *memory,
         }
     }
     fn offset(&self) -> u64 {
         match self {
-            Self::Managed(m) | Self::ManagedTransient(m) => m.offset(),
+            Self::Managed(m) => m.offset(),
             Self::VulkanMemory { offset, .. } => *offset,
         }
     }
     fn size(&self) -> u64 {
         match self {
-            Self::Managed(m) | Self::ManagedTransient(m) => m.size(),
+            Self::Managed(m) => m.size(),
             Self::VulkanMemory { size, .. } => *size,
         }
     }
@@ -909,7 +910,7 @@ impl crate::DynBuffer for Buffer {}
 pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
-    allocation: gpu_allocator::vulkan::Allocation,
+    allocation: MemoryAllocation,
     compacted_size_query: Option<vk::QueryPool>,
 }
 
@@ -945,7 +946,7 @@ impl AccelerationStructure {
 #[derive(Debug)]
 pub enum TextureMemory {
     // shared memory in GPU allocator (owned by wgpu-hal)
-    Allocation(gpu_allocator::vulkan::Allocation),
+    Allocation(MemoryAllocation),
 
     // dedicated memory (owned by wgpu-hal)
     Dedicated(vk::DeviceMemory),
