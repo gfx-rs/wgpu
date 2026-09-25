@@ -99,7 +99,139 @@ impl From<Features> for FeatureBits {
     }
 }
 
-crate::bitflags_array! {
+/// Maps a feature's `#[web(...)]` attribute to whether the feature is allowed on the web
+/// backend, rejecting a missing or unrecognized value.
+macro_rules! web_attr_allows {
+    ($flag:tt; "allow") => {
+        true
+    };
+    ($flag:tt; "ignore") => {
+        false
+    };
+    ($flag:tt; $other:tt) => {
+        compile_error!(concat!(
+            "`#[web(",
+            stringify!($other),
+            ")]` on `",
+            stringify!($flag),
+            "`: the value must be `\"allow\"` or `\"ignore\"`",
+        ))
+    };
+    ($flag:tt;) => {
+        compile_error!(concat!(
+            "WebGPU feature `",
+            stringify!($flag),
+            "` needs a `#[web(\"allow\")]` or `#[web(\"ignore\")]` attribute",
+        ))
+    };
+}
+
+/// Generates what the `web` attribute contributes for one feature struct. Only
+/// `FeaturesWebGPU` features carry the attribute.
+macro_rules! features_web {
+    (FeaturesWebGPU; $($flag:tt [$($web:tt)?])*) => {
+        impl FeaturesWebGPU {
+            /// The features that the web backend will allow through from an underlying
+            /// browser WebGPU implementation.
+            pub const ALLOWED_ON_WEB_BACKEND: Self = Self::from_bits_retain(
+                0 $(| if web_attr_allows!($flag; $($web)?) {
+                    FeaturesWebGPU::$flag.bits()
+                } else {
+                    0
+                })*
+            );
+        }
+    };
+    ($inner_name:tt; $($flag:tt [$($web:tt)?])*) => {
+        $($(
+            compile_error!(concat!(
+                "`#[web(", stringify!($web), ")]` on `", stringify!($flag),
+                "`: only `FeaturesWebGPU` features have a `web` attribute, and `",
+                stringify!($flag), "` is a `", stringify!($inner_name), "` feature",
+            ));
+        )?)*
+    };
+}
+
+/// Defines the feature bitflags, using [`bitflags_array`](crate::bitflags_array) for storage.
+///
+/// On top of what `bitflags_array!` accepts, each flag carries feature-specific attributes,
+/// written after its doc comments. These are consumed here rather than passed on to
+/// `bitflags_array!`. Adding another one means adding a matcher for it, in a fixed position
+/// relative to the existing ones, and generating whatever it should produce.
+///
+/// `#[name("kebab-case-name", "alias", ...)]` gives the names that the WebGPU API uses for
+/// the feature: the name from the spec, for features in `FeaturesWebGPU`, and otherwise a
+/// `wgpu-` prefixed name. It is required on every feature.
+///
+/// `#[web("allow")]` or `#[web("ignore")]` controls whether `wgpu`'s WebGPU backend will
+/// offer the feature when the underlying WebGPU implementation does. Typically should be
+/// `allow`, but `ignore` may be appropriate in cases where missing logic in the WebGPU
+/// backend means the feature will not work via `wgpu` even though it is supported by the
+/// underlying backend, or where there is concern about interactions or confusion with
+/// `wgpu` native features having subtly different API or behavior.
+macro_rules! features {
+    (
+        $(#[$outer:meta])*
+        pub struct ($name:ident, $name_bits:ident): [$T:ty; $Len:expr];
+
+        $(
+            $(#[$bit_outer:meta])*
+            $vis:vis struct $inner_name:ident $lower_inner_name:ident {
+                $(
+                    $(#[doc $($args:tt)*])*
+                    #[name($str_name:literal $(, $alias:literal)*)]
+                    $(#[web($web:tt)])?
+                    const $Flag:tt = $value:expr;
+                )*
+            }
+        )*
+    ) => {
+        crate::bitflags_array! {
+            $(#[$outer])*
+            pub struct ($name, $name_bits): [$T; $Len];
+
+            $(
+                $(#[$bit_outer])*
+                $vis struct $inner_name $lower_inner_name {
+                    $(
+                        $(#[doc $($args)*])*
+                        const $Flag = $value;
+                    )*
+                }
+            )*
+        }
+
+        $( features_web! { $inner_name; $($Flag [$($web)?])* } )*
+
+        // Parses kebab-case feature names (i.e. the names given in the spec, for features
+        // in FeaturesWebGPU, and otherwise the `wgpu-` prefixed names).
+        impl FromStr for $name {
+            type Err = ();
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(match s {
+                    $($($str_name $(| $alias)* => Self::$Flag,)*)*
+                    _ => return Err(()),
+                })
+            }
+        }
+
+        impl $name {
+            #[doc = concat!("If the argument is a single [`", stringify!($name), "`] flag,")]
+            /// returns the corresponding `kebab-case` flag name, otherwise `None`.
+            #[must_use]
+            pub fn as_str(&self) -> Option<&'static str> {
+                Some(match *self {
+                    $($(Self::$Flag => $str_name,)*)*
+                    _ => return None,
+                })
+            }
+        }
+    };
+}
+
+features! {
     /// Features that are not guaranteed to be supported.
     ///
     /// These are either part of the webgpu standard, or are extension features supported by
@@ -1067,6 +1199,7 @@ crate::bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("depth-clip-control")]
+        #[web("allow")]
         const DEPTH_CLIP_CONTROL = WEBGPU_FEATURE_DEPTH_CLIP_CONTROL;
 
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
@@ -1082,6 +1215,7 @@ crate::bitflags_array! {
         ///
         /// [`TextureFormat::Depth32FloatStencil8`]: super::TextureFormat::Depth32FloatStencil8
         #[name("depth32float-stencil8")]
+        #[web("allow")]
         const DEPTH32FLOAT_STENCIL8 = WEBGPU_FEATURE_DEPTH32FLOAT_STENCIL8;
 
         /// Enables BCn family of compressed textures. All BCn textures use 4x4 pixel blocks
@@ -1102,6 +1236,7 @@ crate::bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("texture-compression-bc")]
+        #[web("allow")]
         const TEXTURE_COMPRESSION_BC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC;
 
 
@@ -1117,6 +1252,7 @@ crate::bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("texture-compression-bc-sliced-3d")]
+        #[web("allow")]
         const TEXTURE_COMPRESSION_BC_SLICED_3D = WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D;
 
         /// Enables ETC family of compressed textures. All ETC textures use 4x4 pixel blocks.
@@ -1135,6 +1271,7 @@ crate::bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("texture-compression-etc2")]
+        #[web("allow")]
         const TEXTURE_COMPRESSION_ETC2 = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2;
 
         /// Enables ASTC family of compressed textures. ASTC textures use pixel blocks varying from 4x4 to 12x12.
@@ -1156,6 +1293,7 @@ crate::bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("texture-compression-astc")]
+        #[web("allow")]
         const TEXTURE_COMPRESSION_ASTC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC;
 
 
@@ -1175,6 +1313,7 @@ crate::bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("texture-compression-astc-sliced-3d")]
+        #[web("allow")]
         const TEXTURE_COMPRESSION_ASTC_SLICED_3D = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D;
 
         /// Enables use of Timestamp Queries. These queries tell the current gpu timestamp when
@@ -1207,6 +1346,7 @@ crate::bitflags_array! {
         #[doc = link_to_wgpu_docs!(["`CommandEncoder::resolve_query_set`"]: "struct.CommandEncoder.html#method.resolve_query_set")]
         #[doc = link_to_wgpu_docs!(["`Queue::get_timestamp_period`"]: "struct.Queue.html#method.get_timestamp_period")]
         #[name("timestamp-query")]
+        #[web("allow")]
         const TIMESTAMP_QUERY = WEBGPU_FEATURE_TIMESTAMP_QUERY;
 
         /// Allows non-zero value for the `first_instance` member in indirect draw calls.
@@ -1228,6 +1368,7 @@ crate::bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("indirect-first-instance")]
+        #[web("allow")]
         const INDIRECT_FIRST_INSTANCE = WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE;
 
         /// Allows shaders to use 16-bit floating point types. You may use them uniform buffers,
@@ -1244,6 +1385,7 @@ crate::bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("shader-f16")]
+        #[web("allow")]
         const SHADER_F16 = WEBGPU_FEATURE_SHADER_F16;
 
         /// Allows for usage of textures of format [`TextureFormat::Rg11b10Ufloat`] as a render target
@@ -1258,6 +1400,7 @@ crate::bitflags_array! {
         ///
         /// [`TextureFormat::Rg11b10Ufloat`]: super::TextureFormat::Rg11b10Ufloat
         #[name("rg11b10ufloat-renderable")]
+        #[web("allow")]
         const RG11B10UFLOAT_RENDERABLE = WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE;
 
         /// Allows the [`TextureUsages::STORAGE_BINDING`] usage on textures with format [`TextureFormat::Bgra8Unorm`]
@@ -1273,6 +1416,7 @@ crate::bitflags_array! {
         /// [`TextureFormat::Bgra8Unorm`]: super::TextureFormat::Bgra8Unorm
         /// [`TextureUsages::STORAGE_BINDING`]: super::TextureUsages::STORAGE_BINDING
         #[name("bgra8unorm-storage")]
+        #[web("allow")]
         const BGRA8UNORM_STORAGE = WEBGPU_FEATURE_BGRA8UNORM_STORAGE;
 
 
@@ -1287,6 +1431,7 @@ crate::bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("float32-filterable")]
+        #[web("allow")]
         const FLOAT32_FILTERABLE = WEBGPU_FEATURE_FLOAT32_FILTERABLE;
 
         /// Allows textures with formats "r32float", "rg32float", and "rgba32float" to be blendable.
@@ -1295,6 +1440,7 @@ crate::bitflags_array! {
         /// - Vulkan
         /// - WebGPU
         #[name("float32-blendable")]
+        #[web("allow")]
         const FLOAT32_BLENDABLE = WEBGPU_FEATURE_FLOAT32_BLENDABLE;
 
         /// Allows two outputs from a shader to be used for blending.
@@ -1311,6 +1457,7 @@ crate::bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("dual-source-blending")]
+        #[web("allow")]
         const DUAL_SOURCE_BLENDING = WEBGPU_FEATURE_DUAL_SOURCE_BLENDING;
 
         /// Allows the use of `@builtin(clip_distances)` in WGSL.
@@ -1323,6 +1470,7 @@ crate::bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("clip-distances")]
+        #[web("allow")]
         const CLIP_DISTANCES = WEBGPU_FEATURE_CLIP_DISTANCES;
 
         /// Allows the use of immediate data: small, fast bits of memory that can be updated
@@ -1356,6 +1504,7 @@ crate::bitflags_array! {
         #[doc = link_to_wgpu_docs!(["`RenderPass::set_immediates`"]: "struct.RenderPass.html#method.set_immediates")]
         /// [`Limits::max_immediate_size`]: super::Limits
         #[name("immediates")]
+        #[web("allow")]
         const IMMEDIATES = WEBGPU_FEATURE_IMMEDIATES;
 
         /// Enables `builtin(primitive_index)` in fragment shaders.
@@ -1374,6 +1523,7 @@ crate::bitflags_array! {
         /// WebGPU-defined name, and `shader-primitive-index` is accepted to
         /// remain compatible with previous wgpu behavior.
         #[name("primitive-index", "shader-primitive-index")]
+        #[web("allow")]
         const PRIMITIVE_INDEX = WEBGPU_FEATURE_PRIMITIVE_INDEX;
 
         /// Allows `TextureView`s to rearrange or replace the color components
@@ -1389,6 +1539,7 @@ crate::bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("texture-component-swizzle")]
+        #[web("allow")]
         const TEXTURE_COMPONENT_SWIZZLE = WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE;
     }
 }
@@ -1484,6 +1635,15 @@ mod tests {
                 "{hex}"
             );
         }
+    }
+
+    #[test]
+    fn allowed_on_web_backend() {
+        // Every WebGPU feature is currently allowed on the web backend.
+        assert_eq!(
+            FeaturesWebGPU::ALLOWED_ON_WEB_BACKEND,
+            FeaturesWebGPU::all()
+        );
     }
 
     #[test]
