@@ -18,15 +18,6 @@ OpDecorate %69 BuiltIn LocalInvocationIndex
 OpMemberDecorate %71 0 BuiltIn Position
 OpDecorate %71 Block
 OpDecorate %77 BuiltIn PrimitiveLineIndicesEXT
-OpMemberDecorate %4 0 Offset 0
-OpMemberDecorate %7 0 Offset 0
-OpMemberDecorate %9 0 Offset 0
-OpDecorate %11 ArrayStride 16
-OpDecorate %13 ArrayStride 8
-OpMemberDecorate %15 0 Offset 0
-OpMemberDecorate %15 1 Offset 32
-OpMemberDecorate %15 2 Offset 40
-OpMemberDecorate %15 3 Offset 44
 OpDecorate %26 BuiltIn LocalInvocationIndex
 OpDecorate %81 BuiltIn LocalInvocationIndex
 %2 = OpTypeVoid
