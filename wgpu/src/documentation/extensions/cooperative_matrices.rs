@@ -411,10 +411,13 @@ Implementations must validate the following where possible:
 - The `wgpu_cooperative_matrix` WGSL extension is enabled if any cooperative matrix types
   or builtins are used.
 - Tile sizes `(M, N, K)` and scalar types `(ab_type, cr_type)` match at least one
-  [`CooperativeMatrixProperties`] entry for the current adapter/backend.
+  [`CooperativeMatrixProperties`] entry for the current adapter/backend. Shader module
+  creation rejects a cooperative matrix type whose columns × rows shape does not appear
+  in those entries.
 - Workgroup size, shader stage, and other pipeline configuration constraints required
   by the backend are satisfied.
 - The operands of `coopMultiplyAdd` have matching roles and are shaped M×K, K×N and M×N.
+- A and B use the same component type. C may use a different accumulator type.
 
 The following are examples of **undefined behavior** (non-exhaustive):
 

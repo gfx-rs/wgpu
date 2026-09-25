@@ -235,8 +235,6 @@ pub enum Error {
     UnsupportedRayTracing,
     #[error("cooperative matrix is not supported prior to MSL 2.3")]
     UnsupportedCooperativeMatrix,
-    #[error("cooperative matrix shape {columns}x{rows} is not supported, Metal only has 8x8 simdgroup matrices")]
-    UnsupportedCooperativeMatrixShape { columns: u32, rows: u32 },
     #[error("debugPrintf is not supported prior to MSL 3.2")]
     UnsupportedDebugPrintf,
     #[error("overrides should not be present at this stage")]

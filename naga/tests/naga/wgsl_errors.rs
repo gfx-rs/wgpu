@@ -5355,6 +5355,48 @@ fn cooperative_matrix_shape_mismatch() {
     }
 }
 
+#[test]
+fn cooperative_matrix_component_type_mismatch() {
+    check_validation! {
+        "enable f16;
+         enable wgpu_cooperative_matrix;
+         @compute @workgroup_size(32)
+         fn main() {
+             var a: coop_mat8x8<f16, A>;
+             var b: coop_mat8x8<f32, B>;
+             var c: coop_mat8x8<f32, C>;
+             c = coopMultiplyAdd(a, b, c);
+         }":
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::Expression {
+                    source: naga::valid::ExpressionError::InvalidCooperativeComponentType { .. },
+                    ..
+                },
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::COOPERATIVE_MATRIX | naga::valid::Capabilities::SHADER_FLOAT16
+    }
+}
+
+#[test]
+fn cooperative_matrix_mixed_accumulator_type() {
+    // C may be a wider accumulator than A and B.
+    no_validation_error(
+        "enable f16;
+         enable wgpu_cooperative_matrix;
+         @compute @workgroup_size(32)
+         fn main() {
+             var a: coop_mat16x8<f16, A>;
+             var b: coop_mat16x16<f16, B>;
+             var c: coop_mat16x8<f32, C>;
+             c = coopMultiplyAdd(a, b, c);
+         }",
+        naga::valid::Capabilities::COOPERATIVE_MATRIX | naga::valid::Capabilities::SHADER_FLOAT16,
+    );
+}
+
 /// Tests for mesh shader extension validation via WGSL parsing.
 ///
 /// Some mesh shader features can only be tested at parse-level in WGSL due to

@@ -124,6 +124,8 @@ pub enum TypeError {
     InvalidArrayBaseType(Handle<crate::Type>),
     #[error("Matrix elements must always be floating-point types")]
     MatrixElementNotFloat,
+    #[error("cooperative matrix shape {columns}x{rows} is not supported")]
+    UnsupportedCooperativeMatrixShape { columns: u32, rows: u32 },
     #[error("The constant {0:?} is specialized, and cannot be used as an array size")]
     UnsupportedSpecializedArrayLength(Handle<crate::Constant>),
     #[error("{} of dimensionality {dim:?} and class {class:?} are not supported", if *.arrayed {"Arrayed images"} else {"Images"})]
@@ -450,12 +452,21 @@ impl super::Validator {
                 type_info
             }
             Ti::CooperativeMatrix {
-                columns: _,
-                rows: _,
+                columns,
+                rows,
                 scalar,
                 role: _,
             } => {
                 self.require_type_capability(Capabilities::COOPERATIVE_MATRIX)?;
+                if !self
+                    .cooperative_matrix_shapes
+                    .contains(&super::CooperativeMatrixShape { columns, rows })
+                {
+                    return Err(TypeError::UnsupportedCooperativeMatrixShape {
+                        columns: columns as u32,
+                        rows: rows as u32,
+                    });
+                }
                 // Allow f16 (width 2) and f32 (width 4) for cooperative matrices
                 if scalar.kind != crate::ScalarKind::Float
                     || (scalar.width != 2 && scalar.width != 4)

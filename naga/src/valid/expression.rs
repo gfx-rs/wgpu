@@ -154,14 +154,23 @@ pub enum ExpressionError {
     UnsupportedWidth(crate::MathFunction, crate::ScalarKind, crate::Bytes),
     #[error("Invalid operand for cooperative op")]
     InvalidCooperativeOperand(Handle<crate::Expression>),
-    #[error("Cooperative multiply-add operands must be shaped MxK, KxN and MxN, but A is {a_rows}x{a_columns}, B is {b_rows}x{b_columns} and C is {c_rows}x{c_columns}")]
+    #[error(
+        "cooperative multiply-add operands must be shaped KxM, NxK and NxM (columns x rows), but A is {a_columns}x{a_rows}, B is {b_columns}x{b_rows} and C is {c_columns}x{c_rows}"
+    )]
     InvalidCooperativeShapes {
-        a_rows: u32,
         a_columns: u32,
-        b_rows: u32,
+        a_rows: u32,
         b_columns: u32,
-        c_rows: u32,
+        b_rows: u32,
         c_columns: u32,
+        c_rows: u32,
+    },
+    #[error(
+        "cooperative multiply-add operands A and B must have the same component type, but A is {a_scalar:?} and B is {b_scalar:?}"
+    )]
+    InvalidCooperativeComponentType {
+        a_scalar: crate::Scalar,
+        b_scalar: crate::Scalar,
     },
     #[error("Shift amount exceeds the bit width of {lhs_type:?}")]
     ShiftAmountTooLarge {
@@ -1420,29 +1429,37 @@ impl super::Validator {
                 ShaderStages::COMPUTE
             }
             E::CooperativeMultiplyAdd { a, b, c } => {
-                let shape = |operand, expected_role| match resolver[operand] {
+                let operand = |operand, expected_role| match resolver[operand] {
                     Ti::CooperativeMatrix {
                         columns,
                         rows,
+                        scalar,
                         role,
-                        ..
-                    } if role == expected_role => Ok((rows as u32, columns as u32)),
+                    } if role == expected_role => Ok((columns as u32, rows as u32, scalar)),
                     ref other => {
                         log::debug!("{expected_role:?} operand type: {other:?}");
                         Err(ExpressionError::InvalidCooperativeOperand(operand))
                     }
                 };
-                let (a_rows, a_columns) = shape(a, crate::CooperativeRole::A)?;
-                let (b_rows, b_columns) = shape(b, crate::CooperativeRole::B)?;
-                let (c_rows, c_columns) = shape(c, crate::CooperativeRole::C)?;
+                let (a_columns, a_rows, a_scalar) = operand(a, crate::CooperativeRole::A)?;
+                let (b_columns, b_rows, b_scalar) = operand(b, crate::CooperativeRole::B)?;
+                let (c_columns, c_rows, _) = operand(c, crate::CooperativeRole::C)?;
+                // A and B share one component type. C may be a wider accumulator.
+                if a_scalar != b_scalar {
+                    return Err(ExpressionError::InvalidCooperativeComponentType {
+                        a_scalar,
+                        b_scalar,
+                    });
+                }
+                // Columns x rows, matching `coop_mat{columns}x{rows}`: A is KxM, B is NxK, C is NxM.
                 if a_columns != b_rows || a_rows != c_rows || b_columns != c_columns {
                     return Err(ExpressionError::InvalidCooperativeShapes {
-                        a_rows,
                         a_columns,
-                        b_rows,
+                        a_rows,
                         b_columns,
-                        c_rows,
+                        b_rows,
                         c_columns,
+                        c_rows,
                     });
                 }
                 ShaderStages::COMPUTE

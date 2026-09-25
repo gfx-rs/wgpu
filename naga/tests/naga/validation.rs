@@ -1947,33 +1947,65 @@ fn functions_share_name() {
 }
 
 #[test]
-fn no_rectangular_cooperative_matrix_in_msl() {
-    let module = naga::front::wgsl::parse_str(
-        "enable wgpu_cooperative_matrix;
-         @compute @workgroup_size(32)
-         fn main() {
-             var a: coop_mat16x8<f32, A>;
-         }",
-    )
-    .unwrap();
+fn cooperative_matrix_shapes_come_from_the_caller() {
+    fn module(ty: &str) -> naga::Module {
+        naga::front::wgsl::parse_str(&format!(
+            "enable wgpu_cooperative_matrix;
+             @compute @workgroup_size(32)
+             fn main() {{
+                 var a: {ty}<f32, A>;
+             }}"
+        ))
+        .unwrap()
+    }
 
-    let module_info =
-        valid::Validator::new(ValidationFlags::default(), Capabilities::COOPERATIVE_MATRIX)
-            .validate(&module)
-            .unwrap();
+    let caps = Capabilities::COOPERATIVE_MATRIX;
+    valid::Validator::new(ValidationFlags::default(), caps)
+        .validate(&module("coop_mat16x8"))
+        .expect("COOPERATIVE_MATRIX starts with every IR shape");
 
-    let options = naga::back::msl::Options {
-        lang_version: (2, 3),
-        ..Default::default()
-    };
-    let err = naga::back::msl::write_string(&module, &module_info, &options, &Default::default())
-        .expect_err("Metal only has 8x8 simdgroup matrices");
-
+    let err = valid::Validator::new(ValidationFlags::default(), caps)
+        .cooperative_matrix_shapes([])
+        .validate(&module("coop_mat8x8"))
+        .expect_err("an empty allow-list supports no shapes");
     assert!(matches!(
-        err,
-        naga::back::msl::Error::UnsupportedCooperativeMatrixShape {
-            columns: 16,
-            rows: 8
+        err.as_inner(),
+        valid::ValidationError::Type {
+            source: valid::TypeError::UnsupportedCooperativeMatrixShape {
+                columns: 8,
+                rows: 8,
+            },
+            ..
         }
     ));
+
+    let only_8x8 = [valid::CooperativeMatrixShape {
+        columns: naga::CooperativeSize::Eight,
+        rows: naga::CooperativeSize::Eight,
+    }];
+    valid::Validator::new(ValidationFlags::default(), caps)
+        .cooperative_matrix_shapes(only_8x8)
+        .validate(&module("coop_mat8x8"))
+        .expect("8x8 is in the allow-list");
+
+    for (ty, columns, rows) in [
+        ("coop_mat16x16", 16, 16),
+        ("coop_mat8x16", 8, 16),
+        ("coop_mat16x8", 16, 8),
+    ] {
+        let err = valid::Validator::new(ValidationFlags::default(), caps)
+            .cooperative_matrix_shapes(only_8x8)
+            .validate(&module(ty))
+            .expect_err("shape is absent from the allow-list");
+        assert!(matches!(
+            err.as_inner(),
+            valid::ValidationError::Type {
+                source: valid::TypeError::UnsupportedCooperativeMatrixShape {
+                    columns: got_columns,
+                    rows: got_rows,
+                },
+                ..
+            } if *got_columns == columns && *got_rows == rows
+        ));
+    }
 }
