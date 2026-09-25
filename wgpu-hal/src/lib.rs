@@ -452,6 +452,7 @@ impl From<gpu_allocator::AllocationError> for DeviceError {
 // and remove this type.
 // https://github.com/Traverse-Research/gpu-allocator/issues/295
 #[cfg_attr(not(any(dx12, vulkan)), expect(dead_code))]
+#[derive(Clone, Copy)]
 pub(crate) struct AllocationSizes {
     pub(crate) min_device_memblock_size: u64,
     pub(crate) max_device_memblock_size: u64,
@@ -497,6 +498,17 @@ impl AllocationSizes {
                     max_host_memblock_size: host_size.end.clamp(4 * MB, 256 * MB),
                 }
             }
+        }
+    }
+
+    /// Sizes for the transient pool. Minimum block sizes are reduced because
+    /// gpu-allocator never frees the last block of a memory type.
+    #[allow(dead_code, reason = "only the vulkan backend has a transient pool")]
+    pub(crate) fn transient(self) -> Self {
+        Self {
+            min_device_memblock_size: self.min_device_memblock_size / 4,
+            min_host_memblock_size: self.min_host_memblock_size / 4,
+            ..self
         }
     }
 }
@@ -2095,6 +2107,7 @@ impl From<wgt::TextureFormat> for FormatAspects {
 bitflags!(
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct MemoryFlags: u32 {
+        /// The resource is short-lived and may be placed in a separate memory pool.
         const TRANSIENT = 1 << 0;
         const PREFER_COHERENT = 1 << 1;
     }
