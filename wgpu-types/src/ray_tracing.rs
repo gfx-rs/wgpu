@@ -133,6 +133,9 @@ bitflags::bitflags!(
         const ALLOW_UPDATE = 1 << 0;
         /// Allow the acceleration structure to be compacted in a copy operation
         /// (`Blas::prepare_for_compaction`, `CommandEncoder::compact_blas`).
+        ///
+        /// Some backends allocate structures with this flag from memory meant for
+        /// short-lived resources. Only set it on structures you compact soon after building.
         const ALLOW_COMPACTION = 1 << 1;
         /// Optimize for fast ray tracing performance, recommended if the geometry is unlikely
         /// to change (e.g. in a game: non-interactive scene geometry)
