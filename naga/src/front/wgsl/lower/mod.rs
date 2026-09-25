@@ -906,6 +906,20 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 // Reject direct access to atomic variables that does not go
                 // through a built-in function.
                 if let ir::TypeInner::Pointer { base, .. } = *resolve_inner!(self, pointer) {
+                    fn type_contains_atomic(
+                        ty: Handle<ir::Type>,
+                        types: &crate::UniqueArena<ir::Type>,
+                    ) -> bool {
+                        match types[ty].inner {
+                            ir::TypeInner::Atomic(_) => true,
+                            ir::TypeInner::Array { base, .. } => type_contains_atomic(base, types),
+                            ir::TypeInner::Struct { ref members, .. } => members
+                                .iter()
+                                .any(|member| type_contains_atomic(member.ty, types)),
+                            _ => false,
+                        }
+                    }
+
                     if type_contains_atomic(base, &self.module.types) {
                         return Err(Box::new(Error::InvalidAtomicAccess(span)));
                     }
@@ -974,17 +988,6 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         }
         tl.finish(self)?;
         Ok(address_space.unwrap_or(ir::AddressSpace::Handle))
-    }
-}
-
-fn type_contains_atomic(ty: Handle<ir::Type>, types: &crate::UniqueArena<ir::Type>) -> bool {
-    match types[ty].inner {
-        ir::TypeInner::Atomic(_) => true,
-        ir::TypeInner::Array { base, .. } => type_contains_atomic(base, types),
-        ir::TypeInner::Struct { ref members, .. } => members
-            .iter()
-            .any(|member| type_contains_atomic(member.ty, types)),
-        _ => false,
     }
 }
 
