@@ -213,14 +213,25 @@ impl DescriptorAllocator {
             // See https://github.com/gfx-rs/wgpu/pull/10264
             match unsafe { device.allocate_descriptor_sets(&vk_info) } {
                 Ok(sets) => break (sets[0], index),
-                Err(vk::Result::ERROR_FRAGMENTED_POOL) => {
+                Err(vk::Result::ERROR_FRAGMENTED_POOL | vk::Result::ERROR_OUT_OF_POOL_MEMORY) => {
+                    if created_pool {
+                        // A fresh pool failing to allocate even a single set leaves
+                        // no pool left to fall back to, so drop it and give up.
+                        let pool = bucket.pools.pop().unwrap();
+                        bucket.available_sets -= pool.capacity;
+                        unsafe { device.destroy_descriptor_pool(pool.raw, None) };
+                        log::error!(
+                            "descriptor set allocation from a fresh pool failed unexpectedly"
+                        );
+                        return Err(crate::DeviceError::OutOfMemory);
+                    }
+
                     // Resetting a pool restores the spec guarantee that
                     // fragmentation cannot cause an allocation failure, but it
-                    // implicitly frees all of the pool's sets, so only reset
-                    // a pool that has no live sets and was not just created.
+                    // implicitly frees all of the pool's sets, so only reset a
+                    // pool that has no live sets.
                     let pool = &bucket.pools[index];
-                    let empty = pool.available == pool.capacity;
-                    if !created_pool && empty {
+                    if pool.available == pool.capacity {
                         let reset_result = unsafe {
                             device.reset_descriptor_pool(
                                 pool.raw,
@@ -228,36 +239,28 @@ impl DescriptorAllocator {
                             )
                         };
                         if reset_result.is_ok() {
-                            if let Ok(sets) = unsafe { device.allocate_descriptor_sets(&vk_info) } {
-                                break (sets[0], index);
+                            match unsafe { device.allocate_descriptor_sets(&vk_info) } {
+                                Ok(sets) => break (sets[0], index),
+                                Err(
+                                    vk::Result::ERROR_FRAGMENTED_POOL
+                                    | vk::Result::ERROR_OUT_OF_POOL_MEMORY,
+                                ) => {}
+                                Err(err) => return Err(super::map_host_device_oom_err(err)),
                             }
                         }
                     }
 
+                    let available = bucket.pools[index].available;
+                    let capacity = bucket.pools[index].capacity;
                     bucket.pools[index].fragmented = true;
-                    if created_pool {
-                        log::error!(
-                            "descriptor set allocation from a fresh pool failed due to fragmentation"
-                        );
-                        return Err(crate::DeviceError::OutOfMemory);
-                    }
+                    bucket.available_sets -= available;
                     log::debug!(
-                        "Retiring fragmented descriptor pool ({}/{} sets free), retrying on another pool",
-                        bucket.pools[index].available,
-                        bucket.pools[index].capacity,
+                        "Retiring fragmented descriptor pool ({available}/{capacity} sets free), retrying on another pool"
                     );
                     candidate = bucket
                         .pools
                         .iter()
                         .position(|pool| !pool.fragmented && pool.available != 0);
-                }
-                // Our accounting says the pool has free capacity, so this is
-                // an unexpected backend error.
-                Err(err @ vk::Result::ERROR_OUT_OF_POOL_MEMORY) => {
-                    log::error!(
-                        "descriptor set allocation reported a pool with free capacity as full"
-                    );
-                    return Err(super::get_unexpected_err(err));
                 }
                 Err(err) => return Err(super::map_host_device_oom_err(err)),
             }
@@ -295,18 +298,22 @@ impl DescriptorAllocator {
         }
 
         pool.available += 1;
-        // On Mali, freeing descriptor sets from a fragmented pool does not
-        // make it usable again; resetting it is what does. That is only safe
-        // once no sets are live.
-        if pool.fragmented && pool.available == pool.capacity {
+
+        if !pool.fragmented {
+            bucket.available_sets += 1;
+        } else if pool.available == pool.capacity {
+            // A fragmented pool's free sets are unusable until it is reset, so
+            // they do not count towards `available_sets`.
+            // On Mali, freeing sets does not make such a pool usable again;
+            // resetting it is what does, and that is only safe once no sets are live.
             let reset_result = unsafe {
                 device.reset_descriptor_pool(pool.raw, vk::DescriptorPoolResetFlags::empty())
             };
             if reset_result.is_ok() {
                 pool.fragmented = false;
+                bucket.available_sets += pool.capacity;
             }
         }
-        bucket.available_sets += 1;
         bucket.allocated_sets -= 1;
         if set.bucket_key.update_after_bind {
             self.update_after_bind_descriptors_in_all_pools -= set.bucket_key.counts.total();
@@ -317,13 +324,18 @@ impl DescriptorAllocator {
         // Destroy a pool only if it's empty and we have 1/4th its capacity
         // in other pools.
         // Note that this logic will never destroy the last pool.
-        let pool = bucket.pools.last().unwrap();
-        if pool.available == pool.capacity
-            && bucket.available_sets - pool.capacity > pool.capacity / 4
+        let last = bucket.pools.last().unwrap();
+        let last_available = last.available;
+        let last_capacity = last.capacity;
+        // Only a non-fragmented pool contributes its capacity to
+        // `available_sets`.
+        let last_contribution = if last.fragmented { 0 } else { last_capacity };
+        if last_available == last_capacity
+            && bucket.available_sets - last_contribution > last_capacity / 4
         {
             let pool = bucket.pools.pop().unwrap();
             unsafe { device.destroy_descriptor_pool(pool.raw, None) };
-            bucket.available_sets -= pool.capacity;
+            bucket.available_sets -= last_contribution;
         }
     }
 }
