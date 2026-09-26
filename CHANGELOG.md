@@ -46,7 +46,7 @@ Bottom level categories:
 
 #### Metal
 
-- Probe the compiler's supported MSL version instead of deriving it from the OS version alone. Macs running a newer macOS through OpenCore Legacy Patcher ship a patched Metal compiler that rejects the newest language version, and device creation failed with `Device(Lost)`. By @alkait in [#NNNN](https://github.com/gfx-rs/wgpu/pull/NNNN).
+- Probe the compiler's supported MSL version instead of deriving it from the OS version alone. Macs running a newer macOS through OpenCore Legacy Patcher ship a patched Metal compiler that rejects the newest language version, and device creation failed with `Device(Lost)`. By @alkait in [#10469](https://github.com/gfx-rs/wgpu/pull/10469).
 
 ### Major changes
 
