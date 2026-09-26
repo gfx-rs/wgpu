@@ -1,0 +1,76 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 47
+OpCapability Shader
+OpExtension "SPV_KHR_storage_buffer_storage_class"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %20 "main"
+OpExecutionMode %20 LocalSize 1 1 1
+OpDecorate %6 ArrayStride 4
+OpDecorate %13 DescriptorSet 0
+OpDecorate %13 Binding 0
+OpDecorate %14 Block
+OpMemberDecorate %14 0 Offset 0
+OpDecorate %16 DescriptorSet 0
+OpDecorate %16 Binding 1
+OpDecorate %17 Block
+OpMemberDecorate %17 0 Offset 0
+%2 = OpTypeVoid
+%4 = OpTypeInt 32 0
+%3 = OpTypeVector %4 4
+%5 = OpTypeVector %4 2
+%7 = OpConstant  %4  8
+%6 = OpTypeArray %4 %7
+%8 = OpConstant  %4  7
+%9 = OpConstant  %4  9
+%10 = OpConstant  %4  0
+%11 = OpConstantComposite  %5  %10 %10
+%12 = OpConstantComposite  %3  %10 %10 %8 %9
+%14 = OpTypeStruct %6
+%15 = OpTypePointer StorageBuffer %14
+%13 = OpVariable  %15  StorageBuffer
+%17 = OpTypeStruct %3
+%18 = OpTypePointer StorageBuffer %17
+%16 = OpVariable  %18  StorageBuffer
+%21 = OpTypeFunction %2
+%22 = OpTypePointer StorageBuffer %6
+%24 = OpTypePointer StorageBuffer %3
+%26 = OpTypeFloat 32
+%27 = OpConstant  %26  0
+%28 = OpConstant  %26  1
+%30 = OpTypePointer StorageBuffer %4
+%32 = OpConstant  %4  1
+%34 = OpConstant  %4  2
+%37 = OpConstant  %4  3
+%40 = OpConstant  %4  4
+%42 = OpConstant  %4  5
+%44 = OpConstant  %4  6
+%20 = OpFunction  %2  None %21
+%19 = OpLabel
+%23 = OpAccessChain  %22  %13 %10
+%25 = OpAccessChain  %24  %16 %10
+OpBranch %29
+%29 = OpLabel
+%31 = OpAccessChain  %30  %23 %10
+OpStore %31 %10
+%33 = OpAccessChain  %30  %23 %32
+OpStore %33 %8
+%35 = OpAccessChain  %30  %23 %34
+OpStore %35 %10
+%36 = OpBitcast  %4  %27
+%38 = OpAccessChain  %30  %23 %37
+OpStore %38 %36
+%39 = OpBitcast  %4  %28
+%41 = OpAccessChain  %30  %23 %40
+OpStore %41 %39
+%43 = OpAccessChain  %30  %23 %42
+OpStore %43 %10
+%45 = OpAccessChain  %30  %23 %44
+OpStore %45 %9
+%46 = OpAccessChain  %30  %23 %8
+OpStore %46 %8
+OpStore %25 %12
+OpReturn
+OpFunctionEnd
