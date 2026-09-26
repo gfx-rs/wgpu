@@ -1254,9 +1254,25 @@ impl<'a> ConstantEvaluator<'a> {
                 self.register_evaluated_expr(expr.clone(), span)
             }
             Expression::Compose { ty, ref components } => {
+                let is_vector = matches!(self.types[ty].inner, TypeInner::Vector { .. });
                 let components = components
                     .iter()
-                    .map(|component| self.check_and_get(*component))
+                    .map(|&component| {
+                        let component = self.check_and_get(component)?;
+                        // `flatten_compose` can't see the lanes of a vector `ZeroValue`.
+                        match self.expressions[component] {
+                            Expression::ZeroValue(zero_ty)
+                                if is_vector
+                                    && matches!(
+                                        self.types[zero_ty].inner,
+                                        TypeInner::Vector { .. }
+                                    ) =>
+                            {
+                                self.eval_zero_value_impl(zero_ty, span)
+                            }
+                            _ => Ok(component),
+                        }
+                    })
                     .collect::<Result<Vec<_>, _>>()?;
                 self.register_evaluated_expr(Expression::Compose { ty, components }, span)
             }
