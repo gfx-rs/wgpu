@@ -37,10 +37,10 @@ pub enum BufferError {
   Canceled(#[from] oneshot::Canceled),
   #[class("DOMExceptionOperationError")]
   #[error(transparent)]
-  Access(wgpu_core::resource::BufferAccessError),
+  Operation(wgpu_core::resource::BufferAccessError),
   #[class("DOMExceptionAbortError")]
-  #[error("{0}")]
-  Aborted(&'static str),
+  #[error(transparent)]
+  Aborted(wgpu_core::resource::BufferAccessError),
   #[class(inherit)]
   #[error(transparent)]
   Other(#[from] JsErrorBox),
@@ -49,10 +49,13 @@ pub enum BufferError {
 impl From<wgpu_core::resource::BufferAccessError> for BufferError {
   fn from(err: wgpu_core::resource::BufferAccessError) -> Self {
     match err {
-      wgpu_core::resource::BufferAccessError::Device(
+      e @ wgpu_core::resource::BufferAccessError::Device(
         wgpu_core::device::DeviceError::Lost,
-      ) => BufferError::Aborted("Device lost"),
-      err => BufferError::Access(err),
+      )
+      | e @ wgpu_core::resource::BufferAccessError::MapAborted => {
+        BufferError::Aborted(e)
+      }
+      e => BufferError::Operation(e),
     }
   }
 }
@@ -186,7 +189,7 @@ impl GPUBuffer {
     let (slice_pointer, range_size) = self
       .wgpu_buffer
       .get_mapped_range(offset, size)
-      .map_err(BufferError::Access)?;
+      .map_err(BufferError::Operation)?;
 
     let mode = self.map_mode.borrow();
     let mode = mode.as_ref().unwrap();
