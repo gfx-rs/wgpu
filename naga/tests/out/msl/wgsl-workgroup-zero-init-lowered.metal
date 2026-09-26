@@ -62,7 +62,8 @@ uint naga_div(uint lhs, uint rhs) {
 struct main_Input {
 };
 kernel void main_(
-  uint local_invocation_index [[thread_index_in_threadgroup]]
+  metal::uint3 id [[thread_position_in_threadgroup]]
+, uint local_invocation_index [[thread_index_in_threadgroup]]
 , threadgroup uint& scalar
 , threadgroup type_9& small
 , threadgroup type_10& particles
@@ -83,16 +84,16 @@ kernel void main_(
         if (metal::all(loop_bound == uint2(0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
-            uint _e78 = zero_init_index;
-            uint _e79 = _e78 + 32u;
-            zero_init_index = _e79;
+            uint _e92 = zero_init_index;
+            uint _e93 = _e92 + 32u;
+            zero_init_index = _e93;
             if ((zero_init_index + 32u) >= 256u) {
                 break;
             }
         }
         loop_init = false;
-        uint _e72 = zero_init_index;
-        particles.inner[_e72] = Particle {};
+        uint _e86 = zero_init_index;
+        particles.inner[_e86] = Particle {};
     }
     zero_init_index = local_invocation_index;
     uint2 loop_bound_1 = uint2(4294967295u);
@@ -101,16 +102,16 @@ kernel void main_(
         if (metal::all(loop_bound_1 == uint2(0u))) { break; }
         loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
         if (!loop_init_1) {
-            uint _e107 = zero_init_index;
-            uint _e108 = _e107 + 32u;
-            zero_init_index = _e108;
+            uint _e121 = zero_init_index;
+            uint _e122 = _e121 + 32u;
+            zero_init_index = _e122;
             if ((zero_init_index + 32u) >= 324u) {
                 break;
             }
         }
         loop_init_1 = false;
-        uint _e96 = zero_init_index;
-        mixed.grid.inner[naga_div(_e96, 18u)].inner[naga_mod(_e96, 18u)] = metal::float4 {};
+        uint _e110 = zero_init_index;
+        mixed.grid.inner[naga_div(_e110, 18u)].inner[naga_mod(_e110, 18u)] = metal::float4 {};
     }
     if (local_invocation_index < 3u) {
         metal::atomic_store_explicit(&mixed.cells.inner[local_invocation_index].count, uint {}, metal::memory_order_relaxed);
@@ -122,16 +123,16 @@ kernel void main_(
         if (metal::all(loop_bound_2 == uint2(0u))) { break; }
         loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
         if (!loop_init_2) {
-            uint _e132 = zero_init_index;
-            uint _e133 = _e132 + 32u;
-            zero_init_index = _e133;
+            uint _e146 = zero_init_index;
+            uint _e147 = _e146 + 32u;
+            zero_init_index = _e147;
             if ((zero_init_index + 32u) >= 300u) {
                 break;
             }
         }
         loop_init_2 = false;
-        uint _e120 = zero_init_index;
-        metal::atomic_store_explicit(&mixed.cells.inner[naga_div(_e120, 100u)].bins.inner[naga_mod(_e120, 100u)], uint {}, metal::memory_order_relaxed);
+        uint _e134 = zero_init_index;
+        metal::atomic_store_explicit(&mixed.cells.inner[naga_div(_e134, 100u)].bins.inner[naga_mod(_e134, 100u)], uint {}, metal::memory_order_relaxed);
     }
     if (local_invocation_index == 0u) {
         scalar = uint {};
@@ -141,20 +142,21 @@ kernel void main_(
         metal::atomic_store_explicit(&counter, int {}, metal::memory_order_relaxed);
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    uint _e3 = scalar;
-    float _e7 = small.inner[3];
-    float _e13 = particles.inner[7].vel.y;
-    uint _e18 = single.inner[0].x;
-    output[0] = ((static_cast<float>(_e3) + _e7) + _e13) + static_cast<float>(_e18);
-    float _e27 = mixed.transform[1].x;
-    uint _e30 = mixed.flag;
-    float _e38 = mixed.grid.inner[2].inner[5].z;
-    output[1] = (_e27 + static_cast<float>(_e30)) + _e38;
-    uint _e47 = metal::atomic_load_explicit(&mixed.cells.inner[1].bins.inner[42], metal::memory_order_relaxed);
-    uint _e52 = metal::atomic_load_explicit(&mixed.cells.inner[2].count, metal::memory_order_relaxed);
-    output[2] = static_cast<float>(_e47 + _e52);
-    int _e58 = metal::atomic_load_explicit(&counter, metal::memory_order_relaxed);
-    output[3] = static_cast<float>(_e58);
+    uint base = (id.x + (id.y * 8u)) * 4u;
+    uint _e11 = scalar;
+    float _e15 = small.inner[3];
+    float _e21 = particles.inner[7].vel.y;
+    uint _e26 = single.inner[0].x;
+    output[base] = ((static_cast<float>(_e11) + _e15) + _e21) + static_cast<float>(_e26);
+    float _e37 = mixed.transform[1].x;
+    uint _e40 = mixed.flag;
+    float _e48 = mixed.grid.inner[2].inner[5].z;
+    output[base + 1u] = (_e37 + static_cast<float>(_e40)) + _e48;
+    uint _e59 = metal::atomic_load_explicit(&mixed.cells.inner[1].bins.inner[42], metal::memory_order_relaxed);
+    uint _e64 = metal::atomic_load_explicit(&mixed.cells.inner[2].count, metal::memory_order_relaxed);
+    output[base + 2u] = static_cast<float>(_e59 + _e64);
+    int _e72 = metal::atomic_load_explicit(&counter, metal::memory_order_relaxed);
+    output[base + 3u] = static_cast<float>(_e72);
     return;
 }
 

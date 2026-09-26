@@ -26,11 +26,12 @@ var<workgroup> counter: atomic<i32>;
 var<storage, read_write> output: array<f32>;
 
 @compute @workgroup_size(8, 4)
-fn main() {
-    output[0] = f32(scalar) + small[3] + particles[7].vel.y + f32(single[0].x);
-    output[1] = mixed.transform[1].x + f32(mixed.flag) + mixed.grid[2][5].z;
-    output[2] = f32(atomicLoad(&mixed.cells[1].bins[42]) + atomicLoad(&mixed.cells[2].count));
-    output[3] = f32(atomicLoad(&counter));
+fn main(@builtin(local_invocation_id) id: vec3<u32>) {
+    let base = (id.x + id.y * 8u) * 4u;
+    output[base] = f32(scalar) + small[3] + particles[7].vel.y + f32(single[0].x);
+    output[base + 1u] = mixed.transform[1].x + f32(mixed.flag) + mixed.grid[2][5].z;
+    output[base + 2u] = f32(atomicLoad(&mixed.cells[1].bins[42]) + atomicLoad(&mixed.cells[2].count));
+    output[base + 3u] = f32(atomicLoad(&counter));
 }
 
 @compute @workgroup_size(64)

@@ -69,7 +69,7 @@ int ZeroValueint() {
 }
 
 [numthreads(8, 4, 1)]
-void main(uint local_invocation_index : SV_GroupIndex)
+void main(uint3 id : SV_GroupThreadID, uint local_invocation_index : SV_GroupIndex)
 {
     uint zero_init_index = (uint)0;
 
@@ -83,16 +83,16 @@ void main(uint local_invocation_index : SV_GroupIndex)
         if (all(loop_bound == uint2(0u, 0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
-            uint _e78 = zero_init_index;
-            uint _e79 = (_e78 + 32u);
-            zero_init_index = _e79;
-            if ((_e79 >= 256u)) {
+            uint _e92 = zero_init_index;
+            uint _e93 = (_e92 + 32u);
+            zero_init_index = _e93;
+            if ((_e93 >= 256u)) {
                 break;
             }
         }
         loop_init = false;
-        uint _e72 = zero_init_index;
-        particles[min(uint(_e72), 255u)] = ZeroValueParticle();
+        uint _e86 = zero_init_index;
+        particles[min(uint(_e86), 255u)] = ZeroValueParticle();
     }
     zero_init_index = local_invocation_index;
     uint2 loop_bound_1 = uint2(4294967295u, 4294967295u);
@@ -101,16 +101,16 @@ void main(uint local_invocation_index : SV_GroupIndex)
         if (all(loop_bound_1 == uint2(0u, 0u))) { break; }
         loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
         if (!loop_init_1) {
-            uint _e107 = zero_init_index;
-            uint _e108 = (_e107 + 32u);
-            zero_init_index = _e108;
-            if ((_e108 >= 324u)) {
+            uint _e121 = zero_init_index;
+            uint _e122 = (_e121 + 32u);
+            zero_init_index = _e122;
+            if ((_e122 >= 324u)) {
                 break;
             }
         }
         loop_init_1 = false;
-        uint _e96 = zero_init_index;
-        mixed.grid[min(uint(naga_div(_e96, 18u)), 17u)][min(uint(naga_mod(_e96, 18u)), 17u)] = ZeroValuefloat4();
+        uint _e110 = zero_init_index;
+        mixed.grid[min(uint(naga_div(_e110, 18u)), 17u)][min(uint(naga_mod(_e110, 18u)), 17u)] = ZeroValuefloat4();
     }
     if ((local_invocation_index < 3u)) {
         { uint dummy = 0; InterlockedExchange(mixed.cells[min(uint(local_invocation_index), 2u)].count, ZeroValueuint(), dummy); }
@@ -122,16 +122,16 @@ void main(uint local_invocation_index : SV_GroupIndex)
         if (all(loop_bound_2 == uint2(0u, 0u))) { break; }
         loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
         if (!loop_init_2) {
-            uint _e132 = zero_init_index;
-            uint _e133 = (_e132 + 32u);
-            zero_init_index = _e133;
-            if ((_e133 >= 300u)) {
+            uint _e146 = zero_init_index;
+            uint _e147 = (_e146 + 32u);
+            zero_init_index = _e147;
+            if ((_e147 >= 300u)) {
                 break;
             }
         }
         loop_init_2 = false;
-        uint _e120 = zero_init_index;
-        { uint dummy_1 = 0; InterlockedExchange(mixed.cells[min(uint(naga_div(_e120, 100u)), 2u)].bins[min(uint(naga_mod(_e120, 100u)), 99u)], ZeroValueuint(), dummy_1); }
+        uint _e134 = zero_init_index;
+        { uint dummy_1 = 0; InterlockedExchange(mixed.cells[min(uint(naga_div(_e134, 100u)), 2u)].bins[min(uint(naga_mod(_e134, 100u)), 99u)], ZeroValueuint(), dummy_1); }
     }
     if ((local_invocation_index == 0u)) {
         scalar = ZeroValueuint();
@@ -141,20 +141,21 @@ void main(uint local_invocation_index : SV_GroupIndex)
         { int dummy_2 = 0; InterlockedExchange(counter, ZeroValueint(), dummy_2); }
     }
     GroupMemoryBarrierWithGroupSync();
-    uint _e3 = scalar;
-    float _e7 = small[3];
-    float _e13 = particles[7].vel.y;
-    uint _e18 = single[0].x;
-    output.Store(0, asuint((((float(_e3) + _e7) + _e13) + float(_e18))));
-    float _e27 = mixed.transform[1].x;
-    uint _e30 = mixed.flag;
-    float _e38 = mixed.grid[2][5].z;
-    output.Store(4, asuint(((_e27 + float(_e30)) + _e38)));
-    uint _e47; InterlockedOr(mixed.cells[1].bins[42], 0, _e47);
-    uint _e52; InterlockedOr(mixed.cells[2].count, 0, _e52);
-    output.Store(8, asuint(float((_e47 + _e52))));
-    int _e58; InterlockedOr(counter, 0, _e58);
-    output.Store(12, asuint(float(_e58)));
+    uint base = ((id.x + (id.y * 8u)) * 4u);
+    uint _e11 = scalar;
+    float _e15 = small[3];
+    float _e21 = particles[7].vel.y;
+    uint _e26 = single[0].x;
+    output.Store(base*4, asuint((((float(_e11) + _e15) + _e21) + float(_e26))));
+    float _e37 = mixed.transform[1].x;
+    uint _e40 = mixed.flag;
+    float _e48 = mixed.grid[2][5].z;
+    output.Store((base + 1u)*4, asuint(((_e37 + float(_e40)) + _e48)));
+    uint _e59; InterlockedOr(mixed.cells[1].bins[42], 0, _e59);
+    uint _e64; InterlockedOr(mixed.cells[2].count, 0, _e64);
+    output.Store((base + 2u)*4, asuint(float((_e59 + _e64))));
+    int _e72; InterlockedOr(counter, 0, _e72);
+    output.Store((base + 3u)*4, asuint(float(_e72)));
     return;
 }
 

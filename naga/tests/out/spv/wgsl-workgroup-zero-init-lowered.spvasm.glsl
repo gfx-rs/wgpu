@@ -54,27 +54,27 @@ uint _53(uint _54, uint _55)
 
 void main()
 {
-    uint _78 = 0u;
-    uvec2 _96 = uvec2(4294967295u);
-    uvec2 _117 = uvec2(4294967295u);
-    uvec2 _150 = uvec2(4294967295u);
+    uint _84 = 0u;
+    uvec2 _102 = uvec2(4294967295u);
+    uvec2 _123 = uvec2(4294967295u);
+    uvec2 _155 = uvec2(4294967295u);
     if (gl_LocalInvocationIndex < 16u)
     {
         _30[gl_LocalInvocationIndex] = 0.0;
     }
-    _78 = gl_LocalInvocationIndex;
+    _84 = gl_LocalInvocationIndex;
     for (;;)
     {
-        if (all(equal(uvec2(0u), _96)))
+        if (all(equal(uvec2(0u), _102)))
         {
             break;
         }
-        _96 -= uvec2(uint(_96.y == 0u), 1u);
-        _32[_78] = _5(vec4(0.0), vec4(0.0));
-        uint _110 = _78;
-        uint _111 = _110 + 32u;
-        _78 = _111;
-        if (_111 >= 256u)
+        _102 -= uvec2(uint(_102.y == 0u), 1u);
+        _32[_84] = _5(vec4(0.0), vec4(0.0));
+        uint _116 = _84;
+        uint _117 = _116 + 32u;
+        _84 = _117;
+        if (_117 >= 256u)
         {
             break;
         }
@@ -83,19 +83,19 @@ void main()
             continue;
         }
     }
-    _78 = gl_LocalInvocationIndex;
+    _84 = gl_LocalInvocationIndex;
     for (;;)
     {
-        if (all(equal(uvec2(0u), _117)))
+        if (all(equal(uvec2(0u), _123)))
         {
             break;
         }
-        _117 -= uvec2(uint(_117.y == 0u), 1u);
-        _36._m2[_53(_78, 18u)][_43(_78, 18u)] = vec4(0.0);
-        uint _136 = _78;
-        uint _137 = _136 + 32u;
-        _78 = _137;
-        if (_137 >= 324u)
+        _123 -= uvec2(uint(_123.y == 0u), 1u);
+        _36._m2[_53(_84, 18u)][_43(_84, 18u)] = vec4(0.0);
+        uint _141 = _84;
+        uint _142 = _141 + 32u;
+        _84 = _142;
+        if (_142 >= 324u)
         {
             break;
         }
@@ -108,19 +108,19 @@ void main()
     {
         atomicExchange(_36._m3[gl_LocalInvocationIndex]._m0, 0u);
     }
-    _78 = gl_LocalInvocationIndex;
+    _84 = gl_LocalInvocationIndex;
     for (;;)
     {
-        if (all(equal(uvec2(0u), _150)))
+        if (all(equal(uvec2(0u), _155)))
         {
             break;
         }
-        _150 -= uvec2(uint(_150.y == 0u), 1u);
-        atomicExchange(_36._m3[_53(_78, 100u)]._m1[_43(_78, 100u)], 0u);
-        uint _166 = _78;
-        uint _167 = _166 + 32u;
-        _78 = _167;
-        if (_167 >= 300u)
+        _155 -= uvec2(uint(_155.y == 0u), 1u);
+        atomicExchange(_36._m3[_53(_84, 100u)]._m1[_43(_84, 100u)], 0u);
+        uint _171 = _84;
+        uint _172 = _171 + 32u;
+        _84 = _172;
+        if (_172 >= 300u)
         {
             break;
         }
@@ -138,13 +138,14 @@ void main()
         atomicExchange(_38, 0);
     }
     barrier();
-    _40._m0[0u] = ((float(_28) + _30[3u]) + _32[7u]._m1.y) + float(_34[0u].x);
-    _40._m0[1u] = (_36._m0[1u].x + float(_36._m1)) + _36._m2[2u][5u].z;
-    uint _206 = atomicAdd(_36._m3[1u]._m1[42u], 0u);
-    uint _208 = atomicAdd(_36._m3[2u]._m0, 0u);
-    _40._m0[2u] = float(_206 + _208);
-    int _212 = atomicAdd(_38, 0);
-    _40._m0[3u] = float(_212);
+    uint _187 = (gl_LocalInvocationID.x + (gl_LocalInvocationID.y * 8u)) * 4u;
+    _40._m0[_187] = ((float(_28) + _30[3u]) + _32[7u]._m1.y) + float(_34[0u].x);
+    _40._m0[_187 + 1u] = (_36._m0[1u].x + float(_36._m1)) + _36._m2[2u][5u].z;
+    uint _218 = atomicAdd(_36._m3[1u]._m1[42u], 0u);
+    uint _220 = atomicAdd(_36._m3[2u]._m0, 0u);
+    _40._m0[_187 + 2u] = float(_218 + _220);
+    int _225 = atomicAdd(_38, 0);
+    _40._m0[_187 + 3u] = float(_225);
 }
 
 
@@ -254,22 +255,22 @@ shared int _38;
 
 void main()
 {
-    uvec2 _246 = uvec2(4294967295u);
-    _27 _230 = _27(gl_WorkGroupID, gl_LocalInvocationIndex);
-    uint _241 = _230._m1;
-    uint _238 = _241;
+    uvec2 _258 = uvec2(4294967295u);
+    _27 _243 = _27(gl_WorkGroupID, gl_LocalInvocationIndex);
+    uint _253 = _243._m1;
+    uint _250 = _253;
     for (;;)
     {
-        if (all(equal(uvec2(0u), _246)))
+        if (all(equal(uvec2(0u), _258)))
         {
             break;
         }
-        _246 -= uvec2(uint(_246.y == 0u), 1u);
-        _32[_238] = _5(vec4(0.0), vec4(0.0));
-        uint _259 = _238;
-        uint _260 = _259 + 16u;
-        _238 = _260;
-        if (_260 >= 256u)
+        _258 -= uvec2(uint(_258.y == 0u), 1u);
+        _32[_250] = _5(vec4(0.0), vec4(0.0));
+        uint _271 = _250;
+        uint _272 = _271 + 16u;
+        _250 = _272;
+        if (_272 >= 256u)
         {
             break;
         }
@@ -278,13 +279,13 @@ void main()
             continue;
         }
     }
-    if (_241 == 0u)
+    if (_253 == 0u)
     {
         atomicExchange(_38, 0);
     }
     barrier();
-    float _268 = _32[_230._m1]._m0.x;
-    int _269 = atomicAdd(_38, 0);
-    _40._m0[_230._m1] = _268 + float(_269);
+    float _280 = _32[_243._m1]._m0.x;
+    int _281 = atomicAdd(_38, 0);
+    _40._m0[_243._m1] = _280 + float(_281);
 }
 

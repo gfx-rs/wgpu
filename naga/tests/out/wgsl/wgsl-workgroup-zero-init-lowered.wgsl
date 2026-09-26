@@ -30,7 +30,7 @@ var<workgroup> counter: atomic<i32>;
 var<storage, read_write> output: array<f32>;
 
 @compute @workgroup_size(8, 4, 1)
-fn main(@builtin(local_invocation_index) local_invocation_index: u32) {
+fn main(@builtin(local_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) local_invocation_index: u32) {
     var zero_init_index: u32;
 
     if (local_invocation_index < 16u) {
@@ -38,24 +38,24 @@ fn main(@builtin(local_invocation_index) local_invocation_index: u32) {
     }
     zero_init_index = local_invocation_index;
     loop {
-        let _e72 = zero_init_index;
-        particles[_e72] = Particle();
+        let _e86 = zero_init_index;
+        particles[_e86] = Particle();
         continuing {
-            let _e78 = zero_init_index;
-            let _e79 = (_e78 + 32u);
-            zero_init_index = _e79;
-            break if (_e79 >= 256u);
+            let _e92 = zero_init_index;
+            let _e93 = (_e92 + 32u);
+            zero_init_index = _e93;
+            break if (_e93 >= 256u);
         }
     }
     zero_init_index = local_invocation_index;
     loop {
-        let _e96 = zero_init_index;
-        mixed.grid[(_e96 / 18u)][(_e96 % 18u)] = vec4<f32>();
+        let _e110 = zero_init_index;
+        mixed.grid[(_e110 / 18u)][(_e110 % 18u)] = vec4<f32>();
         continuing {
-            let _e107 = zero_init_index;
-            let _e108 = (_e107 + 32u);
-            zero_init_index = _e108;
-            break if (_e108 >= 324u);
+            let _e121 = zero_init_index;
+            let _e122 = (_e121 + 32u);
+            zero_init_index = _e122;
+            break if (_e122 >= 324u);
         }
     }
     if (local_invocation_index < 3u) {
@@ -63,13 +63,13 @@ fn main(@builtin(local_invocation_index) local_invocation_index: u32) {
     }
     zero_init_index = local_invocation_index;
     loop {
-        let _e120 = zero_init_index;
-        atomicStore((&mixed.cells[(_e120 / 100u)].bins[(_e120 % 100u)]), u32());
+        let _e134 = zero_init_index;
+        atomicStore((&mixed.cells[(_e134 / 100u)].bins[(_e134 % 100u)]), u32());
         continuing {
-            let _e132 = zero_init_index;
-            let _e133 = (_e132 + 32u);
-            zero_init_index = _e133;
-            break if (_e133 >= 300u);
+            let _e146 = zero_init_index;
+            let _e147 = (_e146 + 32u);
+            zero_init_index = _e147;
+            break if (_e147 >= 300u);
         }
     }
     if (local_invocation_index == 0u) {
@@ -80,20 +80,21 @@ fn main(@builtin(local_invocation_index) local_invocation_index: u32) {
         atomicStore((&counter), i32());
     }
     workgroupBarrier();
-    let _e3 = scalar;
-    let _e7 = small[3];
-    let _e13 = particles[7].vel.y;
-    let _e18 = single[0].x;
-    output[0] = (((f32(_e3) + _e7) + _e13) + f32(_e18));
-    let _e27 = mixed.transform[1][0];
-    let _e30 = mixed.flag;
-    let _e38 = mixed.grid[2][5].z;
-    output[1] = ((_e27 + f32(_e30)) + _e38);
-    let _e47 = atomicLoad((&mixed.cells[1].bins[42]));
-    let _e52 = atomicLoad((&mixed.cells[2].count));
-    output[2] = f32((_e47 + _e52));
-    let _e58 = atomicLoad((&counter));
-    output[3] = f32(_e58);
+    let base = ((id.x + (id.y * 8u)) * 4u);
+    let _e11 = scalar;
+    let _e15 = small[3];
+    let _e21 = particles[7].vel.y;
+    let _e26 = single[0].x;
+    output[base] = (((f32(_e11) + _e15) + _e21) + f32(_e26));
+    let _e37 = mixed.transform[1][0];
+    let _e40 = mixed.flag;
+    let _e48 = mixed.grid[2][5].z;
+    output[(base + 1u)] = ((_e37 + f32(_e40)) + _e48);
+    let _e59 = atomicLoad((&mixed.cells[1].bins[42]));
+    let _e64 = atomicLoad((&mixed.cells[2].count));
+    output[(base + 2u)] = f32((_e59 + _e64));
+    let _e72 = atomicLoad((&counter));
+    output[(base + 3u)] = f32(_e72);
     return;
 }
 
