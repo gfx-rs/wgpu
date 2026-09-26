@@ -1401,8 +1401,7 @@ crate::bitflags_array! {
         /// Supported Platforms:
         /// - Vulkan
         /// - Metal
-        /// - OpenGL (on WebGL, only when BC textures are unavailable, as their
-        ///   WebGL extensions require block-aligned sizes)
+        /// - OpenGL
         /// - DX12 (only when `UnalignedBlockTexturesSupported` is true in
         ///   `D3D12_FEATURE_DATA_D3D12_OPTIONS8`)
         ///
