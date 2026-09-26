@@ -667,10 +667,6 @@ pub trait QueueWriteBufferInterface: CommonTraits {
 }
 
 pub trait BufferMappedRangeInterface: CommonTraits {
-    // Used only in wgpu_core's `impl QueueWriteBufferInterface`
-    #[cfg_attr(not(wgpu_core), expect(unused))]
-    fn len(&self) -> usize;
-
     /// # Safety
     ///
     /// Must only be used on read, not write, mappings.

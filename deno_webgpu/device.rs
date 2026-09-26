@@ -28,6 +28,7 @@ use super::texture::GPUTexture;
 use crate::adapter::GPUAdapterInfo;
 use crate::adapter::GPUSupportedFeatures;
 use crate::adapter::GPUSupportedLimits;
+use crate::buffer::BufferMapState;
 use crate::command_encoder::GPUCommandEncoder;
 use crate::error::{fmt_err, make_pipeline_error, GPUError};
 use crate::error::{GPUGenericError, GPUPipelineErrorReason};
@@ -191,16 +192,32 @@ impl GPUDevice {
       wgpu_device: self.wgpu_device.clone(),
       usage: descriptor.usage,
       map_state: RefCell::new(if descriptor.mapped_at_creation {
-        "mapped"
+        BufferMapState::Mapped {
+          mode: wgpu_core::device::HostMap::Write,
+          range: 0..descriptor.size,
+          views: vec![],
+        }
       } else {
-        "unmapped"
+        BufferMapState::Unmapped
       }),
-      map_mode: RefCell::new(if descriptor.mapped_at_creation {
-        Some(wgpu_core::device::HostMap::Write)
-      } else {
-        None
-      }),
-      mapped_js_buffers: RefCell::new(vec![]),
+      data: RefCell::new(
+        if usage.contains(wgpu_types::BufferUsages::MAP_WRITE)
+          || usage.contains(wgpu_types::BufferUsages::MAP_READ)
+          || descriptor.mapped_at_creation
+          || descriptor.size < self.wgpu_device.limits().max_buffer_size
+          || descriptor.size < 1_000_000_000
+        {
+          fn try_zeroed_vec(n: usize) -> Option<Vec<u8>> {
+            let mut v = Vec::new();
+            v.try_reserve_exact(n).ok()?;
+            v.resize(n, 0);
+            Some(v)
+          }
+          try_zeroed_vec(descriptor.size as usize)
+        } else {
+          None
+        },
+      ),
     })
   }
 

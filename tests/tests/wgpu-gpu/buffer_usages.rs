@@ -161,9 +161,15 @@ async fn map_test(
         .unwrap();
 
     if !before_unmap && !before_destroy {
-        {
-            let view = buffer.slice(0..size).get_mapped_range().unwrap();
-            assert!(!view.is_empty());
+        match map_mode_type {
+            Ma::Read => {
+                let view = buffer.slice(0..size).get_mapped_range().unwrap();
+                assert!(!view.is_empty());
+            }
+            Ma::Write => {
+                let view = buffer.slice(0..size).get_mapped_range_mut().unwrap();
+                assert!(!view.is_empty());
+            }
         }
 
         if after_unmap {

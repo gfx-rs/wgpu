@@ -1,9 +1,16 @@
-use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
+use alloc::{
+    boxed::Box,
+    string::String,
+    sync::{Arc, Weak},
+    vec::Vec,
+};
 use core::{
     error, fmt,
+    hash::{Hash, Hasher},
     num::NonZero,
     ops::{Bound, Range, RangeBounds},
 };
+use hashbrown::HashSet;
 
 use crate::util::Mutex;
 use crate::*;
@@ -323,13 +330,18 @@ impl Buffer {
     ///
     /// This terminates the effect of all previous [`map_async()`](Self::map_async) operations and
     /// makes the buffer available for use by the GPU again.
+    ///
+    /// Panics if there is any [`BufferView`] or [`BufferViewMut`] alive.
     pub fn unmap(&self) {
         self.map_context.lock().reset();
         self.inner.unmap();
     }
 
     /// Destroy the associated native resources as soon as possible.
+    ///
+    /// Panics if there is any [`BufferView`] or [`BufferViewMut`] alive.
     pub fn destroy(&self) {
+        self.map_context.lock().reset();
         self.inner.destroy();
     }
 
@@ -580,7 +592,7 @@ impl<'a> BufferSlice<'a> {
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
     ) {
         let mut mc = self.buffer.map_context.lock();
-        if mc.mapped_range.is_some() {
+        if mc.mapped.is_some() {
             // Buffer is already mapped; fail
             drop(mc);
             callback(Err(BufferAsyncError));
@@ -588,7 +600,10 @@ impl<'a> BufferSlice<'a> {
         }
 
         let end = self.offset + self.size;
-        mc.mapped_range = Some(self.offset..end);
+        mc.mapped = Some(Mapped {
+            range: self.offset..end,
+            kind: mode,
+        });
         drop(mc); // release the lock of map_context as callback can call lock it again
 
         self.buffer
@@ -755,24 +770,72 @@ impl fmt::Display for Subrange {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct Mapped {
+    /// The range of the buffer that is mapped.
+    ///
+    /// All [`BufferView`]s and [`BufferViewMut`]s must fall within this range.
+    pub(crate) range: Range<BufferAddress>,
+    pub(crate) kind: MapMode,
+}
+
 /// The mapped portion of a buffer, if any, and its outstanding views.
 ///
 /// This ensures that views fall within the mapped range and don't overlap.
 #[derive(Debug)]
 pub(crate) struct MapContext {
-    /// The range of the buffer that is mapped.
-    ///
     /// This becomes Some(...) when the buffer is mapped at creation time, and
     /// when you call `map_async` on some [`BufferSlice`] (so technically, it
-    /// indicates the portion that is *or has been requested to be* mapped.)
-    ///
-    /// All [`BufferView`]s and [`BufferViewMut`]s must fall within this range.
-    mapped_range: Option<Range<BufferAddress>>,
+    /// indicates the data that is *or has been requested to be* mapped.)
+    mapped: Option<Mapped>,
 
     /// The ranges covered by all outstanding [`BufferView`]s and
     /// [`BufferViewMut`]s. These are non-overlapping, and are all contained
     /// within `mapped_range`.
     sub_ranges: Vec<Subrange>,
+
+    /// The set of buffers that are currently alive on the device.
+    /// This is used to ensure that all buffers are unmapped before the device is destroyed.
+    ///
+    /// We keep it here
+    device_buffers: Arc<Mutex<HashSet<WeakMapContext>>>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct WeakMapContext(Weak<Mutex<MapContext>>);
+
+impl Eq for WeakMapContext {}
+impl PartialEq for WeakMapContext {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.ptr_eq(&other.0)
+    }
+}
+
+impl Hash for WeakMapContext {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.as_ptr().hash(state);
+    }
+}
+
+impl WeakMapContext {
+    fn alive(&self) -> bool {
+        self.0.strong_count() > 0
+    }
+
+    pub(crate) fn unmap(&self) {
+        if let Some(map_context) = self.0.upgrade() {
+            map_context.lock().reset();
+        }
+    }
+}
+
+impl RangeMappingKind {
+    fn mode(&self) -> MapMode {
+        match self {
+            RangeMappingKind::Immutable => MapMode::Read,
+            RangeMappingKind::Mutable => MapMode::Write,
+        }
+    }
 }
 
 impl MapContext {
@@ -782,16 +845,24 @@ impl MapContext {
     /// `mapped_range` argument. For other buffers, pass `None`.
     ///
     /// [`mapped_at_creation`]: BufferDescriptor::mapped_at_creation
-    pub(crate) fn new(mapped_range: Option<Range<BufferAddress>>) -> Self {
-        Self {
-            mapped_range,
+    pub(crate) fn new(
+        mapped: Option<Mapped>,
+        device_buffers: &Arc<Mutex<HashSet<WeakMapContext>>>,
+    ) -> Arc<Mutex<Self>> {
+        let result = Arc::new(Mutex::new(Self {
+            mapped,
             sub_ranges: Vec::new(),
-        }
+            device_buffers: Arc::clone(device_buffers),
+        }));
+        device_buffers
+            .lock()
+            .insert(WeakMapContext(Arc::downgrade(&result)));
+        result
     }
 
     /// Record that the buffer is no longer mapped.
     fn reset(&mut self) {
-        self.mapped_range = None;
+        self.mapped = None;
 
         assert!(
             self.sub_ranges.is_empty(),
@@ -805,19 +876,26 @@ impl MapContext {
     ///
     /// This returns an error if the given range is invalid.
     fn validate_and_add(&mut self, new_sub: Subrange) -> Result<(), MapRangeError> {
-        if self.mapped_range.is_none() {
+        let Some(mapped) = self.mapped.as_ref() else {
             return Err(MapRangeError(
                 "tried to call get_mapped_range(_mut) on an unmapped buffer".into(),
             ));
+        };
+        if mapped.kind != new_sub.kind.mode() {
+            return Err(MapRangeError(alloc::format!(
+                "tried to call get_mapped_range(_mut) on a buffer that was mapped for {:?}, \
+                 but the requested range is for {:?}",
+                mapped.kind,
+                new_sub.kind.mode()
+            )));
         }
-        let mapped_range = self.mapped_range.as_ref().unwrap();
-        if !range_contains(mapped_range, &new_sub.index) {
+        if !range_contains(&mapped.range, &new_sub.index) {
             return Err(MapRangeError(alloc::format!(
                 "tried to call get_mapped_range(_mut) on a range that is not entirely mapped. \
                  Attempted to get range {}, but the mapped range is {}..{}",
                 new_sub,
-                mapped_range.start,
-                mapped_range.end
+                mapped.range.start,
+                mapped.range.end
             )));
         }
         // This check is essential for avoiding undefined behavior: it is the
@@ -855,6 +933,12 @@ impl MapContext {
             .position(|r| r.index == (offset..end))
             .expect("unable to remove range from map context");
         self.sub_ranges.swap_remove(index);
+    }
+}
+
+impl Drop for MapContext {
+    fn drop(&mut self) {
+        self.device_buffers.lock().retain(|f| f.alive());
     }
 }
 
@@ -917,7 +1001,10 @@ static_assertions::assert_impl_all!(MapMode: Send, Sync);
 /// `AsRef<[u8]>`, if that's more convenient.
 ///
 /// Before the buffer can be unmapped, all `BufferView`s observing it
-/// must be dropped. Otherwise, the call to [`Buffer::unmap`] will panic.
+/// must be dropped. Otherwise, the call to [`Buffer::unmap`] or [`Buffer::destroy`]
+/// or [`Device::destroy`] will panic. On native buffer destruction on device lost will
+/// block until all views are dropped, thus it's recommended to not keep views alive
+/// across [`Device::poll`], [`Queue::submit`] or [`Surface::configure`] to prevent deadlocks.
 ///
 /// For example code, see the documentation on [mapping buffers][map].
 ///
@@ -925,11 +1012,13 @@ static_assertions::assert_impl_all!(MapMode: Send, Sync);
 /// [`map_async`]: BufferSlice::map_async
 #[derive(Debug)]
 pub struct BufferView {
+    // we need to drop BufferMappedRange before Buffer,
+    // so that the buffer is not unmapped while the view is still alive
+    inner: dispatch::DispatchBufferMappedRange,
     // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
     buffer: Buffer,
     offset: BufferAddress,
     size: BufferAddress,
-    inner: dispatch::DispatchBufferMappedRange,
 }
 
 /// A write-only view of a mapped buffer's bytes.
@@ -944,18 +1033,23 @@ pub struct BufferView {
 /// and there are also a few convenience methods such as [`BufferViewMut::copy_from_slice()`].
 ///
 /// Before the buffer can be unmapped, all `BufferViewMut`s observing it
-/// must be dropped. Otherwise, the call to [`Buffer::unmap`] will panic.
+/// must be dropped. Otherwise, the call to [`Buffer::unmap`] or [`Buffer::destroy`]
+/// or [`Device::destroy`] will panic. On native buffer destruction on device lost will
+/// block until all views are dropped, thus it's recommended to not keep views alive
+/// across [`Device::poll`], [`Queue::submit`] or [`Surface::configure`] to prevent deadlocks.
 ///
 /// For example code, see the documentation on [mapping buffers][map].
 ///
 /// [map]: Buffer#mapping-buffers
 #[derive(Debug)]
 pub struct BufferViewMut {
+    // we need to drop BufferMappedRange before Buffer,
+    // so that the buffer is not unmapped while the view is still alive
+    inner: dispatch::DispatchBufferMappedRange,
     // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
     buffer: Buffer,
     offset: BufferAddress,
     size: BufferAddress,
-    inner: dispatch::DispatchBufferMappedRange,
 }
 
 // `BufferView` simply dereferences. `BufferViewMut` cannot, because mapped memory may be

@@ -1,6 +1,10 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+#![allow(clippy::nonminimal_bool)]
+
 use std::cell::RefCell;
+use std::fmt::Display;
+use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -60,16 +64,49 @@ impl From<wgpu_core::resource::BufferAccessError> for BufferError {
   }
 }
 
+pub(crate) struct View {
+  range: Range<u64>,
+  array_buffer: v8::Global<v8::ArrayBuffer>,
+}
+
+/// Returns true if two non-inclusive ranges overlap
+// https://stackoverflow.com/questions/3269434/whats-the-most-efficient-way-to-test-if-two-ranges-overlap
+fn range_overlap<T: std::cmp::PartialOrd>(
+  range1: &Range<T>,
+  range2: &Range<T>,
+) -> bool {
+  range1.start < range2.end && range2.start < range1.end
+}
+
+pub(crate) enum BufferMapState {
+  Unmapped,
+  Pending,
+  Mapped {
+    mode: MapMode,
+    range: Range<u64>,
+    views: Vec<View>,
+  },
+}
+
+impl Display for BufferMapState {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      BufferMapState::Unmapped => write!(f, "unmapped"),
+      BufferMapState::Pending => write!(f, "pending"),
+      BufferMapState::Mapped { .. } => write!(f, "mapped"),
+    }
+  }
+}
+
 pub struct GPUBuffer {
   pub wgpu_buffer: Arc<wgpu_core::resource::Buffer>,
   pub wgpu_device: Arc<wgpu_core::device::Device>,
 
   pub usage: u32,
 
-  pub map_state: RefCell<&'static str>,
-  pub map_mode: RefCell<Option<MapMode>>,
-
-  pub mapped_js_buffers: RefCell<Vec<v8::Global<v8::ArrayBuffer>>>,
+  pub map_state: RefCell<BufferMapState>,
+  /// None if buffer is not mappable or OOM while creating the buffer
+  pub data: RefCell<Option<Vec<u8>>>,
 }
 
 impl WebIdlInterfaceConverter for GPUBuffer {
@@ -113,8 +150,8 @@ impl GPUBuffer {
 
   #[getter]
   #[string]
-  fn map_state(&self) -> &'static str {
-    *self.map_state.borrow()
+  fn map_state(&self) -> String {
+    self.map_state.borrow().to_string()
   }
 
   // In the successful case, the promise should resolve to undefined, but
@@ -143,7 +180,7 @@ impl GPUBuffer {
     };
 
     {
-      *self.map_state.borrow_mut() = "pending";
+      *self.map_state.borrow_mut() = BufferMapState::Pending;
     }
 
     let (sender, receiver) =
@@ -188,8 +225,24 @@ impl GPUBuffer {
 
     tokio::try_join!(device_poll_fut, receiver_fut)?;
 
-    *self.map_state.borrow_mut() = "mapped";
-    *self.map_mode.borrow_mut() = Some(mode);
+    let mapping = self.wgpu_buffer.get_mapped_range(offset, size)?;
+
+    if mode == MapMode::Read {
+      let mut data = self.data.borrow_mut();
+      let data = data
+        .as_mut()
+        .ok_or(JsErrorBox::range_error("Buffer failed allocating"))?;
+      mapping.read(
+        &mut data[offset as usize..(offset + mapping.len()) as usize],
+        0,
+      );
+    }
+
+    self.map_state.replace(BufferMapState::Mapped {
+      mode,
+      range: offset..(offset + mapping.len()),
+      views: vec![],
+    });
 
     Ok(())
   }
@@ -200,48 +253,67 @@ impl GPUBuffer {
     #[webidl(default = 0)] offset: u64,
     #[webidl] size: Option<u64>,
   ) -> Result<v8::Local<'s, v8::ArrayBuffer>, BufferError> {
-    let (slice_pointer, range_size) = self
-      .wgpu_buffer
-      .get_mapped_range(offset, size)
-      .map_err(BufferError::Access)?;
+    let size = size.unwrap_or_else(|| self.wgpu_buffer.size() - offset);
+    let BufferMapState::Mapped {
+      mode: _,
+      range,
+      views,
+    } = &mut *self.map_state.borrow_mut()
+    else {
+      return Err(BufferError::Operation("Buffer is not mapped"));
+    };
 
-    let mode = self.map_mode.borrow();
-    let mode = mode.as_ref().unwrap();
+    if !(offset.is_multiple_of(8)) {
+      return Err(BufferError::Operation("Offset must be a multiple of 8"));
+    }
 
-    let bs = if mode == &MapMode::Write {
-      unsafe extern "C" fn noop_deleter_callback(
-        _data: *mut std::ffi::c_void,
-        _byte_length: usize,
-        _deleter_data: *mut std::ffi::c_void,
-      ) {
-      }
+    if !(size.is_multiple_of(4)) {
+      return Err(BufferError::Operation("Size must be a multiple of 4"));
+    }
 
-      // SAFETY: creating a backing store from the pointer and length provided by wgpu
-      unsafe {
-        v8::ArrayBuffer::new_backing_store_from_ptr(
-          slice_pointer.as_ptr() as _,
-          range_size as usize,
-          noop_deleter_callback,
-          std::ptr::null_mut(),
-        )
-      }
-    } else {
-      // SAFETY: creating a vector from the pointer and length provided by wgpu
-      let slice = unsafe {
-        std::slice::from_raw_parts(slice_pointer.as_ptr(), range_size as usize)
-      };
-      v8::ArrayBuffer::new_backing_store_from_vec(slice.to_vec())
+    if !(offset >= range.start) {
+      return Err(BufferError::Operation("Offset is out of range"));
+    }
+
+    if !(offset + size <= range.end) {
+      return Err(BufferError::Operation("Size is out of range"));
+    }
+
+    let range = offset..(offset + size);
+
+    if views.iter().any(|view| range_overlap(&view.range, &range)) {
+      return Err(BufferError::Operation(
+        "Overlapping mapped ranges are not allowed",
+      ));
+    }
+
+    let data = self.data.borrow();
+    let data = data.as_ref().expect("mapAsync succeeded");
+
+    unsafe extern "C" fn noop_deleter_callback(
+      _data: *mut std::ffi::c_void,
+      _byte_length: usize,
+      _deleter_data: *mut std::ffi::c_void,
+    ) {
+    }
+
+    // SAFETY: creating a backing store from the pointer and length provided by wgpu
+    let bs = unsafe {
+      v8::ArrayBuffer::new_backing_store_from_ptr(
+        data.as_ptr().add(offset as usize) as _,
+        size as usize,
+        noop_deleter_callback,
+        std::ptr::null_mut(),
+      )
     };
 
     let shared_bs = bs.make_shared();
     let ab = v8::ArrayBuffer::with_backing_store(scope, &shared_bs);
 
-    if mode == &MapMode::Write {
-      self
-        .mapped_js_buffers
-        .borrow_mut()
-        .push(v8::Global::new(scope, ab));
-    }
+    views.push(View {
+      range,
+      array_buffer: v8::Global::new(scope, ab),
+    });
 
     Ok(ab)
   }
@@ -249,14 +321,29 @@ impl GPUBuffer {
   #[nofast]
   #[undefined]
   fn unmap(&self, scope: &mut v8::HandleScope) -> Result<(), BufferError> {
-    for ab in self.mapped_js_buffers.replace(vec![]) {
-      let ab = ab.open(scope);
-      ab.detach(None);
+    if let BufferMapState::Mapped { mode, range, views } =
+      self.map_state.replace(BufferMapState::Unmapped)
+    {
+      for ab in views {
+        let ab = ab.array_buffer.open(scope);
+        ab.detach(None);
+      }
+
+      if mode == MapMode::Write {
+        if let Ok(mapping) = self
+          .wgpu_buffer
+          .get_mapped_range(range.start, Some(range.end - range.start))
+        {
+          let data = self.data.borrow();
+          let data = data.as_ref().expect("mapAsync succeeded");
+          mapping
+            .write_slice()
+            .copy_from_slice(&data[range.start as usize..range.end as usize]);
+        }
+      }
     }
 
     self.wgpu_buffer.unmap();
-
-    *self.map_state.borrow_mut() = "unmapped";
 
     Ok(())
   }

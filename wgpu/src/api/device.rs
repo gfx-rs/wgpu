@@ -2,6 +2,7 @@ use alloc::{boxed::Box, string::String, sync::Arc, vec};
 #[cfg(wgpu_core)]
 use core::ops::Deref;
 use core::{error, fmt, future::Future, marker::PhantomData};
+use hashbrown::HashSet;
 
 use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
@@ -20,6 +21,9 @@ pub use wgt::error::*;
 #[derive(Debug, Clone)]
 pub struct Device {
     pub(crate) inner: dispatch::DispatchDevice,
+    /// The set of buffers that are currently alive on the device.
+    /// This is used to ensure that all buffers are unmapped before the device is destroyed.
+    pub(crate) buffers: Arc<Mutex<HashSet<WeakMapContext>>>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Device: Send, Sync);
@@ -56,6 +60,7 @@ impl Device {
     pub fn from_custom<T: custom::DeviceInterface>(device: T) -> Self {
         Self {
             inner: dispatch::DispatchDevice::custom(device),
+            buffers: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 
@@ -283,13 +288,19 @@ impl Device {
     /// Creates a [`Buffer`].
     #[must_use]
     pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Buffer {
-        let map_context = MapContext::new(desc.mapped_at_creation.then_some(0..desc.size));
+        let map_context = MapContext::new(
+            desc.mapped_at_creation.then_some(Mapped {
+                range: 0..desc.size,
+                kind: MapMode::Write,
+            }),
+            &self.buffers,
+        );
 
         let buffer = self.inner.create_buffer(desc);
 
         Buffer {
             inner: buffer,
-            map_context: Arc::new(Mutex::new(map_context)),
+            map_context,
         }
     }
 
@@ -611,7 +622,13 @@ impl Device {
         hal_buffer: A::Buffer,
         desc: &BufferDescriptor<'_>,
     ) -> Buffer {
-        let map_context = MapContext::new(desc.mapped_at_creation.then_some(0..desc.size));
+        let map_context = MapContext::new(
+            desc.mapped_at_creation.then_some(Mapped {
+                range: 0..desc.size,
+                kind: MapMode::Write,
+            }),
+            &self.buffers,
+        );
 
         let buffer = unsafe {
             let core_device = self.inner.as_core();
@@ -620,7 +637,7 @@ impl Device {
 
         Buffer {
             inner: buffer.into(),
-            map_context: Arc::new(Mutex::new(map_context)),
+            map_context,
         }
     }
 
@@ -814,7 +831,12 @@ impl Device {
     }
 
     /// Destroy this device.
+    ///
+    /// Panics if there is any [`BufferView`] or [`BufferViewMut`] alive.
     pub fn destroy(&self) {
+        for buffer in self.buffers.lock().drain() {
+            buffer.unmap();
+        }
         self.inner.destroy()
     }
 
