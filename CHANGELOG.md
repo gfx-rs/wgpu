@@ -268,7 +268,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 ### Performance
 
 - Added explicit `Send` and `Sync` implementations to key `wgpu` types so that the compiler can do less work checking those bounds. If you previously added a `#![recursion_limit = ...]` attribute to your crate due to overflow errors involving `wgpu` types, you may now be able to remove it. By @kpreid in [#10177](https://github.com/gfx-rs/wgpu/pull/10177).
-- Workgroup memory is now zero initialized by all invocations of a workgroup instead of a single invocation, when the backend has no native zero initialization. This is done by the new `naga::back::workgroup_init` pass. By @Luca00casati in [#XXXXX](https://github.com/gfx-rs/wgpu/pull/XXXXX).
+- Workgroup memory is now zero initialized by all invocations of a workgroup instead of a single invocation, when the backend has no native zero initialization. This is done by the new `naga::back::workgroup_init` pass. By @Luca00casati in [#10466](https://github.com/gfx-rs/wgpu/pull/#10466).
 
 ### Documentation
 
