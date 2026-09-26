@@ -288,8 +288,8 @@ impl super::Device {
     ) -> Result<super::CompiledShader, crate::PipelineError> {
         let stage_bit = auxil::map_naga_stage(naga_stage);
 
-        let needs_temp_options = stage.zero_initialize_workgroup_memory
-            != layout.naga_options.zero_initialize_workgroup_memory
+        // Workgroup memory is zero initialized by `naga::back::workgroup_init` instead.
+        let needs_temp_options = layout.naga_options.zero_initialize_workgroup_memory
             || stage.module.runtime_checks.bounds_checks != layout.naga_options.restrict_indexing
             || !stage.module.runtime_checks.task_shader_dispatch_tracking
             || !stage
@@ -306,7 +306,7 @@ impl super::Device {
         let mut temp_options;
         let naga_options = if needs_temp_options {
             temp_options = layout.naga_options.clone();
-            temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
+            temp_options.zero_initialize_workgroup_memory = false;
             temp_options.restrict_indexing = stage.module.runtime_checks.bounds_checks;
             temp_options.force_loop_bounding = stage.module.runtime_checks.force_loop_bounding;
             if !stage.module.runtime_checks.task_shader_dispatch_tracking {
@@ -355,6 +355,14 @@ impl super::Device {
                 .map_err(|e| {
                     crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}"))
                 })?;
+                let (module, info) = if stage.zero_initialize_workgroup_memory {
+                    naga::back::workgroup_init::zero_initialize_workgroup_memory(module, info)
+                        .map_err(|e| {
+                            crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}"))
+                        })?
+                } else {
+                    (module, info)
+                };
 
                 let pipeline_options = hlsl::PipelineOptions {
                     entry_point: Some((naga_stage, stage.entry_point.to_string())),

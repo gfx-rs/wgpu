@@ -25,7 +25,10 @@ impl NestedEntryPointArgs {
             .iter()
             .map(String::as_str)
             .chain(self.task_payload.as_deref())
-            .chain(core::iter::once(self.local_invocation_index.as_str()));
+            .chain(
+                self.extra_local_invocation_index
+                    .then_some(self.local_invocation_index.as_str()),
+            );
         for (i, arg) in all_args.enumerate() {
             if i != 0 {
                 write!(out, ", ")?;
@@ -357,7 +360,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 self.write_semantic(&arg.binding, Some((stage, Io::Input)))?;
             }
         }
-        if need_workgroup_variables_initialization || stage == ShaderStage::Mesh {
+        if args.extra_local_invocation_index {
             write!(
                 self.out,
                 "{}uint {} : SV_GroupIndex",

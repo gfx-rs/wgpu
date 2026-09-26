@@ -1,0 +1,20 @@
+(
+    vertex:[
+    ],
+    fragment:[
+    ],
+    compute:[
+    ],
+    task:[
+        (
+            entry_point:"ts_main",
+            target_profile:"as_6_5",
+        ),
+    ],
+    mesh:[
+        (
+            entry_point:"ms_main",
+            target_profile:"ms_6_5",
+        ),
+    ],
+)

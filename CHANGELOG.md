@@ -252,6 +252,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Report `DownlevelFlags::INDIRECT_EXECUTION` and a 256-byte `min_uniform_buffer_offset_alignment` on the iOS Simulator (`target_abi = "sim"`). The Simulator advertises only the Apple2 GPU family but executes indirect draw/dispatch on the host GPU, so compute renderers such as vello previously failed with "Downlevel flags DownlevelFlags(INDIRECT_EXECUTION) are required but not supported". Note that Metal API Validation still rejects indirect commands there. By @edTheGuy00 in [#10189](https://github.com/gfx-rs/wgpu/pull/10189).
 - Fix a crash in `Surface::configure` on iOS below 16. `wantsExtendedDynamicRangeContent` is iOS 16+ and is now only called there. By @VladasZ in [#10257](https://github.com/gfx-rs/wgpu/pull/10257).
 - Fix a crash when creating a declared alternate sRGB view of a render-attachment-only surface with Metal API Validation enabled. By @jinleili in [#10280](https://github.com/gfx-rs/wgpu/pull/10280).
+- Fix MSL output for a loop's `break if` condition that uses values computed in its `continuing` block. The condition was re-evaluated after the block's assignments, which could exit the loop one iteration early. By @Luca00casati in [#10466](https://github.com/gfx-rs/wgpu/pull/10466).
 
 #### GLES
 
@@ -271,6 +272,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 ### Performance
 
 - Added explicit `Send` and `Sync` implementations to key `wgpu` types so that the compiler can do less work checking those bounds. If you previously added a `#![recursion_limit = ...]` attribute to your crate due to overflow errors involving `wgpu` types, you may now be able to remove it. By @kpreid in [#10177](https://github.com/gfx-rs/wgpu/pull/10177).
+- Workgroup memory is now zero initialized by all invocations of a workgroup instead of a single invocation, when the backend has no native zero initialization. This is done by the new `naga::back::workgroup_init` pass. By @Luca00casati in [#10466](https://github.com/gfx-rs/wgpu/pull/#10466).
 
 ### Documentation
 

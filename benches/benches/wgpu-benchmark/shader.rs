@@ -370,6 +370,7 @@ pub fn backends(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                 mesh_output_validation: input.options.mesh_output_validation,
                 task_limits: input.options.task_limits,
                 bounds_checks_policies: input.options.bounds_check_policies,
+                lower_workgroup_zero_init: false,
             };
             if input.options.targets.unwrap().contains(Targets::SPIRV) {
                 if input.filename().contains("pointer-function-arg") {

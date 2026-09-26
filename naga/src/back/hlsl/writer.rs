@@ -126,6 +126,8 @@ pub(super) struct NestedEntryPointArgs {
     pub user_args: Vec<String>,
     pub task_payload: Option<String>,
     pub local_invocation_index: String,
+    /// Whether `local_invocation_index` is an extra argument rather than one of `user_args`.
+    pub extra_local_invocation_index: bool,
 }
 
 const fn is_subgroup_builtin_binding(binding: &Option<crate::Binding>) -> bool {
@@ -1724,6 +1726,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         let needs_local_invocation_index_name = need_workgroup_variables_initialization || nested;
         let mut local_invocation_index_name = None;
+        let mut extra_local_invocation_index = false;
         // For nested entry points, collect arg names as we write them so that
         // write_nested_function_outer can pass the exact same names to the call site.
         let mut nested_wgsl_args: Vec<String> = Vec::new();
@@ -1804,6 +1807,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(self.out, "{}uint {name}", separator())?;
                     write!(self.out, " : SV_GroupIndex")?;
                     local_invocation_index_name = Some(name);
+                    extra_local_invocation_index = true;
                 }
             }
         }
@@ -1917,6 +1921,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     task_payload: nested_task_payload_name,
                     // guaranteed to be set for nested functions (task/mesh shaders)
                     local_invocation_index: local_invocation_index_name.unwrap(),
+                    extra_local_invocation_index,
                 },
             )?;
         }

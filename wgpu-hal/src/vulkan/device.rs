@@ -747,12 +747,18 @@ impl super::Device {
                     entry_point: stage.entry_point.to_owned(),
                     shader_stage: naga_stage,
                 };
+                let lower_zero_init = stage.zero_initialize_workgroup_memory
+                    && matches!(
+                        self.naga_options.zero_initialize_workgroup_memory,
+                        naga::back::spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
+                    );
                 let needs_temp_options = !runtime_checks.bounds_checks
                     || !runtime_checks.force_loop_bounding
                     || !runtime_checks.ray_query_initialization_tracking
                     || !binding_map.is_empty()
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory
+                    || lower_zero_init
                     || !runtime_checks.task_shader_dispatch_tracking
                     || !runtime_checks.mesh_shader_primitive_indices_clamp
                     || !runtime_checks.int_div_checks;
@@ -785,7 +791,7 @@ impl super::Device {
                             language: naga::back::spv::SourceLanguage::WGSL,
                         })
                     }
-                    if !stage.zero_initialize_workgroup_memory {
+                    if !stage.zero_initialize_workgroup_memory || lower_zero_init {
                         temp_options.zero_initialize_workgroup_memory =
                             naga::back::spv::ZeroInitializeWorkgroupMemoryMode::None;
                     }
@@ -810,6 +816,12 @@ impl super::Device {
                 .map_err(|e| {
                     crate::PipelineError::PipelineConstants(stage_flags, format!("{e}"))
                 })?;
+                let (module, info) = if lower_zero_init {
+                    naga::back::workgroup_init::zero_initialize_workgroup_memory(module, info)
+                        .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?
+                } else {
+                    (module, info)
+                };
 
                 let spv = {
                     profiling::scope!("naga::spv::write_vec");
