@@ -342,6 +342,10 @@ impl Surface {
         // present.frag takes care of handling srgb conversion
         true
     }
+
+    pub fn supports_immediate_present(&self) -> bool {
+        false
+    }
 }
 
 impl crate::Surface for Surface {

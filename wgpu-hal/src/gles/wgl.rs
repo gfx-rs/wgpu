@@ -754,6 +754,10 @@ impl Surface {
     pub fn supports_srgb(&self) -> bool {
         self.srgb_capable
     }
+
+    pub fn supports_immediate_present(&self) -> bool {
+        true
+    }
 }
 
 impl crate::Surface for Surface {

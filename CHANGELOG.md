@@ -140,6 +140,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 #### GLES
 
 - Add ANGLE as an opt-in OpenGL backend on Windows via `cfg(windows_angle)`, while keeping the `angle` feature for ANGLE on macOS/iOS. By @csmoe in [#9422](https://github.com/gfx-rs/wgpu/pull/9422).
+- Support `PresentMode::Immediate` on EGL (Linux, Android, ANGLE on Windows) when the driver allows a swap interval of 0. By @Luca00casati in [#10464](https://github.com/gfx-rs/wgpu/pull/#10464).
 
 #### WebGL
 
