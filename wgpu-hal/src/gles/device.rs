@@ -392,6 +392,16 @@ impl super::Device {
                 let msg = format!("{e}");
                 crate::PipelineError::PipelineConstants(map_naga_stage(naga_stage), msg)
             })?;
+            let (module, info) = if stage.zero_initialize_workgroup_memory {
+                naga::back::workgroup_init::zero_initialize_workgroup_memory(module, info).map_err(
+                    |e| {
+                        let msg = format!("{e}");
+                        crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
+                    },
+                )?
+            } else {
+                (module, info)
+            };
 
             let entry_point_index = module
                 .entry_points
@@ -417,24 +427,11 @@ impl super::Device {
             };
 
             let mut output = String::new();
-            let needs_temp_options = stage.zero_initialize_workgroup_memory
-                != context.layout.naga_options.zero_initialize_workgroup_memory;
-            let mut temp_options;
-            let naga_options = if needs_temp_options {
-                // We use a conditional here, as cloning the naga_options could be expensive
-                // That is, we want to avoid doing that unless we cannot avoid it
-                temp_options = context.layout.naga_options.clone();
-                temp_options.zero_initialize_workgroup_memory =
-                    stage.zero_initialize_workgroup_memory;
-                &temp_options
-            } else {
-                &context.layout.naga_options
-            };
             let mut writer = glsl::Writer::new(
                 &mut output,
                 &module,
                 &info,
-                naga_options,
+                &context.layout.naga_options,
                 &pipeline_options,
                 policies,
             )
@@ -1457,7 +1454,8 @@ impl crate::Device for super::Device {
                 version: self.shared.shading_language_version,
                 writer_flags,
                 binding_map,
-                zero_initialize_workgroup_memory: true,
+                // Done by `naga::back::workgroup_init` instead.
+                zero_initialize_workgroup_memory: false,
             },
         })
     }

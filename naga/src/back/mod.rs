@@ -26,6 +26,8 @@ pub mod wgsl;
 
 #[cfg(any(hlsl_out, msl_out, spv_out, glsl_out))]
 pub mod pipeline_constants;
+#[cfg(any(hlsl_out, msl_out, spv_out, glsl_out))]
+pub mod workgroup_init;
 
 #[cfg(any(hlsl_out, glsl_out))]
 mod continue_forward;

@@ -180,6 +180,15 @@ impl super::Device {
                 .map_err(|e| {
                     crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {e:?}"))
                 })?;
+                let (module, module_info) = if stage.zero_initialize_workgroup_memory {
+                    naga::back::workgroup_init::zero_initialize_workgroup_memory(
+                        module,
+                        module_info,
+                    )
+                    .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {e:?}")))?
+                } else {
+                    (module, module_info)
+                };
 
                 let ep_resources = &layout.per_stage_map[naga_stage];
 
@@ -221,7 +230,8 @@ impl super::Device {
                         // TODO: support bounds checks on binding arrays
                         binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                     },
-                    zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
+                    // Done by `naga::back::workgroup_init` instead.
+                    zero_initialize_workgroup_memory: false,
                     force_loop_bounding: stage.module.runtime_checks.force_loop_bounding,
                     task_dispatch_limits: stage
                         .module

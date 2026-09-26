@@ -1,0 +1,10 @@
+targets = "WGSL | GLSL | SPIRV | HLSL | METAL"
+lower_workgroup_zero_init = true
+
+[msl]
+fake_missing_bindings = true
+lang_version = [2, 0]
+
+[spv]
+adjust_coordinate_space = false
+version = [1, 1]

@@ -6,7 +6,7 @@ const DIR_OUT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/out");
 
 #[allow(unused_variables)]
 fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&str>) {
-    let params = input.read_parameters(DIR_IN);
+    let mut params = input.read_parameters(DIR_IN);
     let name = input.file_name.display().to_string();
 
     let targets = params.targets.unwrap();
@@ -86,10 +86,34 @@ Note: this is an issue with snapshot configuration, not code. If you added a new
             })
     };
 
+    let info = if params.lower_workgroup_zero_init {
+        let (lowered, lowered_info) = naga::back::pipeline_constants::process_overrides(
+            module,
+            &info,
+            None,
+            &params.pipeline_constants,
+        )
+        .expect("override evaluation failed");
+        let (lowered, lowered_info) =
+            naga::back::workgroup_init::zero_initialize_workgroup_memory(lowered, lowered_info)
+                .unwrap_or_else(|err| {
+                    panic!("Workgroup init lowering failed on test `{name}`:\n{err:?}")
+                });
+        let lowered_info = lowered_info.into_owned();
+        *module = lowered.into_owned();
+        params.msl.zero_initialize_workgroup_memory = false;
+        params.glsl.zero_initialize_workgroup_memory = false;
+        params.hlsl.zero_initialize_workgroup_memory = false;
+        lowered_info
+    } else {
+        info
+    };
+
     let shared_info = WriterSharedOptions {
         mesh_output_validation: params.mesh_output_validation,
         task_limits: params.task_limits,
         bounds_checks_policies: params.bounds_check_policies,
+        lower_workgroup_zero_init: params.lower_workgroup_zero_init,
     };
 
     {

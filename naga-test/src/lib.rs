@@ -84,6 +84,7 @@ pub struct WriterSharedOptions {
     pub mesh_output_validation: bool,
     pub task_limits: Option<naga::back::TaskDispatchLimits>,
     pub bounds_checks_policies: naga::proc::BoundsCheckPolicies,
+    pub lower_workgroup_zero_init: bool,
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
@@ -173,7 +174,11 @@ impl SpirvOutParameters {
             bounds_check_policies: shared_info.bounds_checks_policies,
             fake_missing_bindings: true,
             binding_map: self.binding_map.clone(),
-            zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
+            zero_initialize_workgroup_memory: if shared_info.lower_workgroup_zero_init {
+                spv::ZeroInitializeWorkgroupMemoryMode::None
+            } else {
+                spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
+            },
             force_loop_bounding: true,
             ray_query_initialization_tracking: true,
             debug_info,
@@ -254,6 +259,9 @@ pub struct Parameters {
     pub pipeline_constants: naga::back::PipelineConstants,
 
     pub mesh_output_validation: bool,
+    /// Zero initialize workgroup memory in the IR with
+    /// `naga::back::workgroup_init` instead of in each backend.
+    pub lower_workgroup_zero_init: bool,
     #[serde(default = "default_task_limits")]
     pub task_limits: Option<naga::back::TaskDispatchLimits>,
 }
