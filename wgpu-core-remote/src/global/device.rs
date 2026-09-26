@@ -4,7 +4,7 @@ use core::ptr::NonNull;
 use wgpu_core_remote_types::{
     encoders::{RenderBundleDescriptor, RenderBundleEncoderDescriptor},
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
-    BufferDescriptor, ExternalTextureDescriptor, PipelineError, PipelineLayoutDescriptor,
+    BufferDescriptor, ExternalTextureDescriptor, MapMode, PipelineError, PipelineLayoutDescriptor,
     QuerySetDescriptor, SamplerDescriptor, ShaderModuleDescriptor, TextureDescriptor,
     TextureViewDescriptor,
 };
@@ -1276,13 +1276,20 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-        op: BufferMapOperation,
+        op: BufferMapOperation<MapMode>,
     ) -> Option<SubmissionIndex> {
         let hub = self.hub.borrow();
 
         let buffer = hub.buffers.get(buffer_id);
 
-        buffer.map_async(offset, size, op)
+        buffer.map_async(
+            offset,
+            size,
+            BufferMapOperation {
+                callback: op.callback,
+                host: resource::MapMode::from_bits_retain(op.host.bits()),
+            },
+        )
     }
 
     pub fn buffer_get_mapped_range(

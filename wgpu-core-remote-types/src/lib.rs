@@ -199,3 +199,12 @@ pub enum BufferMapError {
     Aborted(String),
     Operation(String),
 }
+
+bitflags::bitflags! {
+    /// Corresponds to [WebGPU `GPUMapModeFlags`](https://gpuweb.github.io/gpuweb/#dictdef-gpumapmodeflags).
+    #[derive(serde::Serialize, serde::Deserialize)]
+    pub struct MapMode: u32 {
+        const READ = 0x0001;
+        const WRITE = 0x0002;
+    }
+}

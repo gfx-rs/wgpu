@@ -272,12 +272,21 @@ pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
 
-pub struct BufferMapOperation {
-    pub host: HostMap,
+pub struct BufferMapOperation<M = HostMap> {
+    pub host: M,
     pub callback: Option<BufferMapCallback>,
 }
 
-impl fmt::Debug for BufferMapOperation {
+impl<M> BufferMapOperation<M> {
+    fn use_dummy_host(self) -> BufferMapOperation {
+        BufferMapOperation {
+            host: HostMap::Read,
+            callback: self.callback,
+        }
+    }
+}
+
+impl<M: fmt::Debug> fmt::Debug for BufferMapOperation<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("BufferMapOperation")
             .field("host", &self.host)
@@ -352,6 +361,41 @@ pub enum BufferAccessError {
         size: wgt::BufferAddress,
         buffer_size: wgt::BufferAddress,
     },
+    #[error(transparent)]
+    InvalidMapMode(#[from] BadMapMode),
+}
+
+#[derive(Clone, Debug, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[error("Invalid map mode: {0:?}, exactly one of READ or WRITE map mode must be set")]
+pub struct BadMapMode(MapMode);
+
+bitflags::bitflags! {
+    /// Corresponds to [WebGPU `GPUMapModeFlags`](https://gpuweb.github.io/gpuweb/#dictdef-gpumapmodeflags).
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    pub struct MapMode: u32 {
+        const READ = 0x0001;
+        const WRITE = 0x0002;
+    }
+}
+
+impl From<core::convert::Infallible> for BadMapMode {
+    fn from(_: core::convert::Infallible) -> Self {
+        unreachable!()
+    }
+}
+
+impl TryFrom<MapMode> for HostMap {
+    type Error = BadMapMode;
+
+    fn try_from(mode: MapMode) -> Result<Self, Self::Error> {
+        match mode {
+            m if m == MapMode::READ => Ok(HostMap::Read),
+            m if m == MapMode::WRITE => Ok(HostMap::Write),
+            m => Err(BadMapMode(m)),
+        }
+    }
 }
 
 impl WebGpuError for BufferAccessError {
@@ -374,7 +418,8 @@ impl WebGpuError for BufferAccessError {
             | Self::OutOfBoundsEndOffsetOverrun { .. }
             | Self::MapAborted
             | Self::MapStartOffsetOverrun { .. }
-            | Self::MapEndOffsetOverrun { .. } => ErrorType::Validation,
+            | Self::MapEndOffsetOverrun { .. }
+            | Self::InvalidMapMode(_) => ErrorType::Validation,
         }
     }
 }
@@ -430,7 +475,7 @@ impl WebGpuError for InvalidResourceError {
     }
 }
 
-pub type BufferAccessResult = Result<(), BufferAccessError>;
+pub type BufferAccessResult = Result<HostMap, BufferAccessError>;
 
 #[derive(Debug)]
 pub(crate) struct BufferPendingMapping {
@@ -699,12 +744,16 @@ impl Buffer {
     /// Schedule buffer mapping.
     ///
     /// `op.callback` is guaranteed to be called, regardless of the outcome.
-    pub fn map_async(
+    pub fn map_async<M>(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
-        op: BufferMapOperation,
-    ) -> Option<SubmissionIndex> {
+        op: BufferMapOperation<M>,
+    ) -> Option<SubmissionIndex>
+    where
+        M: fmt::Debug + TryInto<HostMap> + Copy,
+        M::Error: Into<BadMapMode>,
+    {
         profiling::scope!("Buffer::map_async");
         api_log!(
             "Buffer::map_async {:?} offset {offset:?} size {size:?} op: {op:?}",
@@ -713,8 +762,11 @@ impl Buffer {
 
         self.try_map_async(offset, size, op)
             .map_err(|(mut operation, err)| {
-                self.device
-                    .handle_error(err.clone(), Some(&self.label), "Buffer::map_async");
+                // invalid buffer should not raise validation error
+                if !matches!(err, BufferAccessError::InvalidResource(_)) {
+                    self.device
+                        .handle_error(err.clone(), Some(&self.label), "Buffer::map_async");
+                }
                 if let Some(callback) = operation.callback.take() {
                     callback(Err(err));
                 }
@@ -744,12 +796,16 @@ impl Buffer {
     ///
     /// A return value of `Ok(0)` means that mapping does not need to wait on the queue, but
     /// it does not mean that the buffer has already been mapped.
-    fn try_map_async(
+    fn try_map_async<M>(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
-        op: BufferMapOperation,
-    ) -> Result<SubmissionIndex, (BufferMapOperation, BufferAccessError)> {
+        op: BufferMapOperation<M>,
+    ) -> Result<SubmissionIndex, (BufferMapOperation, BufferAccessError)>
+    where
+        M: fmt::Debug + TryInto<HostMap> + Copy,
+        M::Error: Into<BadMapMode>,
+    {
         let range_size = if let Some(size) = size {
             size
         } else {
@@ -757,19 +813,25 @@ impl Buffer {
         };
 
         if let Err(e) = self.check_is_valid() {
-            return Err((op, e.into()));
+            return Err((op.use_dummy_host(), e.into()));
         }
 
         if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
-            return Err((op, BufferAccessError::UnalignedOffset { offset }));
+            return Err((
+                op.use_dummy_host(),
+                BufferAccessError::UnalignedOffset { offset },
+            ));
         }
         if !range_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
-            return Err((op, BufferAccessError::UnalignedRangeSize { range_size }));
+            return Err((
+                op.use_dummy_host(),
+                BufferAccessError::UnalignedRangeSize { range_size },
+            ));
         }
 
         if offset > self.size {
             return Err((
-                op,
+                op.use_dummy_host(),
                 BufferAccessError::MapStartOffsetOverrun {
                     offset,
                     buffer_size: self.size,
@@ -779,7 +841,7 @@ impl Buffer {
         // NOTE: Should never underflow because of our earlier check.
         if range_size > self.size - offset {
             return Err((
-                op,
+                op.use_dummy_host(),
                 BufferAccessError::MapEndOffsetOverrun {
                     offset,
                     size: range_size,
@@ -792,8 +854,17 @@ impl Buffer {
         if !offset.is_multiple_of(wgt::MAP_ALIGNMENT)
             || !end_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT)
         {
-            return Err((op, BufferAccessError::UnalignedRange));
+            return Err((op.use_dummy_host(), BufferAccessError::UnalignedRange));
         }
+
+        let host = match op.host.try_into() {
+            Ok(host) => host,
+            Err(e) => return Err((op.use_dummy_host(), e.into().into())),
+        };
+        let op = BufferMapOperation {
+            host,
+            callback: op.callback,
+        };
 
         let (pub_usage, internal_use) = match op.host {
             HostMap::Read => (wgt::BufferUsages::MAP_READ, wgt::BufferUses::MAP_READ),
@@ -1014,7 +1085,7 @@ impl Buffer {
                         range: pending_mapping.range.clone(),
                         host,
                     };
-                    Ok(())
+                    Ok(host)
                 }
                 Err(e) => Err(e),
             }
@@ -1027,7 +1098,7 @@ impl Buffer {
                 range: pending_mapping.range,
                 host: pending_mapping.op.host,
             };
-            Ok(())
+            Ok(pending_mapping.op.host)
         };
         Some((pending_mapping.op, status))
     }

@@ -25,11 +25,11 @@ static BAD_BUFFER_MAP: GpuTestConfiguration = GpuTestConfiguration::new()
             Some("`map` usage can only be combined with the opposite `copy`"),
         );
 
-        fail(
-            &ctx.device,
-            || buffer.slice(..).map_async(wgpu::MapMode::Write, |_| {}),
-            Some("Buffer with '' label is invalid"),
-        );
+        valid(&ctx.device, || {
+            buffer.slice(..).map_async(wgpu::MapMode::Write, |result| {
+                assert!(result.is_err());
+            })
+        });
         valid(&ctx.device, || buffer.unmap());
         valid(&ctx.device, || buffer.destroy());
         valid(&ctx.device, || buffer.destroy());

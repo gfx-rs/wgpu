@@ -4939,6 +4939,7 @@ dependencies = [
 name = "wgpu-core-remote-types"
 version = "30.0.0"
 dependencies = [
+ "bitflags 2.13.2",
  "hashbrown 0.17.1",
  "naga-types",
  "serde",
