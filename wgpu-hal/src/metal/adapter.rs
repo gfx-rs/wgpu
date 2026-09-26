@@ -2,20 +2,12 @@ use block2::StackBlock;
 use objc2::rc::{autoreleasepool, Retained};
 use objc2::runtime::{AnyObject, ProtocolObject, Sel};
 use objc2::{available, sel};
-<<<<<<< HEAD
 use objc2_foundation::{NSError, NSOperatingSystemVersion, NSProcessInfo, NSString};
 use objc2_metal::{
-    MTLArgumentBuffersTier, MTLCommandQueueDescriptor, MTLCounterSamplingPoint, MTLDevice,
-    MTLFeatureSet, MTLGPUFamily, MTLIndirectAccelerationStructureInstanceDescriptor,
+    MTLArgumentBuffersTier, MTLCommandQueueDescriptor, MTLCompileOptions, MTLCounterSamplingPoint,
+    MTLDevice, MTLFeatureSet, MTLGPUFamily, MTLIndirectAccelerationStructureInstanceDescriptor,
     MTLLanguageVersion, MTLLogLevel, MTLLogState, MTLLogStateDescriptor, MTLPixelFormat,
     MTLReadWriteTextureTier,
-=======
-use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo, NSString};
-use objc2_metal::{
-    MTLArgumentBuffersTier, MTLCompileOptions, MTLCounterSamplingPoint, MTLDevice, MTLFeatureSet,
-    MTLGPUFamily, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
-    MTLPixelFormat, MTLReadWriteTextureTier,
->>>>>>> 3d22d71 (metal: probe the compiler's MSL version instead of trusting the OS version)
 };
 use wgt::{AstcBlock, AstcChannel};
 
