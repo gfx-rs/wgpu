@@ -3926,6 +3926,18 @@ impl<W: Write> Writer<W> {
         statements: &[crate::Statement],
         context: &StatementContext,
     ) -> BackendResult {
+        self.put_statements(level, statements, context)?;
+        self.unemit(statements);
+        Ok(())
+    }
+
+    /// Like [`Self::put_block`], but leaves the block's expressions emitted.
+    fn put_statements(
+        &mut self,
+        level: back::Level,
+        statements: &[crate::Statement],
+        context: &StatementContext,
+    ) -> BackendResult {
         for statement in statements {
             log::trace!("statement[{}] {:?}", level.0, statement);
             match *statement {
@@ -4101,7 +4113,8 @@ impl<W: Write> Writer<W> {
                         let lif = level.next();
                         let lcontinuing = lif.next();
                         writeln!(self.out, "{lif}if (!{gate_name}) {{")?;
-                        self.put_block(lcontinuing, continuing, context)?;
+                        // `break_if` may use expressions emitted in `continuing`.
+                        self.put_statements(lcontinuing, continuing, context)?;
                         if let Some(condition) = break_if {
                             write!(self.out, "{lcontinuing}if (")?;
                             self.put_expression(condition, &context.expression, true)?;
@@ -4109,6 +4122,7 @@ impl<W: Write> Writer<W> {
                             writeln!(self.out, "{}break;", lcontinuing.next())?;
                             writeln!(self.out, "{lcontinuing}}}")?;
                         }
+                        self.unemit(continuing);
                         writeln!(self.out, "{lif}}}")?;
                         writeln!(self.out, "{lif}{gate_name} = false;")?;
                     }
@@ -4492,8 +4506,10 @@ impl<W: Write> Writer<W> {
             }
         }
 
-        // un-emit expressions
-        //TODO: take care of loop/continuing?
+        Ok(())
+    }
+
+    fn unemit(&mut self, statements: &[crate::Statement]) {
         for statement in statements {
             if let crate::Statement::Emit(ref range) = *statement {
                 for handle in range.clone() {
@@ -4501,7 +4517,6 @@ impl<W: Write> Writer<W> {
                 }
             }
         }
-        Ok(())
     }
 
     fn put_store(

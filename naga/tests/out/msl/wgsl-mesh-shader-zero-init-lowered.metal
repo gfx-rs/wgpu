@@ -56,7 +56,7 @@ metal::uint3 _ts_main(
             uint _e30 = zero_init_index;
             uint _e31 = _e30 + 32u;
             zero_init_index = _e31;
-            if ((zero_init_index + 32u) >= 64u) {
+            if (_e31 >= 64u) {
                 break;
             }
         }
@@ -74,7 +74,7 @@ metal::uint3 _ts_main(
             uint _e45 = zero_init_index;
             uint _e46 = _e45 + 32u;
             zero_init_index = _e46;
-            if ((zero_init_index + 32u) >= 256u) {
+            if (_e46 >= 256u) {
                 break;
             }
         }
@@ -143,7 +143,7 @@ void _ms_main(
             uint _e37 = zero_init_index_1;
             uint _e38 = _e37 + 32u;
             zero_init_index_1 = _e38;
-            if ((zero_init_index_1 + 32u) >= 64u) {
+            if (_e38 >= 64u) {
                 break;
             }
         }
@@ -161,7 +161,7 @@ void _ms_main(
             uint _e49 = zero_init_index_1;
             uint _e50 = _e49 + 32u;
             zero_init_index_1 = _e50;
-            if ((zero_init_index_1 + 32u) >= 126u) {
+            if (_e50 >= 126u) {
                 break;
             }
         }

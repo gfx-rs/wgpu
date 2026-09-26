@@ -87,7 +87,7 @@ kernel void main_(
             uint _e92 = zero_init_index;
             uint _e93 = _e92 + 32u;
             zero_init_index = _e93;
-            if ((zero_init_index + 32u) >= 256u) {
+            if (_e93 >= 256u) {
                 break;
             }
         }
@@ -105,7 +105,7 @@ kernel void main_(
             uint _e121 = zero_init_index;
             uint _e122 = _e121 + 32u;
             zero_init_index = _e122;
-            if ((zero_init_index + 32u) >= 324u) {
+            if (_e122 >= 324u) {
                 break;
             }
         }
@@ -126,7 +126,7 @@ kernel void main_(
             uint _e146 = zero_init_index;
             uint _e147 = _e146 + 32u;
             zero_init_index = _e147;
-            if ((zero_init_index + 32u) >= 300u) {
+            if (_e147 >= 300u) {
                 break;
             }
         }
@@ -201,7 +201,7 @@ kernel void with_struct(
             uint _e24 = zero_init_index_1;
             uint _e25 = _e24 + 16u;
             zero_init_index_1 = _e25;
-            if ((zero_init_index_1 + 16u) >= 256u) {
+            if (_e25 >= 256u) {
                 break;
             }
         }
