@@ -17,10 +17,7 @@ fn default_device_lost_callback(reason: wgpu::DeviceLostReason, message: String)
 /// Initialize the logger for the test runner.
 pub fn init_logger() {
     // We don't actually care if it fails
-    #[cfg(not(target_arch = "wasm32"))]
-    let _ = env_logger::try_init();
-    #[cfg(target_arch = "wasm32")]
-    let _ = console_log::init_with_level(log::Level::Info);
+    let _ = crate::logging::init();
 }
 
 /// Initialize a wgpu instance with the options from the environment.
