@@ -776,7 +776,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 16] = [
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 17] = [
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
         webgpu_sys::GpuFeatureName::DepthClipControl,
@@ -840,6 +840,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 16] = [
     (
         wgt::Features::CLIP_DISTANCES,
         webgpu_sys::GpuFeatureName::ClipDistances,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_UNALIGNED,
+        webgpu_sys::GpuFeatureName::TextureCompressionUnaligned,
     ),
 ];
 

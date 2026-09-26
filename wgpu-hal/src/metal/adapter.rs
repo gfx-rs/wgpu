@@ -1255,7 +1255,8 @@ impl super::CapabilitiesQuery {
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE
             | F::PASSTHROUGH_SHADERS
-            | F::EXTERNAL_TEXTURE;
+            | F::EXTERNAL_TEXTURE
+            | F::TEXTURE_COMPRESSION_UNALIGNED;
 
         features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
