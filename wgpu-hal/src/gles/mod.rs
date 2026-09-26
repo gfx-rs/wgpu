@@ -616,12 +616,24 @@ impl crate::DynBindGroupLayout for BindGroupLayout {}
 #[derive(Debug)]
 struct BindGroupLayoutInfo {
     entries: Arc<[wgt::BindGroupLayoutEntry]>,
-    /// Mapping of resources, indexed by `binding`, into the whole layout space.
-    /// For texture resources, the value is the texture slot index.
-    /// For sampler resources, the value is the index of the sampler in the whole layout.
-    /// For buffers, the value is the uniform or storage slot index.
-    /// For unused bindings, the value is `!0`
-    binding_to_slot: Box<[u8]>,
+    /// Mapping of resources, as `(binding, slot)` pairs sorted by `binding`, into the whole layout space.
+    /// For texture resources, the slot is the texture slot index.
+    /// For sampler resources, the slot is the index of the sampler in the whole layout.
+    /// For buffers, the slot is the uniform or storage slot index.
+    ///
+    /// This is sparse because binding indices can be as large as `u32::MAX - 1`.
+    binding_to_slot: BindingToSlot,
+}
+
+type BindingToSlot = Box<[(u32, u8)]>;
+
+impl BindGroupLayoutInfo {
+    /// Returns the slot of `binding`, or `!0` if the layout has no such binding.
+    fn slot(&self, binding: u32) -> u8 {
+        self.binding_to_slot
+            .binary_search_by_key(&binding, |&(binding, _)| binding)
+            .map_or(!0, |index| self.binding_to_slot[index].1)
+    }
 }
 
 #[derive(Debug)]
@@ -638,7 +650,7 @@ impl PipelineLayout {
     /// the resource binding.
     fn get_slot(&self, br: &naga::ResourceBinding) -> u8 {
         let group_info = self.group_infos[br.group as usize].as_ref().unwrap();
-        group_info.binding_to_slot[br.binding as usize]
+        group_info.slot(br.binding)
     }
 }
 
@@ -796,7 +808,7 @@ struct ProgramStage {
 #[derive(Debug, PartialEq, Eq, Hash)]
 struct ProgramCacheKey {
     stages: ArrayVec<ProgramStage, 3>,
-    group_to_binding_to_slot: Box<[Option<Box<[u8]>>]>,
+    group_to_binding_to_slot: Box<[Option<BindingToSlot>]>,
 }
 
 type ProgramCache = FastHashMap<ProgramCacheKey, Result<Arc<PipelineInner>, crate::PipelineError>>;

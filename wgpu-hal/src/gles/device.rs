@@ -1405,17 +1405,7 @@ impl crate::Device for super::Device {
                 continue;
             };
 
-            // create a vector with the size enough to hold all the bindings, filled with `!0`
-            let mut binding_to_slot = vec![
-                !0;
-                bg_layout
-                    .entries
-                    .iter()
-                    .map(|b| b.binding)
-                    .max()
-                    .map_or(0, |idx| idx as usize + 1)
-            ]
-            .into_boxed_slice();
+            let mut binding_to_slot = Vec::with_capacity(bg_layout.entries.len());
 
             for entry in bg_layout.entries.iter() {
                 let counter = match entry.ty {
@@ -1434,7 +1424,7 @@ impl crate::Device for super::Device {
                     wgt::BindingType::ExternalTexture => unimplemented!(),
                 };
 
-                binding_to_slot[entry.binding as usize] = *counter;
+                binding_to_slot.push((entry.binding, *counter));
                 let br = naga::ResourceBinding {
                     group: group_index as u32,
                     binding: entry.binding,
@@ -1443,9 +1433,10 @@ impl crate::Device for super::Device {
                 *counter += entry.count.map_or(1, |c| c.get() as u8);
             }
 
+            binding_to_slot.sort_unstable_by_key(|&(binding, _)| binding);
             group_infos.push(Some(super::BindGroupLayoutInfo {
                 entries: Arc::clone(&bg_layout.entries),
-                binding_to_slot,
+                binding_to_slot: binding_to_slot.into_boxed_slice(),
             }));
         }
 

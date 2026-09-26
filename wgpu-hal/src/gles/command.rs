@@ -744,7 +744,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let group_info = layout.group_infos[index as usize].as_ref().unwrap();
 
         for (binding_layout, raw_binding) in group_info.entries.iter().zip(group.contents.iter()) {
-            let slot = group_info.binding_to_slot[binding_layout.binding as usize] as u32;
+            let slot = group_info.slot(binding_layout.binding) as u32;
             match *raw_binding {
                 super::RawBinding::Buffer {
                     raw,
