@@ -2850,7 +2850,8 @@ static MARK_EXTERNALLY_INITIALIZED_SKIPS_LAZY_CLEAR: GpuTestConfiguration =
                     target_os = "windows",
                     target_os = "linux",
                     target_os = "android",
-                    target_os = "freebsd"
+                    target_os = "freebsd",
+                    target_os = "macos"
                 ))]
                 Backend::Vulkan => {
                     check_mark_externally_initialized::<hal::vulkan::Api>(&ctx).await;
@@ -2925,7 +2926,6 @@ async fn check_mark_externally_initialized_case<A: hal::Api>(ctx: &TestingContex
     // by wgpu-core.
     unsafe {
         let hal_device = ctx.device.as_hal::<A>().expect("adapter backend mismatch");
-        let hal_texture = texture.as_hal::<A>().expect("adapter backend mismatch");
 
         let (staging_buffer, _allocated_size) = hal_device
             .create_buffer(&hal::BufferDescriptor {
@@ -2946,6 +2946,7 @@ async fn check_mark_externally_initialized_case<A: hal::Api>(ctx: &TestingContex
             hal_device.unmap_buffer(&staging_buffer);
         }
 
+        let hal_texture = texture.as_hal::<A>().expect("adapter backend mismatch");
         let mut encoder = ctx
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });

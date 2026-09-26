@@ -34,7 +34,7 @@ env:
   RUST_LOG: debug,wasm_bindgen_wasm_interpreter=warn,wasm_bindgen_cli_support=warn,walrus=warn,naga=info
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
-  RUSTFLAGS: -D warnings
+  RUSTFLAGS: -D warnings --cfg wgpu_validate_locks_debug
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: e # cache busting
@@ -634,7 +634,7 @@ jobs:
         run: cargo +stable install wasm-bindgen-cli --version=$WASM_BINDGEN_VERSION
 
       - name: Install `cargo-nextest`
-        uses: taiki-e/install-action@3f74d7c16a4242f1c95561e98edc25d36adb4375 # v2.87.12
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: cargo-nextest
 
@@ -679,7 +679,7 @@ jobs:
           cargo -V
 
       - name: Install `cargo-nextest` and `cargo-llvm-cov`
-        uses: taiki-e/install-action@3f74d7c16a4242f1c95561e98edc25d36adb4375 # v2.87.12
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
@@ -785,7 +785,7 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         # Mergify draft pull requests re-run the tests of already-reported
         # pull requests, so their coverage is not uploaded.
         if: steps.coverage.outcome == 'success' && !startsWith(github.head_ref, 'mergify/merge-queue/')
@@ -914,7 +914,7 @@ jobs:
         run: tombi format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@d43b6c087ac471e2ea7b8af622ff15f05c0c365b # v1.50.1
+        uses: crate-ci/typos@512fc24f32f44ab01972217aaaf3dc86ec234d53 # v1.50.2
 
   check-cts-runner:
     # runtime is normally 2 minutes
