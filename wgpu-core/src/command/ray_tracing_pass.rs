@@ -371,7 +371,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
     /// This behaves almost the same as a compute pass' equivalent
     /// function, but also adds a `AsAction::TraceTlas` as trace ray
     /// calls need a bit more validation.
-    /// 
+    ///
     /// This differs from a render pass, which the equivalent method
     /// on compute pass' state discuss more.
     fn flush_bindings(&mut self) -> Result<(), RayTracingPassErrorInner> {
