@@ -746,6 +746,16 @@ jobs:
           # Delete snapshots so we can ensure there aren't any excess output files.
           rm -r naga/tests/out
 
+      # Windows CI intermittently stops making progress for a minute or more at
+      # a time, which kills whichever tests happen to be running. Sample the
+      # host counters so that a timeout can be correlated with CPU, memory or
+      # disk pressure. https://github.com/gfx-rs/wgpu/issues/9248
+      - name: (Windows) Start host metrics sampler
+        if: matrix.os == 'windows-2022'
+        uses: $/.github/actions/sample-host-metrics
+        with:
+          output: host-metrics.csv
+
       - name: Run tests
         shell: bash
         run: |
@@ -765,6 +775,18 @@ jobs:
           path: |
             **/*-actual.png
             **/*-difference.png
+
+      # Per-test timings and the host counter samples outlive the run logs,
+      # which is what we need to chase intermittent timeouts (#9248).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        name: Upload test timings
+        if: always() # We want timings even if the tests fail.
+        with:
+          name: test-timings-${{ matrix.os }}
+          path: |
+            **/nextest/*/junit.xml
+            host-metrics.csv
+          if-no-files-found: warn
 
       # Print GPU configuration so we can see what features were available during the test.
       - name: Print GPU configurations
