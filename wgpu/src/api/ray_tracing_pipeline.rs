@@ -113,3 +113,25 @@ pub struct RayTracingPipelineDescriptor<'a> {
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RayTracingPipelineDescriptor<'_>: Send, Sync);
+
+#[cfg(wgpu_core)]
+impl RayTracingPipeline {
+    /// Create a new ray tracing pipeline of wgpu from a wgpu-core ray tracing pipeline.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_ray_tracing_pipeline` - wgpu-core ray tracing pipeline.
+    pub fn from_core(
+        core_ray_tracing_pipeline: alloc::sync::Arc<wgc::ray_tracing_pipeline::RayTracingPipeline>,
+    ) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreRayTracingPipeline::from_core(core_ray_tracing_pipeline)
+                .into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core render pipeline if this `RenderPipeline` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::ray_tracing_pipeline::RayTracingPipeline>> {
+        self.inner.as_core_opt().map(|rtp| rtp.as_core())
+    }
+}
