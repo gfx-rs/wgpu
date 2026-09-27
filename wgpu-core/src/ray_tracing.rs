@@ -211,6 +211,9 @@ pub enum BuildAccelerationStructureError {
         "Tlas {0:?} instance {1} contains an intersection index {2} which is greater than 2^24 - 1"
     )]
     TlasInvalidIntersectionIndex(ResourceErrorIdent, usize, u32),
+
+    #[error("Tlas instance has invalid flags {0:?}")]
+    TlasInstanceFlagsInvalid(wgt::AccelerationStructureInstanceFlags),
 }
 
 impl WebGpuError for BuildAccelerationStructureError {
@@ -248,7 +251,8 @@ impl WebGpuError for BuildAccelerationStructureError {
             | Self::BlasGeometryKindMismatch(..)
             | Self::IncompatibleBlasAabbPrimitiveCount(..)
             | Self::UnalignedAabbPrimitiveOffset(..)
-            | Self::InvalidAabbStride(..) => ErrorType::Validation,
+            | Self::InvalidAabbStride(..)
+            | Self::TlasInstanceFlagsInvalid(..) => ErrorType::Validation,
         }
     }
 }
@@ -443,6 +447,7 @@ pub struct OwnedTlasInstance<R: ReferenceType> {
     pub custom_data: u32,
     pub mask: u8,
     pub intersection_index: u32,
+    pub flags: wgt::AccelerationStructureInstanceFlags,
 }
 
 pub type ArcTlasInstance = OwnedTlasInstance<ArcReferences>;

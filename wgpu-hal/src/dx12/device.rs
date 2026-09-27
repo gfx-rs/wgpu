@@ -2759,7 +2759,11 @@ impl crate::Device for super::Device {
         let temp = Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC {
             Transform: instance.transform,
             _bitfield1: (instance.custom_data & MAX_U24) | (u32::from(instance.mask) << 24),
-            _bitfield2: (instance.pipeline_intersection_data_offset & MAX_U24),
+            _bitfield2: (instance.pipeline_intersection_data_offset & MAX_U24)
+                | (conv::map_acceleration_structure_instance_flags(&instance.flags)
+                    .0
+                    .cast_unsigned()
+                    << 24),
             AccelerationStructure: instance.blas_address,
         };
 

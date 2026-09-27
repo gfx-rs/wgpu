@@ -3302,6 +3302,7 @@ pub struct TlasInstance {
     pub transform: [f32; 12],
     pub custom_data: u32,
     pub mask: u8,
+    pub flags: wgt::AccelerationStructureInstanceFlags,
     pub blas_address: u64,
     /// The offset for the index into the intersection hit
     /// group calculation. Number is in hit groups.

@@ -488,6 +488,7 @@ impl crate::framework::Example for Example {
                         blas_index as u32,
                         0xff,
                         0,
+                        wgpu::AccelerationStructureInstanceFlags::empty(),
                     ));
                 }
             }

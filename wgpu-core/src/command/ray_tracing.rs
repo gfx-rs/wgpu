@@ -260,6 +260,15 @@ pub(crate) fn build_acceleration_structures(
 
             *max_intersection_idx = (*max_intersection_idx).max(instance.intersection_index);
 
+            if instance.flags.contains(
+                wgt::AccelerationStructureInstanceFlags::FORCE_NO_OPAQUE
+                    | wgt::AccelerationStructureInstanceFlags::FORCE_OPAQUE,
+            ) {
+                return Err(BuildAccelerationStructureError::TlasInstanceFlagsInvalid(
+                    instance.flags,
+                ));
+            }
+
             let blas = instance.blas;
             let is_new_dependency = seen_dependencies.insert(blas.tracker_index());
 
@@ -288,6 +297,7 @@ pub(crate) fn build_acceleration_structures(
                     mask: instance.mask,
                     blas_address: blas.handle,
                     pipeline_intersection_data_offset: instance.intersection_index,
+                    flags: instance.flags,
                 },
                 &mut instance_buffer_staging_source,
             );

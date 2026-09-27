@@ -1,3 +1,4 @@
+use wgt::AccelerationStructureInstanceFlags;
 use windows::Win32::Graphics::{Direct3D, Direct3D12, Dxgi};
 
 pub fn buffer_usage_needs_uav(usage: wgt::BufferUses) -> bool {
@@ -440,6 +441,26 @@ pub(crate) fn map_acceleration_structure_geometry_flags(
         d3d_flags |= Direct3D12::D3D12_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION;
     }
     d3d_flags
+}
+
+pub(crate) fn map_acceleration_structure_instance_flags(
+    flags: &AccelerationStructureInstanceFlags,
+) -> Direct3D12::D3D12_RAYTRACING_INSTANCE_FLAGS {
+    let mut conv_flags = Direct3D12::D3D12_RAYTRACING_INSTANCE_FLAGS::default();
+
+    if flags.contains(AccelerationStructureInstanceFlags::FRONT_FACE_CCW) {
+        conv_flags |= Direct3D12::D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE;
+    }
+
+    if flags.contains(AccelerationStructureInstanceFlags::FORCE_OPAQUE) {
+        conv_flags |= Direct3D12::D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_OPAQUE;
+    }
+
+    if flags.contains(AccelerationStructureInstanceFlags::FORCE_NO_OPAQUE) {
+        conv_flags |= Direct3D12::D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
+    }
+
+    conv_flags
 }
 
 pub(crate) fn map_acceleration_structure_copy_mode(

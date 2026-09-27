@@ -3160,7 +3160,8 @@ impl crate::Device for super::Device {
                 | (u32::from(instance.mask) << 24),
             shader_binding_table_record_offset_and_flags: (instance
                 .pipeline_intersection_data_offset
-                & MAX_U24),
+                & MAX_U24)
+                | (conv::map_acceleration_structure_instance_flags(&instance.flags).as_raw() << 24),
             acceleration_structure_reference: instance.blas_address,
         };
         to_extend.extend_from_slice(bytemuck::bytes_of(&temp))
