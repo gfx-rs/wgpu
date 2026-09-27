@@ -368,34 +368,21 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
 
     /// Flush binding state in preparation for a trace rays call.
     ///
-    /// # Differences between render and compute (from which ray tracing passes inherit functionality) passes
-    ///
-    /// Ray tracing pipelines behave the same as compute pipelines.
-    ///
-    /// There are differences between the `flush_bindings` implementations for
-    /// render and compute passes, because render passes have a single usage
-    /// scope for the entire pass, and compute passes have a separate usage
-    /// scope for each dispatch.
-    ///
-    /// For compute passes, bind groups are merged into a fresh usage scope
-    /// here, not into the pass usage scope within calls to `set_bind_group`. As
-    /// specified by WebGPU, for compute passes, we merge only the bind groups
-    /// that are actually used by the pipeline, unlike render passes, which
-    /// merge every bind group that is ever set, even if it is not ultimately
-    /// used by the pipeline.
-    ///
-    /// For compute passes, we call `drain_barriers` here, because barriers may
-    /// be needed before each dispatch if a previous dispatch had a conflicting
-    /// usage. For render passes, barriers are emitted once at the start of the
-    /// render pass.
+    /// This behaves almost the same as a compute pass' equivalent
+    /// function, but also adds a `AsAction::TraceTlas` as trace ray
+    /// calls need a bit more validation.
+    /// 
+    /// This differs from a render pass, which the equivalent method
+    /// on compute pass' state discuss more.
     fn flush_bindings(&mut self) -> Result<(), RayTracingPassErrorInner> {
         for bind_group in self.pass.binder.list_active() {
             unsafe { self.pass.scope.merge_bind_group(&bind_group.used)? };
         }
-        // For compute, usage scopes are associated with each dispatch and not
-        // with the pass as a whole. However, because the cost of creating and
-        // dropping `UsageScope`s is significant (even with the pool), we
-        // add and then remove usage from a single usage scope.
+        // For ray tracing passes, usage scopes are associated with each trace
+        // ray (in the same way as compute passes) and not with the pass as a
+        // whole. However, because the cost of creating and dropping
+        // `UsageScope`s is significant (even with the pool), we add and then
+        // remove usage from a single usage scope.
 
         let intersection_types = self.pipeline.as_ref().unwrap().intersection_types()?;
 

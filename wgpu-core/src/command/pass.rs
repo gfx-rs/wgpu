@@ -206,9 +206,6 @@ where
 ///
 /// See the compute pass version of `State::flush_bindings` for an explanation
 /// of some differences in handling the two types of passes.
-///
-/// `tlas_intersection_offset_cap` should be the maximum tlas intersection index allowed, or None
-/// for an unlimited number (i.e. it doesn't depend on them).
 pub(super) fn flush_bindings_helper(
     state: &mut PassState,
 ) -> Result<(), InvalidOrDestroyedResourceError> {
