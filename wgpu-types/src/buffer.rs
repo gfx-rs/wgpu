@@ -178,7 +178,9 @@ pub struct BufferTransition<T> {
 }
 
 /// Type of buffer mapping.
+#[repr(C)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MapMode {
     /// Map only for reading
     Read,

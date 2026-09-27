@@ -40,13 +40,7 @@ pub(crate) const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Inval
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 pub type QueueDescriptor<'a> = wgt::QueueDescriptor<Label<'a>>;
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum HostMap {
-    Read,
-    Write,
-}
+pub use wgt::MapMode as HostMap;
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
