@@ -125,13 +125,17 @@ impl RayTracingPipeline {
         core_ray_tracing_pipeline: alloc::sync::Arc<wgc::ray_tracing_pipeline::RayTracingPipeline>,
     ) -> Self {
         Self {
-            inner: crate::backend::wgpu_core::CoreRayTracingPipeline::from_core(core_ray_tracing_pipeline)
-                .into(),
+            inner: crate::backend::wgpu_core::CoreRayTracingPipeline::from_core(
+                core_ray_tracing_pipeline,
+            )
+            .into(),
         }
     }
 
     /// Returns the underlying wgpu-core render pipeline if this `RenderPipeline` is on the wgpu-core backend, otherwise `None`.
-    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::ray_tracing_pipeline::RayTracingPipeline>> {
+    pub fn as_core(
+        &self,
+    ) -> Option<alloc::sync::Arc<wgc::ray_tracing_pipeline::RayTracingPipeline>> {
         self.inner.as_core_opt().map(|rtp| rtp.as_core())
     }
 }

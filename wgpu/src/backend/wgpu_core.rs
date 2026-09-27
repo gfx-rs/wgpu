@@ -583,9 +583,10 @@ pub struct CoreRayTracingPipeline {
     pub(crate) wgpu_ray_tracing_pipeline: Arc<wgc::ray_tracing_pipeline::RayTracingPipeline>,
 }
 
-
 impl CoreRayTracingPipeline {
-    pub(crate) fn from_core(core_ray_tracing_pipeline: Arc<wgc::ray_tracing_pipeline::RayTracingPipeline>) -> Self {
+    pub(crate) fn from_core(
+        core_ray_tracing_pipeline: Arc<wgc::ray_tracing_pipeline::RayTracingPipeline>,
+    ) -> Self {
         Self {
             wgpu_ray_tracing_pipeline: core_ray_tracing_pipeline,
         }
