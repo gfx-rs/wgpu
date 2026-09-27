@@ -20,15 +20,6 @@ OpMemberDecorate %23 0 PerPrimitiveEXT
 OpDecorate %23 Block
 OpDecorate %26 PerPrimitiveEXT
 OpDecorate %29 BuiltIn PrimitiveTriangleIndicesEXT
-OpMemberDecorate %5 0 Offset 0
-OpMemberDecorate %8 0 Offset 0
-OpMemberDecorate %8 1 Offset 12
-OpDecorate %9 ArrayStride 16
-OpDecorate %11 ArrayStride 16
-OpMemberDecorate %13 0 Offset 0
-OpMemberDecorate %13 1 Offset 48
-OpMemberDecorate %13 2 Offset 64
-OpMemberDecorate %13 3 Offset 68
 OpDecorate %44 BuiltIn LocalInvocationIndex
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32

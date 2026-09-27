@@ -7,7 +7,6 @@ OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %14 "test_workgroupUniformLoad" %11 %19
 OpExecutionMode %14 LocalSize 4 1 1
-OpDecorate %5 ArrayStride 4
 OpDecorate %11 BuiltIn WorkgroupId
 OpDecorate %19 BuiltIn LocalInvocationIndex
 %2 = OpTypeVoid

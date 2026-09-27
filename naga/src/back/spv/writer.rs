@@ -65,6 +65,18 @@ impl Function {
     }
 }
 
+/// Whether a type's default SPIR-V declaration should carry explicit layout decorations.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum ExplicitLayout {
+    /// Not used by workgroup or buffer variables; keep Naga's usual decorations.
+    #[default]
+    Default,
+    /// Used by Uniform/Storage/Immediate; `Offset`/`ArrayStride`/`MatrixStride` are required.
+    Required,
+    /// Used only by Workgroup/TaskPayload; those decorations are forbidden.
+    Forbidden,
+}
+
 impl Writer {
     pub fn new(options: &Options) -> Result<Self, Error> {
         let (major, minor) = options.lang_version;
@@ -107,6 +119,7 @@ impl Writer {
             cached_constants: crate::FastHashMap::default(),
             global_variables: HandleVec::new(),
             std140_compat_uniform_types: crate::FastHashMap::default(),
+            workgroup_type_ids: crate::FastHashMap::default(),
             fake_missing_bindings: options.fake_missing_bindings,
             binding_map: options.binding_map.clone(),
             saved_cached: CachedExpressions::default(),
@@ -206,6 +219,7 @@ impl Writer {
             cached_constants: take(&mut self.cached_constants).reclaim(),
             global_variables: take(&mut self.global_variables).reclaim(),
             std140_compat_uniform_types: take(&mut self.std140_compat_uniform_types).reclaim(),
+            workgroup_type_ids: take(&mut self.workgroup_type_ids).reclaim(),
             saved_cached: take(&mut self.saved_cached).reclaim(),
             temp_list: take(&mut self.temp_list).reclaim(),
             ray_query_functions: take(&mut self.ray_query_functions).reclaim(),
@@ -360,6 +374,19 @@ impl Writer {
         self.get_pointer_type_id(base_id, class)
     }
 
+    pub(super) fn type_id_for_space(
+        &mut self,
+        handle: Handle<crate::Type>,
+        space: crate::AddressSpace,
+    ) -> Word {
+        if space.forbids_explicit_layout() {
+            if let Some(&id) = self.workgroup_type_ids.get(&handle) {
+                return id;
+            }
+        }
+        self.get_handle_type_id(handle)
+    }
+
     pub(super) fn get_ray_query_pointer_id(&mut self) -> Word {
         let rq_id = self.get_type_id(LookupType::Local(LocalType::RayQuery));
         self.get_pointer_type_id(rq_id, spirv::StorageClass::Function)
@@ -485,7 +512,7 @@ impl Writer {
                 LocalType::Cooperative(CooperativeType::from_inner(inner).unwrap())
             }
             crate::TypeInner::Pointer { base, space } => {
-                let base_type_id = self.get_handle_type_id(base);
+                let base_type_id = self.type_id_for_space(base, space);
                 LocalType::Pointer {
                     base: base_type_id,
                     class: map_storage_class(space),
@@ -2192,6 +2219,7 @@ impl Writer {
         &mut self,
         module: &crate::Module,
         handle: Handle<crate::Type>,
+        explicit_layout: &HandleVec<crate::Type, ExplicitLayout>,
     ) -> Result<Word, Error> {
         let ty = &module.types[handle];
         // If it's a type that needs SPIR-V capabilities, request them now.
@@ -2223,7 +2251,9 @@ impl Writer {
             let id = self.id_gen.next();
             let instruction = match ty.inner {
                 crate::TypeInner::Array { base, size, stride } => {
-                    self.decorate(id, Decoration::ArrayStride, &[stride]);
+                    if explicit_layout[handle] != ExplicitLayout::Forbidden {
+                        self.decorate(id, Decoration::ArrayStride, &[stride]);
+                    }
 
                     let type_id = self.get_handle_type_id(base);
                     match size.resolve(module.to_ctx())? {
@@ -2266,7 +2296,13 @@ impl Writer {
                             }
                             _ => (),
                         }
-                        self.decorate_struct_member(id, index, member, &module.types)?;
+                        self.decorate_struct_member(
+                            id,
+                            index,
+                            member,
+                            &module.types,
+                            explicit_layout[handle] != ExplicitLayout::Forbidden,
+                        )?;
                         let member_id = self.get_handle_type_id(member.ty);
                         member_ids.push(member_id);
                     }
@@ -2305,6 +2341,159 @@ impl Writer {
         }
 
         Ok(id)
+    }
+
+    fn mark_nested_layout(
+        handle: Handle<crate::Type>,
+        types: &UniqueArena<crate::Type>,
+        flags: &mut HandleVec<crate::Type, ExplicitLayout>,
+        wanted: ExplicitLayout,
+    ) {
+        if flags[handle] == wanted || flags[handle] == ExplicitLayout::Required {
+            return;
+        }
+        flags[handle] = wanted;
+        match types[handle].inner {
+            crate::TypeInner::Array { base, .. }
+            | crate::TypeInner::BindingArray { base, .. }
+            | crate::TypeInner::Pointer { base, .. } => {
+                Self::mark_nested_layout(base, types, flags, wanted);
+            }
+            crate::TypeInner::Struct { ref members, .. } => {
+                for member in members {
+                    Self::mark_nested_layout(member.ty, types, flags, wanted);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn explicit_layout_for_types(module: &crate::Module) -> HandleVec<crate::Type, ExplicitLayout> {
+        let mut flags = HandleVec::with_capacity(module.types.len());
+        flags.resize(module.types.len(), ExplicitLayout::Default);
+        for (_, var) in module.global_variables.iter() {
+            let wanted = if var.space.requires_explicit_layout() {
+                ExplicitLayout::Required
+            } else if var.space.forbids_explicit_layout() {
+                ExplicitLayout::Forbidden
+            } else {
+                continue;
+            };
+            Self::mark_nested_layout(var.ty, &module.types, &mut flags, wanted);
+        }
+        flags
+    }
+
+    /// SPIR-V type id for a Workgroup/TaskPayload use of `handle`.
+    ///
+    /// Does not assume the default declaration is decorated: `Forbidden` types
+    /// already have no layout decorations and are reused. `Required` types (also
+    /// used by a buffer) get an undecorated clone so the workgroup variable does
+    /// not share the buffer's `Offset`/`ArrayStride`. Nested `Forbidden` types
+    /// are cloned only when a member needed a clone.
+    fn get_workgroup_type_id(
+        &mut self,
+        handle: Handle<crate::Type>,
+        module: &crate::Module,
+        explicit_layout: &HandleVec<crate::Type, ExplicitLayout>,
+    ) -> Result<Word, Error> {
+        if let Some(&id) = self.workgroup_type_ids.get(&handle) {
+            return Ok(id);
+        }
+
+        let default_id = self.get_handle_type_id(handle);
+        let array_info = match module.types[handle].inner {
+            crate::TypeInner::Array { base, size, .. } => Some((base, size)),
+            _ => None,
+        };
+        let struct_members = match module.types[handle].inner {
+            crate::TypeInner::Struct { ref members, .. } => {
+                Some(members.iter().map(|m| m.ty).collect::<Vec<_>>())
+            }
+            _ => None,
+        };
+
+        let id = if let Some((base, size)) = array_info {
+            let element_id = self.get_workgroup_type_id(base, module, explicit_layout)?;
+            let needs_distinct = element_id != self.get_handle_type_id(base)
+                || explicit_layout[handle] != ExplicitLayout::Forbidden;
+            if needs_distinct {
+                let id = self.id_gen.next();
+                let instruction = match size.resolve(module.to_ctx())? {
+                    crate::proc::IndexableLength::Known(length) => {
+                        let length_id = self.get_index_constant(length);
+                        Instruction::type_array(id, element_id, length_id)
+                    }
+                    crate::proc::IndexableLength::Dynamic => {
+                        Instruction::type_runtime_array(id, element_id)
+                    }
+                };
+                instruction.to_words(&mut self.logical_layout.declarations);
+                id
+            } else {
+                default_id
+            }
+        } else if let Some(member_tys) = struct_members {
+            let mut member_ids = Vec::with_capacity(member_tys.len());
+            let mut needs_distinct = explicit_layout[handle] != ExplicitLayout::Forbidden;
+            for member_ty in member_tys {
+                let member_id = self.get_workgroup_type_id(member_ty, module, explicit_layout)?;
+                if member_id != self.get_handle_type_id(member_ty) {
+                    needs_distinct = true;
+                }
+                member_ids.push(member_id);
+            }
+            if needs_distinct {
+                let id = self.id_gen.next();
+                if self.flags.contains(WriterFlags::DEBUG) {
+                    if let crate::TypeInner::Struct { ref members, .. } = module.types[handle].inner
+                    {
+                        for (index, member) in members.iter().enumerate() {
+                            if let Some(ref name) = member.name {
+                                self.debugs
+                                    .push(Instruction::member_name(id, index as u32, name));
+                            }
+                        }
+                    }
+                }
+                Instruction::type_struct(id, member_ids.as_slice())
+                    .to_words(&mut self.logical_layout.declarations);
+                id
+            } else {
+                default_id
+            }
+        } else {
+            default_id
+        };
+
+        if id != default_id && self.flags.contains(WriterFlags::DEBUG) {
+            if let Some(ref name) = module.types[handle].name {
+                self.debugs.push(Instruction::name(id, name));
+            }
+        }
+
+        self.workgroup_type_ids.insert(handle, id);
+        Ok(id)
+    }
+
+    fn write_workgroup_types(
+        &mut self,
+        module: &crate::Module,
+        explicit_layout: &HandleVec<crate::Type, ExplicitLayout>,
+    ) -> Result<(), Error> {
+        // Clones need OpCopyLogical (SPIR-V 1.4+) to convert to/from the decorated
+        // buffer type. Below 1.4 we keep a single declaration: Forbidden types are
+        // already layoutless, Required types used from workgroup may still fail
+        // VUID-StandaloneSpirv-None-10684.
+        if self.lang_version() < (1, 4) {
+            return Ok(());
+        }
+        for (_, var) in module.global_variables.iter() {
+            if var.space.forbids_explicit_layout() {
+                self.get_workgroup_type_id(var.ty, module, explicit_layout)?;
+            }
+        }
+        Ok(())
     }
 
     /// Writes a std140 layout compatible type declaration for a type. Returns
@@ -2512,6 +2701,7 @@ impl Writer {
                                                 next_index as usize,
                                                 member,
                                                 &module.types,
+                                                true,
                                             )?;
                                             self.get_handle_type_id(member.ty)
                                         }
@@ -2875,7 +3065,7 @@ impl Writer {
                 // variables in the `Uniform` and `StorageBuffer` address spaces
                 // get wrapped, and we're initializing `WorkGroup` variables.
                 let var_id = self.global_variables[handle].var_id;
-                let var_type_id = self.get_handle_type_id(var.ty);
+                let var_type_id = self.type_id_for_space(var.ty, var.space);
                 let init_word = self.get_constant_null(var_type_id);
                 Instruction::store(var_id, init_word, None)
             })
@@ -3562,7 +3752,13 @@ impl Writer {
                         binding: None,
                         offset: 0,
                     };
-                    self.decorate_struct_member(wrapper_type_id, 0, &member, &ir_module.types)?;
+                    self.decorate_struct_member(
+                        wrapper_type_id,
+                        0,
+                        &member,
+                        &ir_module.types,
+                        true,
+                    )?;
 
                     Instruction::type_struct(wrapper_type_id, &[inner_type_id])
                         .to_words(&mut self.logical_layout.declarations);
@@ -3610,15 +3806,22 @@ impl Writer {
             }
             if substitute_inner_type_lookup.is_some() {
                 inner_type_id
+            } else if global_variable.space.forbids_explicit_layout() {
+                let ty_id = self.type_id_for_space(global_variable.ty, global_variable.space);
+                self.get_pointer_type_id(ty_id, class)
             } else {
                 self.get_handle_pointer_type_id(global_variable.ty, class)
             }
         };
 
         let init_word = match (global_variable.space, self.zero_initialize_workgroup_memory) {
-            (crate::AddressSpace::Private, _)
-            | (crate::AddressSpace::WorkGroup, super::ZeroInitializeWorkgroupMemoryMode::Native) => {
+            (crate::AddressSpace::Private, _) => {
                 init_word.or_else(|| Some(self.get_constant_null(inner_type_id)))
+            }
+            (crate::AddressSpace::WorkGroup, super::ZeroInitializeWorkgroupMemoryMode::Native) => {
+                let null_type_id =
+                    self.type_id_for_space(global_variable.ty, global_variable.space);
+                init_word.or_else(|| Some(self.get_constant_null(null_type_id)))
             }
             _ => init_word,
         };
@@ -3638,15 +3841,18 @@ impl Writer {
         index: usize,
         member: &crate::StructMember,
         arena: &UniqueArena<crate::Type>,
+        explicit_layout: bool,
     ) -> Result<(), Error> {
         use spirv::Decoration;
 
-        self.annotations.push(Instruction::member_decorate(
-            struct_id,
-            index as u32,
-            Decoration::Offset,
-            &[member.offset],
-        ));
+        if explicit_layout {
+            self.annotations.push(Instruction::member_decorate(
+                struct_id,
+                index as u32,
+                Decoration::Offset,
+                &[member.offset],
+            ));
+        }
 
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(ref name) = member.name {
@@ -3662,25 +3868,27 @@ impl Writer {
             member_array_subty_inner = &arena[base].inner;
         }
 
-        if let crate::TypeInner::Matrix {
-            columns: _,
-            rows,
-            scalar,
-        } = *member_array_subty_inner
-        {
-            let byte_stride = Alignment::from(rows) * scalar.width as u32;
-            self.annotations.push(Instruction::member_decorate(
-                struct_id,
-                index as u32,
-                Decoration::ColMajor,
-                &[],
-            ));
-            self.annotations.push(Instruction::member_decorate(
-                struct_id,
-                index as u32,
-                Decoration::MatrixStride,
-                &[byte_stride],
-            ));
+        if explicit_layout {
+            if let crate::TypeInner::Matrix {
+                columns: _,
+                rows,
+                scalar,
+            } = *member_array_subty_inner
+            {
+                let byte_stride = Alignment::from(rows) * scalar.width as u32;
+                self.annotations.push(Instruction::member_decorate(
+                    struct_id,
+                    index as u32,
+                    Decoration::ColMajor,
+                    &[],
+                ));
+                self.annotations.push(Instruction::member_decorate(
+                    struct_id,
+                    index as u32,
+                    Decoration::MatrixStride,
+                    &[byte_stride],
+                ));
+            }
         }
 
         Ok(())
@@ -3813,8 +4021,9 @@ impl Writer {
         }
 
         // write all types
+        let explicit_layout = Self::explicit_layout_for_types(ir_module);
         for (handle, _) in ir_module.types.iter() {
-            self.write_type_declaration_arena(ir_module, handle)?;
+            self.write_type_declaration_arena(ir_module, handle, &explicit_layout)?;
         }
 
         // write std140 layout compatible types required by uniforms
@@ -3823,6 +4032,8 @@ impl Writer {
                 self.write_std140_compat_type_declaration(ir_module, var.ty)?;
             }
         }
+
+        self.write_workgroup_types(ir_module, &explicit_layout)?;
 
         // write all const-expressions as constants
         self.constant_ids

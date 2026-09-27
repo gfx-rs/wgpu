@@ -7,9 +7,6 @@ OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %22 "test_atomic_workgroup_uniform_load" %17 %20 %42
 OpExecutionMode %22 LocalSize 64 1 1
-OpDecorate %5 ArrayStride 4
-OpMemberDecorate %7 0 Offset 0
-OpMemberDecorate %7 1 Offset 4
 OpDecorate %17 BuiltIn WorkgroupId
 OpDecorate %20 BuiltIn LocalInvocationId
 OpDecorate %42 BuiltIn LocalInvocationIndex
