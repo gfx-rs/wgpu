@@ -397,6 +397,8 @@ pub(crate) struct PendingWrites {
     dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     dst_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
     copied_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
+    /// Buffers of shader binding data that have been written to when creating their
+    /// ray tracing pipelines.
     written_shader_binding_data: Vec<Arc<ray_tracing_pipeline::ShaderBindingData>>,
     instance_flags: wgt::InstanceFlags,
 }
