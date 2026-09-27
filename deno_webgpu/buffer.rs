@@ -12,8 +12,8 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
-use wgpu_core::device::HostMap as MapMode;
 use wgpu_core::resource::Labeled as _;
+use wgpu_types::MapMode;
 
 use crate::error::GPUGenericError;
 

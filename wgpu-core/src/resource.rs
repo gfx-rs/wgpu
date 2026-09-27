@@ -12,7 +12,7 @@ use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
     math::align_to,
-    TextureSelector,
+    MapMode, TextureSelector,
 };
 
 #[cfg(feature = "trace")]
@@ -22,7 +22,7 @@ use crate::{
     binding_model::{BindGroup, BindingError},
     device::{
         queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError,
-        DeviceMismatch, HostMap, MissingDownlevelFlags, MissingFeatures,
+        DeviceMismatch, MissingDownlevelFlags, MissingFeatures,
     },
     hal_label,
     init_tracker::{BufferInitTracker, TextureInitTracker},
@@ -256,7 +256,7 @@ pub(crate) enum BufferMapState {
     Active {
         mapping: hal::BufferMapping,
         range: hal::MemoryRange,
-        host: HostMap,
+        host: MapMode,
     },
     /// Not mapped
     Idle,
@@ -273,7 +273,7 @@ pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static
 pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
 
 pub struct BufferMapOperation {
-    pub host: HostMap,
+    pub host: MapMode,
     pub callback: Option<BufferMapCallback>,
 }
 
@@ -796,8 +796,8 @@ impl Buffer {
         }
 
         let (pub_usage, internal_use) = match op.host {
-            HostMap::Read => (wgt::BufferUsages::MAP_READ, wgt::BufferUses::MAP_READ),
-            HostMap::Write => (wgt::BufferUsages::MAP_WRITE, wgt::BufferUses::MAP_WRITE),
+            MapMode::Read => (wgt::BufferUsages::MAP_READ, wgt::BufferUses::MAP_READ),
+            MapMode::Write => (wgt::BufferUsages::MAP_WRITE, wgt::BufferUses::MAP_WRITE),
         };
 
         if let Err(e) = self.check_usage(pub_usage) {
@@ -1130,7 +1130,7 @@ impl Buffer {
                 range,
                 host,
             } => {
-                if host == HostMap::Write {
+                if host == MapMode::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
                         use crate::device::trace::{DataKind, IntoTrace};
