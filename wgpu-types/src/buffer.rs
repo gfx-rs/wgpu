@@ -176,3 +176,13 @@ pub struct BufferTransition<T> {
     /// The new state to transition to.
     pub state: BufferUses,
 }
+
+/// Type of buffer mapping.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum MapMode {
+    /// Map only for reading
+    Read,
+    /// Map only for writing
+    Write,
+}
+static_assertions::assert_impl_all!(MapMode: Send, Sync);
