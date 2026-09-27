@@ -101,7 +101,7 @@ impl Test<'_> {
                     expect.offset,
                     Some(expect.data.len() as u64),
                     wgc::resource::BufferMapOperation {
-                        host: wgt::MapMode::Read,
+                        mode: wgt::MapMode::Read,
                         callback: Some(Box::new(map_callback)),
                     },
                 )

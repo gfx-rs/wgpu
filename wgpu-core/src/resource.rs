@@ -273,14 +273,14 @@ pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static
 pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
 
 pub struct BufferMapOperation {
-    pub host: MapMode,
+    pub mode: MapMode,
     pub callback: Option<BufferMapCallback>,
 }
 
 impl fmt::Debug for BufferMapOperation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("BufferMapOperation")
-            .field("host", &self.host)
+            .field("mode", &self.mode)
             .field("callback", &self.callback.as_ref().map(|_| "?"))
             .finish()
     }
@@ -795,7 +795,7 @@ impl Buffer {
             return Err((op, BufferAccessError::UnalignedRange));
         }
 
-        let (pub_usage, internal_use) = match op.host {
+        let (pub_usage, internal_use) = match op.mode {
             MapMode::Read => (wgt::BufferUsages::MAP_READ, wgt::BufferUses::MAP_READ),
             MapMode::Write => (wgt::BufferUsages::MAP_WRITE, wgt::BufferUses::MAP_WRITE),
         };
@@ -999,7 +999,7 @@ impl Buffer {
         let status = if let Err(error) = self.device.check_is_valid() {
             Err(error.into())
         } else if pending_mapping.range.start != pending_mapping.range.end {
-            let host = pending_mapping.op.host;
+            let host = pending_mapping.op.mode;
             let size = pending_mapping.range.end - pending_mapping.range.start;
             match crate::device::map_buffer(
                 self,
@@ -1025,7 +1025,7 @@ impl Buffer {
                     is_coherent: true,
                 },
                 range: pending_mapping.range,
-                host: pending_mapping.op.host,
+                host: pending_mapping.op.mode,
             };
             Ok(())
         };

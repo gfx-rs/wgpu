@@ -158,7 +158,7 @@ impl GPUBuffer {
         offset,
         size,
         wgpu_core::resource::BufferMapOperation {
-          host: mode,
+          mode,
           callback: Some(callback),
         },
       );
