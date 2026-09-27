@@ -1327,11 +1327,13 @@ impl super::CapabilitiesQuery {
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE
             | F::PASSTHROUGH_SHADERS
+            | F::FLOAT32_BLENDABLE
+            | F::CLIP_DISTANCES
+            | F::ADDRESS_MODE_CLAMP_TO_ZERO
             | F::EXTERNAL_TEXTURE;
 
         features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
-        features.set(F::FLOAT32_BLENDABLE, true);
         features.set(F::INDIRECT_FIRST_INSTANCE, self.indirect_draw_dispatch);
         features.set(
             F::TIMESTAMP_QUERY,
@@ -1348,7 +1350,6 @@ impl super::CapabilitiesQuery {
             self.timestamp_query_support
                 .contains(TimestampQuerySupport::INSIDE_WGPU_PASSES),
         );
-        features.set(F::CLIP_DISTANCES, true);
         features.set(
             F::DUAL_SOURCE_BLENDING,
             self.msl_version >= MTLLanguageVersion::Version1_2 && self.dual_source_blending,
@@ -1422,7 +1423,6 @@ impl super::CapabilitiesQuery {
             F::ADDRESS_MODE_CLAMP_TO_BORDER,
             self.sampler_clamp_to_border,
         );
-        features.set(F::ADDRESS_MODE_CLAMP_TO_ZERO, true);
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
 
@@ -1488,10 +1488,6 @@ impl super::CapabilitiesQuery {
             wgt::DownlevelFlags::BASE_VERTEX,
             self.base_vertex_first_instance_drawing,
         );
-        downlevel
-            .flags
-            .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
-
         downlevel.flags.set(
             wgt::DownlevelFlags::MSL2_1,
             self.msl_version >= MTLLanguageVersion::Version2_1,
