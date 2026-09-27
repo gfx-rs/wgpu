@@ -209,10 +209,17 @@ impl Corpus {
     }
 }
 
-#[cfg_attr(miri, ignore)]
-#[test]
-fn test_api() {
-    env_logger::init();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    Corpus::run_from(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/player/data/all.ron"))
+    #[cfg_attr(miri, ignore)]
+    #[test]
+    fn test_api() {
+        env_logger::init();
+
+        Corpus::run_from(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/player/data/all.ron"),
+        )
+    }
 }
