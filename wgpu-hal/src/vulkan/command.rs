@@ -894,14 +894,31 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 height: desc.extent.height,
             },
         };
-        let vk_viewports = [vk::Viewport {
-            x: 0.0,
-            y: desc.extent.height as f32,
-            width: desc.extent.width as f32,
-            height: -(desc.extent.height as f32),
-            min_depth: 0.0,
-            max_depth: 1.0,
-        }];
+        let vk_viewports = if self
+            .device
+            .workarounds
+            .contains(super::Workarounds::IGNORED_NEGATIVE_VIEWPORT_HEIGHT)
+        {
+            // The Y-flip happens in the vertex shader epilogue instead; see the
+            // workaround's documentation.
+            [vk::Viewport {
+                x: 0.0,
+                y: 0.0,
+                width: desc.extent.width as f32,
+                height: desc.extent.height as f32,
+                min_depth: 0.0,
+                max_depth: 1.0,
+            }]
+        } else {
+            [vk::Viewport {
+                x: 0.0,
+                y: desc.extent.height as f32,
+                width: desc.extent.width as f32,
+                height: -(desc.extent.height as f32),
+                min_depth: 0.0,
+                max_depth: 1.0,
+            }]
+        };
 
         let raw_pass = self.device.make_render_pass(rp_key).unwrap();
         fb_key.raw_pass = raw_pass;
@@ -1059,14 +1076,31 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
     }
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {
-        let vk_viewports = [vk::Viewport {
-            x: rect.x,
-            y: rect.y + rect.h,
-            width: rect.w,
-            height: -rect.h, // flip Y
-            min_depth: depth_range.start,
-            max_depth: depth_range.end,
-        }];
+        let vk_viewports = if self
+            .device
+            .workarounds
+            .contains(super::Workarounds::IGNORED_NEGATIVE_VIEWPORT_HEIGHT)
+        {
+            // The Y-flip happens in the vertex shader epilogue instead; see the
+            // workaround's documentation.
+            [vk::Viewport {
+                x: rect.x,
+                y: rect.y,
+                width: rect.w,
+                height: rect.h,
+                min_depth: depth_range.start,
+                max_depth: depth_range.end,
+            }]
+        } else {
+            [vk::Viewport {
+                x: rect.x,
+                y: rect.y + rect.h,
+                width: rect.w,
+                height: -rect.h, // flip Y
+                min_depth: depth_range.start,
+                max_depth: depth_range.end,
+            }]
+        };
         unsafe {
             self.device
                 .raw
