@@ -68,6 +68,25 @@ pub struct TlasInstance {
 }
 
 impl TlasInstance {
+    /// Constructs a new TlasInstance from a [Blas]. Every other field
+    /// is set in a way that will mean the objects within the [Blas]
+    /// appear in their default positions.
+    pub fn from_blas_untransformed(blas: &Blas) -> Self {
+        // transform (an affine matrix with zero offset and an identity 3x3)
+        // 1.0, 0.0, 0.0, 0.0
+        // 0.0, 1.0, 0.0, 0.0
+        // 0.0, 0.0, 1.0, 0.0
+        Self::from_blas_transformed(
+            blas,
+            [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        )
+    }
+    /// Constructs a new TlasInstance from a [Blas]. Every other field
+    /// is set in a way that will mean the objects within the [Blas]
+    /// appear in their positions transformed by `transform`.
+    pub fn from_blas_transformed(blas: &Blas, transform: [f32; 12]) -> Self {
+        Self::new(blas, transform, 0, 0xff)
+    }
     /// Construct TlasInstance.
     /// - blas: Reference to the bottom level acceleration structure
     /// - transform: Transform buffer offset in bytes (optional, required if transform buffer is present)
