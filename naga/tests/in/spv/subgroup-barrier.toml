@@ -1,2 +1,5 @@
 capabilities = "SUBGROUP | SUBGROUP_BARRIER"
-targets = "WGSL | SPIRV | GLSL"
+targets = "WGSL | SPIRV | GLSL | METAL"
+
+[msl]
+lang_version = [2, 0]

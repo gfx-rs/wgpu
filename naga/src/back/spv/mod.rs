@@ -1202,12 +1202,12 @@ pub struct Options<'a> {
     /// The Vulkan memory model is also declared, regardless of this option,
     /// whenever the module requires a capability that depends on it (for
     /// example cooperative matrices). Under the Vulkan memory model, the
-    /// writer annotates storage and workgroup accesses with the memory
-    /// operands the model requires (`NonPrivatePointer` with availability or
-    /// visibility scopes) and widens barrier semantics with
-    /// `MakeAvailable`/`MakeVisible`; the `Coherent` and `Volatile`
-    /// decorations, which the model forbids, are replaced by per-access
-    /// operands.
+    /// writer annotates storage and workgroup pointer accesses with
+    /// `NonPrivatePointer`, storage image accesses with `NonPrivateTexel`, and
+    /// both with the appropriate availability or visibility scope. Fence-only
+    /// barriers use `MakeAvailable`/`MakeVisible`; the `Coherent` and
+    /// `Volatile` decorations, which the model forbids, are replaced by
+    /// per-access operands.
     ///
     /// Requires the device to enable the `vulkanMemoryModel` feature.
     pub use_vulkan_memory_model: bool,

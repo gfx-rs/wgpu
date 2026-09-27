@@ -104,6 +104,9 @@ struct Load {
 
     /// The id of the image being accessed.
     image_id: Word,
+
+    /// The visibility scope required for a storage image read.
+    memory_scope_id: Option<Word>,
 }
 
 impl Load {
@@ -134,10 +137,19 @@ impl Load {
             _ => result_type_id,
         };
 
+        let memory_scope_id = if opcode == spirv::Op::ImageRead
+            && ctx.writer.memory_model == spirv::MemoryModel::Vulkan
+        {
+            Some(ctx.get_scope_constant(spirv::Scope::Workgroup as u32))
+        } else {
+            None
+        };
+
         Ok(Load {
             opcode,
             type_id,
             image_id,
+            memory_scope_id,
         })
     }
 }
@@ -163,18 +175,25 @@ impl Access for Load {
             coordinates_id,
         );
 
-        match (level_id, sample_id) {
-            (None, None) => {}
-            (Some(level_id), None) => {
-                instruction.add_operand(spirv::ImageOperands::LOD.bits());
-                instruction.add_operand(level_id);
-            }
-            (None, Some(sample_id)) => {
-                instruction.add_operand(spirv::ImageOperands::SAMPLE.bits());
-                instruction.add_operand(sample_id);
-            }
+        let (mut operands, index_id) = match (level_id, sample_id) {
+            (None, None) => (spirv::ImageOperands::empty(), None),
+            (Some(level_id), None) => (spirv::ImageOperands::LOD, Some(level_id)),
+            (None, Some(sample_id)) => (spirv::ImageOperands::SAMPLE, Some(sample_id)),
             // There's no such thing as a multi-sampled mipmap.
             (Some(_), Some(_)) => unreachable!(),
+        };
+        if self.memory_scope_id.is_some() {
+            operands |=
+                spirv::ImageOperands::MAKE_TEXEL_VISIBLE | spirv::ImageOperands::NON_PRIVATE_TEXEL;
+        }
+        if !operands.is_empty() {
+            instruction.add_operand(operands.bits());
+        }
+        if let Some(index_id) = index_id {
+            instruction.add_operand(index_id);
+        }
+        if let Some(memory_scope_id) = self.memory_scope_id {
+            instruction.add_operand(memory_scope_id);
         }
 
         block.body.push(instruction);
@@ -200,6 +219,9 @@ struct Store {
 
     /// The value we're going to write to the texel.
     value_id: Word,
+
+    /// The availability scope required for the storage image write.
+    memory_scope_id: Option<Word>,
 }
 
 impl Access for Store {
@@ -214,11 +236,15 @@ impl Access for Store {
         _sample_id: Option<Word>,
         block: &mut Block,
     ) {
-        block.body.push(Instruction::image_write(
-            self.image_id,
-            coordinates_id,
-            self.value_id,
-        ));
+        let mut instruction =
+            Instruction::image_write(self.image_id, coordinates_id, self.value_id);
+        if let Some(memory_scope_id) = self.memory_scope_id {
+            let operands = spirv::ImageOperands::MAKE_TEXEL_AVAILABLE
+                | spirv::ImageOperands::NON_PRIVATE_TEXEL;
+            instruction.add_operand(operands.bits());
+            instruction.add_operand(memory_scope_id);
+        }
+        block.body.push(instruction);
     }
 
     /// Stores don't generate any value, so this just returns `()`.
@@ -1278,7 +1304,16 @@ impl BlockContext<'_> {
         let coordinates = self.write_image_coordinates(coordinate, array_index, block)?;
         let value_id = self.cached[value];
 
-        let write = Store { image_id, value_id };
+        let memory_scope_id = if self.writer.memory_model == spirv::MemoryModel::Vulkan {
+            Some(self.get_scope_constant(spirv::Scope::Workgroup as u32))
+        } else {
+            None
+        };
+        let write = Store {
+            image_id,
+            value_id,
+            memory_scope_id,
+        };
 
         match *self.fun_info[image].ty.inner_with(&self.ir_module.types) {
             crate::TypeInner::Image {

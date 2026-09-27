@@ -42,4 +42,3 @@ void main()
     uint _48 = atomicAdd(_10._m0, 1u);
     memoryBarrierBuffer();
 }
-

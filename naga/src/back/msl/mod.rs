@@ -239,8 +239,6 @@ pub enum Error {
     UnsupportedCooperativeMatrix,
     #[error("debugPrintf is not supported prior to MSL 3.2")]
     UnsupportedDebugPrintf,
-    #[error("memory fences are not supported; Metal has no fence-only barrier")]
-    UnsupportedMemoryFence,
     #[error("overrides should not be present at this stage")]
     Override,
     #[error("bitcasting to {0:?} is not supported")]

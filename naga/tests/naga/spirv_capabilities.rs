@@ -58,6 +58,39 @@ fn require_and_forbid(required: &[Ca], forbidden: &[Ca], source: &str) {
 }
 
 #[test]
+fn failed_write_restores_requested_memory_model() {
+    use naga::back::spv;
+    use naga::valid;
+
+    fn parse_and_validate(source: &str) -> (naga::Module, valid::ModuleInfo) {
+        let module = naga::front::wgsl::parse_str(source).unwrap();
+        let info = valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
+            .validate(&module)
+            .unwrap();
+        (module, info)
+    }
+
+    let options = spv::Options {
+        capabilities: Some(Default::default()),
+        ..Default::default()
+    };
+    let mut writer = spv::Writer::new(&options).unwrap();
+    let mut words = Vec::new();
+
+    let (cooperative, cooperative_info) = parse_and_validate(
+        "enable wgpu_cooperative_matrix; var<private> value: coop_mat8x8<f32, A>;",
+    );
+    assert!(writer
+        .write(&cooperative, &cooperative_info, None, &None, &mut words)
+        .is_err());
+
+    let (plain, plain_info) = parse_and_validate("@compute @workgroup_size(1) fn main() {}");
+    writer
+        .write(&plain, &plain_info, None, &None, &mut words)
+        .unwrap();
+}
+
+#[test]
 fn sampler1d() {
     require(
         &[Ca::Sampled1D],

@@ -16,6 +16,12 @@ var<storage, read_write> plain_buf: Data;
 @group(0) @binding(3)
 var<storage, read_write> flag: atomic<u32>;
 
+@group(0) @binding(4)
+var input_image: texture_storage_2d<rgba8uint, read>;
+
+@group(0) @binding(5)
+var output_image: texture_storage_2d<rgba8uint, write>;
+
 var<workgroup> shared_value: u32;
 
 @compute @workgroup_size(64)
@@ -28,5 +34,6 @@ fn main() {
     atomicStore(&flag, 1u);
     _ = atomicLoad(&flag);
     _ = atomicAdd(&flag, 1u);
+    textureStore(output_image, vec2(0), textureLoad(input_image, vec2(0)));
     storageFence();
 }

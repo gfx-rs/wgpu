@@ -2789,19 +2789,7 @@ impl Writer {
         Ok(id)
     }
 
-    /// Compute the memory scope and semantics operands shared by
-    /// `OpControlBarrier` and `OpMemoryBarrier`.
-    fn barrier_memory_operands(
-        &self,
-        flags: crate::Barrier,
-    ) -> (spirv::Scope, spirv::MemorySemantics) {
-        let mut memory_scope = if flags.contains(crate::Barrier::STORAGE) {
-            spirv::Scope::Device
-        } else if flags.contains(crate::Barrier::SUB_GROUP) {
-            spirv::Scope::Subgroup
-        } else {
-            spirv::Scope::Workgroup
-        };
+    fn barrier_memory_semantics(flags: crate::Barrier) -> spirv::MemorySemantics {
         let mut semantics = spirv::MemorySemantics::ACQUIRE_RELEASE;
         semantics.set(
             spirv::MemorySemantics::UNIFORM_MEMORY,
@@ -2819,6 +2807,22 @@ impl Writer {
             spirv::MemorySemantics::IMAGE_MEMORY,
             flags.contains(crate::Barrier::TEXTURE),
         );
+        semantics
+    }
+
+    /// Compute the memory scope and semantics for a fence-only barrier.
+    fn memory_barrier_operands(
+        &self,
+        flags: crate::Barrier,
+    ) -> (spirv::Scope, spirv::MemorySemantics) {
+        let mut memory_scope = if flags.contains(crate::Barrier::STORAGE) {
+            spirv::Scope::Device
+        } else if flags.contains(crate::Barrier::SUB_GROUP) {
+            spirv::Scope::Subgroup
+        } else {
+            spirv::Scope::Workgroup
+        };
+        let mut semantics = Self::barrier_memory_semantics(flags);
         if self.memory_model == spirv::MemoryModel::Vulkan {
             // Under the Vulkan memory model, availability and visibility are
             // explicit: without these bits the barrier orders accesses but
@@ -2839,7 +2843,12 @@ impl Writer {
         flags: crate::Barrier,
         body: &mut Vec<Instruction>,
     ) {
-        let (memory_scope, semantics) = self.barrier_memory_operands(flags);
+        let memory_scope = if flags.contains(crate::Barrier::SUB_GROUP) {
+            spirv::Scope::Subgroup
+        } else {
+            spirv::Scope::Workgroup
+        };
+        let semantics = Self::barrier_memory_semantics(flags);
         let exec_scope_id = if flags.contains(crate::Barrier::SUB_GROUP) {
             self.get_index_constant(spirv::Scope::Subgroup as u32)
         } else {
@@ -2855,7 +2864,7 @@ impl Writer {
     }
 
     pub(super) fn write_memory_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
-        let (memory_scope, semantics) = self.barrier_memory_operands(flags);
+        let (memory_scope, semantics) = self.memory_barrier_operands(flags);
         let mem_scope_id = self.get_index_constant(memory_scope as u32);
         let semantics_id = self.get_index_constant(semantics.bits());
         block
@@ -4054,31 +4063,34 @@ impl Writer {
         {
             self.memory_model = spirv::MemoryModel::Vulkan;
         }
-        if self.memory_model == spirv::MemoryModel::Vulkan {
-            self.require_any("memory model", &[spirv::Capability::VulkanMemoryModel])?;
-            self.use_extension("SPV_KHR_vulkan_memory_model");
-        }
-
-        // Try to find the entry point and corresponding index
-        let ep_index = match pipeline_options {
-            Some(po) => {
-                let index = ir_module
-                    .entry_points
-                    .iter()
-                    .position(|ep| po.shader_stage == ep.stage && po.entry_point == ep.name)
-                    .ok_or(Error::EntryPointNotFound)?;
-                Some(index)
+        let result = (|| {
+            if self.memory_model == spirv::MemoryModel::Vulkan {
+                self.require_any("memory model", &[spirv::Capability::VulkanMemoryModel])?;
+                self.use_extension("SPV_KHR_vulkan_memory_model");
             }
-            None => None,
-        };
 
-        self.write_logical_layout(ir_module, info, ep_index, debug_info)?;
-        self.write_physical_layout();
+            // Try to find the entry point and corresponding index
+            let ep_index = match pipeline_options {
+                Some(po) => {
+                    let index = ir_module
+                        .entry_points
+                        .iter()
+                        .position(|ep| po.shader_stage == ep.stage && po.entry_point == ep.name)
+                        .ok_or(Error::EntryPointNotFound)?;
+                    Some(index)
+                }
+                None => None,
+            };
 
-        self.physical_layout.in_words(words);
-        self.logical_layout.in_words(words);
+            self.write_logical_layout(ir_module, info, ep_index, debug_info)?;
+            self.write_physical_layout();
+
+            self.physical_layout.in_words(words);
+            self.logical_layout.in_words(words);
+            Ok(())
+        })();
         self.memory_model = requested_memory_model;
-        Ok(())
+        result
     }
 
     /// Return the set of capabilities the last module written used.

@@ -1,5 +1,5 @@
 capabilities = "MEMORY_FENCE"
-targets = "SPIRV | WGSL"
+targets = "SPIRV | WGSL | GLSL | HLSL"
 
 [spv]
 version = [1, 3]
