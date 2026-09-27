@@ -781,7 +781,8 @@ impl Device {
             (shader_modules, intersection_types)
         };
 
-        // Won't panic because `desc.intersections` is required to be below 2^24 - 1 (see `CreateRayTracingPipelineError::TooManyIntersectionGroups`)
+        // Won't panic because the length of `desc.intersections` is required to be below 2^24
+        // (see `CreateRayTracingPipelineError::TooManyIntersectionGroups`)
         let shader_binding_data = match ray_tracing_pipeline::ShaderBindingData::from_raw_pipeline(
             self.clone(),
             raw.as_ref(),
