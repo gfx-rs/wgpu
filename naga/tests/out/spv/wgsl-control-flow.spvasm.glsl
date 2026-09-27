@@ -4,7 +4,7 @@ layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void _5()
 {
     int _14 = 0;
-    memoryBarrierBuffer();
+    groupMemoryBarrier();
     barrier();
     barrier();
     groupMemoryBarrier();
@@ -113,7 +113,7 @@ void _5()
     }
 }
 
-void _51(int _50)
+void _50(int _49)
 {
     do
     {
@@ -121,7 +121,7 @@ void _51(int _50)
     } while(false);
 }
 
-void _57()
+void _56()
 {
     switch (0)
     {
@@ -136,7 +136,7 @@ void _57()
     }
 }
 
-void _63()
+void _62()
 {
     switch (0u)
     {
@@ -162,7 +162,7 @@ void _63()
     }
 }
 
-void _72()
+void _71()
 {
     switch (0)
     {
@@ -193,7 +193,7 @@ void _72()
     }
 }
 
-void _83(int _82)
+void _82(int _81)
 {
     uvec2 _96 = uvec2(4294967295u);
     for (;;)
@@ -203,7 +203,7 @@ void _83(int _82)
             break;
         }
         _96 -= uvec2(uint(_96.y == 0u), 1u);
-        switch (_82)
+        switch (_81)
         {
             case 1:
             {
@@ -382,11 +382,11 @@ void _183(int _179, int _180, int _181, int _182)
 void main()
 {
     _5();
-    _51(1);
-    _57();
-    _63();
-    _72();
-    _83(1);
+    _50(1);
+    _56();
+    _62();
+    _71();
+    _82(1);
     _114(1, 2, 3);
     _183(1, 2, 3, 4);
 }

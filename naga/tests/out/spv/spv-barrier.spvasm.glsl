@@ -6,8 +6,10 @@ void _4()
     barrier();
     memoryBarrierBuffer();
     memoryBarrierImage();
+    groupMemoryBarrier();
     barrier();
     memoryBarrier();
+    groupMemoryBarrier();
     barrier();
 }
 
