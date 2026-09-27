@@ -311,10 +311,10 @@ pub(crate) fn build_acceleration_structures(
                 index: instance.intersection_index,
                 required_intersection_ty: match blas.sizes {
                     wgt::BlasGeometrySizeDescriptors::Triangles { .. } => {
-                        crate::pipeline::RayTracingIntersectionType::Triangle
+                        crate::ray_tracing_pipeline::RayTracingIntersectionType::Triangle
                     }
                     wgt::BlasGeometrySizeDescriptors::AABBs { .. } => {
-                        crate::pipeline::RayTracingIntersectionType::AABB
+                        crate::ray_tracing_pipeline::RayTracingIntersectionType::AABB
                     }
                 },
             };

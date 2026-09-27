@@ -30,8 +30,8 @@ use crate::{
     get_lowest_common_denom, hal_label,
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
-    pipeline,
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
+    ray_tracing_pipeline,
     resource::{
         Blas, BlasCompactState, BlasDescriptor, BlasState, Buffer, BufferAccessError,
         BufferMapState, DestroyedBuffer, DestroyedQuerySet, DestroyedResourceError,
@@ -397,7 +397,7 @@ pub(crate) struct PendingWrites {
     dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     dst_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
     copied_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
-    written_shader_binding_data: Vec<Arc<pipeline::ShaderBindingData>>,
+    written_shader_binding_data: Vec<Arc<ray_tracing_pipeline::ShaderBindingData>>,
     instance_flags: wgt::InstanceFlags,
 }
 
@@ -433,7 +433,7 @@ impl PendingWrites {
             .insert(blas.tracker_index(), blas.clone());
     }
 
-    pub fn use_shader_binding_data(&mut self, sbd: &Arc<pipeline::ShaderBindingData>) {
+    pub fn use_shader_binding_data(&mut self, sbd: &Arc<ray_tracing_pipeline::ShaderBindingData>) {
         self.written_shader_binding_data.push(sbd.clone())
     }
 

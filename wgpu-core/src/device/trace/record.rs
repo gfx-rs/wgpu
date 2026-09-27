@@ -802,7 +802,7 @@ impl<'a> IntoTrace for crate::pipeline::ComputePipelineDescriptor<'a> {
     }
 }
 
-impl<'a> IntoTrace for crate::pipeline::RayTracingPipelineDescriptor<'a> {
+impl<'a> IntoTrace for crate::ray_tracing_pipeline::RayTracingPipelineDescriptor<'a> {
     type Output = TraceRayTracingPipelineDescriptor<'a>;
 
     fn into_trace(self) -> Self::Output {
@@ -815,10 +815,10 @@ impl<'a> IntoTrace for crate::pipeline::RayTracingPipelineDescriptor<'a> {
                 .intersections
                 .into_iter()
                 .map(|intersection| match intersection {
-                    crate::pipeline::RayTracingIntersectionDescriptor::Triangle {
+                    crate::ray_tracing_pipeline::RayTracingIntersectionDescriptor::Triangle {
                         closest_hit,
                         any_hit,
-                    } => crate::pipeline::RayTracingIntersectionDescriptor::Triangle {
+                    } => crate::ray_tracing_pipeline::RayTracingIntersectionDescriptor::Triangle {
                         closest_hit: closest_hit.into_trace(),
                         any_hit: any_hit.map(|a| a.into_trace()),
                     },
@@ -1212,7 +1212,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         },
         A::CreateRayTracingPipeline { id, desc } => A::CreateRayTracingPipeline {
             id,
-            desc: crate::pipeline::RayTracingPipelineDescriptor {
+            desc: crate::ray_tracing_pipeline::RayTracingPipelineDescriptor {
                 label: owned_label(&desc.label),
                 layout: desc.layout,
                 ray_generation: owned_stage(desc.ray_generation),
@@ -1221,10 +1221,10 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
                     .intersections
                     .into_iter()
                     .map(|i| match i {
-                        crate::pipeline::RayTracingIntersectionDescriptor::Triangle {
+                        crate::ray_tracing_pipeline::RayTracingIntersectionDescriptor::Triangle {
                             closest_hit,
                             any_hit,
-                        } => crate::pipeline::RayTracingIntersectionDescriptor::Triangle {
+                        } => crate::ray_tracing_pipeline::RayTracingIntersectionDescriptor::Triangle {
                             closest_hit: owned_stage(closest_hit),
                             any_hit: any_hit.map(owned_stage),
                         },

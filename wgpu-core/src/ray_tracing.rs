@@ -273,9 +273,9 @@ pub enum ValidateAsActionsError {
     #[error("An instance Tlas {0:?} has a requires an intersection type of {1:?} for index {2}, but got {3:?}")]
     TlasInstancesIntersectionIndicesDiffer(
         ResourceErrorIdent,
-        crate::pipeline::RayTracingIntersectionType,
+        crate::ray_tracing_pipeline::RayTracingIntersectionType,
         u32,
-        Option<crate::pipeline::RayTracingIntersectionType>,
+        Option<crate::ray_tracing_pipeline::RayTracingIntersectionType>,
     ),
 }
 
@@ -383,7 +383,10 @@ pub(crate) enum AsAction {
     /// types of the [`Blas`]es
     ///
     /// [`RayTracingPipeline`]: crate::pipeline::RayTracingPipeline
-    TraceTlas(Arc<Tlas>, Vec<crate::pipeline::RayTracingIntersectionType>),
+    TraceTlas(
+        Arc<Tlas>,
+        Vec<crate::ray_tracing_pipeline::RayTracingIntersectionType>,
+    ),
 }
 
 /// Like [`BlasTriangleGeometry`], but with owned data.

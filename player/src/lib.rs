@@ -56,7 +56,7 @@ pub struct Player {
     >,
     ray_tracing_pipelines: HashMap<
         wgc::id::PointerId<wgc::id::markers::RayTracingPipeline>,
-        Arc<wgc::pipeline::RayTracingPipeline>,
+        Arc<wgc::ray_tracing_pipeline::RayTracingPipeline>,
     >,
     pipeline_caches: HashMap<
         wgc::id::PointerId<wgc::id::markers::PipelineCache>,
@@ -595,7 +595,7 @@ impl Player {
     fn resolve_ray_tracing_pipeline_id(
         &self,
         id: wgc::id::PointerId<wgc::id::markers::RayTracingPipeline>,
-    ) -> Arc<wgc::pipeline::RayTracingPipeline> {
+    ) -> Arc<wgc::ray_tracing_pipeline::RayTracingPipeline> {
         self.ray_tracing_pipelines
             .get(&id)
             .expect("invalid ray tracing pipeline")
@@ -747,10 +747,10 @@ impl Player {
     fn resolve_ray_tracing_pipeline_descriptor<'a>(
         &self,
         desc: wgc::device::trace::TraceRayTracingPipelineDescriptor<'a>,
-    ) -> wgc::pipeline::RayTracingPipelineDescriptor<'a> {
+    ) -> wgc::ray_tracing_pipeline::RayTracingPipelineDescriptor<'a> {
         let layout = desc.layout.map(|id| self.resolve_pipeline_layout_id(id));
 
-        wgc::pipeline::RayTracingPipelineDescriptor {
+        wgc::ray_tracing_pipeline::RayTracingPipelineDescriptor {
             label: desc.label,
             layout,
             cache: desc.cache.map(|id| self.resolve_pipeline_cache_id(id)),
@@ -772,10 +772,10 @@ impl Player {
                 .intersections
                 .into_iter()
                 .map(|intersections| match intersections {
-                    wgc::pipeline::RayTracingIntersectionDescriptor::Triangle {
+                    wgc::ray_tracing_pipeline::RayTracingIntersectionDescriptor::Triangle {
                         closest_hit,
                         any_hit,
-                    } => wgc::pipeline::RayTracingIntersectionDescriptor::Triangle {
+                    } => wgc::ray_tracing_pipeline::RayTracingIntersectionDescriptor::Triangle {
                         closest_hit: wgc::pipeline::ProgrammableStageDescriptor {
                             module: self.resolve_shader_module_id(closest_hit.module),
                             entry_point: closest_hit.entry_point,

@@ -17,7 +17,7 @@ use crate::{
     snatch::Snatchable,
     LabelHelpers,
 };
-use crate::{pipeline, FastHashMap};
+use crate::{ray_tracing_pipeline, FastHashMap};
 use hal::AccelerationStructureTriangleIndices;
 use wgt::{Features, AABB_GEOMETRY_MIN_STRIDE};
 
@@ -360,16 +360,19 @@ impl Device {
 
     pub fn create_ray_tracing_pipeline(
         self: &Arc<Self>,
-        desc: pipeline::RayTracingPipelineDescriptor,
+        desc: ray_tracing_pipeline::RayTracingPipelineDescriptor,
     ) -> (
-        Arc<pipeline::RayTracingPipeline>,
-        Option<pipeline::CreateRayTracingPipelineError>,
+        Arc<ray_tracing_pipeline::RayTracingPipeline>,
+        Option<ray_tracing_pipeline::CreateRayTracingPipelineError>,
     ) {
         let (ray_tracing_pipeline, error) =
             match self.create_ray_tracing_pipeline_inner(desc.clone()) {
                 Ok(ray_tracing_pipeline) => (ray_tracing_pipeline, None),
                 Err(error) => (
-                    pipeline::RayTracingPipeline::invalid(self.clone(), desc.label.to_string()),
+                    ray_tracing_pipeline::RayTracingPipeline::invalid(
+                        self.clone(),
+                        desc.label.to_string(),
+                    ),
                     Some(error),
                 ),
             };
@@ -386,8 +389,11 @@ impl Device {
 
     pub fn create_ray_tracing_pipeline_inner(
         self: &Arc<Self>,
-        desc: pipeline::RayTracingPipelineDescriptor,
-    ) -> Result<Arc<pipeline::RayTracingPipeline>, pipeline::CreateRayTracingPipelineError> {
+        desc: ray_tracing_pipeline::RayTracingPipelineDescriptor,
+    ) -> Result<
+        Arc<ray_tracing_pipeline::RayTracingPipeline>,
+        ray_tracing_pipeline::CreateRayTracingPipelineError,
+    > {
         use crate::validation;
 
         self.check_is_valid()?;
@@ -428,10 +434,12 @@ impl Device {
                         .as_ref()
                         .map(|ep| ep.as_ref()),
                 )
-                .map_err(|e| pipeline::CreateRayTracingPipelineError::Stage {
-                    stage: stage_bit,
-                    error: e,
-                })?;
+                .map_err(
+                    |e| ray_tracing_pipeline::CreateRayTracingPipelineError::Stage {
+                        stage: stage_bit,
+                        error: e,
+                    },
+                )?;
 
             let shader_module = &desc.ray_generation.module;
             let shader_module_state = shader_module.state()?;
@@ -446,10 +454,12 @@ impl Device {
                         io,
                         None,
                     )
-                    .map_err(|e| pipeline::CreateRayTracingPipelineError::Stage {
-                        stage: stage_bit,
-                        error: e,
-                    })?;
+                    .map_err(
+                        |e| ray_tracing_pipeline::CreateRayTracingPipelineError::Stage {
+                            stage: stage_bit,
+                            error: e,
+                        },
+                    )?;
             }
 
             hal::ProgrammableStage {
@@ -474,10 +484,12 @@ impl Device {
                     stage.to_naga(),
                     desc.miss.entry_point.as_ref().map(|ep| ep.as_ref()),
                 )
-                .map_err(|e| pipeline::CreateRayTracingPipelineError::Stage {
-                    stage: stage_bit,
-                    error: e,
-                })?;
+                .map_err(
+                    |e| ray_tracing_pipeline::CreateRayTracingPipelineError::Stage {
+                        stage: stage_bit,
+                        error: e,
+                    },
+                )?;
 
             let shader_module = &desc.miss.module;
             let shader_module_state = shader_module.state()?;
@@ -492,10 +504,12 @@ impl Device {
                         io,
                         None,
                     )
-                    .map_err(|e| pipeline::CreateRayTracingPipelineError::Stage {
-                        stage: stage_bit,
-                        error: e,
-                    })?;
+                    .map_err(
+                        |e| ray_tracing_pipeline::CreateRayTracingPipelineError::Stage {
+                            stage: stage_bit,
+                            error: e,
+                        },
+                    )?;
             }
 
             hal::ProgrammableStage {
@@ -508,7 +522,7 @@ impl Device {
 
         if desc.intersections.len() > 1 << 24 {
             return Err(
-                pipeline::CreateRayTracingPipelineError::TooManyIntersectionGroups(
+                ray_tracing_pipeline::CreateRayTracingPipelineError::TooManyIntersectionGroups(
                     desc.intersections.len(),
                 ),
             );
@@ -516,7 +530,7 @@ impl Device {
 
         if desc.max_recursion_depth > self.limits.max_ray_recursion_depth {
             return Err(
-                pipeline::CreateRayTracingPipelineError::TooHighRayRecursionDepth(
+                ray_tracing_pipeline::CreateRayTracingPipelineError::TooHighRayRecursionDepth(
                     desc.max_recursion_depth,
                     self.limits.max_ray_recursion_depth,
                 ),
@@ -528,7 +542,7 @@ impl Device {
 
         for intersection in &desc.intersections {
             match intersection {
-                pipeline::RayTracingIntersectionDescriptor::Triangle {
+                ray_tracing_pipeline::RayTracingIntersectionDescriptor::Triangle {
                     closest_hit,
                     any_hit,
                 } => {
@@ -539,9 +553,11 @@ impl Device {
                             stage.to_naga(),
                             closest_hit.entry_point.as_ref().map(|ep| ep.as_ref()),
                         )
-                        .map_err(|e| pipeline::CreateRayTracingPipelineError::Stage {
-                            stage: stage.to_wgt_bit(),
-                            error: e,
+                        .map_err(|e| {
+                            ray_tracing_pipeline::CreateRayTracingPipelineError::Stage {
+                                stage: stage.to_wgt_bit(),
+                                error: e,
+                            }
                         })?;
 
                     let any_hit = match any_hit {
@@ -557,7 +573,7 @@ impl Device {
                                         any_hit.entry_point.as_ref().map(|ep| ep.as_ref()),
                                     )
                                     .map_err(|e| {
-                                        pipeline::CreateRayTracingPipelineError::Stage {
+                                        ray_tracing_pipeline::CreateRayTracingPipelineError::Stage {
                                             stage: stage.to_wgt_bit(),
                                             error: e,
                                         }
@@ -578,7 +594,7 @@ impl Device {
             .zip(final_intersection_names.iter())
         {
             intersections.push(match intersection {
-                pipeline::RayTracingIntersectionDescriptor::Triangle {
+                ray_tracing_pipeline::RayTracingIntersectionDescriptor::Triangle {
                     closest_hit,
                     any_hit,
                 } => {
@@ -600,9 +616,11 @@ impl Device {
                                     io,
                                     None,
                                 )
-                                .map_err(|e| pipeline::CreateRayTracingPipelineError::Stage {
-                                    stage: stage_bits,
-                                    error: e,
+                                .map_err(|e| {
+                                    ray_tracing_pipeline::CreateRayTracingPipelineError::Stage {
+                                        stage: stage_bits,
+                                        error: e,
+                                    }
                                 })?;
                         }
 
@@ -638,7 +656,7 @@ impl Device {
                                         None,
                                     )
                                     .map_err(|e| {
-                                        pipeline::CreateRayTracingPipelineError::Stage {
+                                        ray_tracing_pipeline::CreateRayTracingPipelineError::Stage {
                                             stage: stage_bits,
                                             error: e,
                                         }
@@ -671,11 +689,13 @@ impl Device {
         {
             for (binding, size) in shader_binding_sizes.iter() {
                 if size.get() % 16 != 0 {
-                    return Err(pipeline::CreateRayTracingPipelineError::UnalignedShader {
-                        binding: binding.binding,
-                        group: binding.group,
-                        size: size.get(),
-                    });
+                    return Err(
+                        ray_tracing_pipeline::CreateRayTracingPipelineError::UnalignedShader {
+                            binding: binding.binding,
+                            group: binding.group,
+                            size: size.get(),
+                        },
+                    );
                 }
             }
         }
@@ -711,21 +731,27 @@ impl Device {
             unsafe { self.raw().create_ray_tracing_pipeline(&pipeline_desc) }.map_err(|err| {
                 match err {
                     hal::PipelineError::Device(error) => {
-                        pipeline::CreateRayTracingPipelineError::Device(
+                        ray_tracing_pipeline::CreateRayTracingPipelineError::Device(
                             self.handle_hal_error(error),
                         )
                     }
                     hal::PipelineError::Linkage(stage, msg) => {
-                        pipeline::CreateRayTracingPipelineError::Internal { stage, error: msg }
+                        ray_tracing_pipeline::CreateRayTracingPipelineError::Internal {
+                            stage,
+                            error: msg,
+                        }
                     }
                     hal::PipelineError::EntryPoint(stage) => {
-                        pipeline::CreateRayTracingPipelineError::Internal {
+                        ray_tracing_pipeline::CreateRayTracingPipelineError::Internal {
                             stage: hal::auxil::map_naga_stage(stage),
                             error: ENTRYPOINT_FAILURE_ERROR.to_string(),
                         }
                     }
                     hal::PipelineError::PipelineConstants(stage, error) => {
-                        pipeline::CreateRayTracingPipelineError::PipelineConstants { stage, error }
+                        ray_tracing_pipeline::CreateRayTracingPipelineError::PipelineConstants {
+                            stage,
+                            error,
+                        }
                     }
                 }
             })?
@@ -739,7 +765,7 @@ impl Device {
             let mut intersection_types = Vec::with_capacity(desc.intersections.len());
             for intersection in &desc.intersections {
                 match intersection {
-                    pipeline::RayTracingIntersectionDescriptor::Triangle {
+                    ray_tracing_pipeline::RayTracingIntersectionDescriptor::Triangle {
                         closest_hit,
                         any_hit,
                     } => {
@@ -747,7 +773,8 @@ impl Device {
                         if let Some(any) = any_hit {
                             shader_modules.push(any.module.clone());
                         }
-                        intersection_types.push(pipeline::RayTracingIntersectionType::Triangle);
+                        intersection_types
+                            .push(ray_tracing_pipeline::RayTracingIntersectionType::Triangle);
                     }
                 }
             }
@@ -755,7 +782,7 @@ impl Device {
         };
 
         // Won't panic because `desc.intersections` is required to be below 2^24 - 1 (see `CreateRayTracingPipelineError::TooManyIntersectionGroups`)
-        let shader_binding_data = match pipeline::ShaderBindingData::from_raw_pipeline(
+        let shader_binding_data = match ray_tracing_pipeline::ShaderBindingData::from_raw_pipeline(
             self.clone(),
             raw.as_ref(),
             desc.intersections.len(),
@@ -776,8 +803,8 @@ impl Device {
             unreachable!("Immediates exceeding maxImmediateSize should have been rejected");
         };
 
-        let pipeline = pipeline::RayTracingPipeline {
-            state: ResourceState::Valid(pipeline::RayTracingPipelineState {
+        let pipeline = ray_tracing_pipeline::RayTracingPipeline {
+            state: ResourceState::Valid(ray_tracing_pipeline::RayTracingPipelineState {
                 raw: ManuallyDrop::new(raw),
                 layout: pipeline_layout.clone(),
                 _shader_modules: shader_modules,

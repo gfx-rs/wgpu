@@ -396,7 +396,7 @@ pub struct CoreRenderPipeline {
 
 #[derive(Debug, Clone)]
 pub struct CoreRayTracingPipeline {
-    pub(crate) wgpu_ray_tracing_pipeline: Arc<wgc::pipeline::RayTracingPipeline>,
+    pub(crate) wgpu_ray_tracing_pipeline: Arc<wgc::ray_tracing_pipeline::RayTracingPipeline>,
 }
 
 #[derive(Debug)]
@@ -1226,6 +1226,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         desc: &crate::RayTracingPipelineDescriptor<'_>,
     ) -> dispatch::DispatchRayTracingPipeline {
         use wgc::pipeline as pipe;
+        use wgc::ray_tracing_pipeline as rt_pipe;
 
         fn downcast_rt_stage<'a>(
             stage: &'a crate::RayTracingStage<'a>,
@@ -1245,7 +1246,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             }
         }
 
-        let descriptor = pipe::RayTracingPipelineDescriptor {
+        let descriptor = rt_pipe::RayTracingPipelineDescriptor {
             label: desc.label.map(Borrowed),
             layout: desc
                 .layout
@@ -1259,7 +1260,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     crate::RayTracingIntersectionDescriptor::Triangle {
                         closest_hit,
                         any_hit,
-                    } => pipe::RayTracingIntersectionDescriptor::Triangle {
+                    } => rt_pipe::RayTracingIntersectionDescriptor::Triangle {
                         closest_hit: downcast_rt_stage(closest_hit),
                         any_hit: any_hit.as_ref().map(|stage| downcast_rt_stage(stage)),
                     },
@@ -1274,9 +1275,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         let (wgpu_ray_tracing_pipeline, error) =
             self.wgpu_device.create_ray_tracing_pipeline(descriptor);
         if let Some(cause) = error {
-            if let wgc::pipeline::CreateRayTracingPipelineError::Internal { stage, ref error } =
-                cause
-            {
+            if let rt_pipe::CreateRayTracingPipelineError::Internal { stage, ref error } = cause {
                 log::error!("Shader translation error for stage {:?}: {}", stage, error);
                 log::error!("Please report it to https://github.com/gfx-rs/wgpu");
             }

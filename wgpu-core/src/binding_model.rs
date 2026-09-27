@@ -27,7 +27,8 @@ use crate::{
     api_log,
     device::{bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
-    pipeline::{ComputePipeline, RayTracingPipeline, RenderPipeline},
+    pipeline::{ComputePipeline, RenderPipeline},
+    ray_tracing_pipeline::RayTracingPipeline,
     resource::{
         Buffer, DestroyedResourceError, ExternalTexture, InvalidOrDestroyedResourceError,
         InvalidResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,

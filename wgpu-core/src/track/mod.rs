@@ -106,7 +106,7 @@ mod texture;
 use crate::{
     binding_model, command,
     lock::{rank, Mutex},
-    pipeline,
+    pipeline, ray_tracing_pipeline,
     resource::{self, Labeled, RawResourceAccess, ResourceErrorIdent, Trackable},
     snatch::SnatchGuard,
     track::blas::BlasTracker,
@@ -650,7 +650,7 @@ pub(crate) struct Tracker {
 
     pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline>,
     pub render_pipelines: StatelessTracker<pipeline::RenderPipeline>,
-    pub ray_tracing_pipelines: StatelessTracker<pipeline::RayTracingPipeline>,
+    pub ray_tracing_pipelines: StatelessTracker<ray_tracing_pipeline::RayTracingPipeline>,
     pub bundles: StatelessTracker<command::RenderBundle>,
     pub query_sets: QuerySetTracker,
 }

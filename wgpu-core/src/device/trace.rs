@@ -301,9 +301,10 @@ pub type TraceComputePipelineDescriptor<'a> = crate::pipeline::ComputePipelineDe
 ///
 /// cbindgen:ignore
 #[doc(hidden)]
-pub type TraceRayTracingPipelineDescriptor<'a> = crate::pipeline::RayTracingPipelineDescriptor<
-    'a,
-    PointerId<markers::PipelineLayout>,
-    PointerId<markers::ShaderModule>,
-    PointerId<markers::PipelineCache>,
->;
+pub type TraceRayTracingPipelineDescriptor<'a> =
+    crate::ray_tracing_pipeline::RayTracingPipelineDescriptor<
+        'a,
+        PointerId<markers::PipelineLayout>,
+        PointerId<markers::ShaderModule>,
+        PointerId<markers::PipelineCache>,
+    >;

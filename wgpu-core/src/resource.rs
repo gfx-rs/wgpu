@@ -3570,7 +3570,7 @@ crate::impl_trackable!(Blas);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct TlasIntersectionType {
     pub(crate) index: u32,
-    pub(crate) required_intersection_ty: crate::pipeline::RayTracingIntersectionType,
+    pub(crate) required_intersection_ty: crate::ray_tracing_pipeline::RayTracingIntersectionType,
 }
 
 #[derive(Debug)]

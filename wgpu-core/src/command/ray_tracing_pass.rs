@@ -23,8 +23,8 @@ use crate::{
     },
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     hal_label, id, impl_resource_type,
-    pipeline::RayTracingPipeline,
     ray_tracing::AsAction,
+    ray_tracing_pipeline::RayTracingPipeline,
     resource::{
         DestroyedResourceError, InvalidOrDestroyedResourceError, InvalidResourceError, Labeled,
         MissingBufferUsageError, ParentDevice,

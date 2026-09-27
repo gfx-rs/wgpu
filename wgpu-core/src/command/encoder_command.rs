@@ -68,7 +68,7 @@ impl ReferenceType for ArcReferences {
     type RenderPipeline = Arc<crate::pipeline::RenderPipeline>;
     type RenderBundle = Arc<crate::command::RenderBundle>;
     type ComputePipeline = Arc<crate::pipeline::ComputePipeline>;
-    type RayTracingPipeline = Arc<crate::pipeline::RayTracingPipeline>;
+    type RayTracingPipeline = Arc<crate::ray_tracing_pipeline::RayTracingPipeline>;
     type Blas = Arc<crate::resource::Blas>;
     type Tlas = Arc<crate::resource::Tlas>;
 }
