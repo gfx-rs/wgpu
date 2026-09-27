@@ -205,6 +205,8 @@ pub enum Error {
     UnimplementedBindTarget(BindTarget),
     #[error("composing of {0:?} is not implemented yet")]
     UnsupportedCompose(Handle<crate::Type>),
+    #[error("the `coherent` qualifier requires MSL 3.2+")]
+    UnsupportedCoherent,
     #[error("operation {0:?} is not implemented yet")]
     UnsupportedBinaryOp(crate::BinaryOperator),
     #[error("standard function '{0}' is not implemented yet")]
@@ -876,8 +878,9 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::PER_VERTEX
         // No RAY_TRACING_PIPELINE
         // No DRAW_INDEX
-        // No MEMORY_DECORATION_VOLATILE
         | Caps::MEMORY_DECORATION_COHERENT
+        | Caps::MEMORY_DECORATION_VOLATILE
+        // No MEMORY_FENCE: Metal has no fence-only barrier.
         | Caps::LINEAR_INTERPOLATION
         | Caps::DEBUG_PRINTF
 }

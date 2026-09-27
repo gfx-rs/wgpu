@@ -15,9 +15,9 @@ void main()
 {
     coopmat<float, gl_ScopeSubgroup, 8u, 8u, gl_MatrixUseAccumulator> _28 = coopmat<float, gl_ScopeSubgroup, 8u, 8u, gl_MatrixUseAccumulator>(0.0);
     coopmat<float, gl_ScopeSubgroup, 8u, 8u, gl_MatrixUseAccumulator> _31 = coopmat<float, gl_ScopeSubgroup, 8u, 8u, gl_MatrixUseAccumulator>(0.0);
-    coopmat<float, gl_ScopeSubgroup, 8u, 8u, gl_MatrixUseAccumulator> _37;
-    coopMatLoad(_37, _20._m0, 4u, 8u, gl_CooperativeMatrixLayoutColumnMajor);
-    _28 = _37;
+    coopmat<float, gl_ScopeSubgroup, 8u, 8u, gl_MatrixUseAccumulator> _39;
+    coopMatLoad(_39, _20._m0, 4u, 8u, gl_CooperativeMatrixLayoutColumnMajor);
+    _28 = _39;
     _31 = coopMatMulAdd(_14, _17, _28, 0);
     coopMatStore(_31, _20._m0, 0u, 8u, gl_CooperativeMatrixLayoutColumnMajor);
     _28 = _31;

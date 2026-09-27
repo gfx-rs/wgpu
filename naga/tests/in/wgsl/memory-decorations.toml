@@ -1,8 +1,11 @@
 capabilities = "MEMORY_DECORATION_COHERENT | MEMORY_DECORATION_VOLATILE"
-targets = "SPIRV | GLSL | WGSL"
+targets = "SPIRV | GLSL | WGSL | METAL"
 
 [spv]
 version = [1, 0]
 
 [glsl]
 version = { Desktop = 430 }
+
+[msl]
+lang_version = [3, 2]

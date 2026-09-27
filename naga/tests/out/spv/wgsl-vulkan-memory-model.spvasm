@@ -1,0 +1,107 @@
+; SPIR-V
+; Version: 1.3
+; Generator: rspirv
+; Bound: 61
+OpCapability Shader
+OpCapability VulkanMemoryModel
+OpExtension "SPV_KHR_vulkan_memory_model"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical Vulkan
+OpEntryPoint GLCompute %20 "main" %35
+OpExecutionMode %20 LocalSize 64 1 1
+OpDecorate %4 ArrayStride 4
+OpMemberDecorate %5 0 Offset 0
+OpDecorate %5 Block
+OpDecorate %7 DescriptorSet 0
+OpDecorate %7 Binding 0
+OpDecorate %9 DescriptorSet 0
+OpDecorate %9 Binding 1
+OpDecorate %10 DescriptorSet 0
+OpDecorate %10 Binding 2
+OpDecorate %11 DescriptorSet 0
+OpDecorate %11 Binding 3
+OpDecorate %12 Block
+OpMemberDecorate %12 0 Offset 0
+OpDecorate %14 NonWritable
+OpDecorate %14 DescriptorSet 0
+OpDecorate %14 Binding 4
+OpDecorate %16 NonReadable
+OpDecorate %16 DescriptorSet 0
+OpDecorate %16 Binding 5
+OpDecorate %35 BuiltIn LocalInvocationIndex
+%2 = OpTypeVoid
+%3 = OpTypeInt 32 0
+%4 = OpTypeRuntimeArray %3
+%5 = OpTypeStruct %4
+%6 = OpTypeImage %3 2D 0 0 0 2 Rgba8ui
+%8 = OpTypePointer StorageBuffer %5
+%7 = OpVariable  %8  StorageBuffer
+%9 = OpVariable  %8  StorageBuffer
+%10 = OpVariable  %8  StorageBuffer
+%12 = OpTypeStruct %3
+%13 = OpTypePointer StorageBuffer %12
+%11 = OpVariable  %13  StorageBuffer
+%15 = OpTypePointer UniformConstant %6
+%14 = OpVariable  %15  UniformConstant
+%16 = OpVariable  %15  UniformConstant
+%18 = OpTypePointer Workgroup %3
+%17 = OpVariable  %18  Workgroup
+%21 = OpTypeFunction %2
+%22 = OpTypePointer StorageBuffer %3
+%23 = OpConstant  %3  0
+%27 = OpConstant  %3  1
+%28 = OpTypeInt 32 1
+%29 = OpConstant  %28  0
+%30 = OpTypeVector %28 2
+%31 = OpConstantComposite  %30  %29 %29
+%33 = OpConstantNull  %3
+%34 = OpConstant  %28  2
+%36 = OpTypePointer Input %3
+%35 = OpVariable  %36  Input
+%39 = OpTypeBool
+%42 = OpConstant  %3  2
+%43 = OpConstant  %3  264
+%45 = OpTypePointer StorageBuffer %4
+%49 = OpConstant  %28  5
+%51 = OpConstant  %3  72
+%57 = OpTypeVector %3 4
+%59 = OpConstant  %3  5
+%60 = OpConstant  %3  24648
+%20 = OpFunction  %2  None %21
+%19 = OpLabel
+%24 = OpAccessChain  %22  %11 %23
+%25 = OpLoad  %6  %14
+%26 = OpLoad  %6  %16
+OpBranch %32
+%32 = OpLabel
+%37 = OpLoad  %3  %35
+%38 = OpIEqual  %39  %37 %23
+OpSelectionMerge %40 None
+OpBranchConditional %38 %41 %40
+%41 = OpLabel
+OpStore %17 %33 MakePointerAvailable|NonPrivatePointer %34
+OpBranch %40
+%40 = OpLabel
+OpControlBarrier %42 %42 %43
+OpBranch %44
+%44 = OpLabel
+%46 = OpAccessChain  %22  %10 %23 %23
+%47 = OpLoad  %3  %46
+OpStore %17 %47 MakePointerAvailable|NonPrivatePointer %34
+OpControlBarrier %42 %42 %43
+%48 = OpLoad  %3  %17 MakePointerVisible|NonPrivatePointer %34
+%50 = OpAccessChain  %22  %7 %23 %23
+OpStore %50 %48 MakePointerAvailable|NonPrivatePointer %49
+OpControlBarrier %42 %42 %51
+%52 = OpAccessChain  %22  %9 %23 %23
+%53 = OpLoad  %3  %52 Volatile|MakePointerVisible|NonPrivatePointer %34
+%54 = OpAccessChain  %22  %9 %23 %27
+OpStore %54 %53 Volatile|MakePointerAvailable|NonPrivatePointer %34
+OpAtomicStore %24 %49 %23 %27
+%55 = OpAtomicLoad  %3  %24 %49 %23
+%56 = OpAtomicIAdd  %3  %24 %49 %23 %27
+%58 = OpImageRead  %57  %25 %31 MakeTexelVisible|NonPrivateTexel %34
+OpImageWrite %26 %31 %58 MakeTexelAvailable|NonPrivateTexel %34
+OpMemoryBarrier %59 %60
+OpReturn
+OpFunctionEnd

@@ -1,3 +1,5 @@
+enable wgpu_memory_fence;
+
 fn function_() {
     subgroupBarrier();
     subgroupBarrier();

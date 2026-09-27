@@ -1,12 +1,14 @@
+enable wgpu_memory_fence;
+
 fn function_() {
+    workgroupFence();
     workgroupBarrier();
-    workgroupBarrier();
-    storageBarrier();
+    storageFence();
     textureBarrier();
     storageBarrier();
     textureBarrier();
-    storageBarrier();
-    workgroupBarrier();
+    storageFence();
+    workgroupFence();
     textureBarrier();
     storageBarrier();
     workgroupBarrier();

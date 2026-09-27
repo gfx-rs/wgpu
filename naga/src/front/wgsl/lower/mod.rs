@@ -9,7 +9,9 @@ use core::{matches, num::NonZeroU32};
 
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
-use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
+use crate::front::wgsl::parse::directive::enable_extension::{
+    EnableExtensions, ImplementedEnableExtension,
+};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::wgsl::Result;
@@ -3426,6 +3428,30 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     );
                     return Ok(None);
                 }
+                "storageFence" => {
+                    ctx.enable_extensions
+                        .require(ImplementedEnableExtension::WgpuMemoryFence, function_span)?;
+                    ctx.prepare_args(arguments, 0, function_span).finish()?;
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        ir::Statement::MemoryBarrier(ir::Barrier::STORAGE),
+                        function_span,
+                    );
+                    return Ok(None);
+                }
+                "workgroupFence" => {
+                    ctx.enable_extensions
+                        .require(ImplementedEnableExtension::WgpuMemoryFence, function_span)?;
+                    ctx.prepare_args(arguments, 0, function_span).finish()?;
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        ir::Statement::MemoryBarrier(ir::Barrier::WORK_GROUP),
+                        function_span,
+                    );
+                    return Ok(None);
+                }
                 "workgroupBarrier" => {
                     ctx.prepare_args(arguments, 0, function_span).finish()?;
 
@@ -3939,12 +3965,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 "debugPrintf" => {
                     if !ctx
                         .enable_extensions
-                        .contains(crate::front::wgsl::ImplementedEnableExtension::WgpuDebugPrintf)
+                        .contains(ImplementedEnableExtension::WgpuDebugPrintf)
                     {
                         return Err(Box::new(Error::EnableExtensionNotEnabled {
                             span: function_span,
-                            kind: crate::front::wgsl::ImplementedEnableExtension::WgpuDebugPrintf
-                                .into(),
+                            kind: ImplementedEnableExtension::WgpuDebugPrintf.into(),
                         }));
                     }
 

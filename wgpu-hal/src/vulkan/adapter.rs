@@ -632,12 +632,7 @@ impl PhysicalDeviceFeatures {
                 Some(
                     vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR::default()
                         .vulkan_memory_model(needed)
-                        // The SPIR-V backend emits storage atomics with `Device`
-                        // memory scope, so whenever the Vulkan memory model is
-                        // enabled we must also enable device scope, otherwise the
-                        // validation layers report
-                        // `VUID-RuntimeSpirv-vulkanMemoryModel-06265`.
-                        .vulkan_memory_model_device_scope(needed),
+                        .vulkan_memory_model_device_scope(false),
                 )
             } else {
                 None
@@ -1105,17 +1100,15 @@ impl PhysicalDeviceFeatures {
                 .unwrap_or(true),
         );
 
-        // Enable cooperative matrix if any configuration is supported. The SPIR-V
-        // we emit for it uses `Device`-scope atomics under the Vulkan memory model,
-        // so the device must also support `vulkanMemoryModelDeviceScope`, otherwise
-        // those shaders trip `VUID-RuntimeSpirv-vulkanMemoryModel-06265`.
+        // Enable cooperative matrix if any configuration and the Vulkan memory
+        // model are supported. Naga uses QueueFamily instead of Device scope, so
+        // the optional vulkanMemoryModelDeviceScope feature is not required.
         features.set(
             F::EXPERIMENTAL_COOPERATIVE_MATRIX,
             !caps.cooperative_matrix_properties.is_empty()
-                && self.vulkan_memory_model.is_some_and(|m| {
-                    m.vulkan_memory_model == vk::TRUE
-                        && m.vulkan_memory_model_device_scope == vk::TRUE
-                }),
+                && self
+                    .vulkan_memory_model
+                    .is_some_and(|m| m.vulkan_memory_model == vk::TRUE),
         );
 
         features.set(
@@ -2992,6 +2985,10 @@ impl super::Adapter {
                 mesh_shader_primitive_indices_clamp: true,
                 trace_ray_argument_validation: true,
                 emit_int_div_checks: true,
+                // Modules that require the Vulkan memory model (cooperative
+                // matrices) still declare it; opting in globally would add
+                // per-access memory operands to every shader.
+                use_vulkan_memory_model: false,
             }
         };
 

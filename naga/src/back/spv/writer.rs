@@ -7,7 +7,7 @@ use spirv::Word;
 use super::{
     block::DebugInfoInner,
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
-    Block, BlockContext, CachedConstant, CachedExpressions, CooperativeType, DebugInfo,
+    AccessKind, Block, BlockContext, CachedConstant, CachedExpressions, CooperativeType, DebugInfo,
     EntryPointContext, Error, Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction,
     LocalImageType, LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType,
     NumericType, Options, PhysicalLayout, PipelineOptions, ResultMember, Writer, WriterFlags,
@@ -97,6 +97,7 @@ impl Writer {
             trace_ray_argument_validation: options.trace_ray_argument_validation,
             use_storage_input_output_16: options.use_storage_input_output_16,
             emit_int_div_checks: options.emit_int_div_checks,
+            memory_model: Self::memory_model_from_options(options),
             void_type,
             tuple_of_u32s_ty_id: None,
             lookup_type: crate::FastHashMap::default(),
@@ -141,7 +142,16 @@ impl Writer {
             super::f16_polyfill::F16IoPolyfill::new(options.use_storage_input_output_16);
         self.task_dispatch_limits = options.task_dispatch_limits;
         self.mesh_shader_primitive_indices_clamp = options.mesh_shader_primitive_indices_clamp;
+        self.memory_model = Self::memory_model_from_options(options);
         Ok(())
+    }
+
+    const fn memory_model_from_options(options: &Options) -> spirv::MemoryModel {
+        if options.use_vulkan_memory_model {
+            spirv::MemoryModel::Vulkan
+        } else {
+            spirv::MemoryModel::GLSL450
+        }
     }
 
     /// Returns `(major, minor)` of the SPIR-V language version.
@@ -183,6 +193,7 @@ impl Writer {
             task_dispatch_limits: self.task_dispatch_limits,
             mesh_shader_primitive_indices_clamp: self.mesh_shader_primitive_indices_clamp,
             emit_int_div_checks: self.emit_int_div_checks,
+            memory_model: self.memory_model,
 
             // Initialized afresh:
             id_gen,
@@ -2778,18 +2789,7 @@ impl Writer {
         Ok(id)
     }
 
-    pub(super) fn write_control_barrier(
-        &mut self,
-        flags: crate::Barrier,
-        body: &mut Vec<Instruction>,
-    ) {
-        let memory_scope = if flags.contains(crate::Barrier::STORAGE) {
-            spirv::Scope::Device
-        } else if flags.contains(crate::Barrier::SUB_GROUP) {
-            spirv::Scope::Subgroup
-        } else {
-            spirv::Scope::Workgroup
-        };
+    fn barrier_memory_semantics(flags: crate::Barrier) -> spirv::MemorySemantics {
         let mut semantics = spirv::MemorySemantics::ACQUIRE_RELEASE;
         semantics.set(
             spirv::MemorySemantics::UNIFORM_MEMORY,
@@ -2807,6 +2807,48 @@ impl Writer {
             spirv::MemorySemantics::IMAGE_MEMORY,
             flags.contains(crate::Barrier::TEXTURE),
         );
+        semantics
+    }
+
+    /// Compute the memory scope and semantics for a fence-only barrier.
+    fn memory_barrier_operands(
+        &self,
+        flags: crate::Barrier,
+    ) -> (spirv::Scope, spirv::MemorySemantics) {
+        let mut memory_scope = if flags.contains(crate::Barrier::STORAGE) {
+            spirv::Scope::Device
+        } else if flags.contains(crate::Barrier::SUB_GROUP) {
+            spirv::Scope::Subgroup
+        } else {
+            spirv::Scope::Workgroup
+        };
+        let mut semantics = Self::barrier_memory_semantics(flags);
+        if self.memory_model == spirv::MemoryModel::Vulkan {
+            // Under the Vulkan memory model, availability and visibility are
+            // explicit: without these bits the barrier orders accesses but
+            // does not propagate them between invocations.
+            semantics |=
+                spirv::MemorySemantics::MAKE_AVAILABLE | spirv::MemorySemantics::MAKE_VISIBLE;
+            // Device scope requires the `vulkanMemoryModelDeviceScope`
+            // feature; QueueFamily is the model's equivalent scope.
+            if memory_scope == spirv::Scope::Device {
+                memory_scope = spirv::Scope::QueueFamily;
+            }
+        }
+        (memory_scope, semantics)
+    }
+
+    pub(super) fn write_control_barrier(
+        &mut self,
+        flags: crate::Barrier,
+        body: &mut Vec<Instruction>,
+    ) {
+        let memory_scope = if flags.contains(crate::Barrier::SUB_GROUP) {
+            spirv::Scope::Subgroup
+        } else {
+            spirv::Scope::Workgroup
+        };
+        let semantics = Self::barrier_memory_semantics(flags);
         let exec_scope_id = if flags.contains(crate::Barrier::SUB_GROUP) {
             self.get_index_constant(spirv::Scope::Subgroup as u32)
         } else {
@@ -2822,34 +2864,77 @@ impl Writer {
     }
 
     pub(super) fn write_memory_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
-        let mut semantics = spirv::MemorySemantics::ACQUIRE_RELEASE;
-        semantics.set(
-            spirv::MemorySemantics::UNIFORM_MEMORY,
-            flags.contains(crate::Barrier::STORAGE),
-        );
-        semantics.set(
-            spirv::MemorySemantics::WORKGROUP_MEMORY,
-            flags.contains(crate::Barrier::WORK_GROUP),
-        );
-        semantics.set(
-            spirv::MemorySemantics::SUBGROUP_MEMORY,
-            flags.contains(crate::Barrier::SUB_GROUP),
-        );
-        semantics.set(
-            spirv::MemorySemantics::IMAGE_MEMORY,
-            flags.contains(crate::Barrier::TEXTURE),
-        );
-        let mem_scope_id = if flags.contains(crate::Barrier::STORAGE) {
-            self.get_index_constant(spirv::Scope::Device as u32)
-        } else if flags.contains(crate::Barrier::SUB_GROUP) {
-            self.get_index_constant(spirv::Scope::Subgroup as u32)
-        } else {
-            self.get_index_constant(spirv::Scope::Workgroup as u32)
-        };
+        let (memory_scope, semantics) = self.memory_barrier_operands(flags);
+        let mem_scope_id = self.get_index_constant(memory_scope as u32);
         let semantics_id = self.get_index_constant(semantics.bits());
         block
             .body
             .push(Instruction::memory_barrier(mem_scope_id, semantics_id));
+    }
+
+    /// Memory operands for a non-atomic access, if any are needed.
+    ///
+    /// Under the Vulkan memory model, accesses to storage and workgroup
+    /// memory carry `NonPrivatePointer` plus a visibility (loads) or
+    /// availability (stores) scope. Globals decorated `@coherent` use
+    /// QueueFamily scope, making every access coherent device-wide;
+    /// everything else uses Workgroup scope, with cross-workgroup
+    /// propagation provided by barriers. Globals decorated `@volatile` add
+    /// the `Volatile` operand, standing in for the decoration the model
+    /// forbids.
+    pub(super) fn access_memory_operands(
+        &mut self,
+        space: crate::AddressSpace,
+        decorations: crate::MemoryDecorations,
+        kind: AccessKind,
+    ) -> Option<super::MemoryOperands> {
+        if self.memory_model != spirv::MemoryModel::Vulkan {
+            return None;
+        }
+        match space {
+            crate::AddressSpace::Storage { .. } | crate::AddressSpace::WorkGroup => {}
+            _ => return None,
+        }
+        let mut access = spirv::MemoryAccess::NON_PRIVATE_POINTER;
+        access |= match kind {
+            AccessKind::Load => spirv::MemoryAccess::MAKE_POINTER_VISIBLE,
+            AccessKind::Store => spirv::MemoryAccess::MAKE_POINTER_AVAILABLE,
+        };
+        if decorations.contains(crate::MemoryDecorations::VOLATILE) {
+            access |= spirv::MemoryAccess::VOLATILE;
+        }
+        let scope = if decorations.contains(crate::MemoryDecorations::COHERENT) {
+            spirv::Scope::QueueFamily
+        } else {
+            spirv::Scope::Workgroup
+        };
+        let scope_id = self.get_constant_scalar(crate::Literal::I32(scope as _));
+        Some(super::MemoryOperands {
+            access,
+            scope_id: Some(scope_id),
+        })
+    }
+
+    /// The scope and semantics for an atomic operation on `space`.
+    pub(super) fn atomic_semantics_and_scope(
+        &self,
+        space: crate::AddressSpace,
+        decorations: crate::MemoryDecorations,
+    ) -> (spirv::MemorySemantics, spirv::Scope) {
+        let (mut semantics, mut scope) = space.to_spirv_semantics_and_scope();
+        if self.memory_model == spirv::MemoryModel::Vulkan {
+            // Device scope requires the `vulkanMemoryModelDeviceScope`
+            // feature; QueueFamily is the model's equivalent scope.
+            if scope == spirv::Scope::Device {
+                scope = spirv::Scope::QueueFamily;
+            }
+            // The `Volatile` decoration is forbidden under the model;
+            // atomics express it through a semantics bit instead.
+            if decorations.contains(crate::MemoryDecorations::VOLATILE) {
+                semantics |= spirv::MemorySemantics::VOLATILE;
+            }
+        }
+        (semantics, scope)
     }
 
     fn generate_workgroup_vars_init_block(
@@ -2877,7 +2962,15 @@ impl Writer {
                 let var_id = self.global_variables[handle].var_id;
                 let var_type_id = self.get_handle_type_id(var.ty);
                 let init_word = self.get_constant_null(var_type_id);
-                Instruction::store(var_id, init_word, None)
+                // Under the Vulkan memory model the zero-init store must be
+                // non-private, or the barrier that follows it will not make
+                // it visible to the other invocations in the workgroup.
+                let memory_operands = self.access_memory_operands(
+                    var.space,
+                    var.memory_decorations,
+                    AccessKind::Store,
+                );
+                Instruction::store(var_id, init_word, memory_operands)
             })
             .collect::<Vec<_>>();
 
@@ -3467,17 +3560,23 @@ impl Writer {
 
         //self.check(class.required_capabilities())?;
 
-        if global_variable
-            .memory_decorations
-            .contains(crate::MemoryDecorations::COHERENT)
-        {
-            self.decorate(id, Decoration::Coherent, &[]);
-        }
-        if global_variable
-            .memory_decorations
-            .contains(crate::MemoryDecorations::VOLATILE)
-        {
-            self.decorate(id, Decoration::Volatile, &[]);
+        // Under the Vulkan memory model the `Coherent` and `Volatile`
+        // decorations are forbidden; their effects are expressed through
+        // memory operands on each access instead
+        // (see `access_memory_operands`).
+        if self.memory_model != spirv::MemoryModel::Vulkan {
+            if global_variable
+                .memory_decorations
+                .contains(crate::MemoryDecorations::COHERENT)
+            {
+                self.decorate(id, Decoration::Coherent, &[]);
+            }
+            if global_variable
+                .memory_decorations
+                .contains(crate::MemoryDecorations::VOLATILE)
+            {
+                self.decorate(id, Decoration::Volatile, &[]);
+            }
         }
 
         if self.flags.contains(WriterFlags::DEBUG) {
@@ -3853,7 +3952,16 @@ impl Writer {
                 }
                 _ => {
                     let id = self.write_global_variable(ir_module, var)?;
-                    GlobalVariable::new(id)
+                    let writes = |index| {
+                        mod_info.get_entry_point(index)[handle].intersects(
+                            crate::valid::GlobalUse::WRITE | crate::valid::GlobalUse::ATOMIC,
+                        )
+                    };
+                    let written = match ep_index {
+                        Some(index) => writes(index),
+                        None => (0..ir_module.entry_points.len()).any(writes),
+                    };
+                    GlobalVariable::new(id, written)
                 }
             };
             self.global_variables.insert(handle, gvar);
@@ -3913,14 +4021,7 @@ impl Writer {
         }
 
         let addressing_model = spirv::AddressingModel::Logical;
-        let memory_model = if self
-            .capabilities_used
-            .contains(&spirv::Capability::VulkanMemoryModel)
-        {
-            spirv::MemoryModel::Vulkan
-        } else {
-            spirv::MemoryModel::GLSL450
-        };
+        let memory_model = self.memory_model;
         //self.check(addressing_model.required_capabilities())?;
         //self.check(memory_model.required_capabilities())?;
 
@@ -3954,25 +4055,42 @@ impl Writer {
     ) -> Result<(), Error> {
         self.reset();
 
-        // Try to find the entry point and corresponding index
-        let ep_index = match pipeline_options {
-            Some(po) => {
-                let index = ir_module
-                    .entry_points
-                    .iter()
-                    .position(|ep| po.shader_stage == ep.stage && po.entry_point == ep.name)
-                    .ok_or(Error::EntryPointNotFound)?;
-                Some(index)
+        let requested_memory_model = self.memory_model;
+        if ir_module
+            .types
+            .iter()
+            .any(|(_, ty)| matches!(ty.inner, crate::TypeInner::CooperativeMatrix { .. }))
+        {
+            self.memory_model = spirv::MemoryModel::Vulkan;
+        }
+        let result = (|| {
+            if self.memory_model == spirv::MemoryModel::Vulkan {
+                self.require_any("memory model", &[spirv::Capability::VulkanMemoryModel])?;
+                self.use_extension("SPV_KHR_vulkan_memory_model");
             }
-            None => None,
-        };
 
-        self.write_logical_layout(ir_module, info, ep_index, debug_info)?;
-        self.write_physical_layout();
+            // Try to find the entry point and corresponding index
+            let ep_index = match pipeline_options {
+                Some(po) => {
+                    let index = ir_module
+                        .entry_points
+                        .iter()
+                        .position(|ep| po.shader_stage == ep.stage && po.entry_point == ep.name)
+                        .ok_or(Error::EntryPointNotFound)?;
+                    Some(index)
+                }
+                None => None,
+            };
 
-        self.physical_layout.in_words(words);
-        self.logical_layout.in_words(words);
-        Ok(())
+            self.write_logical_layout(ir_module, info, ep_index, debug_info)?;
+            self.write_physical_layout();
+
+            self.physical_layout.in_words(words);
+            self.logical_layout.in_words(words);
+            Ok(())
+        })();
+        self.memory_model = requested_memory_model;
+        result
     }
 
     /// Return the set of capabilities the last module written used.
