@@ -22,7 +22,7 @@ use hal::AccelerationStructureTriangleIndices;
 use wgt::{Features, AABB_GEOMETRY_MIN_STRIDE};
 
 impl Device {
-    /// Requires any feature that allows acceleration structures as they can be provided by any extension
+    /// Requires any feature that allows acceleration structures as they can be provided by multiple extensions.
     pub fn require_acceleration_structures(&self) -> Result<(), crate::device::MissingFeatures> {
         self.require_features(Features::EXPERIMENTAL_RAY_QUERY)
             .or_else(|_| self.require_features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES))
