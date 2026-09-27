@@ -27,6 +27,27 @@ impl ExternalTexture {
     }
 }
 
+#[cfg(wgpu_core)]
+impl ExternalTexture {
+    /// Create a new external texture of wgpu from a wgpu-core external texture.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_external_texture` - wgpu-core external texture.
+    pub fn from_core(
+        core_external_texture: alloc::sync::Arc<wgc::resource::ExternalTexture>,
+    ) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreExternalTexture::from_core(core_external_texture)
+                .into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core external texture if this `ExternalTexture` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::resource::ExternalTexture>> {
+        self.inner.as_core_opt().map(|et| et.as_core())
+    }
+}
 /// Describes an [`ExternalTexture`].
 ///
 /// For use with [`Device::create_external_texture`].

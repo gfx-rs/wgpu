@@ -119,6 +119,23 @@ define_lock_ranks! {
         DEVICE_DEFERRED_DESTROY,
         DEVICE_LOST_CLOSURE,
     }
+    // Includes stuff from INSTANCE_DEVICES to cover Device::maintain
+    // and SHARED_TRACKER_INDEX_ALLOCATOR_INNER to cover Texture::new.
+    // We do not expect all of these to be exercised in CI.
+    rank SURFACE_PRESENTATION "Surface::presentation" followed by {
+        DEVICE_SNATCHABLE_LOCK,
+        QUEUE_PENDING_WRITES,
+        DEVICE_TRACKERS,
+        QUEUE_LIFE_TRACKER,
+        BUFFER_BIND_GROUPS,
+        DEVICE_TRACE,
+        TEXTURE_BIND_GROUPS,
+        TEXTURE_CLEAR_MODE,
+        TEXTURE_VIEWS,
+        DEVICE_DEFERRED_DESTROY,
+        DEVICE_LOST_CLOSURE,
+        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
+    }
     rank DEVICE_SNATCHABLE_LOCK "Device::snatchable_lock" followed by {
         BUFFER_MAP_STATE,
         COMMAND_BUFFER_DATA,
@@ -157,6 +174,7 @@ define_lock_ranks! {
         RESOURCE_POOL_INNER,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         TEXTURE_CLEAR_MODE,
+        TEXTURE_INITIALIZATION_STATUS,
         TLAS_BUILT_INDEX,
         TLAS_DEPENDENCIES,
     }
@@ -232,9 +250,6 @@ define_lock_ranks! {
     rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }
     rank TEXTURE_INITIALIZATION_STATUS "Texture::initialization_status" followed by { }
     rank TEXTURE_VIEWS "Texture::views" followed by { }
-
-    // Ranks not connected to the graph, alphabetical.
-    rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
 
     #[cfg(test)]
     rank PAWN "pawn" followed by { ROOK, BISHOP }

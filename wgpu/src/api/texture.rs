@@ -197,6 +197,25 @@ impl Texture {
     }
 }
 
+#[cfg(wgpu_core)]
+impl Texture {
+    /// Create a new texture of wgpu from a wgpu-core texture.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_texture` - wgpu-core texture.
+    pub fn from_core(core_texture: alloc::sync::Arc<wgc::resource::Texture>) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreTexture::from_core(core_texture).into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core texture if this `Texture` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::resource::Texture>> {
+        self.inner.as_core_opt().map(|cd| cd.as_core())
+    }
+}
+
 /// Describes a [`Texture`].
 ///
 /// For use with [`Device::create_texture`].

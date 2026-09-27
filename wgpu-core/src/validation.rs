@@ -153,15 +153,16 @@ impl fmt::Display for InterfaceVar {
 
 /// An [inter-stage input or output value][io].
 ///
-/// A value of this type describes one value to be passed to or returned from
-/// some entry point.
+/// A value of this type describes one value produced by some shader entry
+/// point, to be passed to the next pipeline stage.
 ///
 /// [io]: https://www.w3.org/TR/WGSL/#stage-inputs-outputs
 #[derive(Debug, Eq, PartialEq)]
 enum Varying {
     /// A [user-defined input or output][uio].
     ///
-    /// In WGSL, this is a value with a `@location` attribute.
+    /// In WGSL, this is a value with a `@location` attribute. In Naga terms,
+    /// these are the entry point's [`naga::Binding::Location`] inputs/outputs.
     ///
     /// [uio]: https://www.w3.org/TR/WGSL/#user-defined-inputs-outputs
     UserDefined { location: u32, iv: InterfaceVar },
@@ -1174,17 +1175,30 @@ impl BindingLayoutSource {
     }
 }
 
+/// Summary of one shader stage's outputs, presented as inputs to the next stage.
+///
+/// Each stage in a pipeline produces one of these values, to be validated
+/// against the input requirements of the pipeline's next stage.
 #[derive(Debug, Clone, Default)]
 pub struct StageIo {
+    /// The prior stage's [`Varying::UserDefined`] outputs.
     pub varyings: FastHashMap<wgt::ShaderLocation, InterfaceVar>,
-    /// This must match between mesh & task shaders
-    pub task_payload_size: Option<u32>,
-    /// Fragment shaders cannot input primitive index on mesh shaders that don't output it on DX12.
-    /// Therefore, we track between shader stages if primitive index is written (or if vertex shader
-    /// is used).
+
+    /// If the prior stage was a task shader, the size of its payload global.
     ///
-    /// This is Some if it was a mesh shader.
+    /// This must match the mesh shader's payload global.
+    pub task_payload_size: Option<u32>,
+
+    /// If the prior was a mesh shader, whether it output
+    /// [`BuiltIn::PrimitiveIndex`].
+    ///
+    /// In a mesh pipeline on DX12, the mesh shader and fragment shader must
+    /// agree on whether `PrimitiveIndex` is passed between them.
+    ///
+    /// This is `None` if the prior stage was not a mesh shader.
     pub primitive_index: Option<bool>,
+
+    /// The set of immediate data slots the prior stage used.
     pub immediates: naga::valid::ImmediateUsage,
 }
 
