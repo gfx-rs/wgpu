@@ -108,8 +108,8 @@ pub struct RayTracingPipelineDescriptor<
     pub cache: Option<PLC>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 /// The type of intersection of a index into `RayTracingPipelineDescriptor::intersections`
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum RayTracingIntersectionType {
     /// The intersection is to be used for triangles.
     Triangle,
