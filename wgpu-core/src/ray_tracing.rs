@@ -382,7 +382,7 @@ pub(crate) enum AsAction {
     /// less than the length of the intersection group array and that the
     /// types of the [`Blas`]es
     ///
-    /// [`RayTracingPipeline`]: crate::pipeline::RayTracingPipeline
+    /// [`RayTracingPipeline`]: crate::ray_tracing_pipeline::RayTracingPipeline
     TraceTlas(
         Arc<Tlas>,
         Vec<crate::ray_tracing_pipeline::RayTracingIntersectionType>,
