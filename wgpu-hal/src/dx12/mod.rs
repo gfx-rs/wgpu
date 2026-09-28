@@ -1727,7 +1727,7 @@ impl crate::Queue for Queue {
         &self,
         surface: &Surface,
         _texture: Texture,
-        damage_rects: &[wgt::Rect<u32>],
+        _damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         let mut swapchain = surface.swap_chain.write();
         let sc = swapchain.as_mut().unwrap();
@@ -1741,26 +1741,10 @@ impl crate::Queue for Queue {
             m => unreachable!("Cannot make surface with present mode {m:?}"),
         };
 
-        let mut dirty_rects = damage_rects
-            .iter()
-            .map(|rect| Foundation::RECT {
-                left: rect.x as i32,
-                top: rect.y as i32,
-                right: (rect.x + rect.w) as i32,
-                bottom: (rect.y + rect.h) as i32,
-            })
-            .collect::<Vec<_>>();
-
-        profiling::scope!("IDXGISwapchain3::Present1");
-        let params = Dxgi::DXGI_PRESENT_PARAMETERS {
-            DirtyRectsCount: dirty_rects.len() as u32,
-            pDirtyRects: dirty_rects.as_mut_ptr(),
-            pScrollRect: core::ptr::null_mut(),
-            pScrollOffset: core::ptr::null_mut(),
-        };
-        unsafe { sc.raw.Present1(interval, flags, &params) }
+        profiling::scope!("IDXGISwapchain3::Present");
+        unsafe { sc.raw.Present(interval, flags) }
             .ok()
-            .into_device_result("Present1")?;
+            .into_device_result("Present")?;
 
         Ok(())
     }
