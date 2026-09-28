@@ -26,7 +26,7 @@ use wgt::WasmNotSendSync;
 use crate::{
     api,
     dispatch::{self, BlasCompactCallback, BufferMappedRangeInterface},
-    BindingResource, Blas, BufferBinding, BufferDescriptor, Features, LoadOp, MapMode, Operations,
+    BindingResource, Blas, BufferBinding, BufferDescriptor, Features, LoadOp, Operations,
     ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas, WriteOnly,
 };
 use crate::{dispatch::DispatchAdapter, util::Mutex};
@@ -1807,10 +1807,7 @@ impl dispatch::BufferInterface for CoreBuffer {
         callback: dispatch::BufferMapCallback,
     ) {
         let operation = wgc::resource::BufferMapOperation {
-            host: match mode {
-                MapMode::Read => wgc::device::HostMap::Read,
-                MapMode::Write => wgc::device::HostMap::Write,
-            },
+            mode,
             callback: Some(Box::new(|status| {
                 let res = status.map_err(|_| crate::BufferAsyncError);
                 callback(res);
