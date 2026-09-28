@@ -1166,7 +1166,7 @@ impl Surface {
         &self,
         _suf_texture: super::Texture,
         context: &AdapterContext,
-        damage_rects: &[wgt::DamageRect],
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         let gl = unsafe { context.get_without_egl_lock() };
         let swapchain = self.swapchain.read();
@@ -1226,17 +1226,15 @@ impl Surface {
 
         match self.swap_buffers_with_damage {
             Some(swap_with_damage) if !damage_rects.is_empty() => {
-                // Rects are flat `[x, y, width, height]` EGLints, with a bottom-left origin, so
-                // flip y from the top-left origin `DamageRect` uses.
-                let surface_height = sc.extent.height as i32;
+                // EGL uses a bottom-left origin.
                 let rects = damage_rects
                     .iter()
                     .flat_map(|rect| {
                         [
-                            rect.x,
-                            surface_height - rect.y - rect.height as i32,
-                            rect.width as ffi::c_int,
-                            rect.height as ffi::c_int,
+                            rect.x as ffi::c_int,
+                            (sc.extent.height - rect.y - rect.h) as ffi::c_int,
+                            rect.w as ffi::c_int,
+                            rect.h as ffi::c_int,
                         ]
                     })
                     .collect::<Vec<ffi::c_int>>();

@@ -1767,21 +1767,13 @@ impl dispatch::QueueInterface for CoreQueue {
     }
 
     fn present(&self, detail: &dispatch::DispatchSurfaceOutputDetail) {
-        let detail = detail.as_core();
-        match detail.wgpu_surface.present() {
-            Ok(_status) => (),
-            Err(err) => {
-                self.wgpu_queue
-                    .device()
-                    .handle_error_nolabel(err, "Queue::present");
-            }
-        }
+        self.present_with_damage(detail, &[]);
     }
 
     fn present_with_damage(
         &self,
         detail: &dispatch::DispatchSurfaceOutputDetail,
-        damage_rects: &[wgt::DamageRect],
+        damage_rects: &[wgt::Rect<u32>],
     ) {
         let detail = detail.as_core();
         match detail.wgpu_surface.present_with_damage(damage_rects) {
@@ -1789,7 +1781,7 @@ impl dispatch::QueueInterface for CoreQueue {
             Err(err) => {
                 self.wgpu_queue
                     .device()
-                    .handle_error_nolabel(err, "Queue::present_with_damage");
+                    .handle_error_nolabel(err, "Queue::present");
             }
         }
     }

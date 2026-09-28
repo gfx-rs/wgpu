@@ -605,7 +605,7 @@ impl Swapchain for NativeSwapchain {
         &mut self,
         queue: &crate::vulkan::Queue,
         texture: crate::vulkan::SurfaceTexture,
-        damage_rects: &[wgt::DamageRect],
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         let metadata = texture
             .metadata
@@ -657,7 +657,7 @@ impl Swapchain for NativeSwapchain {
         let mut present_regions;
         let mut vk_info =
             if self.device.private_caps.incremental_present && !damage_rects.is_empty() {
-                rects = conv::map_damage_rects(damage_rects, self.config.extent);
+                rects = conv::map_damage_rects(damage_rects);
                 present_region = vk::PresentRegionKHR::default().rectangles(&rects);
                 present_regions = vk::PresentRegionsKHR::default()
                     .regions(core::slice::from_ref(&present_region));

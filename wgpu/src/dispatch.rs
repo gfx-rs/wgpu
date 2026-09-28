@@ -264,12 +264,10 @@ pub trait QueueInterface: CommonTraits {
 
     fn present(&self, detail: &DispatchSurfaceOutputDetail);
 
-    /// Present with damage hints. Backends that cannot make use of the hints
-    /// fall back to a full present.
     fn present_with_damage(
         &self,
         detail: &DispatchSurfaceOutputDetail,
-        _damage_rects: &[wgt::DamageRect],
+        _damage_rects: &[wgt::Rect<u32>],
     ) {
         self.present(detail);
     }

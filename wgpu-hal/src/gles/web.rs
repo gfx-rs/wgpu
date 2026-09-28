@@ -264,7 +264,7 @@ impl Surface {
         &self,
         _suf_texture: super::Texture,
         context: &AdapterContext,
-        _damage_rects: &[wgt::DamageRect],
+        _damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         let gl = &context.glow_context;
         let swapchain = self.swapchain.read();

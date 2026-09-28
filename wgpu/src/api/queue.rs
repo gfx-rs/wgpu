@@ -378,21 +378,20 @@ impl Queue {
     /// On Wayland, `present` will attach a `wl_buffer` to the underlying `wl_surface` and commit the new surface
     /// state. If it is desired to do things such as request a frame callback, scale the surface using the viewporter
     /// or synchronize other double buffered state, then these operations should be done before the call to `present`.
-    pub fn present(&self, mut surface_texture: SurfaceTexture) {
-        surface_texture.presented = true;
-        self.inner.present(&surface_texture.detail);
+    pub fn present(&self, surface_texture: SurfaceTexture) {
+        self.present_with_damage(surface_texture, &[]);
     }
 
-    /// Schedule a surface texture to be presented on the owning surface, hinting which regions
-    /// changed since the last present.
+    /// Like [`present`](Self::present), but with a hint of which regions changed since the last
+    /// present, in pixels. Rects are clipped to the surface, and backends without incremental
+    /// presentation ignore them.
     ///
-    /// Backends that support incremental presentation forward `damage_rects` to the compositor
-    /// so it can limit repainting; others ignore them. Passing an empty slice is equivalent to
-    /// [`present`](Self::present).
+    /// The texture must still contain the whole frame, since the compositor may use any part
+    /// of it.
     pub fn present_with_damage(
         &self,
         mut surface_texture: SurfaceTexture,
-        damage_rects: &[wgt::DamageRect],
+        damage_rects: &[wgt::Rect<u32>],
     ) {
         surface_texture.presented = true;
         self.inner

@@ -299,7 +299,7 @@ impl Surface {
 
     pub fn present_with_damage(
         self: &Arc<Self>,
-        damage_rects: &[wgt::DamageRect],
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<Status, SurfaceError> {
         #[cfg(feature = "trace")]
         if let Some(present) = self.presentation.lock().as_ref() {
@@ -312,7 +312,7 @@ impl Surface {
 
     pub(crate) fn present_inner(
         &self,
-        damage_rects: &[wgt::DamageRect],
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<Status, SurfaceError> {
         profiling::scope!("Surface::present");
 
@@ -341,11 +341,11 @@ impl Queue {
     pub fn present_with_damage(
         &self,
         surface: &Surface,
-        damage_rects: &[wgt::DamageRect],
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<Status, SurfaceError> {
         profiling::scope!("Queue::present");
 
-        let texture = {
+        let (texture, damage_rects) = {
             let mut presentation = surface.presentation.lock();
             let present = match presentation.as_mut() {
                 Some(present) => present,
@@ -366,10 +366,24 @@ impl Queue {
                 ))));
             }
 
-            present
+            let texture = present
                 .acquired_texture
                 .take()
-                .ok_or(SurfaceError::NothingToPresent)?
+                .ok_or(SurfaceError::NothingToPresent)?;
+
+            // hal requires damage rects to be non-empty and within the surface.
+            let surface_rect = wgt::Rect {
+                x: 0,
+                y: 0,
+                w: present.config.width,
+                h: present.config.height,
+            };
+            let damage_rects = damage_rects
+                .iter()
+                .filter_map(|rect| rect.intersect(&surface_rect))
+                .collect::<Vec<_>>();
+
+            (texture, damage_rects)
         };
 
         // If the texture was never rendered to, clear it and transition to
@@ -395,7 +409,7 @@ impl Queue {
                 // other present calls. Locking command indices prevents submits which must increment the
                 // submission index, and by `write`ing prevents other present calls.
                 let _command_indices = device.command_indices.write();
-                unsafe { raw_queue.present(raw_surface, raw, damage_rects) }
+                unsafe { raw_queue.present(raw_surface, raw, &damage_rects) }
             }
             _ => unreachable!(),
         };

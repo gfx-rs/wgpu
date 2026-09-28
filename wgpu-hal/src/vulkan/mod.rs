@@ -1652,7 +1652,7 @@ impl crate::Queue for Queue {
         &self,
         surface: &Surface,
         texture: SurfaceTexture,
-        damage_rects: &[wgt::DamageRect],
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         let mut swapchain = surface.swapchain.write();
 

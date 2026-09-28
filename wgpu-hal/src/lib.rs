@@ -1354,7 +1354,7 @@ pub trait Queue: WasmNotSendSync {
     ///
     /// `damage_rects` are the regions that changed since the last present, as a
     /// hint for backends that support incremental presentation. An empty slice
-    /// means the whole surface is damaged.
+    /// means the whole surface changed.
     ///
     /// # Safety
     ///
@@ -1374,6 +1374,8 @@ pub trait Queue: WasmNotSendSync {
     /// - Must be externally synchronized with all other queue operations
     ///   ([`submit`][s], [`present`][Queue::present],
     ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
+    /// - Every rect in `damage_rects` must be non-empty and lie within the
+    ///   surface's configured extent.
     ///
     /// [d]: Api::Device
     /// [s]: Queue::submit
@@ -1381,7 +1383,7 @@ pub trait Queue: WasmNotSendSync {
         &self,
         surface: &<Self::A as Api>::Surface,
         texture: <Self::A as Api>::SurfaceTexture,
-        damage_rects: &[wgt::DamageRect],
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), SurfaceError>;
     /// Block until all previously submitted work on this queue has completed,
     /// including any pending presentations.

@@ -1727,7 +1727,7 @@ impl crate::Queue for Queue {
         &self,
         surface: &Surface,
         _texture: Texture,
-        damage_rects: &[wgt::DamageRect],
+        damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         let mut swapchain = surface.swap_chain.write();
         let sc = swapchain.as_mut().unwrap();
@@ -1741,20 +1741,13 @@ impl crate::Queue for Queue {
             m => unreachable!("Cannot make surface with present mode {m:?}"),
         };
 
-        // `RECT` is inclusive-exclusive edges, matching `ClippedDamageRect`. Dirty
-        // rects must lie within the back buffer, so out-of-range damage is clipped;
-        // if nothing survives we leave the list empty, which DXGI reads as a full
-        // present.
         let mut dirty_rects = damage_rects
             .iter()
-            .filter_map(|&rect| {
-                let clipped = auxil::clip_damage_rect(rect, sc.size)?;
-                Some(Foundation::RECT {
-                    left: clipped.left,
-                    top: clipped.top,
-                    right: clipped.right,
-                    bottom: clipped.bottom,
-                })
+            .map(|rect| Foundation::RECT {
+                left: rect.x as i32,
+                top: rect.y as i32,
+                right: (rect.x + rect.w) as i32,
+                bottom: (rect.y + rect.h) as i32,
             })
             .collect::<Vec<_>>();
 
