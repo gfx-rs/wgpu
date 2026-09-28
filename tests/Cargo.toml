@@ -93,6 +93,9 @@ cargo_metadata.workspace = true
 env_logger.workspace = true
 ureq.workspace = true
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+libloading.workspace = true
+
 [target.'cfg(not(any(target_arch = "wasm32", miri)))'.dependencies]
 nv-flip.workspace = true
 

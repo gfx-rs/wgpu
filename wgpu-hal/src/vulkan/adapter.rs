@@ -1423,6 +1423,18 @@ impl PhysicalDeviceProperties {
             extensions.push(ext::image_drm_format_modifier::NAME);
         }
 
+        // Optional `VK_EXT_queue_family_foreign`
+        #[cfg(unix)]
+        if self.supports_extension(ext::queue_family_foreign::NAME) {
+            extensions.push(ext::queue_family_foreign::NAME);
+        }
+
+        // Optional `VK_EXT_physical_device_drm`
+        #[cfg(unix)]
+        if self.supports_extension(ext::physical_device_drm::NAME) {
+            extensions.push(ext::physical_device_drm::NAME);
+        }
+
         // Optional `VK_EXT_memory_budget`
         if self.supports_extension(ext::memory_budget::NAME) {
             extensions.push(ext::memory_budget::NAME);
