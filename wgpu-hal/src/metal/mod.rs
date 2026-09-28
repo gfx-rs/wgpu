@@ -808,7 +808,7 @@ impl crate::Queue for Queue {
         &self,
         _surface: &Surface,
         texture: SurfaceTexture,
-        _damage_rects: &[wgt::DamageRect],
+        _damage_rects: &[wgt::Rect<u32>],
     ) -> Result<(), crate::SurfaceError> {
         autoreleasepool(|_| {
             // We do not bother adjusting `command_buffer_created_not_submitted`
