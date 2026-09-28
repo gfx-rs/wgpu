@@ -67,7 +67,7 @@ pub enum DrawError {
     #[error(transparent)]
     InvalidGroupSize(#[from] InvalidWorkgroupSizeError),
     #[error(
-        "Mesh shader calls in multiview render passes require enabling the `EXPERIMENTAL_MESH_SHADER_MULTIVIEW` feature, and the highest bit ({highest_view_index}) in the multiview mask must be <= `Limits::max_multiview_view_count` ({max_multiviews})"
+        "Mesh shader calls in multiview render passes require enabling the `EXPERIMENTAL_MESH_SHADER_MULTIVIEW` feature, and the highest bit ({highest_view_index}) in the multiview mask must be less than `Limits::max_mesh_multiview_view_count` ({max_multiviews})"
     )]
     MeshPipelineMultiviewLimitsViolated {
         highest_view_index: u32,
@@ -193,7 +193,7 @@ pub(crate) fn validate_mesh_draw_multiview(
         if !device
             .features
             .contains(wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW)
-            || highest_bit > device.limits.max_mesh_multiview_view_count
+            || highest_bit >= device.limits.max_mesh_multiview_view_count
         {
             return Err(DrawError::MeshPipelineMultiviewLimitsViolated {
                 highest_view_index: highest_bit,
