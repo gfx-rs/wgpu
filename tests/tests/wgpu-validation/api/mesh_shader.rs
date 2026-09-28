@@ -184,3 +184,15 @@ fn mesh_draw_multiview_highest_view_below_limit() {
     // Views 0 and 1 with a limit of 2 views.
     mesh_draw_in_multiview_pass(true, 2, 0b11, None);
 }
+
+#[test]
+fn mesh_draw_multiview_highest_view_at_limit() {
+    // View 2 is the third view, one more than the limit allows.
+    mesh_draw_in_multiview_pass(true, 2, 0b111, Some("EXPERIMENTAL_MESH_SHADER_MULTIVIEW"));
+}
+
+#[test]
+fn mesh_draw_selective_multiview_highest_view_at_limit() {
+    // Only view 2 is rendered, but it is still past the limit.
+    mesh_draw_in_multiview_pass(true, 2, 0b100, Some("EXPERIMENTAL_MESH_SHADER_MULTIVIEW"));
+}
