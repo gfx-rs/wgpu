@@ -1,4 +1,5 @@
 use alloc::boxed::Box;
+use core::num::NonZeroU32;
 
 use thiserror::Error;
 
@@ -10,6 +11,7 @@ use crate::resource::InvalidResourceError;
 use crate::validation::InvalidWorkgroupSizeError;
 use crate::{
     binding_model::{BindingError, ImmediateUploadError, LateMinBufferBindingSizeMismatch},
+    device::Device,
     resource::{
         DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError,
         ResourceErrorIdent,
@@ -177,4 +179,27 @@ pub struct Rect<T> {
     pub y: T,
     pub w: T,
     pub h: T,
+}
+
+/// Validates a mesh shader draw against the multiview mask of the render pass or render bundle
+/// it is recorded in.
+pub(crate) fn validate_mesh_draw_multiview(
+    device: &Device,
+    multiview_mask: Option<NonZeroU32>,
+) -> Result<(), DrawError> {
+    if let Some(mv) = multiview_mask {
+        let highest_bit = 31 - mv.leading_zeros();
+
+        if !device
+            .features
+            .contains(wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW)
+            || highest_bit > device.limits.max_mesh_multiview_view_count
+        {
+            return Err(DrawError::MeshPipelineMultiviewLimitsViolated {
+                highest_view_index: highest_bit,
+                max_multiviews: device.limits.max_mesh_multiview_view_count,
+            });
+        }
+    }
+    Ok(())
 }
