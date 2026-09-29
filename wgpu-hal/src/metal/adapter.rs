@@ -1315,22 +1315,22 @@ impl super::CapabilitiesQuery {
         use wgt::Features as F;
 
         let mut features = F::empty()
-            | F::MAPPABLE_PRIMARY_BUFFERS
-            | F::VERTEX_WRITABLE_STORAGE
-            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::IMMEDIATES
-            | F::POLYGON_MODE_LINE
+            | F::ADDRESS_MODE_CLAMP_TO_ZERO
+            | F::BGRA8UNORM_STORAGE
             | F::CLEAR_TEXTURE
-            | F::TEXTURE_FORMAT_16BIT_NORM
+            | F::CLIP_DISTANCES
+            | F::DEPTH32FLOAT_STENCIL8
+            | F::EXTERNAL_TEXTURE
+            | F::FLOAT32_BLENDABLE
+            | F::IMMEDIATES
+            | F::MAPPABLE_PRIMARY_BUFFERS
+            | F::PASSTHROUGH_SHADERS
+            | F::POLYGON_MODE_LINE
             | F::SHADER_F16
             | F::SHADER_I16
-            | F::DEPTH32FLOAT_STENCIL8
-            | F::BGRA8UNORM_STORAGE
-            | F::PASSTHROUGH_SHADERS
-            | F::FLOAT32_BLENDABLE
-            | F::CLIP_DISTANCES
-            | F::ADDRESS_MODE_CLAMP_TO_ZERO
-            | F::EXTERNAL_TEXTURE;
+            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | F::TEXTURE_FORMAT_16BIT_NORM
+            | F::VERTEX_WRITABLE_STORAGE;
 
         features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
