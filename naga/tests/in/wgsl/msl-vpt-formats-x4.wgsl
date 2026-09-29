@@ -57,6 +57,8 @@ struct VertexInput {
   @location(41) v_float16_as_f16   : vec4<f16>,
   @location(42) v_float16x2_as_f16 : vec4<f16>,
   @location(43) v_float16x4_as_f16 : vec4<f16>,
+
+  @location(44) v_snorm10_10_10_2: vec4<f32>,
 }
 
 @vertex

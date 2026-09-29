@@ -23,9 +23,9 @@ struct B {
     b_mat4_: mat4x4<f16>,
 }
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<uniform> global: A;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage, read_write> global_1: B;
 
 fn main_1() {
@@ -40,7 +40,7 @@ fn main_1() {
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     main_1();
     return;

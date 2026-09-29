@@ -70,7 +70,7 @@ fn let_binding(a_1: ptr<function, array<i32, 4>>, i_7: u32) {
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     var vec: array<vec2<i32>, 4>;
     var mat: array<mat2x2<f32>, 4>;

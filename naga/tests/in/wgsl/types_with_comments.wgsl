@@ -28,6 +28,22 @@ struct TestS {
     test_m: u32,
 }
 
+/// struct with undocumented member before documented member
+struct TestT {
+    test_m: u32,
+    /// 2nd member doc comment
+    test_m2: u32,
+}
+
+/// struct with undocumented member between documented members
+struct TestU {
+    /// 1st member doc comment
+    test_m: u32,
+    test_m2: u32,
+    /// 3rd member doc comment
+    test_m3: u32,
+}
+
 /// function f doc comment
 fn test_f() {}
 
@@ -39,5 +55,7 @@ fn test_g() {}
 fn test_ep() {
     _ = w_mem2;
     _ = TestS();
+    _ = TestT();
+    _ = TestU();
     test_g();
 }

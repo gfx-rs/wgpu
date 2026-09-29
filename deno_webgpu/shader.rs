@@ -8,13 +8,12 @@ use deno_core::v8;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
-use wgpu_core::pipeline;
+use wgpu_core::resource::Labeled;
 
 use crate::error::GPUGenericError;
 
 pub struct GPUShaderModule {
   pub wgpu_shader_module: Arc<wgpu_core::pipeline::ShaderModule>,
-  pub label: String,
   pub compilation_info: v8::Global<v8::Object>,
 }
 
@@ -39,7 +38,7 @@ impl GPUShaderModule {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_shader_module.label().to_string()
   }
   #[setter]
   #[string]
@@ -123,35 +122,22 @@ impl GPUCompilationMessage {
 }
 
 impl GPUCompilationMessage {
-  fn new(error: &pipeline::CreateShaderModuleError, source: &str) -> Self {
-    let message = error.to_string();
+  fn new(error: &wgpu_types::CompilationMessage, source: &str) -> Self {
+    let message = error.message.clone();
 
-    let loc = match error {
-      pipeline::CreateShaderModuleError::Parsing(e) => e.inner.location(source),
-      pipeline::CreateShaderModuleError::Validation(e) => {
-        e.inner.location(source)
-      }
-      _ => None,
-    };
+    let loc = error.location.as_ref();
 
     match loc {
       Some(loc) => {
-        let len_utf16 = |s: &str| s.chars().map(|c| c.len_utf16() as u64).sum();
-
-        let start = loc.offset as usize;
-
-        // Naga reports a `line_pos` using UTF-8 bytes, so we cannot use it.
-        let line_start =
-          source[0..start].rfind('\n').map(|pos| pos + 1).unwrap_or(0);
-        let line_pos = len_utf16(&source[line_start..start]) + 1;
+        let loc = loc.to_utf16(source);
 
         Self {
           message,
           r#type: GPUCompilationMessageType::Error,
           line_num: loc.line_number.into(),
-          line_pos,
-          offset: len_utf16(&source[0..start]),
-          length: len_utf16(&source[start..start + loc.length as usize]),
+          line_pos: loc.line_position.into(),
+          offset: loc.offset.into(),
+          length: loc.length.into(),
         }
       }
       _ => Self {
@@ -188,13 +174,14 @@ impl GPUCompilationInfo {
 impl GPUCompilationInfo {
   pub fn new<'args, 'scope>(
     scope: &mut v8::HandleScope<'scope>,
-    messages: impl ExactSizeIterator<
-      Item = &'args pipeline::CreateShaderModuleError,
-    >,
+    compilation_info: &wgpu_types::CompilationInfo,
     source: &'args str,
   ) -> Self {
-    let array = v8::Array::new(scope, messages.len().try_into().unwrap());
-    for (i, message) in messages.enumerate() {
+    let array = v8::Array::new(
+      scope,
+      compilation_info.messages.len().try_into().unwrap(),
+    );
+    for (i, message) in compilation_info.messages.iter().enumerate() {
       let message_object =
         make_cppgc_object(scope, GPUCompilationMessage::new(message, source));
       array.set_index(scope, i.try_into().unwrap(), message_object.into());

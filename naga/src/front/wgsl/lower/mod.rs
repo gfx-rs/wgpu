@@ -1521,7 +1521,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let init = ectx
                     .try_automatic_conversions(init, &ty_res, name.span)
                     .map_err(|error| match *error {
+                        // Both of these mean the same thing to the reader of a
+                        // `var`/`let` declaration: the initializer's type isn't
+                        // the declared one.
                         Error::AutoConversion(e) => Box::new(Error::InitializationTypeMismatch {
+                            name: name.span,
+                            expected: e.dest_type,
+                            got: e.source_type,
+                        }),
+                        Error::TypeMismatch(e) => Box::new(Error::InitializationTypeMismatch {
                             name: name.span,
                             expected: e.dest_type,
                             got: e.source_type,
@@ -1529,17 +1537,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         _ => error,
                     })?;
 
-                let init_ty = ectx.register_type(init)?;
-                if !ectx.module.compare_types(
-                    &proc::TypeResolution::Handle(explicit_ty),
-                    &proc::TypeResolution::Handle(init_ty),
-                ) {
-                    return Err(Box::new(Error::InitializationTypeMismatch {
-                        name: name.span,
-                        expected: ectx.type_to_string(explicit_ty),
-                        got: ectx.type_to_string(init_ty),
-                    }));
-                }
                 ty = explicit_ty;
                 initializer = Some(init);
             }
@@ -1860,6 +1857,18 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ctx.named_expressions
                         .insert(initializer, (l.name.name.to_string(), l.name.span));
 
+                    if matches!(
+                        ctx.module.types[ty].inner,
+                        crate::TypeInner::RayQuery { .. }
+                    ) {
+                        // If a `let` variable is a ray query, it must be invalid as a `let`
+                        // must have an initializer (it is also pretty useless as all other
+                        // operations are disallowed, or require write-able variables).
+                        return Err(Box::new(Error::RayQueryWithInitializer(
+                            ctx.function.expressions.get_span(initializer),
+                        )));
+                    }
+
                     return Ok(());
                 }
                 ast::LocalDecl::Var(ref v) => {
@@ -1916,27 +1925,59 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let handle = ctx
                         .as_expression(block, &mut emitter)
                         .interrupt_emitter(ir::Expression::LocalVariable(var), Span::UNDEFINED)?;
-                    let initializer = if is_inside_loop {
-                        match initializer {
-                            Some(initializer) => Some(initializer),
-                            None => Some(
-                                ctx.as_expression(block, &mut emitter)
-                                    .append_expression(ir::Expression::ZeroValue(ty), stmt.span)?,
-                            ),
-                        }
-                    } else {
-                        initializer
-                    };
+
                     block.extend(emitter.finish(&ctx.function.expressions));
                     ctx.local_table
                         .insert(v.handle, Declared::Runtime(Typed::Reference(handle)));
 
-                    match initializer {
-                        Some(initializer) => ir::Statement::Store {
-                            pointer: handle,
-                            value: initializer,
-                        },
-                        None => return Ok(()),
+                    match ctx.module.types[ty].inner {
+                        crate::TypeInner::RayQuery { .. } => {
+                            // Initializers are disallowed for ray queries as any store is disallowed.
+                            // However, in loops ray queries need to be reset using a special piece of
+                            // IR.
+
+                            // Because we have a special case for ray queries, and initializers are always
+                            // disallowed for ray queries, we remove them here. This prevents having to
+                            // special-case them and then just emitting invalid IR anyway and gives a
+                            // clearer error message.
+                            if let Some(expr) = initializer {
+                                return Err(Box::new(Error::RayQueryWithInitializer(
+                                    ctx.function.expressions.get_span(expr),
+                                )));
+                            }
+
+                            if is_inside_loop {
+                                ir::Statement::RayQuery {
+                                    query: handle,
+                                    fun: ir::RayQueryFunction::Begin,
+                                }
+                            } else {
+                                return Ok(());
+                            }
+                        }
+                        _ => {
+                            let initializer = if is_inside_loop {
+                                match initializer {
+                                    Some(initializer) => Some(initializer),
+                                    None => Some(
+                                        ctx.as_expression(block, &mut emitter).append_expression(
+                                            ir::Expression::ZeroValue(ty),
+                                            stmt.span,
+                                        )?,
+                                    ),
+                                }
+                            } else {
+                                initializer
+                            };
+
+                            match initializer {
+                                Some(initializer) => ir::Statement::Store {
+                                    pointer: handle,
+                                    value: initializer,
+                                },
+                                None => return Ok(()),
+                            }
+                        }
                     }
                 }
                 ast::LocalDecl::Const(ref c) => {
@@ -2104,6 +2145,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                 let value;
                 if let Some(ast_expr) = ast_value {
+                    let value_span = ctx.ast_expressions.get_span(ast_expr);
                     let result_ty = ctx.function.result.as_ref().map(|r| r.ty);
                     let mut ectx = ctx.as_expression(block, &mut emitter);
                     let expr = self.expression_for_abstract(ast_expr, &mut ectx)?;
@@ -2112,7 +2154,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         let mut ectx = ctx.as_expression(block, &mut emitter);
                         let resolution = proc::TypeResolution::Handle(result_ty);
                         let converted =
-                            ectx.try_automatic_conversions(expr, &resolution, Span::default())?;
+                            ectx.try_automatic_conversions(expr, &resolution, value_span)?;
                         value = Some(converted);
                     } else {
                         value = Some(expr);
@@ -2552,6 +2594,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 };
 
                 access
+            }
+            ast::Expression::String(_) => {
+                return Err(Box::new(Error::InvalidStringLiteral {
+                    span,
+                    description: "String literals are only supported in debugPrintf",
+                }))
             }
         };
 
@@ -3888,6 +3936,61 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .push(ir::Statement::RayPipelineFunction(fun), function_span);
                     return Ok(None);
                 }
+                "debugPrintf" => {
+                    if !ctx
+                        .enable_extensions
+                        .contains(crate::front::wgsl::ImplementedEnableExtension::WgpuDebugPrintf)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: function_span,
+                            kind: crate::front::wgsl::ImplementedEnableExtension::WgpuDebugPrintf
+                                .into(),
+                        }));
+                    }
+
+                    if arguments.is_empty() {
+                        return Err(Box::new(Error::WrongArgumentCount {
+                            expected: 1..u32::MAX,
+                            found: 0,
+                            span: function_span,
+                        }));
+                    }
+
+                    // extract the format string
+                    let format_handle = arguments[0];
+                    let format = match ctx.ast_expressions[format_handle] {
+                        ast::Expression::String(s) => s.to_string(),
+                        _ => {
+                            return Err(Box::new(Error::ExpectedStringLiteral {
+                                span: ctx.ast_expressions.get_span(format_handle),
+                                description:
+                                    "debugPrintf's first argument must be a string literal",
+                            }))
+                        }
+                    };
+
+                    // extract remaining arguments (if any)
+                    let mut ir_arguments = Vec::with_capacity(arguments.len().saturating_sub(1));
+
+                    for &ast_handle in &arguments[1..] {
+                        let ir_handle = self.expression(ast_handle, ctx)?;
+                        ir_arguments.push(ir_handle);
+                    }
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block
+                        .extend(rctx.emitter.finish(&rctx.function.expressions));
+                    rctx.emitter.start(&rctx.function.expressions);
+                    rctx.block.push(
+                        ir::Statement::DebugPrintf {
+                            format,
+                            arguments: ir_arguments,
+                        },
+                        function_span,
+                    );
+
+                    return Ok(None);
+                }
                 _ => return Err(Box::new(Error::UnknownIdent(function_span, function_name))),
             }
         };
@@ -4099,6 +4202,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let rule = self.resolve_overloads(span, fun, fun_overloads, &lowered_arguments, ctx)?;
         self.apply_automatic_conversions_for_call(&rule, &mut lowered_arguments, ctx)?;
 
+        self.check_bitfield_range(span, fun, &rule, &lowered_arguments, ctx)?;
+
         // If this function returns a predeclared type, register it
         // in `Module::special_types`. The typifier will expect to
         // be able to find it there.
@@ -4113,6 +4218,48 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             arg2: lowered_arguments.get(2).cloned(),
             arg3: lowered_arguments.get(3).cloned(),
         })
+    }
+
+    /// Check the `offset` and `count` arguments of a call to [`ExtractBits`]
+    /// or [`InsertBits`] to make sure it fits inside the number's `width`.
+    ///
+    /// If `offset` and `count` are fixed numbers and they pick bits outside
+    /// the range we must return a shader creation error.
+    ///
+    /// If the pipeline overrides the numbers, we do not check them here.
+    /// [`get_const_val`] reports them as non-const, so they fall through
+    /// this check.
+    ///
+    /// [`ExtractBits`]: ir::MathFunction::ExtractBits
+    /// [`InsertBits`]: ir::MathFunction::InsertBits
+    /// [`get_const_val`]: ExpressionContext::get_const_val
+    fn check_bitfield_range(
+        &mut self,
+        span: Span,
+        fun: ir::MathFunction,
+        rule: &proc::Rule,
+        arguments: &[Handle<ir::Expression>],
+        ctx: &ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, ()> {
+        let (builtin, offset, count) = match fun {
+            ir::MathFunction::ExtractBits => ("extractBits", 1, 2),
+            ir::MathFunction::InsertBits => ("insertBits", 2, 3),
+            _ => return Ok(()),
+        };
+
+        let (Ok(offset), Ok(count)) = (
+            ctx.get_const_val::<u32>(arguments[offset]),
+            ctx.get_const_val::<u32>(arguments[count]),
+        ) else {
+            return Ok(());
+        };
+
+        let Some(scalar) = rule.arguments[0].inner_with(&ctx.module.types).scalar() else {
+            return Ok(());
+        };
+
+        proc::check_bitfield_range(builtin, offset, count, u32::from(scalar.width) * 8)
+            .map_err(|e| Box::new(Error::ConstantEvaluatorError(Box::new(e), span)))
     }
 
     /// Choose the right overload for a function call.
@@ -4711,6 +4858,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 doc_comments.push(Some(
                     member.doc_comments.iter().map(|s| s.to_string()).collect(),
                 ));
+            } else {
+                doc_comments.push(None);
             }
             members.push(ir::StructMember {
                 name: Some(member.name.name.to_owned()),

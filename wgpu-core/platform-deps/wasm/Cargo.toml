@@ -13,14 +13,14 @@ readme = "README.md"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.76"
+rust-version = "1.87"
 
 [features]
 webgl = ["wgpu-hal/gles"]
 
 # Depend on wgpu-hal conditionally, so that the above features only apply to wgpu-hal on this set of platforms.
 [target.'cfg(all(target_family = "wasm", not(target_os = "emscripten")))'.dependencies]
-wgpu-hal.workspace = true
+wgpu-hal = { workspace = true, default-features = true }
 
 [lints]
 workspace = true

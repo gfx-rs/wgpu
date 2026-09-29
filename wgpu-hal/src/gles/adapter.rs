@@ -1,8 +1,7 @@
 use alloc::{borrow::ToOwned as _, format, string::String, sync::Arc, vec, vec::Vec};
-use core::sync::atomic::AtomicU8;
 
 use glow::HasContext;
-use wgpu_sync::Mutex;
+use wgpu_sync::{atomic::AtomicU8, Mutex};
 use wgt::AstcChannel;
 
 use crate::auxil::db;
@@ -385,10 +384,10 @@ impl super::Adapter {
             || (supported((3, 1), (4, 0)) && extensions.contains("GL_EXT_texture_cube_map_array"));
 
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
-            | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::COMPARISON_SAMPLERS
-            | wgt::DownlevelFlags::SHADER_F16_IN_F32
-            | wgt::DownlevelFlags::MSL2_1;
+            | wgt::DownlevelFlags::MSL2_1
+            | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
+            | wgt::DownlevelFlags::SHADER_F16_IN_F32;
         downlevel_flags.set(
             wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
             supports_cube_array,
@@ -488,11 +487,11 @@ impl super::Adapter {
             };
 
         let mut features = wgt::Features::empty()
-            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::CLEAR_TEXTURE
-            | wgt::Features::IMMEDIATES
             | wgt::Features::DEPTH32FLOAT_STENCIL8
-            | wgt::Features::PASSTHROUGH_SHADERS;
+            | wgt::Features::IMMEDIATES
+            | wgt::Features::PASSTHROUGH_SHADERS
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
         features.set(
             wgt::Features::TEXTURE_FORMAT_16BIT_NORM,
             supports_16bit_norm,
@@ -791,7 +790,11 @@ impl super::Adapter {
             max_sampled_textures_per_shader_stage: super::MAX_TEXTURE_SLOTS as u32,
             max_samplers_per_shader_stage: super::MAX_SAMPLERS as u32,
             max_storage_buffers_per_shader_stage,
+            max_storage_buffers_in_vertex_stage: 0,
+            max_storage_buffers_in_fragment_stage: 0,
             max_storage_textures_per_shader_stage,
+            max_storage_textures_in_vertex_stage: 0,
+            max_storage_textures_in_fragment_stage: 0,
             max_uniform_buffers_per_shader_stage,
             max_binding_array_elements_per_shader_stage: 0,
             max_binding_array_sampler_elements_per_shader_stage: 0,
@@ -1402,7 +1405,8 @@ impl crate::Adapter for super::Adapter {
     fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
         wgt::TextureUses::INCLUSIVE
             | wgt::TextureUses::COLOR_TARGET
-            | wgt::TextureUses::DEPTH_STENCIL_WRITE
+            | wgt::TextureUses::DEPTH_WRITE
+            | wgt::TextureUses::STENCIL_WRITE
     }
 }
 

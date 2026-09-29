@@ -3,6 +3,7 @@ use crate::{
     pipeline::{CreateComputePipelineError, CreateShaderModuleError},
 };
 use alloc::boxed::Box;
+use scopeguard::{guard, ScopeGuard};
 use thiserror::Error;
 
 mod dispatch;
@@ -43,6 +44,8 @@ impl IndirectValidation {
                 return Err(DeviceError::Lost);
             }
         };
+        let dispatch = guard(dispatch, |dispatch| dispatch.dispose(device));
+
         let draw = match Draw::new(
             device,
             required_features,
@@ -56,7 +59,10 @@ impl IndirectValidation {
                 return Err(DeviceError::Lost);
             }
         };
-        Ok(Self { dispatch, draw })
+        Ok(Self {
+            dispatch: ScopeGuard::into_inner(dispatch),
+            draw,
+        })
     }
 
     pub(crate) fn dispose(self, device: &dyn hal::DynDevice) {
@@ -74,6 +80,10 @@ pub(crate) struct BindGroups {
 }
 
 impl BindGroups {
+    /// Creates the bind groups for indirect validation shaders to read from `buffer`.
+    ///
+    /// `buffer_size` is the user-requested size of the buffer.
+    ///
     /// `Ok(None)` will only be returned if `buffer_size` is `0`.
     pub(crate) fn new(
         indirect_validation: &IndirectValidation,

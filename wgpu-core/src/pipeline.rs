@@ -1,3 +1,4 @@
+use alloc::string::ToString as _;
 use alloc::{
     borrow::{Cow, ToOwned},
     boxed::Box,
@@ -78,6 +79,7 @@ pub struct ShaderModule {
     pub(crate) device: Arc<Device>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
+    pub(crate) compilation_info: wgt::CompilationInfo,
 }
 
 impl Drop for ShaderModule {
@@ -116,12 +118,21 @@ impl ShaderModule {
         Ok(state)
     }
 
-    pub(crate) fn invalid(device: Arc<Device>, label: String) -> Arc<Self> {
+    pub(crate) fn invalid(
+        device: Arc<Device>,
+        label: String,
+        compilation_info: wgt::CompilationInfo,
+    ) -> Arc<Self> {
         Arc::new(Self {
             state: ResourceState::Invalid,
             device,
             label,
+            compilation_info,
         })
+    }
+
+    pub fn compilation_info(&self) -> &wgt::CompilationInfo {
+        &self.compilation_info
     }
 
     /// Select an entry point name, given an optional name and a shader stage.
@@ -154,25 +165,33 @@ impl ShaderModule {
                 interface.finalize_entry_point_name(stage, entry_point)
             }
             ShaderMetaData::Passthrough(ref interface) => {
-                if let Some(ep) = entry_point {
-                    if interface.entry_point_names.contains(ep) {
-                        Ok(ep.to_owned())
-                    } else {
-                        Err(validation::StageError::MissingEntryPoint(ep.to_owned()))
-                    }
-                } else {
-                    if interface.entry_point_names.len() != 1 {
-                        return Err(validation::StageError::MultipleEntryPointsFound);
-                    }
-                    Ok(interface
-                        .entry_point_names
-                        .iter()
-                        .next()
-                        .unwrap()
-                        .to_owned())
-                }
+                finalize_passthrough_entry_point_name(interface, entry_point)
             }
         }
+    }
+}
+
+fn finalize_passthrough_entry_point_name(
+    interface: &validation::PassthroughInterface,
+    entry_point: Option<&str>,
+) -> Result<String, validation::StageError> {
+    if let Some(ep) = entry_point {
+        return if interface.entry_point_names.contains(ep) {
+            Ok(ep.to_owned())
+        } else {
+            Err(validation::StageError::MissingEntryPoint(ep.to_owned()))
+        };
+    }
+
+    match interface.entry_point_names.len() {
+        0 => Err(validation::StageError::NoEntryPointFound),
+        1 => Ok(interface
+            .entry_point_names
+            .iter()
+            .next()
+            .unwrap()
+            .to_owned()),
+        _ => Err(validation::StageError::MultipleEntryPointsFound),
     }
 }
 
@@ -180,23 +199,35 @@ impl ShaderModule {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateShaderModuleError {
+    // These variants deliberately don't forward to `ShaderError`'s `Display`,
+    // which would include the shader source text and detailed compiler messages:
+    // per the WebGPU specification <https://gpuweb.github.io/gpuweb/#dom-gpudevice-createshadermodule>,
+    // the message of the validation error raised by `createShaderModule` should not include those details,
+    // since they are accessible via `getCompilationInfo()`.
     #[cfg(feature = "wgsl")]
-    #[error(transparent)]
-    Parsing(#[from] ShaderError<naga::front::wgsl::ParseError>),
+    #[error("Shader '{label}' parsing error. Concrete error is available via `get_compilation_info`", label = _0.label.as_deref().unwrap_or_default())]
+    Parsing(ShaderError<naga::front::wgsl::ParseError>),
+
     #[cfg(feature = "glsl")]
-    #[error(transparent)]
-    ParsingGlsl(#[from] ShaderError<naga::front::glsl::ParseErrors>),
+    #[error("Shader '{label}' parsing error. Concrete error is available via `get_compilation_info`", label = _0.label.as_deref().unwrap_or_default())]
+    ParsingGlsl(ShaderError<naga::front::glsl::ParseErrors>),
+
     #[cfg(feature = "spirv")]
-    #[error(transparent)]
-    ParsingSpirV(#[from] ShaderError<naga::front::spv::Error>),
+    #[error("Shader '{label}' parsing error. Concrete error is available via `get_compilation_info`", label = _0.label.as_deref().unwrap_or_default())]
+    ParsingSpirV(ShaderError<naga::front::spv::Error>),
+
     #[error("Failed to generate the backend-specific code")]
     Generation,
+
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error(transparent)]
-    Validation(#[from] ShaderError<naga::WithSpan<naga::valid::ValidationError>>),
+
+    #[error("Shader '{label}' validation error. Concrete error is available via `get_compilation_info`", label = _0.label.as_deref().unwrap_or_default())]
+    Validation(ShaderError<naga::WithSpan<naga::valid::ValidationError>>),
+
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+
     #[error(
         "Shader global {bind:?} uses a group index {group} that exceeds the max_bind_groups limit of {limit}."
     )]
@@ -205,8 +236,10 @@ pub enum CreateShaderModuleError {
         group: u32,
         limit: u32,
     },
+
     #[error("Generic shader passthrough does not contain any code compatible with this backend.")]
     NotCompiledForBackend,
+
     #[error(
         "Generic passthrough shaders which use GLSL or DXIL must contain exactly one entry point."
     )]
@@ -232,6 +265,113 @@ impl WebGpuError for CreateShaderModuleError {
             #[cfg(feature = "spirv")]
             Self::ParsingSpirV(..) => ErrorType::Validation,
         }
+    }
+}
+
+#[cfg(feature = "wgsl")]
+pub(crate) fn wgsl_to_compilation_info(
+    value: &ShaderError<naga::front::wgsl::ParseError>,
+) -> wgt::CompilationInfo {
+    use alloc::{string::ToString, vec};
+    wgt::CompilationInfo {
+        messages: vec![wgt::CompilationMessage {
+            message: value.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: value
+                .inner
+                .location(&value.source)
+                .as_ref()
+                .map(naga_to_source_location),
+        }],
+    }
+}
+#[cfg(feature = "glsl")]
+pub(crate) fn glsl_to_compilation_info(
+    value: &ShaderError<naga::front::glsl::ParseErrors>,
+) -> wgt::CompilationInfo {
+    use alloc::string::ToString;
+    let messages = value
+        .inner
+        .errors
+        .iter()
+        .map(|err| wgt::CompilationMessage {
+            message: err.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: err
+                .location(&value.source)
+                .as_ref()
+                .map(naga_to_source_location),
+        })
+        .collect();
+    wgt::CompilationInfo { messages }
+}
+
+#[cfg(feature = "spirv")]
+pub(crate) fn spirv_to_compilation_info(
+    value: &ShaderError<naga::front::spv::Error>,
+) -> wgt::CompilationInfo {
+    use alloc::{string::ToString, vec};
+    wgt::CompilationInfo {
+        messages: vec![wgt::CompilationMessage {
+            message: value.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: None,
+        }],
+    }
+}
+
+pub(crate) fn naga_to_compilation_info(
+    value: &ShaderError<naga::WithSpan<naga::valid::ValidationError>>,
+) -> wgt::CompilationInfo {
+    use alloc::{string::ToString, vec};
+    wgt::CompilationInfo {
+        messages: vec![wgt::CompilationMessage {
+            message: value.to_string(),
+            message_type: wgt::CompilationMessageType::Error,
+            location: value
+                .inner
+                .location(&value.source)
+                .as_ref()
+                .map(naga_to_source_location),
+        }],
+    }
+}
+
+fn naga_to_source_location(value: &naga::SourceLocation) -> wgt::SourceLocation {
+    wgt::SourceLocation {
+        length: value.length,
+        offset: value.offset,
+        line_number: value.line_number,
+        line_position: value.line_position,
+    }
+}
+
+pub(crate) fn shader_module_error_into_compilation_info(
+    value: &CreateShaderModuleError,
+) -> wgt::CompilationInfo {
+    match value {
+        #[cfg(feature = "wgsl")]
+        CreateShaderModuleError::Parsing(v) => wgsl_to_compilation_info(v),
+        #[cfg(feature = "glsl")]
+        CreateShaderModuleError::ParsingGlsl(v) => glsl_to_compilation_info(v),
+        #[cfg(feature = "spirv")]
+        CreateShaderModuleError::ParsingSpirV(v) => spirv_to_compilation_info(v),
+        CreateShaderModuleError::Validation(v) => naga_to_compilation_info(v),
+        // Device errors are reported through the error sink, and are not compilation errors.
+        // Same goes for native shader module generation errors.
+        CreateShaderModuleError::Device(_) | CreateShaderModuleError::Generation => {
+            wgt::CompilationInfo {
+                messages: Vec::new(),
+            }
+        }
+        // Everything else is an error message without location information.
+        _ => wgt::CompilationInfo {
+            messages: alloc::vec![wgt::CompilationMessage {
+                message: value.to_string(),
+                message_type: wgt::CompilationMessageType::Error,
+                location: None,
+            }],
+        },
     }
 }
 
@@ -440,17 +580,14 @@ impl ComputePipeline {
         self.layout()?.get_bind_group_layout(index, self.into())
     }
 
-    pub fn get_bind_group_layout(
-        self: &Arc<Self>,
-        index: u32,
-    ) -> (Arc<BindGroupLayout>, Option<GetBindGroupLayoutError>) {
-        let (bgl, error) = match self.get_bind_group_layout_inner(index) {
-            Ok(bgl) => (bgl, None),
-            Err(e) => (
-                BindGroupLayout::invalid(&self.device, String::new()),
-                Some(e),
-            ),
-        };
+    pub fn get_bind_group_layout(self: &Arc<Self>, index: u32) -> Arc<BindGroupLayout> {
+        let bgl = self
+            .get_bind_group_layout_inner(index)
+            .unwrap_or_else(|err| {
+                self.device
+                    .handle_error_nolabel(err, "ComputePipeline::get_bind_group_layout");
+                BindGroupLayout::invalid(&self.device, String::new())
+            });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.device.trace.lock() {
             use crate::device::trace;
@@ -461,7 +598,7 @@ impl ComputePipeline {
                 index,
             });
         };
-        (bgl, error)
+        bgl
     }
 }
 
@@ -1126,17 +1263,14 @@ impl RenderPipeline {
         self.layout()?.get_bind_group_layout(index, self.into())
     }
 
-    pub fn get_bind_group_layout(
-        self: &Arc<Self>,
-        index: u32,
-    ) -> (Arc<BindGroupLayout>, Option<GetBindGroupLayoutError>) {
-        let (bgl, error) = match self.get_bind_group_layout_inner(index) {
-            Ok(bgl) => (bgl, None),
-            Err(e) => (
-                BindGroupLayout::invalid(&self.device, String::new()),
-                Some(e),
-            ),
-        };
+    pub fn get_bind_group_layout(self: &Arc<Self>, index: u32) -> Arc<BindGroupLayout> {
+        let bgl = self
+            .get_bind_group_layout_inner(index)
+            .unwrap_or_else(|err| {
+                self.device
+                    .handle_error_nolabel(err, "RenderPipeline::get_bind_group_layout");
+                BindGroupLayout::invalid(&self.device, String::new())
+            });
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *self.device.trace.lock() {
             use crate::device::trace;
@@ -1147,6 +1281,54 @@ impl RenderPipeline {
                 index,
             });
         };
-        (bgl, error)
+        bgl
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn passthrough_interface(entry_point_names: &[&str]) -> validation::PassthroughInterface {
+        validation::PassthroughInterface {
+            entry_point_names: entry_point_names
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn select_implicit_passthrough_entry_point() {
+        let empty = passthrough_interface(&[]);
+        assert!(matches!(
+            finalize_passthrough_entry_point_name(&empty, None),
+            Err(validation::StageError::NoEntryPointFound)
+        ));
+
+        let single = passthrough_interface(&["main"]);
+        assert_eq!(
+            finalize_passthrough_entry_point_name(&single, None).unwrap(),
+            "main"
+        );
+
+        let multiple = passthrough_interface(&["vertex", "fragment"]);
+        assert!(matches!(
+            finalize_passthrough_entry_point_name(&multiple, None),
+            Err(validation::StageError::MultipleEntryPointsFound)
+        ));
+    }
+
+    #[test]
+    fn select_explicit_passthrough_entry_point() {
+        let interface = passthrough_interface(&["main"]);
+        assert_eq!(
+            finalize_passthrough_entry_point_name(&interface, Some("main")).unwrap(),
+            "main"
+        );
+        assert!(matches!(
+            finalize_passthrough_entry_point_name(&interface, Some("missing")),
+            Err(validation::StageError::MissingEntryPoint(name)) if name == "missing"
+        ));
     }
 }

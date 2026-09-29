@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "cts_runner",
     "deno_webgpu",
@@ -49,6 +49,8 @@ default-members = [
     "tests",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
+    "wgpu-core-remote",
+    "wgpu-core-remote-types",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-naga-bridge",
@@ -70,7 +72,7 @@ ref_as_ptr = "warn"
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.93"
+rust-version = "1.95"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
@@ -93,10 +95,10 @@ wgpu = { version = "30.0.0", path = "./wgpu", default-features = false, features
     "angle",
     "static-dxc",
 ] }
-wgpu-core = { version = "30.0.0", path = "./wgpu-core" }
+wgpu-core = { version = "30.0.0", path = "./wgpu-core", default-features = false }
 wgpu-core-remote = { version = "30.0.0", path = "./wgpu-core-remote" }
 wgpu-core-remote-types = { version = "30.0.0", path = "./wgpu-core-remote-types" }
-wgpu-hal = { version = "30.0.0", path = "./wgpu-hal" }
+wgpu-hal = { version = "30.0.0", path = "./wgpu-hal", default-features = false }
 wgpu-naga-bridge = { version = "30.0.0", path = "./wgpu-naga-bridge" }
 wgpu-sync = { version = "30.0.0", path = "./wgpu-sync", default-features = false }
 wgpu-test = { version = "30.0.0", path = "./tests" }
@@ -132,13 +134,15 @@ cfg-if = "1"
 codespan-reporting = { version = "0.13", default-features = false }
 diff = "0.1"
 document-features = "0.2.10"
-encase = "0.12"
-env_logger = { version = "0.11", default-features = false }
+encase = "0.13"
+env_logger = { version = "0.11", default-features = false, features = [
+    "humantime",
+] }
 exhaust = "0.2"
 fern = "0.7"
 flume = "0.12"
 futures-lite = "2"
-glam = "0.33.0"
+glam = "0.33.9"
 glob = "0.3"
 half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
 hashbrown = { version = "0.17", default-features = false, features = [
@@ -199,6 +203,7 @@ ron = "0.12"
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
 rustc-hash = { version = "1.1", default-features = false }
+scopeguard = { version = "1.2", default-features = false }
 serde_json = "1.0.143"
 serde = { version = "1.0.225", default-features = false }
 shell-words = "1"
@@ -209,14 +214,14 @@ strum = { version = "0.28", default-features = false, features = ["derive"] }
 tempfile = "3"
 toml = "1.0.0"
 trybuild = "1"
-tracy-client = "0.18"
+tracy-client = "0.19"
 thiserror = { version = "2.0.12", default-features = false }
 ureq = { version = "3.2.0", default-features = false }
 unicode-ident = "1.0.5"
 walkdir = "2.3"
 winit = { version = "0.30.8", features = ["android-native-activity"] }
 which = "8"
-xshell = "0.2.2"
+xshell = "0.2.6"
 
 # Metal dependencies
 block2 = "0.6.2"
@@ -272,6 +277,7 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLAccelerationStructureTypes",
     "MTLAccelerationStructureCommandEncoder",
     "MTLResidencySet",
+    "MTLLogState",
 ] }
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "std",
@@ -289,7 +295,8 @@ ash = "0.38"
 
 # DX12 dependencies
 range-alloc = "0.1"
-mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
+# 0.1.5 requires a newer MSVC toolset than Visual Studio 2022 provides.
+mach-dxcompiler-rs = { version = ">=0.1.0,<=0.1.4", default-features = false } # remember to increase max_shader_model if applicable
 windows-core = { version = "0.62", default-features = false }
 windows-result = { version = "0.4", default-features = false }
 

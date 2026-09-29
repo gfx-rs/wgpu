@@ -50,10 +50,7 @@ impl RawId {
 
 /// An identifier for a wgpu object.
 ///
-/// An `Id<T>` value identifies a value stored in a [`Global`]'s [`Hub`].
-///
-/// [`Global`]: crate::global::Global
-/// [`Hub`]: crate::hub::Hub
+/// An `Id<T>` value identifies a value stored in a `Global`'s `Hub`.
 #[repr(transparent)]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]

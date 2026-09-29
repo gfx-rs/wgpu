@@ -6,9 +6,9 @@ struct type_5 {
     member: atomic<u32>,
 }
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage, read_write> global: type_5;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage, read_write> global_1: type_3;
 
 fn function_() {
@@ -31,7 +31,7 @@ fn function_() {
     return;
 }
 
-@compute @workgroup_size(32, 1, 1) 
+@compute @workgroup_size(32, 1, 1)
 fn stage_test_atomic_i_decrement() {
     function_();
 }

@@ -17,7 +17,7 @@ struct FragmentOutput {
 const strct: TestStruct = TestStruct(array<vec4<u32>, 2>(vec4(0u), vec4(1u)));
 
 var<private> global: f32;
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage, read_write> global_1: a_buf;
 var<private> o_color: vec4<f32>;
 
@@ -459,7 +459,7 @@ fn main_1() {
     return;
 }
 
-@fragment 
+@fragment
 fn main() -> FragmentOutput {
     main_1();
     let _e1 = o_color;

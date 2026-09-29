@@ -8,6 +8,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         STENCIL_ONLY_VIEW_CREATION,
         DEPTH_ONLY_VIEW_CREATION,
         SHARED_USAGE_VIEW_CREATION,
+        COPY_ONLY_VIEW_CREATION,
     ]);
 }
 
@@ -114,5 +115,36 @@ static SHARED_USAGE_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::
                 ),
                 ..Default::default()
             });
+        }
+    });
+
+#[apply(gpu_test!)]
+static COPY_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
+        // Regression test for https://github.com/gfx-rs/wgpu/issues/10200: a texture whose
+        // only usages are copies still has to be viewable.
+        for format in [TextureFormat::Rgba8Unorm, TextureFormat::Rgba8Snorm] {
+            for usage in [
+                TextureUsages::COPY_DST,
+                TextureUsages::COPY_SRC,
+                TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
+            ] {
+                let texture = ctx.device.create_texture(&TextureDescriptor {
+                    label: None,
+                    size: Extent3d {
+                        width: 256,
+                        height: 256,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: TextureDimension::D2,
+                    format,
+                    usage,
+                    view_formats: &[],
+                });
+                let _view = texture.create_view(&TextureViewDescriptor::default());
+            }
         }
     });

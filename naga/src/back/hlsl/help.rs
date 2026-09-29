@@ -1322,12 +1322,10 @@ impl<W: Write> super::Writer<'_, W> {
                         crate::TypeInner::Image {
                             class: crate::ImageClass::Storage { format, .. },
                             ..
-                        } => {
-                            if format.single_component() {
-                                let scalar: crate::Scalar = format.into();
-                                if self.wrapped.insert(WrappedType::ImageLoadScalar(scalar)) {
-                                    self.write_loaded_scalar_to_storage_loaded_value(scalar)?;
-                                }
+                        } if format.single_component() => {
+                            let scalar: crate::Scalar = format.into();
+                            if self.wrapped.insert(WrappedType::ImageLoadScalar(scalar)) {
+                                self.write_loaded_scalar_to_storage_loaded_value(scalar)?;
                             }
                         }
                         _ => {}

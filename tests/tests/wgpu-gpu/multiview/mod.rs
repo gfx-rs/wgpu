@@ -146,6 +146,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32) {
         mip_level_count: None,
         base_array_layer: 0,
         array_layer_count: Some(num_layers),
+        swizzle: wgpu::TextureComponentSwizzle::default(),
     };
     let entire_texture_view = texture.create_view(&texture_view_desc);
 

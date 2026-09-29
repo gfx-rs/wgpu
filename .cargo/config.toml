@@ -1,2 +1,7 @@
 [alias]
 xtask = "run -p wgpu-xtask --"
+
+[build]
+# Note that any rustflags set here will be overridden by the `RUSTFLAGS`
+# environment variable, if set (e.g. in CI).
+rustflags = ["--cfg", "wgpu_validate_locks_debug"]

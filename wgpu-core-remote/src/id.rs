@@ -1,6 +1,6 @@
 pub use wgpu_core_remote_types::id::*;
 
-/// Reference wgpu objects via numeric IDs assigned by [`crate::identity::IdentityManager`].
+/// Reference wgpu objects via numeric IDs assigned by [`wgpu_core_remote_types::identity::IdentityManager`].
 #[derive(Clone, Debug)]
 pub struct IdReferences;
 

@@ -73,7 +73,7 @@ impl TextureView {
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::TextureView>> {
         let view = self.inner.as_core_opt()?;
-        unsafe { view.context.texture_view_as_hal::<A>(view) }
+        unsafe { view.as_hal::<A>() }
     }
 
     /// Returns the underlying [`webgpu::GpuTextureView`] handle if this view
@@ -89,6 +89,27 @@ impl TextureView {
     /// Returns custom implementation of TextureView (if custom backend and is internally T)
     pub fn as_custom<T: custom::TextureViewInterface>(&self) -> Option<&T> {
         self.inner.as_custom()
+    }
+}
+
+#[cfg(wgpu_core)]
+impl TextureView {
+    /// Create a new texture view of wgpu from a wgpu-core texture view.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_texture_view` - wgpu-core texture view.
+    pub fn from_core(core_texture_view: alloc::sync::Arc<wgc::resource::TextureView>) -> Self {
+        let texture = Texture::from_core(core_texture_view.texture().clone());
+        Self {
+            inner: crate::backend::wgpu_core::CoreTextureView::from_core(core_texture_view).into(),
+            texture,
+        }
+    }
+
+    /// Returns the underlying wgpu-core device if this `Device` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::resource::TextureView>> {
+        self.inner.as_core_opt().map(|cd| cd.as_core())
     }
 }
 

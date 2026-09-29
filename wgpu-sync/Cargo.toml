@@ -31,8 +31,16 @@ alloc_instead_of_core = "warn"
 default = ["std"]
 std = ["dep:parking_lot", "once_cell/std"]
 
+portable-atomic = ["dep:portable-atomic", "dep:portable-atomic-util"]
+
 [dependencies]
 cfg-if.workspace = true
 lock_api = { workspace = true, default-features = false }
 parking_lot = { workspace = true, optional = true }
 once_cell = { workspace = true, default-features = false, features = ["alloc", "race"] }
+
+[target.'cfg(any(not(target_has_atomic = "ptr"), not(target_has_atomic = "64"), not(target_has_atomic = "32"), not(target_has_atomic = "16"), not(target_has_atomic = "8")))'.dependencies]
+portable-atomic = { workspace = true, optional = true }
+
+[target.'cfg(not(target_has_atomic = "ptr"))'.dependencies]
+portable-atomic-util = { workspace = true, optional = true, features = ["alloc"] }

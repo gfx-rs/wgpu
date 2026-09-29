@@ -1,15 +1,14 @@
 use alloc::borrow::Cow;
 
-use wgpu_core::command::PassTimestampWrites;
-use wgpu_core_remote_types::encoders::{BindingCommand, ComputePassEncoderCommand, DebugCommand};
+use wgpu_core::command::{ComputePass, PassTimestampWrites};
+use wgpu_core_remote_types::encoders::{
+    BindingCommand, ComputePassDescriptor, ComputePassEncoderCommand, DebugCommand,
+};
 use wgt::{BufferAddress, DynamicOffset};
 
 use crate::global::Global;
 use crate::hub::Hub;
 use crate::id;
-
-pub type ComputePassDescriptor<'a> =
-    wgpu_core::command::ComputePassDescriptor<'a, PassTimestampWrites<id::QuerySetId>>;
 
 impl Global {
     /// Creates a compute pass.
@@ -19,9 +18,7 @@ impl Global {
     /// ultimately be generated when the parent encoder is finished, and it is
     /// not possible to run any commands from the invalid pass.
     ///
-    /// If successful, puts the encoder into the [`Locked`] state.
-    ///
-    /// [`Locked`]: crate::command::CommandEncoderStatus::Locked
+    /// If successful, puts the encoder into the `Locked` state.
     pub fn command_encoder_begin_compute_pass<'a>(
         &self,
         encoder_id: id::CommandEncoderId,
@@ -45,8 +42,8 @@ impl Global {
                 .as_ref()
                 .map(|tw| PassTimestampWrites {
                     query_set: query_sets.get(tw.query_set),
-                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index.to_std(),
+                    end_of_pass_write_index: tw.end_of_pass_write_index.to_std(),
                 }),
         };
 
@@ -61,9 +58,9 @@ impl Global {
         pass.end()
     }
 
-    pub fn compute_pass_drop(&self, pass_id: id::ComputePassEncoderId) {
+    pub fn compute_pass_remove(&self, pass_id: id::ComputePassEncoderId) -> ComputePass {
         let mut hub = self.hub.borrow_mut();
-        hub.compute_passes.remove(pass_id);
+        hub.compute_passes.remove(pass_id)
     }
 }
 

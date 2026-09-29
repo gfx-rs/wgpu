@@ -136,7 +136,7 @@ fn test_f64_to_u64_vec(f_23: vec2<f64>) -> vec2<u64> {
     return vec2<u64>(f_23);
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     test_const_eval();
     let _e1 = test_f16_to_i32_(1h);

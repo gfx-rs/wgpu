@@ -8,6 +8,7 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use indexmap::IndexMap;
+use wgpu_core::resource::Labeled as _;
 
 use crate::bind_group_layout::GPUBindGroupLayout;
 use crate::error::GPUGenericError;
@@ -15,10 +16,7 @@ use crate::shader::GPUShaderModule;
 use crate::webidl::GPUPipelineLayoutOrGPUAutoLayoutMode;
 
 pub struct GPUComputePipeline {
-  pub error_handler: super::error::ErrorHandler,
-
   pub wgpu_compute_pipeline: Arc<wgpu_core::pipeline::ComputePipeline>,
-  pub label: String,
 }
 
 impl WebIdlInterfaceConverter for GPUComputePipeline {
@@ -42,7 +40,7 @@ impl GPUComputePipeline {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_compute_pipeline.label().to_string()
   }
   #[setter]
   #[string]
@@ -52,15 +50,12 @@ impl GPUComputePipeline {
 
   #[cppgc]
   fn get_bind_group_layout(&self, #[webidl] index: u32) -> GPUBindGroupLayout {
-    let (wgpu_bind_group_layout, err) =
+    let wgpu_bind_group_layout =
       self.wgpu_compute_pipeline.get_bind_group_layout(index);
-
-    self.error_handler.push_error(err);
 
     // TODO(wgpu): needs to support retrieving the label
     GPUBindGroupLayout {
       wgpu_bind_group_layout,
-      label: "".to_string(),
     }
   }
 }

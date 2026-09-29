@@ -12,7 +12,7 @@ struct FragmentInput {
     @location(11) perspective_center: f32,
 }
 
-@vertex 
+@vertex
 fn vert_main() -> FragmentInput {
     var out: FragmentInput;
 
@@ -31,7 +31,7 @@ fn vert_main() -> FragmentInput {
     return _e39;
 }
 
-@fragment 
+@fragment
 fn frag_main(val: FragmentInput) {
     return;
 }

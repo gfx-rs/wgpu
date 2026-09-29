@@ -9,6 +9,7 @@ use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use indexmap::IndexMap;
+use wgpu_core::resource::Labeled;
 
 use crate::bind_group_layout::GPUBindGroupLayout;
 use crate::error::GPUGenericError;
@@ -19,10 +20,7 @@ use crate::webidl::GPUColorWriteFlags;
 use crate::webidl::GPUPipelineLayoutOrGPUAutoLayoutMode;
 
 pub struct GPURenderPipeline {
-  pub error_handler: super::error::ErrorHandler,
-
   pub wgpu_render_pipeline: Arc<wgpu_core::pipeline::RenderPipeline>,
-  pub label: String,
 }
 
 impl WebIdlInterfaceConverter for GPURenderPipeline {
@@ -46,7 +44,7 @@ impl GPURenderPipeline {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_render_pipeline.label().to_string()
   }
   #[setter]
   #[string]
@@ -56,15 +54,11 @@ impl GPURenderPipeline {
 
   #[cppgc]
   fn get_bind_group_layout(&self, #[webidl] index: u32) -> GPUBindGroupLayout {
-    let (wgpu_bind_group_layout, err) =
+    let wgpu_bind_group_layout =
       self.wgpu_render_pipeline.get_bind_group_layout(index);
 
-    self.error_handler.push_error(err);
-
-    // TODO(wgpu): needs to add a way to retrieve the label
     GPUBindGroupLayout {
       wgpu_bind_group_layout,
-      label: "".to_string(),
     }
   }
 }
@@ -502,6 +496,8 @@ pub(crate) enum GPUVertexFormat {
   Unorm1010102,
   #[webidl(rename = "unorm8x4-bgra")]
   Unorm8x4Bgra,
+  #[webidl(rename = "snorm10-10-10-2")]
+  Snorm1010102,
 }
 
 impl From<GPUVertexFormat> for wgpu_types::VertexFormat {
@@ -548,6 +544,7 @@ impl From<GPUVertexFormat> for wgpu_types::VertexFormat {
       GPUVertexFormat::Sint32x4 => Self::Sint32x4,
       GPUVertexFormat::Unorm1010102 => Self::Unorm10_10_10_2,
       GPUVertexFormat::Unorm8x4Bgra => Self::Unorm8x4Bgra,
+      GPUVertexFormat::Snorm1010102 => Self::Snorm10_10_10_2,
     }
   }
 }

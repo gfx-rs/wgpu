@@ -2,7 +2,7 @@
 name = "wgpu-core-remote"
 version.workspace = true
 edition.workspace = true
-description = "Remoting version of wgpu-core"
+description = "Remoting version of wgpu-core for browser implementing WebGPU"
 homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true

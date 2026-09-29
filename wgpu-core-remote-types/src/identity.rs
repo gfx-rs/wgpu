@@ -100,7 +100,7 @@ impl<T: Marker> Default for IdentityManager<T> {
 /// A collection of identity managers for all resource types.
 ///
 /// This is to be used in content process for ID generation.
-/// IDs are then sent to the GPU process for resource creation in [`crate::hub::Hub`].
+/// IDs are then sent to the GPU process for resource creation in `Hub`.
 #[derive(Debug, Default)]
 pub struct IdentityHub {
     pub adapters: IdentityManager<markers::Adapter>,

@@ -390,10 +390,7 @@ impl Instance {
     ) -> Adapter {
         let core_instance = self.inner.as_core();
         let wgpu_adapter = unsafe { core_instance.create_adapter_from_hal(hal_adapter) };
-        let core = backend::wgpu_core::CoreAdapter {
-            context: core_instance.clone(),
-            wgpu_adapter,
-        };
+        let core = backend::wgpu_core::CoreAdapter { wgpu_adapter };
 
         Adapter { inner: core.into() }
     }
@@ -407,16 +404,17 @@ impl Instance {
     /// # Arguments
     ///
     /// - `core_instance` - wgpu-core instance.
-    ///
-    /// # Safety
-    ///
-    /// Refer to the creation of wgpu-core Instance.
-    pub unsafe fn from_core(core_instance: Arc<wgc::instance::Instance>) -> Self {
+    pub fn from_core(core_instance: Arc<wgc::instance::Instance>) -> Self {
         Self {
-            inner: unsafe {
-                crate::backend::ContextWgpuCore::from_core_instance(core_instance).into()
-            },
+            inner: crate::backend::ContextWgpuCore::from_core_instance(core_instance).into(),
         }
+    }
+
+    /// Get the [`wgpu_core`] instance from this `Instance`.
+    ///
+    /// Returns `None` if the instance is not from the `wgpu_core` backend
+    pub fn as_core(&self) -> Option<Arc<wgc::instance::Instance>> {
+        self.inner.as_core_opt().map(|instance| instance.as_core())
     }
 }
 

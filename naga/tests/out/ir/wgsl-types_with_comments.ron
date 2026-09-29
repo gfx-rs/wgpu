@@ -57,6 +57,52 @@
                 span: 4,
             ),
         ),
+        (
+            name: Some("TestT"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("test_m"),
+                        ty: 2,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("test_m2"),
+                        ty: 2,
+                        binding: None,
+                        offset: 4,
+                    ),
+                ],
+                span: 8,
+            ),
+        ),
+        (
+            name: Some("TestU"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("test_m"),
+                        ty: 2,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("test_m2"),
+                        ty: 2,
+                        binding: None,
+                        offset: 4,
+                    ),
+                    (
+                        name: Some("test_m3"),
+                        ty: 2,
+                        binding: None,
+                        offset: 8,
+                    ),
+                ],
+                span: 12,
+            ),
+        ),
     ],
     special_types: (
         ray_desc: None,
@@ -154,10 +200,14 @@
                         pointer: 0,
                     ),
                     ZeroValue(4),
+                    ZeroValue(5),
+                    ZeroValue(6),
                 ],
                 named_expressions: {
                     1: "phony",
                     2: "phony",
+                    3: "phony",
+                    4: "phony",
                 },
                 body: [
                     Emit((
@@ -190,6 +240,12 @@
             4: [
                 "/// struct S doc comment",
             ],
+            5: [
+                "/// struct with undocumented member before documented member",
+            ],
+            6: [
+                "/// struct with undocumented member between documented members",
+            ],
         },
         struct_members: {
             (3, 0): [
@@ -197,6 +253,15 @@
             ],
             (4, 0): [
                 "/// member doc comment",
+            ],
+            (5, 1): [
+                "/// 2nd member doc comment",
+            ],
+            (6, 0): [
+                "/// 1st member doc comment",
+            ],
+            (6, 2): [
+                "/// 3rd member doc comment",
             ],
         },
         entry_points: {

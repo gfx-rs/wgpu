@@ -289,6 +289,7 @@ pub(super) fn clear_texture_cmd(
             mip_range: subresource_mip_range,
             layer_range: subresource_layer_range,
         },
+        None,
         state.raw_encoder,
         &mut state.tracker.textures,
         &state.device.alignments,
@@ -307,9 +308,15 @@ pub(super) fn clear_texture_cmd(
 /// [`clear_texture_cmd`], which does the validation. This function is also
 /// called directly from various places within wgpu that need to clear a
 /// texture.
+///
+/// For a 3D texture:
+/// - If `depth_slice` is `Some`, clear only that depth slice (in this case,
+///   `range.mip_range` must be a single mip level).
+/// - If `depth_slice` is `None`, clear entire mip level(s).
 pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
     dst_texture: &Arc<Texture>,
     range: TextureInitRange,
+    depth_slice: Option<u32>,
     encoder: &mut dyn hal::DynCommandEncoder,
     texture_tracker: &mut T,
     alignments: &hal::Alignments,
@@ -324,7 +331,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
         TextureClearMode::BufferCopy => wgt::TextureUses::COPY_DST,
         TextureClearMode::RenderPass {
             is_color: false, ..
-        } => wgt::TextureUses::DEPTH_STENCIL_WRITE,
+        } => wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE,
         TextureClearMode::Surface { .. } | TextureClearMode::RenderPass { is_color: true, .. } => {
             wgt::TextureUses::COLOR_TARGET
         }
@@ -369,6 +376,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
             alignments,
             zero_buffer,
             range,
+            depth_slice,
             encoder,
             dst_raw,
         ),
@@ -394,10 +402,21 @@ fn clear_texture_via_buffer_copies(
     alignments: &hal::Alignments,
     zero_buffer: &dyn hal::DynBuffer, // Buffer of size device::ZERO_BUFFER_SIZE
     range: TextureInitRange,
+    depth_slice: Option<u32>,
     encoder: &mut dyn hal::DynCommandEncoder,
     dst_raw: &dyn hal::DynTexture,
 ) {
+    // These preconditions should apply to `clear_texture` as a whole, but since they're
+    // currently only serving this function, seems clearer to keep them here.
     assert!(!texture_desc.format.is_depth_stencil_format());
+    assert!(
+        depth_slice.is_none() || texture_desc.dimension == wgt::TextureDimension::D3,
+        "depth_slice is only applicable to 3D textures",
+    );
+    assert!(
+        depth_slice.is_none() || range.mip_range.len() == 1,
+        "must target a single depth slice when clearing a mip level",
+    );
 
     if texture_desc.format == wgt::TextureFormat::NV12
         || texture_desc.format == wgt::TextureFormat::P010
@@ -436,11 +455,13 @@ fn clear_texture_via_buffer_copies(
             texture_desc.size
         );
 
-        let z_range = 0..(if texture_desc.dimension == wgt::TextureDimension::D3 {
-            mip_size.depth_or_array_layers
+        let z_range = if let Some(depth_slice) = depth_slice {
+            depth_slice..depth_slice + 1
+        } else if texture_desc.dimension == wgt::TextureDimension::D3 {
+            0..mip_size.depth_or_array_layers
         } else {
-            1
-        });
+            0..1
+        };
 
         for array_layer in range.layer_range.clone() {
             // TODO: Only doing one layer at a time for volume textures right now.
@@ -534,11 +555,13 @@ fn clear_texture_via_render_passes(
                                 mip_level,
                                 depth_or_layer,
                             ),
-                            usage: wgt::TextureUses::DEPTH_STENCIL_WRITE,
+                            usage: wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE,
                         },
                         depth_ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
                         stencil_ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
                         clear_value: (0.0, 0),
+                        depth_read_only: false,
+                        stencil_read_only: false,
                     }),
                 )
             };

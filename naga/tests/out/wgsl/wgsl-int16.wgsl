@@ -24,15 +24,15 @@ const constant_variable: u16 = u16(20);
 const f16_to_i16_clamped: i16 = i16(32767);
 
 var<private> private_variable: i16 = i16(1);
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<uniform> input_uniform: UniformCompatible;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage> input_storage: UniformCompatible;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var<storage> input_arrays: StorageCompatible;
-@group(0) @binding(3) 
+@group(0) @binding(3)
 var<storage, read_write> output: UniformCompatible;
-@group(0) @binding(4) 
+@group(0) @binding(4)
 var<storage, read_write> output_arrays: StorageCompatible;
 var<workgroup> shared_val: u16;
 
@@ -205,7 +205,7 @@ fn uint16_function(x_1: u16) -> u16 {
     return _e115;
 }
 
-@compute @workgroup_size(64, 1, 1) 
+@compute @workgroup_size(64, 1, 1)
 fn main(@builtin(subgroup_invocation_id) subgroup_invocation_id: u32) {
     var sg_val: i16;
     var sg_uval: u16;

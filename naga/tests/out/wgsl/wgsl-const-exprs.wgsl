@@ -137,7 +137,7 @@ fn abstract_access(i: u32) {
     return;
 }
 
-@compute @workgroup_size(2, 3, 1) 
+@compute @workgroup_size(2, 3, 1)
 fn main() {
     swizzle_of_compose();
     index_of_compose();

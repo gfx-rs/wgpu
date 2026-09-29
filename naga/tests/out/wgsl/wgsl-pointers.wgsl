@@ -2,7 +2,7 @@ struct DynamicArray {
     arr: array<u32>,
 }
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage, read_write> dynamic_array: DynamicArray;
 
 fn f() {
@@ -26,7 +26,7 @@ fn index_dynamic_array(i_1: i32, v_2: u32) {
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     f();
     index_unsized(1i, 1u);

@@ -1,3 +1,16 @@
+/*!
+This crate is a remoting version of [`wgpu_core`] for browser implementing WebGPU.
+
+Modern browsers have content processes that are untrusted and cannot directly access the GPU.
+Instead, they communicate with a trusted GPU process that has access to the GPU.
+
+wgpu-core-remote provides a remoting wrapper around [`wgpu_core`] named [`Global`](crate::global::Global),
+that is used in the GPU process to execute commands from the content process.
+All stuff that is needed in the content process is provided in the [`wgpu_core_remote_types`] crate.
+
+The key part of remoting are [`Id`](crate::id::Id) which are described in [`crate::hub`].
+*/
+
 #![allow(
     // Need many arguments for some core functions to be able to re-use code in many situations.
     clippy::too_many_arguments,
@@ -18,14 +31,23 @@ extern crate alloc;
 extern crate wgpu_hal as hal;
 extern crate wgpu_types as wgt;
 
-pub type TexelCopyBufferInfo = wgt::TexelCopyBufferInfo<id::BufferId>;
-pub type TexelCopyTextureInfo = wgt::TexelCopyTextureInfo<id::TextureId>;
-pub type CopyExternalImageDestInfo = wgt::CopyExternalImageDestInfo<id::TextureId>;
-
-pub type Command = wgpu_core::command::Command<id::IdReferences>;
-
 pub mod global;
 pub mod hub;
 pub mod id;
 pub mod registry;
 pub mod storage;
+
+pub fn map_buffer_access_error(
+    err: wgpu_core::resource::BufferAccessError,
+) -> wgpu_core_remote_types::BufferMapError {
+    match err {
+        e
+        @ wgpu_core::resource::BufferAccessError::Device(wgpu_core::device::DeviceError::Lost) => {
+            wgpu_core_remote_types::BufferMapError::Aborted(e.to_string())
+        }
+        e @ wgpu_core::resource::BufferAccessError::MapAborted => {
+            wgpu_core_remote_types::BufferMapError::Aborted(e.to_string())
+        }
+        e => wgpu_core_remote_types::BufferMapError::Operation(e.to_string()),
+    }
+}

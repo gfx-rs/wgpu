@@ -239,6 +239,30 @@ void _309()
 
 void _403()
 {
+    int _405 = ~1;
+    uint _406 = ~1u;
+    ivec2 _407 = ~ivec2(1);
+    uvec3 _408 = ~uvec3(1u);
+    int _409 = 2 | 1;
+    uint _410 = 2u | 1u;
+    ivec2 _411 = ivec2(2) | ivec2(1);
+    uvec3 _412 = uvec3(2u) | uvec3(1u);
+    int _413 = 2 & 1;
+    uint _414 = 2u & 1u;
+    ivec2 _415 = ivec2(2) & ivec2(1);
+    uvec3 _416 = uvec3(2u) & uvec3(1u);
+    int _417 = 2 ^ 1;
+    uint _418 = 2u ^ 1u;
+    ivec2 _419 = ivec2(2) ^ ivec2(1);
+    uvec3 _420 = uvec3(2u) ^ uvec3(1u);
+    int _421 = 2 << int(1u);
+    uint _422 = 2u << 1u;
+    ivec2 _423 = ivec2(2) << ivec2(uvec2(1u));
+    uvec3 _424 = uvec3(2u) << uvec3(1u);
+    int _425 = 2 >> int(1u);
+    uint _426 = 2u >> 1u;
+    ivec2 _427 = ivec2(2) >> ivec2(uvec2(1u));
+    uvec3 _428 = uvec3(2u) >> uvec3(1u);
 }
 
 void _430()

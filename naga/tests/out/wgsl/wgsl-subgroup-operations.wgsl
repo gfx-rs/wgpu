@@ -3,7 +3,7 @@ struct Structure {
     @builtin(subgroup_size) subgroup_size: u32,
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main(sizes: Structure, @builtin(subgroup_id) subgroup_id: u32, @builtin(subgroup_invocation_id) subgroup_invocation_id: u32) {
     let _e7 = subgroupBallot(((subgroup_invocation_id & 1u) == 1u));
     let _e8 = subgroupBallot();

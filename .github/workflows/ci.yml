@@ -1,14 +1,12 @@
 name: CI
 
 on:
-  push:
-    branches-ignore: [
-        # Branches with the `gh-readonly-queue` prefix are used by the
-        # merge queue, so they are already covered by the `merge_group` event.
-        "gh-readonly-queue/**",
-      ]
   pull_request:
-  merge_group:
+  # Runs on `trunk` to save the build caches that pull requests read
+  # and to upload the coverage baseline.
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 env:
   #
@@ -20,7 +18,7 @@ env:
   #
 
   # This is the MSRV used by all repository infrastructure.
-  REPO_MSRV: "1.93"
+  REPO_MSRV: "1.95"
   # This is the MSRV used by `wgpu` itself.
   WGPU_MSRV: "1.87"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, `wgpu-sync`, and `wgpu-types` crates,
@@ -36,7 +34,7 @@ env:
   RUST_LOG: debug,wasm_bindgen_wasm_interpreter=warn,wasm_bindgen_cli_support=warn,walrus=warn,naga=info
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
-  RUSTFLAGS: -D warnings
+  RUSTFLAGS: -D warnings --cfg wgpu_validate_locks_debug
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: e # cache busting
@@ -215,9 +213,13 @@ jobs:
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install toolchain (repo MSRV - tier 1 or 2)
         if: matrix.tier == 1 || matrix.tier == 2
@@ -255,7 +257,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -363,6 +365,11 @@ jobs:
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features metal
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features dx12
 
+          # Check important naga features in isolation
+          for feature in glsl-in glsl-out hlsl-out msl-out spv-in spv-out wgsl-in wgsl-out; do
+            cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features $feature
+          done
+
           # build docs
           cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
@@ -374,6 +381,8 @@ jobs:
 
           cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} \
                 --package wgpu-core \
+                --package wgpu-core-remote \
+                --package wgpu-core-remote-types \
                 --package wgpu-hal \
                 --package naga \
                 --package wgpu \
@@ -414,9 +423,13 @@ jobs:
     name: wgpu MSRV Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install core MSRV toolchain
         run: |
@@ -435,7 +448,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: wgpu-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -488,9 +501,13 @@ jobs:
     name: Core MSRV Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install core MSRV toolchain
         run: |
@@ -509,7 +526,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: core-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -529,8 +546,8 @@ jobs:
         run: |
           set -e
 
-          # check `wgpu-core` with all features. This will also get `wgpu-hal` and `wgpu-types`.
-          cargo check --target ${{ matrix.target }} --all-features -p wgpu-core
+          # check `wgpu-core-remote` and `wgpu-core` all features. This will also get `wgpu-core-remote-types` and `wgpu-hal` and `wgpu-types`.
+          cargo check --target ${{ matrix.target }} --all-features -p wgpu-core -p wgpu-core-remote
 
   # Check that the libraries build — but not that there are no warnings or that tests pass -
   # with `-Zdirect-minimal-versions` which lowers all dependencies from the workspace packages
@@ -546,9 +563,13 @@ jobs:
       # Also, allow unexpected_cfgs because it is very common and spammy when using old deps.
       RUSTFLAGS: -A unexpected_cfgs
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install toolchain
         run: |
@@ -587,9 +608,13 @@ jobs:
     name: Test WebAssembly
     runs-on: ubuntu-latest
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install repo MSRV toolchain
         run: |
@@ -609,7 +634,7 @@ jobs:
         run: cargo +stable install wasm-bindgen-cli --version=$WASM_BINDGEN_VERSION
 
       - name: Install `cargo-nextest`
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: cargo-nextest
 
@@ -640,9 +665,13 @@ jobs:
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install repo MSRV toolchain
         run: |
@@ -650,7 +679,7 @@ jobs:
           cargo -V
 
       - name: Install `cargo-nextest` and `cargo-llvm-cov`
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
@@ -667,7 +696,7 @@ jobs:
         # Cache step must go before warp and mesa install on windows as they write into the
         # target directory, and rust-cache will overwrite the entirety of the target directory.
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -677,37 +706,37 @@ jobs:
 
       - name: (Windows) Install DXC
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-dxc
+        uses: $/.github/actions/install-dxc
 
       - name: (Windows) Install WARP
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-warp
+        uses: $/.github/actions/install-warp
         with:
           target-dir: "target/llvm-cov-target/debug"
 
       - name: (Windows) Install Agility SDK
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-agility-sdk
+        uses: $/.github/actions/install-agility-sdk
 
       - name: (Windows) Install Mesa
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-mesa
+        uses: $/.github/actions/install-mesa
 
       - name: (Windows) Install Vulkan SDK
         if: matrix.os == 'windows-2022'
-        uses: ./.github/actions/install-vulkan-sdk
+        uses: $/.github/actions/install-vulkan-sdk
 
       - name: (Mac) Install Vulkan SDK
         if: matrix.os == 'macos-14'
-        uses: ./.github/actions/install-vulkan-sdk
+        uses: $/.github/actions/install-vulkan-sdk
 
       - name: (Linux) Install Vulkan SDK
         if: matrix.os == 'ubuntu-24.04'
-        uses: ./.github/actions/install-vulkan-sdk
+        uses: $/.github/actions/install-vulkan-sdk
 
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
-        uses: ./.github/actions/install-mesa
+        uses: $/.github/actions/install-mesa
 
       - name: Delete Naga snapshots
         shell: bash
@@ -716,6 +745,16 @@ jobs:
 
           # Delete snapshots so we can ensure there aren't any excess output files.
           rm -r naga/tests/out
+
+      # Windows CI intermittently stops making progress for a minute or more at
+      # a time, which kills whichever tests happen to be running. Sample the
+      # host counters so that a timeout can be correlated with CPU, memory or
+      # disk pressure. https://github.com/gfx-rs/wgpu/issues/9248
+      - name: (Windows) Start host metrics sampler
+        if: matrix.os == 'windows-2022'
+        uses: $/.github/actions/sample-host-metrics
+        with:
+          output: host-metrics.csv
 
       - name: Run tests
         shell: bash
@@ -726,9 +765,9 @@ jobs:
 
       - name: Check Naga snapshots
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
-        run: git add . && git diff --exit-code HEAD naga/tests/out
+        run: git add --intent-to-add -- naga/tests/out && git diff --exit-code HEAD -- naga/tests/out
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         name: Upload comparison images
         if: always() # We want artifacts even if the tests fail.
         with:
@@ -736,6 +775,18 @@ jobs:
           path: |
             **/*-actual.png
             **/*-difference.png
+
+      # Per-test timings and the host counter samples outlive the run logs,
+      # which is what we need to chase intermittent timeouts (#9248).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        name: Upload test timings
+        if: always() # We want timings even if the tests fail.
+        with:
+          name: test-timings-${{ matrix.os }}
+          path: |
+            **/nextest/*/junit.xml
+            host-metrics.csv
+          if-no-files-found: warn
 
       # Print GPU configuration so we can see what features were available during the test.
       - name: Print GPU configurations
@@ -756,8 +807,10 @@ jobs:
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v7
-        if: steps.coverage.outcome == 'success'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+        # Mergify draft pull requests re-run the tests of already-reported
+        # pull requests, so their coverage is not uploaded.
+        if: steps.coverage.outcome == 'success' && !startsWith(github.head_ref, 'mergify/merge-queue/')
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -769,9 +822,13 @@ jobs:
     name: Doctest
     runs-on: ubuntu-latest
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install repo MSRV toolchain
         run: |
@@ -780,7 +837,7 @@ jobs:
           cargo -V
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: doctests-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -800,9 +857,13 @@ jobs:
     name: Miri (limited scope)
     runs-on: ubuntu-latest
 
+    permissions: {}
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # Miri is *only* available on nightly.
       - name: Install nightly toolchain
@@ -813,7 +874,7 @@ jobs:
           cargo -V
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: miri-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -835,9 +896,18 @@ jobs:
 
     name: Format & Typos
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Only pull requests give a well-defined commit range. The merge queue
+      # runs the commits that this check already saw on the pull request.
+      - name: Check for AI-authored commits
+        if: github.event_name == 'pull_request'
+        uses: $/.github/actions/ai-commit-check
 
       - name: Install repo MSRV toolchain
         run: |
@@ -845,17 +915,20 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
+      - name: Check repository files
+        run: cargo --locked xtask sync-repo-files --check
+
       # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
       # files, even ones this step doesn't modify.
       - name: "Format `**/*.{md,js,html,yml}` files"
-        run: "npx --yes prettier@3.8.1 --check --write . && git diff --exit-code"
+        run: "npx --yes prettier@3.9.6 --check --write . && git diff --exit-code"
 
       - name: Run `cargo fmt`
         run: |
           cargo --locked fmt -- --check
 
       - name: Install Tombi
-        uses: tombi-toml/setup-tombi@v1.2.0
+        uses: tombi-toml/setup-tombi@ea139001852855a7f1cf30a9b60c71ebb6446a99 # v1.5.5
         with:
           version: "1.1.3"
 
@@ -863,7 +936,7 @@ jobs:
         run: tombi format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.47.2
+        uses: crate-ci/typos@00f422f3b19c57bc6338715ebfe3316d38768461 # v1.50.3
 
   check-cts-runner:
     # runtime is normally 2 minutes
@@ -871,9 +944,12 @@ jobs:
 
     name: Clippy cts_runner
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install MSRV toolchain
         run: |
@@ -892,7 +968,7 @@ jobs:
           EOF
 
       - name: Caching
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: cts-runner-${{ env.CACHE_SUFFIX }}
           env-vars: ImageVersion
@@ -911,12 +987,15 @@ jobs:
 
     name: "cargo-deny advisories"
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Run `cargo deny check`
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           command: check advisories
           arguments: --all-features --workspace
@@ -929,14 +1008,32 @@ jobs:
 
     name: "cargo-deny"
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Run `cargo deny check`
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           command: check bans licenses sources
           arguments: --all-features --workspace
           command-arguments: -Dwarnings -Aunmatched-organization
           rust-version: ${{ env.REPO_MSRV }}
+
+  zizmor:
+    name: "Zizmor"
+    runs-on: ubuntu-latest
+    permissions:
+      # `zizmor-action` uploads its findings to GitHub code scanning as SARIF.
+      security-events: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run `zizmor`
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4

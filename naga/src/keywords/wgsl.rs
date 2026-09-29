@@ -444,6 +444,7 @@ pub const BUILTIN_IDENTIFIERS: &[&str] = &[
     "quadSwapX",
     "quadSwapY",
     // not in the WGSL spec
+    "debugPrintf",
     "i64",
     "u64",
     "f64",

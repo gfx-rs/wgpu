@@ -16,9 +16,13 @@ fn default_device_lost_callback(reason: wgpu::DeviceLostReason, message: String)
 
 /// Initialize the logger for the test runner.
 pub fn init_logger() {
+    // Millisecond timestamps, because second resolution is not enough to tell
+    // where the time goes when CI stalls. See
+    // <https://github.com/gfx-rs/wgpu/issues/9248>.
+    //
     // We don't actually care if it fails
     #[cfg(not(target_arch = "wasm32"))]
-    let _ = env_logger::try_init();
+    let _ = env_logger::builder().format_timestamp_millis().try_init();
     #[cfg(target_arch = "wasm32")]
     let _ = console_log::init_with_level(log::Level::Info);
 }
@@ -47,10 +51,18 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
     } else {
         wgpu::Dx12Compiler::from_env().unwrap_or(wgpu::Dx12Compiler::StaticDxc)
     };
+    assert!(
+        params
+            .required_instance_flags
+            .intersection(params.forbidden_instance_flags)
+            .is_empty(),
+        "overlapping required_instance_flags and forbidden_instance_flags does not make sense"
+    );
     // The defaults for debugging, overridden by the environment, overridden by the test parameters.
     let flags = wgpu::InstanceFlags::debugging()
         .with_env()
-        .union(params.required_instance_flags);
+        .union(params.required_instance_flags)
+        .difference(params.forbidden_instance_flags);
 
     Instance::new(wgpu::InstanceDescriptor {
         backends,

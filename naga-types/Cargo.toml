@@ -27,3 +27,6 @@ indexmap.workspace = true
 rustc-hash.workspace = true
 serde = { workspace = true, features = ["alloc", "derive"], optional = true }
 thiserror.workspace = true
+
+[dev-dependencies]
+strum.workspace = true

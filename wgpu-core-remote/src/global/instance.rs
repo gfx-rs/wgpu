@@ -1,17 +1,22 @@
-use wgpu_core::device::DeviceDescriptor;
-use wgpu_core::instance::RequestDeviceError;
+use alloc::borrow::Cow;
+
+use alloc::sync::Arc;
+
+use wgpu_core_remote_types::DeviceDescriptor;
+use wgpu_core_remote_types::Label;
+use wgpu_core_remote_types::RequestAdapterOptions;
+use wgpu_core_remote_types::RequestDeviceError;
 use wgt::Backends;
 
 use crate::global::Global;
 use crate::hub::Hub;
 use crate::id::{AdapterId, DeviceId, QueueId};
 
-pub type RequestAdapterOptions = wgt::RequestAdapterOptions<()>;
-
 impl Global {
     pub fn request_adapter(
         &self,
         desc: &RequestAdapterOptions,
+        apply_limit_buckets: bool,
         backends: Backends,
         id_in: AdapterId,
     ) -> Result<AdapterId, wgt::RequestAdapterError> {
@@ -20,7 +25,7 @@ impl Global {
             power_preference: desc.power_preference,
             force_fallback_adapter: desc.force_fallback_adapter,
             compatible_surface: None,
-            apply_limit_buckets: desc.apply_limit_buckets,
+            apply_limit_buckets,
         };
         let adapter = self.instance.request_adapter(&desc, backends)?;
         let id = hub.adapters.assign(id_in, adapter);
@@ -32,14 +37,14 @@ impl Global {
     /// The HAL adapter may be obtained e.g. by calling `enumerate_adapters` on
     /// the HAL directly.
     ///
-    /// If [limit bucketing][lt] is desired, [`crate::limits::apply_limit_buckets`]
+    /// If [limit bucketing][lt] is desired, [`wgpu_core::limits::apply_limit_buckets`]
     /// should be called with the HAL adapter before calling this function.
     ///
     /// # Safety
     ///
     /// `hal_adapter` must be created from this global internal instance handle.
     ///
-    /// [lt]: crate::limits#Limit-bucketing
+    /// [lt]: wgpu_core::limits#Limit-bucketing
     pub unsafe fn create_adapter_from_hal(
         &self,
         hal_adapter: hal::DynExposedAdapter,
@@ -106,9 +111,49 @@ impl Global {
         adapter.cooperative_matrix_properties()
     }
 
-    pub fn adapter_drop(&self, adapter_id: AdapterId) {
+    pub fn adapter_remove(&self, adapter_id: AdapterId) -> Arc<wgpu_core::instance::Adapter> {
         let mut hub = self.hub.borrow_mut();
-        hub.adapters.remove(adapter_id);
+        hub.adapters.remove(adapter_id)
+    }
+}
+
+fn map_request_device_error(err: wgpu_core::instance::RequestDeviceError) -> RequestDeviceError {
+    match err {
+        e @ wgpu_core::instance::RequestDeviceError::LimitsExceeded(_) => {
+            RequestDeviceError::FailedLimit(e.to_string())
+        }
+        e @ wgpu_core::instance::RequestDeviceError::UnsupportedFeature(_) => {
+            RequestDeviceError::UnsupportedFeature(e.to_string())
+        }
+        e => RequestDeviceError::Other(e.to_string()),
+    }
+}
+
+/// Accepts a `DeviceDescriptor` from the content process
+/// and accepts other parameters from trusted process.
+pub fn map_device_descriptor<'a>(
+    desc: &'a DeviceDescriptor<'a>,
+    trace: wgt::Trace,
+    additional_features: wgt::Features,
+) -> wgt::DeviceDescriptor<Label<'a>> {
+    wgt::DeviceDescriptor {
+        label: desc.label.as_ref().map(|l| Cow::Borrowed(l.as_ref())),
+        required_features: wgt::Features::from_internal_flags(
+            wgt::FeaturesWGPU::empty(),
+            desc.required_features,
+        )
+        .union(additional_features),
+        required_limits: desc.required_limits.clone(),
+        default_queue: wgt::QueueDescriptor {
+            label: desc
+                .default_queue
+                .label
+                .as_ref()
+                .map(|l| Cow::Borrowed(l.as_ref())),
+        },
+        experimental_features: wgt::ExperimentalFeatures::disabled(),
+        memory_hints: wgt::MemoryHints::MemoryUsage,
+        trace,
     }
 }
 
@@ -117,6 +162,8 @@ impl Global {
         &self,
         adapter_id: AdapterId,
         desc: &DeviceDescriptor,
+        trace: wgt::Trace,
+        additional_features: wgt::Features,
         device_id_in: DeviceId,
         queue_id_in: QueueId,
     ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
@@ -129,7 +176,10 @@ impl Global {
         } = &mut *hub;
 
         let adapter = adapters.get(adapter_id);
-        let (device, queue) = adapter.request_device(desc)?;
+        let desc = map_device_descriptor(desc, trace, additional_features);
+        let (device, queue) = adapter
+            .request_device(&desc)
+            .map_err(map_request_device_error)?;
 
         let device_id = devices.assign(device_id_in, device);
 
@@ -138,25 +188,27 @@ impl Global {
         Ok((device_id, queue_id))
     }
 
-    pub fn adapter_validate_device_descriptor(
+    pub fn adapter_validate_device_descriptor<'a>(
         &self,
         adapter_id: AdapterId,
-        desc: &mut DeviceDescriptor,
+        desc: &mut wgt::DeviceDescriptor<Label<'a>>,
     ) -> Result<(), RequestDeviceError> {
         let hub = self.hub.borrow();
         let adapter = hub.adapters.get(adapter_id);
-        adapter.validate_device_descriptor(desc)
+        adapter
+            .validate_device_descriptor(desc)
+            .map_err(map_request_device_error)
     }
 
     /// # Safety
     ///
     /// - `hal_device` must be created from `adapter_id` or its internal handle.
     /// - `desc` must be a subset of `hal_device` features and limits.
-    pub unsafe fn create_device_from_hal(
+    pub unsafe fn create_device_from_hal<'a>(
         &self,
         adapter_id: AdapterId,
         hal_device: hal::DynOpenDevice,
-        desc: &DeviceDescriptor,
+        desc: &wgt::DeviceDescriptor<Label<'a>>,
         device_id_in: DeviceId,
         queue_id_in: QueueId,
     ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
@@ -169,8 +221,8 @@ impl Global {
         } = &mut *hub;
 
         let adapter = adapters.get(adapter_id);
-        let (device, queue) =
-            unsafe { adapter.create_device_and_queue_from_hal(hal_device, desc) }?;
+        let (device, queue) = unsafe { adapter.create_device_and_queue_from_hal(hal_device, desc) }
+            .map_err(map_request_device_error)?;
 
         let device_id = devices.assign(device_id_in, device);
 

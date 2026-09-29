@@ -2,7 +2,6 @@
 
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::num::NonZeroU64;
 use std::sync::Arc;
 
 use deno_core::cppgc::Ptr;
@@ -52,6 +51,7 @@ impl GPURenderBundleEncoder {
     // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
   }
 
+  #[reentrant]
   #[cppgc]
   fn finish(
     &self,
@@ -213,7 +213,7 @@ impl GPURenderBundleEncoder {
       buffer.wgpu_buffer.clone(),
       index_format.into(),
       offset,
-      size.and_then(NonZeroU64::new),
+      size,
     );
 
     Ok(())
@@ -237,7 +237,7 @@ impl GPURenderBundleEncoder {
         .into_option()
         .map(|buffer| buffer.wgpu_buffer.clone()),
       offset,
-      size.and_then(NonZeroU64::new),
+      size,
     );
 
     Ok(())

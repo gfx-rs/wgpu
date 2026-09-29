@@ -185,6 +185,8 @@ pub enum WidthError {
 pub enum ImmediateError {
     #[error("The scalar type {0:?} is not supported in immediates")]
     InvalidScalar(crate::Scalar),
+    #[error("Arrays are not supported in the immediate address space")]
+    InvalidArray,
 }
 
 // Only makes sense if `flags.contains(HOST_SHAREABLE)`
@@ -661,7 +663,7 @@ impl super::Validator {
                     flags: base_info.flags & type_info_mask,
                     uniform_layout,
                     storage_layout,
-                    immediates_compatibility: base_info.immediates_compatibility.clone(),
+                    immediates_compatibility: Err(ImmediateError::InvalidArray),
                 }
             }
             Ti::Struct { ref members, span } => {

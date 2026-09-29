@@ -2,7 +2,6 @@
 
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::num::NonZeroU64;
 use std::sync::Arc;
 
 use deno_core::cppgc::Ptr;
@@ -90,6 +89,7 @@ impl GPURenderPassEncoder {
       .set_scissor_rect(x, y, width, height);
   }
 
+  #[reentrant]
   #[required(1)]
   #[undefined]
   fn set_blend_constant(&self, #[webidl] color: GPUColor) {
@@ -129,6 +129,7 @@ impl GPURenderPassEncoder {
     self.render_pass.borrow_mut().end_occlusion_query();
   }
 
+  #[reentrant]
   #[required(1)]
   #[undefined]
   fn execute_bundles(&self, #[webidl] bundles: Vec<Ptr<GPURenderBundle>>) {
@@ -269,7 +270,7 @@ impl GPURenderPassEncoder {
       buffer.wgpu_buffer.clone(),
       index_format.into(),
       offset,
-      size.and_then(NonZeroU64::new),
+      size,
     );
   }
 
@@ -288,7 +289,7 @@ impl GPURenderPassEncoder {
         .into_option()
         .map(|buffer| buffer.wgpu_buffer.clone()),
       offset,
-      size.and_then(NonZeroU64::new),
+      size,
     );
   }
 

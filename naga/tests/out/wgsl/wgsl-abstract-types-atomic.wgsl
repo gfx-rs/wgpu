@@ -1,6 +1,6 @@
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage, read_write> atomic_i32_: atomic<i32>;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage, read_write> atomic_u32_: atomic<u32>;
 
 fn test_atomic_i32_() {
@@ -33,7 +33,7 @@ fn test_atomic_u32_() {
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     test_atomic_i32_();
     test_atomic_u32_();

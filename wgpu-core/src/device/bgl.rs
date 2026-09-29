@@ -62,12 +62,18 @@ impl EntryMap {
     ///
     /// Errors if there are duplicate bindings or if any binding index is greater than
     /// the device's limits.
-    pub fn from_entries(
-        entries: &[wgt::BindGroupLayoutEntry],
-    ) -> Result<Self, binding_model::CreateBindGroupLayoutError> {
+    pub fn from_entries<BGLE>(
+        entries: &[BGLE],
+    ) -> Result<Self, binding_model::CreateBindGroupLayoutError>
+    where
+        BGLE: TryInto<wgt::BindGroupLayoutEntry> + Copy,
+        binding_model::CreateBindGroupLayoutError:
+            From<<BGLE as TryInto<wgt::BindGroupLayoutEntry>>::Error>,
+    {
         let mut inner = FastIndexMap::with_capacity_and_hasher(entries.len(), Default::default());
         for entry in entries {
-            if inner.insert(entry.binding, *entry).is_some() {
+            let entry: wgt::BindGroupLayoutEntry = (*entry).try_into()?;
+            if inner.insert(entry.binding, entry).is_some() {
                 return Err(binding_model::CreateBindGroupLayoutError::ConflictBinding(
                     entry.binding,
                 ));

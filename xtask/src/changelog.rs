@@ -1,5 +1,6 @@
 use std::sync::OnceLock;
 
+use anyhow::Context;
 use pico_args::Arguments;
 use regex_lite::Regex;
 use xshell::Shell;
@@ -16,10 +17,13 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
 
     let from_commit = shell
         .cmd("git")
-        .args(["merge-base", "--fork-point", &from_branch])
-        .args(to_commit.as_ref())
+        .args([
+            "merge-base",
+            &from_branch,
+            to_commit.as_deref().unwrap_or("HEAD"),
+        ])
         .read()
-        .unwrap();
+        .context("could not find the common ancestor for the changelog comparison")?;
 
     let diff = shell
         .cmd("git")
@@ -53,6 +57,26 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
     };
 
     let mut failed = false;
+
+    let odd_characters = find_odd_characters(&new_changelog_contents);
+    if !odd_characters.is_empty() {
+        failed = true;
+
+        #[expect(clippy::uninlined_format_args)]
+        {
+            eprintln!("Found odd character(s) in `{}`:\n", CHANGELOG_PATH_RELATIVE,);
+        }
+
+        for odd_character in &odd_characters {
+            eprintln!("{odd_character}");
+        }
+
+        eprintln!();
+        eprintln!(
+            "hint: these are usually invisible characters such as non-breaking or zero-width \
+             spaces; replace them with regular spaces (or delete them) and try again."
+        );
+    }
 
     let hunks_in_a_released_section =
         hunks_in_a_released_section(&old_changelog_contents, &new_changelog_contents, &diff);
@@ -181,6 +205,68 @@ fn first_release_section_line_num(changelog_contents: &str) -> u64 {
     unreleased_line_num + 1 + changelog_lines.position(|l| l.starts_with("## ")).unwrap() as u64
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct OddCharacter {
+    line: u64,
+    column: u64,
+    character: char,
+}
+
+impl std::fmt::Display for OddCharacter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "- line {}, column {}: {}",
+            self.line,
+            self.column,
+            self.character.escape_unicode(),
+        )
+    }
+}
+
+fn find_odd_characters(changelog_contents: &str) -> Vec<OddCharacter> {
+    let mut odd_characters = vec![];
+
+    let mut line = 1;
+    let mut column = 1;
+    for character in changelog_contents.chars() {
+        if is_odd_character(character) {
+            odd_characters.push(OddCharacter {
+                line,
+                column,
+                character,
+            });
+        }
+
+        if character == '\n' {
+            line += 1;
+            column = 1;
+        } else {
+            column += 1;
+        }
+    }
+
+    odd_characters
+}
+
+fn is_odd_character(character: char) -> bool {
+    match character {
+        ' ' | '\t' | '\n' | '\r' => false,
+        _ => {
+            character.is_control()
+                || character.is_whitespace()
+                || matches!(
+                    character,
+                    '\u{00AD}' // soft hyphen
+                        | '\u{200B}'..='\u{200F}' // zero-width characters and directional marks
+                        | '\u{2028}'..='\u{202E}' // separators and bidi overrides
+                        | '\u{2060}'..='\u{2064}' // invisible operators and joins
+                        | '\u{FEFF}' // zero-width no-break space / byte order mark
+                )
+        }
+    }
+}
+
 struct SplitPrefixInclusive<'haystack, 'prefix> {
     haystack: Option<&'haystack str>,
     prefix: &'prefix str,
@@ -221,6 +307,121 @@ impl<'haystack> Iterator for SplitPrefixInclusive<'haystack, '_> {
                 Some(&remaining[..length])
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test_check_changelog {
+    use pico_args::Arguments;
+    use xshell::Shell;
+
+    use super::check_changelog;
+
+    #[test]
+    fn base_branch_advanced_without_reflog_history() -> anyhow::Result<()> {
+        let shell = Shell::new()?;
+        let directory = shell.create_temp_dir()?;
+        shell.change_dir(directory.path());
+        shell.write_file("gitconfig", "")?;
+        shell.set_var("GIT_CONFIG_GLOBAL", directory.path().join("gitconfig"));
+        shell.set_var("GIT_CONFIG_NOSYSTEM", "1");
+        shell.set_var("GIT_AUTHOR_NAME", "Test");
+        shell.set_var("GIT_AUTHOR_EMAIL", "test@example.com");
+        shell.set_var("GIT_COMMITTER_NAME", "Test");
+        shell.set_var("GIT_COMMITTER_EMAIL", "test@example.com");
+        shell
+            .cmd("git")
+            .args(["init", "--initial-branch=trunk"])
+            .run()?;
+
+        let original = "# Changelog\n\n## Unreleased\n\n## 1.0.0\n\n- Released.\n";
+        shell.write_file("CHANGELOG.md", original)?;
+        shell.cmd("git").args(["add", "CHANGELOG.md"]).run()?;
+        shell
+            .cmd("git")
+            .args(["commit", "-m", "Initial changelog"])
+            .run()?;
+        shell.cmd("git").args(["checkout", "-b", "topic"]).run()?;
+        let updated = original.replace("## Unreleased\n", "## Unreleased\n\n- New entry.\n");
+        shell.write_file("CHANGELOG.md", &updated)?;
+        shell
+            .cmd("git")
+            .args(["commit", "-am", "Add entry"])
+            .run()?;
+
+        shell.cmd("git").args(["checkout", "trunk"]).run()?;
+        shell
+            .cmd("git")
+            .args(["commit", "--allow-empty", "-m", "Advance trunk"])
+            .run()?;
+        shell
+            .cmd("git")
+            .args(["update-ref", "refs/remotes/origin/trunk", "HEAD"])
+            .run()?;
+        shell.cmd("git").args(["checkout", "topic"]).run()?;
+
+        check_changelog(
+            shell.clone(),
+            Arguments::from_vec(vec!["origin/trunk".into()]),
+        )?;
+        shell.write_file(
+            "CHANGELOG.md",
+            updated.replace("Released.", "Changed release."),
+        )?;
+        assert!(check_changelog(
+            shell.clone(),
+            Arguments::from_vec(vec!["origin/trunk".into()])
+        )
+        .is_err());
+        check_changelog(
+            shell,
+            Arguments::from_vec(vec!["origin/trunk".into(), "topic".into()]),
+        )?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test_find_odd_characters {
+    use super::{find_odd_characters, is_odd_character, OddCharacter};
+
+    #[test]
+    fn accepts_regular_text() {
+        assert_eq!(
+            find_odd_characters(
+                "# Changelog\n\n- Em dashes—curly quotes'… accents é and emoji 🎉 are fine.\n"
+            ),
+            []
+        );
+    }
+
+    #[test]
+    fn accepts_ordinary_whitespace() {
+        for character in [' ', '\t', '\n', '\r'] {
+            assert!(!is_odd_character(character));
+        }
+    }
+
+    #[test]
+    fn rejects_invisible_characters() {
+        for character in [
+            '\u{00A0}', '\u{00AD}', '\u{200B}', '\u{200E}', '\u{202A}', '\u{2060}', '\u{FEFF}',
+            '\u{0000}',
+        ] {
+            assert!(is_odd_character(character));
+        }
+    }
+
+    #[test]
+    fn reports_line_and_column() {
+        assert_eq!(
+            find_odd_characters("first line\nse\u{00A0}cond line"),
+            [OddCharacter {
+                line: 2,
+                column: 3,
+                character: '\u{00A0}',
+            }],
+        );
     }
 }
 
