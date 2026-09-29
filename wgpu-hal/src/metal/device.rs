@@ -741,8 +741,7 @@ impl crate::Device for super::Device {
             None
         }
         .map(conv::map_texture_component_swizzle);
-        let has_shader_usage = texture
-            .raw
+        let has_shader_usage = raw_source
             .usage()
             .intersects(MTLTextureUsage::ShaderRead | MTLTextureUsage::ShaderWrite);
         let needs_texture_view = 'b: {
@@ -784,22 +783,20 @@ impl crate::Device for super::Device {
                 };
                 let raw_result = unsafe {
                     if let Some(swizzle) = swizzle {
-                        raw_source
-                            .newTextureViewWithPixelFormat_textureType_levels_slices_swizzle(
-                                raw_format,
-                                raw_type,
-                                level_range,
-                                slice_range,
-                                swizzle,
-                            )
+                        raw_source.newTextureViewWithPixelFormat_textureType_levels_slices_swizzle(
+                            raw_format,
+                            raw_type,
+                            level_range,
+                            slice_range,
+                            swizzle,
+                        )
                     } else {
-                        raw_source
-                            .newTextureViewWithPixelFormat_textureType_levels_slices(
-                                raw_format,
-                                raw_type,
-                                level_range,
-                                slice_range,
-                            )
+                        raw_source.newTextureViewWithPixelFormat_textureType_levels_slices(
+                            raw_format,
+                            raw_type,
+                            level_range,
+                            slice_range,
+                        )
                     }
                 };
                 let raw = raw_result.ok_or_else(|| {
@@ -807,7 +804,7 @@ impl crate::Device for super::Device {
                     // would be rejected by `wpgu-core` validation, but at least until that
                     // is implemented, we log a verbose error message.
                     // Related: <https://github.com/gpuweb/gpuweb/issues/6876>.
-                    let storage_mode = texture.raw.storageMode();
+                    let storage_mode = raw_source.storageMode();
                     let memoryless = if storage_mode == MTLStorageMode::Memoryless {
                         "This may be because the texture is memoryless (has TRANSIENT_ATTACHMENT usage). "
                     } else {
@@ -827,7 +824,7 @@ impl crate::Device for super::Device {
                         texture.copy_size.depth,
                         texture.mip_levels,
                         texture.array_layers,
-                        texture.raw.usage(),
+                        raw_source.usage(),
                         storage_mode,
                         desc,
                         raw_format,
@@ -855,7 +852,7 @@ impl crate::Device for super::Device {
             // to avoid using the r001 view.
             attachment: if format_equal {
                 AttachmentInfo {
-                    texture: texture.raw.clone(),
+                    texture: raw_source.clone(),
                     base_mip_level: desc.range.base_mip_level,
                     base_array_layer: desc.range.base_array_layer,
                 }
