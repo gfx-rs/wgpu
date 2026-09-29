@@ -458,34 +458,34 @@ impl super::Adapter {
 
         // these should always be available on d3d12
         let mut features = wgt::Features::empty()
-            | wgt::Features::DEPTH_CLIP_CONTROL
-            | wgt::Features::DEPTH32FLOAT_STENCIL8
-            | wgt::Features::INDIRECT_FIRST_INSTANCE
-            | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
-            | wgt::Features::MULTI_DRAW_INDIRECT_COUNT
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO
-            | wgt::Features::POLYGON_MODE_LINE
-            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | wgt::Features::TIMESTAMP_QUERY
-            | wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
-            | wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES
-            | wgt::Features::TEXTURE_COMPRESSION_BC
-            | wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D
             | wgt::Features::CLEAR_TEXTURE
-            | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
+            | wgt::Features::DEPTH32FLOAT_STENCIL8
+            | wgt::Features::DEPTH_CLIP_CONTROL
+            | wgt::Features::DUAL_SOURCE_BLENDING
+            | wgt::Features::EXTERNAL_TEXTURE
+            | wgt::Features::FLOAT32_BLENDABLE
+            | wgt::Features::FLOAT32_FILTERABLE
             | wgt::Features::IMMEDIATES
+            | wgt::Features::INDIRECT_FIRST_INSTANCE
+            | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
+            | wgt::Features::MEMORY_DECORATION_COHERENT
+            | wgt::Features::MULTI_DRAW_INDIRECT_COUNT
+            | wgt::Features::PASSTHROUGH_SHADERS
+            | wgt::Features::POLYGON_MODE_LINE
             | wgt::Features::PRIMITIVE_INDEX
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
-            | wgt::Features::DUAL_SOURCE_BLENDING
-            | wgt::Features::TEXTURE_FORMAT_NV12
-            | wgt::Features::FLOAT32_FILTERABLE
-            | wgt::Features::FLOAT32_BLENDABLE
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::TEXTURE_ATOMIC
-            | wgt::Features::PASSTHROUGH_SHADERS
-            | wgt::Features::EXTERNAL_TEXTURE
-            | wgt::Features::MEMORY_DECORATION_COHERENT
-            | wgt::Features::TEXTURE_COMPONENT_SWIZZLE;
+            | wgt::Features::TEXTURE_COMPONENT_SWIZZLE
+            | wgt::Features::TEXTURE_COMPRESSION_BC
+            | wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D
+            | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
+            | wgt::Features::TEXTURE_FORMAT_NV12
+            | wgt::Features::TIMESTAMP_QUERY
+            | wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
+            | wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.

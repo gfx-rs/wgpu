@@ -932,16 +932,6 @@ impl fmt::Display for MapRangeError {
 
 impl error::Error for MapRangeError {}
 
-/// Type of buffer mapping.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum MapMode {
-    /// Map only for reading
-    Read,
-    /// Map only for writing
-    Write,
-}
-static_assertions::assert_impl_all!(MapMode: Send, Sync);
-
 /// A read-only view of a mapped buffer's bytes.
 ///
 /// To get a `BufferView`, first [map] the buffer, and then
