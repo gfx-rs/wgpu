@@ -225,6 +225,61 @@ error: wrong type passed as argument #1 to `cross`
 }
 
 #[test]
+fn sign_unsigned() {
+    check(
+        r#"
+            @compute @workgroup_size(1)
+            fn main() {
+                var input = vec4<u32>(1u);
+                let value = sign(input);
+            }
+        "#,
+        "\
+error: wrong type passed as argument #1 to `sign`
+  ┌─ wgsl:5:29
+  │
+5 │                 let value = sign(input);
+  │                             ^^^^
+  │
+  = note: `sign` accepts the following types for argument #1:
+  = note: allowed type: {AbstractInt}
+  = note: allowed type: {AbstractFloat}
+  = note: allowed type: i32
+  = note: allowed type: i16
+  = note: allowed type: i64
+  = note: allowed type: f32
+  = note: allowed type: f16
+  = note: allowed type: f64
+  = note: allowed type: vec2<{AbstractInt}>
+  = note: allowed type: vec2<{AbstractFloat}>
+  = note: allowed type: vec2<i32>
+  = note: allowed type: vec2<i16>
+  = note: allowed type: vec2<i64>
+  = note: allowed type: vec2<f32>
+  = note: allowed type: vec2<f16>
+  = note: allowed type: vec2<f64>
+  = note: allowed type: vec3<{AbstractInt}>
+  = note: allowed type: vec3<{AbstractFloat}>
+  = note: allowed type: vec3<i32>
+  = note: allowed type: vec3<i16>
+  = note: allowed type: vec3<i64>
+  = note: allowed type: vec3<f32>
+  = note: allowed type: vec3<f16>
+  = note: allowed type: vec3<f64>
+  = note: allowed type: vec4<{AbstractInt}>
+  = note: allowed type: vec4<{AbstractFloat}>
+  = note: allowed type: vec4<i32>
+  = note: allowed type: vec4<i16>
+  = note: allowed type: vec4<i64>
+  = note: allowed type: vec4<f32>
+  = note: allowed type: vec4<f16>
+  = note: allowed type: vec4<f64>
+
+",
+    );
+}
+
+#[test]
 fn cross_vec4() {
     check(
         r#"
