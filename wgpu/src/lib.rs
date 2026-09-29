@@ -111,7 +111,7 @@ pub use wgt::{
     Features, FeaturesWGPU, FeaturesWebGPU, FilterMode, ForceShaderModelToken, FrontFace,
     GlBackendOptions, GlDebugFns, GlFenceBehavior, Gles3MinorVersion, HalCounters,
     ImageSubresourceRange, IndexFormat, InstanceDescriptor, InstanceFlags, InternalCounters,
-    Limits, LoadOpDontCare, MemoryBudgetThresholds, MemoryHints, MipmapFilterMode,
+    Limits, LoadOpDontCare, MapMode, MemoryBudgetThresholds, MemoryHints, MipmapFilterMode,
     MultisampleState, NoopBackendOptions, Origin2d, Origin3d, PassthroughShaderEntryPoint,
     PipelineStatisticsTypes, PollError, PollStatus, PolygonMode, PowerPreference,
     PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,

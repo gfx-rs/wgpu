@@ -34,7 +34,7 @@ use crate::{
     command, conv,
     device::{
         bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
-        BufferMapPendingClosure, DeviceLostInvocation, HostMap, MissingDownlevelFlags,
+        BufferMapPendingClosure, DeviceLostInvocation, MapMode, MissingDownlevelFlags,
         MissingFeatures, RenderPassContext,
     },
     error::ErrorSink,
@@ -1311,7 +1311,7 @@ impl Device {
                 buffer,
                 tail_start,
                 final_size - tail_start,
-                HostMap::Write,
+                MapMode::Write,
                 snatch_guard,
             )?;
             let raw = buffer
@@ -1373,13 +1373,13 @@ impl Device {
                     is_coherent: true,
                 }
             } else {
-                map_buffer(&buffer, 0, map_size, HostMap::Write, &snatch_guard)?
+                map_buffer(&buffer, 0, map_size, MapMode::Write, &snatch_guard)?
             };
             drop(snatch_guard);
             *buffer.map_state.lock() = resource::BufferMapState::Active {
                 mapping,
                 range: 0..map_size,
-                host: HostMap::Write,
+                host: MapMode::Write,
             };
             wgt::BufferUses::MAP_WRITE
         } else {
