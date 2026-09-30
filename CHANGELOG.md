@@ -53,6 +53,10 @@ Bottom level categories:
 
 - Fix a crash/hang when configuring a surface with the `Bt2100Pq`, `Bt2100Hlg`, or `ExtendedDisplayP3` color space: the dynamically resolved CoreGraphics color-space constants were read with one level of indirection missing. By @stuartparmenter in [#10175](https://github.com/gfx-rs/wgpu/pull/10175).
 
+#### WebGPU
+
+- Report `CompositeAlphaMode::PreMultiplied` in the surface capabilities of the WebGPU backend, so configuring a transparent canvas no longer fails validation. By @elbaro in [#10507](https://github.com/gfx-rs/wgpu/pull/10507).
+
 ## v30.0.1 (2026-08-21)
 
 ### Bug Fixes
