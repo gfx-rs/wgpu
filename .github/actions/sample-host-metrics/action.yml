@@ -1,0 +1,20 @@
+name: "Sample host metrics"
+description: "Start a background sampler that records host performance counters to a CSV."
+inputs:
+  output:
+    description: "Path of the CSV file to write."
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - shell: pwsh
+      env:
+        INPUTS_OUTPUT: ${{ inputs.output }}
+      run: |
+        Start-Process pwsh -WindowStyle Hidden -ArgumentList @(
+            "-NoProfile"
+            "-File"
+            "${{ github.action_path }}/sample.ps1"
+            "-Output"
+            $env:INPUTS_OUTPUT
+        )

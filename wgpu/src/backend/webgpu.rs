@@ -778,12 +778,52 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
 
 const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 16] = [
     (
-        wgt::Features::DEPTH_CLIP_CONTROL,
-        webgpu_sys::GpuFeatureName::DepthClipControl,
+        wgt::Features::BGRA8UNORM_STORAGE,
+        webgpu_sys::GpuFeatureName::Bgra8unormStorage,
+    ),
+    (
+        wgt::Features::CLIP_DISTANCES,
+        webgpu_sys::GpuFeatureName::ClipDistances,
     ),
     (
         wgt::Features::DEPTH32FLOAT_STENCIL8,
         webgpu_sys::GpuFeatureName::Depth32floatStencil8,
+    ),
+    (
+        wgt::Features::DEPTH_CLIP_CONTROL,
+        webgpu_sys::GpuFeatureName::DepthClipControl,
+    ),
+    (
+        wgt::Features::DUAL_SOURCE_BLENDING,
+        webgpu_sys::GpuFeatureName::DualSourceBlending,
+    ),
+    (
+        wgt::Features::FLOAT32_BLENDABLE,
+        webgpu_sys::GpuFeatureName::Float32Blendable,
+    ),
+    (
+        wgt::Features::FLOAT32_FILTERABLE,
+        webgpu_sys::GpuFeatureName::Float32Filterable,
+    ),
+    (
+        wgt::Features::INDIRECT_FIRST_INSTANCE,
+        webgpu_sys::GpuFeatureName::IndirectFirstInstance,
+    ),
+    (
+        wgt::Features::RG11B10UFLOAT_RENDERABLE,
+        webgpu_sys::GpuFeatureName::Rg11b10ufloatRenderable,
+    ),
+    (
+        wgt::Features::SHADER_F16,
+        webgpu_sys::GpuFeatureName::ShaderF16,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ASTC,
+        webgpu_sys::GpuFeatureName::TextureCompressionAstc,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
+        webgpu_sys::GpuFeatureName::TextureCompressionAstcSliced3d,
     ),
     (
         wgt::Features::TEXTURE_COMPRESSION_BC,
@@ -798,48 +838,8 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 16] = [
         webgpu_sys::GpuFeatureName::TextureCompressionEtc2,
     ),
     (
-        wgt::Features::TEXTURE_COMPRESSION_ASTC,
-        webgpu_sys::GpuFeatureName::TextureCompressionAstc,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
-        webgpu_sys::GpuFeatureName::TextureCompressionAstcSliced3d,
-    ),
-    (
         wgt::Features::TIMESTAMP_QUERY,
         webgpu_sys::GpuFeatureName::TimestampQuery,
-    ),
-    (
-        wgt::Features::INDIRECT_FIRST_INSTANCE,
-        webgpu_sys::GpuFeatureName::IndirectFirstInstance,
-    ),
-    (
-        wgt::Features::SHADER_F16,
-        webgpu_sys::GpuFeatureName::ShaderF16,
-    ),
-    (
-        wgt::Features::RG11B10UFLOAT_RENDERABLE,
-        webgpu_sys::GpuFeatureName::Rg11b10ufloatRenderable,
-    ),
-    (
-        wgt::Features::BGRA8UNORM_STORAGE,
-        webgpu_sys::GpuFeatureName::Bgra8unormStorage,
-    ),
-    (
-        wgt::Features::FLOAT32_FILTERABLE,
-        webgpu_sys::GpuFeatureName::Float32Filterable,
-    ),
-    (
-        wgt::Features::FLOAT32_BLENDABLE,
-        webgpu_sys::GpuFeatureName::Float32Blendable,
-    ),
-    (
-        wgt::Features::DUAL_SOURCE_BLENDING,
-        webgpu_sys::GpuFeatureName::DualSourceBlending,
-    ),
-    (
-        wgt::Features::CLIP_DISTANCES,
-        webgpu_sys::GpuFeatureName::ClipDistances,
     ),
 ];
 
