@@ -263,6 +263,14 @@ pub trait QueueInterface: CommonTraits {
     fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
 
     fn present(&self, detail: &DispatchSurfaceOutputDetail);
+
+    fn present_with_damage(
+        &self,
+        detail: &DispatchSurfaceOutputDetail,
+        _damage_rects: &[wgt::Rect<u32>],
+    ) {
+        self.present(detail);
+    }
 }
 
 pub trait ShaderModuleInterface: CommonTraits {

@@ -170,11 +170,4 @@ impl WebGpuError for RenderCommandError {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Rect<T> {
-    pub x: T,
-    pub y: T,
-    pub w: T,
-    pub h: T,
-}
+pub use wgt::Rect;

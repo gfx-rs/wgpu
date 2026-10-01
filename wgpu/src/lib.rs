@@ -115,7 +115,7 @@ pub use wgt::{
     MultisampleState, NoopBackendOptions, Origin2d, Origin3d, PassthroughShaderEntryPoint,
     PipelineStatisticsTypes, PollError, PollStatus, PolygonMode, PowerPreference,
     PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
-    QueryType, RenderBundleDepthStencil, RequestAdapterError, SamplerBindingType,
+    QueryType, Rect, RenderBundleDepthStencil, RequestAdapterError, SamplerBindingType,
     SamplerBorderColor, ShaderLocation, ShaderModel, ShaderRuntimeChecks, ShaderStages,
     StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
     SurfaceColorSpace, SurfaceColorSpaces, SurfaceFormatCapabilities, SurfaceStatus,
