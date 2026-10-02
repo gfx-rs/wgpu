@@ -137,6 +137,30 @@ fn abstract_access(i: u32) {
     return;
 }
 
+fn swizzle_of_compose_zero_value() {
+    var out_6: vec2<i32> = vec2<i32>(0i, 3i);
+
+    return;
+}
+
+fn index_of_compose_zero_value() {
+    var out_7: i32 = 0i;
+
+    return;
+}
+
+fn index_of_nested_compose_zero_value() {
+    var out_8: i32 = 0i;
+
+    return;
+}
+
+fn access_of_compose_zero_value() {
+    var out_9: vec3<i32> = vec3<i32>();
+
+    return;
+}
+
 @compute @workgroup_size(2, 3, 1)
 fn main() {
     swizzle_of_compose();
@@ -153,5 +177,9 @@ fn main() {
     packed_dot_product();
     test_local_const();
     abstract_access(1u);
+    swizzle_of_compose_zero_value();
+    index_of_compose_zero_value();
+    index_of_nested_compose_zero_value();
+    access_of_compose_zero_value();
     return;
 }
