@@ -862,6 +862,15 @@ impl super::Validator {
                 validate_expr(result)?;
                 Ok(())
             }
+            crate::Statement::SubgroupBallotFindBit {
+                order: _,
+                argument,
+                result,
+            } => {
+                validate_expr(argument)?;
+                validate_expr(result)?;
+                Ok(())
+            }
             crate::Statement::CooperativeStore { target, ref data } => {
                 validate_expr(target)?;
                 validate_expr(data.pointer)?;

@@ -2835,6 +2835,55 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     );
                     emitter.start(ctx.expressions);
                 }
+                Op::GroupNonUniformBallotFindLSB | Op::GroupNonUniformBallotFindMSB => {
+                    inst.expect(5)?;
+                    block.extend(emitter.finish(ctx.expressions));
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let exec_scope_id = self.next()?;
+                    let argument_id = self.next()?;
+
+                    let argument_lookup = self.lookup_expression.lookup(argument_id)?;
+                    let argument_handle = get_expr_handle!(argument_id, argument_lookup);
+
+                    let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
+                    let _exec_scope = resolve_constant(ctx.gctx(), &exec_scope_const.inner)
+                        .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
+                        .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
+
+                    let order = if inst.op == Op::GroupNonUniformBallotFindLSB {
+                        crate::BallotFindBitOrder::Lsb
+                    } else {
+                        crate::BallotFindBitOrder::Msb
+                    };
+
+                    let result_type = self.lookup_type.lookup(result_type_id)?;
+
+                    let result_handle = ctx.expressions.append(
+                        crate::Expression::SubgroupOperationResult {
+                            ty: result_type.handle,
+                        },
+                        span,
+                    );
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: result_handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+
+                    block.push(
+                        crate::Statement::SubgroupBallotFindBit {
+                            order,
+                            argument: argument_handle,
+                            result: result_handle,
+                        },
+                        span,
+                    );
+                    emitter.start(ctx.expressions);
+                }
                 Op::AtomicLoad => {
                     inst.expect(6)?;
                     let start = self.data_offset;

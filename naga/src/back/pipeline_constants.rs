@@ -872,6 +872,14 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
             adjust(argument);
             adjust(result)
         }
+        Statement::SubgroupBallotFindBit {
+            order: _,
+            ref mut argument,
+            ref mut result,
+        } => {
+            adjust(argument);
+            adjust(result);
+        }
         Statement::Call {
             ref mut arguments,
             ref mut result,
