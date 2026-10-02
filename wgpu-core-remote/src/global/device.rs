@@ -994,7 +994,7 @@ impl Global {
     /// Returns an error if the pipeline creation fails instead of handling error in device.
     ///
     /// Id is assigned to the pipeline only if the creation succeeds.
-    pub fn create_render_pipeline_or_error(
+    pub fn device_create_render_pipeline_or_error(
         &self,
         device_id: DeviceId,
         desc: &RenderPipelineDescriptor,
