@@ -24,7 +24,7 @@ bitflags::bitflags! {
     /// Kinds of expressions that require uniform control flow.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
     pub struct UniformityRequirements: u8 {
         const WORK_GROUP_BARRIER = 0x1;
         const DERIVATIVE = if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE { 0 } else { 0x2 };
@@ -34,7 +34,7 @@ bitflags::bitflags! {
 }
 
 /// Uniform control flow characteristics.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(test, derive(PartialEq))]
@@ -234,7 +234,7 @@ struct Sampling {
     sampler: GlobalOrArgument,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct FunctionInfo {

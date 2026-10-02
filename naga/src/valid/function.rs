@@ -1897,17 +1897,6 @@ impl super::Validator {
         }
 
         for (index, argument) in fun.arguments.iter().enumerate() {
-            match module.types[argument.ty].inner.pointer_space() {
-                Some(crate::AddressSpace::Private | crate::AddressSpace::Function) | None => {}
-                Some(other) => {
-                    return Err(FunctionError::InvalidArgumentPointerSpace {
-                        index,
-                        name: argument.name.clone().unwrap_or_default(),
-                        space: other,
-                    }
-                    .with_span_handle(argument.ty, &module.types))
-                }
-            }
             // Check for the least informative error last.
             if !self.types[argument.ty.index()]
                 .flags

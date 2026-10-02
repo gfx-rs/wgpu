@@ -101,6 +101,16 @@ impl<T> Arena<T> {
             .map(|(i, v)| (Handle::from_usize(i), v))
     }
 
+    pub fn iter_span(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = (Handle<T>, &T, &Span)> + ExactSizeIterator {
+        self.data
+            .iter()
+            .zip(self.span_info.iter())
+            .enumerate()
+            .map(|(i, (v, span))| (Handle::from_usize(i), v, span))
+    }
+
     /// Returns an iterator over the items stored in this arena, returning both
     /// the item's handle and a reference to it.
     pub fn iter_mut_span(
