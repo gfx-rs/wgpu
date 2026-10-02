@@ -59,12 +59,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
         update_mode: AccelerationStructureUpdateMode::Build,
     });
 
-    tlas[0] = Some(TlasInstance::new(
-        &blas,
-        [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-        0,
-        0xFF,
-    ));
+    tlas[0] = Some(TlasInstance::from_blas_untransformed(&blas));
 
     // Actually build the BLAS.
     let mut encoder = ctx
