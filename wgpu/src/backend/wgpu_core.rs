@@ -1199,85 +1199,30 @@ impl dispatch::DeviceInterface for CoreDevice {
         &self,
         desc: &crate::RenderPipelineDescriptor<'_>,
     ) -> dispatch::DispatchRenderPipeline {
-        use wgc::pipeline as pipe;
+        with_render_pipeline_descriptor(desc, |descriptor| {
+            let wgpu_render_pipeline = self.wgpu_device.create_render_pipeline(descriptor);
+            CoreRenderPipeline {
+                wgpu_render_pipeline,
+            }
+            .into()
+        })
+    }
 
-        let vertex_buffers: ArrayVec<_, { wgc::MAX_VERTEX_BUFFERS }> = desc
-            .vertex
-            .buffers
-            .iter()
-            .map(|vbuf| {
-                vbuf.as_ref().map(|vbuf| pipe::VertexBufferLayout {
-                    array_stride: vbuf.array_stride,
-                    step_mode: vbuf.step_mode,
-                    attributes: Borrowed(vbuf.attributes),
-                })
-            })
-            .collect();
-
-        let vert_constants = desc
-            .vertex
-            .compilation_options
-            .constants
-            .iter()
-            .map(|&(key, value)| (String::from(key), value))
-            .collect();
-
-        let descriptor = pipe::ResolvedGeneralRenderPipelineDescriptor {
-            label: desc.label.map(Borrowed),
-            layout: desc
-                .layout
-                .map(|layout| layout.inner.as_core().wgpu_pipeline_layout.clone()),
-            vertex: wgc::pipeline::RenderPipelineVertexProcessor::Vertex(pipe::VertexState {
-                stage: pipe::ProgrammableStageDescriptor {
-                    module: desc
-                        .vertex
-                        .module
-                        .inner
-                        .as_core()
-                        .wgpu_shader_module
-                        .clone(),
-                    entry_point: desc.vertex.entry_point.map(Borrowed),
-                    constants: vert_constants,
-                    zero_initialize_workgroup_memory: desc
-                        .vertex
-                        .compilation_options
-                        .zero_initialize_workgroup_memory,
-                },
-                buffers: Borrowed(&vertex_buffers),
-            }),
-            primitive: desc.primitive,
-            depth_stencil: desc.depth_stencil.clone(),
-            multisample: desc.multisample,
-            fragment: desc.fragment.as_ref().map(|frag| {
-                let frag_constants = frag
-                    .compilation_options
-                    .constants
-                    .iter()
-                    .map(|&(key, value)| (String::from(key), value))
-                    .collect();
-                pipe::FragmentState {
-                    stage: pipe::ProgrammableStageDescriptor {
-                        module: frag.module.inner.as_core().wgpu_shader_module.clone(),
-                        entry_point: frag.entry_point.map(Borrowed),
-                        constants: frag_constants,
-                        zero_initialize_workgroup_memory: frag
-                            .compilation_options
-                            .zero_initialize_workgroup_memory,
-                    },
-                    targets: Borrowed(frag.targets),
-                }
-            }),
-            multiview_mask: desc.multiview_mask,
-            cache: desc
-                .cache
-                .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
-        };
-
-        let wgpu_render_pipeline = self.wgpu_device.create_render_pipeline(descriptor);
-        CoreRenderPipeline {
-            wgpu_render_pipeline,
-        }
-        .into()
+    fn create_render_pipeline_async(
+        &self,
+        desc: &crate::RenderPipelineDescriptor<'_>,
+    ) -> Pin<Box<dyn dispatch::CreateRenderPipelineFuture>> {
+        let result = with_render_pipeline_descriptor(desc, |descriptor| {
+            self.wgpu_device.create_render_pipeline_or_error(descriptor)
+        })
+        .map(|wgpu_render_pipeline| {
+            CoreRenderPipeline {
+                wgpu_render_pipeline,
+            }
+            .into()
+        })
+        .map_err(|err| pipeline_error(err, desc.label, "Device::create_render_pipeline_async"));
+        Box::pin(ready(result))
     }
 
     fn create_mesh_pipeline(
@@ -1367,38 +1312,32 @@ impl dispatch::DeviceInterface for CoreDevice {
         &self,
         desc: &crate::ComputePipelineDescriptor<'_>,
     ) -> dispatch::DispatchComputePipeline {
-        use wgc::pipeline as pipe;
-
-        let constants = desc
-            .compilation_options
-            .constants
-            .iter()
-            .map(|&(key, value)| (String::from(key), value))
-            .collect();
-
-        let descriptor = pipe::ComputePipelineDescriptor {
-            label: desc.label.map(Borrowed),
-            layout: desc
-                .layout
-                .map(|pll| pll.inner.as_core().wgpu_pipeline_layout.clone()),
-            stage: pipe::ProgrammableStageDescriptor {
-                module: desc.module.inner.as_core().wgpu_shader_module.clone(),
-                entry_point: desc.entry_point.map(Borrowed),
-                constants,
-                zero_initialize_workgroup_memory: desc
-                    .compilation_options
-                    .zero_initialize_workgroup_memory,
-            },
-            cache: desc
-                .cache
-                .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
-        };
-
+        let descriptor = map_compute_pipeline_descriptor(desc);
         let wgpu_compute_pipeline = self.wgpu_device.create_compute_pipeline(descriptor);
         CoreComputePipeline {
             wgpu_compute_pipeline,
         }
         .into()
+    }
+
+    fn create_compute_pipeline_async(
+        &self,
+        desc: &crate::ComputePipelineDescriptor<'_>,
+    ) -> Pin<Box<dyn dispatch::CreateComputePipelineFuture>> {
+        let descriptor = map_compute_pipeline_descriptor(desc);
+        let result = self
+            .wgpu_device
+            .create_compute_pipeline_or_error(descriptor)
+            .map(|wgpu_compute_pipeline| {
+                CoreComputePipeline {
+                    wgpu_compute_pipeline,
+                }
+                .into()
+            })
+            .map_err(|err| {
+                pipeline_error(err, desc.label, "Device::create_compute_pipeline_async")
+            });
+        Box::pin(ready(result))
     }
 
     unsafe fn create_pipeline_cache(
@@ -2981,5 +2920,151 @@ impl dispatch::BufferMappedRangeInterface for CoreBufferMappedRange {
     #[cfg(webgpu)]
     fn as_uint8array(&self) -> &js_sys::Uint8Array {
         panic!("Only available on WebGPU")
+    }
+}
+
+/// Maps a render pipeline descriptor to its wgpu-core form and passes it to `f`.
+///
+/// The wgpu-core descriptor borrows the vertex buffer layouts collected here, so it can't be
+/// returned.
+fn with_render_pipeline_descriptor<R>(
+    desc: &crate::RenderPipelineDescriptor<'_>,
+    f: impl FnOnce(wgc::pipeline::ResolvedGeneralRenderPipelineDescriptor<'_>) -> R,
+) -> R {
+    use wgc::pipeline as pipe;
+
+    let vertex_buffers: ArrayVec<_, { wgc::MAX_VERTEX_BUFFERS }> = desc
+        .vertex
+        .buffers
+        .iter()
+        .map(|vbuf| {
+            vbuf.as_ref().map(|vbuf| pipe::VertexBufferLayout {
+                array_stride: vbuf.array_stride,
+                step_mode: vbuf.step_mode,
+                attributes: Borrowed(vbuf.attributes),
+            })
+        })
+        .collect();
+
+    let vert_constants = desc
+        .vertex
+        .compilation_options
+        .constants
+        .iter()
+        .map(|&(key, value)| (String::from(key), value))
+        .collect();
+
+    let descriptor = pipe::ResolvedGeneralRenderPipelineDescriptor {
+        label: desc.label.map(Borrowed),
+        layout: desc
+            .layout
+            .map(|layout| layout.inner.as_core().wgpu_pipeline_layout.clone()),
+        vertex: wgc::pipeline::RenderPipelineVertexProcessor::Vertex(pipe::VertexState {
+            stage: pipe::ProgrammableStageDescriptor {
+                module: desc
+                    .vertex
+                    .module
+                    .inner
+                    .as_core()
+                    .wgpu_shader_module
+                    .clone(),
+                entry_point: desc.vertex.entry_point.map(Borrowed),
+                constants: vert_constants,
+                zero_initialize_workgroup_memory: desc
+                    .vertex
+                    .compilation_options
+                    .zero_initialize_workgroup_memory,
+            },
+            buffers: Borrowed(&vertex_buffers),
+        }),
+        primitive: desc.primitive,
+        depth_stencil: desc.depth_stencil.clone(),
+        multisample: desc.multisample,
+        fragment: desc.fragment.as_ref().map(|frag| {
+            let frag_constants = frag
+                .compilation_options
+                .constants
+                .iter()
+                .map(|&(key, value)| (String::from(key), value))
+                .collect();
+            pipe::FragmentState {
+                stage: pipe::ProgrammableStageDescriptor {
+                    module: frag.module.inner.as_core().wgpu_shader_module.clone(),
+                    entry_point: frag.entry_point.map(Borrowed),
+                    constants: frag_constants,
+                    zero_initialize_workgroup_memory: frag
+                        .compilation_options
+                        .zero_initialize_workgroup_memory,
+                },
+                targets: Borrowed(frag.targets),
+            }
+        }),
+        multiview_mask: desc.multiview_mask,
+        cache: desc
+            .cache
+            .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
+    };
+
+    f(descriptor)
+}
+
+fn map_compute_pipeline_descriptor<'a>(
+    desc: &crate::ComputePipelineDescriptor<'a>,
+) -> wgc::pipeline::ComputePipelineDescriptor<'a> {
+    use wgc::pipeline as pipe;
+
+    let constants = desc
+        .compilation_options
+        .constants
+        .iter()
+        .map(|&(key, value)| (String::from(key), value))
+        .collect();
+
+    pipe::ComputePipelineDescriptor {
+        label: desc.label.map(Borrowed),
+        layout: desc
+            .layout
+            .map(|pll| pll.inner.as_core().wgpu_pipeline_layout.clone()),
+        stage: pipe::ProgrammableStageDescriptor {
+            module: desc.module.inner.as_core().wgpu_shader_module.clone(),
+            entry_point: desc.entry_point.map(Borrowed),
+            constants,
+            zero_initialize_workgroup_memory: desc
+                .compilation_options
+                .zero_initialize_workgroup_memory,
+        },
+        cache: desc
+            .cache
+            .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
+    }
+}
+
+/// Converts a pipeline creation error into the [`crate::Error`] that an asynchronous pipeline
+/// creation resolves to, in the same form that the error scopes would have received it.
+fn pipeline_error(
+    err: impl WebGpuError + WasmNotSendSync + 'static,
+    label: Option<&str>,
+    fn_ident: &'static str,
+) -> crate::Error {
+    let error_type = err.webgpu_error_type();
+    let source: wgt::error::ErrorSource = Box::new(wgc::error::ContextError {
+        fn_ident,
+        source: Box::new(err),
+        label: label.unwrap_or_default().to_owned(),
+    });
+    match error_type {
+        wgt::error::ErrorType::OutOfMemory => crate::Error::OutOfMemory { source },
+        wgt::error::ErrorType::Validation => crate::Error::Validation {
+            description: format_error(&*source),
+            source,
+        },
+        // `create_*_pipeline_or_error` resolves a lost device to an invalid pipeline, so
+        // this is only reached by internal errors.
+        wgt::error::ErrorType::Internal | wgt::error::ErrorType::DeviceLost => {
+            crate::Error::Internal {
+                description: format_error(&*source),
+                source,
+            }
+        }
     }
 }
