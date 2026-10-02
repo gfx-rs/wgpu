@@ -1172,6 +1172,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             if let TypeInner::BindingArray { base, size, .. } = module.types[global.ty].inner {
                 if let Some(overridden_size) = bt.binding_array_size {
                     write!(self.out, "[{overridden_size}]")?;
+                } else if matches!(size, crate::ArraySize::Dynamic) {
+                    // Unbounded descriptor array; legal since SM 5.1.
+                    write!(self.out, "[]")?;
                 } else {
                     self.write_array_size(module, base, size)?;
                 }
