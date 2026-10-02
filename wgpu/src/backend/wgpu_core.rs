@@ -1975,6 +1975,10 @@ impl dispatch::ComputePipelineInterface for CoreComputePipeline {
         }
         .into()
     }
+
+    fn get_subgroup_size(&self) -> Option<u32> {
+        self.wgpu_compute_pipeline.get_subgroup_size()
+    }
 }
 
 impl dispatch::PipelineCacheInterface for CorePipelineCache {
