@@ -1491,6 +1491,29 @@ impl Writer {
                     .varying_ids
                     .push(self.global_variables[task_payload].var_id);
             }
+            // The mesh output copy and the workgroup memory polyfill both read
+            // `LocalInvocationIndex`, which an entry point may only declare once.
+            if iface.mesh_info.is_some() && local_invocation_index_var_id.is_none() {
+                let u32_type_id = self.get_u32_type_id();
+                let pointer_type_id =
+                    self.get_pointer_type_id(u32_type_id, spirv::StorageClass::Input);
+                let var_id = self.id_gen.next();
+                Instruction::variable(pointer_type_id, var_id, spirv::StorageClass::Input, None)
+                    .to_words(&mut self.logical_layout.declarations);
+                self.decorate(
+                    var_id,
+                    spirv::Decoration::BuiltIn,
+                    &[spirv::BuiltIn::LocalInvocationIndex as u32],
+                );
+                iface.varying_ids.push(var_id);
+
+                let id = self.id_gen.next();
+                prelude
+                    .body
+                    .push(Instruction::load(u32_type_id, id, var_id, None));
+                local_invocation_index_var_id = Some(var_id);
+                local_invocation_index_id = Some(id);
+            }
             self.write_entry_point_mesh_shader_info(
                 iface,
                 local_invocation_index_var_id,
