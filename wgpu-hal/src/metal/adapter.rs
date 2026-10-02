@@ -1243,23 +1243,25 @@ impl super::CapabilitiesQuery {
         use wgt::Features as F;
 
         let mut features = F::empty()
-            | F::MAPPABLE_PRIMARY_BUFFERS
-            | F::VERTEX_WRITABLE_STORAGE
-            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::IMMEDIATES
-            | F::POLYGON_MODE_LINE
+            | F::ADDRESS_MODE_CLAMP_TO_ZERO
+            | F::BGRA8UNORM_STORAGE
             | F::CLEAR_TEXTURE
-            | F::TEXTURE_FORMAT_16BIT_NORM
+            | F::CLIP_DISTANCES
+            | F::DEPTH32FLOAT_STENCIL8
+            | F::EXTERNAL_TEXTURE
+            | F::FLOAT32_BLENDABLE
+            | F::IMMEDIATES
+            | F::MAPPABLE_PRIMARY_BUFFERS
+            | F::PASSTHROUGH_SHADERS
+            | F::POLYGON_MODE_LINE
             | F::SHADER_F16
             | F::SHADER_I16
-            | F::DEPTH32FLOAT_STENCIL8
-            | F::BGRA8UNORM_STORAGE
-            | F::PASSTHROUGH_SHADERS
-            | F::EXTERNAL_TEXTURE;
+            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | F::TEXTURE_FORMAT_16BIT_NORM
+            | F::VERTEX_WRITABLE_STORAGE;
 
         features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
-        features.set(F::FLOAT32_BLENDABLE, true);
         features.set(F::INDIRECT_FIRST_INSTANCE, self.indirect_draw_dispatch);
         features.set(
             F::TIMESTAMP_QUERY,
@@ -1276,7 +1278,6 @@ impl super::CapabilitiesQuery {
             self.timestamp_query_support
                 .contains(TimestampQuerySupport::INSIDE_WGPU_PASSES),
         );
-        features.set(F::CLIP_DISTANCES, true);
         features.set(
             F::DUAL_SOURCE_BLENDING,
             self.msl_version >= MTLLanguageVersion::Version1_2 && self.dual_source_blending,
@@ -1350,7 +1351,6 @@ impl super::CapabilitiesQuery {
             F::ADDRESS_MODE_CLAMP_TO_BORDER,
             self.sampler_clamp_to_border,
         );
-        features.set(F::ADDRESS_MODE_CLAMP_TO_ZERO, true);
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
 
@@ -1416,10 +1416,6 @@ impl super::CapabilitiesQuery {
             wgt::DownlevelFlags::BASE_VERTEX,
             self.base_vertex_first_instance_drawing,
         );
-        downlevel
-            .flags
-            .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
-
         downlevel.flags.set(
             wgt::DownlevelFlags::MSL2_1,
             self.msl_version >= MTLLanguageVersion::Version2_1,
