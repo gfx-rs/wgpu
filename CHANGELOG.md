@@ -280,6 +280,10 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 - Added explicit `Send` and `Sync` implementations to key `wgpu` types so that the compiler can do less work checking those bounds. If you previously added a `#![recursion_limit = ...]` attribute to your crate due to overflow errors involving `wgpu` types, you may now be able to remove it. By @kpreid in [#10177](https://github.com/gfx-rs/wgpu/pull/10177).
 
+#### Metal
+
+- Render and compute passes that need no preparatory GPU work now share the encoder's current `MTLCommandBuffer` instead of each getting one of its own, which cost about 2.3 MiB of driver memory per pass until the submission completed and limited an encoder to 4096 passes. Passes that load a texture discarded earlier in the same encoder, use indirect draws with indirect validation enabled, or execute render bundles still get their own. By @matthargett in [#10506](https://github.com/gfx-rs/wgpu/pull/10506).
+
 ### Documentation
 
 #### General

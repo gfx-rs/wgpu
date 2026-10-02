@@ -2278,17 +2278,74 @@ pub(super) fn encode_render_pass(
 
     let mut indirect_draw_validation_batcher = crate::indirect_validation::DrawBatcher::new();
 
-    // We automatically keep extending command buffers over time, and because
-    // we want to insert a command buffer _before_ what we're about to record,
-    // we need to make sure to close the previous one.
-    parent_state
-        .raw_encoder
-        .close_if_open()
-        .map_pass_err(pass_scope)?;
-    let raw_encoder = parent_state
-        .raw_encoder
-        .open_pass(base.label.as_deref())
-        .map_pass_err(pass_scope)?;
+    // This is only a conservative preflight. All validation and tracking still
+    // run below, including on backends where barriers and query resets are no-ops.
+    let append = device.adapter.raw.capabilities.pass_barriers_are_noop
+        && !color_attachments.iter().flatten().any(|attachment| {
+            (attachment.load_op == LoadOp::Load
+                || attachment.view.parent.desc.dimension == wgt::TextureDimension::D3)
+                && parent_state
+                    .texture_memory_actions
+                    .has_discarded_texture(&attachment.view.parent)
+        })
+        && !depth_stencil_attachment.as_ref().is_some_and(|attachment| {
+            let aspects = attachment.view.desc.aspects();
+            ((aspects.contains(hal::FormatAspects::DEPTH)
+                && attachment.depth.load_op() == LoadOp::Load)
+                || (aspects.contains(hal::FormatAspects::STENCIL)
+                    && attachment.stencil.load_op() == LoadOp::Load))
+                && parent_state
+                    .texture_memory_actions
+                    .has_discarded_texture(&attachment.view.parent)
+        })
+        && !base.commands.iter().any(|command| match command {
+            ArcRenderCommand::DrawIndirect { .. }
+            | ArcRenderCommand::MultiDrawIndirectCount { .. } => {
+                device.indirect_validation.is_some()
+            }
+            // Bundles may contain indirect draws and texture initialization actions.
+            ArcRenderCommand::ExecuteBundle(_) => true,
+            ArcRenderCommand::SetBindGroup {
+                bind_group: Some(group),
+                ..
+            } => group.texture_init_actions.iter().any(|action| {
+                parent_state
+                    .texture_memory_actions
+                    .has_discarded_texture(&action.texture)
+            }),
+            ArcRenderCommand::SetBindGroup {
+                bind_group: None, ..
+            }
+            | ArcRenderCommand::SetPipeline(_)
+            | ArcRenderCommand::SetIndexBuffer { .. }
+            | ArcRenderCommand::SetVertexBuffer { .. }
+            | ArcRenderCommand::SetBlendConstant(_)
+            | ArcRenderCommand::SetStencilReference(_)
+            | ArcRenderCommand::SetViewport { .. }
+            | ArcRenderCommand::SetScissor(_)
+            | ArcRenderCommand::SetImmediate { .. }
+            | ArcRenderCommand::Draw { .. }
+            | ArcRenderCommand::DrawIndexed { .. }
+            | ArcRenderCommand::DrawMeshTasks { .. }
+            | ArcRenderCommand::PushDebugGroup { .. }
+            | ArcRenderCommand::PopDebugGroup
+            | ArcRenderCommand::InsertDebugMarker { .. }
+            | ArcRenderCommand::WriteTimestamp { .. }
+            | ArcRenderCommand::BeginOcclusionQuery { .. }
+            | ArcRenderCommand::EndOcclusionQuery
+            | ArcRenderCommand::BeginPipelineStatisticsQuery { .. }
+            | ArcRenderCommand::EndPipelineStatisticsQuery => false,
+        });
+    let raw_encoder = if append {
+        parent_state.raw_encoder.open_if_closed()
+    } else {
+        parent_state
+            .raw_encoder
+            .close_if_open()
+            .map_pass_err(pass_scope)?;
+        parent_state.raw_encoder.open_pass(base.label.as_deref())
+    }
+    .map_pass_err(pass_scope)?;
 
     let (scope, pending_discard_init_fixups, mut pending_query_resets) = {
         let mut pending_query_resets = QueryResetMap::new();
@@ -2683,7 +2740,9 @@ pub(super) fn encode_render_pass(
 
         let pending_discard_init_fixups = state.pass.pending_discard_init_fixups;
 
-        parent_state.raw_encoder.close().map_pass_err(pass_scope)?;
+        if !append {
+            parent_state.raw_encoder.close().map_pass_err(pass_scope)?;
+        }
         (trackers, pending_discard_init_fixups, pending_query_resets)
     };
 
@@ -2691,12 +2750,16 @@ pub(super) fn encode_render_pass(
     let tracker = &mut parent_state.tracker;
 
     {
-        let transit = encoder
-            .open_pass(hal_label(
+        assert!(!append || pending_discard_init_fixups.is_empty());
+        let transit = if append {
+            encoder.open_if_closed()
+        } else {
+            encoder.open_pass(hal_label(
                 Some("(wgpu internal) Pre Pass"),
                 device.instance_flags,
             ))
-            .map_pass_err(pass_scope)?;
+        }
+        .map_pass_err(pass_scope)?;
 
         // If this pass reads any surfaces that were discarded by a previous
         // pass in the same command buffer, initialize them.
@@ -2734,7 +2797,9 @@ pub(super) fn encode_render_pass(
         }
     }
 
-    encoder.close_and_swap().map_pass_err(pass_scope)?;
+    if !append {
+        encoder.close_and_swap().map_pass_err(pass_scope)?;
+    }
 
     Ok(())
 }
