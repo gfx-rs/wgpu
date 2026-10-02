@@ -15,7 +15,6 @@ impl DxgiLib {
     }
 
     /// Will error with crate::DeviceError::Unexpected if DXGI 1.3 is not available.
-    #[cfg_attr(not(dx12), expect(dead_code))]
     pub fn debug_interface1(&self) -> Result<Option<Dxgi::IDXGIInfoQueue>, crate::DeviceError> {
         // Calls windows::Win32::Graphics::Dxgi::DXGIGetDebugInterface1 on dxgi.dll
         type Fun = extern "system" fn(
@@ -62,7 +61,6 @@ impl DxgiLib {
     }
 
     /// Will error with crate::DeviceError::Unexpected if DXGI 1.4 is not available.
-    #[cfg_attr(not(dx12), expect(dead_code))]
     pub fn create_factory4(
         &self,
         factory_flags: Dxgi::DXGI_CREATE_FACTORY_FLAGS,

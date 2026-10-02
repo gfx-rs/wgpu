@@ -23,6 +23,9 @@ fn main() {
         ) },
         metal: { all(target_vendor = "apple", feature = "metal") },
         vulkan: { all(not(target_family = "wasm"), feature = "vulkan") },
+        // The shared DXGI presentation code (`auxil::dxgi`) is built for DX12 and for the
+        // Windows Vulkan backend (which can present through a DXGI flip-model swapchain).
+        dxgi: { any(dx12, all(vulkan, target_os = "windows")) },
         drm: { all(
             feature = "drm",
             any(target_os = "linux", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd")
