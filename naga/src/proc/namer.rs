@@ -323,13 +323,7 @@ impl Namer {
                 let name = self.call_or(&arg.name, "param");
                 output.insert(NameKey::FunctionArgument(fun_handle, index as u32), name);
 
-                if matches!(
-                    module.types[arg.ty].inner,
-                    crate::TypeInner::Image {
-                        class: crate::ImageClass::External,
-                        ..
-                    }
-                ) {
+                if module.types[arg.ty].inner.is_external_image() {
                     let base = arg.name.as_deref().unwrap_or("param");
                     for &(suffix, ext_key) in ExternalTextureNameKey::ALL {
                         let name = self.call(&format!("{base}_{suffix}"));
@@ -354,13 +348,7 @@ impl Namer {
             let name = self.call_or(&var.name, "global");
             output.insert(NameKey::GlobalVariable(handle), name);
 
-            if matches!(
-                module.types[var.ty].inner,
-                crate::TypeInner::Image {
-                    class: crate::ImageClass::External,
-                    ..
-                }
-            ) {
+            if module.types[var.ty].inner.is_external_image() {
                 let base = var.name.as_deref().unwrap_or("global");
                 for &(suffix, ext_key) in ExternalTextureNameKey::ALL {
                     let name = self.call(&format!("{base}_{suffix}"));
