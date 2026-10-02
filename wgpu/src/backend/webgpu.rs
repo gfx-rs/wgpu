@@ -1890,11 +1890,17 @@ impl dispatch::AdapterInterface for WebAdapter {
     }
 
     fn features(&self) -> crate::Features {
-        *self.cached_properties.features.get_or_init(|| map_wgt_features(self.inner.features()))
+        *self
+            .cached_properties
+            .features
+            .get_or_init(|| map_wgt_features(self.inner.features()))
     }
 
     fn limits(&self) -> crate::Limits {
-        self.cached_properties.limits.get_or_init(|| map_wgt_limits(self.inner.limits())).clone()
+        self.cached_properties
+            .limits
+            .get_or_init(|| map_wgt_limits(self.inner.limits()))
+            .clone()
     }
 
     fn downlevel_capabilities(&self) -> crate::DownlevelCapabilities {
@@ -2055,11 +2061,17 @@ fn naga_to_source_location(value: crate::naga::SourceLocation) -> wgt::SourceLoc
 
 impl dispatch::DeviceInterface for WebDevice {
     fn features(&self) -> crate::Features {
-        *self.cached_properties.features.get_or_init(|| map_wgt_features(self.inner.features()))
+        *self
+            .cached_properties
+            .features
+            .get_or_init(|| map_wgt_features(self.inner.features()))
     }
 
     fn limits(&self) -> crate::Limits {
-        self.cached_properties.limits.get_or_init(|| map_wgt_limits(self.inner.limits())).clone()
+        self.cached_properties
+            .limits
+            .get_or_init(|| map_wgt_limits(self.inner.limits()))
+            .clone()
     }
 
     fn adapter_info(&self) -> crate::AdapterInfo {
