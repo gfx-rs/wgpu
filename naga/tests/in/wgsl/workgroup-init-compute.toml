@@ -1,0 +1,2 @@
+targets = "HLSL"
+pipeline_constants = { width = 8.0, height = 2.0, count = 37.0 }

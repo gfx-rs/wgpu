@@ -1826,21 +1826,27 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             let back::FunctionType::EntryPoint(index) = func_ctx.ty else {
                 unreachable!();
             };
-            writeln!(
-                self.out,
-                "{}if ({} == 0) {{",
-                back::INDENT,
-                // need_workgroup_variables_initialization forces this to be written
-                // if the user doesn't specify it (so this must be Some())
-                local_invocation_index_name.as_ref().unwrap(),
-            )?;
-            self.write_workgroup_variables_initialization(
-                func_ctx,
-                module,
-                module.entry_points[index as usize].stage,
-            )?;
-
-            writeln!(self.out, "{}}}", back::INDENT)?;
+            let workgroup_size = module.entry_points[index as usize]
+                .workgroup_size
+                .iter()
+                .try_fold(1u32, |total, &size| total.checked_mul(size))
+                .ok_or_else(|| Error::Custom("Workgroup invocation count overflow".into()))?;
+            for (handle, var) in module.global_variables.iter() {
+                if !func_ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
+                {
+                    let name = self.names[&NameKey::GlobalVariable(handle)].clone();
+                    self.write_compute_workgroup_init(
+                        module,
+                        proc::TypeResolution::Handle(var.ty),
+                        (&name, false),
+                        &mut Vec::new(),
+                        (
+                            local_invocation_index_name.as_ref().unwrap(),
+                            workgroup_size,
+                        ),
+                    )?;
+                }
+            }
             self.write_control_barrier(crate::Barrier::WORK_GROUP, back::Level(1))?;
         }
 
@@ -2004,6 +2010,121 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             && module.global_variables.iter().any(|(handle, var)| {
                 !func_ctx.info[handle].is_empty() && var.space.is_workgroup_like()
             })
+    }
+
+    fn write_compute_workgroup_init(
+        &mut self,
+        module: &Module,
+        ty: proc::TypeResolution,
+        (access, in_struct): (&str, bool),
+        dimensions: &mut Vec<(String, u32)>,
+        invocation: (&str, u32),
+    ) -> BackendResult {
+        match *ty.inner_with(&module.types) {
+            TypeInner::Array { base, size, .. } => {
+                let proc::IndexableLength::Known(count) = size.resolve(module.to_ctx())? else {
+                    unreachable!();
+                };
+                let index = self.namer.call("zero_index");
+                let element = format!("{access}[{index}]");
+                dimensions.push((index, count));
+                self.write_compute_workgroup_init(
+                    module,
+                    proc::TypeResolution::Handle(base),
+                    (&element, in_struct),
+                    dimensions,
+                    invocation,
+                )?;
+                dimensions.pop();
+            }
+            TypeInner::Struct { ref members, .. } => {
+                for (index, member) in members.iter().enumerate() {
+                    let name =
+                        &self.names[&NameKey::StructMember(ty.handle().unwrap(), index as u32)];
+                    let field = format!("{access}.{name}");
+                    match module.types[member.ty].inner {
+                        TypeInner::Matrix {
+                            columns,
+                            rows: crate::VectorSize::Bi,
+                            scalar,
+                        } if member.binding.is_none() => {
+                            for column in 0..columns as u8 {
+                                self.write_compute_workgroup_init(
+                                    module,
+                                    proc::TypeResolution::Value(TypeInner::Vector {
+                                        size: crate::VectorSize::Bi,
+                                        scalar,
+                                    }),
+                                    (&format!("{field}_{column}"), true),
+                                    dimensions,
+                                    invocation,
+                                )?;
+                            }
+                        }
+                        _ => {
+                            self.write_compute_workgroup_init(
+                                module,
+                                proc::TypeResolution::Handle(member.ty),
+                                (
+                                    &field,
+                                    member.binding.is_none()
+                                        || matches!(
+                                            module.types[member.ty].inner,
+                                            TypeInner::Array { .. }
+                                        ),
+                                ),
+                                dimensions,
+                                invocation,
+                            )?;
+                        }
+                    }
+                }
+            }
+            ref inner => {
+                let level = back::Level(1);
+                let body = level.next();
+                let (local_index, workgroup_size) = invocation;
+                if dimensions.is_empty() {
+                    writeln!(self.out, "{level}if ({local_index} == 0) {{")?;
+                } else {
+                    let count = dimensions
+                        .iter()
+                        .try_fold(1u32, |total, &(_, size)| total.checked_mul(size))
+                        .ok_or_else(|| {
+                            Error::Custom("Workgroup array element count overflow".into())
+                        })?;
+                    let index = self.namer.call("zero_flat_index");
+                    // Keep DXC from expanding large aggregate initializers during optimization.
+                    writeln!(self.out, "{level}[loop]")?;
+                    writeln!(self.out, "{level}for (uint {index} = {local_index}; {index} < {count}u; {index} += {workgroup_size}u) {{")?;
+                    let mut stride = count;
+                    for &(ref dimension, size) in dimensions.iter() {
+                        stride /= size;
+                        writeln!(
+                            self.out,
+                            "{body}uint {dimension} = ({index} / {stride}u) % {size}u;"
+                        )?;
+                    }
+                }
+                write!(self.out, "{body}{access} = (")?;
+                if in_struct
+                    && matches!(
+                        inner,
+                        TypeInner::Matrix {
+                            rows: crate::VectorSize::Bi,
+                            ..
+                        }
+                    )
+                {
+                    self.write_global_type(module, ty.handle().unwrap())?;
+                } else {
+                    self.write_value_type(module, inner)?;
+                }
+                writeln!(self.out, ")0;")?;
+                writeln!(self.out, "{level}}}")?;
+            }
+        }
+        Ok(())
     }
 
     pub(super) fn write_workgroup_variables_initialization(
