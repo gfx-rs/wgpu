@@ -79,6 +79,19 @@ impl Deref for DxgiAdapter {
     }
 }
 
+fn wrap_adapter(adapter1: Dxgi::IDXGIAdapter1) -> Option<DxgiAdapter> {
+    if !should_keep_adapter(&adapter1) {
+        return None;
+    }
+
+    if let Ok(adapter4) = adapter1.cast::<Dxgi::IDXGIAdapter4>() {
+        Some(DxgiAdapter::Adapter4(adapter4))
+    } else {
+        let adapter3 = adapter1.cast::<Dxgi::IDXGIAdapter3>().unwrap();
+        Some(DxgiAdapter::Adapter3(adapter3))
+    }
+}
+
 pub fn enumerate_adapters(factory: DxgiFactory) -> Vec<DxgiAdapter> {
     let mut adapters = Vec::with_capacity(8);
 
@@ -93,19 +106,42 @@ pub fn enumerate_adapters(factory: DxgiFactory) -> Vec<DxgiAdapter> {
             }
         };
 
-        if !should_keep_adapter(&adapter1) {
-            continue;
-        }
-
-        if let Ok(adapter4) = adapter1.cast::<Dxgi::IDXGIAdapter4>() {
-            adapters.push(DxgiAdapter::Adapter4(adapter4));
-        } else {
-            let adapter3 = adapter1.cast::<Dxgi::IDXGIAdapter3>().unwrap();
-            adapters.push(DxgiAdapter::Adapter3(adapter3));
-        }
+        adapters.extend(wrap_adapter(adapter1));
     }
 
     adapters
+}
+
+/// [`enumerate_adapters`], ordered by `IDXGIFactory6::EnumAdapterByGpuPreference`
+/// instead of `EnumAdapters1`'s primary-display-first order. Returns `None`
+/// when DXGI 1.6 is unavailable (Windows 10 before 1803); the caller decides
+/// how to rank adapters without OS preference ordering.
+pub fn enumerate_adapters_by_gpu_preference(
+    factory: &DxgiFactory,
+    preference: Dxgi::DXGI_GPU_PREFERENCE,
+) -> Option<Vec<DxgiAdapter>> {
+    let DxgiFactory::Factory6(factory6) = factory else {
+        return None;
+    };
+
+    let mut adapters = Vec::with_capacity(8);
+
+    for cur_index in 0.. {
+        profiling::scope!("IDXGIFactory6::EnumAdapterByGpuPreference");
+        let adapter1: Dxgi::IDXGIAdapter1 =
+            match unsafe { factory6.EnumAdapterByGpuPreference(cur_index, preference) } {
+                Ok(a) => a,
+                Err(e) if e.code() == Dxgi::DXGI_ERROR_NOT_FOUND => break,
+                Err(e) => {
+                    log::error!("Failed enumerating adapters by GPU preference: {e}");
+                    break;
+                }
+            };
+
+        adapters.extend(wrap_adapter(adapter1));
+    }
+
+    Some(adapters)
 }
 
 #[derive(Clone, Debug)]
