@@ -10,10 +10,7 @@ use core::{
     ptr,
     time::Duration,
 };
-use std::{
-    sync::mpsc::{sync_channel, SyncSender},
-    thread,
-};
+use std::{sync::mpsc::sync_channel, thread};
 
 use glow::HasContext;
 use glutin_wgl_sys::wgl_extra::{
@@ -345,9 +342,24 @@ fn get_global_window_class() -> Result<CString, crate::InstanceError> {
 
 struct InstanceDevice {
     dc: Gdi::HDC,
+}
 
-    /// This is used to keep the thread owning `dc` alive until this struct is dropped.
-    _tx: SyncSender<()>,
+const INSTANCE_THREAD_SHUTDOWN: u32 = WindowsAndMessaging::WM_APP;
+
+impl Drop for InstanceDevice {
+    fn drop(&mut self) {
+        let window = unsafe { Gdi::WindowFromDC(self.dc) };
+        if let Err(e) = unsafe {
+            WindowsAndMessaging::PostMessageA(
+                Some(window),
+                INSTANCE_THREAD_SHUTDOWN,
+                Foundation::WPARAM::default(),
+                Foundation::LPARAM::default(),
+            )
+        } {
+            log::error!("failed to request instance thread shutdown: {e}");
+        }
+    }
 }
 
 fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
@@ -370,7 +382,6 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
 
     let window_class = get_global_window_class()?;
 
-    let (drop_tx, drop_rx) = sync_channel(0);
     let (setup_tx, setup_rx) = sync_channel(0);
 
     // We spawn a thread which owns the hidden window for this instance.
@@ -430,8 +441,23 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
             match setup {
                 Ok((_window, dc)) => {
                     setup_tx.send(Ok(SendDc(dc.device))).unwrap();
-                    // Wait for the shutdown event to free the window and device context handle.
-                    drop_rx.recv().ok();
+                    loop {
+                        let mut message = unsafe { mem::zeroed::<WindowsAndMessaging::MSG>() };
+                        match unsafe {
+                            WindowsAndMessaging::GetMessageA(&mut message, None, 0, 0).0
+                        } {
+                            -1 => {
+                                log::error!(
+                                    "failed to retrieve instance thread message: {}",
+                                    Error::from_thread()
+                                );
+                                break;
+                            }
+                            0 => break,
+                            _ if message.message == INSTANCE_THREAD_SHUTDOWN => break,
+                            _ => {}
+                        }
+                    }
                 }
                 Err(err) => {
                     setup_tx.send(Err(err)).unwrap();
@@ -444,7 +470,7 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
 
     let dc = setup_rx.recv().unwrap()?.0;
 
-    Ok(InstanceDevice { dc, _tx: drop_tx })
+    Ok(InstanceDevice { dc })
 }
 
 impl crate::Instance for Instance {
