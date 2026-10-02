@@ -29,3 +29,4 @@ wgpu-types = { workspace = true, features = ["serde"] }
 naga-types = { workspace = true }
 serde = { workspace = true }
 hashbrown = { workspace = true }
+bitflags = { workspace = true, features = ["serde"] }

@@ -272,12 +272,21 @@ pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
 
-pub struct BufferMapOperation {
-    pub mode: MapMode,
+pub struct BufferMapOperation<M = MapMode> {
+    pub mode: M,
     pub callback: Option<BufferMapCallback>,
 }
 
-impl fmt::Debug for BufferMapOperation {
+impl<M> BufferMapOperation<M> {
+    fn use_dummy_mode(self) -> BufferMapOperation {
+        BufferMapOperation {
+            mode: MapMode::Read,
+            callback: self.callback,
+        }
+    }
+}
+
+impl<M: fmt::Debug> fmt::Debug for BufferMapOperation<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("BufferMapOperation")
             .field("mode", &self.mode)
@@ -352,6 +361,41 @@ pub enum BufferAccessError {
         size: wgt::BufferAddress,
         buffer_size: wgt::BufferAddress,
     },
+    #[error(transparent)]
+    InvalidMapMode(#[from] BadMapMode),
+}
+
+#[derive(Clone, Debug, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[error("Invalid map mode: {0:?}, exactly one of READ or WRITE map mode must be set")]
+pub struct BadMapMode(MapModeFlags);
+
+bitflags::bitflags! {
+    /// Corresponds to [WebGPU `GPUMapModeFlags`](https://gpuweb.github.io/gpuweb/#dictdef-gpumapmodeflags).
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    pub struct MapModeFlags: u32 {
+        const READ = 0x0001;
+        const WRITE = 0x0002;
+    }
+}
+
+impl From<core::convert::Infallible> for BadMapMode {
+    fn from(_: core::convert::Infallible) -> Self {
+        unreachable!()
+    }
+}
+
+impl TryFrom<MapModeFlags> for MapMode {
+    type Error = BadMapMode;
+
+    fn try_from(mode: MapModeFlags) -> Result<Self, Self::Error> {
+        match mode {
+            m if m == MapModeFlags::READ => Ok(MapMode::Read),
+            m if m == MapModeFlags::WRITE => Ok(MapMode::Write),
+            m => Err(BadMapMode(m)),
+        }
+    }
 }
 
 impl WebGpuError for BufferAccessError {
@@ -374,7 +418,8 @@ impl WebGpuError for BufferAccessError {
             | Self::OutOfBoundsEndOffsetOverrun { .. }
             | Self::MapAborted
             | Self::MapStartOffsetOverrun { .. }
-            | Self::MapEndOffsetOverrun { .. } => ErrorType::Validation,
+            | Self::MapEndOffsetOverrun { .. }
+            | Self::InvalidMapMode(_) => ErrorType::Validation,
         }
     }
 }
@@ -430,7 +475,7 @@ impl WebGpuError for InvalidResourceError {
     }
 }
 
-pub type BufferAccessResult = Result<(), BufferAccessError>;
+pub type BufferAccessResult = Result<MapMode, BufferAccessError>;
 
 #[derive(Debug)]
 pub(crate) struct BufferPendingMapping {
@@ -699,12 +744,16 @@ impl Buffer {
     /// Schedule buffer mapping.
     ///
     /// `op.callback` is guaranteed to be called, regardless of the outcome.
-    pub fn map_async(
+    pub fn map_async<M>(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
-        op: BufferMapOperation,
-    ) -> Option<SubmissionIndex> {
+        op: BufferMapOperation<M>,
+    ) -> Option<SubmissionIndex>
+    where
+        M: fmt::Debug + TryInto<MapMode> + Copy,
+        M::Error: Into<BadMapMode>,
+    {
         profiling::scope!("Buffer::map_async");
         api_log!(
             "Buffer::map_async {:?} offset {offset:?} size {size:?} op: {op:?}",
@@ -744,18 +793,35 @@ impl Buffer {
     ///
     /// A return value of `Ok(0)` means that mapping does not need to wait on the queue, but
     /// it does not mean that the buffer has already been mapped.
-    fn try_map_async(
+    fn try_map_async<M>(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
-        op: BufferMapOperation,
-    ) -> Result<SubmissionIndex, (BufferMapOperation, BufferAccessError)> {
+        op: BufferMapOperation<M>,
+    ) -> Result<SubmissionIndex, (BufferMapOperation, BufferAccessError)>
+    where
+        M: fmt::Debug + TryInto<MapMode> + Copy,
+        M::Error: Into<BadMapMode>,
+    {
         let range_size = if let Some(size) = size {
             size
         } else {
             self.size.saturating_sub(offset)
         };
 
+        let device = &self.device;
+        if let Err(e) = device.check_is_valid() {
+            return Err((op.use_dummy_mode(), e.into()));
+        }
+
+        let mode = match op.mode.try_into() {
+            Ok(mode) => mode,
+            Err(e) => return Err((op.use_dummy_mode(), e.into().into())),
+        };
+        let op = BufferMapOperation {
+            mode,
+            callback: op.callback,
+        };
         if let Err(e) = self.check_is_valid() {
             return Err((op, e.into()));
         }
@@ -801,11 +867,6 @@ impl Buffer {
         };
 
         if let Err(e) = self.check_usage(pub_usage) {
-            return Err((op, e.into()));
-        }
-
-        let device = &self.device;
-        if let Err(e) = device.check_is_valid() {
             return Err((op, e.into()));
         }
 
@@ -1014,7 +1075,7 @@ impl Buffer {
                         range: pending_mapping.range.clone(),
                         host,
                     };
-                    Ok(())
+                    Ok(host)
                 }
                 Err(e) => Err(e),
             }
@@ -1027,7 +1088,7 @@ impl Buffer {
                 range: pending_mapping.range,
                 host: pending_mapping.op.mode,
             };
-            Ok(())
+            Ok(pending_mapping.op.mode)
         };
         Some((pending_mapping.op, status))
     }

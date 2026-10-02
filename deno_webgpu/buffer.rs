@@ -37,13 +37,10 @@ pub enum BufferError {
   Canceled(#[from] oneshot::Canceled),
   #[class("DOMExceptionOperationError")]
   #[error(transparent)]
-  Access(wgpu_core::resource::BufferAccessError),
+  Operation(wgpu_core::resource::BufferAccessError),
   #[class("DOMExceptionAbortError")]
-  #[error("{0}")]
-  Aborted(&'static str),
-  #[class("DOMExceptionOperationError")]
-  #[error("{0}")]
-  Operation(&'static str),
+  #[error(transparent)]
+  Aborted(wgpu_core::resource::BufferAccessError),
   #[class(inherit)]
   #[error(transparent)]
   Other(#[from] JsErrorBox),
@@ -52,10 +49,13 @@ pub enum BufferError {
 impl From<wgpu_core::resource::BufferAccessError> for BufferError {
   fn from(err: wgpu_core::resource::BufferAccessError) -> Self {
     match err {
-      wgpu_core::resource::BufferAccessError::Device(
+      e @ wgpu_core::resource::BufferAccessError::Device(
         wgpu_core::device::DeviceError::Lost,
-      ) => BufferError::Aborted("Device lost"),
-      err => BufferError::Access(err),
+      )
+      | e @ wgpu_core::resource::BufferAccessError::MapAborted => {
+        BufferError::Aborted(e)
+      }
+      e => BufferError::Operation(e),
     }
   }
 }
@@ -127,21 +127,6 @@ impl GPUBuffer {
     #[webidl(default = 0)] offset: u64,
     #[webidl] size: Option<u64>,
   ) -> Result<(), BufferError> {
-    let read_mode = (mode & 0x0001) == 0x0001;
-    let write_mode = (mode & 0x0002) == 0x0002;
-    if (read_mode && write_mode) || (!read_mode && !write_mode) {
-      return Err(BufferError::Operation(
-        "exactly one of READ or WRITE map mode must be set",
-      ));
-    }
-
-    let mode = if read_mode {
-      MapMode::Read
-    } else {
-      assert!(write_mode);
-      MapMode::Write
-    };
-
     {
       *self.map_state.borrow_mut() = "pending";
     }
@@ -158,16 +143,17 @@ impl GPUBuffer {
         offset,
         size,
         wgpu_core::resource::BufferMapOperation {
-          mode,
+          mode: wgpu_core::resource::MapModeFlags::from_bits_retain(mode),
           callback: Some(callback),
         },
       );
     }
 
-    let done = Rc::new(RefCell::new(false));
+    let done = Rc::new(RefCell::new(None));
     let done_ = done.clone();
+    let done__ = done.clone();
     let device_poll_fut = async move {
-      while !*done.borrow() {
+      while done.borrow().is_none() {
         {
           self
             .wgpu_device
@@ -180,16 +166,16 @@ impl GPUBuffer {
     };
 
     let receiver_fut = async move {
-      receiver.await??;
+      let mode = receiver.await??;
       let mut done = done_.borrow_mut();
-      *done = true;
+      *done = Some(mode);
       Ok::<(), BufferError>(())
     };
 
     tokio::try_join!(device_poll_fut, receiver_fut)?;
 
     *self.map_state.borrow_mut() = "mapped";
-    *self.map_mode.borrow_mut() = Some(mode);
+    *self.map_mode.borrow_mut() = *done__.borrow();
 
     Ok(())
   }
@@ -203,7 +189,7 @@ impl GPUBuffer {
     let (slice_pointer, range_size) = self
       .wgpu_buffer
       .get_mapped_range(offset, size)
-      .map_err(BufferError::Access)?;
+      .map_err(BufferError::Operation)?;
 
     let mode = self.map_mode.borrow();
     let mode = mode.as_ref().unwrap();

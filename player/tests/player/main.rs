@@ -55,7 +55,7 @@ struct Test<'a> {
     actions: Vec<wgc::device::trace::Action<'a, PointerReferences>>,
 }
 
-fn map_callback(status: Result<(), wgc::resource::BufferAccessError>) {
+fn map_callback(status: Result<wgt::MapMode, wgc::resource::BufferAccessError>) {
     if let Err(e) = status {
         panic!("Buffer map error: {e}");
     }

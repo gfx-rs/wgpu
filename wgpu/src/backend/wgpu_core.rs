@@ -1809,7 +1809,7 @@ impl dispatch::BufferInterface for CoreBuffer {
         let operation = wgc::resource::BufferMapOperation {
             mode,
             callback: Some(Box::new(|status| {
-                let res = status.map_err(|_| crate::BufferAsyncError);
+                let res = status.map(|_| ()).map_err(|_| crate::BufferAsyncError);
                 callback(res);
             })),
         };
