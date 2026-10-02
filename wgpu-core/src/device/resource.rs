@@ -371,6 +371,31 @@ impl Drop for Device {
     }
 }
 
+/// Tile shapes that appear in `properties`, as `coop_mat{columns}x{rows}`.
+///
+/// A configuration with dimensions M, N, K contributes A as K×M, B as N×K, and C as N×M.
+fn cooperative_matrix_shapes(
+    properties: &[wgt::CooperativeMatrixProperties],
+) -> Vec<naga::valid::CooperativeMatrixShape> {
+    let mut shapes = Vec::new();
+    for prop in properties {
+        for (columns, rows) in [
+            (prop.k_size, prop.m_size),
+            (prop.n_size, prop.k_size),
+            (prop.n_size, prop.m_size),
+        ] {
+            let Some(shape) = naga::valid::CooperativeMatrixShape::from_dimensions(columns, rows)
+            else {
+                continue;
+            };
+            if !shapes.contains(&shape) {
+                shapes.push(shape);
+            }
+        }
+    }
+    shapes
+}
+
 impl Device {
     pub fn features(&self) -> &wgt::Features {
         &self.features
@@ -2591,6 +2616,9 @@ impl Device {
             self.downlevel.flags,
             naga::valid::ValidationFlags::all(),
         )
+        .cooperative_matrix_shapes(cooperative_matrix_shapes(
+            &self.adapter.cooperative_matrix_properties(),
+        ))
         .validate(&module)
         .map_err(|inner| {
             pipeline::CreateShaderModuleError::Validation(naga::error::ShaderError {
