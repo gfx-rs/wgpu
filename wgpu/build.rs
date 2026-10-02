@@ -2,7 +2,7 @@ fn main() {
     cfg_aliases::cfg_aliases! {
         native: { not(target_family = "wasm") },
         Emscripten: { all(target_family = "wasm", target_os = "emscripten") },
-        web: { all(target_family = "wasm", not(Emscripten), feature = "web") },
+        web: { all(target_family = "wasm", feature = "web") },
 
         send_sync: { any(
             native,
@@ -10,8 +10,8 @@ fn main() {
         ) },
 
         // Backends - keep this in sync with `wgpu-core/Cargo.toml` & docs in `wgpu/Cargo.toml`
-        webgpu: { all(not(native), not(Emscripten), feature = "webgpu") },
-        webgl: { all(not(native), not(Emscripten), feature = "webgl") },
+        webgpu: { all(not(native), feature = "webgpu") },
+        webgl: { all(not(native), feature = "webgl") },
         dx12: { all(target_os = "windows", feature = "dx12") },
         metal: { all(target_vendor = "apple", feature = "metal") },
         vulkan: { any(

@@ -234,8 +234,9 @@ smallvec.workspace = true
 ###############
 # Webassembly #
 ###############
-[target.'cfg(all(target_family = "wasm", not(target_os = "emscripten")))'.dependencies]
-# Needed for all backends
+[target.'cfg(all(target_family = "wasm" ))'.dependencies]
+
+# Needed for all wasm32 backends (incl. Emscripten, see below)
 js-sys = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true, features = [
@@ -256,9 +257,13 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 # Emscripten #
 ##############
 [target.'cfg(target_os = "emscripten")'.dependencies]
-wgpu-core = { workspace = true, default-features = true }
-wgpu-hal = { workspace = true, default-features = true, features = ["portable-atomic"] }
 
+# wgpu currently does not use the Emscripten ABI for GPU calls.
+# When the WebGPU feature is enabled, Emscripten therefore uses the same
+# JavaScript/WebGPU path as other wasm32 targets.
+
+wgpu-core.workspace = true
+wgpu-hal.workspace = true
 smallvec.workspace = true
 
 [dev-dependencies]
