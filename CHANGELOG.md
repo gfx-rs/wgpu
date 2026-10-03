@@ -277,6 +277,10 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Fix `pop_error_scope` panics when it returns `null`. By @beicause in [#10039](https://github.com/gfx-rs/wgpu/pull/10039).
 - Fix `Device::on_uncaptured_error` never firing in browsers that do not implement `GPUDevice.onuncapturederror`, such as Safari, by listening for the `uncapturederror` event instead of assigning to that attribute. By @zemse in [#10270](https://github.com/gfx-rs/wgpu/pull/10270).
 
+#### Emscripten
+
+- Fix support for Emscripten (v6.0.10+) by making it use websys. By @almarklein in [#10515](https://github.com/gfx-rs/wgpu/pull/10515)
+
 ### Performance
 
 - Added explicit `Send` and `Sync` implementations to key `wgpu` types so that the compiler can do less work checking those bounds. If you previously added a `#![recursion_limit = ...]` attribute to your crate due to overflow errors involving `wgpu` types, you may now be able to remove it. By @kpreid in [#10177](https://github.com/gfx-rs/wgpu/pull/10177).
