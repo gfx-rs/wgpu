@@ -94,7 +94,6 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     let mut tests = Vec::new();
 
     adapter::all_tests(&mut tests);
-
     allocator_report::all_tests(&mut tests);
     bgra8unorm_storage::all_tests(&mut tests);
     buffer_resource_limits::all_tests(&mut tests);
