@@ -55,6 +55,7 @@ impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + Sync + 'static 
 /// Corresponds to the [`GPUErrorFilter`] type in the WebGPU API.
 ///
 /// [`GPUErrorFilter`]: https://gpuweb.github.io/gpuweb/#enumdef-gpuerrorfilter
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum ErrorFilter {
