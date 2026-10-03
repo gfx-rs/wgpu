@@ -1,6 +1,7 @@
 use wgpu::util::DeviceExt;
 use wgpu_test::{
-    apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    apply, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters, TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
@@ -14,6 +15,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         MESH_DRAW_DIVERGENT,
         MESH_DRAW_INDIRECT,
         MESH_MULTI_DRAW_INDIRECT,
+        MESH_MULTI_DRAW_INDIRECT_COLOR_READBACK,
         MESH_MULTI_DRAW_INDIRECT_COUNT,
         MESH_PIPELINE_BASIC_MESH_NO_DRAW,
         MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW,
@@ -242,9 +244,122 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
         .unwrap();
 }
 
+async fn mesh_multi_draw_indirect_color_readback(ctx: TestingContext) {
+    let device = &ctx.device;
+    let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &[],
+        immediate_size: 0,
+    });
+    let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
+        label: None,
+        layout: Some(&layout),
+        task: Some(wgpu::TaskState {
+            module: &shader,
+            entry_point: Some("ts_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        mesh: wgpu::MeshState {
+            module: &shader,
+            entry_point: Some("ms_main"),
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            cull_mode: Some(wgpu::Face::Back),
+            ..Default::default()
+        },
+        depth_stencil: None,
+        multisample: Default::default(),
+        multiview: None,
+        cache: None,
+    });
+
+    // Enough draws to take Metal's ICB path (`ICB_MIN_DRAW_COUNT`).
+    let indirect_args = [wgpu::util::DispatchIndirectArgs { x: 1, y: 1, z: 1 }; 512];
+    let indirect_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: None,
+        usage: wgpu::BufferUsages::INDIRECT,
+        contents: bytemuck::cast_slice(&indirect_args),
+    });
+
+    let texture_size = wgpu::Extent3d {
+        width: 64,
+        height: 64,
+        depth_or_array_layers: 1,
+    };
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: texture_size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let readback = ReadbackBuffers::new(device, &texture);
+
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &texture_view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    // Transparent black, so an untouched target reads back as
+                    // all zeros and the assertion below cannot pass vacuously.
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        pass.set_pipeline(&pipeline);
+        pass.multi_draw_mesh_tasks_indirect(&indirect_buffer, 0, indirect_args.len() as u32);
+    }
+
+    readback.copy_from(device, &mut encoder, &texture);
+    ctx.queue.submit([encoder.finish()]);
+
+    assert!(
+        !readback.are_zero(&ctx).await,
+        "multi_draw_mesh_tasks_indirect should render something over the transparent clear"
+    );
+}
+
 fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
+    let params = TestParameters::default();
+    // Metal's shader validation layer (MTL_SHADER_VALIDATION=1, which the
+    // harness enables) makes GPU-generated mesh commands in indirect command
+    // buffers execute without drawing anything on macOS 26 / Apple9, while the
+    // same commands draw correctly without it. The multi-draw variants can be
+    // lowered to ICBs on Metal, so they run without shader validation, as the
+    // ray-tracing tests already do.
+    let params = match draw_type {
+        DrawType::MultiIndirect | DrawType::MultiIndirectCount => {
+            params.disable_mtl_shader_validation()
+        }
+        DrawType::Standard | DrawType::Indirect => params,
+    };
     GpuTestConfiguration::new().parameters(
-        TestParameters::default()
+        params
             .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(
                 wgpu::Features::EXPERIMENTAL_MESH_SHADER
@@ -419,6 +534,10 @@ pub static MESH_MULTI_DRAW_INDIRECT: GpuTestConfiguration =
             },
         );
     });
+#[apply(gpu_test!)]
+pub static MESH_MULTI_DRAW_INDIRECT_COLOR_READBACK: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::MultiIndirect)
+        .run_async(mesh_multi_draw_indirect_color_readback);
 #[apply(gpu_test!)]
 pub static MESH_MULTI_DRAW_INDIRECT_COUNT: GpuTestConfiguration =
     default_gpu_test_config(DrawType::MultiIndirectCount).run_sync(|ctx| {
