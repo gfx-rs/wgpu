@@ -20,6 +20,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("data"),
                         ty: 1,
                         binding: None,
@@ -74,6 +75,7 @@
                     name: Some("n_base"),
                     ty: 0,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: Some((
@@ -269,6 +271,7 @@
                         name: Some("global_id"),
                         ty: 3,
                         binding: Some(BuiltIn(GlobalInvocationId)),
+                        immutable_pointee: false,
                     ),
                 ],
                 result: None,

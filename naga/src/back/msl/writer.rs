@@ -652,7 +652,7 @@ impl crate::AddressSpace {
             | Self::Immediate
             | Self::Handle
             | Self::TaskPayload => true,
-            Self::Function => false,
+            Self::Function | Self::PhysicalStorage => false,
             Self::RayPayload | Self::IncomingRayPayload => unreachable!(),
         }
     }
@@ -664,7 +664,7 @@ impl crate::AddressSpace {
             // rely on the actual use of a global by functions. This means we
             // may end up with "const" even if the binding is read-write,
             // and that should be OK.
-            Self::Storage { .. } => true,
+            Self::Storage { .. } | Self::PhysicalStorage => true,
             Self::TaskPayload => true,
             Self::RayPayload | Self::IncomingRayPayload => unimplemented!(),
             // These should always be read-write.
@@ -680,7 +680,7 @@ impl crate::AddressSpace {
         match self {
             Self::Handle => None,
             Self::Uniform | Self::Immediate => Some("constant"),
-            Self::Storage { .. } => Some("device"),
+            Self::Storage { .. } | Self::PhysicalStorage => Some("device"),
             // note for `RayPayload`, this probably needs to be emulated as a
             // private variable, as metal has essentially an inout input
             // for where it is passed.
@@ -1963,6 +1963,7 @@ impl<W: Write> Writer<W> {
             crate::Literal::U16(value) => {
                 write!(self.out, "static_cast<ushort>({value})")?;
             }
+            crate::Literal::I8(_) | crate::Literal::U8(_) => return Err(Error::Int8Unsupported),
             crate::Literal::I16(value) => {
                 write!(self.out, "static_cast<short>({value})")?;
             }
@@ -2956,6 +2957,14 @@ impl<W: Write> Writer<W> {
                         )?;
                     }
                 }
+            }
+            crate::Expression::PointerCast { .. }
+            | crate::Expression::PointerOffset { .. }
+            | crate::Expression::MatrixLoad { .. }
+            | crate::Expression::PointerAlignment { .. }
+            | crate::Expression::CoherentPointer { .. }
+            | crate::Expression::AtomicPointer { .. } => {
+                return Err(Error::PhysicalStorageUnsupported)
             }
             crate::Expression::As {
                 expr,
@@ -4446,6 +4455,9 @@ impl<W: Write> Writer<W> {
                     }
                     writeln!(self.out, ");")?;
                 }
+                crate::Statement::MatrixStore { .. } => {
+                    return Err(Error::PhysicalStorageUnsupported)
+                }
                 crate::Statement::CooperativeStore { target, ref data } => {
                     write!(self.out, "{level}simdgroup_store(")?;
                     self.put_expression(target, &context.expression, true)?;
@@ -4565,6 +4577,16 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
+        if module
+            .types
+            .iter()
+            .any(|(_, ty)| ty.inner.pointer_space() == Some(crate::AddressSpace::PhysicalStorage))
+        {
+            return Err(Error::PhysicalStorageUnsupported);
+        }
+        if proc::module_uses_int8(module) {
+            return Err(Error::Int8Unsupported);
+        }
         self.emit_int_div_checks = options.emit_int_div_checks;
         self.names.clear();
         self.namer.reset(
@@ -6795,6 +6817,14 @@ template <typename A>
                 } => {
                     self.write_wrapped_math_function(module, func_ctx, fun, arg, arg1, arg2, arg3)?;
                 }
+                crate::Expression::PointerCast { .. }
+                | crate::Expression::PointerOffset { .. }
+                | crate::Expression::MatrixLoad { .. }
+                | crate::Expression::PointerAlignment { .. }
+                | crate::Expression::CoherentPointer { .. }
+                | crate::Expression::AtomicPointer { .. } => {
+                    return Err(Error::PhysicalStorageUnsupported)
+                }
                 crate::Expression::As {
                     expr,
                     kind,
@@ -7208,6 +7238,9 @@ template <typename A>
                         continue;
                     }
                     match var.space {
+                        crate::AddressSpace::PhysicalStorage => {
+                            return Err(Error::PhysicalStorageUnsupported)
+                        }
                         crate::AddressSpace::Uniform
                         | crate::AddressSpace::Storage { .. }
                         | crate::AddressSpace::Handle => {

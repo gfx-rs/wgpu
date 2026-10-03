@@ -199,6 +199,10 @@ enum ResolvedInterpolation {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("8-bit integers are only supported by the SPIR-V backend")]
+    Int8Unsupported,
+    #[error("physical storage buffer pointers are unsupported by this backend")]
+    PhysicalStorageUnsupported,
     #[error(transparent)]
     Format(#[from] FmtError),
     #[error("bind target {0:?} is empty")]

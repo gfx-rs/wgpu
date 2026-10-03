@@ -657,6 +657,7 @@ impl ParsingContext<'_> {
                 align = member_alignment.max(align);
 
                 members.push(StructMember {
+                    access: None,
                     name: Some(name),
                     ty: info.ty,
                     binding: None,

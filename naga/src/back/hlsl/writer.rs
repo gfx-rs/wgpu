@@ -327,6 +327,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module_info: &valid::ModuleInfo,
         fragment_entry_point: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<super::ReflectionInfo, Error> {
+        if module
+            .types
+            .iter()
+            .any(|(_, ty)| ty.inner.pointer_space() == Some(crate::AddressSpace::PhysicalStorage))
+        {
+            return Err(Error::PhysicalStorageUnsupported);
+        }
+        if proc::module_uses_int8(module) {
+            return Err(Error::Int8Unsupported);
+        }
         self.reset(module);
 
         if module.uses_mesh_shaders() && self.options.shader_model < ShaderModel::V6_5 {
@@ -1069,6 +1079,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-variable-register
         let register_ty = match global.space {
+            crate::AddressSpace::PhysicalStorage => return Err(Error::PhysicalStorageUnsupported),
             crate::AddressSpace::Function => unreachable!("Function address space"),
             crate::AddressSpace::Private => {
                 write!(self.out, "static ")?;
@@ -3066,6 +3077,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::MatrixStore { .. } => return Err(Error::PhysicalStorageUnsupported),
             Statement::CooperativeStore { .. } => unimplemented!(),
             Statement::RayPipelineFunction(_) => unreachable!(),
             Statement::DebugPrintf { .. } => unimplemented!(),
@@ -3622,6 +3634,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
             crate::Literal::F16(value) => write!(self.out, "{value:?}h")?,
             crate::Literal::U16(value) => write!(self.out, "uint16_t({value})")?,
+            crate::Literal::I8(_) | crate::Literal::U8(_) => return Err(Error::Int8Unsupported),
             crate::Literal::I16(value) => write!(self.out, "int16_t({value})")?,
             crate::Literal::U32(value) => write!(self.out, "{value}u")?,
             // `-2147483648` is parsed by some compilers as unary negation of
@@ -3934,6 +3947,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     let needs_bound_check = self.options.restrict_indexing
                         && !indexing_binding_array
                         && match resolved.pointer_space() {
+                            Some(crate::AddressSpace::PhysicalStorage) => {
+                                return Err(Error::PhysicalStorageUnsupported)
+                            }
                             Some(
                                 crate::AddressSpace::Function
                                 | crate::AddressSpace::Private
@@ -4427,6 +4443,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_expr(module, expr, func_ctx)?;
                 write!(self.out, ")")?;
             }
+            Expression::PointerCast { .. }
+            | Expression::PointerOffset { .. }
+            | Expression::MatrixLoad { .. }
+            | Expression::PointerAlignment { .. }
+            | Expression::CoherentPointer { .. }
+            | Expression::AtomicPointer { .. } => return Err(Error::PhysicalStorageUnsupported),
             Expression::As {
                 expr,
                 kind,

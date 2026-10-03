@@ -167,6 +167,7 @@ pub(in crate::back::glsl) const fn glsl_storage_qualifier(
     use crate::AddressSpace as As;
 
     match space {
+        As::PhysicalStorage => None,
         As::Function => None,
         As::Private => None,
         As::Storage { .. } => Some("buffer"),

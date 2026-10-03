@@ -124,6 +124,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 #### Naga
 
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
+- Add experimental physical storage buffer pointers (Vulkan buffer device addresses) to Naga IR, behind the new `Capabilities::PHYSICAL_STORAGE_BUFFER_ADDRESSES` validation capability. Only IR built directly and the SPIR-V frontend/backend support them; WGSL, GLSL, HLSL and MSL reject them, and safe `wgpu` shader-module creation rejects the capability, so native pointers are reachable only through shader passthrough. Includes `AddressSpace::PhysicalStorage`, `PointerCast`/`PointerOffset` address arithmetic, scalar-layout records, runtime-sized pointees, null pointers, explicit alignment, scoped coherent accesses, checked atomics with an independent compare-exchange failure order, `i8`/`u8` scalars, explicit matrix load/store layouts, cooperative matrix access, per-member `StructMember::access` restrictions, and `FunctionArgument::immutable_pointee`. By @nickdarnell in [#NNNNN](https://github.com/gfx-rs/wgpu/pull/NNNNN).
 
 #### Hal
 
@@ -174,6 +175,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - `naga::valid::ValidationError` is now always returned boxed, to avoid `clippy::large_result_err` warning. By @beicause in [#9612](https://github.com/gfx-rs/wgpu/pull/9612)
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
+- `naga::FunctionArgument` has a new `immutable_pointee: bool` field and `naga::StructMember` has a new `access: Option<StorageAccess>` field, for physical storage pointers. Code constructing these structs must set them; use `false` and `None` to keep the previous behavior. Serialized modules without the fields still deserialize. By @nickdarnell in [#NNNNN](https://github.com/gfx-rs/wgpu/pull/NNNNN).
 
 #### Metal
 

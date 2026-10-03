@@ -29,18 +29,21 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("a"),
                         ty: 0,
                         binding: None,
                         offset: 0,
                     ),
                     (
+                        access: None,
                         name: Some("b"),
                         ty: 1,
                         binding: None,
                         offset: 16,
                     ),
                     (
+                        access: None,
                         name: Some("c"),
                         ty: 2,
                         binding: None,
@@ -55,6 +58,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("value"),
                         ty: 2,
                         binding: None,
@@ -147,36 +151,42 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("_matrix"),
                         ty: 6,
                         binding: None,
                         offset: 0,
                     ),
                     (
+                        access: None,
                         name: Some("matrix_array"),
                         ty: 8,
                         binding: None,
                         offset: 64,
                     ),
                     (
+                        access: None,
                         name: Some("atom"),
                         ty: 9,
                         binding: None,
                         offset: 96,
                     ),
                     (
+                        access: None,
                         name: Some("atom_arr"),
                         ty: 10,
                         binding: None,
                         offset: 100,
                     ),
                     (
+                        access: None,
                         name: Some("arr"),
                         ty: 12,
                         binding: None,
                         offset: 144,
                     ),
                     (
+                        access: None,
                         name: Some("data"),
                         ty: 13,
                         binding: None,
@@ -202,6 +212,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("m"),
                         ty: 15,
                         binding: None,
@@ -245,6 +256,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("am"),
                         ty: 19,
                         binding: None,
@@ -322,6 +334,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("x"),
                         ty: 0,
                         binding: None,
@@ -373,6 +386,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("m"),
                         ty: 2,
                         binding: None,
@@ -387,6 +401,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("delicious"),
                         ty: 2,
                         binding: None,
@@ -401,12 +416,14 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("om_nom_nom"),
                         ty: 36,
                         binding: None,
                         offset: 0,
                     ),
                     (
+                        access: None,
                         name: Some("thing"),
                         ty: 0,
                         binding: None,
@@ -1608,6 +1625,7 @@
                     name: Some("foo"),
                     ty: 21,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: Some((
@@ -1642,6 +1660,7 @@
                     name: Some("a"),
                     ty: 23,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: Some((
@@ -1685,6 +1704,7 @@
                     name: Some("p"),
                     ty: 26,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: None,
@@ -1714,6 +1734,7 @@
                     name: Some("foo"),
                     ty: 28,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: None,
@@ -1851,6 +1872,7 @@
                     name: Some("p"),
                     ty: 30,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: Some((
@@ -1889,6 +1911,7 @@
                     name: Some("p"),
                     ty: 30,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: None,
@@ -1926,6 +1949,7 @@
                     name: Some("p"),
                     ty: 32,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: Some((
@@ -1964,6 +1988,7 @@
                     name: Some("p"),
                     ty: 32,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: None,
@@ -2059,6 +2084,7 @@
                     name: Some("value"),
                     ty: 33,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: Some((
@@ -2362,6 +2388,7 @@
                         name: Some("vi"),
                         ty: 0,
                         binding: Some(BuiltIn(VertexIndex)),
+                        immutable_pointee: false,
                     ),
                 ],
                 result: Some((

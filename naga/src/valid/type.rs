@@ -107,12 +107,16 @@ pub enum Disalignment {
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum TypeError {
+    #[error("Struct member {0} has invalid access flags")]
+    InvalidMemberAccess(u32),
     #[error("Capability {0:?} is required")]
     MissingCapability(Capabilities),
     #[error("The {0:?} scalar width {1} is not supported for an atomic")]
     InvalidAtomicWidth(crate::ScalarKind, crate::Bytes),
     #[error("Invalid type for pointer target {0:?}")]
     InvalidPointerBase(Handle<crate::Type>),
+    #[error("Physical storage cannot point to a boolean")]
+    InvalidPhysicalStorageScalar,
     #[error("Unsized types like {base:?} must be in the `Storage` address space, not `{space:?}`")]
     InvalidPointerToUnsized {
         base: Handle<crate::Type>,
@@ -224,13 +228,14 @@ fn check_member_layout(
 /// If a pointer in `space` is permitted to be passed as an argument to a
 /// user-defined function, return `TypeFlags::ARGUMENT`. Otherwise, return
 /// `TypeFlags::empty()`.
-///
-/// Pointers passed as arguments to user-defined functions must be in the
-/// `Function` or `Private` address space.
 const fn ptr_space_argument_flag(space: crate::AddressSpace) -> TypeFlags {
     use crate::AddressSpace as As;
     match space {
-        As::Function | As::Private | As::RayPayload | As::IncomingRayPayload => TypeFlags::ARGUMENT,
+        As::Function
+        | As::Private
+        | As::RayPayload
+        | As::IncomingRayPayload
+        | As::PhysicalStorage => TypeFlags::ARGUMENT,
         As::Uniform
         | As::Storage { .. }
         | As::Handle
@@ -316,7 +321,16 @@ impl super::Validator {
                 _ => scalar.width == 4,
             },
             crate::ScalarKind::Sint => {
-                if scalar.width == 2 {
+                if scalar.width == 1 {
+                    if !self.capabilities.contains(Capabilities::SHADER_INT8) {
+                        return Err(WidthError::MissingCapability {
+                            name: "8-bit integer",
+                            flag: "SHADER_INT8",
+                        });
+                    }
+                    immediates_compatibility = Err(ImmediateError::InvalidScalar(scalar));
+                    true
+                } else if scalar.width == 2 {
                     if !self.capabilities.contains(Capabilities::SHADER_INT16) {
                         return Err(WidthError::MissingCapability {
                             name: "i16",
@@ -340,7 +354,16 @@ impl super::Validator {
                 }
             }
             crate::ScalarKind::Uint => {
-                if scalar.width == 2 {
+                if scalar.width == 1 {
+                    if !self.capabilities.contains(Capabilities::SHADER_INT8) {
+                        return Err(WidthError::MissingCapability {
+                            name: "8-bit integer",
+                            flag: "SHADER_INT8",
+                        });
+                    }
+                    immediates_compatibility = Err(ImmediateError::InvalidScalar(scalar));
+                    true
+                } else if scalar.width == 2 {
                     if !self.capabilities.contains(Capabilities::SHADER_INT16) {
                         return Err(WidthError::MissingCapability {
                             name: "u16",
@@ -390,7 +413,9 @@ impl super::Validator {
             Ti::Scalar(scalar) => {
                 let immediates_compatibility = self.check_width(scalar)?;
                 let shareable = if scalar.kind.is_numeric() {
-                    TypeFlags::IO_SHAREABLE | TypeFlags::HOST_SHAREABLE
+                    let mut flags = TypeFlags::HOST_SHAREABLE;
+                    flags.set(TypeFlags::IO_SHAREABLE, scalar.width != 1);
+                    flags
                 } else {
                     TypeFlags::empty()
                 };
@@ -410,7 +435,9 @@ impl super::Validator {
             Ti::Vector { size, scalar } => {
                 let immediates_compatibility = self.check_width(scalar)?;
                 let shareable = if scalar.kind.is_numeric() {
-                    TypeFlags::IO_SHAREABLE | TypeFlags::HOST_SHAREABLE
+                    let mut flags = TypeFlags::HOST_SHAREABLE;
+                    flags.set(TypeFlags::IO_SHAREABLE, scalar.width != 1);
+                    flags
                 } else {
                     TypeFlags::empty()
                 };
@@ -515,14 +542,28 @@ impl super::Validator {
             Ti::Pointer { base, space } => {
                 use crate::AddressSpace as As;
 
+                if space == As::PhysicalStorage {
+                    self.require_type_capability(Capabilities::PHYSICAL_STORAGE_BUFFER_ADDRESSES)?;
+                }
                 let base_info = &self.types[base.index()];
+                if space == As::PhysicalStorage
+                    && (!base_info.flags.contains(TypeFlags::HOST_SHAREABLE)
+                        || (base_info.storage_layout.is_err()
+                            && !self
+                                .capabilities
+                                .contains(Capabilities::PHYSICAL_STORAGE_SCALAR_LAYOUT))
+                        || gctx.types[base]
+                            .inner
+                            .physical_scalar_layout(gctx)
+                            .is_none())
+                {
+                    return Err(TypeError::InvalidPointerBase(base));
+                }
                 if !base_info.flags.contains(TypeFlags::DATA) {
                     return Err(TypeError::InvalidPointerBase(base));
                 }
 
-                // Runtime-sized values can only live in the `Storage` address
-                // space, so it's useless to have a pointer to such a type in
-                // any other space.
+                // Runtime-sized values can only live in storage address spaces.
                 //
                 // Detecting this problem here prevents the definition of
                 // functions like:
@@ -533,7 +574,7 @@ impl super::Validator {
                 // may also present difficulties in code generation).
                 if !base_info.flags.contains(TypeFlags::SIZED) {
                     match space {
-                        As::Storage { .. } => {}
+                        As::Storage { .. } | As::PhysicalStorage => {}
                         _ => {
                             return Err(TypeError::InvalidPointerToUnsized { base, space });
                         }
@@ -546,14 +587,21 @@ impl super::Validator {
                 // best to set `ARGUMENT` accurately anyway.
                 let argument_flag = ptr_space_argument_flag(space);
 
-                // Pointers cannot be stored in variables, structure members, or
-                // array elements, so we do not mark them as `DATA`.
+                let (data_flags, alignment) = if space == crate::AddressSpace::PhysicalStorage {
+                    (
+                        TypeFlags::DATA | TypeFlags::HOST_SHAREABLE,
+                        Alignment::EIGHT,
+                    )
+                } else {
+                    (TypeFlags::empty(), Alignment::ONE)
+                };
                 TypeInfo::new(
-                    argument_flag
+                    data_flags
+                        | argument_flag
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
                         | TypeFlags::CREATION_RESOLVED,
-                    Alignment::ONE,
+                    alignment,
                 )
             }
             Ti::ValuePointer {
@@ -576,14 +624,25 @@ impl super::Validator {
                 // best to set `ARGUMENT` accurately anyway.
                 let argument_flag = ptr_space_argument_flag(space);
 
-                // Pointers cannot be stored in variables, structure members, or
-                // array elements, so we do not mark them as `DATA`.
+                let (data_flags, alignment) = if space == crate::AddressSpace::PhysicalStorage {
+                    self.require_type_capability(Capabilities::PHYSICAL_STORAGE_BUFFER_ADDRESSES)?;
+                    if scalar.kind == crate::ScalarKind::Bool {
+                        return Err(TypeError::InvalidPhysicalStorageScalar);
+                    }
+                    (
+                        TypeFlags::DATA | TypeFlags::HOST_SHAREABLE,
+                        Alignment::EIGHT,
+                    )
+                } else {
+                    (TypeFlags::empty(), Alignment::ONE)
+                };
                 TypeInfo::new(
-                    argument_flag
+                    data_flags
+                        | argument_flag
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
                         | TypeFlags::CREATION_RESOLVED,
-                    Alignment::ONE,
+                    alignment,
                 )
             }
             Ti::Array { base, size, stride } => {
@@ -690,6 +749,12 @@ impl super::Validator {
                 let mut prev_struct_data: Option<(u32, u32)> = None;
 
                 for (i, member) in members.iter().enumerate() {
+                    if member.access.is_some_and(|access| {
+                        !(access - (crate::StorageAccess::LOAD | crate::StorageAccess::STORE))
+                            .is_empty()
+                    }) {
+                        return Err(TypeError::InvalidMemberAccess(i as u32));
+                    }
                     let base_info = &self.types[member.ty.index()];
                     if !base_info
                         .flags

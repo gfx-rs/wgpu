@@ -62,24 +62,28 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("a"),
                         ty: 0,
                         binding: None,
                         offset: 0,
                     ),
                     (
+                        access: None,
                         name: Some("b"),
                         ty: 0,
                         binding: None,
                         offset: 4,
                     ),
                     (
+                        access: None,
                         name: Some("g"),
                         ty: 0,
                         binding: None,
                         offset: 8,
                     ),
                     (
+                        access: None,
                         name: Some("k"),
                         ty: 0,
                         binding: None,
@@ -94,48 +98,56 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("yuv_conversion_matrix"),
                         ty: 5,
                         binding: None,
                         offset: 0,
                     ),
                     (
+                        access: None,
                         name: Some("gamut_conversion_matrix"),
                         ty: 4,
                         binding: None,
                         offset: 64,
                     ),
                     (
+                        access: None,
                         name: Some("src_tf"),
                         ty: 6,
                         binding: None,
                         offset: 112,
                     ),
                     (
+                        access: None,
                         name: Some("dst_tf"),
                         ty: 6,
                         binding: None,
                         offset: 128,
                     ),
                     (
+                        access: None,
                         name: Some("sample_transform"),
                         ty: 3,
                         binding: None,
                         offset: 144,
                     ),
                     (
+                        access: None,
                         name: Some("load_transform"),
                         ty: 3,
                         binding: None,
                         offset: 168,
                     ),
                     (
+                        access: None,
                         name: Some("size"),
                         ty: 2,
                         binding: None,
                         offset: 192,
                     ),
                     (
+                        access: None,
                         name: Some("num_planes"),
                         ty: 1,
                         binding: None,
@@ -213,6 +225,7 @@
                     name: Some("t"),
                     ty: 8,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: Some((
