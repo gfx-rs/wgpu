@@ -158,6 +158,7 @@ impl crate::Adapter for super::Adapter {
                     features,
                     counters: Default::default(),
                     limits: limits.clone(),
+                    allocations: Default::default(),
                 },
                 queue: super::Queue {
                     shared: Arc::new(QueueShared {

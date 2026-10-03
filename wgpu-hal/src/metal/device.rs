@@ -160,6 +160,22 @@ const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> nt::VertexF
 }
 
 impl super::Device {
+    /// Record a resource this device allocated, keyed by its object's address.
+    fn track_allocation(&self, key: usize, label: Option<&str>, allocated_size: usize) {
+        self.allocations.lock().insert(
+            key,
+            super::LiveAllocation {
+                name: alloc::string::String::from(label.unwrap_or_default()),
+                size: allocated_size as u64,
+            },
+        );
+    }
+
+    /// Forget a destroyed resource. Unknown keys (resources this device did not allocate) are ignored.
+    fn untrack_allocation(&self, key: usize) {
+        self.allocations.lock().remove(&key);
+    }
+
     fn load_shader(
         &self,
         stage: &crate::ProgrammableStage<super::ShaderModule>,
@@ -446,6 +462,7 @@ impl super::Device {
             shared: Arc::new(shared),
             features,
             counters: Default::default(),
+            allocations: Default::default(),
             limits: limits.clone(),
         }
     }
@@ -489,11 +506,17 @@ impl crate::Device for super::Device {
             if let Some(label) = desc.label {
                 raw.setLabel(Some(&NSString::from_str(label)));
             }
+            self.track_allocation(
+                Retained::as_ptr(&raw) as usize,
+                desc.label,
+                raw.allocatedSize(),
+            );
             self.counters.buffers.add(1);
             Ok((super::Buffer { raw }, desc.size))
         })
     }
-    unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {
+    unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
+        self.untrack_allocation(Retained::as_ptr(&buffer.raw) as usize);
         self.counters.buffers.sub(1);
     }
 
@@ -590,6 +613,11 @@ impl crate::Device for super::Device {
             if let Some(label) = desc.label {
                 raw.setLabel(Some(&NSString::from_str(label)));
             }
+            self.track_allocation(
+                Retained::as_ptr(&raw) as usize,
+                desc.label,
+                raw.allocatedSize(),
+            );
 
             self.counters.textures.add(1);
 
@@ -605,7 +633,10 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn destroy_texture(&self, _texture: super::Texture) {
+    unsafe fn destroy_texture(&self, texture: super::Texture) {
+        // A texture this device did not allocate (a surface's drawable, `texture_from_raw`) was never
+        // tracked, so removing it is a no-op.
+        self.untrack_allocation(Retained::as_ptr(&texture.raw) as usize);
         self.counters.textures.sub(1);
     }
 
@@ -2256,6 +2287,42 @@ impl crate::Device for super::Device {
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
         self.counters.as_ref().clone()
+    }
+
+    /// Metal has no sub-allocator: every buffer and texture is its own `MTLResource` allocation. So
+    /// each live resource is one allocation in a block of its own size (`MTLResource.allocatedSize`,
+    /// alignment included), and `total_allocated_bytes` is their sum. That makes the report exact and
+    /// deterministic, where the Vulkan and DX12 ones describe a sub-allocator's blocks.
+    ///
+    /// `total_reserved_bytes` is `MTLDevice.currentAllocatedSize`: everything the device holds,
+    /// including memory this backend did not allocate (drawables, pipelines, internal heaps), and
+    /// never less than the tracked total.
+    fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
+        let live = self.allocations.lock();
+        let mut allocations = Vec::with_capacity(live.len());
+        let mut blocks = Vec::with_capacity(live.len());
+        let mut total_allocated_bytes = 0u64;
+        for allocation in live.values() {
+            let index = allocations.len();
+            allocations.push(wgt::AllocationReport {
+                name: allocation.name.clone(),
+                offset: 0,
+                size: allocation.size,
+            });
+            blocks.push(wgt::MemoryBlockReport {
+                size: allocation.size,
+                allocations: index..index + 1,
+            });
+            total_allocated_bytes += allocation.size;
+        }
+        drop(live);
+        let device_total = self.shared.device.currentAllocatedSize() as u64;
+        Some(wgt::AllocatorReport {
+            allocations,
+            blocks,
+            total_allocated_bytes,
+            total_reserved_bytes: device_total.max(total_allocated_bytes),
+        })
     }
 
     fn check_if_oom(&self) -> Result<(), crate::DeviceError> {
