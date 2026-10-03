@@ -642,6 +642,18 @@ pub struct Device {
     features: wgt::Features,
     counters: Arc<wgt::HalCounters>,
     limits: wgt::Limits,
+    /// The buffers and textures this device allocated and has not destroyed, for
+    /// `generate_allocator_report`. Metal has no sub-allocator: every resource is its own
+    /// allocation, so each is reported as one allocation in a block of its own size.
+    allocations: Mutex<HashMap<usize, LiveAllocation>>,
+}
+
+/// One resource in [`Device::allocations`].
+#[derive(Debug)]
+struct LiveAllocation {
+    name: String,
+    /// `MTLResource.allocatedSize`: what Metal actually holds for it, alignment included.
+    size: u64,
 }
 
 #[derive(Debug)]
