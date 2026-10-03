@@ -86,6 +86,7 @@ mod pipeline_cache;
 mod pool;
 pub mod present;
 pub mod ray_tracing;
+pub mod ray_tracing_pipeline;
 pub mod resource;
 mod snatch;
 pub mod storage;

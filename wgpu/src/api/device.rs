@@ -4,6 +4,7 @@ use core::ops::Deref;
 use core::{error, fmt, future::Future, marker::PhantomData};
 
 use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
+use crate::api::ray_tracing_pipeline::{RayTracingPipeline, RayTracingPipelineDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
 use crate::util::Mutex;
 use crate::*;
@@ -278,6 +279,16 @@ impl Device {
     pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor<'_>) -> ComputePipeline {
         let pipeline = self.inner.create_compute_pipeline(desc);
         ComputePipeline { inner: pipeline }
+    }
+
+    /// Creates a [`RayTracingPipeline`].
+    #[must_use]
+    pub fn create_ray_tracing_pipeline(
+        &self,
+        desc: &RayTracingPipelineDescriptor<'_>,
+    ) -> RayTracingPipeline {
+        let pipeline = self.inner.create_ray_tracing_pipeline(desc);
+        RayTracingPipeline { inner: pipeline }
     }
 
     /// Creates a [`Buffer`].

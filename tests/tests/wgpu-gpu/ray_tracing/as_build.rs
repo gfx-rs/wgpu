@@ -556,6 +556,7 @@ fn build_with_transform(ctx: TestingContext) {
         [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
         0,
         0xFF,
+        0,
     ));
 
     let mut encoder_build = ctx
