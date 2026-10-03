@@ -758,6 +758,7 @@ impl BindingArrayFixture {
                 name: Some("S".into()),
                 inner: naga::TypeInner::Struct {
                     members: vec![naga::StructMember {
+                        access: None,
                         name: Some("m".into()),
                         ty: ty_u32,
                         binding: None,
@@ -1278,6 +1279,7 @@ fn invalid_constructor_unsized_struct() {
             name: Some("Unsized".into()),
             inner: TypeInner::Struct {
                 members: vec![StructMember {
+                    access: None,
                     name: Some("data".into()),
                     ty: ty_array,
                     binding: None,

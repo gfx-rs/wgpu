@@ -23,6 +23,14 @@ impl crate::ScalarKind {
 }
 
 impl crate::Scalar {
+    pub const I8: Self = Self {
+        kind: crate::ScalarKind::Sint,
+        width: 1,
+    };
+    pub const U8: Self = Self {
+        kind: crate::ScalarKind::Uint,
+        width: 1,
+    };
     pub const I16: Self = Self {
         kind: crate::ScalarKind::Sint,
         width: 2,
@@ -114,6 +122,8 @@ pub fn concrete_int_scalars() -> impl Iterator<Item = ir::Scalar> {
     [
         ir::Scalar::I32,
         ir::Scalar::U32,
+        ir::Scalar::I8,
+        ir::Scalar::U8,
         ir::Scalar::I16,
         ir::Scalar::U16,
         ir::Scalar::I64,
@@ -136,6 +146,61 @@ pub fn vector_sizes() -> impl Iterator<Item = ir::VectorSize> + Clone {
 const POINTER_SPAN: u32 = 4;
 
 impl crate::TypeInner {
+    /// Scalar alignment for a supported physical pointee with compatible offsets and strides.
+    pub(crate) fn physical_scalar_layout(&self, gctx: super::GlobalCtx) -> Option<u32> {
+        use crate::TypeInner as T;
+        match *self {
+            T::Scalar(s)
+            | T::Atomic(s)
+            | T::Vector { scalar: s, .. }
+            | T::Matrix { scalar: s, .. } => Some(u32::from(s.width)),
+            T::Pointer {
+                space: crate::AddressSpace::PhysicalStorage,
+                ..
+            }
+            | T::ValuePointer {
+                space: crate::AddressSpace::PhysicalStorage,
+                ..
+            } => Some(8),
+            T::Array { base, stride, .. } => {
+                let alignment = gctx.types[base].inner.physical_scalar_layout(gctx)?;
+                (stride >= gctx.types[base].inner.size(gctx) && stride.is_multiple_of(alignment))
+                    .then_some(alignment)
+            }
+            T::Struct { ref members, span } => {
+                let mut alignment = 1;
+                for member in members {
+                    let a = gctx.types[member.ty].inner.physical_scalar_layout(gctx)?;
+                    if !member.offset.is_multiple_of(a) {
+                        return None;
+                    }
+                    alignment = alignment.max(a);
+                }
+                span.is_multiple_of(alignment).then_some(alignment)
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether this value contains a physical pointer, without following pointees.
+    pub fn contains_physical_pointer(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
+        match *self {
+            Self::Pointer {
+                space: crate::AddressSpace::PhysicalStorage,
+                ..
+            }
+            | Self::ValuePointer {
+                space: crate::AddressSpace::PhysicalStorage,
+                ..
+            } => true,
+            Self::Array { base, .. } => types[base].inner.contains_physical_pointer(types),
+            Self::Struct { ref members, .. } => members
+                .iter()
+                .any(|m| types[m.ty].inner.contains_physical_pointer(types)),
+            _ => false,
+        }
+    }
+
     /// Return the scalar type of `self`.
     ///
     /// If `inner` is a scalar, vector, or matrix type, return
@@ -245,6 +310,14 @@ impl crate::TypeInner {
                 scalar,
                 role: _,
             } => Some(columns as u32 * rows as u32 * scalar.width as u32),
+            Self::Pointer {
+                space: crate::AddressSpace::PhysicalStorage,
+                ..
+            }
+            | Self::ValuePointer {
+                space: crate::AddressSpace::PhysicalStorage,
+                ..
+            } => Some(8),
             Self::Pointer { .. } | Self::ValuePointer { .. } => Some(POINTER_SPAN),
             Self::Array {
                 base: _,
@@ -641,6 +714,18 @@ macro_rules! define_int_float_limits {
     };
 }
 
+define_int_float_limits!(
+    i8,
+    half::f16,
+    half::f16::from_f32(-128.0),
+    half::f16::from_f32(127.0)
+);
+define_int_float_limits!(u8, half::f16, half::f16::ZERO, half::f16::from_f32(255.0));
+define_int_float_limits!(i8, f32, -128.0f32, 127.0f32);
+define_int_float_limits!(u8, f32, 0.0f32, 255.0f32);
+define_int_float_limits!(i8, f64, -128.0f64, 127.0f64);
+define_int_float_limits!(u8, f64, 0.0f64, 255.0f64);
+
 // i16 range [-32768, 32767] fits exactly in f16 (max 65504), f32, and f64.
 // u16 range [0, 65535] fits exactly in f32 and f64. For f16, max exactly
 // representable is 65504 (f16::MAX).
@@ -676,12 +761,36 @@ define_int_float_limits!(u64, f64, 0.0f64, 18446744073709549568.0f64);
 /// Returns a tuple of [`crate::Literal`]s representing the minimum and maximum
 /// float values exactly representable by the provided float and integer types.
 /// Panics if `float` is not one of `F16`, `F32`, or `F64`, or `int` is
-/// not one of `I16`, `U16`, `I32`, `U32`, `I64`, or `U64`.
+/// not one of `I8`, `U8`, `I16`, `U16`, `I32`, `U32`, `I64`, or `U64`.
 pub fn min_max_float_representable_by(
     float: crate::Scalar,
     int: crate::Scalar,
 ) -> (crate::Literal, crate::Literal) {
     match (float, int) {
+        (crate::Scalar::F16, crate::Scalar::I8) => (
+            crate::Literal::F16(i8::min_float()),
+            crate::Literal::F16(i8::max_float()),
+        ),
+        (crate::Scalar::F16, crate::Scalar::U8) => (
+            crate::Literal::F16(u8::min_float()),
+            crate::Literal::F16(u8::max_float()),
+        ),
+        (crate::Scalar::F32, crate::Scalar::I8) => (
+            crate::Literal::F32(i8::min_float()),
+            crate::Literal::F32(i8::max_float()),
+        ),
+        (crate::Scalar::F32, crate::Scalar::U8) => (
+            crate::Literal::F32(u8::min_float()),
+            crate::Literal::F32(u8::max_float()),
+        ),
+        (crate::Scalar::F64, crate::Scalar::I8) => (
+            crate::Literal::F64(i8::min_float()),
+            crate::Literal::F64(i8::max_float()),
+        ),
+        (crate::Scalar::F64, crate::Scalar::U8) => (
+            crate::Literal::F64(u8::min_float()),
+            crate::Literal::F64(u8::max_float()),
+        ),
         (crate::Scalar::F16, crate::Scalar::I16) => (
             crate::Literal::F16(i16::min_float()),
             crate::Literal::F16(i16::max_float()),

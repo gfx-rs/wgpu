@@ -62,6 +62,16 @@ impl<'a, W: Write> Writer<'a, W> {
         pipeline_options: &'a PipelineOptions,
         policies: proc::BoundsCheckPolicies,
     ) -> Result<Self, Error> {
+        if module
+            .types
+            .iter()
+            .any(|(_, ty)| ty.inner.pointer_space() == Some(crate::AddressSpace::PhysicalStorage))
+        {
+            return Err(Error::PhysicalStorageUnsupported);
+        }
+        if proc::module_uses_int8(module) {
+            return Err(Error::Int8Unsupported);
+        }
         // Check if the requested version is supported
         if !options.version.is_supported() {
             log::error!("Version {}", options.version);
@@ -719,6 +729,7 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         match global.space {
+            crate::AddressSpace::PhysicalStorage => return Err(Error::PhysicalStorageUnsupported),
             crate::AddressSpace::Private => {
                 self.write_simple_global(handle, global)?;
             }
@@ -2285,6 +2296,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::MatrixStore { .. } => return Err(Error::PhysicalStorageUnsupported),
             Statement::CooperativeStore { .. } => unimplemented!(),
             Statement::RayPipelineFunction(_) => unimplemented!(),
             Statement::DebugPrintf { .. } => unimplemented!(),
@@ -2362,6 +2374,9 @@ impl<'a, W: Write> Writer<'a, W> {
                     // While `core` doesn't necessarily need it, it's allowed and since `es` needs it we
                     // always write it as the extra branch wouldn't have any benefit in readability
                     crate::Literal::U16(value) => write!(self.out, "uint16_t({value})")?,
+                    crate::Literal::I8(_) | crate::Literal::U8(_) => {
+                        return Err(Error::Int8Unsupported)
+                    }
                     crate::Literal::I16(value) => write!(self.out, "int16_t({value})")?,
                     crate::Literal::U32(value) => write!(self.out, "{value}u")?,
                     crate::Literal::I32(value) => write!(self.out, "{value}")?,
@@ -3766,6 +3781,12 @@ impl<'a, W: Write> Writer<'a, W> {
             // `As` is always a call.
             // If `convert` is true the function name is the type
             // Else the function name is one of the glsl provided bitcast functions
+            Expression::PointerCast { .. }
+            | Expression::PointerOffset { .. }
+            | Expression::MatrixLoad { .. }
+            | Expression::PointerAlignment { .. }
+            | Expression::CoherentPointer { .. }
+            | Expression::AtomicPointer { .. } => return Err(Error::PhysicalStorageUnsupported),
             Expression::As {
                 expr,
                 kind: target_kind,

@@ -16,6 +16,7 @@ members = [
     "naga",
     "naga/fuzz",
     "naga/hlsl-snapshots",
+    "naga/physical-storage-gpu",
     "naga/xtask",
     "player",
     "tests",

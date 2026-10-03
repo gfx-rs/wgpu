@@ -232,6 +232,17 @@ impl Layouter {
                         alignment: Alignment::from(rows) * alignment,
                     }
                 }
+                Ti::Pointer {
+                    space: crate::AddressSpace::PhysicalStorage,
+                    ..
+                }
+                | Ti::ValuePointer {
+                    space: crate::AddressSpace::PhysicalStorage,
+                    ..
+                } => TypeLayout {
+                    size,
+                    alignment: Alignment::EIGHT,
+                },
                 Ti::Pointer { .. } | Ti::ValuePointer { .. } => TypeLayout {
                     size,
                     alignment: Alignment::ONE,

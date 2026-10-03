@@ -68,6 +68,7 @@ pub(super) const fn map_storage_class(space: crate::AddressSpace) -> spirv::Stor
         crate::AddressSpace::Function => spirv::StorageClass::Function,
         crate::AddressSpace::Private => spirv::StorageClass::Private,
         crate::AddressSpace::Storage { .. } => spirv::StorageClass::StorageBuffer,
+        crate::AddressSpace::PhysicalStorage => spirv::StorageClass::PhysicalStorageBuffer,
         crate::AddressSpace::Uniform => spirv::StorageClass::Uniform,
         crate::AddressSpace::WorkGroup => spirv::StorageClass::Workgroup,
         crate::AddressSpace::Immediate => spirv::StorageClass::PushConstant,
@@ -103,7 +104,9 @@ impl crate::AddressSpace {
         self,
     ) -> (spirv::MemorySemantics, spirv::Scope) {
         match self {
-            Self::Storage { .. } => (spirv::MemorySemantics::empty(), spirv::Scope::Device),
+            Self::Storage { .. } | Self::PhysicalStorage => {
+                (spirv::MemorySemantics::empty(), spirv::Scope::Device)
+            }
             Self::WorkGroup => (spirv::MemorySemantics::empty(), spirv::Scope::Workgroup),
             Self::Uniform => (spirv::MemorySemantics::empty(), spirv::Scope::Device),
             Self::Handle => (spirv::MemorySemantics::empty(), spirv::Scope::Device),

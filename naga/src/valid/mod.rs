@@ -2,6 +2,7 @@
 Shader validator.
 */
 
+mod access;
 mod analyzer;
 mod compose;
 mod expression;
@@ -226,6 +227,30 @@ bitflags::bitflags! {
         const LINEAR_INTERPOLATION = 1 << 44;
         /// Support for `debugPrintf`.
         const DEBUG_PRINTF = 1 << 45;
+        /// Physical buffer pointers for trusted native SPIR-V consumers.
+        ///
+        /// Enables [`crate::AddressSpace::PhysicalStorage`] with host-shareable
+        /// pointees, including atomic scalars and runtime-sized arrays. Pointer
+        /// values occupy eight bytes and carry no array length. Atomic scalar
+        /// and cooperative-matrix capabilities still apply. Globals cannot use
+        /// this address space.
+        /// Non-SPIR-V writers reject modules containing these pointers.
+        ///
+        /// Callers must guarantee valid, appropriately aligned addresses, allocation
+        /// lifetimes, and synchronization. Validation cannot prove these properties.
+        /// Array bounds checks do not establish allocation bounds. This capability
+        /// is disabled by default and is not exposed by safe wgpu feature mapping.
+        const PHYSICAL_STORAGE_BUFFER_ADDRESSES = 1 << 46;
+        /// Permit scalar-aligned physical pointees.
+        ///
+        /// Requires [`Self::PHYSICAL_STORAGE_BUFFER_ADDRESSES`] and Vulkan's
+        /// `scalarBlockLayout` feature. Uniform and storage descriptor layouts
+        /// retain their existing alignment requirements.
+        const PHYSICAL_STORAGE_SCALAR_LAYOUT = 1 << 47;
+        /// Native 8-bit integers; not enabled by safe wgpu shader validation.
+        const SHADER_INT8 = 1 << 48;
+        /// Physical-pointer availability and visibility under the Vulkan memory model.
+        const COHERENT_PHYSICAL_MEMORY = 1 << 49;
     }
 }
 
@@ -716,6 +741,8 @@ impl Validator {
         match gctx.types[o.ty].inner {
             crate::TypeInner::Scalar(
                 crate::Scalar::BOOL
+                | crate::Scalar::I8
+                | crate::Scalar::U8
                 | crate::Scalar::I16
                 | crate::Scalar::U16
                 | crate::Scalar::I32

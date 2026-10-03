@@ -228,6 +228,19 @@ impl ExpressionTracer<'_> {
                 self.expressions_used.insert_iter(arg2);
                 self.expressions_used.insert_iter(arg3);
             }
+            Ex::PointerCast { expr, ty } => {
+                self.expressions_used.insert(expr);
+                self.types_used.insert(ty);
+            }
+            Ex::PointerAlignment { pointer, .. }
+            | Ex::CoherentPointer { pointer, .. }
+            | Ex::AtomicPointer { pointer, .. } => {
+                self.expressions_used.insert(pointer);
+            }
+            Ex::PointerOffset { pointer, offset } => {
+                self.expressions_used.insert(pointer);
+                self.expressions_used.insert(offset);
+            }
             Ex::As {
                 expr,
                 kind: _,
@@ -253,7 +266,7 @@ impl ExpressionTracer<'_> {
             } => {
                 self.expressions_used.insert(query);
             }
-            Ex::CooperativeLoad { ref data, .. } => {
+            Ex::MatrixLoad { ref data, .. } | Ex::CooperativeLoad { ref data, .. } => {
                 self.expressions_used.insert(data.pointer);
                 self.expressions_used.insert(data.stride);
             }
@@ -405,6 +418,29 @@ impl ModuleMap {
                 operand_map.adjust_option(arg2);
                 operand_map.adjust_option(arg3);
             }
+            Ex::PointerCast {
+                ref mut expr,
+                ref mut ty,
+            } => {
+                adjust(expr);
+                self.types.adjust(ty);
+            }
+            Ex::PointerAlignment {
+                ref mut pointer, ..
+            }
+            | Ex::CoherentPointer {
+                ref mut pointer, ..
+            }
+            | Ex::AtomicPointer {
+                ref mut pointer, ..
+            } => adjust(pointer),
+            Ex::PointerOffset {
+                ref mut pointer,
+                ref mut offset,
+            } => {
+                adjust(pointer);
+                adjust(offset);
+            }
             Ex::As {
                 ref mut expr,
                 kind: _,
@@ -428,7 +464,7 @@ impl ModuleMap {
                 ref mut query,
                 committed: _,
             } => adjust(query),
-            Ex::CooperativeLoad { ref mut data, .. } => {
+            Ex::MatrixLoad { ref mut data, .. } | Ex::CooperativeLoad { ref mut data, .. } => {
                 adjust(&mut data.pointer);
                 adjust(&mut data.stride);
             }

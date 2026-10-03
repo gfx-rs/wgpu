@@ -33,12 +33,14 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("old_value"),
                         ty: 1,
                         binding: None,
                         offset: 0,
                     ),
                     (
+                        access: None,
                         name: Some("exchanged"),
                         ty: 3,
                         binding: None,
