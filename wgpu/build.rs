@@ -11,7 +11,7 @@ fn main() {
 
         // Backends - keep this in sync with `wgpu-core/Cargo.toml` & docs in `wgpu/Cargo.toml`
         webgpu: { all(not(native), feature = "webgpu") },
-        webgl: { all(not(native), feature = "webgl") },
+        webgl: { all(not(native), not(Emscripten), feature = "webgl") },
         dx12: { all(target_os = "windows", feature = "dx12") },
         metal: { all(target_vendor = "apple", feature = "metal") },
         vulkan: { any(
