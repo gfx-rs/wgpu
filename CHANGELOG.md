@@ -93,6 +93,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - `wgpu::WriteOnly<[_]>` now implements `Send`. By @kpreid in [#10163](https://github.com/gfx-rs/wgpu/pull/10163).
 - Add support for shader `debugPrintf` in Metal and Vulkan, behind a wgsl extension. By @39ali [#9389](https://github.com/gfx-rs/wgpu/pull/9389).
 - Added `Texture::mark_externally_initialized()` to stop a texture from being lazily cleared if it was written to externally (e.g. via `as_hal`). By @R-Cramer4 in [#10075](https://github.com/gfx-rs/wgpu/pull/10075).
+- Added `Features::TEXTURE_COMPRESSION_UNALIGNED` (WebGPU's `texture-compression-unaligned`), which allows creating block-compressed textures whose size is not a multiple of the texel block dimensions. Supported on all backends, where the driver supports it. By @castano in [#10247](https://github.com/gfx-rs/wgpu/pull/10247).
 - Added the following members to `Limits`:
 
   - `Limits::max_storage_buffers_in_vertex_stage`

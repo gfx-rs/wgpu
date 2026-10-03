@@ -682,7 +682,8 @@ impl PhysicalDeviceFeatures {
             | F::PIPELINE_CACHE
             | F::SHADER_EARLY_DEPTH_TEST
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::TEXTURE_ATOMIC;
+            | F::TEXTURE_ATOMIC
+            | F::TEXTURE_COMPRESSION_UNALIGNED;
 
         let mut dl_flags = Df::empty()
             | Df::BASE_VERTEX

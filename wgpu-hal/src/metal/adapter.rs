@@ -1257,6 +1257,7 @@ impl super::CapabilitiesQuery {
             | F::SHADER_F16
             | F::SHADER_I16
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | F::TEXTURE_COMPRESSION_UNALIGNED;
             | F::TEXTURE_FORMAT_16BIT_NORM
             | F::VERTEX_WRITABLE_STORAGE;
 
