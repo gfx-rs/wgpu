@@ -593,9 +593,10 @@ impl ComputePipeline {
     }
 
     pub fn get_subgroup_size(self: &Arc<Self>) -> Option<u32> {
-        self.raw()
-            .ok()
-            .and_then(hal::DynComputePipeline::get_subgroup_size)
+        self.raw().ok().and_then(|pipeline| {
+            let device = self.device.raw();
+            unsafe { device.get_compute_pipeline_subgroup_size(pipeline) }
+        })
     }
 }
 

@@ -111,6 +111,10 @@ pub trait DynDevice: DynResource {
         >,
     ) -> Result<Box<dyn DynComputePipeline>, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: Box<dyn DynComputePipeline>);
+    unsafe fn get_compute_pipeline_subgroup_size(
+        &self,
+        pipeline: &dyn DynComputePipeline,
+    ) -> Option<u32>;
 
     unsafe fn create_ray_tracing_pipeline(
         &self,
@@ -455,6 +459,13 @@ impl<D: Device + DynResource> DynDevice for D {
 
     unsafe fn destroy_compute_pipeline(&self, pipeline: Box<dyn DynComputePipeline>) {
         unsafe { D::destroy_compute_pipeline(self, pipeline.unbox()) };
+    }
+
+    unsafe fn get_compute_pipeline_subgroup_size(
+        &self,
+        pipeline: &dyn DynComputePipeline,
+    ) -> Option<u32> {
+        unsafe { D::get_compute_pipeline_subgroup_size(self, pipeline.expect_downcast_ref()) }
     }
 
     unsafe fn create_ray_tracing_pipeline(

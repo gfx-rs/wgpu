@@ -1108,6 +1108,10 @@ pub trait Device: WasmNotSendSync {
         >,
     ) -> Result<<Self::A as Api>::ComputePipeline, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: <Self::A as Api>::ComputePipeline);
+    unsafe fn get_compute_pipeline_subgroup_size(
+        &self,
+        pipeline: &<Self::A as Api>::ComputePipeline,
+    ) -> Option<u32>;
 
     #[allow(clippy::type_complexity)]
     unsafe fn create_ray_tracing_pipeline(
