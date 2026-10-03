@@ -120,6 +120,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
   By @jinleili in [#10308](https://github.com/gfx-rs/wgpu/pull/10308).
 
 - Added `Utf16SourceLocation` which is analogue to `SourceLocation` but using UTF-16 code units. Added `Utf16SourceLocation::to_utf8` and `SourceLocation::to_utf16` to convert between them. By @sagudev in [#10294](https://github.com/gfx-rs/wgpu/pull/10294).
+- Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
 
 #### Naga
 
@@ -179,6 +180,10 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 - Removed the `size` argument to `wgpu_hal::metal::Device::buffer_from_raw`. The passed size value was previously used only to resolve vertex buffer bindings without an explicit size, possibly incorrectly. Binding sizes are now resolved in `wgpu-core`. By @andyleiserson in [#9848](https://github.com/gfx-rs/wgpu/pull/9848).
 
+#### Vulkan
+
+- Sub-allocate `wgpu_hal::MemoryFlags::TRANSIENT` buffers and acceleration structure build scratch from a separate Vulkan memory pool, so short-lived allocations no longer pin memory blocks shared with long-lived resources. By @stuartparmenter in [#10232](https://github.com/gfx-rs/wgpu/pull/10232).
+
 ### Bug Fixes
 
 #### General
@@ -198,6 +203,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 #### naga
 
+- Reject unsigned integer arguments to WGSL `sign()` during Naga validation instead of allowing them to reach and panic in the SPIR-V backend. By @notferdon in [#10451](https://github.com/gfx-rs/wgpu/pull/10451).
 - Fix panics when shader `var<immediate>` size is larger than 256 bytes. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
 - Fix a panic in the SPIR-V frontend when a subgroup collective operation (e.g. `OpGroupNonUniformUMin`) or `OpGroupNonUniformBallot` used an argument whose value needed to be spilled to a temporary variable, such as when the argument was computed inside a loop. By @nazar-pc in [#9957](https://github.com/gfx-rs/wgpu/issues/9957).
 - Lower `@builtin(instance_index)` in `@any_hit` and `@closest_hit` entry points to SPIR-V's `InstanceId` rather than `InstanceIndex`, which Vulkan only permits in the vertex stage. By @JMS55 in [10154](https://github.com/gfx-rs/wgpu/pull/10154).
@@ -241,6 +247,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Request `VK_KHR_spirv_1_4` and raise the generated SPIR-V version to 1.4 when `EXPERIMENTAL_RAY_TRACING_PIPELINES` or `EXPERIMENTAL_MESH_SHADER` is enabled on a pre-Vulkan-1.2 device. Both `SPV_KHR_ray_tracing` and `SPV_EXT_mesh_shader` require SPIR-V 1.4, but shaders were generated as 1.3 there: ray tracing pipelines requested neither the extension nor the version, and mesh shaders requested the extension without raising the version. Naga now rejects ray tracing pipeline shaders targeting below SPIR-V 1.4, as it already did for mesh shaders. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
 - Fix feature detection for [Robust Image Access](https://docs.vulkan.org/spec/latest/chapters/shaders.html#shaders-robust-image-access) when `VK_EXT_robustness2` is present but reports no support for [Robust Image Access 2](https://docs.vulkan.org/spec/latest/chapters/shaders.html#shaders-robust-image-access2), fixing a shader compilation crash on some Mali drivers. By @raphlinus in [#10291](https://github.com/gfx-rs/wgpu/pull/10291).
 - Fixed a panic on the Vulkan backend when dropping a surface whose acquired texture was still alive (e.g. after `present` failed due to a lost device). By @MarcelStruckWO in [#10230](https://github.com/gfx-rs/wgpu/pull/10230).
+- Recover from `VK_ERROR_FRAGMENTED_POOL` and `VK_ERROR_OUT_OF_POOL_MEMORY` when allocating descriptor sets by resetting or retiring the offending pool and retrying on the next available (or a freshly created) pool instead of panicking. By @beicause in [#10264](https://github.com/gfx-rs/wgpu/pull/10264).
 
 #### Metal
 
@@ -253,6 +260,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Report `DownlevelFlags::INDIRECT_EXECUTION` and a 256-byte `min_uniform_buffer_offset_alignment` on the iOS Simulator (`target_abi = "sim"`). The Simulator advertises only the Apple2 GPU family but executes indirect draw/dispatch on the host GPU, so compute renderers such as vello previously failed with "Downlevel flags DownlevelFlags(INDIRECT_EXECUTION) are required but not supported". Note that Metal API Validation still rejects indirect commands there. By @edTheGuy00 in [#10189](https://github.com/gfx-rs/wgpu/pull/10189).
 - Fix a crash in `Surface::configure` on iOS below 16. `wantsExtendedDynamicRangeContent` is iOS 16+ and is now only called there. By @VladasZ in [#10257](https://github.com/gfx-rs/wgpu/pull/10257).
 - Fix a crash when creating a declared alternate sRGB view of a render-attachment-only surface with Metal API Validation enabled. By @jinleili in [#10280](https://github.com/gfx-rs/wgpu/pull/10280).
+- Fix oversaturated sRGB surface colors on wide-gamut displays by explicitly setting the layer's sRGB color space. By @jinleili in [#10286](https://github.com/gfx-rs/wgpu/pull/10286).
 
 #### GLES
 

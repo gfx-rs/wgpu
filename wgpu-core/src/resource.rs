@@ -12,7 +12,7 @@ use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
     math::align_to,
-    TextureSelector,
+    MapMode, TextureSelector,
 };
 
 #[cfg(feature = "trace")]
@@ -22,7 +22,7 @@ use crate::{
     binding_model::{BindGroup, BindingError},
     device::{
         queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError,
-        DeviceMismatch, HostMap, MissingDownlevelFlags, MissingFeatures,
+        DeviceMismatch, MissingDownlevelFlags, MissingFeatures,
     },
     hal_label,
     init_tracker::{BufferInitTracker, TextureInitTracker},
@@ -256,7 +256,7 @@ pub(crate) enum BufferMapState {
     Active {
         mapping: hal::BufferMapping,
         range: hal::MemoryRange,
-        host: HostMap,
+        host: MapMode,
     },
     /// Not mapped
     Idle,
@@ -273,14 +273,14 @@ pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static
 pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
 
 pub struct BufferMapOperation {
-    pub host: HostMap,
+    pub mode: MapMode,
     pub callback: Option<BufferMapCallback>,
 }
 
 impl fmt::Debug for BufferMapOperation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("BufferMapOperation")
-            .field("host", &self.host)
+            .field("mode", &self.mode)
             .field("callback", &self.callback.as_ref().map(|_| "?"))
             .finish()
     }
@@ -795,9 +795,9 @@ impl Buffer {
             return Err((op, BufferAccessError::UnalignedRange));
         }
 
-        let (pub_usage, internal_use) = match op.host {
-            HostMap::Read => (wgt::BufferUsages::MAP_READ, wgt::BufferUses::MAP_READ),
-            HostMap::Write => (wgt::BufferUsages::MAP_WRITE, wgt::BufferUses::MAP_WRITE),
+        let (pub_usage, internal_use) = match op.mode {
+            MapMode::Read => (wgt::BufferUsages::MAP_READ, wgt::BufferUses::MAP_READ),
+            MapMode::Write => (wgt::BufferUsages::MAP_WRITE, wgt::BufferUses::MAP_WRITE),
         };
 
         if let Err(e) = self.check_usage(pub_usage) {
@@ -999,7 +999,7 @@ impl Buffer {
         let status = if let Err(error) = self.device.check_is_valid() {
             Err(error.into())
         } else if pending_mapping.range.start != pending_mapping.range.end {
-            let host = pending_mapping.op.host;
+            let host = pending_mapping.op.mode;
             let size = pending_mapping.range.end - pending_mapping.range.start;
             match crate::device::map_buffer(
                 self,
@@ -1025,7 +1025,7 @@ impl Buffer {
                     is_coherent: true,
                 },
                 range: pending_mapping.range,
-                host: pending_mapping.op.host,
+                host: pending_mapping.op.mode,
             };
             Ok(())
         };
@@ -1130,7 +1130,7 @@ impl Buffer {
                 range,
                 host,
             } => {
-                if host == HostMap::Write {
+                if host == MapMode::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
                         use crate::device::trace::{DataKind, IntoTrace};
@@ -2671,6 +2671,10 @@ impl TextureView {
             },
             label: desc.label.to_string(),
         })
+    }
+
+    pub fn texture(&self) -> &Arc<Texture> {
+        &self.parent
     }
 }
 
