@@ -120,6 +120,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 - Added `Utf16SourceLocation` which is analogue to `SourceLocation` but using UTF-16 code units. Added `Utf16SourceLocation::to_utf8` and `SourceLocation::to_utf16` to convert between them. By @sagudev in [#10294](https://github.com/gfx-rs/wgpu/pull/10294).
 - Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
+- Added `wgt::Features::CORE_FEATURES_AND_LIMITS`, which is currently always reported as supported if a device [`wgpu_types::DownlevelCapabilities::is_webgpu_compliant`]. By @sagudev in [#10293](https://github.com/gfx-rs/wgpu/pull/10293).
 
 #### Naga
 

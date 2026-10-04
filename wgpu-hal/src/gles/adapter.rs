@@ -954,6 +954,17 @@ impl super::Adapter {
         #[cfg_attr(target_family = "wasm", allow(dropping_references))]
         drop(gl);
 
+        let downlevel = wgt::DownlevelCapabilities {
+            flags: downlevel_flags,
+            limits: downlevel_defaults,
+            shader_model: wgt::ShaderModel::Sm5,
+        };
+
+        features.set(
+            wgt::Features::CORE_FEATURES_AND_LIMITS,
+            downlevel.is_webgpu_compliant(),
+        );
+
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
                 shared: Arc::new(super::AdapterShared {
@@ -974,11 +985,7 @@ impl super::Adapter {
             features,
             capabilities: crate::Capabilities {
                 limits,
-                downlevel: wgt::DownlevelCapabilities {
-                    flags: downlevel_flags,
-                    limits: downlevel_defaults,
-                    shader_model: wgt::ShaderModel::Sm5,
-                },
+                downlevel,
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(4).unwrap(),
                     buffer_copy_pitch: wgt::BufferSize::new(4).unwrap(),

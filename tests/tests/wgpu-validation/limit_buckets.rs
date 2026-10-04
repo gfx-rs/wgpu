@@ -10,7 +10,8 @@ use wgpu_types as wgt;
 const UPLEVEL_FEATURES: wgt::Features = {
     use wgt::Features;
 
-    Features::DEPTH_CLIP_CONTROL
+    Features::CORE_FEATURES_AND_LIMITS
+        .union(Features::DEPTH_CLIP_CONTROL)
         .union(Features::DEPTH32FLOAT_STENCIL8)
         .union(Features::TEXTURE_COMPRESSION_BC)
         .union(Features::TEXTURE_COMPRESSION_BC_SLICED_3D)

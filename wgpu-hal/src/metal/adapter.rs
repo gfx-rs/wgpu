@@ -1239,7 +1239,7 @@ impl super::CapabilitiesQuery {
         }
     }
 
-    pub fn features(&self) -> wgt::Features {
+    pub fn features(&self, capabilities: &crate::Capabilities) -> wgt::Features {
         use wgt::Features as F;
 
         let mut features = F::empty()
@@ -1388,6 +1388,11 @@ impl super::CapabilitiesQuery {
 
         features.set(F::MULTISAMPLE_ARRAY, self.supports_multisample_array);
         features.set(F::DEBUG_PRINTF, self.supports_debug_printf);
+
+        features.set(
+            F::CORE_FEATURES_AND_LIMITS,
+            capabilities.downlevel.is_webgpu_compliant(),
+        );
 
         features
     }
