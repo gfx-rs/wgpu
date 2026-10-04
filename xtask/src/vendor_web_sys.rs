@@ -95,6 +95,9 @@ const WEB_SYS_FEATURES_NEEDED: &[&str] = &[
     "GpuOrigin3dDict",
     "GpuOutOfMemoryError",
     "GpuPipelineDescriptorBase",
+    "GpuPipelineError",
+    "GpuPipelineErrorInit",
+    "GpuPipelineErrorReason",
     "GpuPipelineLayout",
     "GpuPipelineLayoutDescriptor",
     "GpuPowerPreference",
@@ -305,7 +308,7 @@ pub(crate) fn run_vendor_web_sys(shell: Shell, mut args: Arguments) -> anyhow::R
     );
 
     module_file_contents
-        .push_str("use web_sys::{Event, EventTarget, HtmlCanvasElement, HtmlImageElement, HtmlVideoElement, OffscreenCanvas, ImageBitmap, ImageData, VideoFrame};\n");
+        .push_str("use web_sys::{DomException, Event, EventTarget, HtmlCanvasElement, HtmlImageElement, HtmlVideoElement, OffscreenCanvas, ImageBitmap, ImageData, VideoFrame};\n");
 
     for &feature in WEB_SYS_FEATURES_NEEDED {
         module_file_contents.push_str(&format!("mod gen_{feature};\n"));
