@@ -2566,6 +2566,12 @@ impl super::Instance {
             workarounds,
         };
 
+        let available_features = if capabilities.downlevel.is_webgpu_compliant() {
+            available_features | wgt::Features::CORE_FEATURES_AND_LIMITS
+        } else {
+            available_features
+        };
+
         Some(crate::ExposedAdapter {
             adapter,
             info,
