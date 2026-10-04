@@ -120,6 +120,11 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 - Added `Utf16SourceLocation` which is analogue to `SourceLocation` but using UTF-16 code units. Added `Utf16SourceLocation::to_utf8` and `SourceLocation::to_utf16` to convert between them. By @sagudev in [#10294](https://github.com/gfx-rs/wgpu/pull/10294).
 - Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
+- Added `Device::create_render_pipeline_async` and `Device::create_compute_pipeline_async`, which map to `createRenderPipelineAsync()`/`createComputePipelineAsync()` on WebGPU. Errors are returned through the future instead of the error scope. On native backends the returned future is already resolved. Resolves [#3794](https://github.com/gfx-rs/wgpu/issues/3794).
+
+  **Breaking for custom backends:** Implementations of `DeviceInterface` must implement `create_render_pipeline_async` and `create_compute_pipeline_async`.
+
+  By @abdymazhit in [#10438](https://github.com/gfx-rs/wgpu/pull/10438).
 
 #### Naga
 

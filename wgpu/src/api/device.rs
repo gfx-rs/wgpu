@@ -266,6 +266,27 @@ impl Device {
         RenderPipeline { inner: pipeline }
     }
 
+    /// Creates a [`RenderPipeline`], resolving once it is ready to be used.
+    ///
+    /// A validation or internal error is delivered as the `Err` of the returned future
+    /// instead of going to the current error scope or the uncaptured error handler. If the
+    /// device is lost, the future resolves to an invalid pipeline, as with
+    /// [`Device::create_render_pipeline`].
+    ///
+    /// On WebGPU this calls [`GPUDevice.createRenderPipelineAsync()`], which allows the
+    /// implementation to compile the pipeline in the background instead of stalling when it
+    /// is first used. Native backends create the pipeline before this function returns, and
+    /// the returned future is already resolved.
+    ///
+    /// [`GPUDevice.createRenderPipelineAsync()`]: https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createRenderPipelineAsync
+    pub fn create_render_pipeline_async(
+        &self,
+        desc: &RenderPipelineDescriptor<'_>,
+    ) -> impl Future<Output = Result<RenderPipeline, Error>> + WasmNotSend + 'static {
+        let pipeline = self.inner.create_render_pipeline_async(desc);
+        async move { pipeline.await.map(|inner| RenderPipeline { inner }) }
+    }
+
     /// Creates a mesh shader based [`RenderPipeline`].
     #[must_use]
     pub fn create_mesh_pipeline(&self, desc: &MeshPipelineDescriptor<'_>) -> RenderPipeline {
@@ -278,6 +299,21 @@ impl Device {
     pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor<'_>) -> ComputePipeline {
         let pipeline = self.inner.create_compute_pipeline(desc);
         ComputePipeline { inner: pipeline }
+    }
+
+    /// Creates a [`ComputePipeline`], resolving once it is ready to be used.
+    ///
+    /// On WebGPU this calls [`GPUDevice.createComputePipelineAsync()`]; see
+    /// [`Device::create_render_pipeline_async`] for how the result and the errors differ
+    /// from the synchronous call, and for what the native backends do.
+    ///
+    /// [`GPUDevice.createComputePipelineAsync()`]: https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createComputePipelineAsync
+    pub fn create_compute_pipeline_async(
+        &self,
+        desc: &ComputePipelineDescriptor<'_>,
+    ) -> impl Future<Output = Result<ComputePipeline, Error>> + WasmNotSend + 'static {
+        let pipeline = self.inner.create_compute_pipeline_async(desc);
+        async move { pipeline.await.map(|inner| ComputePipeline { inner }) }
     }
 
     /// Creates a [`Buffer`].
