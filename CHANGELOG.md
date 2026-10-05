@@ -120,6 +120,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 - Added `Utf16SourceLocation` which is analogue to `SourceLocation` but using UTF-16 code units. Added `Utf16SourceLocation::to_utf8` and `SourceLocation::to_utf16` to convert between them. By @sagudev in [#10294](https://github.com/gfx-rs/wgpu/pull/10294).
 - Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
+- Add `Instance::create_noop_surface`, which creates a surface on the noop backend without requiring window or display handles. The noop backend now supports configuring surfaces and acquiring surface textures. By @DouglasDwyer in [#10538](https://github.com/gfx-rs/wgpu/pull/10538).
 
 #### Naga
 

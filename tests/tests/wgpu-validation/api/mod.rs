@@ -14,4 +14,5 @@ mod mesh_shader;
 mod ray_tracing_pipeline;
 mod render_bundle;
 mod render_pipeline;
+mod surface;
 mod texture;

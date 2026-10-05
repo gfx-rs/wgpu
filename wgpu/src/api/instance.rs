@@ -285,6 +285,24 @@ impl Instance {
         })
     }
 
+    /// Constructs a stub surface for testing using [`Backend::Noop`].
+    ///
+    /// This is a convenience function which avoids the window and display handles needed to
+    /// create a surface through [`Instance::create_surface()`]. The instance must have been
+    /// created with [`Backends::NOOP`] and [`NoopBackendOptions::enabled()`].
+    #[cfg(all(wgpu_core, noop))]
+    pub fn create_noop_surface(&self) -> Result<Surface<'static>, CreateSurfaceError> {
+        let ctx = self.inner.as_core_opt().ok_or_else(|| {
+            wgc::instance::CreateSurfaceError::BackendNotEnabled(wgt::Backend::Noop)
+        })?;
+
+        Ok(Surface {
+            _handle_source: None,
+            inner: ctx.create_noop_surface()?.into(),
+            config: Mutex::new(None),
+        })
+    }
+
     /// Polls all devices.
     ///
     /// If `force_wait` is true and this is not running on the web, then this

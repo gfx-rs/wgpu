@@ -35,7 +35,8 @@ pub enum Backend {
     ///
     /// * Render passes and compute passes are not executed.
     /// * Textures may be created, but do not store any texels.
-    /// * There are no compatible surfaces.
+    /// * Surfaces may be created, configured, and acquired from, but presented textures are
+    ///   discarded rather than displayed.
     ///
     /// An adapter using the noop backend can only be obtained if [`NoopBackendOptions`]
     /// enables it, in addition to the ordinary requirement of [`Backends::NOOP`] being set.

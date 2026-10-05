@@ -19,6 +19,15 @@ pub struct Api;
 pub struct Context {
     options: Arc<wgt::NoopBackendOptions>,
 }
+impl Context {
+    /// Creates a surface for this instance without requiring any window or display handles.
+    pub fn create_surface_without_handles(&self) -> Context {
+        Context {
+            options: Arc::clone(&self.options),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Encoder;
 #[derive(Debug)]
@@ -209,7 +218,10 @@ impl crate::Surface for Context {
         _timeout: Option<Duration>,
         _fence: &Fence,
     ) -> Result<crate::AcquiredSurfaceTexture<Api>, crate::SurfaceError> {
-        Err(crate::SurfaceError::Timeout)
+        Ok(crate::AcquiredSurfaceTexture {
+            texture: Resource,
+            suboptimal: false,
+        })
     }
     unsafe fn discard_texture(&self, texture: Resource) {}
 }
@@ -240,7 +252,17 @@ impl crate::Adapter for Context {
     }
 
     unsafe fn surface_capabilities(&self, surface: &Context) -> Option<crate::SurfaceCapabilities> {
-        None
+        Some(crate::SurfaceCapabilities {
+            formats: vec![wgt::SurfaceFormatCapabilities {
+                format: wgt::TextureFormat::Bgra8Unorm,
+                color_spaces: wgt::SurfaceColorSpaces::SRGB,
+            }],
+            maximum_frame_latency: 1..=3,
+            current_extent: None,
+            usage: wgt::TextureUses::COLOR_TARGET,
+            present_modes: vec![wgt::PresentMode::Fifo],
+            composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
+        })
     }
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {

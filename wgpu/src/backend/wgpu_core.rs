@@ -51,6 +51,14 @@ fn handle_error_fatal(cause: impl Error + WasmNotSendSync + 'static, operation: 
 }
 
 impl ContextWgpuCore {
+    #[cfg(noop)]
+    pub(crate) fn create_noop_surface(&self) -> Result<CoreSurface, crate::CreateSurfaceError> {
+        Ok(CoreSurface {
+            wgpu_surface: self.0.create_noop_surface()?,
+            configured_device: Arc::new(Mutex::default()),
+        })
+    }
+
     pub unsafe fn from_hal_instance<A: hal::Api>(hal_instance: A::Instance) -> Self {
         Self(wgc::instance::Instance::from_hal_instance::<A>(
             "wgpu".to_owned(),
