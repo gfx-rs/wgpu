@@ -235,7 +235,6 @@ smallvec.workspace = true
 # Webassembly #
 ###############
 [target.'cfg(all(target_family = "wasm" ))'.dependencies]
-
 # Needed for all wasm32 backends (incl. Emscripten, see below)
 js-sys = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
@@ -257,7 +256,6 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 # Emscripten #
 ##############
 [target.'cfg(target_os = "emscripten")'.dependencies]
-
 # Enables the `webgpu` backend for the `wasm32-unknown-emscripten` target using
 # the `web-sys` API (rather than the Emscripten ABI).
 wgpu-core.workspace = true
