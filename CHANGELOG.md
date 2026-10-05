@@ -279,7 +279,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 #### Emscripten
 
-- Fix support for Emscripten (v6.0.10+) by making it use websys. By @almarklein in [#10515](https://github.com/gfx-rs/wgpu/pull/10515)
+- Fix support for Emscripten (v6.0.10+) by making it use `web-sys`. By @almarklein in [#10515](https://github.com/gfx-rs/wgpu/pull/10515)
 
 ### Performance
 
