@@ -617,38 +617,43 @@ mod proptest {
         );
     }
 
-    proptest! {
-        #[test]
-        fn tracker_matches_model(
-            (size, ops, queries) in (1u32..=64).prop_flat_map(|size| {
-                (
-                    Just(size),
-                    proptest::collection::vec(op_strategy(size), 0..64),
-                    proptest::collection::vec(range_strategy(size), 1..16),
-                )
-            })
-        ) {
-            let mut tracker = Tracker::new(size);
-            let mut model = Model::new(size);
-            assert_state_matches_model(&tracker, &model);
+    #[cfg(test)]
+    mod tests {
+        use super::*;
 
-            for op in ops {
-                match op {
-                    Op::Drain(range) => {
-                        // Fully consume the drain iterator, as callers do.
-                        tracker.drain(range.clone()).for_each(drop);
-                        model.drain(range);
-                    }
-                    Op::Discard(pos) => {
-                        tracker.discard(pos);
-                        model.discard(pos);
-                    }
-                }
+        proptest! {
+            #[test]
+            fn tracker_matches_model(
+                (size, ops, queries) in (1u32..=64).prop_flat_map(|size| {
+                    (
+                        Just(size),
+                        proptest::collection::vec(op_strategy(size), 0..64),
+                        proptest::collection::vec(range_strategy(size), 1..16),
+                    )
+                })
+            ) {
+                let mut tracker = Tracker::new(size);
+                let mut model = Model::new(size);
                 assert_state_matches_model(&tracker, &model);
-            }
 
-            for query in queries {
-                assert_queries_match_model(&mut tracker, &model, query);
+                for op in ops {
+                    match op {
+                        Op::Drain(range) => {
+                            // Fully consume the drain iterator, as callers do.
+                            tracker.drain(range.clone()).for_each(drop);
+                            model.drain(range);
+                        }
+                        Op::Discard(pos) => {
+                            tracker.discard(pos);
+                            model.discard(pos);
+                        }
+                    }
+                    assert_state_matches_model(&tracker, &model);
+                }
+
+                for query in queries {
+                    assert_queries_match_model(&mut tracker, &model, query);
+                }
             }
         }
     }
