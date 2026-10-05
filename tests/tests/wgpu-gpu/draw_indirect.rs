@@ -5,7 +5,7 @@ use wgpu::{
     vertex_attr_array,
 };
 use wgpu_test::{
-    apply, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    apply, gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, GpuTestInitializer,
     TestParameters, TestingContext,
 };
 
@@ -1530,7 +1530,11 @@ static MULTI_DRAW_INDEXED_INDIRECT_U16_OFFSET: GpuTestConfiguration = GpuTestCon
     .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-            .limits(wgpu::Limits::downlevel_defaults()),
+            .limits(wgpu::Limits::downlevel_defaults())
+            // The GL backend drops the index buffer's binding offset for
+            // indirect indexed draws: `glDrawElementsIndirect` has no
+            // byte-offset parameter, and only direct draws apply it.
+            .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
     )
     .run_async(|ctx| run_multi_draw_indexed_indirect_u16(ctx, 2));
 
