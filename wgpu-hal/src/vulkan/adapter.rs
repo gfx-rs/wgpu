@@ -671,35 +671,36 @@ impl PhysicalDeviceFeatures {
     ) -> (wgt::Features, wgt::DownlevelFlags) {
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
-            | F::MAPPABLE_PRIMARY_BUFFERS
-            | F::IMMEDIATES
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
-            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE
+            | F::IMMEDIATES
+            | F::MAPPABLE_PRIMARY_BUFFERS
+            | F::MEMORY_DECORATION_COHERENT
+            | F::MEMORY_DECORATION_VOLATILE
+            | F::PASSTHROUGH_SHADERS
             | F::PIPELINE_CACHE
             | F::SHADER_EARLY_DEPTH_TEST
-            | F::TEXTURE_ATOMIC
-            | F::PASSTHROUGH_SHADERS
-            | F::MEMORY_DECORATION_COHERENT
-            | F::MEMORY_DECORATION_VOLATILE;
+            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | F::TEXTURE_ATOMIC;
 
-        let mut dl_flags = Df::COMPUTE_SHADERS
+        let mut dl_flags = Df::empty()
             | Df::BASE_VERTEX
-            | Df::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
-            | Df::COMPARISON_SAMPLERS
-            | Df::VERTEX_STORAGE
-            | Df::FRAGMENT_STORAGE
-            | Df::DEPTH_TEXTURE_AND_BUFFER_COPIES
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED
-            | Df::UNRESTRICTED_INDEX_BUFFER
+            | Df::COMPARISON_SAMPLERS
+            | Df::COMPUTE_SHADERS
+            | Df::DEPTH_TEXTURE_AND_BUFFER_COPIES
+            | Df::FRAGMENT_STORAGE
             | Df::INDIRECT_EXECUTION
-            | Df::VIEW_FORMATS
-            | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
-            | Df::NONBLOCKING_QUERY_RESOLVE
-            | Df::SHADER_F16_IN_F32
+            | Df::LINEAR_INTERPOLATION
             | Df::MSL2_1
-            | Df::LINEAR_INTERPOLATION;
+            | Df::NONBLOCKING_QUERY_RESOLVE
+            | Df::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
+            | Df::SHADER_F16_IN_F32
+            | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
+            | Df::UNRESTRICTED_INDEX_BUFFER
+            | Df::VERTEX_STORAGE
+            | Df::VIEW_FORMATS;
 
         // `VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL`
         // and `VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL`
@@ -3069,19 +3070,17 @@ impl super::Adapter {
             next_submit_chain: Mutex::new(None),
         };
 
-        let allocation_sizes = AllocationSizes::from_memory_hints(memory_hints).into();
+        let allocation_sizes = AllocationSizes::from_memory_hints(memory_hints);
 
         let buffer_device_address = enabled_extensions.contains(&khr::buffer_device_address::NAME);
 
-        let mem_allocator =
-            gpu_allocator::vulkan::Allocator::new(&gpu_allocator::vulkan::AllocatorCreateDesc {
-                instance: self.instance.raw.clone(),
-                device: shared.raw.clone(),
-                physical_device: self.raw,
-                debug_settings: Default::default(),
-                buffer_device_address,
-                allocation_sizes,
-            })?;
+        let mem_allocator = super::MemoryAllocators::new(
+            self.instance.raw.clone(),
+            shared.raw.clone(),
+            self.raw,
+            buffer_device_address,
+            allocation_sizes,
+        )?;
 
         let desc_allocator = super::descriptor::DescriptorAllocator::new(
             if let Some(di) = self.phd_capabilities.descriptor_indexing {
@@ -3093,7 +3092,7 @@ impl super::Adapter {
 
         let device = super::Device {
             shared,
-            mem_allocator: Mutex::new(mem_allocator),
+            mem_allocator,
             desc_allocator: Mutex::new(desc_allocator),
             valid_ash_memory_types,
             naga_options,

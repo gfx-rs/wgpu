@@ -196,7 +196,7 @@ impl GPUDevice {
         "unmapped"
       }),
       map_mode: RefCell::new(if descriptor.mapped_at_creation {
-        Some(wgpu_core::device::HostMap::Write)
+        Some(wgpu_types::MapMode::Write)
       } else {
         None
       }),

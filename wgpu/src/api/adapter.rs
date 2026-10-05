@@ -216,3 +216,24 @@ impl Adapter {
         self.inner.cooperative_matrix_properties()
     }
 }
+
+#[cfg(wgpu_core)]
+impl Adapter {
+    /// Create a new adapter of wgpu from a wgpu-core adapter.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_adapter` - wgpu-core adapter.
+    pub fn from_core(core_adapter: alloc::sync::Arc<wgc::instance::Adapter>) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreAdapter::from_core(core_adapter).into(),
+        }
+    }
+
+    /// Get the [`wgpu_core`] adapter from this `Adapter`.
+    ///
+    /// Returns `None` if the adapter is not from the `wgpu_core` backend
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::instance::Adapter>> {
+        self.inner.as_core_opt().map(|adapter| adapter.as_core())
+    }
+}

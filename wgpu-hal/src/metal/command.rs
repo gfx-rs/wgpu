@@ -588,7 +588,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
     where
         I: Iterator<Item = super::CommandBuffer>,
     {
-        //do nothing
+        // Multi-draw work queued for a pre-pass that was never recorded (say
+        // wgpu-core failed to begin it) must not leak into the next user of
+        // this encoder. `begin_encoding` can't clear it: the pre-pass of a
+        // pass begins its own command buffer before encoding that pass's work.
+        self.deferred_multi_draws.clear();
+        self.deferred_multi_draw_resources.clear();
     }
 
     unsafe fn transition_buffers<'a, T>(&mut self, _barriers: T)
@@ -1300,7 +1305,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.state.raw_primitive_type = pipeline.raw_primitive_type;
         self.state.render_pipeline = Some(pipeline.raw.clone());
-        self.state.render_pipeline_icb = pipeline.icb.clone();
+        self.state.render_pipeline_icb = pipeline.icb_raw.clone();
         match pipeline.vs_info {
             Some(ref info) => self.state.stage_infos.vs.assign_from(info),
             None => self.state.stage_infos.vs.clear(),
