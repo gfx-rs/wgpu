@@ -34,15 +34,16 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         MULTI_DRAW_INDIRECT,
         MULTI_DRAW_INDIRECT_GPU_GENERATED_ARGS,
         MULTI_DRAW_INDEXED_INDIRECT_GPU_GENERATED_ARGS,
-        MULTI_DRAW_INDIRECT_COUNT_READBACK,
-        MULTI_DRAW_INDEXED_INDIRECT_COUNT_READBACK,
         MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP,
         MULTI_DRAW_INDIRECT_OVER_ICB_MEMORY_LIMIT,
         MULTI_DRAW_INDIRECT_AFTER_DISCARDED_3D_ATTACHMENT,
         MULTI_DRAW_INDIRECT_FIRST_VERTEX_AND_INSTANCE,
         MULTI_DRAW_INDIRECT_MIXED_SEQUENCE,
         MULTI_DRAW_INDIRECT_WITH_BIND_GROUPS,
+        MULTI_DRAW_INDIRECT_FRAGMENT_UNIFORM,
+        MULTI_DRAW_INDIRECT_SAMPLED_TEXTURE,
         MULTI_DRAW_INDEXED_INDIRECT_U16,
+        MULTI_DRAW_INDEXED_INDIRECT_U16_OFFSET,
         MULTI_DRAW_INDEXED_INDIRECT_POSITIVE_BASE_VERTEX,
         MULTI_DRAW_INDEXED_INDIRECT_NEGATIVE_BASE_VERTEX,
     ]);
@@ -431,24 +432,35 @@ fn create_indirect_render_pipeline(
     ctx: &TestingContext,
     indexed: bool,
 ) -> (wgpu::RenderPipeline, wgpu::Buffer, Option<wgpu::Buffer>) {
+    create_indirect_render_pipeline_with_shader(
+        ctx,
+        indexed,
+        "
+            @vertex
+            fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
+                return vec4f(position, 0.0, 1.0);
+            }
+
+            @fragment
+            fn fs_main() -> @location(0) vec4f {
+                return vec4f(1.0);
+            }
+        ",
+    )
+}
+
+/// Like [`create_indirect_render_pipeline`], with a WGSL shader that has a
+/// `vs_main(@location(0) position: vec2f)` and an `fs_main` entry point.
+fn create_indirect_render_pipeline_with_shader(
+    ctx: &TestingContext,
+    indexed: bool,
+    wgsl: &str,
+) -> (wgpu::RenderPipeline, wgpu::Buffer, Option<wgpu::Buffer>) {
     let shader = ctx
         .device
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(
-                "
-                    @vertex
-                    fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
-                        return vec4f(position, 0.0, 1.0);
-                    }
-
-                    @fragment
-                    fn fs_main() -> @location(0) vec4f {
-                        return vec4f(1.0);
-                    }
-                "
-                .into(),
-            ),
+            source: wgpu::ShaderSource::Wgsl(wgsl.into()),
         });
     let pipeline = ctx
         .device
@@ -595,11 +607,13 @@ fn create_draw_indexed_indirect_buffer(
     })
 }
 
-/// Kept in sync with `ICB_MIN_DRAW_COUNT` in `wgpu-hal/src/metal/command.rs`
+/// Kept in sync with `ICB_MIN_DRAW_COUNT` in `wgpu-hal/src/metal/icb.rs`
 /// so these tests exercise Metal's indirect-command-buffer lowering rather
 /// than the small-count per-draw loop.
 const ICB_MULTI_DRAW_TEST_COUNT: usize = 512;
 
+/// Empty draws, then the only real one, far enough in that Metal's ICB path
+/// generates it in a later threadgroup than the first.
 async fn run_multi_draw_indirect_over_icb_workgroup(ctx: TestingContext) {
     let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline(&ctx, false);
     let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
@@ -611,7 +625,7 @@ async fn run_multi_draw_indirect_over_icb_workgroup(ctx: TestingContext) {
             first_vertex: 0,
             first_instance: 0,
         };
-        64
+        ICB_MULTI_DRAW_TEST_COUNT + 64
     ];
     args.push(wgpu::util::DrawIndirectArgs {
         vertex_count: 6,
@@ -1099,11 +1113,183 @@ fn create_custom_vertex_buffer(ctx: &TestingContext, vertices: &[f32]) -> wgpu::
     })
 }
 
-async fn run_multi_draw_indexed_indirect_u16(ctx: TestingContext) {
+/// Two full-target draws followed by empty ones, enough of them to take
+/// Metal's ICB path; all drawn under `pipeline` with `bind_group` at group 0.
+async fn run_full_target_multi_draw(
+    ctx: &TestingContext,
+    pipeline: &wgpu::RenderPipeline,
+    bind_group: &wgpu::BindGroup,
+    vertex_buffer: Option<&wgpu::Buffer>,
+) {
+    let mut args = vec![
+        wgpu::util::DrawIndirectArgs {
+            vertex_count: 0,
+            instance_count: 1,
+            first_vertex: 0,
+            first_instance: 0,
+        };
+        ICB_MULTI_DRAW_TEST_COUNT
+    ];
+    args[0] = wgpu::util::DrawIndirectArgs {
+        vertex_count: 3,
+        instance_count: 1,
+        first_vertex: 0,
+        first_instance: 0,
+    };
+    args[1] = wgpu::util::DrawIndirectArgs {
+        vertex_count: 3,
+        instance_count: 1,
+        first_vertex: 3,
+        first_instance: 0,
+    };
+    let indirect_buffer = create_draw_indirect_buffer(ctx, &args);
+    let (out_texture, out_texture_view) = create_rgba8_render_target(ctx, 256, 256);
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+                resolve_target: None,
+                view: &out_texture_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        rpass.set_pipeline(pipeline);
+        rpass.set_bind_group(0, bind_group, &[]);
+        if let Some(vertex_buffer) = vertex_buffer {
+            rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        }
+        rpass.multi_draw_indirect(&indirect_buffer, 0, args.len() as u32);
+    }
+
+    assert_all_white(ctx, encoder, &out_texture).await;
+}
+
+/// The fragment stage reads a uniform buffer that the commands of Metal's ICB
+/// inherit; see `ICB_MAX_INHERITED_BUFFER_BIND_COUNT` in
+/// `wgpu-hal/src/metal/icb.rs` for why its fragment bind count stays 0.
+async fn run_multi_draw_indirect_fragment_uniform(ctx: TestingContext) {
+    let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline_with_shader(
+        &ctx,
+        false,
+        "
+            @group(0) @binding(0) var<uniform> color: vec4f;
+
+            @vertex
+            fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
+                return vec4f(position, 0.0, 1.0);
+            }
+
+            @fragment
+            fn fs_main() -> @location(0) vec4f {
+                return color;
+            }
+        ",
+    );
+    let color_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(&[1.0f32; 4]),
+        usage: wgpu::BufferUsages::UNIFORM,
+    });
+    let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: color_buffer.as_entire_binding(),
+        }],
+    });
+
+    run_full_target_multi_draw(&ctx, &pipeline, &bind_group, Some(&vertex_buffer)).await;
+}
+
+/// Metal rejects the ICB-capable variant of a pipeline whose fragment shader
+/// accesses a texture, so this pipeline's multi-draws must keep the per-draw
+/// loop.
+async fn run_multi_draw_indirect_sampled_texture(ctx: TestingContext) {
+    let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline_with_shader(
+        &ctx,
+        false,
+        "
+            @group(0) @binding(0) var color_texture: texture_2d<f32>;
+            @group(0) @binding(1) var color_sampler: sampler;
+
+            @vertex
+            fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
+                return vec4f(position, 0.0, 1.0);
+            }
+
+            @fragment
+            fn fs_main() -> @location(0) vec4f {
+                return textureSample(color_texture, color_sampler, vec2f(0.5, 0.5));
+            }
+        ",
+    );
+    let white_texture = ctx.device.create_texture_with_data(
+        &ctx.queue,
+        &wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        },
+        wgpu::util::TextureDataOrder::LayerMajor,
+        &[u8::MAX; 4],
+    );
+    let sampler = ctx
+        .device
+        .create_sampler(&wgpu::SamplerDescriptor::default());
+    let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(
+                    &white_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                ),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&sampler),
+            },
+        ],
+    });
+
+    run_full_target_multi_draw(&ctx, &pipeline, &bind_group, Some(&vertex_buffer)).await;
+}
+
+/// `index_offset` is the byte offset the index buffer is bound at. Two bytes
+/// leaves the indices only 2-byte aligned, which Metal's ICB generation kernel
+/// receives as a `device ushort*` bound at that offset.
+async fn run_multi_draw_indexed_indirect_u16(ctx: TestingContext, index_offset: u64) {
     let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline(&ctx, true);
+    // Zeros before the real indices: reading from the start of the buffer
+    // would draw a degenerate triangle and leave half the target uncovered.
+    let mut indices = vec![0u16; (index_offset / 2) as usize];
+    indices.extend_from_slice(&[0, 1, 2, 0, 3, 1]);
     let index_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
-        contents: bytemuck::cast_slice(&[0u16, 1, 2, 0, 3, 1]),
+        contents: bytemuck::cast_slice(&indices),
         usage: wgpu::BufferUsages::INDEX,
     });
     let mut args = vec![
@@ -1155,7 +1341,10 @@ async fn run_multi_draw_indexed_indirect_u16(ctx: TestingContext) {
         });
         rpass.set_pipeline(&pipeline);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        rpass.set_index_buffer(
+            index_buffer.slice(index_offset..),
+            wgpu::IndexFormat::Uint16,
+        );
         rpass.multi_draw_indexed_indirect(&indirect_buffer, 0, ICB_MULTI_DRAW_TEST_COUNT as u32);
     }
 
@@ -1240,102 +1429,6 @@ async fn run_multi_draw_indexed_indirect_base_vertex(ctx: TestingContext, base_v
     assert_all_white(&ctx, encoder, &out_texture).await;
 }
 
-async fn run_multi_draw_indirect_count_readback(ctx: TestingContext, indexed: bool) {
-    let (pipeline, vertex_buffer, index_buffer) = create_indirect_render_pipeline(&ctx, indexed);
-    let max_draw_count = ICB_MULTI_DRAW_TEST_COUNT as u32;
-    let count_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
-        label: None,
-        contents: bytemuck::cast_slice(&[2u32]),
-        usage: wgpu::BufferUsages::INDIRECT,
-    });
-
-    let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 256, 256);
-    let mut encoder = ctx
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    {
-        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                    store: wgpu::StoreOp::Store,
-                },
-                resolve_target: None,
-                view: &out_texture_view,
-                depth_slice: None,
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
-        rpass.set_pipeline(&pipeline);
-        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        if let Some(index_buffer) = index_buffer.as_ref() {
-            let mut args = vec![
-                wgpu::util::DrawIndexedIndirectArgs {
-                    index_count: 0,
-                    instance_count: 1,
-                    first_index: 0,
-                    base_vertex: 0,
-                    first_instance: 0,
-                };
-                ICB_MULTI_DRAW_TEST_COUNT
-            ];
-            args[0] = wgpu::util::DrawIndexedIndirectArgs {
-                index_count: 3,
-                instance_count: 1,
-                first_index: 0,
-                base_vertex: 0,
-                first_instance: 0,
-            };
-            args[1] = wgpu::util::DrawIndexedIndirectArgs {
-                index_count: 3,
-                instance_count: 1,
-                first_index: 3,
-                base_vertex: 0,
-                first_instance: 0,
-            };
-            let indirect_buffer = create_draw_indexed_indirect_buffer(&ctx, &args);
-            rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            rpass.multi_draw_indexed_indirect_count(
-                &indirect_buffer,
-                0,
-                &count_buffer,
-                0,
-                max_draw_count,
-            );
-        } else {
-            let mut args = vec![
-                wgpu::util::DrawIndirectArgs {
-                    vertex_count: 0,
-                    instance_count: 1,
-                    first_vertex: 0,
-                    first_instance: 0,
-                };
-                ICB_MULTI_DRAW_TEST_COUNT
-            ];
-            args[0] = wgpu::util::DrawIndirectArgs {
-                vertex_count: 3,
-                instance_count: 1,
-                first_vertex: 0,
-                first_instance: 0,
-            };
-            args[1] = wgpu::util::DrawIndirectArgs {
-                vertex_count: 3,
-                instance_count: 1,
-                first_vertex: 3,
-                first_instance: 0,
-            };
-            let indirect_buffer = create_draw_indirect_buffer(&ctx, &args);
-            rpass.multi_draw_indirect_count(&indirect_buffer, 0, &count_buffer, 0, max_draw_count);
-        }
-    }
-
-    assert_all_white(&ctx, encoder, &out_texture).await;
-}
-
 #[apply(gpu_test!)]
 static MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -1403,13 +1496,40 @@ static MULTI_DRAW_INDIRECT_WITH_BIND_GROUPS: GpuTestConfiguration = GpuTestConfi
     .run_async(run_multi_draw_indirect_with_bind_groups);
 
 #[apply(gpu_test!)]
+static MULTI_DRAW_INDIRECT_FRAGMENT_UNIFORM: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(run_multi_draw_indirect_fragment_uniform);
+
+#[apply(gpu_test!)]
+static MULTI_DRAW_INDIRECT_SAMPLED_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(run_multi_draw_indirect_sampled_texture);
+
+#[apply(gpu_test!)]
 static MULTI_DRAW_INDEXED_INDIRECT_U16: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
             .limits(wgpu::Limits::downlevel_defaults()),
     )
-    .run_async(run_multi_draw_indexed_indirect_u16);
+    .run_async(|ctx| run_multi_draw_indexed_indirect_u16(ctx, 0));
+
+#[apply(gpu_test!)]
+static MULTI_DRAW_INDEXED_INDIRECT_U16_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| run_multi_draw_indexed_indirect_u16(ctx, 2));
 
 #[apply(gpu_test!)]
 static MULTI_DRAW_INDEXED_INDIRECT_POSITIVE_BASE_VERTEX: GpuTestConfiguration =
@@ -1430,27 +1550,6 @@ static MULTI_DRAW_INDEXED_INDIRECT_NEGATIVE_BASE_VERTEX: GpuTestConfiguration =
                 .limits(wgpu::Limits::downlevel_defaults()),
         )
         .run_async(|ctx| run_multi_draw_indexed_indirect_base_vertex(ctx, -4));
-
-#[apply(gpu_test!)]
-static MULTI_DRAW_INDIRECT_COUNT_READBACK: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-            .features(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT)
-            .limits(wgpu::Limits::downlevel_defaults()),
-    )
-    .run_async(|ctx| run_multi_draw_indirect_count_readback(ctx, false));
-
-#[apply(gpu_test!)]
-static MULTI_DRAW_INDEXED_INDIRECT_COUNT_READBACK: GpuTestConfiguration =
-    GpuTestConfiguration::new()
-        .parameters(
-            TestParameters::default()
-                .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
-                .features(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT)
-                .limits(wgpu::Limits::downlevel_defaults()),
-        )
-        .run_async(|ctx| run_multi_draw_indirect_count_readback(ctx, true));
 
 async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
     let draw_count = ICB_MULTI_DRAW_TEST_COUNT as u32;
