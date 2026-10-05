@@ -116,6 +116,8 @@ pub enum ExpressionError {
     InvalidSampleOffsetExprType,
     #[error("Sample offset constant {1:?} doesn't match the image dimension {0:?}")]
     InvalidSampleOffset(crate::ImageDimension, Handle<crate::Expression>),
+    #[error("Sample offset components must be in the range -8 to 7")]
+    SampleOffsetOutOfRange(Handle<crate::Expression>),
     #[error("Depth reference {0:?} is not a scalar float")]
     InvalidDepthReference(Handle<crate::Expression>),
     #[error("Depth sample level can only be Auto or Zero")]
@@ -161,6 +163,59 @@ pub enum ExpressionError {
     },
     #[error("Division by zero")]
     DivideByZero,
+}
+
+/// The WGSL spec requires each component of a texture `offset` to be in `-8..=7`
+/// ([§17.7][spec]); values outside that range are shader-creation errors.
+///
+/// Returns `Ok(())` when every component that can be resolved statically is in
+/// range, and also when a component cannot be resolved: a const-expression we
+/// cannot evaluate here must not be rejected on a guess.
+///
+/// [spec]: https://gpuweb.github.io/gpuweb/wgsl/#texture-builtin-functions
+fn check_sample_offset_range(
+    handle: Handle<crate::Expression>,
+    expressions: &crate::Arena<crate::Expression>,
+    module: &crate::Module,
+) -> Result<(), ExpressionError> {
+    fn walk(
+        handle: Handle<crate::Expression>,
+        expressions: &crate::Arena<crate::Expression>,
+        module: &crate::Module,
+        out_of_range: &mut bool,
+    ) {
+        match expressions[handle] {
+            crate::Expression::Literal(crate::Literal::I32(value)) => {
+                if !(-8..=7).contains(&value) {
+                    *out_of_range = true;
+                }
+            }
+            crate::Expression::ZeroValue(_) => {}
+            crate::Expression::Splat { value, .. } => {
+                walk(value, expressions, module, out_of_range);
+            }
+            crate::Expression::Compose { ref components, .. } => {
+                for &component in components {
+                    walk(component, expressions, module, out_of_range);
+                }
+            }
+            crate::Expression::Constant(constant) => walk(
+                module.constants[constant].init,
+                &module.global_expressions,
+                module,
+                out_of_range,
+            ),
+            _ => {}
+        }
+    }
+
+    let mut out_of_range = false;
+    walk(handle, expressions, module, &mut out_of_range);
+    if out_of_range {
+        Err(ExpressionError::SampleOffsetOutOfRange(handle))
+    } else {
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -662,6 +717,9 @@ impl super::Validator {
                             return Err(ExpressionError::InvalidSampleOffset(dim, const_expr));
                         }
                     }
+
+                    // WGSL §17.7: each component of `offset` must be in -8..=7.
+                    check_sample_offset_range(const_expr, &function.expressions, module)?;
                 }
 
                 // check depth reference type

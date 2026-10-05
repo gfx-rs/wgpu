@@ -102,8 +102,7 @@ webgpu:shader,validation,expression,call,builtin,reflect:values:* // 67%, abstra
 webgpu:shader,validation,expression,call,builtin,refract:values:* // 67%, abstract-float operands are concretized to f32 rather than kept abstract, https://github.com/gfx-rs/wgpu/issues/7405
 webgpu:shader,validation,expression,call,builtin,smoothstep:* // 69%, const eval issues
 webgpu:shader,validation,expression,call,builtin,textureDimensions:* // >99%, no external texture in deno
-webgpu:shader,validation,expression,call,builtin,textureGather:* // 99%, https://github.com/gfx-rs/wgpu/issues/8876
-webgpu:shader,validation,expression,call,builtin,textureGatherCompare:* // 99%, edge case in offset or external texture validation
+webgpu:shader,validation,expression,call,builtin,textureGather:* // 99.7%, texture_type subcase (depth texture vs non-depth) still fails
 webgpu:shader,validation,expression,call,builtin,textureLoad:* // 99%, texture_external not implemented
 webgpu:shader,validation,expression,call,builtin,textureSample:* // 99%, texture_external
 webgpu:shader,validation,expression,call,builtin,textureSampleBaseClampToEdge:* // 96%, texture_external

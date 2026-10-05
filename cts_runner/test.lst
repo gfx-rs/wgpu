@@ -470,6 +470,7 @@ webgpu:shader,validation,expression,call,builtin,step:*
 webgpu:shader,validation,expression,call,builtin,tan:*
 webgpu:shader,validation,expression,call,builtin,tanh:*
 // Uses external textures
+webgpu:shader,validation,expression,call,builtin,textureGatherCompare:*
 fails-if(vulkan) webgpu:shader,validation,expression,call,builtin,textureLoad:*
 webgpu:shader,validation,expression,call,builtin,textureNumLayers:*
 webgpu:shader,validation,expression,call,builtin,textureNumLevels:*
