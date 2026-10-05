@@ -12,7 +12,7 @@ env:
   # Keep in sync with ci.yml
   #
 
-  REPO_MSRV: "1.95"
+  REPO_MSRV: "1.96.1"
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
