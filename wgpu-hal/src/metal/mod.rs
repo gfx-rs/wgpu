@@ -333,6 +333,8 @@ struct CapabilitiesQuery {
     supports_raytracing: bool,
     shader_per_vertex: bool,
     supports_multisample_array: bool,
+    /// Static preconditions for lowering multi-draws to render ICBs; see
+    /// `PrivateCapabilities::indirect_command_buffers_rendering`.
     indirect_command_buffers_rendering: bool,
     indirect_command_buffers_mesh: bool,
     /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
@@ -350,9 +352,8 @@ struct PrivateCapabilities {
     timestamp_query_support: TimestampQuerySupport,
     supports_memoryless_storage: bool,
     mesh_shaders: bool,
-    /// Metal ICB rendering is intentionally tracked separately from
-    /// `MULTI_DRAW_INDIRECT_COUNT`: this backend uses render ICBs to lower
-    /// fixed-count multi-draws even when the count feature isn't exposed.
+    /// Whether multi-draws may lower to render ICBs. False under
+    /// `InstanceFlags::STRICT_WEBGPU_COMPLIANCE`.
     indirect_command_buffers_rendering: bool,
     indirect_command_buffers_mesh: bool,
     /// Whether `optimizeIndirectCommandBuffer` is worth a blit pass on this GPU.
@@ -416,16 +417,7 @@ struct AdapterShared {
     private_texture_format_caps: PrivateTextureFormatCapabilities,
     settings: Settings,
     presentation_timer: time::PresentationTimer,
-    icb_command_pipelines: Mutex<Option<Result<icb::IcbCommandPipelines, crate::DeviceError>>>,
-    /// Result of the render-ICB execution probe, filled in by
-    /// [`AdapterShared::render_icb_executes`] the first time it is needed.
-    render_icb_probe: Mutex<Option<bool>>,
     instance_flags: wgt::InstanceFlags,
-    /// Indirect command buffers awaiting reuse; see [`icb::PooledIcb`].
-    icb_pool: Mutex<Vec<icb::PooledIcb>>,
-    /// Bytes per ICB command for each `icb::IcbDrawKind` tag, measured on
-    /// first use.
-    icb_bytes_per_command: Mutex<[Option<u64>; 3]>,
     use_debug_printf: atomic::AtomicBool,
 }
 
@@ -438,7 +430,13 @@ impl AdapterShared {
         capabilities_query: &CapabilitiesQuery,
         instance_flags: wgt::InstanceFlags,
     ) -> Self {
-        let private_caps = capabilities_query.private_capabilities();
+        let mut private_caps = capabilities_query.private_capabilities();
+        // Firefox and Deno set `STRICT_WEBGPU_COMPLIANCE`; for them the ICB
+        // lowering does no work at all, not even at device creation.
+        if instance_flags.contains(wgt::InstanceFlags::STRICT_WEBGPU_COMPLIANCE) {
+            private_caps.indirect_command_buffers_rendering = false;
+            private_caps.indirect_command_buffers_mesh = false;
+        }
         let private_texture_format_caps = capabilities_query.private_texture_format_capabilities();
         log::debug!("{private_caps:#?}");
         log::debug!("{private_texture_format_caps:#?}");
@@ -450,11 +448,7 @@ impl AdapterShared {
             device,
             settings: Settings::default(),
             presentation_timer: time::PresentationTimer::new(),
-            icb_command_pipelines: Mutex::new(None),
-            render_icb_probe: Mutex::new(None),
             instance_flags,
-            icb_pool: Mutex::new(Vec::new()),
-            icb_bytes_per_command: Mutex::new([None; 3]),
             use_debug_printf: atomic::AtomicBool::new(false),
         }
     }
@@ -682,6 +676,9 @@ pub struct Device {
     features: wgt::Features,
     counters: Arc<wgt::HalCounters>,
     limits: wgt::Limits,
+    /// Set up when the device is opened; `None` when multi-draws keep the
+    /// per-draw loop. See [`icb::IcbContext::new`].
+    icb: Option<Arc<icb::IcbContext>>,
 }
 
 #[derive(Debug)]
@@ -1252,9 +1249,10 @@ impl PipelineStageInfo {
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: Retained<ProtocolObject<dyn MTLRenderPipelineState>>,
-    /// ICB-capable twin of `raw`, compiled on first use; `None` when the
-    /// pipeline can never execute inside an ICB.
-    icb: Option<Arc<icb::IcbRenderPipeline>>,
+    /// ICB-capable variant of `raw`, used only to execute multi-draws lowered
+    /// to ICBs; `None` when the device doesn't lower multi-draws or Metal
+    /// rejects the variant.
+    icb_raw: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
     vs_info: Option<PipelineStageInfo>,
     fs_info: Option<PipelineStageInfo>,
     ts_info: Option<PipelineStageInfo>,
@@ -1371,7 +1369,7 @@ struct CommandState {
     render: Option<Retained<ProtocolObject<dyn MTLRenderCommandEncoder>>>,
     compute: Option<Retained<ProtocolObject<dyn MTLComputeCommandEncoder>>>,
     render_pipeline: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
-    render_pipeline_icb: Option<Arc<icb::IcbRenderPipeline>>,
+    render_pipeline_icb: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
     raw_primitive_type: MTLPrimitiveType,
     index: Option<IndexState>,
     stage_infos: MultiStageData<PipelineStageInfo>,
@@ -1427,6 +1425,8 @@ pub struct CommandEncoder {
     /// [`CommandBuffer`] so submission keep-alive doesn't depend on
     /// [`Settings::retain_command_buffer_references`].
     deferred_multi_draw_resources: Vec<icb::IcbExecutionResources>,
+    /// The device's ICB lowering state; see [`Device::icb`].
+    icb: Option<Arc<icb::IcbContext>>,
 }
 
 impl fmt::Debug for CommandEncoder {

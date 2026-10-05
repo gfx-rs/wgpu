@@ -1,21 +1,27 @@
-use core::slice;
+use core::{ptr::NonNull, slice};
 
 use objc2::runtime::ProtocolObject;
 use objc2_foundation::{NSRange, NSString};
 use objc2_metal::{
     MTLArgumentEncoder, MTLBlitCommandEncoder, MTLBuffer, MTLClearColor, MTLCommandBuffer,
     MTLCommandBufferStatus, MTLCommandEncoder, MTLCommandQueue, MTLComputeCommandEncoder,
-    MTLDevice, MTLFunction, MTLIndirectCommandBufferDescriptor, MTLIndirectCommandType,
-    MTLLanguageVersion, MTLLibrary, MTLLoadAction, MTLPixelFormat, MTLRenderCommandEncoder,
-    MTLRenderPassDescriptor, MTLRenderPipelineDescriptor, MTLResourceOptions, MTLResourceUsage,
-    MTLSize, MTLStorageMode, MTLStoreAction, MTLTextureDescriptor, MTLTextureUsage,
+    MTLDevice, MTLFunction, MTLLanguageVersion, MTLLibrary, MTLLoadAction, MTLPixelFormat,
+    MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLRenderPipelineDescriptor,
+    MTLResourceOptions, MTLResourceUsage, MTLSize, MTLStorageMode, MTLStoreAction,
+    MTLTextureDescriptor, MTLTextureUsage,
 };
 
 const PROBE_SHADER: &str = include_str!("./shaders/icb_probe.metal");
 
+/// Whether `device` executes a GPU-generated render ICB correctly: one draw,
+/// generated, executed and read back exactly as the multi-draw lowering does
+/// it, with the same ICB descriptor and with buffers inherited at the slots
+/// wgpu binds them to. `optimize` mirrors
+/// `PrivateCapabilities::indirect_command_buffers_optimize`.
 pub(super) fn supports_render_icb(
     device: &ProtocolObject<dyn MTLDevice>,
     msl_version: MTLLanguageVersion,
+    optimize: bool,
 ) -> bool {
     let library = match super::device::compile_msl_library(device, msl_version, false, PROBE_SHADER)
     {
@@ -78,16 +84,31 @@ pub(super) fn supports_render_icb(
     else {
         return false;
     };
+    // One triangle covering the target, and the color it is drawn in.
+    let positions: [f32; 6] = [-1.0, -1.0, 3.0, -1.0, -1.0, 3.0];
+    let color: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
+    let Some(vertex_buffer) = (unsafe {
+        device.newBufferWithBytes_length_options(
+            NonNull::from(&positions).cast(),
+            size_of_val(&positions),
+            MTLResourceOptions::StorageModeShared,
+        )
+    }) else {
+        return false;
+    };
+    let Some(color_buffer) = (unsafe {
+        device.newBufferWithBytes_length_options(
+            NonNull::from(&color).cast(),
+            size_of_val(&color),
+            MTLResourceOptions::StorageModeShared,
+        )
+    }) else {
+        return false;
+    };
 
-    let icb_descriptor = MTLIndirectCommandBufferDescriptor::new();
-    icb_descriptor.setCommandTypes(MTLIndirectCommandType::Draw);
-    icb_descriptor.setInheritPipelineState(true);
-    icb_descriptor.setInheritBuffers(true);
-    icb_descriptor.setMaxVertexBufferBindCount(0);
-    icb_descriptor.setMaxFragmentBufferBindCount(0);
     let Some(icb) = (unsafe {
         device.newIndirectCommandBufferWithDescriptor_maxCommandCount_options(
-            &icb_descriptor,
+            &super::icb::icb_descriptor(super::icb::ICB_KIND_DRAW),
             1,
             MTLResourceOptions::StorageModePrivate,
         )
@@ -126,19 +147,6 @@ pub(super) fn supports_render_icb(
     let Some(generation_buffer) = queue.commandBuffer() else {
         return false;
     };
-    let Some(reset) = generation_buffer.blitCommandEncoder() else {
-        return false;
-    };
-    unsafe {
-        reset.resetCommandsInBuffer_withRange(
-            &icb,
-            NSRange {
-                location: 0,
-                length: 1,
-            },
-        );
-    }
-    reset.endEncoding();
     let Some(compute) = generation_buffer.computeCommandEncoder() else {
         return false;
     };
@@ -164,19 +172,21 @@ pub(super) fn supports_render_icb(
         },
     );
     compute.endEncoding();
-    let Some(optimize) = generation_buffer.blitCommandEncoder() else {
-        return false;
-    };
-    unsafe {
-        optimize.optimizeIndirectCommandBuffer_withRange(
-            &icb,
-            NSRange {
-                location: 0,
-                length: 1,
-            },
-        );
+    if optimize {
+        let Some(blit) = generation_buffer.blitCommandEncoder() else {
+            return false;
+        };
+        unsafe {
+            blit.optimizeIndirectCommandBuffer_withRange(
+                &icb,
+                NSRange {
+                    location: 0,
+                    length: 1,
+                },
+            );
+        }
+        blit.endEncoding();
     }
-    optimize.endEncoding();
     generation_buffer.commit();
     generation_buffer.waitUntilCompleted();
     if generation_buffer.status() != MTLCommandBufferStatus::Completed {
@@ -194,6 +204,10 @@ pub(super) fn supports_render_icb(
         return false;
     };
     render.setRenderPipelineState(&pipeline);
+    unsafe {
+        render.setVertexBuffer_offset_atIndex(Some(&vertex_buffer), 0, 30);
+        render.setFragmentBuffer_offset_atIndex(Some(&color_buffer), 0, 0);
+    }
     #[expect(deprecated)]
     render.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
     unsafe {

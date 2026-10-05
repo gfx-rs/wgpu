@@ -158,6 +158,7 @@ impl crate::Adapter for super::Adapter {
                     features,
                     counters: Default::default(),
                     limits: limits.clone(),
+                    icb: super::icb::IcbContext::new(&self.shared).map(Arc::new),
                 },
                 queue: super::Queue {
                     shared: Arc::new(QueueShared {
@@ -801,9 +802,10 @@ impl super::CapabilitiesQuery {
         // where the same hardware on 18 passes, and A10X only works with
         // command generation hoisted out of the render pass. The real gate is
         // therefore a runtime probe that executes a one-draw ICB and reads the
-        // pixel back, `AdapterShared::render_icb_executes`. It runs on the
-        // first multi-draw that could use an ICB rather than at adapter
-        // creation, so adapters that never multi-draw never pay for it.
+        // pixel back. It runs in `Adapter::open` (see `icb::IcbContext::new`),
+        // so recording never stalls on it, and not at all under
+        // `STRICT_WEBGPU_COMPLIANCE`, which clears this cap in
+        // `AdapterShared::new`.
         //
         // No feature or downlevel flag depends on the probe: multi-draws are
         // exposed exactly as they were before ICBs existed, and a failed probe

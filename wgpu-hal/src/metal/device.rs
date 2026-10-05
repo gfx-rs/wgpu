@@ -456,11 +456,13 @@ impl super::Device {
         // instance flags apply.
         let shared =
             super::AdapterShared::new(raw, &capabilities_query, wgt::InstanceFlags::empty());
+        let icb = super::icb::IcbContext::new(&shared).map(Arc::new);
         super::Device {
             shared: Arc::new(shared),
             features,
             counters: Default::default(),
             limits: limits.clone(),
+            icb,
         }
     }
 
@@ -898,6 +900,7 @@ impl crate::Device for super::Device {
             counters: Arc::clone(&self.counters),
             deferred_multi_draws: Vec::new(),
             deferred_multi_draw_resources: Vec::new(),
+            icb: self.icb.clone(),
         })
     }
 
@@ -1487,6 +1490,9 @@ impl crate::Device for super::Device {
                 fn setLabel(&self, label: Option<&NSString>) {
                     descriptor_fn!(self.setLabel(label));
                 }
+                fn setSupportIndirectCommandBuffers(&self, enabled: bool) {
+                    descriptor_fn!(self.setSupportIndirectCommandBuffers(enabled));
+                }
                 unsafe fn setMaxVertexAmplificationCount(&self, count: NSUInteger) {
                     unsafe { descriptor_fn!(self.setMaxVertexAmplificationCount(count)) }
                 }
@@ -1854,21 +1860,15 @@ impl crate::Device for super::Device {
                     descriptor.setMaxVertexAmplificationCount(mv.get().count_ones() as usize)
                 };
             }
-            // Keep the ordinary pipeline state for direct draws. On some
-            // drivers, using an ICB-capable pipeline directly changes render
-            // behavior. Multiview pipelines also fail with the ICB flag. The
-            // ICB-capable twin is compiled lazily, by the first multi-draw
-            // that lowers to an ICB under this pipeline; see
-            // `icb::IcbRenderPipeline`.
-            let request_icb_support = self.shared.private_caps.indirect_command_buffers_rendering
-                && match descriptor {
-                    MetalGenericRenderPipelineDescriptor::Standard(_) => {
-                        desc.multiview_mask.is_none()
-                    }
-                    MetalGenericRenderPipelineDescriptor::Mesh(_) => {
-                        self.shared.private_caps.indirect_command_buffers_mesh
-                    }
-                };
+            // Direct draws always use `raw`. The ICB-capable variant compiled
+            // below only executes multi-draws lowered to ICBs, so the lowering
+            // can't change how any other draw renders. Multiview pipelines fail
+            // with the ICB flag, so they get no variant.
+            let request_icb_support = desc.multiview_mask.is_none()
+                && self.icb.as_ref().is_some_and(|icb| match descriptor {
+                    MetalGenericRenderPipelineDescriptor::Standard(_) => true,
+                    MetalGenericRenderPipelineDescriptor::Mesh(_) => icb.lowers_mesh_draws(),
+                });
             // Create the pipeline from descriptor
             let create = |descriptor: &MetalGenericRenderPipelineDescriptor| match descriptor {
                 MetalGenericRenderPipelineDescriptor::Standard(d) => self
@@ -1890,23 +1890,27 @@ impl crate::Device for super::Device {
                     format!("new_render_pipeline_state: {e:?}"),
                 )
             })?;
-            let icb = request_icb_support.then(|| {
-                let descriptor = match descriptor {
-                    MetalGenericRenderPipelineDescriptor::Standard(inner) => {
-                        super::icb::IcbPipelineDescriptor::Standard(inner)
-                    }
-                    MetalGenericRenderPipelineDescriptor::Mesh(inner) => {
-                        super::icb::IcbPipelineDescriptor::Mesh(inner)
-                    }
-                };
-                Arc::new(super::icb::IcbRenderPipeline::new(descriptor, desc.label))
-            });
+            let icb_raw = if request_icb_support {
+                descriptor.setSupportIndirectCommandBuffers(true);
+                create(&descriptor)
+                    .inspect_err(|error| {
+                        log::debug!(
+                            "Metal rejected the ICB-capable variant of render pipeline {:?}, \
+                             so its multi-draws will use the per-draw loop. Fragment shaders \
+                             that access textures cause this. Metal error: {error:?}",
+                            desc.label,
+                        );
+                    })
+                    .ok()
+            } else {
+                None
+            };
 
             self.counters.render_pipelines.add(1);
 
             Ok(super::RenderPipeline {
                 raw,
-                icb,
+                icb_raw,
                 vs_info,
                 fs_info,
                 ts_info,
