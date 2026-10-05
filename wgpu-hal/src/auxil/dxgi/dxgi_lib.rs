@@ -89,24 +89,5 @@ impl DxgiLib {
         result__.ok_or(crate::DeviceError::Unexpected)
     }
 
-    /// Will error with crate::DeviceError::Unexpected if DXGI 1.3 is not available.
-    #[cfg_attr(not(dx12), expect(dead_code))]
-    pub fn create_factory_media(&self) -> Result<Dxgi::IDXGIFactoryMedia, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Dxgi::CreateDXGIFactory1 on dxgi.dll
-        type Fun = extern "system" fn(
-            riid: *const windows_core::GUID,
-            ppfactory: *mut *mut ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(c"CreateDXGIFactory1".to_bytes()) }?;
-
-        let mut result__ = None;
-
-        // https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nn-dxgi1_3-idxgifactorymedia
-        (func)(&Dxgi::IDXGIFactoryMedia::IID, <*mut _>::cast(&mut result__))
-            .ok()
-            .into_device_result("create_factory_media")?;
-
-        result__.ok_or(crate::DeviceError::Unexpected)
-    }
 }
+

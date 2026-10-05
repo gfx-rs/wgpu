@@ -1,7 +1,10 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
 
 use wgpu_sync::RwLock;
-use windows::Win32::{Foundation, Graphics::Dxgi};
+use windows::{
+    core::Interface as _,
+    Win32::{Foundation, Graphics::Dxgi},
+};
 
 use super::SurfaceTarget;
 use crate::{
@@ -28,8 +31,10 @@ impl crate::Instance for super::Instance {
 
         let (lib_dxgi, factory) = auxil::dxgi::factory::create_factory(desc.flags)?;
 
-        // Create IDXGIFactoryMedia
-        let factory_media = lib_dxgi.create_factory_media().ok();
+        // The factory implements `IDXGIFactoryMedia` as well, so ask it for that interface rather
+        // than calling the legacy `CreateDXGIFactory1` export for it: overlays that hook that
+        // export (ReShade) treat the factory it returns as an `IDXGIFactory` and crash the process.
+        let factory_media = factory.cast::<Dxgi::IDXGIFactoryMedia>().ok();
 
         let mut supports_allow_tearing = false;
         if let Some(factory5) = factory.as_factory5() {
