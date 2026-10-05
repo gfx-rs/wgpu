@@ -258,10 +258,8 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 ##############
 [target.'cfg(target_os = "emscripten")'.dependencies]
 
-# wgpu currently does not use the Emscripten ABI for GPU calls.
-# When the WebGPU feature is enabled, Emscripten therefore uses the same
-# JavaScript/WebGPU path as other wasm32 targets.
-
+# Enables the `webgpu` backend for the `wasm32-unknown-emscripten` target using
+# the `web-sys` API (rather than the Emscripten ABI).
 wgpu-core.workspace = true
 wgpu-hal.workspace = true
 smallvec.workspace = true
