@@ -1823,6 +1823,10 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         group_count_y: u32,
         group_count_z: u32,
     );
+    /// # Safety
+    ///
+    /// - If `draw_count > 1`, see the deferred-work obligation on
+    ///   [`encode_deferred_multi_draws`](CommandEncoder::encode_deferred_multi_draws).
     unsafe fn draw_mesh_tasks_indirect(
         &mut self,
         buffer: &<Self::A as Api>::Buffer,
@@ -1856,9 +1860,12 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// - Must be called outside of a render, compute, or ray-tracing pass.
     /// - Between the [`end_render_pass`] for a pass that recorded indirect
     ///   multi-draws and the submission of that pass's command buffer, this
-    ///   method must be called exactly once on this [`CommandEncoder`], while
-    ///   recording a command buffer that the queue will execute *before* the
-    ///   pass's command buffer.
+    ///   method must be called on this [`CommandEncoder`], while recording a
+    ///   command buffer that the queue will execute *before* the pass's
+    ///   command buffer. One call covers every pass ended since the previous
+    ///   call.
+    /// - The command buffer recorded here must not be reset until the pass's
+    ///   command buffer has completed.
     /// - Any indirect (or count) buffer passed to a [`draw_indirect`]-family
     ///   call in that pass must not be written between that call and the
     ///   execution of the command buffer recorded here, other than by wgpu's
