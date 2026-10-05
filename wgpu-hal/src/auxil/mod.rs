@@ -53,6 +53,11 @@ pub mod db {
         /// cbindgen:ignore
         pub const VENDOR: u32 = 0x5143;
     }
+    pub mod verisilicon {
+        // `VK_VENDOR_ID_VSI`; VeriSilicon does not use a PCI vendor id for its GPUs.
+        /// cbindgen:ignore
+        pub const VENDOR: u32 = 0x10002;
+    }
 }
 
 /// Maximum binding size for the shaders that only support `i32` indexing.
