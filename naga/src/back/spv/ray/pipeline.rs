@@ -1,7 +1,8 @@
 //! Code for ray tracing pipelines
 
 use crate::back::spv::{
-    Block, BlockContext, Instruction, LocalType, LookupRaytracingFunction, Writer, WriterFlags,
+    Block, BlockContext, Error, Instruction, LocalType, LookupRaytracingFunction, Writer,
+    WriterFlags,
 };
 
 impl Writer {
@@ -9,28 +10,28 @@ impl Writer {
         &mut self,
         ir_module: &crate::Module,
         payload: crate::Handle<crate::GlobalVariable>,
-    ) -> spirv::Word {
+    ) -> Result<spirv::Word, Error> {
         if let Some(&word) = self
             .ray_tracing_functions
             .get(&LookupRaytracingFunction::TraceRay { payload })
         {
-            return word;
+            return Ok(word);
         }
 
         let acceleration_structure_type_id =
-            self.get_localtype_id(LocalType::AccelerationStructure);
+            self.get_localtype_id(LocalType::AccelerationStructure)?;
 
         let ray_desc_type_id = self.get_handle_type_id(
             ir_module
                 .special_types
                 .ray_desc
                 .expect("ray desc should be set if `traceRays` is called"),
-        );
+        )?;
 
         let (func_id, mut function, arg_ids) = self.write_function_signature(
             &[acceleration_structure_type_id, ray_desc_type_id],
             self.void_type,
-        );
+        )?;
 
         let acceleration_structure_id = arg_ids[0];
         let desc_id = arg_ids[1];
@@ -47,7 +48,7 @@ impl Writer {
             ray_origin_id,
             ray_dir_id,
             valid_id,
-        } = self.write_extract_ray_desc(&mut block, desc_id, self.trace_ray_argument_validation);
+        } = self.write_extract_ray_desc(&mut block, desc_id, self.trace_ray_argument_validation)?;
 
         let merge_label_id = self.id_gen.next();
         let merge_block = Block::new(merge_label_id);
@@ -75,7 +76,7 @@ impl Writer {
             }
         }
 
-        let zero = self.get_constant_scalar(crate::Literal::U32(0));
+        let zero = self.get_constant_scalar(crate::Literal::U32(0))?;
 
         valid_block.body.push(Instruction::trace_ray(
             acceleration_structure_id,
@@ -104,19 +105,19 @@ impl Writer {
                     ray_origin_id,
                     ray_dir_id,
                 ],
-            );
+            )?;
         }
 
         function.consume(invalid_block, Instruction::branch(merge_label_id));
 
         function.consume(merge_block, Instruction::return_void());
 
-        function.to_words(&mut self.logical_layout.function_definitions);
+        function.to_words(&mut self.logical_layout.function_definitions)?;
 
         self.ray_tracing_functions
             .insert(LookupRaytracingFunction::TraceRay { payload }, func_id);
 
-        func_id
+        Ok(func_id)
     }
 }
 
@@ -125,7 +126,7 @@ impl BlockContext<'_> {
         &mut self,
         function: &crate::RayPipelineFunction,
         block: &mut Block,
-    ) {
+    ) -> Result<(), Error> {
         match *function {
             crate::RayPipelineFunction::TraceRay {
                 acceleration_structure,
@@ -142,7 +143,7 @@ impl BlockContext<'_> {
                 let desc_id = self.cached[descriptor];
                 let acc_struct_id = self.get_handle_id(acceleration_structure);
 
-                let func = self.writer.write_trace_ray(self.ir_module, payload);
+                let func = self.writer.write_trace_ray(self.ir_module, payload)?;
 
                 let func_id = self.gen_id();
                 block.body.push(Instruction::function_call(
@@ -153,5 +154,6 @@ impl BlockContext<'_> {
                 ));
             }
         }
+        Ok(())
     }
 }

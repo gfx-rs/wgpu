@@ -174,8 +174,8 @@ impl Writer {
         position_id: Word,
         body: &mut Vec<Instruction>,
     ) -> Result<(), Error> {
-        let float_ptr_type_id = self.get_f32_pointer_type_id(spirv::StorageClass::Output);
-        let index_y_id = self.get_index_constant(1);
+        let float_ptr_type_id = self.get_f32_pointer_type_id(spirv::StorageClass::Output)?;
+        let index_y_id = self.get_index_constant(1)?;
         let access_id = self.id_gen.next();
         body.push(Instruction::access_chain(
             float_ptr_type_id,
@@ -184,7 +184,7 @@ impl Writer {
             &[index_y_id],
         ));
 
-        let float_type_id = self.get_f32_type_id();
+        let float_type_id = self.get_f32_type_id()?;
         let load_id = self.id_gen.next();
         body.push(Instruction::load(float_type_id, load_id, access_id, None));
 
@@ -206,9 +206,9 @@ impl Writer {
         frag_depth_id: Word,
         body: &mut Vec<Instruction>,
     ) -> Result<(), Error> {
-        let float_type_id = self.get_f32_type_id();
-        let zero_scalar_id = self.get_constant_scalar(crate::Literal::F32(0.0));
-        let one_scalar_id = self.get_constant_scalar(crate::Literal::F32(1.0));
+        let float_type_id = self.get_f32_type_id()?;
+        let zero_scalar_id = self.get_constant_scalar(crate::Literal::F32(0.0))?;
+        let one_scalar_id = self.get_constant_scalar(crate::Literal::F32(1.0))?;
 
         let original_id = self.id_gen.next();
         body.push(Instruction::load(
@@ -290,33 +290,37 @@ impl BlockContext<'_> {
     ///
     /// See [`crate::back::msl::Writer::gen_force_bounded_loop_statements`] for details
     /// of why this is required.
-    fn write_force_bounded_loop_instructions(&mut self, mut block: Block, merge_id: Word) -> Block {
-        let uint_type_id = self.writer.get_u32_type_id();
-        let uint2_type_id = self.writer.get_vec2u_type_id();
+    fn write_force_bounded_loop_instructions(
+        &mut self,
+        mut block: Block,
+        merge_id: Word,
+    ) -> Result<Block, Error> {
+        let uint_type_id = self.writer.get_u32_type_id()?;
+        let uint2_type_id = self.writer.get_vec2u_type_id()?;
         let uint2_ptr_type_id = self
             .writer
-            .get_vec2u_pointer_type_id(spirv::StorageClass::Function);
-        let bool_type_id = self.writer.get_bool_type_id();
-        let bool2_type_id = self.writer.get_vec2_bool_type_id();
-        let zero_uint_const_id = self.writer.get_constant_scalar(crate::Literal::U32(0));
+            .get_vec2u_pointer_type_id(spirv::StorageClass::Function)?;
+        let bool_type_id = self.writer.get_bool_type_id()?;
+        let bool2_type_id = self.writer.get_vec2_bool_type_id()?;
+        let zero_uint_const_id = self.writer.get_constant_scalar(crate::Literal::U32(0))?;
         let zero_uint2_const_id = self.writer.get_constant_composite(
             LookupType::Local(LocalType::Numeric(NumericType::Vector {
                 size: crate::VectorSize::Bi,
                 scalar: crate::Scalar::U32,
             })),
             &[zero_uint_const_id, zero_uint_const_id],
-        );
-        let one_uint_const_id = self.writer.get_constant_scalar(crate::Literal::U32(1));
+        )?;
+        let one_uint_const_id = self.writer.get_constant_scalar(crate::Literal::U32(1))?;
         let max_uint_const_id = self
             .writer
-            .get_constant_scalar(crate::Literal::U32(u32::MAX));
+            .get_constant_scalar(crate::Literal::U32(u32::MAX))?;
         let max_uint2_const_id = self.writer.get_constant_composite(
             LookupType::Local(LocalType::Numeric(NumericType::Vector {
                 size: crate::VectorSize::Bi,
                 scalar: crate::Scalar::U32,
             })),
             &[max_uint_const_id, max_uint_const_id],
-        );
+        )?;
 
         let loop_counter_var_id = self.gen_id();
         if self.writer.flags.contains(WriterFlags::DEBUG) {
@@ -426,7 +430,7 @@ impl BlockContext<'_> {
             .body
             .push(Instruction::store(loop_counter_var_id, result_id, None));
 
-        block
+        Ok(block)
     }
 
     /// If `pointer` refers to a scalar reached by a dynamic (non-constant)
@@ -495,8 +499,8 @@ impl BlockContext<'_> {
             return Ok(None);
         };
 
-        let vector_type_id = self.get_numeric_type_id(NumericType::Vector { size, scalar });
-        let component_type_id = self.get_numeric_type_id(NumericType::Scalar(scalar));
+        let vector_type_id = self.get_numeric_type_id(NumericType::Vector { size, scalar })?;
+        let component_type_id = self.get_numeric_type_id(NumericType::Scalar(scalar))?;
 
         let vector_load_id = self.write_checked_load(
             vector_pointer,
@@ -598,9 +602,10 @@ impl BlockContext<'_> {
             columns,
             rows,
             scalar,
-        });
-        let column_type_id = self.get_numeric_type_id(NumericType::Vector { size: rows, scalar });
-        let component_type_id = self.get_numeric_type_id(NumericType::Scalar(scalar));
+        })?;
+        let column_type_id =
+            self.get_numeric_type_id(NumericType::Vector { size: rows, scalar })?;
+        let component_type_id = self.get_numeric_type_id(NumericType::Scalar(scalar))?;
         let get_column_function_id = self.writer.wrapped_functions
             [&WrappedFunction::MatCx2GetColumn {
                 r#type: matrix_pointer_base_type,
@@ -628,7 +633,7 @@ impl BlockContext<'_> {
                 ..
             }) => {
                 let cast_id = self.gen_id();
-                let u32_type_id = self.writer.get_u32_type_id();
+                let u32_type_id = self.writer.get_u32_type_id()?;
                 block.body.push(Instruction::unary(
                     spirv::Op::Bitcast,
                     u32_type_id,
@@ -721,15 +726,16 @@ impl BlockContext<'_> {
             columns,
             rows,
             scalar,
-        });
-        let column_type_id = self.get_numeric_type_id(NumericType::Vector { size: rows, scalar });
+        })?;
+        let column_type_id =
+            self.get_numeric_type_id(NumericType::Vector { size: rows, scalar })?;
         let column_pointer_type_id =
-            self.get_pointer_type_id(column_type_id, map_storage_class(space));
+            self.get_pointer_type_id(column_type_id, map_storage_class(space))?;
         let column0_index = self.writer.std140_compat_uniform_types[&struct_type].member_indices
             [member_index as usize];
         let column_indices = (0..columns as u32)
             .map(|c| self.get_index_constant(column0_index + c))
-            .collect::<ArrayVec<_, 4>>();
+            .collect::<Result<ArrayVec<_, 4>, _>>()?;
 
         // Load each column from the struct, then composite into the real
         // matrix type.
@@ -780,7 +786,7 @@ impl BlockContext<'_> {
                         block.body.push(access);
                         load_mat_from_struct(pointer_id, id_gen, block)
                     },
-                ),
+                )?,
         };
 
         Ok(Some(result_id))
@@ -801,15 +807,15 @@ impl BlockContext<'_> {
             return Ok(());
         }
 
-        let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty);
+        let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty)?;
         let id = match self.ir_function.expressions[expr_handle] {
-            crate::Expression::Literal(literal) => self.writer.get_constant_scalar(literal),
+            crate::Expression::Literal(literal) => self.writer.get_constant_scalar(literal)?,
             crate::Expression::Constant(handle) => {
                 let init = self.ir_module.constants[handle].init;
                 self.writer.constant_ids[init]
             }
             crate::Expression::Override(_) => return Err(Error::Override),
-            crate::Expression::ZeroValue(_) => self.writer.get_constant_null(result_type_id),
+            crate::Expression::ZeroValue(_) => self.writer.get_constant_null(result_type_id)?,
             crate::Expression::Compose { ty, ref components } => {
                 self.temp_list.clear();
                 if self.expression_constness.is_const(expr_handle) {
@@ -823,7 +829,7 @@ impl BlockContext<'_> {
                         .map(|component| self.cached[component]),
                     );
                     self.writer
-                        .get_constant_composite(LookupType::Handle(ty), &self.temp_list)
+                        .get_constant_composite(LookupType::Handle(ty), &self.temp_list)?
                 } else {
                     self.temp_list
                         .extend(components.iter().map(|&component| self.cached[component]));
@@ -844,8 +850,8 @@ impl BlockContext<'_> {
                 if self.expression_constness.is_const(expr_handle) {
                     let ty = self
                         .writer
-                        .get_expression_lookup_type(&self.fun_info[expr_handle].ty);
-                    self.writer.get_constant_composite(ty, components)
+                        .get_expression_lookup_type(&self.fun_info[expr_handle].ty)?;
+                    self.writer.get_constant_composite(ty, components)?
                 } else {
                     let id = self.gen_id();
                     block.body.push(Instruction::composite_construct(
@@ -919,7 +925,7 @@ impl BlockContext<'_> {
                                 // can do is spill the value to a new temporary variable,
                                 // at which point we can get a pointer to that and just
                                 // use `OpAccessChain` in the usual way.
-                                self.spill_to_internal_variable(base, block);
+                                self.spill_to_internal_variable(base, block)?;
 
                                 // Since the base was spilled, mark this access to it as
                                 // spilled, too.
@@ -952,7 +958,7 @@ impl BlockContext<'_> {
                             }
                         };
 
-                        let binding_type_id = self.get_handle_type_id(binding_type);
+                        let binding_type_id = self.get_handle_type_id(binding_type)?;
 
                         let load_id = self.gen_id();
                         block.body.push(Instruction::load(
@@ -1043,7 +1049,7 @@ impl BlockContext<'_> {
                             }
                         };
 
-                        let binding_type_id = self.get_handle_type_id(binding_type);
+                        let binding_type_id = self.get_handle_type_id(binding_type)?;
 
                         let load_id = self.gen_id();
                         block.body.push(Instruction::load(
@@ -1108,8 +1114,8 @@ impl BlockContext<'_> {
                 let id = self.gen_id();
                 let left_id = self.cached[left];
                 let right_id = self.cached[right];
-                let left_type_id = self.get_expression_type_id(&self.fun_info[left].ty);
-                let right_type_id = self.get_expression_type_id(&self.fun_info[right].ty);
+                let left_type_id = self.get_expression_type_id(&self.fun_info[left].ty)?;
+                let right_type_id = self.get_expression_type_id(&self.fun_info[right].ty)?;
 
                 if let Some(function_id) =
                     self.writer
@@ -1158,7 +1164,7 @@ impl BlockContext<'_> {
                                     rows,
                                     scalar.width,
                                     spirv::Op::FAdd,
-                                );
+                                )?;
 
                                 self.cached[expr_handle] = id;
                                 return Ok(());
@@ -1187,7 +1193,7 @@ impl BlockContext<'_> {
                                     rows,
                                     scalar.width,
                                     spirv::Op::FSub,
-                                );
+                                )?;
 
                                 self.cached[expr_handle] = id;
                                 return Ok(());
@@ -1463,11 +1469,11 @@ impl BlockContext<'_> {
                             self.temp_list.clear();
                             self.temp_list.resize(size as _, arg1_id);
 
-                            arg1_id = self.writer.get_constant_composite(ty, &self.temp_list);
+                            arg1_id = self.writer.get_constant_composite(ty, &self.temp_list)?;
 
                             self.temp_list.fill(arg2_id);
 
-                            arg2_id = self.writer.get_constant_composite(ty, &self.temp_list);
+                            arg2_id = self.writer.get_constant_composite(ty, &self.temp_list)?;
                         }
 
                         MathOp::Custom(Instruction::ext_inst_gl_op(
@@ -1536,7 +1542,7 @@ impl BlockContext<'_> {
                                         &[index],
                                     )
                                 },
-                            );
+                            )?;
                             self.cached[expr_handle] = id;
                             return Ok(());
                         }
@@ -1603,14 +1609,14 @@ impl BlockContext<'_> {
                                 _ => unreachable!(),
                             };
 
-                            let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+                            let eight = self.writer.get_constant_scalar(crate::Literal::U32(8))?;
 
                             const VEC_LENGTH: u8 = 4;
                             let mut bit_shifts = [0; VEC_LENGTH as usize];
                             for (index, bit_shift) in bit_shifts.iter_mut().enumerate() {
                                 *bit_shift = self
                                     .writer
-                                    .get_constant_scalar(crate::Literal::U32(index as u32 * 8));
+                                    .get_constant_scalar(crate::Literal::U32(index as u32 * 8))?;
                             }
 
                             self.write_dot_product(
@@ -1630,7 +1636,7 @@ impl BlockContext<'_> {
                                         eight,
                                     )
                                 },
-                            );
+                            )?;
                         }
 
                         self.cached[expr_handle] = id;
@@ -1674,7 +1680,7 @@ impl BlockContext<'_> {
                                 &crate::TypeInner::Scalar(scalar),
                             ) => {
                                 let selector_type_id =
-                                    self.get_numeric_type_id(NumericType::Vector { size, scalar });
+                                    self.get_numeric_type_id(NumericType::Vector { size, scalar })?;
                                 self.temp_list.clear();
                                 self.temp_list.resize(size as usize, arg2_id);
 
@@ -1733,7 +1739,7 @@ impl BlockContext<'_> {
                                         .get_constant_scalar_with(scalar.width * 8, scalar)?,
                                 );
 
-                                self.writer.get_constant_composite(ty, &self.temp_list)
+                                self.writer.get_constant_composite(ty, &self.temp_list)?
                             }
                             crate::TypeInner::Scalar(scalar) => self
                                 .writer
@@ -1772,13 +1778,13 @@ impl BlockContext<'_> {
                                 );
 
                                 (
-                                    self.get_type_id(ty),
-                                    self.writer.get_constant_composite(ty, &self.temp_list),
+                                    self.get_type_id(ty)?,
+                                    self.writer.get_constant_composite(ty, &self.temp_list)?,
                                     scalar.width,
                                 )
                             }
                             crate::TypeInner::Scalar(scalar) => (
-                                self.get_numeric_type_id(NumericType::Scalar(scalar)),
+                                self.get_numeric_type_id(NumericType::Scalar(scalar))?,
                                 self.writer
                                     .get_constant_scalar_with(scalar.width * 8 - 1, scalar)?,
                                 scalar.width,
@@ -1841,10 +1847,10 @@ impl BlockContext<'_> {
                         let bit_width = arg_ty.scalar_width().unwrap() * 8;
                         let width_constant = self
                             .writer
-                            .get_constant_scalar(crate::Literal::U32(bit_width as u32));
+                            .get_constant_scalar(crate::Literal::U32(bit_width as u32))?;
 
                         let u32_type =
-                            self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32));
+                            self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32))?;
 
                         // o = min(offset, w)
                         let offset_id = self.gen_id();
@@ -1891,10 +1897,10 @@ impl BlockContext<'_> {
                         let bit_width = arg_ty.scalar_width().unwrap() * 8;
                         let width_constant = self
                             .writer
-                            .get_constant_scalar(crate::Literal::U32(bit_width as u32));
+                            .get_constant_scalar(crate::Literal::U32(bit_width as u32))?;
 
                         let u32_type =
-                            self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32));
+                            self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32))?;
 
                         // o = min(offset, w)
                         let offset_id = self.gen_id();
@@ -1967,7 +1973,7 @@ impl BlockContext<'_> {
                                     id,
                                     is_signed,
                                     should_clamp,
-                                )
+                                )?
                             } else {
                                 self.write_pack4x8_polyfill(
                                     block,
@@ -1976,7 +1982,7 @@ impl BlockContext<'_> {
                                     id,
                                     is_signed,
                                     should_clamp,
-                                )
+                                )?
                             };
 
                         MathOp::Custom(last_instruction)
@@ -1997,7 +2003,7 @@ impl BlockContext<'_> {
                                     arg0_id,
                                     id,
                                     is_signed,
-                                )
+                                )?
                             } else {
                                 self.write_unpack4x8_polyfill(
                                     block,
@@ -2005,7 +2011,7 @@ impl BlockContext<'_> {
                                     arg0_id,
                                     id,
                                     is_signed,
-                                )
+                                )?
                             };
 
                         MathOp::Custom(last_instruction)
@@ -2129,7 +2135,7 @@ impl BlockContext<'_> {
                     let bool_vector_type_id = self.get_numeric_type_id(NumericType::Vector {
                         size,
                         scalar: condition_scalar,
-                    });
+                    })?;
 
                     let id = self.gen_id();
                     block.body.push(Instruction::composite_construct(
@@ -2201,9 +2207,9 @@ impl BlockContext<'_> {
                     .expect("not a cached ray query");
                 let func_id = self
                     .writer
-                    .write_ray_query_get_intersection_function(committed, self.ir_module);
+                    .write_ray_query_get_intersection_function(committed, self.ir_module)?;
                 let ray_intersection = self.ir_module.special_types.ray_intersection.unwrap();
-                let intersection_type_id = self.get_handle_type_id(ray_intersection);
+                let intersection_type_id = self.get_handle_type_id(ray_intersection)?;
                 let id = self.gen_id();
                 block.body.push(Instruction::function_call(
                     intersection_type_id,
@@ -2218,7 +2224,7 @@ impl BlockContext<'_> {
                     "RayQueryVertexPositions",
                     &[spirv::Capability::RayQueryPositionFetchKHR],
                 )?;
-                self.write_ray_query_return_vertex_position(query, block, committed)
+                self.write_ray_query_return_vertex_position(query, block, committed)?
             }
             crate::Expression::CooperativeLoad { ref data, .. } => {
                 self.writer.require_any(
@@ -2230,7 +2236,7 @@ impl BlockContext<'_> {
                 } else {
                     spirv::CooperativeMatrixLayout::ColumnMajorKHR
                 };
-                let layout_id = self.get_index_constant(layout as u32);
+                let layout_id = self.get_index_constant(layout as u32)?;
                 let stride_id = self.cached[data.stride];
                 match self.write_access_chain(data.pointer, block, AccessTypeAdjustment::None)? {
                     ExpressionPointer::Ready { pointer_id } => {
@@ -2262,7 +2268,7 @@ impl BlockContext<'_> {
                                 ));
                                 id
                             },
-                        ),
+                        )?,
                 }
             }
             crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
@@ -2334,7 +2340,7 @@ impl BlockContext<'_> {
                 self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
                     size: rows,
                     scalar,
-                })));
+                })))?;
 
             // Type of the column after conversion
             let column_dst_ty =
@@ -2344,7 +2350,7 @@ impl BlockContext<'_> {
                         kind,
                         width: convert,
                     },
-                })));
+                })))?;
 
             let mut components = ArrayVec::<Word, 4>::new();
 
@@ -2424,7 +2430,7 @@ impl BlockContext<'_> {
                         self.temp_list.clear();
                         self.temp_list.resize(size as _, zero_scalar_id);
 
-                        self.writer.get_constant_composite(ty, &self.temp_list)
+                        self.writer.get_constant_composite(ty, &self.temp_list)?
                     }
                     None => zero_scalar_id,
                 };
@@ -2450,11 +2456,11 @@ impl BlockContext<'_> {
                         self.temp_list.clear();
                         self.temp_list.resize(size as _, zero_scalar_id);
 
-                        let vec0_id = self.writer.get_constant_composite(ty, &self.temp_list);
+                        let vec0_id = self.writer.get_constant_composite(ty, &self.temp_list)?;
 
                         self.temp_list.fill(one_scalar_id);
 
-                        let vec1_id = self.writer.get_constant_composite(ty, &self.temp_list);
+                        let vec1_id = self.writer.get_constant_composite(ty, &self.temp_list)?;
 
                         (vec1_id, vec0_id)
                     }
@@ -2477,10 +2483,10 @@ impl BlockContext<'_> {
                 let dst_scalar = crate::Scalar { kind, width };
                 let (min, max) =
                     crate::proc::min_max_float_representable_by(src_scalar, dst_scalar);
-                let expr_type_id = self.get_expression_type_id(&self.fun_info[expr].ty);
+                let expr_type_id = self.get_expression_type_id(&self.fun_info[expr].ty)?;
 
                 let maybe_splat_const = |writer: &mut Writer, const_id| match src_size {
-                    None => const_id,
+                    None => Ok(const_id),
                     Some(size) => {
                         let constituent_ids = [const_id; crate::VectorSize::MAX];
                         writer.get_constant_composite(
@@ -2492,10 +2498,10 @@ impl BlockContext<'_> {
                         )
                     }
                 };
-                let min_const_id = self.writer.get_constant_scalar(min);
-                let min_const_id = maybe_splat_const(self.writer, min_const_id);
-                let max_const_id = self.writer.get_constant_scalar(max);
-                let max_const_id = maybe_splat_const(self.writer, max_const_id);
+                let min_const_id = self.writer.get_constant_scalar(min)?;
+                let min_const_id = maybe_splat_const(self.writer, min_const_id)?;
+                let max_const_id = self.writer.get_constant_scalar(max)?;
+                let max_const_id = maybe_splat_const(self.writer, max_const_id)?;
 
                 let clamp_id = self.gen_id();
                 block.body.push(Instruction::ext_inst_gl_op(
@@ -2578,9 +2584,9 @@ impl BlockContext<'_> {
         let result_type_id = {
             let resolution = &self.fun_info[expr_handle].ty;
             match type_adjustment {
-                AccessTypeAdjustment::None => self.writer.get_expression_type_id(resolution),
+                AccessTypeAdjustment::None => self.writer.get_expression_type_id(resolution)?,
                 AccessTypeAdjustment::IntroducePointer(class) => {
-                    self.writer.get_resolution_pointer_id(resolution, class)
+                    self.writer.get_resolution_pointer_id(resolution, class)?
                 }
                 AccessTypeAdjustment::UseStd140CompatType => {
                     match *resolution.inner_with(&self.ir_module.types) {
@@ -2590,7 +2596,7 @@ impl BlockContext<'_> {
                         } => self.writer.get_pointer_type_id(
                             self.writer.std140_compat_uniform_types[&base].type_id,
                             map_storage_class(space),
-                        ),
+                        )?,
                         _ => unreachable!(
                             "`UseStd140CompatType` must only be used with uniform pointer types"
                         ),
@@ -2666,7 +2672,7 @@ impl BlockContext<'_> {
                                 }
                                 _ => index,
                             };
-                            let index_id = self.get_index_constant(index);
+                            let index_id = self.get_index_constant(index)?;
                             self.temp_list.push(index_id);
                         }
                         // Bounds checks are not required when indexing a matrix. If indexing a
@@ -2796,14 +2802,14 @@ impl BlockContext<'_> {
                 // Even if the index is known, `OpAccessChain`
                 // requires expression operands, not literals.
                 let scalar = crate::Literal::U32(known_index);
-                Ok(self.writer.get_constant_scalar(scalar))
+                self.writer.get_constant_scalar(scalar)
             }
             BoundsCheckResult::Computed(computed_index_id) => Ok(computed_index_id),
             BoundsCheckResult::Conditional {
                 condition_id: condition,
                 index_id: index,
             } => {
-                self.extend_bounds_check_condition_chain(accumulated_checks, condition, block);
+                self.extend_bounds_check_condition_chain(accumulated_checks, condition, block)?;
 
                 // Use the index from the `Access` expression unchanged.
                 Ok(index)
@@ -2834,13 +2840,13 @@ impl BlockContext<'_> {
         chain: &mut Option<Word>,
         comparison_id: Word,
         block: &mut Block,
-    ) {
+    ) -> Result<(), Error> {
         match *chain {
             Some(ref mut prior_checks) => {
                 let combined = self.gen_id();
                 block.body.push(Instruction::binary(
                     spirv::Op::LogicalAnd,
-                    self.writer.get_bool_type_id(),
+                    self.writer.get_bool_type_id()?,
                     combined,
                     *prior_checks,
                     comparison_id,
@@ -2852,6 +2858,7 @@ impl BlockContext<'_> {
                 *chain = Some(comparison_id);
             }
         }
+        Ok(())
     }
 
     fn write_checked_load(
@@ -2922,8 +2929,8 @@ impl BlockContext<'_> {
                         };
                     let instruction = if let Some(space) = atomic_space {
                         let (semantics, scope) = space.to_spirv_semantics_and_scope();
-                        let scope_constant_id = self.get_scope_constant(scope as u32);
-                        let semantics_id = self.get_index_constant(semantics.bits());
+                        let scope_constant_id = self.get_scope_constant(scope as u32)?;
+                        let semantics_id = self.get_index_constant(semantics.bits())?;
                         Instruction::atomic_load(
                             result_type_id,
                             id,
@@ -2956,7 +2963,7 @@ impl BlockContext<'_> {
                             ));
                             value_id
                         },
-                    )
+                    )?
                 }
             };
 
@@ -2982,7 +2989,11 @@ impl BlockContext<'_> {
         }
     }
 
-    fn spill_to_internal_variable(&mut self, base: Handle<crate::Expression>, block: &mut Block) {
+    fn spill_to_internal_variable(
+        &mut self,
+        base: Handle<crate::Expression>,
+        block: &mut Block,
+    ) -> Result<(), Error> {
         use indexmap::map::Entry;
 
         // Make sure we have an internal variable to spill `base` to.
@@ -2994,7 +3005,7 @@ impl BlockContext<'_> {
                 let pointer_type_id = self.writer.get_resolution_pointer_id(
                     &self.fun_info[base].ty,
                     spirv::StorageClass::Function,
-                );
+                )?;
                 let id = self.writer.id_gen.next();
                 vacant.insert(super::LocalVariable {
                     id,
@@ -3037,6 +3048,7 @@ impl BlockContext<'_> {
         block
             .body
             .push(Instruction::store(spill_variable_id, base_id, None));
+        Ok(())
     }
 
     /// Generate an access to a spilled temporary, if necessary.
@@ -3094,13 +3106,13 @@ impl BlockContext<'_> {
         rows: crate::VectorSize,
         width: u8,
         op: spirv::Op,
-    ) {
+    ) -> Result<(), Error> {
         self.temp_list.clear();
 
         let vector_type_id = self.get_numeric_type_id(NumericType::Vector {
             size: rows,
             scalar: crate::Scalar::float(width),
-        });
+        })?;
 
         for index in 0..columns as u32 {
             let column_id_left = self.gen_id();
@@ -3135,6 +3147,7 @@ impl BlockContext<'_> {
             result_id,
             &self.temp_list,
         ));
+        Ok(())
     }
 
     /// Build the instructions for vector - scalar multiplication
@@ -3195,8 +3208,8 @@ impl BlockContext<'_> {
         size: u32,
         block: &mut Block,
         extractor: impl Fn(Word, Word, Word) -> Instruction,
-    ) {
-        let mut partial_sum = self.writer.get_constant_null(result_type_id);
+    ) -> Result<(), Error> {
+        let mut partial_sum = self.writer.get_constant_null(result_type_id)?;
         let last_component = size - 1;
         for index in 0..=last_component {
             // compute the product of the current components
@@ -3231,6 +3244,7 @@ impl BlockContext<'_> {
             // set the id of the result as the previous partial sum
             partial_sum = id;
         }
+        Ok(())
     }
 
     /// Emit code for `pack4x{I,U}8[Clamp]` if capability "Int8" is available.
@@ -3242,7 +3256,7 @@ impl BlockContext<'_> {
         id: u32,
         is_signed: bool,
         should_clamp: bool,
-    ) -> Instruction {
+    ) -> Result<Instruction, Error> {
         let int_type = if is_signed {
             crate::ScalarKind::Sint
         } else {
@@ -3255,14 +3269,14 @@ impl BlockContext<'_> {
                 width: 4,
             },
         };
-        let wide_vector_type_id = self.get_numeric_type_id(wide_vector_type);
+        let wide_vector_type_id = self.get_numeric_type_id(wide_vector_type)?;
         let packed_vector_type_id = self.get_numeric_type_id(NumericType::Vector {
             size: crate::VectorSize::Quad,
             scalar: crate::Scalar {
                 kind: crate::ScalarKind::Uint,
                 width: 1,
             },
-        });
+        })?;
 
         let mut wide_vector = arg0_id;
         if should_clamp {
@@ -3279,15 +3293,15 @@ impl BlockContext<'_> {
                     spirv::GlslStd450Op::UClamp,
                 )
             };
-            let mut splat_bound = |lit| {
-                let scalar = self.writer.get_constant_scalar(lit);
+            let mut splat_bound = |lit| -> Result<Word, Error> {
+                let scalar = self.writer.get_constant_scalar(lit)?;
                 self.writer.get_constant_composite(
                     LookupType::Local(LocalType::Numeric(wide_vector_type)),
                     &[scalar; 4],
                 )
             };
-            let min = splat_bound(min);
-            let max = splat_bound(max);
+            let min = splat_bound(min)?;
+            let max = splat_bound(max)?;
 
             let clamp_id = self.gen_id();
             block.body.push(Instruction::ext_inst_gl_op(
@@ -3313,7 +3327,12 @@ impl BlockContext<'_> {
         // and a scalar precisely as required by the WGSL spec [2].
         // [1]: https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpBitcast
         // [2]: https://www.w3.org/TR/WGSL/#pack4xI8-builtin
-        Instruction::unary(spirv::Op::Bitcast, result_type_id, id, packed_vector)
+        Ok(Instruction::unary(
+            spirv::Op::Bitcast,
+            result_type_id,
+            id,
+            packed_vector,
+        ))
     }
 
     /// Emit code for `pack4x{I,U}8[Clamp]` if capability "Int8" is not available.
@@ -3325,30 +3344,32 @@ impl BlockContext<'_> {
         id: u32,
         is_signed: bool,
         should_clamp: bool,
-    ) -> Instruction {
+    ) -> Result<Instruction, Error> {
         let int_type = if is_signed {
             crate::ScalarKind::Sint
         } else {
             crate::ScalarKind::Uint
         };
-        let uint_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32));
+        let uint_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32))?;
         let int_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar {
             kind: int_type,
             width: 4,
-        }));
+        }))?;
 
         let mut last_instruction = Instruction::new(spirv::Op::Nop);
 
-        let zero = self.writer.get_constant_scalar(crate::Literal::U32(0));
+        let zero = self.writer.get_constant_scalar(crate::Literal::U32(0))?;
         let mut preresult = zero;
         block
             .body
             .reserve(usize::from(VEC_LENGTH) * (2 + usize::from(is_signed)));
 
-        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8))?;
         const VEC_LENGTH: u8 = 4;
         for i in 0..u32::from(VEC_LENGTH) {
-            let offset = self.writer.get_constant_scalar(crate::Literal::U32(i * 8));
+            let offset = self
+                .writer
+                .get_constant_scalar(crate::Literal::U32(i * 8))?;
             let mut extracted = self.gen_id();
             block.body.push(Instruction::binary(
                 spirv::Op::CompositeExtract,
@@ -3381,8 +3402,8 @@ impl BlockContext<'_> {
                         spirv::GlslStd450Op::UClamp,
                     )
                 };
-                let min = self.writer.get_constant_scalar(min);
-                let max = self.writer.get_constant_scalar(max);
+                let min = self.writer.get_constant_scalar(min)?;
+                let max = self.writer.get_constant_scalar(max)?;
 
                 let clamp_id = self.gen_id();
                 block.body.push(Instruction::ext_inst_gl_op(
@@ -3420,7 +3441,7 @@ impl BlockContext<'_> {
                 preresult = new_preresult;
             }
         }
-        last_instruction
+        Ok(last_instruction)
     }
 
     /// Emit code for `unpack4x{I,U}8` if capability "Int8" is available.
@@ -3431,7 +3452,7 @@ impl BlockContext<'_> {
         arg0_id: u32,
         id: u32,
         is_signed: bool,
-    ) -> Instruction {
+    ) -> Result<Instruction, Error> {
         let (int_type, convert_op) = if is_signed {
             (crate::ScalarKind::Sint, spirv::Op::SConvert)
         } else {
@@ -3444,7 +3465,7 @@ impl BlockContext<'_> {
                 kind: int_type,
                 width: 1,
             },
-        });
+        })?;
 
         // The SPIR-V spec [1] defines the bit order for bit casting between a vector
         // and a scalar precisely as required by the WGSL spec [2].
@@ -3458,7 +3479,12 @@ impl BlockContext<'_> {
             arg0_id,
         ));
 
-        Instruction::unary(convert_op, result_type_id, id, packed_vector)
+        Ok(Instruction::unary(
+            convert_op,
+            result_type_id,
+            id,
+            packed_vector,
+        ))
     }
 
     /// Emit code for `unpack4x{I,U}8` if capability "Int8" is not available.
@@ -3469,20 +3495,20 @@ impl BlockContext<'_> {
         arg0_id: u32,
         id: u32,
         is_signed: bool,
-    ) -> Instruction {
+    ) -> Result<Instruction, Error> {
         let (int_type, extract_op) = if is_signed {
             (crate::ScalarKind::Sint, spirv::Op::BitFieldSExtract)
         } else {
             (crate::ScalarKind::Uint, spirv::Op::BitFieldUExtract)
         };
 
-        let sint_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::I32));
+        let sint_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::I32))?;
 
-        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8))?;
         let int_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar {
             kind: int_type,
             width: 4,
-        }));
+        }))?;
         block
             .body
             .reserve(usize::from(VEC_LENGTH) * 2 + usize::from(is_signed));
@@ -3504,7 +3530,7 @@ impl BlockContext<'_> {
         for (i, part_id) in parts.into_iter().enumerate() {
             let index = self
                 .writer
-                .get_constant_scalar(crate::Literal::U32(i as u32 * 8));
+                .get_constant_scalar(crate::Literal::U32(i as u32 * 8))?;
             block.body.push(Instruction::ternary(
                 extract_op,
                 int_type_id,
@@ -3515,7 +3541,7 @@ impl BlockContext<'_> {
             ));
         }
 
-        Instruction::composite_construct(result_type_id, id, &parts)
+        Ok(Instruction::composite_construct(result_type_id, id, &parts))
     }
 
     /// Generate one or more SPIR-V blocks for `naga_block`.
@@ -3784,7 +3810,7 @@ impl BlockContext<'_> {
                     ));
 
                     if self.force_loop_bounding {
-                        block = self.write_force_bounded_loop_instructions(block, merge_id);
+                        block = self.write_force_bounded_loop_instructions(block, merge_id)?;
                     }
                     self.function.consume(block, Instruction::branch(body_id));
 
@@ -3867,10 +3893,10 @@ impl BlockContext<'_> {
                     return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::ControlBarrier(flags) => {
-                    self.writer.write_control_barrier(flags, &mut block.body);
+                    self.writer.write_control_barrier(flags, &mut block.body)?;
                 }
                 Statement::MemoryBarrier(flags) => {
-                    self.writer.write_memory_barrier(flags, &mut block);
+                    self.writer.write_memory_barrier(flags, &mut block)?;
                 }
                 Statement::Store { pointer, value } => {
                     let value_id = self.cached[value];
@@ -3894,8 +3920,8 @@ impl BlockContext<'_> {
                             };
                             let instruction = if let Some(space) = atomic_space {
                                 let (semantics, scope) = space.to_spirv_semantics_and_scope();
-                                let scope_constant_id = self.get_scope_constant(scope as u32);
-                                let semantics_id = self.get_index_constant(semantics.bits());
+                                let scope_constant_id = self.get_scope_constant(scope as u32)?;
+                                let semantics_id = self.get_index_constant(semantics.bits())?;
                                 Instruction::atomic_store(
                                     pointer_id,
                                     scope_constant_id,
@@ -3945,7 +3971,7 @@ impl BlockContext<'_> {
                     let type_id = match result {
                         Some(expr) => {
                             self.cached[expr] = id;
-                            self.get_expression_type_id(&self.fun_info[expr].ty)
+                            self.get_expression_type_id(&self.fun_info[expr].ty)?
                         }
                         None => self.writer.void_type,
                     };
@@ -3968,7 +3994,7 @@ impl BlockContext<'_> {
                     // so use `result`'s type if it is available. For no-result
                     // operations, fall back to `value`'s type.
                     let result_type_id =
-                        self.get_expression_type_id(&self.fun_info[result.unwrap_or(value)].ty);
+                        self.get_expression_type_id(&self.fun_info[result.unwrap_or(value)].ty)?;
 
                     if let Some(result) = result {
                         self.cached[result] = id;
@@ -3993,8 +4019,8 @@ impl BlockContext<'_> {
                         .pointer_space()
                         .unwrap();
                     let (semantics, scope) = space.to_spirv_semantics_and_scope();
-                    let scope_constant_id = self.get_scope_constant(scope as u32);
-                    let semantics_id = self.get_index_constant(semantics.bits());
+                    let scope_constant_id = self.get_scope_constant(scope as u32)?;
+                    let semantics_id = self.get_index_constant(semantics.bits())?;
                     let value_id = self.cached[value];
                     let value_inner = self.fun_info[value].ty.inner_with(&self.ir_module.types);
 
@@ -4148,9 +4174,9 @@ impl BlockContext<'_> {
                         }
                         crate::AtomicFunction::Exchange { compare: Some(cmp) } => {
                             let scalar_type_id =
-                                self.get_numeric_type_id(NumericType::Scalar(scalar));
+                                self.get_numeric_type_id(NumericType::Scalar(scalar))?;
                             let bool_type_id =
-                                self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::BOOL));
+                                self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::BOOL))?;
 
                             let cas_result_id = self.gen_id();
                             let equality_result_id = self.gen_id();
@@ -4206,8 +4232,8 @@ impl BlockContext<'_> {
                 }
                 Statement::WorkGroupUniformLoad { pointer, result } => {
                     self.writer
-                        .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
-                    let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty);
+                        .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body)?;
+                    let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty)?;
                     // Match `Expression::Load` behavior, including `OpAtomicLoad` when
                     // loading from a pointer to `atomic<T>`.
                     let id = self.write_checked_load(
@@ -4218,10 +4244,10 @@ impl BlockContext<'_> {
                     )?;
                     self.cached[result] = id;
                     self.writer
-                        .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
+                        .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body)?;
                 }
                 Statement::RayQuery { query, ref fun } => {
-                    self.write_ray_query_function(query, fun, &mut block);
+                    self.write_ray_query_function(query, fun, &mut block)?;
                 }
                 Statement::SubgroupBallot {
                     result,
@@ -4251,7 +4277,7 @@ impl BlockContext<'_> {
                     } else {
                         spirv::CooperativeMatrixLayout::ColumnMajorKHR
                     };
-                    let layout_id = self.get_index_constant(layout as u32);
+                    let layout_id = self.get_index_constant(layout as u32)?;
                     let stride_id = self.cached[data.stride];
                     match self.write_access_chain(
                         data.pointer,
@@ -4281,7 +4307,7 @@ impl BlockContext<'_> {
                     };
                 }
                 Statement::RayPipelineFunction(ref fun) => {
-                    self.write_ray_tracing_pipeline_function(fun, &mut block);
+                    self.write_ray_tracing_pipeline_function(fun, &mut block)?;
                 }
                 Statement::DebugPrintf {
                     ref format,
@@ -4294,7 +4320,7 @@ impl BlockContext<'_> {
                     }
 
                     self.writer
-                        .write_debug_printf(&mut block, format, &format_params);
+                        .write_debug_printf(&mut block, format, &format_params)?;
                 }
             }
         }
@@ -4304,8 +4330,8 @@ impl BlockContext<'_> {
             // need to end it with some kind of return instruction.
             BlockExit::Return => match self.ir_function.result {
                 Some(ref result) if self.function.entry_point_context.is_none() => {
-                    let type_id = self.get_handle_type_id(result.ty);
-                    let null_id = self.writer.get_constant_null(type_id);
+                    let type_id = self.get_handle_type_id(result.ty)?;
+                    let null_id = self.writer.get_constant_null(type_id)?;
                     Instruction::return_value(null_id)
                 }
                 _ => Instruction::return_void(),

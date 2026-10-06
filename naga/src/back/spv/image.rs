@@ -88,7 +88,7 @@ trait Access {
     /// Construct the SPIR-V 'zero' value to be returned for an out-of-bounds
     /// access under the `ReadZeroSkipWrite` policy. If the access does not
     /// produce a value, `Self::Output` should be `()`.
-    fn out_of_bounds_value(&self, ctx: &mut BlockContext<'_>) -> Self::Output;
+    fn out_of_bounds_value(&self, ctx: &mut BlockContext<'_>) -> Result<Self::Output, Error>;
 }
 
 /// Texel access information for an [`ImageLoad`] expression.
@@ -130,7 +130,7 @@ impl Load {
             crate::ImageClass::Depth { .. } => ctx.get_numeric_type_id(NumericType::Vector {
                 size: crate::VectorSize::Quad,
                 scalar: crate::Scalar::F32,
-            }),
+            })?,
             _ => result_type_id,
         };
 
@@ -186,7 +186,7 @@ impl Access for Load {
         self.type_id
     }
 
-    fn out_of_bounds_value(&self, ctx: &mut BlockContext<'_>) -> Word {
+    fn out_of_bounds_value(&self, ctx: &mut BlockContext<'_>) -> Result<Word, Error> {
         ctx.writer.get_constant_null(self.type_id)
     }
 }
@@ -225,7 +225,9 @@ impl Access for Store {
     fn result_type(&self) {}
 
     /// Stores don't generate any value, so this just returns `()`.
-    fn out_of_bounds_value(&self, _ctx: &mut BlockContext<'_>) {}
+    fn out_of_bounds_value(&self, _ctx: &mut BlockContext<'_>) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 impl BlockContext<'_> {
@@ -273,7 +275,7 @@ impl BlockContext<'_> {
         let array_index = match array_index {
             None => {
                 let value_id = coordinates_id;
-                let type_id = self.get_expression_type_id(ty);
+                let type_id = self.get_expression_type_id(ty)?;
                 let size = match *inner_ty {
                     Ti::Scalar { .. } => None,
                     Ti::Vector { size, .. } => Some(size),
@@ -339,7 +341,8 @@ impl BlockContext<'_> {
             }
         };
         let reconciled_array_index_id = if let Some(cast) = cast {
-            let component_ty_id = self.get_numeric_type_id(NumericType::Scalar(component_scalar));
+            let component_ty_id =
+                self.get_numeric_type_id(NumericType::Scalar(component_scalar))?;
             let reconciled_id = self.gen_id();
             block.body.push(Instruction::unary(
                 cast,
@@ -356,7 +359,7 @@ impl BlockContext<'_> {
         let type_id = self.get_numeric_type_id(NumericType::Vector {
             size,
             scalar: component_scalar,
-        });
+        })?;
 
         // Schmear the coordinates and index together.
         let value_id = self.gen_id();
@@ -401,7 +404,7 @@ impl BlockContext<'_> {
     /// If `coordinates` is a scalar, return a scalar one. Otherwise, return
     /// a vector of ones.
     fn write_coordinate_one(&mut self, coordinates: &ImageCoordinates) -> Result<Word, Error> {
-        let one = self.get_scope_constant(1);
+        let one = self.get_scope_constant(1)?;
         match coordinates.size {
             None => Ok(one),
             Some(vector_size) => {
@@ -412,7 +415,7 @@ impl BlockContext<'_> {
                     id,
                     &ones[..vector_size as usize],
                 )
-                .to_words(&mut self.writer.logical_layout.declarations);
+                .to_words(&mut self.writer.logical_layout.declarations)?;
                 Ok(id)
             }
         }
@@ -430,7 +433,7 @@ impl BlockContext<'_> {
         size_id: Word,
         block: &mut Block,
     ) -> Result<Word, Error> {
-        let i32_one_id = self.get_scope_constant(1);
+        let i32_one_id = self.get_scope_constant(1)?;
 
         // Subtract one from `size` to get the largest valid value.
         let limit_id = self.gen_id();
@@ -523,7 +526,7 @@ impl BlockContext<'_> {
             &[spirv::Capability::ImageQuery],
         )?;
 
-        let i32_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::I32));
+        let i32_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::I32))?;
 
         // If `level` is `Some`, clamp it to fall within bounds. This must
         // happen first, because we'll use it to query the image size for
@@ -605,10 +608,10 @@ impl BlockContext<'_> {
             &[spirv::Capability::ImageQuery],
         )?;
 
-        let bool_type_id = self.writer.get_bool_type_id();
-        let i32_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::I32));
+        let bool_type_id = self.writer.get_bool_type_id()?;
+        let i32_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::I32))?;
 
-        let null_id = access.out_of_bounds_value(self);
+        let null_id = access.out_of_bounds_value(self)?;
 
         let mut selection = Selection::start(block, access.result_type());
 
@@ -676,7 +679,7 @@ impl BlockContext<'_> {
             },
             None => NumericType::Scalar(crate::Scalar::BOOL),
         };
-        let coords_bool_type_id = self.get_numeric_type_id(coords_numeric_type);
+        let coords_bool_type_id = self.get_numeric_type_id(coords_numeric_type)?;
         let coords_conds_id = self.gen_id();
         selection.block().body.push(Instruction::binary(
             spirv::Op::ULessThan,
@@ -831,15 +834,15 @@ impl BlockContext<'_> {
             self.get_numeric_type_id(NumericType::Vector {
                 size: crate::VectorSize::Quad,
                 scalar: crate::Scalar::F32,
-            })
+            })?
         } else {
             result_type_id
         };
 
         // OpTypeSampledImage
-        let image_type_id = self.get_handle_type_id(image_type);
+        let image_type_id = self.get_handle_type_id(image_type)?;
         let sampled_image_type_id =
-            self.get_type_id(LookupType::Local(LocalType::SampledImage { image_type_id }));
+            self.get_type_id(LookupType::Local(LocalType::SampledImage { image_type_id }))?;
 
         let sampler_id = self.get_handle_id(sampler);
 
@@ -863,8 +866,8 @@ impl BlockContext<'_> {
 
             // Query the size of level 0 of the texture.
             let image_size_id = self.gen_id();
-            let vec2u_type_id = self.writer.get_vec2u_type_id();
-            let const_zero_uint_id = self.writer.get_constant_scalar(crate::Literal::U32(0));
+            let vec2u_type_id = self.writer.get_vec2u_type_id()?;
+            let const_zero_uint_id = self.writer.get_constant_scalar(crate::Literal::U32(0))?;
             let mut query_inst = Instruction::image_query(
                 spirv::Op::ImageQuerySizeLod,
                 vec2u_type_id,
@@ -875,7 +878,7 @@ impl BlockContext<'_> {
             block.body.push(query_inst);
 
             let image_size_f_id = self.gen_id();
-            let vec2f_type_id = self.writer.get_vec2f_type_id();
+            let vec2f_type_id = self.writer.get_vec2f_type_id()?;
             block.body.push(Instruction::unary(
                 spirv::Op::ConvertUToF,
                 vec2f_type_id,
@@ -885,14 +888,14 @@ impl BlockContext<'_> {
 
             // Calculate the top-left and bottom-right margin for clamping to. I.e. a
             // half-texel from each side.
-            let const_0_5_f32_id = self.writer.get_constant_scalar(crate::Literal::F32(0.5));
+            let const_0_5_f32_id = self.writer.get_constant_scalar(crate::Literal::F32(0.5))?;
             let const_0_5_vec2f_id = self.writer.get_constant_composite(
                 LookupType::Local(LocalType::Numeric(NumericType::Vector {
                     size: crate::VectorSize::Bi,
                     scalar: crate::Scalar::F32,
                 })),
                 &[const_0_5_f32_id, const_0_5_f32_id],
-            );
+            )?;
 
             let margin_left_id = self.gen_id();
             block.body.push(Instruction::binary(
@@ -903,14 +906,14 @@ impl BlockContext<'_> {
                 image_size_f_id,
             ));
 
-            let const_1_f32_id = self.writer.get_constant_scalar(crate::Literal::F32(1.0));
+            let const_1_f32_id = self.writer.get_constant_scalar(crate::Literal::F32(1.0))?;
             let const_1_vec2f_id = self.writer.get_constant_composite(
                 LookupType::Local(LocalType::Numeric(NumericType::Vector {
                     size: crate::VectorSize::Bi,
                     scalar: crate::Scalar::F32,
                 })),
                 &[const_1_f32_id, const_1_f32_id],
-            );
+            )?;
 
             let margin_right_id = self.gen_id();
             block.body.push(Instruction::binary(
@@ -951,7 +954,7 @@ impl BlockContext<'_> {
 
         let mut main_instruction = match (level, gather) {
             (_, Some(component)) => {
-                let component_id = self.get_index_constant(component as u32);
+                let component_id = self.get_index_constant(component as u32)?;
                 let mut inst = Instruction::image_gather(
                     sample_result_type_id,
                     id,
@@ -975,7 +978,7 @@ impl BlockContext<'_> {
                     depth_id,
                 );
 
-                let zero_id = self.writer.get_constant_scalar(crate::Literal::F32(0.0));
+                let zero_id = self.writer.get_constant_scalar(crate::Literal::F32(0.0))?;
 
                 mask |= spirv::ImageOperands::LOD;
                 inst.add_operand(mask.bits());
@@ -1020,7 +1023,7 @@ impl BlockContext<'_> {
                 ) {
                     let lod_f32_id = self.gen_id();
                     let f32_type_id =
-                        self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::F32));
+                        self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::F32))?;
                     let convert_op = match *self.fun_info[lod_handle]
                         .ty
                         .inner_with(&self.ir_module.types)
@@ -1160,7 +1163,7 @@ impl BlockContext<'_> {
                     None => NumericType::Scalar(crate::Scalar::U32),
                 };
 
-                let extended_size_type_id = self.get_numeric_type_id(vector_numeric_type);
+                let extended_size_type_id = self.get_numeric_type_id(vector_numeric_type)?;
 
                 let (query_op, level_id) = match class {
                     Ic::Sampled { multi: true, .. }
@@ -1169,7 +1172,7 @@ impl BlockContext<'_> {
                     _ => {
                         let level_id = match level {
                             Some(expr) => self.cached[expr],
-                            None => self.get_index_constant(0),
+                            None => self.get_index_constant(0)?,
                         };
                         (spirv::Op::ImageQuerySizeLod, Some(level_id))
                     }
@@ -1229,7 +1232,7 @@ impl BlockContext<'_> {
                 let extended_size_type_id = self.get_numeric_type_id(NumericType::Vector {
                     size: vec_size,
                     scalar: crate::Scalar::U32,
-                });
+                })?;
                 let id_extended = self.gen_id();
                 let mut inst = Instruction::image_query(
                     spirv::Op::ImageQuerySizeLod,
@@ -1237,7 +1240,7 @@ impl BlockContext<'_> {
                     id_extended,
                     image_id,
                 );
-                inst.add_operand(self.get_index_constant(0));
+                inst.add_operand(self.get_index_constant(0)?);
                 block.body.push(inst);
 
                 let extract_id = self.gen_id();
@@ -1328,8 +1331,9 @@ impl BlockContext<'_> {
             return Err(Error::Validation("Invalid image class"));
         };
         let scalar = format.into();
-        let scalar_type_id = self.get_numeric_type_id(NumericType::Scalar(scalar));
-        let pointer_type_id = self.get_pointer_type_id(scalar_type_id, spirv::StorageClass::Image);
+        let scalar_type_id = self.get_numeric_type_id(NumericType::Scalar(scalar))?;
+        let pointer_type_id =
+            self.get_pointer_type_id(scalar_type_id, spirv::StorageClass::Image)?;
         let signed = scalar.kind == crate::ScalarKind::Sint;
         if scalar.width == 8 {
             self.writer
@@ -1337,7 +1341,7 @@ impl BlockContext<'_> {
         }
         let pointer_id = self.gen_id();
         let coordinates = self.write_image_coordinates(coordinate, array_index, block)?;
-        let sample_id = self.writer.get_constant_scalar(crate::Literal::U32(0));
+        let sample_id = self.writer.get_constant_scalar(crate::Literal::U32(0))?;
         block.body.push(Instruction::image_texel_pointer(
             pointer_type_id,
             pointer_id,
@@ -1360,12 +1364,12 @@ impl BlockContext<'_> {
                 return Err(Error::Validation("Exchange atomics are not supported yet"))
             }
         };
-        let result_type_id = self.get_expression_type_id(&self.fun_info[value].ty);
+        let result_type_id = self.get_expression_type_id(&self.fun_info[value].ty)?;
         let id = self.gen_id();
         let space = crate::AddressSpace::Handle;
         let (semantics, scope) = space.to_spirv_semantics_and_scope();
-        let scope_constant_id = self.get_scope_constant(scope as u32);
-        let semantics_id = self.get_index_constant(semantics.bits());
+        let scope_constant_id = self.get_scope_constant(scope as u32)?;
+        let semantics_id = self.get_index_constant(semantics.bits())?;
         let value_id = self.cached[value];
 
         block.body.push(Instruction::image_atomic(

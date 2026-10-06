@@ -7,7 +7,7 @@ pub mod query;
 
 use alloc::{vec, vec::Vec};
 
-use super::{Block, Function, FunctionArgument, Instruction, LookupFunctionType, Writer};
+use super::{Block, Error, Function, FunctionArgument, Instruction, LookupFunctionType, Writer};
 
 struct ExtractedRayDesc {
     ray_flags_id: spirv::Word,
@@ -25,11 +25,11 @@ fn write_ray_flags_contains_flags(
     block: &mut Block,
     id: spirv::Word,
     flag: u32,
-) -> spirv::Word {
-    let bit_id = writer.get_constant_scalar(crate::Literal::U32(flag));
-    let zero_id = writer.get_constant_scalar(crate::Literal::U32(0));
-    let u32_type_id = writer.get_u32_type_id();
-    let bool_ty = writer.get_bool_type_id();
+) -> Result<spirv::Word, Error> {
+    let bit_id = writer.get_constant_scalar(crate::Literal::U32(flag))?;
+    let zero_id = writer.get_constant_scalar(crate::Literal::U32(0))?;
+    let u32_type_id = writer.get_u32_type_id()?;
+    let bool_ty = writer.get_bool_type_id()?;
 
     let and_id = writer.id_gen.next();
     block.body.push(Instruction::binary(
@@ -49,7 +49,7 @@ fn write_ray_flags_contains_flags(
         zero_id,
     ));
 
-    eq_id
+    Ok(eq_id)
 }
 
 impl Writer {
@@ -58,11 +58,12 @@ impl Writer {
         block: &mut Block,
         desc_id: spirv::Word,
         validate: bool,
-    ) -> ExtractedRayDesc {
-        let bool_type_id = self.get_bool_type_id();
-        let bool_vec3_type_id = self.get_vec3_bool_type_id();
-        let f32_type_id = self.get_f32_type_id();
-        let flag_type_id = self.get_numeric_type_id(super::NumericType::Scalar(crate::Scalar::U32));
+    ) -> Result<ExtractedRayDesc, Error> {
+        let bool_type_id = self.get_bool_type_id()?;
+        let bool_vec3_type_id = self.get_vec3_bool_type_id()?;
+        let f32_type_id = self.get_f32_type_id()?;
+        let flag_type_id =
+            self.get_numeric_type_id(super::NumericType::Scalar(crate::Scalar::U32))?;
 
         //Note: composite extract indices and types must match `generate_ray_desc_type`
         let ray_flags_id = self.id_gen.next();
@@ -98,7 +99,7 @@ impl Writer {
         let vector_type_id = self.get_numeric_type_id(super::NumericType::Vector {
             size: crate::VectorSize::Tri,
             scalar: crate::Scalar::F32,
-        });
+        })?;
         let ray_origin_id = self.id_gen.next();
         block.body.push(Instruction::composite_extract(
             vector_type_id,
@@ -131,7 +132,7 @@ impl Writer {
             // therefore also tmax is too because it is greater than
             // or equal to tmin) (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06349).
             let tmin_ge_zero_id = self.id_gen.next();
-            let zero_id = self.get_constant_scalar(crate::Literal::F32(0.0));
+            let zero_id = self.get_constant_scalar(crate::Literal::F32(0.0))?;
             block.body.push(Instruction::binary(
                 spirv::Op::FOrdGreaterThanEqual,
                 bool_type_id,
@@ -244,13 +245,13 @@ impl Writer {
                 writer: &mut Writer,
                 block: &mut Block,
                 mut bools: Vec<spirv::Word>,
-            ) -> spirv::Word {
+            ) -> Result<spirv::Word, Error> {
                 assert!(bools.len() > 1, "Must have multiple booleans!");
-                let bool_ty = writer.get_bool_type_id();
+                let bool_ty = writer.get_bool_type_id()?;
                 let mut each_two_true = Vec::new();
                 while let Some(last_bool) = bools.pop() {
                     for &bool in &bools {
-                        let both_true_id = writer.write_logical_and(block, last_bool, bool);
+                        let both_true_id = writer.write_logical_and(block, last_bool, bool)?;
                         each_two_true.push(both_true_id);
                     }
                 }
@@ -274,7 +275,7 @@ impl Writer {
                     less_than_two_id,
                     all_or_id,
                 ));
-                less_than_two_id
+                Ok(less_than_two_id)
             }
 
             // Check that at most one of skip triangles and skip AABBs is
@@ -284,19 +285,19 @@ impl Writer {
                 block,
                 ray_flags_id,
                 crate::RayFlag::SKIP_TRIANGLES.bits(),
-            );
+            )?;
             let contains_skip_aabbs = write_ray_flags_contains_flags(
                 self,
                 block,
                 ray_flags_id,
                 crate::RayFlag::SKIP_AABBS.bits(),
-            );
+            )?;
 
             let not_contain_skip_triangles_aabbs = write_less_than_2_true(
                 self,
                 block,
                 vec![contains_skip_triangles, contains_skip_aabbs],
-            );
+            )?;
 
             // Check that at most one of skip triangles (taken from above check),
             // cull back facing, and cull front face is present (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06890)
@@ -305,13 +306,13 @@ impl Writer {
                 block,
                 ray_flags_id,
                 crate::RayFlag::CULL_BACK_FACING.bits(),
-            );
+            )?;
             let contains_cull_front = write_ray_flags_contains_flags(
                 self,
                 block,
                 ray_flags_id,
                 crate::RayFlag::CULL_FRONT_FACING.bits(),
-            );
+            )?;
 
             let not_contain_skip_triangles_cull = write_less_than_2_true(
                 self,
@@ -321,7 +322,7 @@ impl Writer {
                     contains_cull_back,
                     contains_cull_front,
                 ],
-            );
+            )?;
 
             // Check that at most one of force opaque, force not opaque, cull opaque,
             // and cull not opaque are present (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06891)
@@ -330,25 +331,25 @@ impl Writer {
                 block,
                 ray_flags_id,
                 crate::RayFlag::FORCE_OPAQUE.bits(),
-            );
+            )?;
             let contains_no_opaque = write_ray_flags_contains_flags(
                 self,
                 block,
                 ray_flags_id,
                 crate::RayFlag::FORCE_NO_OPAQUE.bits(),
-            );
+            )?;
             let contains_cull_opaque = write_ray_flags_contains_flags(
                 self,
                 block,
                 ray_flags_id,
                 crate::RayFlag::CULL_OPAQUE.bits(),
-            );
+            )?;
             let contains_cull_no_opaque = write_ray_flags_contains_flags(
                 self,
                 block,
                 ray_flags_id,
                 crate::RayFlag::CULL_NO_OPAQUE.bits(),
-            );
+            )?;
 
             let not_contain_multiple_opaque = write_less_than_2_true(
                 self,
@@ -359,7 +360,7 @@ impl Writer {
                     contains_cull_opaque,
                     contains_cull_no_opaque,
                 ],
-            );
+            )?;
 
             // Combine all checks into a single flag saying whether the call is valid or not.
             Some(self.write_reduce_and(
@@ -373,12 +374,12 @@ impl Writer {
                     not_contain_skip_triangles_cull,
                     not_contain_multiple_opaque,
                 ],
-            ))
+            )?)
         } else {
             None
         };
 
-        ExtractedRayDesc {
+        Ok(ExtractedRayDesc {
             ray_flags_id,
             cull_mask_id,
             tmin_id,
@@ -386,7 +387,7 @@ impl Writer {
             ray_origin_id,
             ray_dir_id,
             valid_id,
-        }
+        })
     }
     /// writes a logical and of two scalar booleans
     fn write_logical_and(
@@ -394,9 +395,9 @@ impl Writer {
         block: &mut Block,
         one: spirv::Word,
         two: spirv::Word,
-    ) -> spirv::Word {
+    ) -> Result<spirv::Word, Error> {
         let id = self.id_gen.next();
-        let bool_id = self.get_bool_type_id();
+        let bool_id = self.get_bool_type_id()?;
         block.body.push(Instruction::binary(
             spirv::Op::LogicalAnd,
             bool_id,
@@ -404,16 +405,20 @@ impl Writer {
             one,
             two,
         ));
-        id
+        Ok(id)
     }
 
-    fn write_reduce_and(&mut self, block: &mut Block, mut bools: Vec<spirv::Word>) -> spirv::Word {
+    fn write_reduce_and(
+        &mut self,
+        block: &mut Block,
+        mut bools: Vec<spirv::Word>,
+    ) -> Result<spirv::Word, Error> {
         // The combined `and`ed together of all of the bools up to this point.
         let mut current_combined = bools.pop().unwrap();
         for boolean in bools {
-            current_combined = self.write_logical_and(block, current_combined, boolean)
+            current_combined = self.write_logical_and(block, current_combined, boolean)?
         }
-        current_combined
+        Ok(current_combined)
     }
 
     // returns the id of the function, the function, and ids for its arguments.
@@ -421,11 +426,11 @@ impl Writer {
         &mut self,
         arg_types: &[spirv::Word],
         return_ty: spirv::Word,
-    ) -> (spirv::Word, Function, Vec<spirv::Word>) {
+    ) -> Result<(spirv::Word, Function, Vec<spirv::Word>), Error> {
         let func_ty = self.get_function_type(LookupFunctionType {
             parameter_type_ids: Vec::from(arg_types),
             return_type_id: return_ty,
-        });
+        })?;
 
         let mut function = Function::default();
         let func_id = self.id_gen.next();
@@ -447,6 +452,6 @@ impl Writer {
             });
             arg_ids.push(id);
         }
-        (func_id, function, arg_ids)
+        Ok((func_id, function, arg_ids))
     }
 }

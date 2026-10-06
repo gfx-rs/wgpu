@@ -180,6 +180,12 @@ pub enum Error {
     SpirvVersionTooLow(u8, u8),
     #[error("mapping of {0:?} is missing")]
     MissingBinding(crate::ResourceBinding),
+    #[error(
+        "an {op:?} instruction is {word_count} words long, \
+         but SPIR-V instructions are limited to {} words",
+        u16::MAX
+    )]
+    InstructionTooLong { op: spirv::Op, word_count: u32 },
 }
 
 #[derive(Default)]
@@ -872,32 +878,36 @@ impl BlockContext<'_> {
         self.writer.id_gen.next()
     }
 
-    fn get_type_id(&mut self, lookup_type: LookupType) -> Word {
+    fn get_type_id(&mut self, lookup_type: LookupType) -> Result<Word, Error> {
         self.writer.get_type_id(lookup_type)
     }
 
-    fn get_handle_type_id(&mut self, handle: Handle<crate::Type>) -> Word {
+    fn get_handle_type_id(&mut self, handle: Handle<crate::Type>) -> Result<Word, Error> {
         self.writer.get_handle_type_id(handle)
     }
 
-    fn get_expression_type_id(&mut self, tr: &TypeResolution) -> Word {
+    fn get_expression_type_id(&mut self, tr: &TypeResolution) -> Result<Word, Error> {
         self.writer.get_expression_type_id(tr)
     }
 
-    fn get_index_constant(&mut self, index: Word) -> Word {
+    fn get_index_constant(&mut self, index: Word) -> Result<Word, Error> {
         self.writer.get_constant_scalar(crate::Literal::U32(index))
     }
 
-    fn get_scope_constant(&mut self, scope: Word) -> Word {
+    fn get_scope_constant(&mut self, scope: Word) -> Result<Word, Error> {
         self.writer
             .get_constant_scalar(crate::Literal::I32(scope as _))
     }
 
-    fn get_pointer_type_id(&mut self, base: Word, class: spirv::StorageClass) -> Word {
+    fn get_pointer_type_id(
+        &mut self,
+        base: Word,
+        class: spirv::StorageClass,
+    ) -> Result<Word, Error> {
         self.writer.get_pointer_type_id(base, class)
     }
 
-    fn get_numeric_type_id(&mut self, numeric: NumericType) -> Word {
+    fn get_numeric_type_id(&mut self, numeric: NumericType) -> Result<Word, Error> {
         self.writer.get_numeric_type_id(numeric)
     }
 }

@@ -2015,3 +2015,61 @@ fn functions_share_name() {
     .validate(&module)
     .expect("module should be valid");
 }
+
+/// Walk `words` instruction by instruction, using each instruction header's
+/// word count, and check that the walk lands exactly on the end of the module.
+///
+/// A header that understates its instruction's length desynchronizes every
+/// consumer that decodes SPIR-V this way, including drivers.
+#[track_caller]
+fn assert_spv_instruction_lengths_consistent(words: &[u32]) {
+    const HEADER_WORDS: usize = 5;
+
+    let mut offset = HEADER_WORDS;
+    while offset < words.len() {
+        let word_count = (words[offset] >> 16) as usize;
+        assert_ne!(word_count, 0, "instruction at word {offset} has no length");
+        offset += word_count;
+    }
+    assert_eq!(
+        offset,
+        words.len(),
+        "instruction lengths overrun the module"
+    );
+}
+
+/// An entry-point name too long for `OpEntryPoint` must be reported as a
+/// backend error, not silently truncated into a malformed instruction header.
+#[test]
+fn spv_entry_point_name_too_long() {
+    // `OpEntryPoint` spends three words on its header, execution model, and
+    // function id. The nul-terminated name must fit in what remains.
+    const MAX_NAME_BYTES: usize = (u16::MAX as usize - 3) * 4 - 1;
+
+    let write = |name_len: usize| {
+        let name = "e".repeat(name_len);
+        let source = format!("@compute @workgroup_size(1) fn {name}() {{}}");
+
+        let module = naga::front::wgsl::parse_str(&source).unwrap();
+        let info = naga::valid::Validator::new(Default::default(), Default::default())
+            .validate(&module)
+            .unwrap();
+
+        naga::back::spv::write_vec(&module, &info, &Default::default(), None)
+    };
+
+    let words = write(MAX_NAME_BYTES).expect("the longest encodable name should succeed");
+    assert_spv_instruction_lengths_consistent(&words);
+
+    let result = write(MAX_NAME_BYTES + 1);
+    assert!(
+        matches!(
+            result,
+            Err(naga::back::spv::Error::InstructionTooLong {
+                op: spirv::Op::EntryPoint,
+                word_count: 0x1_0000,
+            })
+        ),
+        "expected an overflow error, got {result:?}"
+    );
+}
