@@ -649,11 +649,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Windows runs in the `gpu-test-windows-attempt-*` jobs below.
         include:
-          # Windows
-          - name: Windows x86_64
-            os: windows-2022
-
           # Mac
           - name: Mac aarch64
             os: macos-14
@@ -667,11 +664,22 @@ jobs:
 
     permissions: {}
 
-    steps:
+    steps: &gpu-test-steps
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # Windows CI intermittently lands on hosts that stall for a minute or
+      # more at a time, which kills whichever tests happen to be running.
+      # Record the host details and counters from the start of the job.
+      # https://github.com/gfx-rs/wgpu/issues/9248
+      - name: (Windows) Start host metrics sampler
+        if: matrix.os == 'windows-2022'
+        uses: $/.github/actions/sample-host-metrics
+        with:
+          output-dir: host-metrics
+          abort-on-bad-host: ${{ matrix.attempt == 1 }}
 
       - name: Install repo MSRV toolchain
         run: |
@@ -746,22 +754,36 @@ jobs:
           # Delete snapshots so we can ensure there aren't any excess output files.
           rm -r naga/tests/out
 
-      # Windows CI intermittently stops making progress for a minute or more at
-      # a time, which kills whichever tests happen to be running. Sample the
-      # host counters so that a timeout can be correlated with CPU, memory or
-      # disk pressure. https://github.com/gfx-rs/wgpu/issues/9248
-      - name: (Windows) Start host metrics sampler
+      # While armed, the sampler judges whether the host is one of the stalling
+      # ones, and on the first attempt kills the build or tests if it is.
+      - name: (Windows) Arm host watchdog
         if: matrix.os == 'windows-2022'
-        uses: $/.github/actions/sample-host-metrics
-        with:
-          output: host-metrics.csv
+        shell: pwsh
+        run: New-Item -ItemType File -Force -Path host-metrics/watchdog-armed | Out-Null
 
       - name: Run tests
+        id: tests
         shell: bash
         run: |
           set -e
 
           cargo --locked xtask test --llvm-cov
+
+      - name: (Windows) Disarm host watchdog
+        if: always() && matrix.os == 'windows-2022'
+        shell: pwsh
+        run: Remove-Item -Force -ErrorAction SilentlyContinue -Path host-metrics/watchdog-armed
+
+      - name: (Windows) Check host
+        id: check-host
+        if: always() && matrix.os == 'windows-2022'
+        shell: pwsh
+        env:
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          RETRY_ALLOWED: ${{ matrix.attempt == 1 }}
+        run: |
+          .github/actions/sample-host-metrics/check-host.ps1 -OutputDir host-metrics `
+              -TestsOutcome $env:TESTS_OUTCOME -RetryAllowed:($env:RETRY_ALLOWED -eq "true")
 
       - name: Check Naga snapshots
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
@@ -771,7 +793,7 @@ jobs:
         name: Upload comparison images
         if: always() # We want artifacts even if the tests fail.
         with:
-          name: comparison-images-${{ matrix.os }}
+          name: comparison-images-${{ matrix.os }}${{ matrix.attempt && format('-attempt-{0}', matrix.attempt) || '' }}
           path: |
             **/*-actual.png
             **/*-difference.png
@@ -782,10 +804,10 @@ jobs:
         name: Upload test timings
         if: always() # We want timings even if the tests fail.
         with:
-          name: test-timings-${{ matrix.os }}
+          name: test-timings-${{ matrix.os }}${{ matrix.attempt && format('-attempt-{0}', matrix.attempt) || '' }}
           path: |
             **/nextest/*/junit.xml
-            host-metrics.csv
+            host-metrics/
           if-no-files-found: warn
 
       # Print GPU configuration so we can see what features were available during the test.
@@ -814,6 +836,80 @@ jobs:
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Windows runs the same steps as `gpu-test`, but gets a second attempt on a
+  # new host when the first attempt finds that its host is one of the stalling
+  # ones, or when its tests fail only by timing out.
+  # https://github.com/gfx-rs/wgpu/issues/9248
+  gpu-test-windows-attempt-1:
+    timeout-minutes: 30
+
+    strategy:
+      matrix:
+        include:
+          - name: Windows x86_64
+            os: windows-2022
+            attempt: 1
+
+    name: Test ${{ matrix.name }} (attempt ${{ matrix.attempt }})
+    runs-on: ${{ matrix.os }}
+
+    permissions: {}
+
+    outputs:
+      retry: ${{ steps.check-host.outputs.retry }}
+
+    steps: *gpu-test-steps
+
+  gpu-test-windows-attempt-2:
+    needs: gpu-test-windows-attempt-1
+    if: ${{ !cancelled() && needs.gpu-test-windows-attempt-1.outputs.retry == 'true' }}
+
+    timeout-minutes: 30
+
+    strategy:
+      matrix:
+        include:
+          - name: Windows x86_64
+            os: windows-2022
+            attempt: 2
+
+    name: Test ${{ matrix.name }} (attempt ${{ matrix.attempt }})
+    runs-on: ${{ matrix.os }}
+
+    permissions: {}
+
+    steps: *gpu-test-steps
+
+  # Reports the outcome of the attempts under the name the Windows test job
+  # has always had.
+  gpu-test-windows:
+    needs: [gpu-test-windows-attempt-1, gpu-test-windows-attempt-2]
+    if: always()
+
+    timeout-minutes: 2
+
+    name: Test Windows x86_64
+    runs-on: ubuntu-latest
+
+    permissions: {}
+
+    steps:
+      - name: Check attempts
+        env:
+          FIRST: ${{ needs.gpu-test-windows-attempt-1.result }}
+          RETRY: ${{ needs.gpu-test-windows-attempt-1.outputs.retry }}
+          SECOND: ${{ needs.gpu-test-windows-attempt-2.result }}
+        run: |
+          echo "attempt 1: $FIRST, retry requested: ${RETRY:-false}, attempt 2: $SECOND"
+          if [ "$FIRST" = success ]; then
+            exit 0
+          fi
+          if [ "$RETRY" = true ] && [ "$SECOND" = success ]; then
+            echo "::notice title=Windows tests passed on retry::Attempt 1 ran on an unsuitable host."
+            exit 0
+          fi
+          exit 1
 
   doctest:
     # runtime is normally 2 minutes
