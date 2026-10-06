@@ -39,6 +39,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         MULTI_DRAW_INDIRECT_COUNT_SAMPLED_TEXTURE,
         MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP,
         MULTI_DRAW_INDIRECT_OVER_ICB_MEMORY_LIMIT,
+        MULTI_DRAW_INDIRECT_ICB_MEMORY,
         MULTI_DRAW_INDIRECT_AFTER_DISCARDED_3D_ATTACHMENT,
         MULTI_DRAW_INDIRECT_FIRST_VERTEX_AND_INSTANCE,
         MULTI_DRAW_INDIRECT_MIXED_SEQUENCE,
@@ -793,6 +794,95 @@ async fn run_multi_draw_indirect_over_icb_memory_limit(ctx: TestingContext) {
     assert_all_white(&ctx, encoder, &out_texture).await;
 }
 
+/// Metal reports the memory of the indirect command buffers it runs
+/// multi-draws through, reuses a pooled one for the next multi-draw of the
+/// same kind, and releases pooled ones that go unused for two seconds. Other
+/// backends, and Metal devices that keep multi-draws on the per-draw loop, hold
+/// none, so there is nothing more to check on them.
+async fn run_multi_draw_indirect_icb_memory(ctx: TestingContext) {
+    let icb_memory = || {
+        ctx.device
+            .get_internal_counters()
+            .hal
+            .indirect_command_buffer_memory
+            .read()
+    };
+    assert_eq!(icb_memory(), 0);
+
+    let (pipeline, vertex_buffer, _) = create_indirect_render_pipeline(&ctx, false);
+    let mut args = vec![
+        wgpu::util::DrawIndirectArgs {
+            vertex_count: 0,
+            instance_count: 1,
+            first_vertex: 0,
+            first_instance: 0,
+        };
+        ICB_MULTI_DRAW_TEST_COUNT
+    ];
+    args[0] = wgpu::util::DrawIndirectArgs {
+        vertex_count: 6,
+        instance_count: 1,
+        first_vertex: 0,
+        first_instance: 0,
+    };
+    let indirect_buffer = create_draw_indirect_buffer(&ctx, &args);
+    let multi_draw = || async {
+        let (out_texture, out_texture_view) = create_rgba8_render_target(&ctx, 64, 64);
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                    resolve_target: None,
+                    view: &out_texture_view,
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            rpass.set_pipeline(&pipeline);
+            rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            rpass.multi_draw_indirect(&indirect_buffer, 0, args.len() as u32);
+        }
+        // Reading the result back waits for the submission, which also frees
+        // its command buffers and returns the ICB to the pool.
+        assert_all_white(&ctx, encoder, &out_texture).await;
+    };
+
+    multi_draw().await;
+    let held = icb_memory();
+    if held == 0 {
+        return;
+    }
+    multi_draw().await;
+    assert_eq!(
+        icb_memory(),
+        held,
+        "the second multi-draw should reuse the pooled ICB"
+    );
+
+    // Longer than the Metal backend's two-second idle release; any submission
+    // then frees the idle ICB.
+    std::thread::sleep(std::time::Duration::from_millis(2500));
+    ctx.queue.submit([ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default())
+        .finish()]);
+    assert_eq!(
+        icb_memory(),
+        0,
+        "an ICB idle for two seconds should be released"
+    );
+}
+
 async fn run_multi_draw_indirect_first_vertex_and_instance(ctx: TestingContext) {
     let shader = ctx
         .device
@@ -1468,6 +1558,15 @@ static MULTI_DRAW_INDIRECT_OVER_ICB_MEMORY_LIMIT: GpuTestConfiguration =
                 .remove_instance_flags(wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL),
         )
         .run_async(run_multi_draw_indirect_over_icb_memory_limit);
+
+#[apply(gpu_test!)]
+static MULTI_DRAW_INDIRECT_ICB_MEMORY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(run_multi_draw_indirect_icb_memory);
 
 #[apply(gpu_test!)]
 static MULTI_DRAW_INDIRECT_FIRST_VERTEX_AND_INSTANCE: GpuTestConfiguration =

@@ -124,7 +124,9 @@ impl crate::Adapter for super::Adapter {
                 }
             }
 
-            let icb = super::icb::IcbContext::new(&self.shared, features).map(Arc::new);
+            let counters = Arc::<wgt::HalCounters>::default();
+            let icb = super::icb::IcbContext::new(&self.shared, features, Arc::clone(&counters))
+                .map(Arc::new);
             // Count draws have no lowering without the multi-draw support
             // kernels (see `icb::DeferredMultiDraw::ClampedArgs`), so fail
             // device creation rather than a later draw call.
@@ -168,9 +170,9 @@ impl crate::Adapter for super::Adapter {
                 device: super::Device {
                     shared: Arc::clone(&self.shared),
                     features,
-                    counters: Default::default(),
+                    counters,
                     limits: limits.clone(),
-                    icb,
+                    icb: icb.clone(),
                 },
                 queue: super::Queue {
                     shared: Arc::new(QueueShared {
@@ -181,6 +183,7 @@ impl crate::Adapter for super::Adapter {
                         relay: OnceCell::new(),
                     }),
                     timestamp_period,
+                    icb,
                 },
             })
         })

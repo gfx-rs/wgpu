@@ -511,6 +511,10 @@ static_assertions::assert_impl_all!(Adapter: Send, Sync);
 pub struct Queue {
     shared: Arc<QueueShared>,
     timestamp_period: f32,
+    /// The device's ICB lowering state, whose pool every submission trims;
+    /// see [`icb::IcbContext::release_idle`]. `None` for a queue wrapped from
+    /// a raw handle, whose device then only trims when an ICB comes back.
+    icb: Option<Arc<icb::IcbContext>>,
 }
 
 #[cfg(send_sync)]
@@ -530,6 +534,7 @@ impl Queue {
                 relay: OnceCell::new(),
             }),
             timestamp_period,
+            icb: None,
         }
     }
 
@@ -731,6 +736,9 @@ impl crate::Queue for Queue {
         _surface_textures: &[&SurfaceTexture],
         (signal_fence, signal_value): (&Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
+        if let Some(ref icb) = self.icb {
+            icb.release_idle();
+        }
         autoreleasepool(|_| {
             // Drain caller-staged waits onto a dedicated command buffer
             // committed before the user CBs.

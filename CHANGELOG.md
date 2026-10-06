@@ -138,7 +138,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 #### Metal
 
 - Fix Naga's Metal backend crashing when a storage texture was used as a function argument. By @ErichDonGubler in [#9867](https://github.com/gfx-rs/wgpu/pull/9867).
-- Metal now runs fixed-count multi-draws of 512 or more draws through GPU-generated indirect command buffers, instead of one indirect draw per command on the CPU. This is off with `InstanceFlags::STRICT_WEBGPU_COMPLIANCE`. By @matthargett in [#9640](https://github.com/gfx-rs/wgpu/pull/9640).
+- Metal now runs fixed-count multi-draws of 512 or more draws through GPU-generated indirect command buffers, instead of one indirect draw per command on the CPU. This is off with `InstanceFlags::STRICT_WEBGPU_COMPLIANCE`. The memory they hold is reported as `HalCounters::indirect_command_buffer_memory`, and pooled ones unused for two seconds are released. By @matthargett in [#9640](https://github.com/gfx-rs/wgpu/pull/9640).
 - Expose `MULTI_DRAW_INDIRECT_COUNT` on Metal when indirect command buffers are supported. `multi_draw_*_indirect_count` executes through a GPU-generated indirect command buffer with a GPU-clamped execution range; draws recorded with a pipeline that can't execute inside an ICB fall back to a series of indirect draws over GPU-clamped arguments. The draw count is never read by the CPU. By @matthargett in [#9679](https://github.com/gfx-rs/wgpu/pull/9679).
 - Fix `max_task_workgroup_count` being misreported on pre-Apple7 devices. By @inner-daemons in [#10065](https://github.com/gfx-rs/wgpu/pull/10065).
 
