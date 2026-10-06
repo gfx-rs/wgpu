@@ -89,7 +89,8 @@ function Get-TopProcesses($samples, $now) {
     $rows = @()
     foreach ($kind in @(@("cpu", "% processor time"), @("io", "io data bytes/sec"))) {
         $rank = 0
-        $byInstance.Values | Sort-Object { $_[$kind[1]] } -Descending | Select-Object -First 5 |
+        $byInstance.Values | Where-Object { $_[$kind[1]] -gt 0 } | Sort-Object { $_[$kind[1]] } -Descending |
+            Select-Object -First 5 |
             ForEach-Object {
                 $rank++
                 $rows += "$now,$($kind[0]),$rank,$($_.name),$($_["id process"]),$([math]::Round($_[$kind[1]], 1))"

@@ -851,7 +851,8 @@ jobs:
             os: windows-2022
             attempt: 1
 
-    name: Test ${{ matrix.name }} (attempt ${{ matrix.attempt }})
+    # Written without substitutions for consistency with the retries
+    name: Test Windows x86_64 (attempt 1)
     runs-on: ${{ matrix.os }}
 
     permissions: {}
@@ -874,7 +875,8 @@ jobs:
             os: windows-2022
             attempt: 2
 
-    name: Test ${{ matrix.name }} (attempt ${{ matrix.attempt }})
+    # Avoid substitutions because names of skipped jobs don't get them
+    name: Test Windows x86_64 (retry; attempt 2)
     runs-on: ${{ matrix.os }}
 
     permissions: {}

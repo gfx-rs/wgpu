@@ -43,7 +43,6 @@ function Show($title, [scriptblock] $block) {
         Get-Volume | Select-Object DriveLetter, FileSystemLabel, FileSystem, DriveType, AllocationUnitSize,
             Size, SizeRemaining, HealthStatus
     }
-    Show "Dev Drive" { foreach ($d in "C:", "D:") { "$d $(fsutil devdrv query $d 2>&1)" } }
     Show "File system filters" { fltmc filters; fltmc instances }
     Show "Defender status" {
         Get-MpComputerStatus | Select-Object AMRunningMode, AMServiceEnabled, AntivirusEnabled,
