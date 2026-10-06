@@ -152,13 +152,17 @@ impl crate::Adapter for super::Adapter {
                 1.0
             };
 
+            let counters = Arc::<wgt::HalCounters>::default();
+            let icb =
+                super::icb::IcbContext::new(&self.shared, Arc::clone(&counters)).map(Arc::new);
+
             Ok(crate::OpenDevice {
                 device: super::Device {
                     shared: Arc::clone(&self.shared),
                     features,
-                    counters: Default::default(),
+                    counters,
                     limits: limits.clone(),
-                    icb: super::icb::IcbContext::new(&self.shared).map(Arc::new),
+                    icb: icb.clone(),
                 },
                 queue: super::Queue {
                     shared: Arc::new(QueueShared {
@@ -169,6 +173,7 @@ impl crate::Adapter for super::Adapter {
                         relay: OnceCell::new(),
                     }),
                     timestamp_period,
+                    icb,
                 },
             })
         })

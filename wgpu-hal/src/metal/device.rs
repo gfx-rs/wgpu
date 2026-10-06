@@ -456,11 +456,12 @@ impl super::Device {
         // instance flags apply.
         let shared =
             super::AdapterShared::new(raw, &capabilities_query, wgt::InstanceFlags::empty());
-        let icb = super::icb::IcbContext::new(&shared).map(Arc::new);
+        let counters = Arc::<wgt::HalCounters>::default();
+        let icb = super::icb::IcbContext::new(&shared, Arc::clone(&counters)).map(Arc::new);
         super::Device {
             shared: Arc::new(shared),
             features,
-            counters: Default::default(),
+            counters,
             limits: limits.clone(),
             icb,
         }

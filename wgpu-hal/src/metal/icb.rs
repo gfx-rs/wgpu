@@ -8,7 +8,8 @@
 //! [`encode_deferred_icb_generation`]: super::CommandEncoder::encode_deferred_icb_generation
 
 use alloc::{sync::Arc, vec::Vec};
-use core::ptr::NonNull;
+use core::{ptr::NonNull, time::Duration};
+use std::time::Instant;
 use wgpu_sync::Mutex;
 
 use objc2::{rc::Retained, runtime::ProtocolObject};
@@ -72,10 +73,15 @@ const ICB_MAX_INHERITED_BUFFER_BIND_COUNT: usize = 31;
 /// crashes the process on macOS 27.
 const ICB_MAX_BYTES: u64 = 64 << 20;
 
-/// Bounds on the per-adapter pool of indirect command buffers: entries kept,
+/// Bounds on the per-device pool of indirect command buffers: entries kept,
 /// and the total memory they may retain.
 const ICB_POOL_MAX_ENTRIES: usize = 8;
 const ICB_POOL_MAX_BYTES: u64 = 128 << 20;
+
+/// How long a pooled ICB may go unused before it is released. A multi-draw
+/// that recurs every frame reuses its ICB long before this, so only memory an
+/// app has stopped using is given back.
+const ICB_POOL_IDLE_RELEASE: Duration = Duration::from_secs(2);
 
 /// [`IcbDrawKind::tag`] values. Each kind has its own ICB descriptor, and ICBs
 /// are only reused for the same kind.
@@ -257,21 +263,15 @@ pub(super) enum IcbDrawKind {
 /// `encode_deferred_multi_draws`.
 pub(super) struct IcbGenerationRequest {
     kind: IcbDrawKind,
-    icb: Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>,
-    /// Argument buffer through which the generation kernel addresses the ICB,
-    /// already encoded at draw time.
-    argument_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+    /// The ICB, with its argument buffer already encoded at draw time; its
+    /// capacity is at least `draw_count`.
+    allocation: IcbAllocation,
     /// Buffer holding the packed indirect draw arguments.
     args_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
     args_offset: wgt::BufferAddress,
     draw_count: u32,
     /// One of the `ICB_PRIMITIVE_*` values; unused for mesh draws.
     primitive_type_value: u32,
-    kind_tag: u8,
-    /// Command capacity the ICB was created with; at least `draw_count`.
-    capacity: u32,
-    /// Memory the ICB and its argument buffer occupy.
-    bytes: u64,
 }
 
 impl IcbDrawKind {
@@ -287,45 +287,50 @@ impl IcbDrawKind {
 }
 
 /// An indirect command buffer and the argument buffer through which the
-/// generation kernels address it, kept for reuse once the command buffer that
-/// executed it has completed.
-///
-/// Creating an ICB is the dominant CPU cost of the whole lowering (hundreds of
-/// microseconds for a few thousand commands, growing with the count), so ICBs
-/// are recycled: a multi-draw takes the smallest pooled ICB of its kind that
-/// holds its draws, and the command buffer that executes it puts it back when
-/// it completes.
-#[derive(Debug)]
-pub(super) struct PooledIcb {
-    kind_tag: u8,
-    capacity: u32,
-    bytes: u64,
+/// generation kernels address it. Its memory counts towards
+/// `HalCounters::indirect_command_buffer_memory` from creation until it is
+/// freed, wherever that happens: evicted or released from the pool, or
+/// dropped with a pass that was never submitted.
+pub(super) struct IcbAllocation {
     icb: Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>,
     argument_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
-}
-
-#[cfg(send_sync)]
-unsafe impl Send for PooledIcb {}
-#[cfg(send_sync)]
-unsafe impl Sync for PooledIcb {}
-
-/// Objects a submitted command buffer must keep alive; see
-/// [`super::CommandBuffer::_icb_resources`]. Dropped with that command buffer.
-/// The `encode_deferred_multi_draws` contract makes that no earlier than the
-/// completion of the pass that executes the ICB, which is when the ICB can
-/// safely return to the pool.
-pub(super) struct IcbExecutionResources {
-    context: Arc<IcbContext>,
     kind_tag: u8,
+    /// Command capacity the ICB was created with.
     capacity: u32,
+    /// Memory the ICB and its argument buffer occupy.
     bytes: u64,
-    icb: Option<Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>>,
-    argument_buffer: Option<Retained<ProtocolObject<dyn MTLBuffer>>>,
+    counters: Arc<wgt::HalCounters>,
 }
 
-impl core::fmt::Debug for IcbExecutionResources {
+#[cfg(send_sync)]
+unsafe impl Send for IcbAllocation {}
+#[cfg(send_sync)]
+unsafe impl Sync for IcbAllocation {}
+
+impl IcbAllocation {
+    fn new(
+        icb: Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>,
+        argument_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+        kind_tag: u8,
+        capacity: u32,
+        counters: &Arc<wgt::HalCounters>,
+    ) -> Self {
+        let bytes = icb.allocatedSize() as u64 + argument_buffer.allocatedSize() as u64;
+        counters.indirect_command_buffer_memory.add(bytes as isize);
+        Self {
+            icb,
+            argument_buffer,
+            kind_tag,
+            capacity,
+            bytes,
+            counters: Arc::clone(counters),
+        }
+    }
+}
+
+impl core::fmt::Debug for IcbAllocation {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("IcbExecutionResources")
+        f.debug_struct("IcbAllocation")
             .field("kind_tag", &self.kind_tag)
             .field("capacity", &self.capacity)
             .field("bytes", &self.bytes)
@@ -333,41 +338,44 @@ impl core::fmt::Debug for IcbExecutionResources {
     }
 }
 
+impl Drop for IcbAllocation {
+    fn drop(&mut self) {
+        self.counters
+            .indirect_command_buffer_memory
+            .sub(self.bytes as isize);
+    }
+}
+
+/// An [`IcbAllocation`] waiting in [`IcbContext::pool`] for reuse.
+///
+/// Creating an ICB is the dominant CPU cost of the whole lowering (hundreds of
+/// microseconds for a few thousand commands, growing with the count), so ICBs
+/// are recycled: a multi-draw takes the smallest pooled ICB of its kind that
+/// holds its draws, and the command buffer that executes it puts it back when
+/// it completes. Entries unused for [`ICB_POOL_IDLE_RELEASE`] are released.
+#[derive(Debug)]
+struct PooledIcb {
+    allocation: IcbAllocation,
+    /// When the ICB came back to the pool.
+    idle_since: Instant,
+}
+
+/// Objects a submitted command buffer must keep alive; see
+/// [`super::CommandBuffer::_icb_resources`]. Dropped with that command buffer.
+/// The `encode_deferred_multi_draws` contract makes that no earlier than the
+/// completion of the pass that executes the ICB, which is when the ICB can
+/// safely return to the pool.
+#[derive(Debug)]
+pub(super) struct IcbExecutionResources {
+    context: Arc<IcbContext>,
+    allocation: Option<IcbAllocation>,
+}
+
 impl Drop for IcbExecutionResources {
     fn drop(&mut self) {
-        let (Some(icb), Some(argument_buffer)) = (self.icb.take(), self.argument_buffer.take())
-        else {
-            return;
-        };
-        if self.bytes > ICB_POOL_MAX_BYTES {
-            return;
+        if let Some(allocation) = self.allocation.take() {
+            self.context.release(allocation);
         }
-        let mut pool = self.context.pool.lock();
-        let mut total: u64 = pool.iter().map(|entry| entry.bytes).sum();
-        while pool.len() >= ICB_POOL_MAX_ENTRIES || total + self.bytes > ICB_POOL_MAX_BYTES {
-            // Make room by evicting the smallest entry, unless this one is
-            // smaller still: large ICBs are the expensive ones to recreate.
-            let Some((index, smallest)) = pool
-                .iter()
-                .enumerate()
-                .min_by_key(|(_, entry)| entry.bytes)
-                .map(|(index, entry)| (index, entry.bytes))
-            else {
-                break;
-            };
-            if smallest >= self.bytes {
-                return;
-            }
-            total -= smallest;
-            pool.swap_remove(index);
-        }
-        pool.push(PooledIcb {
-            kind_tag: self.kind_tag,
-            capacity: self.capacity,
-            bytes: self.bytes,
-            icb,
-            argument_buffer,
-        });
     }
 }
 
@@ -381,6 +389,8 @@ pub(super) struct IcbContext {
     bytes_per_command: [u64; 3],
     /// Indirect command buffers awaiting reuse; see [`PooledIcb`].
     pool: Mutex<Vec<PooledIcb>>,
+    /// The device's counters, which report the ICBs' memory.
+    counters: Arc<wgt::HalCounters>,
 }
 
 impl core::fmt::Debug for IcbContext {
@@ -396,7 +406,10 @@ impl IcbContext {
     /// `None` when multi-draws keep the per-draw loop: the lowering is off for
     /// this adapter (always under `STRICT_WEBGPU_COMPLIANCE`), the device
     /// fails the execution probe, or a generation kernel fails to compile.
-    pub(super) fn new(shared: &super::AdapterShared) -> Option<Self> {
+    pub(super) fn new(
+        shared: &super::AdapterShared,
+        counters: Arc<wgt::HalCounters>,
+    ) -> Option<Self> {
         let caps = &shared.private_caps;
         if !caps.indirect_command_buffers_rendering {
             return None;
@@ -436,7 +449,74 @@ impl IcbContext {
             pipelines,
             bytes_per_command,
             pool: Mutex::new(Vec::new()),
+            counters,
         })
+    }
+
+    /// Takes the smallest pooled ICB of `kind_tag` that holds `draw_count`
+    /// commands, leaving the larger ones for larger draws.
+    fn take_pooled(&self, kind_tag: u8, draw_count: u32) -> Option<IcbAllocation> {
+        let mut pool = self.pool.lock();
+        let index = pool
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| {
+                entry.allocation.kind_tag == kind_tag && entry.allocation.capacity >= draw_count
+            })
+            .min_by_key(|(_, entry)| entry.allocation.capacity)
+            .map(|(index, _)| index)?;
+        Some(pool.swap_remove(index).allocation)
+    }
+
+    /// Returns an ICB whose execution has completed to the pool, or frees it
+    /// when it doesn't fit.
+    fn release(&self, allocation: IcbAllocation) {
+        if allocation.bytes > ICB_POOL_MAX_BYTES {
+            return;
+        }
+        let now = Instant::now();
+        let mut pool = self.pool.lock();
+        Self::release_idle_entries(&mut pool, now);
+        let mut total: u64 = pool.iter().map(|entry| entry.allocation.bytes).sum();
+        while pool.len() >= ICB_POOL_MAX_ENTRIES || total + allocation.bytes > ICB_POOL_MAX_BYTES {
+            // Make room by evicting the smallest entry, unless this one is
+            // smaller still: large ICBs are the expensive ones to recreate.
+            let Some((index, smallest)) = pool
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, entry)| entry.allocation.bytes)
+                .map(|(index, entry)| (index, entry.allocation.bytes))
+            else {
+                break;
+            };
+            if smallest >= allocation.bytes {
+                return;
+            }
+            total -= smallest;
+            pool.swap_remove(index);
+        }
+        pool.push(PooledIcb {
+            allocation,
+            idle_since: now,
+        });
+    }
+
+    /// Frees the pooled ICBs that have gone unused for
+    /// [`ICB_POOL_IDLE_RELEASE`]. The queue calls this on every submission, so
+    /// a rendering app gets the memory back within a few seconds of its last
+    /// multi-draw; one that stops submitting keeps at most
+    /// [`ICB_POOL_MAX_BYTES`] until it submits again.
+    pub(super) fn release_idle(&self) {
+        let mut pool = self.pool.lock();
+        if !pool.is_empty() {
+            Self::release_idle_entries(&mut pool, Instant::now());
+        }
+    }
+
+    fn release_idle_entries(pool: &mut Vec<PooledIcb>, now: Instant) {
+        pool.retain(|entry| {
+            now.saturating_duration_since(entry.idle_since) < ICB_POOL_IDLE_RELEASE
+        });
     }
 
     /// Whether mesh-task multi-draws lower to ICBs on this device.
@@ -607,28 +687,8 @@ impl super::CommandEncoder {
             return false;
         }
 
-        // Prefer a pooled ICB of the same kind with enough capacity, taking the
-        // smallest that fits so large ones stay available for large draws.
-        let pooled = {
-            let mut pool = context.pool.lock();
-            let mut best: Option<usize> = None;
-            for (index, entry) in pool.iter().enumerate() {
-                if entry.kind_tag == kind_tag
-                    && entry.capacity >= draw_count
-                    && best.is_none_or(|b| pool[b].capacity > entry.capacity)
-                {
-                    best = Some(index);
-                }
-            }
-            best.map(|index| pool.swap_remove(index))
-        };
-        let (icb, argument_buffer, capacity, bytes) = match pooled {
-            Some(entry) => (
-                entry.icb,
-                entry.argument_buffer,
-                entry.capacity,
-                entry.bytes,
-            ),
+        let allocation = match context.take_pooled(kind_tag, draw_count) {
+            Some(allocation) => allocation,
             None => {
                 // Power-of-two capacities keep the pool reusable across
                 // nearby draw counts, within the memory bound; only the first
@@ -674,8 +734,7 @@ impl super::CommandEncoder {
                         .encoder
                         .setIndirectCommandBuffer_atIndex(Some(&icb), 0);
                 }
-                let bytes = icb.allocatedSize() as u64 + argument_buffer.allocatedSize() as u64;
-                (icb, argument_buffer, capacity, bytes)
+                IcbAllocation::new(icb, argument_buffer, kind_tag, capacity, &context.counters)
             }
         };
 
@@ -687,7 +746,10 @@ impl super::CommandEncoder {
         encoder.setRenderPipelineState(&icb_pipeline_state);
         #[expect(deprecated)]
         unsafe {
-            encoder.useResource_usage(ProtocolObject::from_ref(&*icb), MTLResourceUsage::Read);
+            encoder.useResource_usage(
+                ProtocolObject::from_ref(&*allocation.icb),
+                MTLResourceUsage::Read,
+            );
             if let IcbDrawKind::DrawIndexed {
                 ref index_buffer, ..
             } = kind
@@ -703,7 +765,7 @@ impl super::CommandEncoder {
                 );
             }
             encoder.executeCommandsInBuffer_withRange(
-                &icb,
+                &allocation.icb,
                 NSRange {
                     location: 0,
                     length: draw_count as usize,
@@ -713,12 +775,8 @@ impl super::CommandEncoder {
         encoder.setRenderPipelineState(pipeline);
 
         self.deferred_multi_draws.push(IcbGenerationRequest {
-            kind_tag,
-            capacity,
-            bytes,
             kind,
-            icb,
-            argument_buffer,
+            allocation,
             args_buffer: buffer.raw.clone(),
             args_offset: offset,
             draw_count,
@@ -774,7 +832,7 @@ impl super::CommandEncoder {
             };
             compute.setComputePipelineState(&pipeline.pipeline);
             unsafe {
-                compute.setBuffer_offset_atIndex(Some(&request.argument_buffer), 0, 0);
+                compute.setBuffer_offset_atIndex(Some(&request.allocation.argument_buffer), 0, 0);
                 compute.setBuffer_offset_atIndex(
                     Some(&request.args_buffer),
                     request.args_offset as usize,
@@ -830,7 +888,7 @@ impl super::CommandEncoder {
                     }
                 }
                 compute.useResource_usage(
-                    ProtocolObject::from_ref(&*request.icb),
+                    ProtocolObject::from_ref(&*request.allocation.icb),
                     MTLResourceUsage::Write,
                 );
             }
@@ -853,7 +911,7 @@ impl super::CommandEncoder {
             for request in &self.deferred_multi_draws {
                 unsafe {
                     blit.optimizeIndirectCommandBuffer_withRange(
-                        &request.icb,
+                        &request.allocation.icb,
                         NSRange {
                             location: 0,
                             length: request.draw_count as usize,
@@ -875,11 +933,7 @@ impl super::CommandEncoder {
                     .drain(..)
                     .map(|request| IcbExecutionResources {
                         context: context.clone(),
-                        kind_tag: request.kind_tag,
-                        capacity: request.capacity,
-                        bytes: request.bytes,
-                        icb: Some(request.icb),
-                        argument_buffer: Some(request.argument_buffer),
+                        allocation: Some(request.allocation),
                     }),
             );
     }
