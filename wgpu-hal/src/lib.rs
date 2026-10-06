@@ -3037,10 +3037,15 @@ pub struct RayTracingPassDescriptor<'a> {
     pub label: Label<'a>,
 }
 
-#[test]
-fn test_default_limits() {
-    let limits = wgt::Limits::default();
-    assert!(limits.max_bind_groups <= MAX_BIND_GROUPS as u32);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_limits() {
+        let limits = wgt::Limits::default();
+        assert!(limits.max_bind_groups <= MAX_BIND_GROUPS as u32);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -3048,6 +3053,8 @@ pub struct AccelerationStructureDescriptor<'a> {
     pub label: Label<'a>,
     pub size: wgt::BufferAddress,
     pub format: AccelerationStructureFormat,
+    /// Backends may allocate the structure as a short-lived resource, since it is
+    /// usually replaced by its compacted copy.
     pub allow_compaction: bool,
 }
 

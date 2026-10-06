@@ -2908,10 +2908,15 @@ impl crate::Device for super::Device {
                 .label
                 .unwrap_or("Unlabeled acceleration structure buffer");
 
+            let pool = if desc.allow_compaction {
+                super::MemoryPool::Transient
+            } else {
+                super::MemoryPool::General
+            };
             let allocation = self
                 .mem_allocator
                 .allocate(
-                    super::MemoryPool::General,
+                    pool,
                     &gpu_allocator::vulkan::AllocationCreateDesc {
                         name,
                         requirements,

@@ -25,15 +25,6 @@ use crate::{
 
 use wgt::{Backend, Backends, InstanceFlags, PowerPreference};
 
-#[test]
-fn downlevel_default_limits_less_than_default_limits() {
-    let res = check_limits(&wgt::Limits::downlevel_defaults(), &wgt::Limits::default());
-    assert!(
-        res.is_empty(),
-        "Downlevel limits are greater than default limits",
-    )
-}
-
 #[derive(Debug)]
 pub(crate) struct InstanceDevices(Mutex<WeakVec<Device>>);
 
@@ -1748,5 +1739,14 @@ mod tests {
                 &wgt::Limits::defaults(),
             );
         }
+    }
+
+    #[test]
+    fn downlevel_default_limits_less_than_default_limits() {
+        let res = check_limits(&wgt::Limits::downlevel_defaults(), &wgt::Limits::default());
+        assert!(
+            res.is_empty(),
+            "Downlevel limits are greater than default limits",
+        )
     }
 }

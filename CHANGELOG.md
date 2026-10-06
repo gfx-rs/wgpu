@@ -183,6 +183,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 #### Vulkan
 
 - Sub-allocate `wgpu_hal::MemoryFlags::TRANSIENT` buffers and acceleration structure build scratch from a separate Vulkan memory pool, so short-lived allocations no longer pin memory blocks shared with long-lived resources. By @stuartparmenter in [#10232](https://github.com/gfx-rs/wgpu/pull/10232).
+- Allocate acceleration structures created with `AccelerationStructureFlags::ALLOW_COMPACTION` from the transient Vulkan memory pool, since they are usually replaced by their compacted copies. By @stuartparmenter in [#10233](https://github.com/gfx-rs/wgpu/pull/10233).
 
 ### Bug Fixes
 
@@ -231,6 +232,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Correctly emit primitive_index for the SPIR-V backend, handling mesh and raytracing shaders. Before, you could not use primitive_index with these shader types. An enable primitive_index statement is still required in wgsl shaders, in addition to enable wgpu_mesh_shader/enable wgpu_ray_tracing_pipeline. By @JMS55 in [#10153](https://github.com/gfx-rs/wgpu/pull/10153).
 - Prevent invalid IR from being generated when using a ray query in a loop. By @Vecvec in [#9945](https://github.com/gfx-rs/wgpu/pull/9945)
 - Raise a type error, rather than panic, for some cases of an invalid `select` argument type in WGSL constant evaluation. By @ErichDonGubler in [#10350](https://github.com/gfx-rs/wgpu/pull/10350).
+- Fix `sign` returning unexpected values for floating-point arguments in the HLSL backend. By @ErichDonGubler in [#10434](https://github.com/gfx-rs/wgpu/pull/10434).
 
 #### DX12
 

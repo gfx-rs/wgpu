@@ -209,11 +209,17 @@ impl Corpus {
     }
 }
 
-#[cfg_attr(miri, ignore)]
-#[test]
-fn test_api() {
-    // Millisecond timestamps; see <https://github.com/gfx-rs/wgpu/issues/9248>.
-    env_logger::builder().format_timestamp_millis().init();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[cfg_attr(miri, ignore)]
+    #[test]
+    fn test_api() {
+        // Millisecond timestamps; see <https://github.com/gfx-rs/wgpu/issues/9248>.
+        env_logger::builder().format_timestamp_millis().init();
 
-    Corpus::run_from(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/player/data/all.ron"))
+        Corpus::run_from(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/player/data/all.ron"),
+        )
+    }
 }
