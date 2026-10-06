@@ -96,6 +96,7 @@ each color space, and whether wgpu applies the transfer function for you:
 | `ExtendedDisplayP3` | `Rgba16Float` | extended sRGB-encoded, P3 primaries | no; apply the extended sRGB OETF (after gamut-mapping to P3) |
 | `Bt2100Pq` (HDR10) | `Rgb10a2Unorm` | PQ-encoded, BT.2020 primaries | no; apply the PQ OETF (after gamut-mapping to BT.2020) |
 | `Bt2100Hlg` | `Rgb10a2Unorm` | HLG-encoded, BT.2020 primaries | no; apply the HLG OETF (after gamut-mapping to BT.2020) |
+| `PassThrough` | any | as described by the application to the window system | no |
 
 In short, wgpu applies the transfer function for you only when you render to
 an `*Srgb` format. In every other case the values your shader writes to the

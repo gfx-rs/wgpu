@@ -414,6 +414,14 @@ pub enum SurfaceColorSpace {
     ///   neither of which has an encoded-extended-Display-P3 swapchain color
     ///   space.
     ExtendedDisplayP3 = 7,
+    /// No color space is communicated to the window system. The application
+    /// must describe the native surface itself, e.g. through Wayland color
+    /// management.
+    ///
+    /// This corresponds to Vulkan's `VK_COLOR_SPACE_PASS_THROUGH_EXT`.
+    ///
+    /// * **Supported on**: Vulkan (where the driver exposes it).
+    PassThrough = 8,
 }
 
 impl SurfaceColorSpace {
@@ -423,6 +431,7 @@ impl SurfaceColorSpace {
     pub const fn to_color_spaces(self) -> Option<SurfaceColorSpaces> {
         match self {
             Self::Auto => None,
+            Self::PassThrough => Some(SurfaceColorSpaces::PASS_THROUGH),
             Self::Srgb => Some(SurfaceColorSpaces::SRGB),
             Self::ExtendedSrgbLinear => Some(SurfaceColorSpaces::EXTENDED_SRGB_LINEAR),
             Self::DisplayP3 => Some(SurfaceColorSpaces::DISPLAY_P3),
@@ -453,7 +462,7 @@ impl SurfaceColorSpace {
             | Self::ExtendedDisplayP3
             | Self::Bt2100Pq
             | Self::Bt2100Hlg => true,
-            Self::Auto | Self::Srgb | Self::DisplayP3 => false,
+            Self::Auto | Self::Srgb | Self::DisplayP3 | Self::PassThrough => false,
         }
     }
 }
@@ -483,6 +492,8 @@ bitflags::bitflags! {
         const EXTENDED_SRGB = 1 << 5;
         /// [`SurfaceColorSpace::ExtendedDisplayP3`] is supported.
         const EXTENDED_DISPLAY_P3 = 1 << 6;
+        /// [`SurfaceColorSpace::PassThrough`] is supported.
+        const PASS_THROUGH = 1 << 7;
     }
 }
 

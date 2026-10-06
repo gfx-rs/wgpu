@@ -4520,7 +4520,8 @@ impl dispatch::SurfaceInterface for WebSurface {
             }
             cs @ (wgt::SurfaceColorSpace::ExtendedSrgbLinear
             | wgt::SurfaceColorSpace::Bt2100Pq
-            | wgt::SurfaceColorSpace::Bt2100Hlg) => {
+            | wgt::SurfaceColorSpace::Bt2100Hlg
+            | wgt::SurfaceColorSpace::PassThrough) => {
                 // Not representable on a WebGPU canvas: `ExtendedSrgbLinear`
                 // needs a linear-transfer canvas (WebGPU has none), and
                 // `Bt2100Pq`/`Bt2100Hlg` need PQ/HLG canvas signaling (browsers expose
