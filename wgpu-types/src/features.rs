@@ -87,9 +87,18 @@ mod webgpu_impl {
     pub const WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE: u64 = 1 << 18;
 }
 
+/// Prefer `From<(FeaturesWGPU, FeaturesWebGPU)>` instead, which protects against swapping
+/// the two feature sets.
 impl From<FeatureBits> for Features {
     fn from(value: FeatureBits) -> Self {
         Self::from_bits_retain(value)
+    }
+}
+
+impl From<(FeaturesWGPU, FeaturesWebGPU)> for Features {
+    fn from(value: (FeaturesWGPU, FeaturesWebGPU)) -> Self {
+        let (wgpu, webgpu) = value;
+        Self::from_parts(wgpu, webgpu)
     }
 }
 
@@ -1394,37 +1403,40 @@ crate::bitflags_array! {
 }
 
 impl Features {
+    /// Construct a [`Features`] from separate [`FeaturesWGPU`] and [`FeaturesWebGPU`].
+    ///
+    /// This `const` constructor is also available as a `From` impl.
+    pub const fn from_parts(wgpu: FeaturesWGPU, webgpu: FeaturesWebGPU) -> Self {
+        Self::from_bits_retain(FeatureBits([wgpu.bits(), webgpu.bits()]))
+    }
+
     /// Mask of all features which are part of the upstream WebGPU standard.
     #[must_use]
     pub const fn all_webgpu_mask() -> Self {
-        Self::from_bits_truncate(FeatureBits([
-            FeaturesWGPU::empty().bits(),
-            FeaturesWebGPU::all().bits(),
-        ]))
+        Self::from_parts(FeaturesWGPU::empty(), FeaturesWebGPU::all())
     }
 
     /// Mask of all features that are only available when targeting native (not web).
     #[must_use]
     pub const fn all_native_mask() -> Self {
-        Self::from_bits_truncate(FeatureBits([
-            FeaturesWGPU::all().bits(),
-            FeaturesWebGPU::empty().bits(),
-        ]))
+        Self::from_parts(FeaturesWGPU::all(), FeaturesWebGPU::empty())
     }
 
     /// Mask of all features which are experimental.
     #[must_use]
     pub const fn all_experimental_mask() -> Self {
-        Self::from_bits_truncate(FeatureBits([
-            FeaturesWGPU::EXPERIMENTAL_MESH_SHADER.bits()
-                | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_MULTIVIEW.bits()
-                | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_POINTS.bits()
-                | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
-                | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
-                | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits()
-                | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits(),
-            FeaturesWebGPU::empty().bits(),
-        ]))
+        Self::from_parts(
+            FeaturesWGPU::from_bits_truncate(
+                FeaturesWGPU::EXPERIMENTAL_MESH_SHADER.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_MULTIVIEW.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_POINTS.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits(),
+            ),
+            FeaturesWebGPU::empty(),
+        )
     }
 
     /// Vertex formats allowed for creating and building BLASes
