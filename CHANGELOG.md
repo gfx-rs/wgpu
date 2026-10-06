@@ -344,6 +344,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Sanitize shader labels before passing them to DXC as the source name. Fixes compilation when label contains a `:`. By @lucasmerlin in [#10134](https://github.com/gfx-rs/wgpu/pull/10134).
 - Fix a use-after-free when several threads create pipelines from the same shader with FXC. The shader cache now holds copies of the bytecode, not FXC's blobs, whose reference count is not thread-safe. By @xorza in [#10805](https://github.com/gfx-rs/wgpu/pull/10805).
 - Fix a 1 second stall in `Surface::get_current_texture` after a surface texture was dropped without being presented. By @DouglasDwyer in [#10511](https://github.com/gfx-rs/wgpu/pull/10511).
+- Present with `DXGI_PRESENT_RESTART` the first time after a swapchain is created or resized, discarding queued frames of the old size that DWM would otherwise show stretched while the window is being resized. By @DouglasDwyer in [#10548](https://github.com/gfx-rs/wgpu/pull/10548).
 
 #### Vulkan
 
