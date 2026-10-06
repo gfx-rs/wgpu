@@ -1626,17 +1626,21 @@ impl Writer {
             let pointer_type_id = context
                 .writer
                 .get_handle_pointer_type_id(variable.ty, spirv::StorageClass::Function);
-            let instruction = Instruction::variable(
-                pointer_type_id,
-                id,
-                spirv::StorageClass::Function,
-                init_word.or_else(|| match ir_module.types[variable.ty].inner {
+            let init_word = match init_word {
+                Some(word) => Some(word),
+                None => match ir_module.types[variable.ty].inner {
                     crate::TypeInner::RayQuery { .. } => None,
                     _ => {
                         let type_id = context.get_handle_type_id(variable.ty);
                         Some(context.writer.write_constant_null(type_id))
                     }
-                }),
+                },
+            };
+            let instruction = Instruction::variable(
+                pointer_type_id,
+                id,
+                spirv::StorageClass::Function,
+                init_word,
             );
 
             context
@@ -3618,7 +3622,10 @@ impl Writer {
         let init_word = match (global_variable.space, self.zero_initialize_workgroup_memory) {
             (crate::AddressSpace::Private, _)
             | (crate::AddressSpace::WorkGroup, super::ZeroInitializeWorkgroupMemoryMode::Native) => {
-                init_word.or_else(|| Some(self.get_constant_null(inner_type_id)))
+                Some(match init_word {
+                    Some(word) => word,
+                    None => self.get_constant_null(inner_type_id),
+                })
             }
             _ => init_word,
         };

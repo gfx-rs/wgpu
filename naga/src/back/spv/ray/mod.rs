@@ -114,7 +114,7 @@ impl Writer {
             &[5],
         ));
 
-        let valid_id = validate.then(||{
+        let valid_id = if validate {
             let tmin_le_tmax_id = self.id_gen.next();
             // Check both that tmin is less than or equal to tmax (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06350)
             // and implicitly that neither tmin or tmax are NaN (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06351)
@@ -250,11 +250,7 @@ impl Writer {
                 let mut each_two_true = Vec::new();
                 while let Some(last_bool) = bools.pop() {
                     for &bool in &bools {
-                        let both_true_id = writer.write_logical_and(
-                            block,
-                            last_bool,
-                            bool,
-                        );
+                        let both_true_id = writer.write_logical_and(block, last_bool, bool);
                         each_two_true.push(both_true_id);
                     }
                 }
@@ -366,7 +362,7 @@ impl Writer {
             );
 
             // Combine all checks into a single flag saying whether the call is valid or not.
-            self.write_reduce_and(
+            Some(self.write_reduce_and(
                 block,
                 vec![
                     tmin_le_tmax_id,
@@ -377,8 +373,10 @@ impl Writer {
                     not_contain_skip_triangles_cull,
                     not_contain_multiple_opaque,
                 ],
-            )
-        });
+            ))
+        } else {
+            None
+        };
 
         ExtractedRayDesc {
             ray_flags_id,

@@ -1606,11 +1606,12 @@ impl BlockContext<'_> {
                             let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
 
                             const VEC_LENGTH: u8 = 4;
-                            let bit_shifts: [_; VEC_LENGTH as usize] =
-                                core::array::from_fn(|index| {
-                                    self.writer
-                                        .get_constant_scalar(crate::Literal::U32(index as u32 * 8))
-                                });
+                            let mut bit_shifts = [0; VEC_LENGTH as usize];
+                            for (index, bit_shift) in bit_shifts.iter_mut().enumerate() {
+                                *bit_shift = self
+                                    .writer
+                                    .get_constant_scalar(crate::Literal::U32(index as u32 * 8));
+                            }
 
                             self.write_dot_product(
                                 id,
@@ -3278,13 +3279,15 @@ impl BlockContext<'_> {
                     spirv::GlslStd450Op::UClamp,
                 )
             };
-            let [min, max] = [min, max].map(|lit| {
+            let mut splat_bound = |lit| {
                 let scalar = self.writer.get_constant_scalar(lit);
                 self.writer.get_constant_composite(
                     LookupType::Local(LocalType::Numeric(wide_vector_type)),
                     &[scalar; 4],
                 )
-            });
+            };
+            let min = splat_bound(min);
+            let max = splat_bound(max);
 
             let clamp_id = self.gen_id();
             block.body.push(Instruction::ext_inst_gl_op(
@@ -3378,7 +3381,8 @@ impl BlockContext<'_> {
                         spirv::GlslStd450Op::UClamp,
                     )
                 };
-                let [min, max] = [min, max].map(|lit| self.writer.get_constant_scalar(lit));
+                let min = self.writer.get_constant_scalar(min);
+                let max = self.writer.get_constant_scalar(max);
 
                 let clamp_id = self.gen_id();
                 block.body.push(Instruction::ext_inst_gl_op(
