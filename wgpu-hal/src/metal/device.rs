@@ -1861,10 +1861,17 @@ impl crate::Device for super::Device {
                     descriptor.setMaxVertexAmplificationCount(mv.get().count_ones() as usize)
                 };
             }
-            // Direct draws always use `raw`. The ICB-capable variant compiled
-            // below only executes multi-draws lowered to ICBs, so the lowering
-            // can't change how any other draw renders. Multiview pipelines fail
-            // with the ICB flag, so they get no variant.
+            // Direct draws always use `raw`, and the ICB-capable variant below
+            // only executes multi-draws lowered to ICBs. Using the variant for
+            // everything would break debugging under Metal's shader validation
+            // layer: on macOS 27 (M4 Max) with MTL_SHADER_VALIDATION=1, a
+            // pipeline created with `supportIndirectCommandBuffers` reads zeros
+            // from a program-scope `constant` array indexed at runtime, so a
+            // vertex shader that takes its positions from one draws nothing.
+            // Without that layer, and on the iOS and tvOS devices tested even
+            // with it, both states render identically. Multiview pipelines get
+            // no variant because ICB execution under vertex amplification is
+            // untested.
             let request_icb_support = desc.multiview_mask.is_none()
                 && self.icb.as_ref().is_some_and(|icb| match descriptor {
                     MetalGenericRenderPipelineDescriptor::Standard(_) => true,
