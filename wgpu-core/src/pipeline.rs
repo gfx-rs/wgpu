@@ -77,8 +77,8 @@ pub struct PassthroughInterface {
 #[derive(Debug)]
 pub enum ShaderModuleState {
     NagaModule {
-        raw: Box<dyn hal::DynShaderModule>,
-        interface: validation::Interface,
+        hal: hal::NagaShader,
+        runtime_checks: wgt::ShaderRuntimeChecks,
     },
     Passthrough {
         raw: Box<dyn hal::DynShaderModule>,
@@ -113,8 +113,8 @@ impl Drop for ShaderModule {
             return;
         };
         match state {
-            ShaderModuleState::NagaModule { raw, .. }
-            | ShaderModuleState::Passthrough { raw, .. } => unsafe {
+            ShaderModuleState::NagaModule { .. } => (),
+            ShaderModuleState::Passthrough { raw, .. } => unsafe {
                 self.device.raw().destroy_shader_module(raw);
             },
         }
@@ -174,9 +174,30 @@ impl ShaderModule {
     ) -> Result<String, validation::StageError> {
         let state = self.state()?;
         match state {
-            ShaderModuleState::NagaModule { ref interface, .. } => {
-                interface.finalize_entry_point_name(stage, entry_point)
-            }
+            ShaderModuleState::NagaModule {
+                hal: hal::NagaShader { module, .. },
+                ..
+            } => match entry_point {
+                Some(name) => module
+                    .entry_points
+                    .iter()
+                    .find(|&ep| ep.stage == stage && ep.name == name)
+                    .map(|ep| ep.name.clone())
+                    .ok_or_else(|| validation::StageError::NoEntryPointWithNameForStage {
+                        name: name.to_string(),
+                        stage,
+                    }),
+                None => {
+                    let mut candidates = module.entry_points.iter().filter(|&ep| ep.stage == stage);
+                    let Some(first) = candidates.next() else {
+                        return Err(validation::StageError::NoEntryPointForStage(stage));
+                    };
+                    if candidates.next().is_some() {
+                        return Err(validation::StageError::AmbiguousEntryPointForStage(stage));
+                    }
+                    Ok(first.name.clone())
+                }
+            },
             ShaderModuleState::Passthrough { ref interface, .. } => {
                 finalize_passthrough_entry_point_name(interface, entry_point)
             }

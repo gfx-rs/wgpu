@@ -2679,33 +2679,17 @@ impl Device {
             })
         })?;
 
-        let interface = validation::Interface::new(&module, &info, self.limits.clone());
-        let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {
+        let hal = hal::NagaShader {
             module,
             info,
             debug_source,
-        });
-        let hal_desc = hal::ShaderModuleDescriptor {
-            label: desc.label.to_hal(self.instance_flags),
-            runtime_checks: desc.runtime_checks,
-        };
-        let raw = match unsafe { self.raw().create_shader_module(&hal_desc, hal_shader) } {
-            Ok(raw) => raw,
-            Err(error) => {
-                return Err(match error {
-                    hal::ShaderError::Device(error) => {
-                        pipeline::CreateShaderModuleError::Device(self.handle_hal_error(error))
-                    }
-                    hal::ShaderError::Compilation(ref msg) => {
-                        log::error!("Shader error: {msg}");
-                        pipeline::CreateShaderModuleError::Generation
-                    }
-                })
-            }
         };
 
         let module = pipeline::ShaderModule {
-            state: ResourceState::Valid(pipeline::ShaderModuleState::NagaModule { raw, interface }),
+            state: ResourceState::Valid(pipeline::ShaderModuleState::NagaModule {
+                hal,
+                runtime_checks: desc.runtime_checks,
+            }),
             device: self.clone(),
             label: desc.label.to_string(),
             compilation_info: wgt::CompilationInfo::default(),
@@ -4551,9 +4535,8 @@ impl Device {
         let mut io = validation::StageIo::default();
         let mut binding_layout_source;
         let final_entry_point_name;
-        let module;
-
-        {
+        let generated_hal_compute_module;
+        let module = {
             let stage = validation::ShaderStageForValidation::Compute;
             let stage_err = |error: validation::StageError| pipeline::CreatePipelineError::Stage {
                 stage: wgt::ShaderStages::COMPUTE,
@@ -4568,13 +4551,25 @@ impl Device {
                 .map_err(stage_err)?;
 
             match shader_module_state {
-                pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
+                pipeline::ShaderModuleState::NagaModule {
+                    hal,
+                    runtime_checks,
+                } => {
                     binding_layout_source = match pipeline_layout {
                         Some(pipeline_layout) => {
                             validation::BindingLayoutSource::Provided(pipeline_layout)
                         }
                         None => validation::BindingLayoutSource::new_derived(&self.limits),
                     };
+
+                    let (interface, raw) = self.compile_programmable_stage(
+                        hal,
+                        &shader_module.label,
+                        stage.to_naga(),
+                        &final_entry_point_name,
+                        &desc.stage.constants,
+                        runtime_checks,
+                    )?;
 
                     io = interface
                         .check_stage(
@@ -4587,7 +4582,8 @@ impl Device {
                         )
                         .map_err(stage_err)?;
 
-                    module = &**raw;
+                    generated_hal_compute_module = raw;
+                    &*generated_hal_compute_module
                 }
                 pipeline::ShaderModuleState::Passthrough { raw, .. } => {
                     match pipeline_layout {
@@ -4604,10 +4600,10 @@ impl Device {
                         }
                     }
 
-                    module = &**raw;
+                    &**raw
                 }
             }
-        }
+        };
 
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
@@ -4642,7 +4638,7 @@ impl Device {
             stage: hal::ProgrammableStage {
                 module,
                 entry_point: final_entry_point_name.as_ref(),
-                constants: &desc.stage.constants,
+                constants: &naga::back::PipelineConstants::default(),
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
             },
             cache: cache.as_ref().map(|it| it.raw()).transpose()?,
@@ -5158,6 +5154,10 @@ impl Device {
             sc
         };
 
+        let empty_constants = naga::back::PipelineConstants::default();
+        let generated_hal_vertex_module;
+        let generated_hal_task_module;
+        let generated_hal_mesh_module;
         let mut vertex_stage = None;
         let mut task_stage = None;
         let mut mesh_stage = None;
@@ -5167,7 +5167,8 @@ impl Device {
         let mut passthrough_stages = wgt::ShaderStages::empty();
         match desc.vertex {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
-                vertex_stage = {
+                {
+                    // keep for cleaner diffs
                     let stage_desc = &vertex.stage;
                     let stage = validation::ShaderStageForValidation::Vertex {
                         topology: desc.primitive.topology,
@@ -5195,7 +5196,18 @@ impl Device {
 
                     let module;
                     match vertex_shader_module_state {
-                        pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
+                        pipeline::ShaderModuleState::NagaModule {
+                            hal,
+                            runtime_checks,
+                        } => {
+                            let (interface, raw) = self.compile_programmable_stage(
+                                hal,
+                                &vertex_shader_module.label,
+                                naga::ShaderStage::Vertex,
+                                &vertex_entry_point_name,
+                                &stage_desc.constants,
+                                runtime_checks,
+                            )?;
                             io = interface
                                 .check_stage(
                                     &mut binding_layout_source,
@@ -5207,7 +5219,8 @@ impl Device {
                                 )
                                 .map_err(stage_err)?;
                             validated_stages |= stage_bit;
-                            module = &**raw;
+                            generated_hal_vertex_module = raw;
+                            module = &*generated_hal_vertex_module;
                         }
                         pipeline::ShaderModuleState::Passthrough { raw, .. } => {
                             passthrough_stages |= stage_bit;
@@ -5215,14 +5228,14 @@ impl Device {
                         }
                     }
 
-                    Some(hal::ProgrammableStage {
+                    vertex_stage = Some(hal::ProgrammableStage {
                         module,
                         entry_point: &vertex_entry_point_name,
-                        constants: &stage_desc.constants,
+                        constants: &empty_constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
-                    })
-                };
+                    });
+                }
             }
             pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
                 self.require_features(wgt::Features::EXPERIMENTAL_MESH_SHADER)?;
@@ -5252,7 +5265,18 @@ impl Device {
 
                     let module;
                     match task_shader_module_state {
-                        pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
+                        pipeline::ShaderModuleState::NagaModule {
+                            hal,
+                            runtime_checks,
+                        } => {
+                            let (interface, raw) = self.compile_programmable_stage(
+                                hal,
+                                &task_shader_module.label,
+                                naga::ShaderStage::Task,
+                                &task_entry_point_name,
+                                &stage_desc.constants,
+                                runtime_checks,
+                            )?;
                             io = interface
                                 .check_stage(
                                     &mut binding_layout_source,
@@ -5264,7 +5288,8 @@ impl Device {
                                 )
                                 .map_err(stage_err)?;
                             validated_stages |= stage_bit;
-                            module = &**raw;
+                            generated_hal_task_module = raw;
+                            module = &*generated_hal_task_module;
                         }
                         pipeline::ShaderModuleState::Passthrough { raw, .. } => {
                             passthrough_stages |= stage_bit;
@@ -5275,7 +5300,7 @@ impl Device {
                     Some(hal::ProgrammableStage {
                         module,
                         entry_point: &task_entry_point_name,
-                        constants: &stage_desc.constants,
+                        constants: &empty_constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
                     })
@@ -5307,7 +5332,18 @@ impl Device {
 
                     let module;
                     match mesh_shader_module_state {
-                        pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
+                        pipeline::ShaderModuleState::NagaModule {
+                            hal,
+                            runtime_checks,
+                        } => {
+                            let (interface, raw) = self.compile_programmable_stage(
+                                hal,
+                                &mesh_shader_module.label,
+                                naga::ShaderStage::Mesh,
+                                &mesh_entry_point_name,
+                                &stage_desc.constants,
+                                runtime_checks,
+                            )?;
                             io = interface
                                 .check_stage(
                                     &mut binding_layout_source,
@@ -5319,7 +5355,8 @@ impl Device {
                                 )
                                 .map_err(stage_err)?;
                             validated_stages |= stage_bit;
-                            module = &**raw;
+                            generated_hal_mesh_module = raw;
+                            module = &*generated_hal_mesh_module;
                         }
                         pipeline::ShaderModuleState::Passthrough { raw, .. } => {
                             passthrough_stages |= stage_bit;
@@ -5330,7 +5367,7 @@ impl Device {
                     Some(hal::ProgrammableStage {
                         module,
                         entry_point: &mesh_entry_point_name,
-                        constants: &stage_desc.constants,
+                        constants: &empty_constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
                     })
@@ -5338,6 +5375,7 @@ impl Device {
             }
         }
 
+        let generated_hal_fragment_module;
         let fragment_entry_point_name;
         let fragment_stage = match desc.fragment {
             Some(ref fragment_state) => {
@@ -5371,7 +5409,18 @@ impl Device {
 
                 let module;
                 match shader_module_state {
-                    pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
+                    pipeline::ShaderModuleState::NagaModule {
+                        hal,
+                        runtime_checks,
+                    } => {
+                        let (interface, raw) = self.compile_programmable_stage(
+                            hal,
+                            &shader_module.label,
+                            naga::ShaderStage::Fragment,
+                            &fragment_entry_point_name,
+                            &fragment_state.stage.constants,
+                            runtime_checks,
+                        )?;
                         io = interface
                             .check_stage(
                                 &mut binding_layout_source,
@@ -5383,7 +5432,8 @@ impl Device {
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
-                        module = &**raw;
+                        generated_hal_fragment_module = raw;
+                        module = &*generated_hal_fragment_module;
                     }
                     pipeline::ShaderModuleState::Passthrough { raw, .. } => {
                         passthrough_stages |= stage_bit;
@@ -5394,7 +5444,7 @@ impl Device {
                 Some(hal::ProgrammableStage {
                     module,
                     entry_point: &fragment_entry_point_name,
-                    constants: &fragment_state.stage.constants,
+                    constants: &empty_constants,
                     zero_initialize_workgroup_memory: fragment_state
                         .stage
                         .zero_initialize_workgroup_memory,
@@ -5666,6 +5716,75 @@ impl Device {
             }
             other => pipeline::CreatePipelineError::from_hal_without_device_loss(other),
         }
+    }
+
+    fn compile_programmable_stage(
+        self: &Arc<Self>,
+        shader: &hal::NagaShader,
+        shader_label: &str,
+        stage: naga::ShaderStage,
+        final_entry_point_name: &str,
+        constants: &naga::back::PipelineConstants,
+        runtime_checks: &wgt::ShaderRuntimeChecks,
+    ) -> Result<(validation::Interface, Box<dyn hal::DynShaderModule>), pipeline::CreatePipelineError>
+    {
+        let (module, info) = naga::back::pipeline_constants::process_overrides(
+            &shader.module,
+            &shader.info,
+            Some((stage, final_entry_point_name)),
+            constants,
+        )
+        .map_err(|e| pipeline::CreatePipelineError::PipelineConstants {
+            stage: hal::auxil::map_naga_stage(stage),
+            message: e.to_string(),
+        })?;
+
+        let interface = validation::Interface::new(&module, &info, self.limits.clone());
+
+        // These clones are necessary for the moment, because most (all?)
+        // `wgpu_hal` backends must retain the Naga module and its info in order
+        // to process overrides at pipeline creation time. Typically, no
+        // platform API module is created when
+        // `wgpu_hal::Device::create_shader_module` is called. Instead, platform
+        // API modules are created at pipeline creation time, and then discarded
+        // immediately.
+        //
+        // However, since fixing #9774 entails moving override processing to
+        // wgpu-core, that implies that we could remove override constants from
+        // the `wgpu_hal` API altogether; the hal `ShaderModule` types could
+        // actually hold shader modules. They'll still be created and discarded
+        // at pipeline creation time --- just by wgpu-core, not internally to
+        // wgpu-hal. With that change, hal backends could merely borrow the Naga
+        // module and info, and these clones could be removed.
+        let shader = hal::NagaShader {
+            module: Cow::Owned(module.into_owned()),
+            info: info.into_owned(),
+            debug_source: shader.debug_source.clone(),
+        };
+        let hal_shader = hal::ShaderInput::Naga(shader);
+        let hal_desc = hal::ShaderModuleDescriptor {
+            label: Some(shader_label),
+            runtime_checks: *runtime_checks,
+        };
+        let hal = match unsafe { self.raw().create_shader_module(&hal_desc, hal_shader) } {
+            Ok(raw) => raw,
+            Err(error) => {
+                return Err(match error {
+                    hal::ShaderError::Device(error) => {
+                        pipeline::CreatePipelineError::Device(self.handle_hal_error(error))
+                    }
+                    hal::ShaderError::Compilation(message) => {
+                        log::error!("Shader error: {message}");
+                        pipeline::CreatePipelineError::Internal {
+                            stage: hal::auxil::map_naga_stage(stage),
+                            message,
+                        }
+                    }
+                });
+            }
+        };
+
+        Ok((interface, hal))
     }
 
     /// # Safety
