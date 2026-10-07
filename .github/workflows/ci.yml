@@ -851,9 +851,8 @@ jobs:
             os: windows-2022
             attempt: 1
 
-    # Written without substitutions for consistency with the retries. The
-    # expression stops GitHub from appending the matrix values to the name.
-    name: ${{ 'Test Windows x86_64 (attempt 1)' }}
+    # Not substituting the platform to be consistent with the retry jobs.
+    name: Test Windows x86_64 (attempt ${{ matrix.attempt }})
     runs-on: ${{ matrix.os }}
 
     permissions: {}
@@ -876,9 +875,8 @@ jobs:
             os: windows-2022
             attempt: 2
 
-    # Avoid substitutions because names of skipped jobs don't get them. The
-    # expression stops GitHub from appending the matrix values to the name.
-    name: ${{ 'Test Windows x86_64 (retry; attempt 2)' }}
+    # Avoid substituting the platform because skipped jobs don't apply substitutions.
+    name: Test Windows x86_64 (retry; attempt ${{ matrix.attempt }})
     runs-on: ${{ matrix.os }}
 
     permissions: {}
