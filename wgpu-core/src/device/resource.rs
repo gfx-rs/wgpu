@@ -5161,9 +5161,9 @@ impl Device {
         let mut vertex_stage = None;
         let mut task_stage = None;
         let mut mesh_stage = None;
-        let mut _vertex_entry_point_name = String::new();
-        let mut _task_entry_point_name = String::new();
-        let mut _mesh_entry_point_name = String::new();
+        let vertex_entry_point_name;
+        let task_entry_point_name;
+        let mesh_entry_point_name;
         let mut passthrough_stages = wgt::ShaderStages::empty();
         match desc.vertex {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
@@ -5186,7 +5186,7 @@ impl Device {
                         .map_err(stage_err)?;
                     vertex_shader_module.same_device(self)?;
 
-                    _vertex_entry_point_name = vertex_shader_module
+                    vertex_entry_point_name = vertex_shader_module
                         .finalize_entry_point_name(
                             stage.to_naga(),
                             stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
@@ -5200,7 +5200,7 @@ impl Device {
                                 .check_stage(
                                     &mut binding_layout_source,
                                     &mut minimum_binding_sizes,
-                                    &_vertex_entry_point_name,
+                                    &vertex_entry_point_name,
                                     stage,
                                     io,
                                     Some(desc.primitive.topology),
@@ -5217,7 +5217,7 @@ impl Device {
 
                     Some(hal::ProgrammableStage {
                         module,
-                        entry_point: &_vertex_entry_point_name,
+                        entry_point: &vertex_entry_point_name,
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
@@ -5243,7 +5243,7 @@ impl Device {
                         .map_err(stage_err)?;
                     task_shader_module.same_device(self)?;
 
-                    _task_entry_point_name = task_shader_module
+                    task_entry_point_name = task_shader_module
                         .finalize_entry_point_name(
                             stage.to_naga(),
                             stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
@@ -5257,7 +5257,7 @@ impl Device {
                                 .check_stage(
                                     &mut binding_layout_source,
                                     &mut minimum_binding_sizes,
-                                    &_task_entry_point_name,
+                                    &task_entry_point_name,
                                     stage,
                                     io,
                                     Some(desc.primitive.topology),
@@ -5274,7 +5274,7 @@ impl Device {
 
                     Some(hal::ProgrammableStage {
                         module,
-                        entry_point: &_task_entry_point_name,
+                        entry_point: &task_entry_point_name,
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
@@ -5298,7 +5298,7 @@ impl Device {
                         .map_err(stage_err)?;
                     mesh_shader_module.same_device(self)?;
 
-                    _mesh_entry_point_name = mesh_shader_module
+                    mesh_entry_point_name = mesh_shader_module
                         .finalize_entry_point_name(
                             stage.to_naga(),
                             stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
@@ -5312,7 +5312,7 @@ impl Device {
                                 .check_stage(
                                     &mut binding_layout_source,
                                     &mut minimum_binding_sizes,
-                                    &_mesh_entry_point_name,
+                                    &mesh_entry_point_name,
                                     stage,
                                     io,
                                     Some(desc.primitive.topology),
@@ -5329,7 +5329,7 @@ impl Device {
 
                     Some(hal::ProgrammableStage {
                         module,
-                        entry_point: &_mesh_entry_point_name,
+                        entry_point: &mesh_entry_point_name,
                         constants: &stage_desc.constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
