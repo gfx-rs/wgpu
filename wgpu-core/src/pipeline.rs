@@ -137,21 +137,18 @@ impl ShaderModule {
 
     /// Select an entry point name, given an optional name and a shader stage.
     ///
-    /// This function takes care of turning the `Option<&str>`
-    /// [`ProgrammableStageDescriptor::entry_point`][ep] into a specific name.
+    /// This function resolves an `Option<&str>`
+    /// [`ProgrammableStageDescriptor::entry_point`][ep] value to the name of an
+    /// entry point in `self`.
     ///
-    /// For non-passthrough shaders, if `entry_point` is `Some`, then return it
-    /// as a `String`. Otherwise, return the name of the unique entry point in
-    /// `self`'s module for `stage`; if there is not exactly one such entry
-    /// point, return an error.
+    /// If `entry_point` is given, verify that `self` has an entry point by that
+    /// name for `stage`, and then return the name as an owned `String`.
     ///
-    /// The non-passthrough case counts on `Interface::check_stage` to verify
-    /// that an entry point with the given name actually exists.
+    /// If `entry_point` is `None`, verify that `self` has exactly one entry
+    /// point for `stage`, and return its name.
     ///
-    /// For passthrough shaders, if `entry_point` is `Some`, verify that an
-    /// entry point by that name exists (returning an error if not), and return
-    /// it as a `String`. Otherwise, if `entry_point` is `None`, then check that
-    /// this module has exactly one entry point, and return its name.
+    /// Passthrough modules do not record entry points' stages, so for those,
+    /// `stage` is ignored.
     ///
     /// [ep]: crate::pipeline::ProgrammableStageDescriptor::entry_point
     pub(crate) fn finalize_entry_point_name(
