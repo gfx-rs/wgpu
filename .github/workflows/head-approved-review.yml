@@ -1,0 +1,22 @@
+# Starts the `Head approved` workflow when a user approves a pull request.
+#
+# On pull requests from forks, this workflow gets no secrets, so it cannot post
+# the check. The `Head approved` workflow runs from `trunk` on `workflow_run`
+# and posts it.
+name: Head approved review
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions: {}
+
+jobs:
+  trigger:
+    name: Trigger head-approved check
+    if: github.event.review.state == 'approved'
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - run: echo "The Head approved workflow posts the check."
