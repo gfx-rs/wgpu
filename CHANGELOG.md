@@ -82,6 +82,34 @@ By @beicause in [#9553](https://github.com/gfx-rs/wgpu/pull/9553).
 
 By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
+#### `TextureDescriptor` has new field `texture_binding_view_dimension`, new downlevel flag `ARBITRARY_BINDING_VIEW_DIMENSIONS`
+
+`TextureDescriptor` has a new field `texture_binding_view_dimension`,
+implementing WebGPU's
+[`textureBindingViewDimension`](https://gpuweb.github.io/gpuweb/#dom-gputexturedescriptor-texturebindingviewdimension)
+. On devices without the new
+`DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS` (GLES/WebGL), texture
+bindings must use a view of this dimension, `None` infers it from the texture's
+dimension and layer count, and `CubeArray` is not allowed. Devices with the
+downlevel flag ignore it. `Texture::texture_binding_view_dimension()` returns
+the resolved value. This allows specifying a binding view dimension that was
+otherwise only inferred from a heuristic for GLSL that could get it wrong.
+
+Example for a cube map:
+
+```diff
+ wgpu::TextureDescriptor {
+     size: wgpu::Extent3d { width: 256, height: 256, depth_or_array_layers: 6 },
+     dimension: wgpu::TextureDimension::D2,
+     // ...
++    texture_binding_view_dimension: Some(wgpu::TextureViewDimension::Cube),
+ }
+```
+
+**Breaking for custom backends:** Implementations of `TextureInterface` must implement `texture_binding_view_dimension`.
+
+By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
+
 ### Added/New Features
 
 #### General
@@ -120,6 +148,7 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 - Added `Utf16SourceLocation` which is analogue to `SourceLocation` but using UTF-16 code units. Added `Utf16SourceLocation::to_utf8` and `SourceLocation::to_utf16` to convert between them. By @sagudev in [#10294](https://github.com/gfx-rs/wgpu/pull/10294).
 - Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
+- Added `TextureDescriptor::default_view_dimension` to get the view dimension a texture's views default to. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### Naga
 
@@ -152,6 +181,10 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 
 - Add `Device::import_external_texture` to bind a `GPUExternalTexture` sampled from an `HTMLVideoElement` or WebCodecs `VideoFrame`, without a copy. By @AdrianEddy in [#9936](https://github.com/gfx-rs/wgpu/pull/9936).
 
+#### deno_webgpu
+
+- `GPUTextureDescriptor` accepts `textureBindingViewDimension`. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
+
 ### Changes
 
 #### General
@@ -174,6 +207,10 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - `naga::valid::ValidationError` is now always returned boxed, to avoid `clippy::large_result_err` warning. By @beicause in [#9612](https://github.com/gfx-rs/wgpu/pull/9612)
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
+
+#### Hal
+
+- `TextureDescriptor` has a new field `texture_binding_view_dimension`. It must be `Some` on devices without `DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS` (the GLES backend allocates the texture's GL target from it), and is ignored otherwise. By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### Metal
 

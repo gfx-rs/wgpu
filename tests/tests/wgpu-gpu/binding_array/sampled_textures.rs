@@ -119,6 +119,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
             format: TextureFormat::Rgba8UnormSrgb,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
 
         ctx.queue.write_texture(
@@ -157,6 +158,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
         format: TextureFormat::Rgba8UnormSrgb,
         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
 
     let output_view = output_texture.create_view(&TextureViewDescriptor::default());
@@ -341,6 +343,7 @@ async fn partial_binding_array_followed_by_storage_buffer(ctx: TestingContext) {
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let input_view = input_texture.create_view(&TextureViewDescriptor::default());
 
@@ -368,6 +371,7 @@ async fn partial_binding_array_followed_by_storage_buffer(ctx: TestingContext) {
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let output_view = output_texture.create_view(&TextureViewDescriptor::default());
 

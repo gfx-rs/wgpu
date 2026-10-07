@@ -1574,6 +1574,7 @@ pub struct Texture {
     pub(crate) views: Mutex<WeakVec<TextureView>>,
     // Bind groups that reference this texture. May contain duplicates.
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
+    pub(crate) texture_binding_view_dimension: Option<wgt::TextureViewDimension>,
 }
 
 impl Texture {
@@ -1585,6 +1586,7 @@ impl Texture {
         format_features: wgt::TextureFormatFeatures,
         clear_mode: TextureClearMode,
         init: bool,
+        texture_binding_view_dimension: Option<wgt::TextureViewDimension>,
     ) -> Self {
         Texture {
             state: ResourceState::Valid(TextureState {
@@ -1610,6 +1612,7 @@ impl Texture {
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
+            texture_binding_view_dimension,
         }
     }
 
@@ -1635,6 +1638,7 @@ impl Texture {
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, TextureClearMode::None),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
+            texture_binding_view_dimension: None,
         })
     }
 
@@ -1653,6 +1657,11 @@ impl Texture {
                 expected,
             })
         }
+    }
+
+    /// Return the resolved texture binding view dimension.
+    pub fn texture_binding_view_dimension(&self) -> Option<wgt::TextureViewDimension> {
+        self.texture_binding_view_dimension
     }
 }
 
@@ -1878,17 +1887,9 @@ impl Texture {
                 .unwrap_or(self.desc.format)
         });
 
-        let resolved_dimension = desc.dimension.unwrap_or_else(|| match self.desc.dimension {
-            wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
-            wgt::TextureDimension::D2 => {
-                if self.desc.array_layer_count() == 1 {
-                    wgt::TextureViewDimension::D2
-                } else {
-                    wgt::TextureViewDimension::D2Array
-                }
-            }
-            wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
-        });
+        let resolved_dimension = desc
+            .dimension
+            .unwrap_or_else(|| self.desc.default_view_dimension());
 
         let resolved_mip_level_count = desc.range.mip_level_count.unwrap_or_else(|| {
             self.desc
@@ -2436,6 +2437,25 @@ pub enum CreateTextureError {
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error(transparent)]
+    InvalidTextureBindingViewDimension(#[from] TextureBindingViewDimensionError),
+}
+
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum TextureBindingViewDimensionError {
+    #[error(
+        "Texture binding view dimension {dimension:?} requires \
+         depth_or_array_layers to be {required}, but it is {actual}"
+    )]
+    InvalidLayerCount {
+        dimension: wgt::TextureViewDimension,
+        required: u32,
+        actual: u32,
+    },
+
+    #[error("CubeArray is not a valid texture binding view dimension")]
+    CubeArray,
 }
 
 crate::impl_resource_type!(Texture);
@@ -2477,6 +2497,7 @@ impl WebGpuError for CreateTextureError {
             | Self::InvalidTransientTextureMipLevelCount(_)
             | Self::InvalidTransientTextureLayerCount(_)
             | Self::InvalidTransientTextureViewFormats
+            | Self::InvalidTextureBindingViewDimension(_)
             | Self::MultisampledNotRenderAttachment => ErrorType::Validation,
         }
     }

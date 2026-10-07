@@ -195,6 +195,16 @@ impl Texture {
     pub unsafe fn mark_externally_initialized(&self) {
         unsafe { self.inner.mark_externally_initialized() }
     }
+
+    /// Returns the texture binding view dimension that was inferred or provided when creating the
+    /// texture.
+    ///
+    /// On adapters without ARBITRARY_BINDING_VIEW_DIMENSIONS when a texture binding view dimension
+    /// was not specified - this returns the inferred texture view dimension.
+    /// On adapters with it - this returns None.
+    pub fn texture_binding_view_dimension(&self) -> Option<TextureViewDimension> {
+        self.inner.texture_binding_view_dimension()
+    }
 }
 
 #[cfg(wgpu_core)]

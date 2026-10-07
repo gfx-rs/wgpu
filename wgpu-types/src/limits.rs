@@ -1300,6 +1300,18 @@ bitflags::bitflags! {
         /// GLSL ES has no `noperspective` qualifier, so the GLES backend only supports this
         /// on desktop OpenGL, not on GLES/WebGL2.
         const LINEAR_INTERPOLATION = 1 << 26;
+
+        /// Texture views used for bindings can have any `dimension` compatible with the texture.
+        ///
+        /// When this is not present:
+        /// - Texture views used for bindings must specify the same `dimension` as the
+        ///   `texture_binding_view_dimension` inferred/specified when creating the texture.
+        /// - If `texture_binding_view_dimension` is not specified, it will be inferred from the
+        ///   texture dimension and array layer count.
+        /// - `texture_binding_view_dimension` must not be `cube-array`.
+        ///
+        /// See <https://gpuweb.github.io/gpuweb/#dom-gpudevice-createtexture>
+        const ARBITRARY_BINDING_VIEW_DIMENSIONS = 1 << 27;
     }
 }
 

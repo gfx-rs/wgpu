@@ -152,6 +152,7 @@ fn create_texture_and_view(
         format,
         usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     if let Some(data) = data {
         ctx.queue.write_texture(
@@ -190,6 +191,7 @@ fn create_discarded_texture_and_view(ctx: &TestingContext) -> wgpu::TextureView 
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 

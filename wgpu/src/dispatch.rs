@@ -319,6 +319,8 @@ pub trait TextureInterface: CommonTraits {
     ///
     /// The entire contents of the texture must already be initialized.
     unsafe fn mark_externally_initialized(&self) {}
+
+    fn texture_binding_view_dimension(&self) -> Option<crate::TextureViewDimension>;
 }
 pub trait ExternalTextureInterface: CommonTraits {
     fn destroy(&self);

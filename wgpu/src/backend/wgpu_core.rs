@@ -1906,6 +1906,10 @@ impl dispatch::TextureInterface for CoreTexture {
     unsafe fn mark_externally_initialized(&self) {
         unsafe { self.wgpu_texture.mark_externally_initialized() }
     }
+
+    fn texture_binding_view_dimension(&self) -> Option<crate::TextureViewDimension> {
+        self.wgpu_texture.texture_binding_view_dimension()
+    }
 }
 
 impl dispatch::BlasInterface for CoreBlas {
