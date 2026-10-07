@@ -252,6 +252,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Prevent invalid IR from being generated when using a ray query in a loop. By @Vecvec in [#9945](https://github.com/gfx-rs/wgpu/pull/9945)
 - Raise a type error, rather than panic, for some cases of an invalid `select` argument type in WGSL constant evaluation. By @ErichDonGubler in [#10350](https://github.com/gfx-rs/wgpu/pull/10350).
 - Fix `sign` returning unexpected values for floating-point arguments in the HLSL backend. By @ErichDonGubler in [#10434](https://github.com/gfx-rs/wgpu/pull/10434).
+- Fix invalid MSL generated for `textureSampleGrad` with 3D and cube textures, which emitted `metal::gradient2d` for every texture dimension. By @ErichDonGubler in [#XXXX](https://github.com/gfx-rs/wgpu/pull/XXXX).
 
 #### DX12
 
