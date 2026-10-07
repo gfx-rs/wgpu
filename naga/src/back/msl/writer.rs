@@ -1343,7 +1343,21 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
             }
             crate::SampleLevel::Gradient { x, y } => {
-                write!(self.out, ", {NAMESPACE}::gradient2d(")?;
+                let dim = match *context.resolve_type(image) {
+                    crate::TypeInner::Image { dim, .. } => dim,
+                    ref other => unreachable!("Unexpected type {other:?}"),
+                };
+                let gradient = match dim {
+                    crate::ImageDimension::D2 => "gradient2d",
+                    crate::ImageDimension::D3 => "gradient3d",
+                    crate::ImageDimension::Cube => "gradientcube",
+                    // `image_needs_lod` is false for 1D images, so the
+                    // `!has_levels` arm above has already handled them.
+                    crate::ImageDimension::D1 => {
+                        unreachable!("1D image can't be sampled with a gradient")
+                    }
+                };
+                write!(self.out, ", {NAMESPACE}::{gradient}(")?;
                 self.put_expression(x, context, true)?;
                 write!(self.out, ", ")?;
                 self.put_expression(y, context, true)?;
