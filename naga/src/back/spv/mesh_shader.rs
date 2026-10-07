@@ -59,11 +59,11 @@ impl super::Writer {
     ) -> Result<Word, Error> {
         let array_ty = self.id_gen.next();
         Instruction::type_array(array_ty, ty, array_size_id)
-            .to_words(&mut self.logical_layout.declarations);
-        let ptr_ty = self.get_pointer_type_id(array_ty, spirv::StorageClass::Output);
+            .to_words(&mut self.logical_layout.declarations)?;
+        let ptr_ty = self.get_pointer_type_id(array_ty, spirv::StorageClass::Output)?;
         let var_id = self.id_gen.next();
         Instruction::variable(ptr_ty, var_id, spirv::StorageClass::Output, None)
-            .to_words(&mut self.logical_layout.declarations);
+            .to_words(&mut self.logical_layout.declarations)?;
         Ok(var_id)
     }
 
@@ -87,11 +87,13 @@ impl super::Writer {
                     ..
                 } => members
                     .iter()
-                    .map(|a| MeshReturnMember {
-                        ty_id: self.get_handle_type_id(a.ty),
-                        binding: a.binding.clone().unwrap(),
+                    .map(|a| {
+                        Ok(MeshReturnMember {
+                            ty_id: self.get_handle_type_id(a.ty)?,
+                            binding: a.binding.clone().unwrap(),
+                        })
                     })
-                    .collect(),
+                    .collect::<Result<_, Error>>()?,
                 _ => unreachable!(),
             };
         let vertex_array_type_id = out_members
@@ -110,11 +112,13 @@ impl super::Writer {
                 ..
             } => members
                 .iter()
-                .map(|a| MeshReturnMember {
-                    ty_id: self.get_handle_type_id(a.ty),
-                    binding: a.binding.clone().unwrap(),
+                .map(|a| {
+                    Ok(MeshReturnMember {
+                        ty_id: self.get_handle_type_id(a.ty)?,
+                        binding: a.binding.clone().unwrap(),
+                    })
                 })
-                .collect(),
+                .collect::<Result<_, Error>>()?,
             _ => unreachable!(),
         };
         let primitive_members = match &ir_module.types[mesh_info.primitive_output_type] {
@@ -123,32 +127,34 @@ impl super::Writer {
                 ..
             } => members
                 .iter()
-                .map(|a| MeshReturnMember {
-                    ty_id: self.get_handle_type_id(a.ty),
-                    binding: a.binding.clone().unwrap(),
+                .map(|a| {
+                    Ok(MeshReturnMember {
+                        ty_id: self.get_handle_type_id(a.ty)?,
+                        binding: a.binding.clone().unwrap(),
+                    })
                 })
-                .collect(),
+                .collect::<Result<_, Error>>()?,
             _ => unreachable!(),
         };
         // In the final return, we do a giant memcpy, for which this is helpful
         let local_invocation_index_var_id = match local_invocation_index_id {
             Some(a) => a,
             None => {
-                let u32_id = self.get_u32_type_id();
+                let u32_id = self.get_u32_type_id()?;
                 let var = self.id_gen.next();
                 Instruction::variable(
-                    self.get_pointer_type_id(u32_id, spirv::StorageClass::Input),
+                    self.get_pointer_type_id(u32_id, spirv::StorageClass::Input)?,
                     var,
                     spirv::StorageClass::Input,
                     None,
                 )
-                .to_words(&mut self.logical_layout.declarations);
+                .to_words(&mut self.logical_layout.declarations)?;
                 Instruction::decorate(
                     var,
                     spirv::Decoration::BuiltIn,
                     &[spirv::BuiltIn::LocalInvocationIndex as u32],
                 )
-                .to_words(&mut self.logical_layout.annotations);
+                .to_words(&mut self.logical_layout.annotations)?;
                 iface.varying_ids.push(var);
 
                 var
@@ -161,13 +167,13 @@ impl super::Writer {
             out_members,
             local_invocation_index_var_id,
             workgroup_size: self
-                .get_constant_scalar(crate::Literal::U32(iface.workgroup_size.iter().product())),
+                .get_constant_scalar(crate::Literal::U32(iface.workgroup_size.iter().product()))?,
 
             vertex_info: PerOutputTypeMeshReturnInfo {
                 array_type_id: vertex_array_type_id,
                 struct_members: vertex_members,
                 max_length_constant: self
-                    .get_constant_scalar(crate::Literal::U32(mesh_info.max_vertices)),
+                    .get_constant_scalar(crate::Literal::U32(mesh_info.max_vertices))?,
                 bindings: Vec::new(),
                 builtin_block: None,
             },
@@ -175,16 +181,16 @@ impl super::Writer {
                 array_type_id: primitive_array_type_id,
                 struct_members: primitive_members,
                 max_length_constant: self
-                    .get_constant_scalar(crate::Literal::U32(mesh_info.max_primitives)),
+                    .get_constant_scalar(crate::Literal::U32(mesh_info.max_primitives))?,
                 bindings: Vec::new(),
                 builtin_block: None,
             },
             primitive_indices: None,
         };
         let vert_array_size_id =
-            self.get_constant_scalar(crate::Literal::U32(mesh_info.max_vertices));
+            self.get_constant_scalar(crate::Literal::U32(mesh_info.max_vertices))?;
         let prim_array_size_id =
-            self.get_constant_scalar(crate::Literal::U32(mesh_info.max_primitives));
+            self.get_constant_scalar(crate::Literal::U32(mesh_info.max_primitives))?;
 
         // Create the actual output variables and types.
         // According to SPIR-V,
@@ -237,14 +243,14 @@ impl super::Writer {
                     bi_index += 1;
                 }
             }
-            ins.to_words(&mut self.logical_layout.declarations);
+            ins.to_words(&mut self.logical_layout.declarations)?;
             decorations.push(Instruction::decorate(
                 builtin_block_ty_id,
                 spirv::Decoration::Block,
                 &[],
             ));
             for dec in decorations {
-                dec.to_words(&mut self.logical_layout.annotations);
+                dec.to_words(&mut self.logical_layout.annotations)?;
             }
             let v =
                 self.write_mesh_return_global_variable(builtin_block_ty_id, vert_array_size_id)?;
@@ -317,19 +323,19 @@ impl super::Writer {
                     bi_index += 1;
                 }
             }
-            ins.to_words(&mut self.logical_layout.declarations);
+            ins.to_words(&mut self.logical_layout.declarations)?;
             decorations.push(Instruction::decorate(
                 builtin_block_ty_id,
                 spirv::Decoration::Block,
                 &[],
             ));
             for dec in decorations {
-                dec.to_words(&mut self.logical_layout.annotations);
+                dec.to_words(&mut self.logical_layout.annotations)?;
             }
             let v =
                 self.write_mesh_return_global_variable(builtin_block_ty_id, prim_array_size_id)?;
             Instruction::decorate(v, spirv::Decoration::PerPrimitiveEXT, &[])
-                .to_words(&mut self.logical_layout.annotations);
+                .to_words(&mut self.logical_layout.annotations)?;
             iface.varying_ids.push(v);
             if self.flags.contains(WriterFlags::DEBUG) {
                 self.debugs
@@ -347,7 +353,7 @@ impl super::Writer {
                         self.write_mesh_return_global_variable(member.ty_id, vert_array_size_id)?;
                     // Decorate the variable with Location
                     Instruction::decorate(v, spirv::Decoration::Location, &[location])
-                        .to_words(&mut self.logical_layout.annotations);
+                        .to_words(&mut self.logical_layout.annotations)?;
                     iface.varying_ids.push(v);
                     mesh_return_info.vertex_info.bindings.push(v);
                 }
@@ -379,7 +385,7 @@ impl super::Writer {
                             _ => unreachable!(),
                         } as Word],
                     )
-                    .to_words(&mut self.logical_layout.annotations);
+                    .to_words(&mut self.logical_layout.annotations)?;
                     iface.varying_ids.push(v);
                     if self.flags.contains(WriterFlags::DEBUG) {
                         self.debugs
@@ -393,10 +399,10 @@ impl super::Writer {
                         self.write_mesh_return_global_variable(member.ty_id, prim_array_size_id)?;
                     // Decorate the variable with Location
                     Instruction::decorate(v, spirv::Decoration::Location, &[location])
-                        .to_words(&mut self.logical_layout.annotations);
+                        .to_words(&mut self.logical_layout.annotations)?;
                     // Decorate it with PerPrimitiveEXT
                     Instruction::decorate(v, spirv::Decoration::PerPrimitiveEXT, &[])
-                        .to_words(&mut self.logical_layout.annotations);
+                        .to_words(&mut self.logical_layout.annotations)?;
                     iface.varying_ids.push(v);
 
                     mesh_return_info.primitive_info.bindings.push(v);
@@ -424,7 +430,7 @@ impl super::Writer {
         let values = [self.id_gen.next(), self.id_gen.next(), self.id_gen.next()];
         for (i, &value) in values.iter().enumerate() {
             let instruction = Instruction::composite_extract(
-                self.get_u32_type_id(),
+                self.get_u32_type_id()?,
                 value,
                 value_id,
                 &[i as Word],
@@ -451,8 +457,8 @@ impl super::Writer {
         count_id: u32,
         index_var: u32,
         return_info: &MeshReturnInfo,
-    ) {
-        let u32_id = self.get_u32_type_id();
+    ) -> Result<(), Error> {
+        let u32_id = self.get_u32_type_id()?;
         let condition_check = self.id_gen.next();
         let loop_continue = self.id_gen.next();
         let loop_body = self.id_gen.next();
@@ -477,7 +483,7 @@ impl super::Writer {
             let cond = self.id_gen.next();
             body.push(Instruction::binary(
                 spirv::Op::ULessThan,
-                self.get_bool_type_id(),
+                self.get_bool_type_id()?,
                 cond,
                 val_i,
                 count_id,
@@ -508,6 +514,7 @@ impl super::Writer {
 
             body.push(Instruction::branch(loop_header));
         }
+        Ok(())
     }
 
     /// This generates the instructions used to copy all parts of a single output vertex/primitive
@@ -519,8 +526,8 @@ impl super::Writer {
         index_var: u32,
         vert_array_ptr: u32,
         prim_array_ptr: u32,
-    ) -> Vec<Instruction> {
-        let u32_type_id = self.get_u32_type_id();
+    ) -> Result<Vec<Instruction>, Error> {
+        let u32_type_id = self.get_u32_type_id()?;
         let mut body = Vec::new();
         // Current index to copy
         let val_i = self.id_gen.next();
@@ -543,12 +550,12 @@ impl super::Writer {
         for (member_id, member) in info.struct_members.iter().enumerate() {
             let val_to_copy_ptr = self.id_gen.next();
             body.push(Instruction::access_chain(
-                self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Workgroup),
+                self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Workgroup)?,
                 val_to_copy_ptr,
                 array_ptr,
                 &[
                     val_i,
-                    self.get_constant_scalar(crate::Literal::U32(member_id as u32)),
+                    self.get_constant_scalar(crate::Literal::U32(member_id as u32))?,
                 ],
             ));
             let val_to_copy = self.id_gen.next();
@@ -568,7 +575,7 @@ impl super::Writer {
                     | crate::BuiltIn::TriangleIndices,
                 ) => {
                     body.push(Instruction::access_chain(
-                        self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output),
+                        self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output)?,
                         ptr_to_copy_to,
                         return_info.primitive_indices.unwrap(),
                         &[val_i],
@@ -576,12 +583,12 @@ impl super::Writer {
                 }
                 crate::Binding::BuiltIn(bi) => {
                     body.push(Instruction::access_chain(
-                        self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output),
+                        self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output)?,
                         ptr_to_copy_to,
                         info.builtin_block.unwrap(),
                         &[
                             val_i,
-                            self.get_constant_scalar(crate::Literal::U32(builtin_index)),
+                            self.get_constant_scalar(crate::Literal::U32(builtin_index))?,
                         ],
                     ));
                     needs_y_flip = matches!(bi, crate::BuiltIn::Position { .. })
@@ -590,7 +597,7 @@ impl super::Writer {
                 }
                 crate::Binding::Location { .. } => {
                     body.push(Instruction::access_chain(
-                        self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output),
+                        self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output)?,
                         ptr_to_copy_to,
                         info.bindings[binding_index],
                         &[val_i],
@@ -604,7 +611,7 @@ impl super::Writer {
             if needs_y_flip {
                 let prev_y = self.id_gen.next();
                 body.push(Instruction::composite_extract(
-                    self.get_f32_type_id(),
+                    self.get_f32_type_id()?,
                     prev_y,
                     val_to_copy,
                     &[1],
@@ -612,21 +619,21 @@ impl super::Writer {
                 let new_y = self.id_gen.next();
                 body.push(Instruction::unary(
                     spirv::Op::FNegate,
-                    self.get_f32_type_id(),
+                    self.get_f32_type_id()?,
                     new_y,
                     prev_y,
                 ));
                 let new_ptr_to_copy_to = self.id_gen.next();
                 body.push(Instruction::access_chain(
-                    self.get_f32_pointer_type_id(spirv::StorageClass::Output),
+                    self.get_f32_pointer_type_id(spirv::StorageClass::Output)?,
                     new_ptr_to_copy_to,
                     ptr_to_copy_to,
-                    &[self.get_constant_scalar(crate::Literal::U32(1))],
+                    &[self.get_constant_scalar(crate::Literal::U32(1))?],
                 ));
                 body.push(Instruction::store(new_ptr_to_copy_to, new_y, None));
             }
         }
-        body
+        Ok(body)
     }
 
     /// Writes the return call for a mesh shader, which involves copying previously
@@ -639,21 +646,21 @@ impl super::Writer {
         loop_counter_primitives: u32,
         local_invocation_index_id: Word,
     ) -> Result<(), Error> {
-        let u32_id = self.get_u32_type_id();
+        let u32_id = self.get_u32_type_id()?;
 
         // Load the actual vertex and primitive counts
         let mut load_u32_by_member_index =
-            |members: &[MeshReturnMember], bi: crate::BuiltIn, max: u32| {
+            |members: &[MeshReturnMember], bi: crate::BuiltIn, max: u32| -> Result<Word, Error> {
                 let member_index = members
                     .iter()
                     .position(|a| a.binding == crate::Binding::BuiltIn(bi))
                     .unwrap() as u32;
                 let ptr_id = self.id_gen.next();
                 block.body.push(Instruction::access_chain(
-                    self.get_pointer_type_id(u32_id, spirv::StorageClass::Workgroup),
+                    self.get_pointer_type_id(u32_id, spirv::StorageClass::Workgroup)?,
                     ptr_id,
                     return_info.out_variable_id,
-                    &[self.get_constant_scalar(crate::Literal::U32(member_index))],
+                    &[self.get_constant_scalar(crate::Literal::U32(member_index))?],
                 ));
                 let before_min_id = self.id_gen.next();
                 block
@@ -669,24 +676,24 @@ impl super::Writer {
                     id,
                     &[before_min_id, max],
                 ));
-                id
+                Ok(id)
             };
         let vert_count_id = load_u32_by_member_index(
             &return_info.out_members,
             crate::BuiltIn::VertexCount,
             return_info.vertex_info.max_length_constant,
-        );
+        )?;
         let prim_count_id = load_u32_by_member_index(
             &return_info.out_members,
             crate::BuiltIn::PrimitiveCount,
             return_info.primitive_info.max_length_constant,
-        );
+        )?;
 
         // Get pointers to the arrays of data to extract
-        let mut get_array_ptr = |bi: crate::BuiltIn, array_type_id: u32| {
+        let mut get_array_ptr = |bi: crate::BuiltIn, array_type_id: u32| -> Result<Word, Error> {
             let id = self.id_gen.next();
             block.body.push(Instruction::access_chain(
-                self.get_pointer_type_id(array_type_id, spirv::StorageClass::Workgroup),
+                self.get_pointer_type_id(array_type_id, spirv::StorageClass::Workgroup)?,
                 id,
                 return_info.out_variable_id,
                 &[self.get_constant_scalar(crate::Literal::U32(
@@ -695,18 +702,18 @@ impl super::Writer {
                         .iter()
                         .position(|a| a.binding == crate::Binding::BuiltIn(bi))
                         .unwrap() as u32,
-                ))],
+                ))?],
             ));
-            id
+            Ok(id)
         };
         let vert_array_ptr = get_array_ptr(
             crate::BuiltIn::Vertices,
             return_info.vertex_info.array_type_id,
-        );
+        )?;
         let prim_array_ptr = get_array_ptr(
             crate::BuiltIn::Primitives,
             return_info.primitive_info.array_type_id,
-        );
+        )?;
 
         // This must be called exactly once before any other mesh outputs are written
         {
@@ -736,7 +743,7 @@ impl super::Writer {
             loop_counter_vertices,
             vert_array_ptr,
             prim_array_ptr,
-        );
+        )?;
         // Write vertex copy loop
         self.write_mesh_copy_loop(
             &mut block.body,
@@ -746,7 +753,7 @@ impl super::Writer {
             vert_count_id,
             loop_counter_vertices,
             return_info,
-        );
+        )?;
 
         // In between loops, reset the initial index
         {
@@ -766,7 +773,7 @@ impl super::Writer {
             loop_counter_primitives,
             vert_array_ptr,
             prim_array_ptr,
-        );
+        )?;
         // Write primitive copy loop
         self.write_mesh_copy_loop(
             &mut block.body,
@@ -776,7 +783,7 @@ impl super::Writer {
             prim_count_id,
             loop_counter_primitives,
             return_info,
-        );
+        )?;
 
         block.body.push(Instruction::label(func_end));
         Ok(())
@@ -793,14 +800,14 @@ impl super::Writer {
             parameter_type_ids: alloc::vec![],
             return_type_id: self.void_type,
         };
-        let function_type = self.get_function_type(lookup_function_type);
+        let function_type = self.get_function_type(lookup_function_type)?;
         function.signature = Some(Instruction::function(
             self.void_type,
             out_id,
             spirv::FunctionControl::empty(),
             function_type,
         ));
-        let u32_id = self.get_u32_type_id();
+        let u32_id = self.get_u32_type_id()?;
         {
             let mut block = Block::new(self.id_gen.next());
             // A general function variable that we guarantee to allow in the final return. It must be
@@ -811,7 +818,7 @@ impl super::Writer {
             block.body.insert(
                 0,
                 Instruction::variable(
-                    self.get_pointer_type_id(u32_id, spirv::StorageClass::Function),
+                    self.get_pointer_type_id(u32_id, spirv::StorageClass::Function)?,
                     loop_counter_vertices,
                     spirv::StorageClass::Function,
                     None,
@@ -820,7 +827,7 @@ impl super::Writer {
             block.body.insert(
                 1,
                 Instruction::variable(
-                    self.get_pointer_type_id(u32_id, spirv::StorageClass::Function),
+                    self.get_pointer_type_id(u32_id, spirv::StorageClass::Function)?,
                     loop_counter_primitives,
                     spirv::StorageClass::Function,
                     None,
@@ -839,7 +846,7 @@ impl super::Writer {
                 inner_id,
                 &[],
             ));
-            self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
+            self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body)?;
             self.write_mesh_shader_return(
                 return_info,
                 &mut block,
@@ -849,7 +856,7 @@ impl super::Writer {
             )?;
             function.consume(block, Instruction::return_void());
         }
-        function.to_words(&mut self.logical_layout.function_definitions);
+        function.to_words(&mut self.logical_layout.function_definitions)?;
         Ok(out_id)
     }
 
@@ -864,7 +871,7 @@ impl super::Writer {
             parameter_type_ids: alloc::vec![],
             return_type_id: self.void_type,
         };
-        let function_type = self.get_function_type(lookup_function_type);
+        let function_type = self.get_function_type(lookup_function_type)?;
         function.signature = Some(Instruction::function(
             self.void_type,
             out_id,
@@ -876,25 +883,25 @@ impl super::Writer {
             let mut block = Block::new(self.id_gen.next());
             let result = self.id_gen.next();
             block.body.push(Instruction::function_call(
-                self.get_vec3u_type_id(),
+                self.get_vec3u_type_id()?,
                 result,
                 inner_id,
                 &[],
             ));
-            self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
+            self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body)?;
             let final_value = if let Some(task_limits) = self.task_dispatch_limits {
-                let zero_u32 = self.get_constant_scalar(crate::Literal::U32(0));
+                let zero_u32 = self.get_constant_scalar(crate::Literal::U32(0))?;
                 let max_per_dim = self.get_constant_scalar(crate::Literal::U32(
                     task_limits.max_mesh_workgroups_per_dim,
-                ));
+                ))?;
                 let max_total = self.get_constant_scalar(crate::Literal::U32(
                     task_limits.max_mesh_workgroups_total,
-                ));
-                let combined_struct_type = self.get_tuple_of_u32s_ty_id();
+                ))?;
+                let combined_struct_type = self.get_tuple_of_u32s_ty_id()?;
                 let values = [self.id_gen.next(), self.id_gen.next(), self.id_gen.next()];
                 for (i, value) in values.into_iter().enumerate() {
                     block.body.push(Instruction::composite_extract(
-                        self.get_u32_type_id(),
+                        self.get_u32_type_id()?,
                         value,
                         result,
                         &[i as u32],
@@ -912,13 +919,13 @@ impl super::Writer {
                         values[1],
                     ));
                     block.body.push(Instruction::composite_extract(
-                        self.get_u32_type_id(),
+                        self.get_u32_type_id()?,
                         prod_1,
                         struct_out,
                         &[0],
                     ));
                     block.body.push(Instruction::composite_extract(
-                        self.get_u32_type_id(),
+                        self.get_u32_type_id()?,
                         overflows[0],
                         struct_out,
                         &[1],
@@ -935,13 +942,13 @@ impl super::Writer {
                         values[2],
                     ));
                     block.body.push(Instruction::composite_extract(
-                        self.get_u32_type_id(),
+                        self.get_u32_type_id()?,
                         prod_final,
                         struct_out,
                         &[0],
                     ));
                     block.body.push(Instruction::composite_extract(
-                        self.get_u32_type_id(),
+                        self.get_u32_type_id()?,
                         overflows[1],
                         struct_out,
                         &[1],
@@ -950,7 +957,7 @@ impl super::Writer {
                 let total_too_large = self.id_gen.next();
                 block.body.push(Instruction::binary(
                     spirv::Op::UGreaterThan,
-                    self.get_bool_type_id(),
+                    self.get_bool_type_id()?,
                     total_too_large,
                     prod_final,
                     max_total,
@@ -960,7 +967,7 @@ impl super::Writer {
                 for (i, value) in values.into_iter().enumerate() {
                     block.body.push(Instruction::binary(
                         spirv::Op::UGreaterThan,
-                        self.get_bool_type_id(),
+                        self.get_bool_type_id()?,
                         too_large[i],
                         value,
                         max_per_dim,
@@ -970,7 +977,7 @@ impl super::Writer {
                 for (i, value) in overflows.into_iter().enumerate() {
                     block.body.push(Instruction::binary(
                         spirv::Op::INotEqual,
-                        self.get_bool_type_id(),
+                        self.get_bool_type_id()?,
                         overflow_happens[i],
                         value,
                         zero_u32,
@@ -981,7 +988,7 @@ impl super::Writer {
                     let new = self.id_gen.next();
                     block.body.push(Instruction::binary(
                         spirv::Op::LogicalOr,
-                        self.get_bool_type_id(),
+                        self.get_bool_type_id()?,
                         new,
                         current_violates_limits,
                         is_too_large,
@@ -992,7 +999,7 @@ impl super::Writer {
                     let new = self.id_gen.next();
                     block.body.push(Instruction::binary(
                         spirv::Op::LogicalOr,
-                        self.get_bool_type_id(),
+                        self.get_bool_type_id()?,
                         new,
                         current_violates_limits,
                         overflow_happens,
@@ -1001,13 +1008,13 @@ impl super::Writer {
                 }
                 let zero_vec3 = self.id_gen.next();
                 block.body.push(Instruction::composite_construct(
-                    self.get_vec3u_type_id(),
+                    self.get_vec3u_type_id()?,
                     zero_vec3,
                     &[zero_u32, zero_u32, zero_u32],
                 ));
                 let final_result = self.id_gen.next();
                 block.body.push(Instruction::select(
-                    self.get_vec3u_type_id(),
+                    self.get_vec3u_type_id()?,
                     final_result,
                     current_violates_limits,
                     zero_vec3,
@@ -1021,7 +1028,7 @@ impl super::Writer {
                 self.write_entry_point_task_return(final_value, &mut block.body, task_payload)?;
             function.consume(block, ins);
         }
-        function.to_words(&mut self.logical_layout.function_definitions);
+        function.to_words(&mut self.logical_layout.function_definitions)?;
         Ok(out_id)
     }
 }

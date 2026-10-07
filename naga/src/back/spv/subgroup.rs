@@ -15,12 +15,13 @@ impl BlockContext<'_> {
         let vec4_u32_type_id = self.get_numeric_type_id(NumericType::Vector {
             size: crate::VectorSize::Quad,
             scalar: crate::Scalar::U32,
-        });
-        let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
+        })?;
+        let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32)?;
         let predicate = if let Some(predicate) = *predicate {
             self.cached[predicate]
         } else {
-            self.writer.get_constant_scalar(crate::Literal::Bool(true))
+            self.writer
+                .get_constant_scalar(crate::Literal::Bool(true))?
         };
         let id = self.gen_id();
         block.body.push(Instruction::group_non_uniform_ballot(
@@ -58,7 +59,7 @@ impl BlockContext<'_> {
 
         let id = self.gen_id();
         let result_ty = &self.fun_info[result].ty;
-        let result_type_id = self.get_expression_type_id(result_ty);
+        let result_type_id = self.get_expression_type_id(result_ty)?;
         let result_ty_inner = result_ty.inner_with(&self.ir_module.types);
 
         let (is_scalar, scalar) = match *result_ty_inner {
@@ -94,7 +95,7 @@ impl BlockContext<'_> {
             (_, sg::And | sg::Or | sg::Xor) => unimplemented!(),
         };
 
-        let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
+        let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32)?;
 
         use crate::CollectiveOperation as c;
         let group_op = match *op {
@@ -156,9 +157,9 @@ impl BlockContext<'_> {
 
         let id = self.gen_id();
         let result_ty = &self.fun_info[result].ty;
-        let result_type_id = self.get_expression_type_id(result_ty);
+        let result_type_id = self.get_expression_type_id(result_ty)?;
 
-        let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
+        let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32)?;
 
         let arg_id = self.cached[argument];
         match *mode {
@@ -207,7 +208,7 @@ impl BlockContext<'_> {
                     crate::Direction::X => 0,
                     crate::Direction::Y => 1,
                     crate::Direction::Diagonal => 2,
-                });
+                })?;
                 block.body.push(Instruction::group_non_uniform_quad_swap(
                     result_type_id,
                     id,

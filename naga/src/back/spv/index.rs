@@ -118,7 +118,7 @@ impl BlockContext<'_> {
                         // binding array holding structs whose last members are
                         // runtime-sized arrays.
                         crate::Expression::GlobalVariable(handle) => {
-                            let index_id = self.get_index_constant(index_outer);
+                            let index_id = self.get_index_constant(index_outer)?;
                             binding_array_index_id = Some(index_id);
                             global_handle = handle;
                             opt_last_member_index = Some(index);
@@ -225,9 +225,9 @@ impl BlockContext<'_> {
             Some(index_id) => {
                 let element_type_id = match self.ir_module.types[global.ty].inner {
                     crate::TypeInner::BindingArray { base, size: _ } => {
-                        let base_id = self.get_handle_type_id(base);
+                        let base_id = self.get_handle_type_id(base)?;
                         let class = map_storage_class(global.space);
-                        self.get_pointer_type_id(base_id, class)
+                        self.get_pointer_type_id(base_id, class)?
                     }
                     _ => return Err(Error::Validation("array length expression case-5")),
                 };
@@ -244,7 +244,7 @@ impl BlockContext<'_> {
         };
         let length_id = self.gen_id();
         block.body.push(Instruction::array_length(
-            self.writer.get_u32_type_id(),
+            self.writer.get_u32_type_id()?,
             length_id,
             structure_id,
             last_member_index,
@@ -327,11 +327,11 @@ impl BlockContext<'_> {
             }
             MaybeKnown::Computed(length_id) => {
                 // Emit code to compute the max index from the length.
-                let const_one_id = self.get_index_constant(1);
+                let const_one_id = self.get_index_constant(1)?;
                 let max_index_id = self.gen_id();
                 block.body.push(Instruction::binary(
                     spirv::Op::ISub,
-                    self.writer.get_u32_type_id(),
+                    self.writer.get_u32_type_id()?,
                     max_index_id,
                     length_id,
                     const_one_id,
@@ -373,12 +373,12 @@ impl BlockContext<'_> {
         }
 
         let index_id = match index {
-            GuardedIndex::Known(value) => self.get_index_constant(value),
+            GuardedIndex::Known(value) => self.get_index_constant(value)?,
             GuardedIndex::Expression(expr) => self.cached[expr],
         };
 
         let max_index_id = match max_index {
-            MaybeKnown::Known(value) => self.get_index_constant(value),
+            MaybeKnown::Known(value) => self.get_index_constant(value)?,
             MaybeKnown::Computed(id) => id,
         };
 
@@ -388,7 +388,7 @@ impl BlockContext<'_> {
         block.body.push(Instruction::ext_inst_gl_op(
             self.writer.gl450_ext_inst_id,
             spirv::GlslStd450Op::UMin,
-            self.writer.get_u32_type_id(),
+            self.writer.get_u32_type_id()?,
             restricted_index_id,
             &[index_id, max_index_id],
         ));
@@ -437,12 +437,12 @@ impl BlockContext<'_> {
         }
 
         let index_id = match index {
-            GuardedIndex::Known(value) => self.get_index_constant(value),
+            GuardedIndex::Known(value) => self.get_index_constant(value)?,
             GuardedIndex::Expression(expr) => self.cached[expr],
         };
 
         let length_id = match length {
-            MaybeKnown::Known(value) => self.get_index_constant(value),
+            MaybeKnown::Known(value) => self.get_index_constant(value)?,
             MaybeKnown::Computed(id) => id,
         };
 
@@ -450,7 +450,7 @@ impl BlockContext<'_> {
         let condition_id = self.gen_id();
         block.body.push(Instruction::binary(
             spirv::Op::ULessThan,
-            self.writer.get_bool_type_id(),
+            self.writer.get_bool_type_id()?,
             condition_id,
             index_id,
             length_id,
@@ -475,12 +475,12 @@ impl BlockContext<'_> {
         condition: Word,
         block: &mut Block,
         emit_load: F,
-    ) -> Word
+    ) -> Result<Word, Error>
     where
         F: FnOnce(&mut IdGenerator, &mut Block) -> Word,
     {
         // For the out-of-bounds case, we produce a zero value.
-        let null_id = self.writer.get_constant_null(result_type);
+        let null_id = self.writer.get_constant_null(result_type)?;
 
         let mut selection = Selection::start(block, result_type);
 
@@ -502,7 +502,7 @@ impl BlockContext<'_> {
         // The in-bounds path. Perform the access and the load.
         let loaded_value = emit_load(&mut self.writer.id_gen, selection.block());
 
-        selection.finish(self, loaded_value)
+        Ok(selection.finish(self, loaded_value))
     }
 
     /// Emit code for bounds checks for an array, vector, or matrix access.
@@ -610,7 +610,7 @@ impl BlockContext<'_> {
                         ));
                         element_id
                     },
-                )
+                )?
             }
         };
 
