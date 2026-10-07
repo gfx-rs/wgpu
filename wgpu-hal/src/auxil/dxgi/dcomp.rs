@@ -7,7 +7,7 @@ use windows::{
     Win32::{Foundation::HWND, Graphics::DirectComposition},
 };
 
-use super::DynLib;
+use crate::auxil::dyn_lib::DynLib;
 
 // Lazy-loaded DirectComposition library
 #[derive(Debug)]
