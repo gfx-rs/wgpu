@@ -4525,7 +4525,9 @@ impl dispatch::SurfaceInterface for WebSurface {
                 // Not representable on a WebGPU canvas: `ExtendedSrgbLinear`
                 // needs a linear-transfer canvas (WebGPU has none), and
                 // `Bt2100Pq`/`Bt2100Hlg` need PQ/HLG canvas signaling (browsers expose
-                // none). `get_capabilities` never advertises these, but an app
+                // none). `PassThrough` requires control over canvas color interpretation,
+                // which WebGPU does not expose.
+                // `get_capabilities` never advertises these, but an app
                 // may still request one without checking; record the failure and
                 // report the surface as lost (as for a rejected `configure`)
                 // rather than panicking, since there is no `catch_unwind` on
