@@ -1164,6 +1164,23 @@ impl BindingLayoutSource {
     }
 }
 
+/// Resource usage accumulated across all of a pipeline's stages.
+pub struct PipelineResources {
+    pub layout: BindingLayoutSource,
+    pub minimum_binding_sizes: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    pub immediates: naga::valid::ImmediateUsage,
+}
+
+impl PipelineResources {
+    pub fn new(layout: BindingLayoutSource) -> Self {
+        Self {
+            layout,
+            minimum_binding_sizes: FastHashMap::default(),
+            immediates: Default::default(),
+        }
+    }
+}
+
 /// Summary of one shader stage's outputs, presented as inputs to the next stage.
 ///
 /// Each stage in a pipeline produces one of these values, to be validated
@@ -1186,9 +1203,6 @@ pub struct StageIo {
     ///
     /// This is `None` if the prior stage was not a mesh shader.
     pub primitive_index: Option<bool>,
-
-    /// The set of immediate data slots the prior stage used.
-    pub immediates: naga::valid::ImmediateUsage,
 }
 
 impl Interface {
@@ -1564,8 +1578,7 @@ impl Interface {
     /// [validating inter-stage interfaces]: https://www.w3.org/TR/webgpu/#abstract-opdef-validating-inter-stage-interfaces
     pub fn check_stage(
         &self,
-        layouts: &mut BindingLayoutSource,
-        minimum_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+        resources: &mut PipelineResources,
         entry_point_name: &str,
         shader_stage: ShaderStageForValidation,
         inputs: StageIo,
@@ -1586,12 +1599,17 @@ impl Interface {
         let EntryPointKeyRef(_, entry_point_name) = pair;
 
         let stage_bit = shader_stage.to_wgt_bit();
+        let PipelineResources {
+            ref mut layout,
+            ref mut minimum_binding_sizes,
+            ref mut immediates,
+        } = *resources;
 
         // check resources visibility
         for &handle in entry_point.resources.iter() {
             let res = &self.resources[handle];
             let result = 'err: {
-                match layouts {
+                match layout {
                     BindingLayoutSource::Provided(pipeline_layout) => {
                         // update the required binding size for this buffer
                         if let ResourceType::Buffer {
@@ -1664,7 +1682,7 @@ impl Interface {
         //
         // We only need to do this if the binding layout is provided by the user, as derived
         // layouts will inherently be correctly tagged.
-        if let BindingLayoutSource::Provided(pipeline_layout) = layouts {
+        if let BindingLayoutSource::Provided(pipeline_layout) = layout {
             for &(texture_handle, sampler_handle) in entry_point.sampling_pairs.iter() {
                 let texture_bind = &self.resources[texture_handle].bind;
                 let sampler_bind = &self.resources[sampler_handle].bind;
@@ -2086,10 +2104,10 @@ impl Interface {
 
         let immediate_usage = self
             .immediate_usage(shader_stage.to_naga(), entry_point_name)
-            .merge(&inputs.immediates);
+            .merge(immediates);
 
         // Check pipeline layout immediate size
-        if let BindingLayoutSource::Provided(pipeline_layout) = layouts {
+        if let BindingLayoutSource::Provided(pipeline_layout) = layout {
             if pipeline_layout.immediate_size < immediate_usage.size() {
                 return Err(StageError::LayoutImmediateSize {
                     layout: pipeline_layout.immediate_size,
@@ -2097,6 +2115,8 @@ impl Interface {
                 });
             }
         }
+
+        *immediates = immediate_usage;
 
         Ok(StageIo {
             task_payload_size: entry_point.task_payload_size,
@@ -2106,7 +2126,6 @@ impl Interface {
             } else {
                 None
             },
-            immediates: immediate_usage,
         })
     }
 }
