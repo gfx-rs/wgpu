@@ -22,7 +22,7 @@ use objc2_metal::{
     MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTextureUsage, MTLTriangleFillMode,
     MTLVertexDescriptor, MTLVertexStepFunction,
 };
-use wgpu_sync::{Condvar, CondvarMutex, RwLock};
+use wgpu_sync::{Condvar, CondvarMutex};
 
 use super::{adapter::MAX_BUFFERS, conv, AttachmentInfo, PassthroughShader, ShaderModuleSource};
 use crate::{auxil::map_naga_stage, DropCallback, DropGuard, TlasInstance};
@@ -2098,7 +2098,6 @@ impl crate::Device for super::Device {
         };
         Ok(super::Fence {
             sync: Arc::new((CondvarMutex::new(0), Condvar::new())),
-            pending_command_buffers: RwLock::new(Vec::new()),
             shared_event,
         })
     }
@@ -2121,17 +2120,6 @@ impl crate::Device for super::Device {
 
         if wait_value <= *lock {
             return Ok(true);
-        }
-
-        {
-            let pending_command_buffers = fence.pending_command_buffers.read();
-            if !pending_command_buffers
-                .iter()
-                .any(|&(value, _)| value >= wait_value)
-            {
-                log::error!("No active command buffers for fence value {wait_value}");
-                return Err(crate::DeviceError::Lost);
-            }
         }
 
         if let Some(timeout) = timeout {

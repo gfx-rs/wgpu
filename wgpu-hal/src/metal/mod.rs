@@ -46,13 +46,12 @@ use objc2::{
 use objc2_foundation::ns_string;
 use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLArgumentBuffersTier,
-    MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandQueue,
-    MTLComputeCommandEncoder, MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode,
-    MTLDepthClipMode, MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType,
-    MTLLanguageVersion, MTLLibrary, MTLPrimitiveType, MTLReadWriteTextureTier,
-    MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages, MTLResource,
-    MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture, MTLTextureType,
-    MTLTriangleFillMode, MTLWinding,
+    MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandQueue, MTLComputeCommandEncoder,
+    MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode, MTLDepthClipMode,
+    MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType, MTLLanguageVersion, MTLLibrary,
+    MTLPrimitiveType, MTLReadWriteTextureTier, MTLRenderCommandEncoder, MTLRenderPipelineState,
+    MTLRenderStages, MTLResource, MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize,
+    MTLTexture, MTLTextureType, MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
 use wgpu_sync::{atomic, Condvar, Mutex, OnceCell, RwLock};
@@ -742,7 +741,9 @@ impl crate::Queue for Queue {
             let extra_command_buffer = {
                 let fence_sync = Arc::clone(&signal_fence.sync);
                 let block = block2::RcBlock::new(move |_cmd_buf| {
-                    *fence_sync.0.lock() = signal_value;
+                    let mut value = fence_sync.0.lock();
+                    *value = (*value).max(signal_value);
+                    drop(value);
                     fence_sync.1.notify_all();
                 });
 
@@ -759,12 +760,6 @@ impl crate::Queue for Queue {
                 };
                 raw.setLabel(Some(ns_string!("(wgpu internal) Signal")));
                 unsafe { raw.addCompletedHandler(block2::RcBlock::as_ptr(&block)) };
-
-                signal_fence.maintain();
-                signal_fence
-                    .pending_command_buffers
-                    .write()
-                    .push((signal_value, raw.clone()));
 
                 if let Some(shared_event) = &signal_fence.shared_event {
                     raw.encodeSignalEvent_value(shared_event.as_ref(), signal_value);
@@ -1264,15 +1259,8 @@ unsafe impl Sync for QuerySet {}
 #[derive(Debug)]
 pub struct Fence {
     sync: Arc<(wgpu_sync::CondvarMutex<crate::FenceValue>, Condvar)>,
-    /// The pending fence values have to be ascending.
-    pending_command_buffers: RwLock<Vec<PendingCommandBuffer>>,
     shared_event: Option<Retained<ProtocolObject<dyn MTLSharedEvent>>>,
 }
-
-type PendingCommandBuffer = (
-    crate::FenceValue,
-    Retained<ProtocolObject<dyn MTLCommandBuffer>>,
-);
 
 impl crate::DynFence for Fence {}
 
@@ -1281,24 +1269,7 @@ unsafe impl Sync for Fence {}
 
 impl Fence {
     fn get_latest(&self) -> crate::FenceValue {
-        let mut max_value = *self.sync.0.lock();
-        let pending_command_buffers = self.pending_command_buffers.read();
-        for &(value, ref cmd_buf) in pending_command_buffers.iter() {
-            match cmd_buf.status() {
-                MTLCommandBufferStatus::Completed | MTLCommandBufferStatus::Error => {
-                    max_value = value;
-                }
-                _ => {}
-            }
-        }
-        max_value
-    }
-
-    fn maintain(&self) {
-        let latest = self.get_latest();
-        self.pending_command_buffers
-            .write()
-            .retain(|&(value, _)| value > latest);
+        *self.sync.0.lock()
     }
 
     pub fn raw_shared_event(&self) -> Option<&ProtocolObject<dyn MTLSharedEvent>> {
