@@ -1462,7 +1462,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             ray_generation: downcast_rt_stage(&desc.ray_generation),
             miss: downcast_rt_stage(&desc.miss),
             intersections: desc
-                .intersection_descs
+                .intersections
                 .iter()
                 .map(|intersection_desc| match intersection_desc {
                     crate::RayTracingIntersectionDescriptor::Triangle {

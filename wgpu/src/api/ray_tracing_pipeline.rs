@@ -105,7 +105,7 @@ pub struct RayTracingPipelineDescriptor<'a> {
     /// The miss stage. Called if a ray does not hit any object.
     pub miss: RayTracingStage<'a>,
     /// The list of intersection descriptors
-    pub intersection_descs: &'a [RayTracingIntersectionDescriptor<'a>],
+    pub intersections: &'a [RayTracingIntersectionDescriptor<'a>],
     /// The maximum depth of entry points able to be recursed into, discounting the ray generation stage.
     pub max_recursion_depth: u32,
     /// The pipeline cache to use when creating this pipeline.
