@@ -1,0 +1,96 @@
+# Posts a passing `head-approved` check on approved pull request heads.
+#
+# The check passes on a commit when one of these is true:
+#
+# - A user with write access approved this exact commit.
+# - A trusted actor pushed this commit, and the previous head commit passed or
+#   a user with write access approved it. Trusted actors are users with write
+#   access and Mergify.
+# - The commit is the head of a Mergify merge queue pull request, and each of
+#   its parents passed or is in the default branch.
+#
+# Branch protection on `trunk` requires this check. Check results belong to a
+# commit, so a new push has no result. Thus GitHub blocks the merge of commits
+# that a user without write access pushed after the last approval.
+#
+# Security rules. Read these before you change this file:
+#
+# - This workflow runs with secrets on events that untrusted users can cause.
+#   Do not check out, build, or run code from a pull request. The checkout
+#   step gets `.github/scripts/head-approved.py` from the default branch. Do
+#   not set its `ref`.
+# - Do not put text that a pull request controls (titles, branch names, commit
+#   messages) in a `run:` script. Give values to scripts only through `env:`.
+# - The `workflow_run` trigger can come from a fork, because a fork controls
+#   the workflow file that sends it. Use its payload only to find the pull
+#   request. Read all other data from the API.
+# - Only post passing checks. A check result applies to all pull requests with
+#   the same head commit. If this workflow posts failures, an outsider can push
+#   the head commit of another pull request and block it.
+# - Branch protection must require this check from the `head-approved` app and
+#   not from "any source". If not, a fork can post a check with this name.
+# - The required check must stay in classic branch protection, or in a ruleset
+#   that Mergify cannot bypass. If Mergify can bypass it, GitHub does not
+#   enforce it when Mergify merges.
+# - The app private key is in the `head-approved` environment, which only
+#   `trunk` can use. Give the app only the "Checks: write" permission.
+name: Head approved
+
+on: # zizmor: ignore[dangerous-triggers] This workflow does not run pull request code.
+  pull_request_target:
+    types: [opened, synchronize]
+  workflow_run:
+    workflows: ["Head approved review"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  head-approved:
+    name: Post head-approved check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Finds runs of this workflow that are not complete.
+      actions: read
+      # Reads the check result on the previous head commit.
+      checks: read
+      # Reads pull requests and their reviews.
+      pull-requests: read
+    environment:
+      name: head-approved
+      deployment: false
+    steps:
+      - name: Create app token
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.HEAD_APPROVED_CLIENT_ID }}
+          private-key: ${{ secrets.HEAD_APPROVED_PRIVATE_KEY }}
+          permission-checks: write
+
+      - name: Check out script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts/head-approved.py
+          sparse-checkout-cone-mode: false
+
+      - name: Evaluate and post check
+        env:
+          APP_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          READ_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          BEFORE: ${{ github.event.before }}
+          SENDER: ${{ github.event.sender.login }}
+          RUN_HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
+          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: python3 .github/scripts/head-approved.py
