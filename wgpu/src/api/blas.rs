@@ -66,8 +66,9 @@ pub struct TlasInstance {
     /// Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`.
     pub mask: u8,
     /// Intersection group index into a ray tracing pipeline. Must be less than the number of intersection groups in any ray tracing
-    /// pipeline a tlas built with this is used for. This can be read in ray queries, but only if [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`]
-    /// is enabled is this allowed to be non-zero due to a metal limitation.
+    /// pipeline a tlas built with this is used for. This can be read in ray queries. If this field is non-zero,
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`] must be enabled. This must only use the lower 24 bits, if any bits are
+    /// outside that range (byte 4 does not equal 0) the TlasInstance becomes invalid and generates a validation error when built.
     ///
     /// [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES
     pub intersection_index: u32,
