@@ -778,7 +778,10 @@ impl Device {
                     }
                 }
             }
-            (shader_modules, Arc::from(intersection_types.into_boxed_slice()))
+            (
+                shader_modules,
+                Arc::from(intersection_types.into_boxed_slice()),
+            )
         };
 
         // Won't panic because the length of `desc.intersections` is required to be below 2^24
