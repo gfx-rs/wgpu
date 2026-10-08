@@ -207,7 +207,7 @@ impl ShaderBindingData {
             let mut staging = crate::resource::StagingBuffer::new(
                 &device,
                 NonZeroU64::new(base_data.len() as _).expect(
-                    "The total number of groups is always greater than zero,
+                    "The total number of groups is always greater than zero, \
                          and `ray_tracing_pipeline_group_data_size` must be too.",
                 ),
             )?;
