@@ -1060,7 +1060,7 @@ impl super::Instance {
             Self::from_raw(
                 entry,
                 vk_instance,
-                instance_api_version,
+                instance_api_version.min(app_info.api_version),
                 android_sdk_version,
                 debug_utils,
                 extensions,
