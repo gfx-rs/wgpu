@@ -2617,7 +2617,7 @@ impl dispatch::DeviceInterface for WebDevice {
         &self,
         _desc: &crate::RayTracingPipelineDescriptor<'_>,
     ) -> dispatch::DispatchRayTracingPipeline {
-        unreachable!("ray tracing is not web.")
+        unimplemented!("ray tracing is not on the web.")
     }
 
     unsafe fn create_pipeline_cache(
@@ -3371,7 +3371,7 @@ impl Drop for WebComputePipeline {
 
 impl dispatch::RayTracingPipelineInterface for WebRayTracingPipeline {
     fn get_bind_group_layout(&self, _index: u32) -> dispatch::DispatchBindGroupLayout {
-        unreachable!("ray tracing is not web.")
+        unimplemented!("ray tracing is not on the web.")
     }
 }
 impl Drop for WebRayTracingPipeline {
@@ -3611,7 +3611,7 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         &self,
         _desc: &crate::RayTracingPassDescriptor<'_>,
     ) -> dispatch::DispatchRayTracingPass {
-        unreachable!("ray tracing is not web.")
+        unimplemented!("ray tracing is not on the web.")
     }
 
     fn finish(&mut self) -> dispatch::DispatchCommandBuffer {
