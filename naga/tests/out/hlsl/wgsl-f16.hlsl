@@ -271,7 +271,7 @@ half f16_function(half x)
     val = (_e191 + min(_e192, _e193));
     half _e196 = val;
     half _e197 = val;
-    val = (_e196 + sign(_e197));
+    val = (_e196 + half(sign(_e197)));
     half _e200 = val;
     val = (_e200 + 1.0h);
     half2 _e205 = input_uniform.val_f16_2_;

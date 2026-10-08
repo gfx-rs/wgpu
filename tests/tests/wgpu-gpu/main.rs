@@ -81,6 +81,7 @@ mod timestamp_normalization;
 mod timestamp_query;
 mod transfer;
 mod transient;
+mod transient_memory;
 mod transition_resources;
 mod vertex_formats;
 mod vertex_indices;
@@ -170,6 +171,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     timestamp_query::all_tests(&mut tests);
     transfer::all_tests(&mut tests);
     transient::all_tests(&mut tests);
+    transient_memory::all_tests(&mut tests);
     transition_resources::all_tests(&mut tests);
     compute_pass_transition_resources::all_tests(&mut tests);
     vertex_formats::all_tests(&mut tests);
