@@ -376,11 +376,12 @@ pub(crate) enum AsAction {
     /// [`Tlas`] as backends have undefined behaviour on this (it would
     /// cause AABBs to be incorrect, etc.)
     BindTlas(Arc<Tlas>),
-    /// A [`RayTracingPipeline`] has had a `dispatch_rays` call on it.
+    /// A [`RayTracingPipeline`] has had a `trace_rays` call on it.
     /// This [`Tlas`] has been put in a bindgroup, and so the validation
     /// must ensure that the maximum intersection index in the [`Tlas`] is
     /// less than the length of the intersection group array and that the
-    /// types of the [`Blas`]es
+    /// types of the [`Blas`]es are the same as those of the
+    /// [`RayTracingPipeline`].
     ///
     /// [`RayTracingPipeline`]: crate::ray_tracing_pipeline::RayTracingPipeline
     TraceTlas(

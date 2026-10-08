@@ -132,7 +132,7 @@ impl RayTracingPipeline {
         }
     }
 
-    /// Returns the underlying wgpu-core render pipeline if this `RenderPipeline` is on the wgpu-core backend, otherwise `None`.
+    /// Returns the underlying wgpu-core ray tracing pipeline if this `RayTracingPipeline` is on the wgpu-core backend, otherwise `None`.
     pub fn as_core(
         &self,
     ) -> Option<alloc::sync::Arc<wgc::ray_tracing_pipeline::RayTracingPipeline>> {
