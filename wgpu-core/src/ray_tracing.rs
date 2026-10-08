@@ -385,7 +385,7 @@ pub(crate) enum AsAction {
     /// [`RayTracingPipeline`]: crate::ray_tracing_pipeline::RayTracingPipeline
     TraceTlas(
         Arc<Tlas>,
-        Vec<crate::ray_tracing_pipeline::RayTracingIntersectionType>,
+        Arc<[crate::ray_tracing_pipeline::RayTracingIntersectionType]>,
     ),
 }
 

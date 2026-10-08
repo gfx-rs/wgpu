@@ -393,7 +393,7 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
             for tlas in bind_group.used.acceleration_structures.into_iter() {
                 self.pass.base.as_actions.push(AsAction::TraceTlas(
                     tlas.clone(),
-                    intersection_types.to_vec(),
+                    intersection_types.clone(),
                 ));
             }
         }

@@ -278,7 +278,7 @@ pub(crate) struct RayTracingPipelineState {
     pub(crate) layout: Arc<PipelineLayout>,
     pub(crate) shader_binding_data: Arc<ShaderBindingData>,
     pub(crate) _shader_modules: Vec<Arc<ShaderModule>>,
-    pub(crate) intersection_types: Vec<RayTracingIntersectionType>,
+    pub(crate) intersection_types: Arc<[RayTracingIntersectionType]>,
 }
 
 #[derive(Debug)]
@@ -366,7 +366,7 @@ impl RayTracingPipeline {
 
     pub(crate) fn intersection_types(
         &self,
-    ) -> Result<&[RayTracingIntersectionType], InvalidResourceError> {
+    ) -> Result<&Arc<[RayTracingIntersectionType]>, InvalidResourceError> {
         let ResourceState::Valid(state) = &self.state else {
             return Err(InvalidResourceError(self.error_ident()));
         };
