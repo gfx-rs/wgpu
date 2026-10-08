@@ -80,7 +80,7 @@ impl TlasInstance {
     /// - transform: Transform buffer offset in bytes (optional, required if transform buffer is present)
     /// - custom_data: Custom index for the instance used inside the shader (max 24 bits)
     /// - mask: Mask for the instance used inside the shader to filter instances
-    /// - intersection_index: Either a index into an intersection group in a ray tracing pipeline or data for ray queries
+    /// - intersection_index: Either an index into an intersection group in a ray tracing pipeline or data for ray queries
     ///
     /// Note: while one of these contains a reference to a BLAS that BLAS will not be dropped,
     /// but it can still be destroyed. Destroying a BLAS that is referenced by one or more
