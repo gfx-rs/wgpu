@@ -48,7 +48,7 @@ pub enum CreateRayTracingPipelineError {
     },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
-    #[error("The number of intersection shaders {0} is greater than 2^24 - 1")]
+    #[error("The number of intersection shaders {0} is greater than 2^24")]
     TooManyIntersectionGroups(usize),
     #[error(
         "The ray recursion depth {0} is greater than the limit Limits::max_ray_recursion_depth {1}"
