@@ -334,7 +334,7 @@ impl RayTracingPipeline {
 
     pub(crate) fn invalid(device: Arc<Device>, label: String) -> Arc<Self> {
         Arc::new(Self {
-            tracking_data: TrackingData::new(device.tracker_indices.compute_pipelines.clone()),
+            tracking_data: TrackingData::new(device.tracker_indices.ray_tracing_pipelines.clone()),
             state: ResourceState::Invalid,
             device,
             immediate_slots_required: naga::valid::ImmediateSlots::default(),
