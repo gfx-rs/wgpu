@@ -87,7 +87,7 @@ impl RayTracingPass<'_> {
 
 /// [`Features::IMMEDIATES`] must be enabled on the device in order to call these functions.
 impl RayTracingPass<'_> {
-    /// Set immediate data for subsequent dispatch calls.
+    /// Set immediate data for subsequent [RayTracingPass::trace_rays] calls.
     ///
     /// Write the bytes in `data` at offset `offset` within immediate data
     /// storage.  Both `offset` and the length of `data` must be
