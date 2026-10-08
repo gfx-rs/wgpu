@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(doc)]
 use crate::{Features, TextureFormat};
 
-use naga_types::link_to_wgpu_item;
+use crate::link_to_wgpu_item;
 
 /// Invoke a macro for each of the limits.
 ///
