@@ -737,7 +737,7 @@ unsafe fn insert<T: Clone>(
     strict_assert_eq!(new_end_state.is_invalid(), false);
 
     unsafe {
-        if let Some(&mut ref mut start_state) = start_states {
+        if let Some(start_state) = start_states {
             *start_state.get_unchecked_mut(index) = new_start_state;
         }
         *current_states.get_unchecked_mut(index) = new_end_state;
