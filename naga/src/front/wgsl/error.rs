@@ -141,6 +141,7 @@ impl core::fmt::Display for ParseError {
 impl core::error::Error for ParseError {}
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod parse_error_tests {
 
     #[test]
