@@ -4484,14 +4484,7 @@ impl Device {
         let compute_pipeline = self
             .create_compute_pipeline_or_error_inner(desc.clone())
             .unwrap_or_else(|err| {
-                if let pipeline::CreateComputePipelineError::Internal(ref error) = err {
-                    log::error!(
-                        "Shader translation error for stage {:?}: {}",
-                        wgt::ShaderStages::COMPUTE,
-                        error
-                    );
-                    log::error!("Please report it to https://github.com/gfx-rs/wgpu");
-                }
+                log_compute_pipeline_internal_error(&err);
                 self.handle_error(
                     err,
                     desc.label.as_deref(),
@@ -4500,19 +4493,7 @@ impl Device {
 
                 pipeline::ComputePipeline::invalid(self.clone(), desc.label.to_string())
             });
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *self.trace.lock() {
-            use crate::device::trace;
-            use crate::device::trace::IntoTrace;
-            trace.add(trace::Action::CreateComputePipeline {
-                id: compute_pipeline.to_trace(),
-                desc: desc.to_trace(),
-            });
-        }
-        api_log!(
-            "Device::create_compute_pipeline -> {:?}",
-            Arc::as_ptr(&compute_pipeline)
-        );
+        self.record_compute_pipeline(&compute_pipeline, &desc, "Device::create_compute_pipeline");
         compute_pipeline
     }
 
@@ -4525,13 +4506,42 @@ impl Device {
         self: &Arc<Self>,
         desc: pipeline::ComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
-        let label = desc.label.to_string();
-        match self.create_compute_pipeline_or_error_inner(desc) {
-            Err(err) if err.webgpu_error_type() == wgt::error::ErrorType::DeviceLost => {
-                Ok(pipeline::ComputePipeline::invalid(self.clone(), label))
-            }
+        profiling::scope!("Device::create_compute_pipeline_or_error");
+        let result = match self.create_compute_pipeline_or_error_inner(desc.clone()) {
+            Err(err) if err.webgpu_error_type() == wgt::error::ErrorType::DeviceLost => Ok(
+                pipeline::ComputePipeline::invalid(self.clone(), desc.label.to_string()),
+            ),
             result => result,
+        };
+        match result {
+            Ok(ref compute_pipeline) => self.record_compute_pipeline(
+                compute_pipeline,
+                &desc,
+                "Device::create_compute_pipeline_or_error",
+            ),
+            Err(ref err) => log_compute_pipeline_internal_error(err),
         }
+        result
+    }
+
+    /// Records a compute pipeline handed out to the user in the trace and the API log.
+    #[cfg_attr(not(feature = "trace"), expect(unused_variables))]
+    fn record_compute_pipeline(
+        &self,
+        compute_pipeline: &Arc<pipeline::ComputePipeline>,
+        desc: &pipeline::ComputePipelineDescriptor,
+        fn_ident: &'static str,
+    ) {
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace;
+            use crate::device::trace::IntoTrace;
+            trace.add(trace::Action::CreateComputePipeline {
+                id: compute_pipeline.to_trace(),
+                desc: desc.to_trace(),
+            });
+        }
+        api_log!("{fn_ident} -> {:?}", Arc::as_ptr(compute_pipeline));
     }
 
     fn create_compute_pipeline_or_error_inner(
@@ -4696,25 +4706,11 @@ impl Device {
         let render_pipeline = self
             .create_render_pipeline_or_error_inner(desc.clone())
             .unwrap_or_else(|err| {
-                if let pipeline::CreateRenderPipelineError::Internal { stage, ref error } = err {
-                    log::error!("Shader translation error for stage {stage:?}: {error}");
-                    log::error!("Please report it to https://github.com/gfx-rs/wgpu");
-                }
+                log_render_pipeline_internal_error(&err);
                 self.handle_error(err, desc.label.as_deref(), "Device::create_render_pipeline");
                 pipeline::RenderPipeline::invalid(self.clone(), desc.label.to_string())
             });
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *self.trace.lock() {
-            use crate::device::trace::IntoTrace;
-            trace.add(trace::Action::CreateGeneralRenderPipeline {
-                id: render_pipeline.to_trace(),
-                desc: desc.to_trace(),
-            });
-        }
-        api_log!(
-            "Device::create_render_pipeline -> {:?}",
-            Arc::as_ptr(&render_pipeline)
-        );
+        self.record_render_pipeline(&render_pipeline, &desc, "Device::create_render_pipeline");
         render_pipeline
     }
 
@@ -4727,13 +4723,41 @@ impl Device {
         self: &Arc<Self>,
         desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
     ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreateRenderPipelineError> {
-        let label = desc.label.to_string();
-        match self.create_render_pipeline_or_error_inner(desc) {
+        profiling::scope!("Device::create_render_pipeline_or_error");
+        let result = match self.create_render_pipeline_or_error_inner(desc.clone()) {
             Err(e) if e.webgpu_error_type() == wgt::error::ErrorType::DeviceLost => Ok(
-                pipeline::RenderPipeline::invalid(self.clone(), label.to_string()),
+                pipeline::RenderPipeline::invalid(self.clone(), desc.label.to_string()),
             ),
             result => result,
+        };
+        match result {
+            Ok(ref render_pipeline) => self.record_render_pipeline(
+                render_pipeline,
+                &desc,
+                "Device::create_render_pipeline_or_error",
+            ),
+            Err(ref err) => log_render_pipeline_internal_error(err),
         }
+        result
+    }
+
+    /// Records a render pipeline handed out to the user in the trace and the API log.
+    #[cfg_attr(not(feature = "trace"), expect(unused_variables))]
+    fn record_render_pipeline(
+        &self,
+        render_pipeline: &Arc<pipeline::RenderPipeline>,
+        desc: &pipeline::ResolvedGeneralRenderPipelineDescriptor,
+        fn_ident: &'static str,
+    ) {
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *self.trace.lock() {
+            use crate::device::trace::IntoTrace;
+            trace.add(trace::Action::CreateGeneralRenderPipeline {
+                id: render_pipeline.to_trace(),
+                desc: desc.to_trace(),
+            });
+        }
+        api_log!("{fn_ident} -> {:?}", Arc::as_ptr(render_pipeline));
     }
 
     fn create_render_pipeline_or_error_inner(
@@ -5970,3 +5994,21 @@ impl Device {
 crate::impl_resource_type!(Device);
 crate::impl_labeled!(Device);
 crate::impl_storage_item!(Device);
+
+fn log_compute_pipeline_internal_error(err: &pipeline::CreateComputePipelineError) {
+    if let pipeline::CreateComputePipelineError::Internal(ref error) = *err {
+        log::error!(
+            "Shader translation error for stage {:?}: {}",
+            wgt::ShaderStages::COMPUTE,
+            error
+        );
+        log::error!("Please report it to https://github.com/gfx-rs/wgpu");
+    }
+}
+
+fn log_render_pipeline_internal_error(err: &pipeline::CreateRenderPipelineError) {
+    if let pipeline::CreateRenderPipelineError::Internal { stage, ref error } = *err {
+        log::error!("Shader translation error for stage {stage:?}: {error}");
+        log::error!("Please report it to https://github.com/gfx-rs/wgpu");
+    }
+}
