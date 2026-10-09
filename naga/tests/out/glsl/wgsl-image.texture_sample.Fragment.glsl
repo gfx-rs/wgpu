@@ -5,7 +5,11 @@ uniform sampler2D _group_0_binding_1_fs;
 
 uniform sampler2DArray _group_0_binding_4_fs;
 
+uniform samplerCube _group_0_binding_5_fs;
+
 uniform samplerCubeArray _group_0_binding_6_fs;
+
+uniform sampler3D _group_0_binding_7_fs;
 
 layout(location = 0) out vec4 _fs2p_location0;
 
@@ -84,7 +88,19 @@ void main() {
     vec4 _e146 = texture(_group_0_binding_6_fs, vec4(_e3, 0), 2.0);
     a = (_e141 + _e146);
     vec4 _e148 = a;
-    _fs2p_location0 = _e148;
+    vec4 _e151 = textureGrad(_group_0_binding_1_fs, vec2(_e1), _e1, _e1);
+    a = (_e148 + _e151);
+    vec4 _e153 = a;
+    vec4 _e156 = textureGrad(_group_0_binding_7_fs, vec3(_e3), _e3, _e3);
+    a = (_e153 + _e156);
+    vec4 _e158 = a;
+    vec4 _e161 = textureGrad(_group_0_binding_5_fs, vec3(_e3), _e3, _e3);
+    a = (_e158 + _e161);
+    vec4 _e163 = a;
+    vec4 _e167 = textureGrad(_group_0_binding_6_fs, vec4(_e3, 0u), _e3, _e3);
+    a = (_e163 + _e167);
+    vec4 _e169 = a;
+    _fs2p_location0 = _e169;
     return;
 }
 

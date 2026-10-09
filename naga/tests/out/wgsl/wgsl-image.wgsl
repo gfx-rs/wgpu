@@ -188,7 +188,19 @@ fn texture_sample() -> @location(0) vec4<f32> {
     let _e146 = textureSampleBias(image_cube_array, sampler_reg, _e3, 0i, 2f);
     a = (_e141 + _e146);
     let _e148 = a;
-    return _e148;
+    let _e151 = textureSampleGrad(image_2d, sampler_reg, _e1, _e1, _e1);
+    a = (_e148 + _e151);
+    let _e153 = a;
+    let _e156 = textureSampleGrad(image_3d, sampler_reg, _e3, _e3, _e3);
+    a = (_e153 + _e156);
+    let _e158 = a;
+    let _e161 = textureSampleGrad(image_cube, sampler_reg, _e3, _e3, _e3);
+    a = (_e158 + _e161);
+    let _e163 = a;
+    let _e167 = textureSampleGrad(image_cube_array, sampler_reg, _e3, 0u, _e3, _e3);
+    a = (_e163 + _e167);
+    let _e169 = a;
+    return _e169;
 }
 
 @fragment
