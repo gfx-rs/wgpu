@@ -18,6 +18,12 @@ override auto_conversion: u32 = 0;
 var<private> gain_x_10: f32 = gain * 10.;
 var<private> store_override: f32;
 
+// Composites with an override-expression component cannot be evaluated at
+// constant evaluation time, but become constants during override processing,
+// so they must still be flattened correctly then.
+var<private> override_compose: vec4<f32> = vec4<f32>(vec2<f32>(gain, 1.0), vec2<f32>(2.0, 3.0));
+var<private> override_compose_zero_value: vec4<f32> = vec4<f32>(vec2<f32>(), gain, 1.0);
+
 @compute @workgroup_size(1)
 fn main() {
     var t = height * 5;
@@ -27,6 +33,9 @@ fn main() {
     var gain_x_100 = gain_x_10 * 10.;
 
     store_override = gain;
+
+    _ = override_compose;
+    _ = override_compose_zero_value;
 
     _ = specular_param;
     _ = width;
