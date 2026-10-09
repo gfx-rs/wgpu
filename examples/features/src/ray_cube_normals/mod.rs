@@ -322,19 +322,18 @@ impl crate::framework::Example for Example {
 
         for x in 0..side_count {
             for y in 0..side_count {
-                tlas[(x + y * side_count) as usize] = Some(wgpu::TlasInstance::new(
-                    &blas,
-                    affine_to_rows(&Affine3A::from_rotation_translation(
-                        Quat::from_rotation_y(45.9_f32.to_radians()),
-                        Vec3 {
-                            x: x as f32 * dist,
-                            y: y as f32 * dist,
-                            z: -30.0,
-                        },
-                    )),
-                    0,
-                    0xff,
-                ));
+                tlas[(x + y * side_count) as usize] =
+                    Some(wgpu::TlasInstance::from_blas_transformed(
+                        &blas,
+                        affine_to_rows(&Affine3A::from_rotation_translation(
+                            Quat::from_rotation_y(45.9_f32.to_radians()),
+                            Vec3 {
+                                x: x as f32 * dist,
+                                y: y as f32 * dist,
+                                z: -30.0,
+                            },
+                        )),
+                    ));
             }
         }
 
