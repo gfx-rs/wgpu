@@ -1,0 +1,8 @@
+targets = "SPIRV | METAL | HLSL"
+
+[bounds_check_policies]
+index = "Restrict"
+buffer = "Restrict"
+
+[hlsl]
+restrict_indexing = true
