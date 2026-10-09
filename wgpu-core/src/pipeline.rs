@@ -179,19 +179,19 @@ fn finalize_passthrough_entry_point_name(
         return if interface.entry_point_names.contains(ep) {
             Ok(ep.to_owned())
         } else {
-            Err(validation::StageError::MissingEntryPoint(ep.to_owned()))
+            Err(validation::StageError::NoEntryPointWithName(ep.to_owned()))
         };
     }
 
     match interface.entry_point_names.len() {
-        0 => Err(validation::StageError::NoEntryPointFound),
+        0 => Err(validation::StageError::NoEntryPoints),
         1 => Ok(interface
             .entry_point_names
             .iter()
             .next()
             .unwrap()
             .to_owned()),
-        _ => Err(validation::StageError::MultipleEntryPointsFound),
+        _ => Err(validation::StageError::AmbiguousEntryPoint),
     }
 }
 
@@ -1303,7 +1303,7 @@ mod tests {
         let empty = passthrough_interface(&[]);
         assert!(matches!(
             finalize_passthrough_entry_point_name(&empty, None),
-            Err(validation::StageError::NoEntryPointFound)
+            Err(validation::StageError::NoEntryPoints)
         ));
 
         let single = passthrough_interface(&["main"]);
@@ -1315,7 +1315,7 @@ mod tests {
         let multiple = passthrough_interface(&["vertex", "fragment"]);
         assert!(matches!(
             finalize_passthrough_entry_point_name(&multiple, None),
-            Err(validation::StageError::MultipleEntryPointsFound)
+            Err(validation::StageError::AmbiguousEntryPoint)
         ));
     }
 
@@ -1328,7 +1328,7 @@ mod tests {
         );
         assert!(matches!(
             finalize_passthrough_entry_point_name(&interface, Some("missing")),
-            Err(validation::StageError::MissingEntryPoint(name)) if name == "missing"
+            Err(validation::StageError::NoEntryPointWithName(name)) if name == "missing"
         ));
     }
 }
