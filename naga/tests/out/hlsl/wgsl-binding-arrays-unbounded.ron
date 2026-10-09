@@ -1,0 +1,16 @@
+(
+    vertex:[
+    ],
+    fragment:[
+        (
+            entry_point:"main",
+            target_profile:"ps_6_0",
+        ),
+    ],
+    compute:[
+    ],
+    task:[
+    ],
+    mesh:[
+    ],
+)
