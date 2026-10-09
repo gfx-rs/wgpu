@@ -1027,6 +1027,7 @@ fn future_request_adapter(
             Some(adapter) => Ok(WebAdapter {
                 inner: adapter,
                 ident: crate::cmp::Identifier::create(),
+                cached_properties: Rc::new(CachedProperties::default()),
             }
             .into()),
             None => Err(request_adapter_null_error(requested_backends)),
@@ -1066,6 +1067,7 @@ fn future_request_device(
                     ident: crate::cmp::Identifier::create(),
                     error_scope_count: Rc::new(Cell::new(0)),
                     uncaptured_error_listener: Rc::new(RefCell::new(None)),
+                    cached_properties: Rc::new(CachedProperties::default()),
                 }
                 .into(),
                 WebQueue {
@@ -1279,11 +1281,26 @@ pub fn get_browser_gpu_property(
     Ok(DefinedNonNullJsValue::new(maybe_undefined_gpu))
 }
 
+/// Cached properties of a WebGPU adapter.
+/// In native, the map_wgt_* calls are fine because the cached object is
+/// a native object. In wasm, however, the cached object is a JS object, so
+/// so to avoid an expensive map_wgt_* call on every call we'll cache
+/// these results here.
+
+#[derive(Debug, Default)]
+pub struct CachedProperties {
+    features: OnceCell<crate::Features>,
+    limits: OnceCell<crate::Limits>,
+    adapter_info: OnceCell<crate::AdapterInfo>,
+}
+
 #[derive(Debug, Clone)]
 pub struct WebAdapter {
     pub(crate) inner: webgpu_sys::GpuAdapter,
     /// Unique identifier for this Adapter.
     ident: crate::cmp::Identifier,
+    /// Cached JS objects for the adapter.
+    cached_properties: Rc<CachedProperties>,
 }
 
 #[derive(Debug, Clone)]
@@ -1296,6 +1313,8 @@ pub struct WebDevice {
     /// The `uncapturederror` listener currently registered on the device, so
     /// that setting a new handler can unregister the previous one.
     uncaptured_error_listener: Rc<RefCell<Option<js_sys::Function>>>,
+    /// Cached JS objects for the device.
+    cached_properties: Rc<CachedProperties>,
 }
 
 #[derive(Debug, Clone)]
@@ -1871,11 +1890,17 @@ impl dispatch::AdapterInterface for WebAdapter {
     }
 
     fn features(&self) -> crate::Features {
-        map_wgt_features(self.inner.features())
+        *self
+            .cached_properties
+            .features
+            .get_or_init(|| map_wgt_features(self.inner.features()))
     }
 
     fn limits(&self) -> crate::Limits {
-        map_wgt_limits(self.inner.limits())
+        self.cached_properties
+            .limits
+            .get_or_init(|| map_wgt_limits(self.inner.limits()))
+            .clone()
     }
 
     fn downlevel_capabilities(&self) -> crate::DownlevelCapabilities {
@@ -1884,7 +1909,10 @@ impl dispatch::AdapterInterface for WebAdapter {
     }
 
     fn get_info(&self) -> crate::AdapterInfo {
-        map_adapter_info(&self.inner.info())
+        self.cached_properties
+            .adapter_info
+            .get_or_init(|| map_adapter_info(&self.inner.info()))
+            .clone()
     }
 
     fn get_texture_format_features(
@@ -2033,15 +2061,24 @@ fn naga_to_source_location(value: crate::naga::SourceLocation) -> wgt::SourceLoc
 
 impl dispatch::DeviceInterface for WebDevice {
     fn features(&self) -> crate::Features {
-        map_wgt_features(self.inner.features())
+        *self
+            .cached_properties
+            .features
+            .get_or_init(|| map_wgt_features(self.inner.features()))
     }
 
     fn limits(&self) -> crate::Limits {
-        map_wgt_limits(self.inner.limits())
+        self.cached_properties
+            .limits
+            .get_or_init(|| map_wgt_limits(self.inner.limits()))
+            .clone()
     }
 
     fn adapter_info(&self) -> crate::AdapterInfo {
-        map_adapter_info(&self.inner.adapter_info())
+        self.cached_properties
+            .adapter_info
+            .get_or_init(|| map_adapter_info(&self.inner.adapter_info()))
+            .clone()
     }
 
     fn create_shader_module(
