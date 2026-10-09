@@ -1925,11 +1925,27 @@ impl super::InstanceShared {
         phd: vk::PhysicalDevice,
     ) -> (PhysicalDeviceProperties, PhysicalDeviceFeatures) {
         let capabilities = {
+            // Device-level functionality is limited to the instance's API version.
+            let major_minor = |version| {
+                vk::make_api_version(
+                    0,
+                    vk::api_version_major(version),
+                    vk::api_version_minor(version),
+                    0,
+                )
+            };
+            let instance_api_version = major_minor(self.instance_api_version);
+
             let mut capabilities = PhysicalDeviceProperties::default();
             capabilities.supported_extensions =
                 unsafe { self.raw.enumerate_device_extension_properties(phd).unwrap() };
             capabilities.properties = unsafe { self.raw.get_physical_device_properties(phd) };
-            capabilities.device_api_version = capabilities.properties.api_version;
+            capabilities.device_api_version =
+                if instance_api_version < major_minor(capabilities.properties.api_version) {
+                    instance_api_version
+                } else {
+                    capabilities.properties.api_version
+                };
 
             let supports_multiview = capabilities.device_api_version >= vk::API_VERSION_1_1
                 || capabilities.supports_extension(khr::multiview::NAME);
