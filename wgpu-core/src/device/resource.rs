@@ -45,7 +45,9 @@ use crate::{
     },
     instance::{Adapter, RequestDeviceError},
     lock::{rank, Mutex, RwLock},
-    pipeline::{self, shader_module_error_into_compilation_info, ColorStateError},
+    pipeline::{
+        self, shader_module_error_into_compilation_info, ColorStateError, PassthroughInterface,
+    },
     pool::ResourcePool,
     resource::{
         self, Buffer, BufferState, ExternalTexture, ExternalTextureState, Labeled, ParentDevice,
@@ -56,14 +58,13 @@ use crate::{
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
-    validation::{self, check_color_attachment_count, PassthroughInterface, ShaderMetaData},
+    validation::{self, check_color_attachment_count},
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers,
 };
 
 use super::{
-    queue::Queue, DeviceDescriptor, DeviceError, DeviceLostClosure, UserClosures,
-    ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
+    queue::Queue, DeviceDescriptor, DeviceError, DeviceLostClosure, UserClosures, ZERO_BUFFER_SIZE,
 };
 
 use wgpu_sync::atomic::AtomicU64;
@@ -2684,35 +2685,16 @@ impl Device {
             })
         })?;
 
-        let interface = validation::Interface::new(&module, &info, self.limits.clone());
-        let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {
+        let hal = hal::NagaShader {
             module,
             info,
             debug_source,
-        });
-        let hal_desc = hal::ShaderModuleDescriptor {
-            label: desc.label.to_hal(self.instance_flags),
-            runtime_checks: desc.runtime_checks,
-        };
-        let raw = match unsafe { self.raw().create_shader_module(&hal_desc, hal_shader) } {
-            Ok(raw) => raw,
-            Err(error) => {
-                return Err(match error {
-                    hal::ShaderError::Device(error) => {
-                        pipeline::CreateShaderModuleError::Device(self.handle_hal_error(error))
-                    }
-                    hal::ShaderError::Compilation(ref msg) => {
-                        log::error!("Shader error: {msg}");
-                        pipeline::CreateShaderModuleError::Generation
-                    }
-                })
-            }
         };
 
         let module = pipeline::ShaderModule {
-            state: ResourceState::Valid(pipeline::ShaderModuleState {
-                raw,
-                interface: ShaderMetaData::Interface(interface),
+            state: ResourceState::Valid(pipeline::ShaderModuleState::NagaModule {
+                hal,
+                runtime_checks: desc.runtime_checks,
             }),
             device: self.clone(),
             label: desc.label.to_string(),
@@ -2870,15 +2852,15 @@ impl Device {
         };
 
         let module = pipeline::ShaderModule {
-            state: ResourceState::Valid(pipeline::ShaderModuleState {
+            state: ResourceState::Valid(pipeline::ShaderModuleState::Passthrough {
                 raw,
-                interface: ShaderMetaData::Passthrough(PassthroughInterface {
+                interface: PassthroughInterface {
                     entry_point_names: descriptor
                         .entry_points
                         .iter()
                         .map(|e| e.name.to_string())
                         .collect(),
-                }),
+                },
             }),
             device: self.clone(),
             label: descriptor.label.to_string(),
@@ -4484,12 +4466,8 @@ impl Device {
         let compute_pipeline = self
             .create_compute_pipeline_or_error_inner(desc.clone())
             .unwrap_or_else(|err| {
-                if let pipeline::CreateComputePipelineError::Internal(ref error) = err {
-                    log::error!(
-                        "Shader translation error for stage {:?}: {}",
-                        wgt::ShaderStages::COMPUTE,
-                        error
-                    );
+                if let pipeline::CreatePipelineError::Internal { stage, ref message } = err {
+                    log::error!("Shader translation error for stage {stage:?}: {message}");
                     log::error!("Please report it to https://github.com/gfx-rs/wgpu");
                 }
                 self.handle_error(
@@ -4524,7 +4502,7 @@ impl Device {
     pub fn create_compute_pipeline_or_error(
         self: &Arc<Self>,
         desc: pipeline::ComputePipelineDescriptor,
-    ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
+    ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreatePipelineError> {
         let label = desc.label.to_string();
         match self.create_compute_pipeline_or_error_inner(desc) {
             Err(err) if err.webgpu_error_type() == wgt::error::ErrorType::DeviceLost => {
@@ -4537,7 +4515,7 @@ impl Device {
     fn create_compute_pipeline_or_error_inner(
         self: &Arc<Self>,
         desc: pipeline::ComputePipelineDescriptor,
-    ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
+    ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreatePipelineError> {
         self.check_is_valid()?;
 
         self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;
@@ -4559,40 +4537,79 @@ impl Device {
             None => None,
         };
 
-        if shader_module_state.interface.interface().is_none() && pipeline_layout.is_none() {
-            return Err(pipeline::CreateComputePipelineError::Implicit(
-                pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
-            ));
-        }
-
-        let mut binding_layout_source = match pipeline_layout {
-            Some(pipeline_layout) => validation::BindingLayoutSource::Provided(pipeline_layout),
-            None => validation::BindingLayoutSource::new_derived(&self.limits),
-        };
         let mut minimum_binding_sizes = FastHashMap::default();
         let mut io = validation::StageIo::default();
-
+        let mut binding_layout_source;
         let final_entry_point_name;
-
-        {
+        let generated_hal_compute_module;
+        let module = {
             let stage = validation::ShaderStageForValidation::Compute;
+            let stage_err = |error: validation::StageError| pipeline::CreatePipelineError::Stage {
+                stage: wgt::ShaderStages::COMPUTE,
+                error,
+            };
 
-            final_entry_point_name = shader_module.finalize_entry_point_name(
-                stage.to_naga(),
-                desc.stage.entry_point.as_ref().map(|ep| ep.as_ref()),
-            )?;
+            final_entry_point_name = shader_module
+                .finalize_entry_point_name(
+                    stage.to_naga(),
+                    desc.stage.entry_point.as_ref().map(|ep| ep.as_ref()),
+                )
+                .map_err(stage_err)?;
 
-            if let Some(interface) = shader_module_state.interface.interface() {
-                io = interface.check_stage(
-                    &mut binding_layout_source,
-                    &mut minimum_binding_sizes,
-                    &final_entry_point_name,
-                    stage,
-                    io,
-                    None,
-                )?;
+            match shader_module_state {
+                pipeline::ShaderModuleState::NagaModule {
+                    hal,
+                    runtime_checks,
+                } => {
+                    binding_layout_source = match pipeline_layout {
+                        Some(pipeline_layout) => {
+                            validation::BindingLayoutSource::Provided(pipeline_layout)
+                        }
+                        None => validation::BindingLayoutSource::new_derived(&self.limits),
+                    };
+
+                    let (interface, raw) = self.compile_programmable_stage(
+                        hal,
+                        &shader_module.label,
+                        stage.to_naga(),
+                        &final_entry_point_name,
+                        &desc.stage.constants,
+                        runtime_checks,
+                    )?;
+
+                    io = interface
+                        .check_stage(
+                            &mut binding_layout_source,
+                            &mut minimum_binding_sizes,
+                            &final_entry_point_name,
+                            stage,
+                            io,
+                            None,
+                        )
+                        .map_err(stage_err)?;
+
+                    generated_hal_compute_module = raw;
+                    &*generated_hal_compute_module
+                }
+                pipeline::ShaderModuleState::Passthrough { raw, .. } => {
+                    match pipeline_layout {
+                        Some(pipeline_layout) => {
+                            binding_layout_source =
+                                validation::BindingLayoutSource::Provided(pipeline_layout);
+                        }
+                        None => {
+                            return Err(pipeline::CreatePipelineError::Implicit(
+                                pipeline::ImplicitLayoutError::Passthrough(
+                                    wgt::ShaderStages::COMPUTE,
+                                ),
+                            ));
+                        }
+                    }
+
+                    &**raw
+                }
             }
-        }
+        };
 
         let pipeline_layout = match binding_layout_source {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
@@ -4625,33 +4642,16 @@ impl Device {
             label: desc.label.to_hal(self.instance_flags),
             layout: pipeline_layout.raw()?,
             stage: hal::ProgrammableStage {
-                module: shader_module_state.raw.as_ref(),
+                module,
                 entry_point: final_entry_point_name.as_ref(),
-                constants: &desc.stage.constants,
+                constants: &naga::back::PipelineConstants::default(),
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
             },
             cache: cache.as_ref().map(|it| it.raw()).transpose()?,
         };
 
-        let raw =
-            unsafe { self.raw().create_compute_pipeline(&pipeline_desc) }.map_err(
-                |err| match err {
-                    hal::PipelineError::Device(error) => {
-                        pipeline::CreateComputePipelineError::Device(self.handle_hal_error(error))
-                    }
-                    hal::PipelineError::Linkage(_stages, msg) => {
-                        pipeline::CreateComputePipelineError::Internal(msg)
-                    }
-                    hal::PipelineError::EntryPoint(_stage) => {
-                        pipeline::CreateComputePipelineError::Internal(
-                            ENTRYPOINT_FAILURE_ERROR.to_string(),
-                        )
-                    }
-                    hal::PipelineError::PipelineConstants(_stages, msg) => {
-                        pipeline::CreateComputePipelineError::PipelineConstants(msg)
-                    }
-                },
-            )?;
+        let raw = unsafe { self.raw().create_compute_pipeline(&pipeline_desc) }
+            .map_err(|error| self.handle_hal_pipeline_error(error))?;
 
         let pipeline = pipeline::ComputePipeline {
             state: ResourceState::Valid(pipeline::ComputePipelineState {
@@ -4696,8 +4696,8 @@ impl Device {
         let render_pipeline = self
             .create_render_pipeline_or_error_inner(desc.clone())
             .unwrap_or_else(|err| {
-                if let pipeline::CreateRenderPipelineError::Internal { stage, ref error } = err {
-                    log::error!("Shader translation error for stage {stage:?}: {error}");
+                if let pipeline::CreatePipelineError::Internal { stage, ref message } = err {
+                    log::error!("Shader translation error for stage {stage:?}: {message}");
                     log::error!("Please report it to https://github.com/gfx-rs/wgpu");
                 }
                 self.handle_error(err, desc.label.as_deref(), "Device::create_render_pipeline");
@@ -4726,7 +4726,7 @@ impl Device {
     pub fn create_render_pipeline_or_error(
         self: &Arc<Self>,
         desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
-    ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreateRenderPipelineError> {
+    ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreatePipelineError> {
         let label = desc.label.to_string();
         match self.create_render_pipeline_or_error_inner(desc) {
             Err(e) if e.webgpu_error_type() == wgt::error::ErrorType::DeviceLost => Ok(
@@ -4739,7 +4739,7 @@ impl Device {
     fn create_render_pipeline_or_error_inner(
         self: &Arc<Self>,
         desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
-    ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreateRenderPipelineError> {
+    ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreatePipelineError> {
         use wgt::TextureFormatFeatureFlags as Tfff;
 
         self.check_is_valid()?;
@@ -4777,10 +4777,11 @@ impl Device {
         let mut has_depth_attachment = false;
         if let pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) = desc.vertex {
             if vertex.buffers.len() > self.limits.max_vertex_buffers as usize {
-                return Err(pipeline::CreateRenderPipelineError::TooManyVertexBuffers {
+                return Err(pipeline::RenderError::TooManyVertexBuffers {
                     given: vertex.buffers.len() as u32,
                     limit: self.limits.max_vertex_buffers,
-                });
+                }
+                .into());
             }
 
             vertex_steps = Vec::with_capacity(vertex.buffers.len());
@@ -4796,17 +4797,19 @@ impl Device {
                 // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-gpuvertexbufferlayout
 
                 if vb_state.array_stride > self.limits.max_vertex_buffer_array_stride as u64 {
-                    return Err(pipeline::CreateRenderPipelineError::VertexStrideTooLarge {
+                    return Err(pipeline::RenderError::VertexStrideTooLarge {
                         index: i as u32,
                         given: vb_state.array_stride as u32,
                         limit: self.limits.max_vertex_buffer_array_stride,
-                    });
+                    }
+                    .into());
                 }
                 if vb_state.array_stride % wgt::VERTEX_ALIGNMENT != 0 {
-                    return Err(pipeline::CreateRenderPipelineError::UnalignedVertexStride {
+                    return Err(pipeline::RenderError::UnalignedVertexStride {
                         index: i as u32,
                         stride: vb_state.array_stride,
-                    });
+                    }
+                    .into());
                 }
 
                 let max_stride = if vb_state.array_stride == 0 {
@@ -4818,32 +4821,29 @@ impl Device {
                 for attribute in vb_state.attributes.iter() {
                     let attribute_stride = attribute.offset + attribute.format.size();
                     if attribute_stride > max_stride {
-                        return Err(
-                            pipeline::CreateRenderPipelineError::VertexAttributeStrideTooLarge {
-                                location: attribute.shader_location,
-                                given: attribute_stride as u32,
-                                limit: max_stride as u32,
-                            },
-                        );
+                        return Err(pipeline::RenderError::VertexAttributeStrideTooLarge {
+                            location: attribute.shader_location,
+                            given: attribute_stride as u32,
+                            limit: max_stride as u32,
+                        }
+                        .into());
                     }
 
                     let required_offset_alignment = attribute.format.size().min(4);
                     if attribute.offset % required_offset_alignment != 0 {
-                        return Err(
-                            pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
-                                location: attribute.shader_location,
-                                offset: attribute.offset,
-                            },
-                        );
+                        return Err(pipeline::RenderError::InvalidVertexAttributeOffset {
+                            location: attribute.shader_location,
+                            offset: attribute.offset,
+                        }
+                        .into());
                     }
 
                     if attribute.shader_location >= self.limits.max_vertex_attributes {
-                        return Err(
-                            pipeline::CreateRenderPipelineError::VertexAttributeLocationTooLarge {
-                                given: attribute.shader_location,
-                                limit: self.limits.max_vertex_attributes,
-                            },
-                        );
+                        return Err(pipeline::RenderError::VertexAttributeLocationTooLarge {
+                            given: attribute.shader_location,
+                            limit: self.limits.max_vertex_attributes,
+                        }
+                        .into());
                     }
 
                     last_stride = last_stride.max(attribute_stride);
@@ -4866,12 +4866,11 @@ impl Device {
 
                 for attribute in vb_state.attributes.iter() {
                     if attribute.offset >= 0x10000000 {
-                        return Err(
-                            pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
-                                location: attribute.shader_location,
-                                offset: attribute.offset,
-                            },
-                        );
+                        return Err(pipeline::RenderError::InvalidVertexAttributeOffset {
+                            location: attribute.shader_location,
+                            offset: attribute.offset,
+                        }
+                        .into());
                     }
 
                     if let wgt::VertexFormat::Float64
@@ -4888,21 +4887,21 @@ impl Device {
                     );
 
                     if previous.is_some() {
-                        return Err(pipeline::CreateRenderPipelineError::ShaderLocationClash(
+                        return Err(pipeline::RenderError::ShaderLocationClash(
                             attribute.shader_location,
-                        ));
+                        )
+                        .into());
                     }
                 }
                 total_attributes += vb_state.attributes.len();
             }
 
             if total_attributes > self.limits.max_vertex_attributes as usize {
-                return Err(
-                    pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
-                        given: total_attributes as u32,
-                        limit: self.limits.max_vertex_attributes,
-                    },
-                );
+                return Err(pipeline::RenderError::TooManyVertexAttributes {
+                    given: total_attributes as u32,
+                    limit: self.limits.max_vertex_attributes,
+                }
+                .into());
             }
         } else {
             vertex_steps = Vec::new();
@@ -4910,12 +4909,11 @@ impl Device {
         };
 
         if desc.primitive.strip_index_format.is_some() && !desc.primitive.topology.is_strip() {
-            return Err(
-                pipeline::CreateRenderPipelineError::StripIndexFormatForNonStripTopology {
-                    strip_index_format: desc.primitive.strip_index_format,
-                    topology: desc.primitive.topology,
-                },
-            );
+            return Err(pipeline::RenderError::StripIndexFormatForNonStripTopology {
+                strip_index_format: desc.primitive.strip_index_format,
+                topology: desc.primitive.topology,
+            }
+            .into());
         }
 
         if desc.primitive.unclipped_depth {
@@ -4934,9 +4932,7 @@ impl Device {
         }
 
         if desc.primitive.conservative && desc.primitive.polygon_mode != wgt::PolygonMode::Fill {
-            return Err(
-                pipeline::CreateRenderPipelineError::ConservativeRasterizationNonFillPolygonMode,
-            );
+            return Err(pipeline::RenderError::ConservativeRasterizationNonFillPolygonMode.into());
         }
 
         let mut target_specified = false;
@@ -5024,16 +5020,17 @@ impl Device {
                     break 'error None;
                 };
                 if let Some(e) = error {
-                    return Err(pipeline::CreateRenderPipelineError::ColorState(i as u8, e));
+                    return Err(pipeline::RenderError::ColorState(i as u8, e).into());
                 }
             }
         }
 
         if dual_source_blending && color_targets.len() > 1 {
             return Err(
-                pipeline::CreateRenderPipelineError::DualSourceBlendingWithMultipleColorTargets {
+                pipeline::RenderError::DualSourceBlendingWithMultipleColorTargets {
                     count: color_targets.len(),
-                },
+                }
+                .into(),
             );
         }
 
@@ -5041,7 +5038,7 @@ impl Device {
             color_targets.iter().flatten().map(|cs| cs.format),
             self.limits.max_color_attachment_bytes_per_sample,
         )
-        .map_err(pipeline::CreateRenderPipelineError::ColorAttachment)?;
+        .map_err(pipeline::RenderError::ColorAttachment)?;
 
         if let Some(ds) = depth_stencil_state {
             // See <https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-gpudepthstencilstate>.
@@ -5115,7 +5112,7 @@ impl Device {
                 break 'error None;
             };
             if let Some(e) = error {
-                return Err(pipeline::CreateRenderPipelineError::DepthStencilState(e));
+                return Err(pipeline::RenderError::DepthStencilState(e).into());
             }
 
             if ds.bias.clamp != 0.0 {
@@ -5125,16 +5122,17 @@ impl Device {
             if (ds.bias.is_enabled() || ds.bias.clamp != 0.0)
                 && !desc.primitive.topology.is_triangles()
             {
-                return Err(pipeline::CreateRenderPipelineError::DepthStencilState(
+                return Err(pipeline::RenderError::DepthStencilState(
                     pipeline::DepthStencilStateError::DepthBiasWithIncompatibleTopology(
                         desc.primitive.topology,
                     ),
-                ));
+                )
+                .into());
             }
         }
 
         if !target_specified {
-            return Err(pipeline::CreateRenderPipelineError::NoTargetSpecified);
+            return Err(pipeline::RenderError::NoTargetSpecified.into());
         }
 
         let is_auto_layout = desc.layout.is_none();
@@ -5157,28 +5155,33 @@ impl Device {
         let samples = {
             let sc = desc.multisample.count;
             if sc == 0 || sc > 32 || !sc.is_power_of_two() {
-                return Err(pipeline::CreateRenderPipelineError::InvalidSampleCount(sc));
+                return Err(pipeline::RenderError::InvalidSampleCount(sc).into());
             }
             sc
         };
 
+        let empty_constants = naga::back::PipelineConstants::default();
+        let generated_hal_vertex_module;
+        let generated_hal_task_module;
+        let generated_hal_mesh_module;
         let mut vertex_stage = None;
         let mut task_stage = None;
         let mut mesh_stage = None;
-        let mut _vertex_entry_point_name = String::new();
-        let mut _task_entry_point_name = String::new();
-        let mut _mesh_entry_point_name = String::new();
+        let vertex_entry_point_name;
+        let task_entry_point_name;
+        let mesh_entry_point_name;
         let mut passthrough_stages = wgt::ShaderStages::empty();
         match desc.vertex {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
-                vertex_stage = {
+                {
+                    // keep for cleaner diffs
                     let stage_desc = &vertex.stage;
                     let stage = validation::ShaderStageForValidation::Vertex {
                         topology: desc.primitive.topology,
                         compare_function: desc.depth_stencil.as_ref().and_then(|d| d.depth_compare),
                     };
                     let stage_bit = stage.to_wgt_bit();
-                    let stage_err = |error| pipeline::CreateRenderPipelineError::Stage {
+                    let stage_err = |error| pipeline::CreatePipelineError::Stage {
                         stage: stage_bit,
                         error,
                     };
@@ -5190,38 +5193,55 @@ impl Device {
                         .map_err(stage_err)?;
                     vertex_shader_module.same_device(self)?;
 
-                    if vertex_shader_module_state.interface.interface().is_none() {
-                        passthrough_stages |= stage_bit;
-                    }
-
-                    _vertex_entry_point_name = vertex_shader_module
+                    vertex_entry_point_name = vertex_shader_module
                         .finalize_entry_point_name(
                             stage.to_naga(),
                             stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = vertex_shader_module_state.interface.interface() {
-                        io = interface
-                            .check_stage(
-                                &mut binding_layout_source,
-                                &mut minimum_binding_sizes,
-                                &_vertex_entry_point_name,
-                                stage,
-                                io,
-                                Some(desc.primitive.topology),
-                            )
-                            .map_err(stage_err)?;
-                        validated_stages |= stage_bit;
+                    let module;
+                    match vertex_shader_module_state {
+                        pipeline::ShaderModuleState::NagaModule {
+                            hal,
+                            runtime_checks,
+                        } => {
+                            let (interface, raw) = self.compile_programmable_stage(
+                                hal,
+                                &vertex_shader_module.label,
+                                naga::ShaderStage::Vertex,
+                                &vertex_entry_point_name,
+                                &stage_desc.constants,
+                                runtime_checks,
+                            )?;
+                            io = interface
+                                .check_stage(
+                                    &mut binding_layout_source,
+                                    &mut minimum_binding_sizes,
+                                    &vertex_entry_point_name,
+                                    stage,
+                                    io,
+                                    Some(desc.primitive.topology),
+                                )
+                                .map_err(stage_err)?;
+                            validated_stages |= stage_bit;
+                            generated_hal_vertex_module = raw;
+                            module = &*generated_hal_vertex_module;
+                        }
+                        pipeline::ShaderModuleState::Passthrough { raw, .. } => {
+                            passthrough_stages |= stage_bit;
+                            module = &**raw;
+                        }
                     }
-                    Some(hal::ProgrammableStage {
-                        module: vertex_shader_module_state.raw.as_ref(),
-                        entry_point: &_vertex_entry_point_name,
-                        constants: &stage_desc.constants,
+
+                    vertex_stage = Some(hal::ProgrammableStage {
+                        module,
+                        entry_point: &vertex_entry_point_name,
+                        constants: &empty_constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
-                    })
-                };
+                    });
+                }
             }
             pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
                 self.require_features(wgt::Features::EXPERIMENTAL_MESH_SHADER)?;
@@ -5230,7 +5250,7 @@ impl Device {
                     let stage_desc = &task.stage;
                     let stage = validation::ShaderStageForValidation::Task;
                     let stage_bit = stage.to_wgt_bit();
-                    let stage_err = |error| pipeline::CreateRenderPipelineError::Stage {
+                    let stage_err = |error| pipeline::CreatePipelineError::Stage {
                         stage: stage_bit,
                         error,
                     };
@@ -5242,34 +5262,51 @@ impl Device {
                         .map_err(stage_err)?;
                     task_shader_module.same_device(self)?;
 
-                    if task_shader_module_state.interface.interface().is_none() {
-                        passthrough_stages |= stage_bit;
-                    }
-
-                    _task_entry_point_name = task_shader_module
+                    task_entry_point_name = task_shader_module
                         .finalize_entry_point_name(
                             stage.to_naga(),
                             stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = task_shader_module_state.interface.interface() {
-                        io = interface
-                            .check_stage(
-                                &mut binding_layout_source,
-                                &mut minimum_binding_sizes,
-                                &_task_entry_point_name,
-                                stage,
-                                io,
-                                Some(desc.primitive.topology),
-                            )
-                            .map_err(stage_err)?;
-                        validated_stages |= stage_bit;
+                    let module;
+                    match task_shader_module_state {
+                        pipeline::ShaderModuleState::NagaModule {
+                            hal,
+                            runtime_checks,
+                        } => {
+                            let (interface, raw) = self.compile_programmable_stage(
+                                hal,
+                                &task_shader_module.label,
+                                naga::ShaderStage::Task,
+                                &task_entry_point_name,
+                                &stage_desc.constants,
+                                runtime_checks,
+                            )?;
+                            io = interface
+                                .check_stage(
+                                    &mut binding_layout_source,
+                                    &mut minimum_binding_sizes,
+                                    &task_entry_point_name,
+                                    stage,
+                                    io,
+                                    Some(desc.primitive.topology),
+                                )
+                                .map_err(stage_err)?;
+                            validated_stages |= stage_bit;
+                            generated_hal_task_module = raw;
+                            module = &*generated_hal_task_module;
+                        }
+                        pipeline::ShaderModuleState::Passthrough { raw, .. } => {
+                            passthrough_stages |= stage_bit;
+                            module = &**raw;
+                        }
                     }
+
                     Some(hal::ProgrammableStage {
-                        module: task_shader_module_state.raw.as_ref(),
-                        entry_point: &_task_entry_point_name,
-                        constants: &stage_desc.constants,
+                        module,
+                        entry_point: &task_entry_point_name,
+                        constants: &empty_constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
                     })
@@ -5280,7 +5317,7 @@ impl Device {
                     let stage_desc = &mesh.stage;
                     let stage = validation::ShaderStageForValidation::Mesh;
                     let stage_bit = stage.to_wgt_bit();
-                    let stage_err = |error| pipeline::CreateRenderPipelineError::Stage {
+                    let stage_err = |error| pipeline::CreatePipelineError::Stage {
                         stage: stage_bit,
                         error,
                     };
@@ -5292,34 +5329,51 @@ impl Device {
                         .map_err(stage_err)?;
                     mesh_shader_module.same_device(self)?;
 
-                    if mesh_shader_module_state.interface.interface().is_none() {
-                        passthrough_stages |= stage_bit;
-                    }
-
-                    _mesh_entry_point_name = mesh_shader_module
+                    mesh_entry_point_name = mesh_shader_module
                         .finalize_entry_point_name(
                             stage.to_naga(),
                             stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
                         )
                         .map_err(stage_err)?;
 
-                    if let Some(interface) = mesh_shader_module_state.interface.interface() {
-                        io = interface
-                            .check_stage(
-                                &mut binding_layout_source,
-                                &mut minimum_binding_sizes,
-                                &_mesh_entry_point_name,
-                                stage,
-                                io,
-                                Some(desc.primitive.topology),
-                            )
-                            .map_err(stage_err)?;
-                        validated_stages |= stage_bit;
+                    let module;
+                    match mesh_shader_module_state {
+                        pipeline::ShaderModuleState::NagaModule {
+                            hal,
+                            runtime_checks,
+                        } => {
+                            let (interface, raw) = self.compile_programmable_stage(
+                                hal,
+                                &mesh_shader_module.label,
+                                naga::ShaderStage::Mesh,
+                                &mesh_entry_point_name,
+                                &stage_desc.constants,
+                                runtime_checks,
+                            )?;
+                            io = interface
+                                .check_stage(
+                                    &mut binding_layout_source,
+                                    &mut minimum_binding_sizes,
+                                    &mesh_entry_point_name,
+                                    stage,
+                                    io,
+                                    Some(desc.primitive.topology),
+                                )
+                                .map_err(stage_err)?;
+                            validated_stages |= stage_bit;
+                            generated_hal_mesh_module = raw;
+                            module = &*generated_hal_mesh_module;
+                        }
+                        pipeline::ShaderModuleState::Passthrough { raw, .. } => {
+                            passthrough_stages |= stage_bit;
+                            module = &**raw;
+                        }
                     }
+
                     Some(hal::ProgrammableStage {
-                        module: mesh_shader_module_state.raw.as_ref(),
-                        entry_point: &_mesh_entry_point_name,
-                        constants: &stage_desc.constants,
+                        module,
+                        entry_point: &mesh_entry_point_name,
+                        constants: &empty_constants,
                         zero_initialize_workgroup_memory: stage_desc
                             .zero_initialize_workgroup_memory,
                     })
@@ -5327,6 +5381,7 @@ impl Device {
             }
         }
 
+        let generated_hal_fragment_module;
         let fragment_entry_point_name;
         let fragment_stage = match desc.fragment {
             Some(ref fragment_state) => {
@@ -5335,7 +5390,7 @@ impl Device {
                     has_depth_attachment,
                 };
                 let stage_bit = stage.to_wgt_bit();
-                let stage_err = |error| pipeline::CreateRenderPipelineError::Stage {
+                let stage_err = |error| pipeline::CreatePipelineError::Stage {
                     stage: stage_bit,
                     error,
                 };
@@ -5346,10 +5401,6 @@ impl Device {
                     .map_err(Into::into)
                     .map_err(stage_err)?;
                 shader_module.same_device(self)?;
-
-                if shader_module_state.interface.interface().is_none() {
-                    passthrough_stages |= stage_bit;
-                }
 
                 fragment_entry_point_name = shader_module
                     .finalize_entry_point_name(
@@ -5362,24 +5413,44 @@ impl Device {
                     )
                     .map_err(stage_err)?;
 
-                if let Some(interface) = shader_module_state.interface.interface() {
-                    io = interface
-                        .check_stage(
-                            &mut binding_layout_source,
-                            &mut minimum_binding_sizes,
+                let module;
+                match shader_module_state {
+                    pipeline::ShaderModuleState::NagaModule {
+                        hal,
+                        runtime_checks,
+                    } => {
+                        let (interface, raw) = self.compile_programmable_stage(
+                            hal,
+                            &shader_module.label,
+                            naga::ShaderStage::Fragment,
                             &fragment_entry_point_name,
-                            stage,
-                            io,
-                            Some(desc.primitive.topology),
-                        )
-                        .map_err(stage_err)?;
-                    validated_stages |= stage_bit;
+                            &fragment_state.stage.constants,
+                            runtime_checks,
+                        )?;
+                        io = interface
+                            .check_stage(
+                                &mut binding_layout_source,
+                                &mut minimum_binding_sizes,
+                                &fragment_entry_point_name,
+                                stage,
+                                io,
+                                Some(desc.primitive.topology),
+                            )
+                            .map_err(stage_err)?;
+                        validated_stages |= stage_bit;
+                        generated_hal_fragment_module = raw;
+                        module = &*generated_hal_fragment_module;
+                    }
+                    pipeline::ShaderModuleState::Passthrough { raw, .. } => {
+                        passthrough_stages |= stage_bit;
+                        module = &**raw;
+                    }
                 }
 
                 Some(hal::ProgrammableStage {
-                    module: shader_module_state.raw.as_ref(),
+                    module,
                     entry_point: &fragment_entry_point_name,
-                    constants: &fragment_state.stage.constants,
+                    constants: &empty_constants,
                     zero_initialize_workgroup_memory: fragment_state
                         .stage
                         .zero_initialize_workgroup_memory,
@@ -5389,7 +5460,7 @@ impl Device {
         };
 
         if !passthrough_stages.is_empty() && is_auto_layout {
-            return Err(pipeline::CreateRenderPipelineError::Implicit(
+            return Err(pipeline::CreatePipelineError::Implicit(
                 pipeline::ImplicitLayoutError::Passthrough(passthrough_stages),
             ));
         }
@@ -5401,9 +5472,7 @@ impl Device {
                 match color_targets.get(*i as usize) {
                     Some(Some(state)) => {
                         validation::check_color_attachment_compatibility(state, output.ty)
-                            .map_err(|err| {
-                                pipeline::CreateRenderPipelineError::ColorState(*i as u8, err)
-                            })?;
+                            .map_err(|err| pipeline::RenderError::ColorState(*i as u8, err))?;
                     }
                     _ => {
                         log::debug!(
@@ -5419,10 +5488,11 @@ impl Device {
 
             let missing_color_outputs = required_color_outputs & !active_color_outputs;
             if missing_color_outputs != 0 {
-                return Err(pipeline::CreateRenderPipelineError::ColorState(
+                return Err(pipeline::RenderError::ColorState(
                     missing_color_outputs.trailing_zeros() as u8,
                     ColorStateError::OutputNotPresent,
-                ));
+                )
+                .into());
             }
         }
 
@@ -5454,12 +5524,11 @@ impl Device {
                 u32::try_from(pipeline_layout.bind_group_layouts.len() + vertex.buffers.len())
                     .unwrap();
             if bind_groups_plus_vertex_buffers > self.limits.max_bind_groups_plus_vertex_buffers {
-                return Err(
-                    pipeline::CreateRenderPipelineError::TooManyBindGroupsPlusVertexBuffers {
-                        given: bind_groups_plus_vertex_buffers,
-                        limit: self.limits.max_bind_groups_plus_vertex_buffers,
-                    },
-                );
+                return Err(pipeline::RenderError::TooManyBindGroupsPlusVertexBuffers {
+                    given: bind_groups_plus_vertex_buffers,
+                    limit: self.limits.max_bind_groups_plus_vertex_buffers,
+                }
+                .into());
             }
 
             let given = pipeline_layout
@@ -5474,11 +5543,12 @@ impl Device {
                     .max_buffers_and_acceleration_structures_per_shader_stage;
                 if given > limit {
                     return Err(
-                    pipeline::CreateRenderPipelineError::TooManyBuffersAndAccelerationStructuresInVertexStage {
-                        given,
-                        limit,
-                    },
-                );
+                        pipeline::RenderError::TooManyBuffersAndAccelerationStructuresInVertexStage {
+                            given,
+                            limit,
+                        }
+                        .into(),
+                    );
                 }
             }
         }
@@ -5498,11 +5568,12 @@ impl Device {
         {
             for (binding, size) in minimum_binding_sizes.iter() {
                 if size.get() % 16 != 0 {
-                    return Err(pipeline::CreateRenderPipelineError::UnalignedShader {
+                    return Err(pipeline::RenderError::UnalignedShader {
                         binding: binding.binding,
                         group: binding.group,
                         size: size.get(),
-                    });
+                    }
+                    .into());
                 }
             }
         }
@@ -5543,25 +5614,8 @@ impl Device {
                 multiview_mask: desc.multiview_mask,
                 cache: cache.as_ref().map(|it| it.raw()).transpose()?,
             };
-            unsafe { self.raw().create_render_pipeline(&pipeline_desc) }.map_err(
-                |err| match err {
-                    hal::PipelineError::Device(error) => {
-                        pipeline::CreateRenderPipelineError::Device(self.handle_hal_error(error))
-                    }
-                    hal::PipelineError::Linkage(stage, msg) => {
-                        pipeline::CreateRenderPipelineError::Internal { stage, error: msg }
-                    }
-                    hal::PipelineError::EntryPoint(stage) => {
-                        pipeline::CreateRenderPipelineError::Internal {
-                            stage: hal::auxil::map_naga_stage(stage),
-                            error: ENTRYPOINT_FAILURE_ERROR.to_string(),
-                        }
-                    }
-                    hal::PipelineError::PipelineConstants(stage, error) => {
-                        pipeline::CreateRenderPipelineError::PipelineConstants { stage, error }
-                    }
-                },
-            )?
+            unsafe { self.raw().create_render_pipeline(&pipeline_desc) }
+                .map_err(|err| self.handle_hal_pipeline_error(err))?
         };
 
         let pass_context = RenderPassContext {
@@ -5648,6 +5702,95 @@ impl Device {
         }
 
         Ok(pipeline)
+    }
+
+    /// Handle a [`hal::PipelineError`].
+    ///
+    /// Turn `error` into a [`CreatePipelineError`] and return it.
+    ///
+    /// Pass all [`hal::DeviceError`]s through [`Device::handle_hal_error`],
+    /// so that `self` is marked as lost when appropriate.
+    ///
+    /// [`CreatePipelineError`]: pipeline::CreatePipelineError
+    pub(crate) fn handle_hal_pipeline_error(
+        &self,
+        error: hal::PipelineError,
+    ) -> pipeline::CreatePipelineError {
+        match error {
+            hal::PipelineError::Device(error) => {
+                pipeline::CreatePipelineError::Device(self.handle_hal_error(error))
+            }
+            other => pipeline::CreatePipelineError::from_hal_without_device_loss(other),
+        }
+    }
+
+    fn compile_programmable_stage(
+        self: &Arc<Self>,
+        shader: &hal::NagaShader,
+        shader_label: &str,
+        stage: naga::ShaderStage,
+        final_entry_point_name: &str,
+        constants: &naga::back::PipelineConstants,
+        runtime_checks: &wgt::ShaderRuntimeChecks,
+    ) -> Result<(validation::Interface, Box<dyn hal::DynShaderModule>), pipeline::CreatePipelineError>
+    {
+        let (module, info) = naga::back::pipeline_constants::process_overrides(
+            &shader.module,
+            &shader.info,
+            Some((stage, final_entry_point_name)),
+            constants,
+        )
+        .map_err(|e| pipeline::CreatePipelineError::PipelineConstants {
+            stage: hal::auxil::map_naga_stage(stage),
+            message: e.to_string(),
+        })?;
+
+        let interface = validation::Interface::new(&module, &info, self.limits.clone());
+
+        // These clones are necessary for the moment, because most (all?)
+        // `wgpu_hal` backends must retain the Naga module and its info in order
+        // to process overrides at pipeline creation time. Typically, no
+        // platform API module is created when
+        // `wgpu_hal::Device::create_shader_module` is called. Instead, platform
+        // API modules are created at pipeline creation time, and then discarded
+        // immediately.
+        //
+        // However, since fixing #9774 entails moving override processing to
+        // wgpu-core, that implies that we could remove override constants from
+        // the `wgpu_hal` API altogether; the hal `ShaderModule` types could
+        // actually hold shader modules. They'll still be created and discarded
+        // at pipeline creation time --- just by wgpu-core, not internally to
+        // wgpu-hal. With that change, hal backends could merely borrow the Naga
+        // module and info, and these clones could be removed.
+        let shader = hal::NagaShader {
+            module: Cow::Owned(module.into_owned()),
+            info: info.into_owned(),
+            debug_source: shader.debug_source.clone(),
+        };
+        let hal_shader = hal::ShaderInput::Naga(shader);
+        let hal_desc = hal::ShaderModuleDescriptor {
+            label: Some(shader_label),
+            runtime_checks: *runtime_checks,
+        };
+        let hal = match unsafe { self.raw().create_shader_module(&hal_desc, hal_shader) } {
+            Ok(raw) => raw,
+            Err(error) => {
+                return Err(match error {
+                    hal::ShaderError::Device(error) => {
+                        pipeline::CreatePipelineError::Device(self.handle_hal_error(error))
+                    }
+                    hal::ShaderError::Compilation(message) => {
+                        log::error!("Shader error: {message}");
+                        pipeline::CreatePipelineError::Internal {
+                            stage: hal::auxil::map_naga_stage(stage),
+                            message,
+                        }
+                    }
+                });
+            }
+        };
+
+        Ok((interface, hal))
     }
 
     /// # Safety
