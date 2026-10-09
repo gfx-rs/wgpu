@@ -1,0 +1,7 @@
+# METAL is excluded: Metal only has 8x8 simdgroup matrices.
+targets = "SPIRV | WGSL"
+capabilities = "COOPERATIVE_MATRIX | SHADER_FLOAT16"
+
+[spv]
+debug = false
+version = [1, 4]

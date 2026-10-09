@@ -958,14 +958,13 @@ crate::bitflags_array! {
         /// matrix multiply-accumulate operations on small tiles of data, enabling
         /// hardware-accelerated matrix math.
         ///
-        /// **Current limitations:** The implementation currently only supports 8x8 f32 matrices.
-        /// On Vulkan, support is determined by querying `vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`
-        /// for configurations matching 8x8x8 f32. Most Vulkan implementations (NVIDIA, AMD) primarily
-        /// support f16 inputs at larger sizes (e.g., 16x16), so Vulkan support may be limited.
-        ///
         /// Supported platforms:
         /// - Metal (with MSL 2.3+ and Apple7+/Mac2+, using simdgroup matrix operations)
-        /// - Vulkan (with [VK_KHR_cooperative_matrix](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_cooperative_matrix.html), if 8x8 f32 is supported)
+        /// - Vulkan (with [VK_KHR_cooperative_matrix](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_cooperative_matrix.html))
+        ///
+        /// The tile shapes a shader may use are the ones reported by the adapter's
+        /// [`CooperativeMatrixProperties`](crate::CooperativeMatrixProperties). `wgpu`
+        /// passes that set to shader validation.
         ///
         /// This is a native only feature.
         #[name("wgpu-cooperative-matrix")]
