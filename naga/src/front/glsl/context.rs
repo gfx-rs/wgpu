@@ -324,6 +324,7 @@ impl<'a> Context<'a> {
             name: name_meta.as_ref().map(|&(ref name, _)| name.clone()),
             ty,
             binding: None,
+            immutable_pointee: false,
         };
         self.parameters.push(ty);
 

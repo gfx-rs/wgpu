@@ -130,7 +130,8 @@ impl crate::AddressSpace {
     const fn initializable(&self) -> bool {
         match *self {
             crate::AddressSpace::Function | crate::AddressSpace::Private => true,
-            crate::AddressSpace::WorkGroup
+            crate::AddressSpace::PhysicalStorage
+            | crate::AddressSpace::WorkGroup
             | crate::AddressSpace::Uniform
             | crate::AddressSpace::Storage { .. }
             | crate::AddressSpace::Handle
@@ -411,6 +412,10 @@ type BackendResult<T = ()> = Result<T, Error>;
 /// A GLSL compilation error.
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("8-bit integers are only supported by the SPIR-V backend")]
+    Int8Unsupported,
+    #[error("physical storage buffer pointers are unsupported by this backend")]
+    PhysicalStorageUnsupported,
     /// A error occurred while writing to the output.
     #[error("Format error")]
     FmtError(#[from] FmtError),

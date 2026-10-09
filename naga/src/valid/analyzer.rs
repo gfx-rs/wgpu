@@ -661,7 +661,7 @@ impl FunctionInfo {
                     As::Uniform | As::Immediate => true,
                     // storage data is only uniform when read-only
                     As::Storage { access } => !access.contains(crate::StorageAccess::STORE),
-                    As::Handle => false,
+                    As::Handle | As::PhysicalStorage => false,
                 };
                 Uniformity {
                     non_uniform_result: if uniform { None } else { Some(handle) },
@@ -673,7 +673,15 @@ impl FunctionInfo {
                 requirements: UniformityRequirements::empty(),
             },
             E::Load { pointer } => {
-                let non_uniform_result = self.add_ref(pointer);
+                let mut non_uniform_result = self.add_ref(pointer);
+                if self[pointer]
+                    .ty
+                    .inner_with(resolve_context.types)
+                    .pointer_space()
+                    == Some(crate::AddressSpace::PhysicalStorage)
+                {
+                    non_uniform_result = Some(handle);
+                }
                 Uniformity {
                     non_uniform_result,
                     requirements: UniformityRequirements::empty(),
@@ -804,7 +812,15 @@ impl FunctionInfo {
                     requirements: UniformityRequirements::empty(),
                 }
             }
-            E::As { expr, .. } => Uniformity {
+            E::PointerOffset { pointer, offset } => Uniformity {
+                non_uniform_result: self.add_ref(pointer).or(self.add_ref(offset)),
+                requirements: UniformityRequirements::empty(),
+            },
+            E::As { expr, .. }
+            | E::PointerCast { expr, .. }
+            | E::PointerAlignment { pointer: expr, .. }
+            | E::CoherentPointer { pointer: expr, .. }
+            | E::AtomicPointer { pointer: expr, .. } => Uniformity {
                 non_uniform_result: self.add_ref(expr),
                 requirements: UniformityRequirements::empty(),
             },
@@ -846,6 +862,14 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(query),
                 requirements: UniformityRequirements::empty(),
             },
+            E::MatrixLoad { ref data, .. } => {
+                let _ = self.add_ref(data.pointer);
+                let _ = self.add_ref(data.stride);
+                Uniformity {
+                    non_uniform_result: Some(handle),
+                    requirements: UniformityRequirements::empty(),
+                }
+            }
             E::CooperativeLoad { ref data, .. } => Uniformity {
                 non_uniform_result: self.add_ref(data.pointer).or(self.add_ref(data.stride)),
                 requirements: UniformityRequirements::COOP_OPS,
@@ -1184,6 +1208,16 @@ impl FunctionInfo {
                     }
                     FunctionUniformity::new()
                 }
+                S::MatrixStore { target, ref data } => FunctionUniformity {
+                    result: Uniformity {
+                        non_uniform_result: self
+                            .add_ref(target)
+                            .or(self.add_ref_impl(data.pointer, GlobalUse::WRITE))
+                            .or(self.add_ref(data.stride)),
+                        requirements: UniformityRequirements::empty(),
+                    },
+                    exit: ExitFlags::empty(),
+                },
                 S::CooperativeStore { target, ref data } => FunctionUniformity {
                     result: Uniformity {
                         non_uniform_result: self

@@ -36,6 +36,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: None,
                         ty: 1,
                         binding: None,
@@ -69,6 +70,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: None,
                         ty: 6,
                         binding: None,

@@ -76,6 +76,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("num_lights"),
                         ty: 7,
                         binding: None,
@@ -101,18 +102,21 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("proj"),
                         ty: 9,
                         binding: None,
                         offset: 0,
                     ),
                     (
+                        access: None,
                         name: Some("pos"),
                         ty: 3,
                         binding: None,
                         offset: 64,
                     ),
                     (
+                        access: None,
                         name: Some("color"),
                         ty: 3,
                         binding: None,
@@ -135,6 +139,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: Some(("LOAD")),
                         name: Some("data"),
                         ty: 11,
                         binding: None,
@@ -368,11 +373,13 @@
                     name: None,
                     ty: 2,
                     binding: None,
+                    immutable_pointee: false,
                 ),
                 (
                     name: None,
                     ty: 3,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: Some((
@@ -983,6 +990,7 @@
                             blend_src: None,
                             per_primitive: false,
                         )),
+                        immutable_pointee: false,
                     ),
                     (
                         name: Some("in_position_fs"),
@@ -994,6 +1002,7 @@
                             blend_src: None,
                             per_primitive: false,
                         )),
+                        immutable_pointee: false,
                     ),
                 ],
                 result: Some((

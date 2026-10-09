@@ -404,6 +404,12 @@ impl StatementGraph {
                         },
                     }
                 }
+                S::MatrixStore { target, data } => {
+                    self.dependencies.push((id, target, "matrix"));
+                    self.dependencies.push((id, data.pointer, "pointer"));
+                    self.dependencies.push((id, data.stride, "stride"));
+                    "MatrixStore"
+                }
                 S::CooperativeStore { target, data } => {
                     self.dependencies.push((id, target, "target"));
                     self.dependencies.push((id, data.pointer, "pointer"));
@@ -746,6 +752,34 @@ fn write_function_expressions(
                 }
                 (format!("{fun:?}").into(), 7)
             }
+            E::PointerCast { expr, .. } => {
+                edges.insert("address", expr);
+                ("PointerCast".into(), 3)
+            }
+            E::AtomicPointer {
+                pointer,
+                order,
+                failure_order,
+            } => {
+                edges.insert("pointer", pointer);
+                (
+                    format!("AtomicPointer({order:?}, {failure_order:?})").into(),
+                    3,
+                )
+            }
+            E::CoherentPointer { pointer, scope } => {
+                edges.insert("pointer", pointer);
+                (format!("CoherentPointer({scope:?})").into(), 3)
+            }
+            E::PointerAlignment { pointer, alignment } => {
+                edges.insert("pointer", pointer);
+                (format!("PointerAlignment({alignment})").into(), 3)
+            }
+            E::PointerOffset { pointer, offset } => {
+                edges.insert("pointer", pointer);
+                edges.insert("offset", offset);
+                ("PointerOffset".into(), 3)
+            }
             E::As {
                 kind,
                 expr,
@@ -777,6 +811,11 @@ fn write_function_expressions(
                 edges.insert("", query);
                 let ty = if committed { "Committed" } else { "Candidate" };
                 (format!("get{ty}HitVertexPositions").into(), 4)
+            }
+            E::MatrixLoad { ref data, .. } => {
+                edges.insert("pointer", data.pointer);
+                edges.insert("stride", data.stride);
+                ("matrixLoad".into(), 4)
             }
             E::CooperativeLoad { ref data, .. } => {
                 edges.insert("pointer", data.pointer);

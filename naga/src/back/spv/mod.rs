@@ -797,13 +797,17 @@ struct ExpressionConstnessTracker {
 }
 
 impl ExpressionConstnessTracker {
-    fn from_arena(arena: &crate::Arena<crate::Expression>) -> Self {
+    fn from_arena(
+        arena: &crate::Arena<crate::Expression>,
+        types: &crate::UniqueArena<crate::Type>,
+    ) -> Self {
         let mut inner = crate::arena::HandleSet::for_arena(arena);
         for (handle, expr) in arena.iter() {
             let insert = match *expr {
-                crate::Expression::Literal(_)
-                | crate::Expression::ZeroValue(_)
-                | crate::Expression::Constant(_) => true,
+                crate::Expression::ZeroValue(ty) => {
+                    !types[ty].inner.contains_physical_pointer(types)
+                }
+                crate::Expression::Literal(_) | crate::Expression::Constant(_) => true,
                 crate::Expression::Compose { ref components, .. } => {
                     components.iter().all(|&h| inner.contains(h))
                 }
@@ -933,6 +937,7 @@ pub struct Writer {
     /// If `capabilities_available` is `Some`, then this is always a subset of
     /// that.
     capabilities_used: crate::FastIndexSet<Capability>,
+    uses_device_scope: bool,
 
     /// The set of spirv extensions used.
     extensions_used: crate::FastIndexSet<&'static str>,
@@ -950,6 +955,7 @@ pub struct Writer {
     tuple_of_u32s_ty_id: Option<Word>,
     //TODO: convert most of these into vectors, addressable by handle indices
     lookup_type: crate::FastHashMap<LookupType, Word>,
+    physical_matrix_wrappers: crate::FastHashMap<Handle<crate::Type>, Word>,
     lookup_function: crate::FastHashMap<Handle<crate::Function>, Word>,
     lookup_function_type: crate::FastHashMap<LookupFunctionType, Word>,
     /// Operations which have been wrapped in a helper function. The value is
@@ -1211,6 +1217,8 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::RAY_HIT_VERTEX_POSITION
         | Caps::SHADER_FLOAT16
         | Caps::SHADER_INT16
+        | Caps::SHADER_INT8
+        | Caps::COHERENT_PHYSICAL_MEMORY
         // No TEXTURE_EXTERNAL
         | Caps::SHADER_FLOAT16_IN_FLOAT32
         | Caps::SHADER_BARYCENTRICS

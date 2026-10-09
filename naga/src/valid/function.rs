@@ -13,6 +13,11 @@ use crate::span::{AddSpan as _, MapErrWithSpan as _};
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum CallError {
+    #[error("The call violates pointer access restrictions")]
+    PointerAccess {
+        #[source]
+        source: alloc::boxed::Box<FunctionError>,
+    },
     #[error("Argument {index} expression is invalid")]
     Argument {
         index: usize,
@@ -92,6 +97,13 @@ pub enum LocalVariableError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum FunctionError {
+    #[error("Pointer access analysis exceeded its complexity limit")]
+    PointerAccessAnalysisLimit,
+    #[error("Pointer {pointer:?} does not permit {access:?}")]
+    InvalidPointerAccess {
+        pointer: Handle<crate::Expression>,
+        access: crate::StorageAccess,
+    },
     #[error("Expression {handle:?} is invalid")]
     Expression {
         handle: Handle<crate::Expression>,
@@ -214,6 +226,8 @@ pub enum FunctionError {
     WorkgroupUniformLoadInvalidPointer(Handle<crate::Expression>),
     #[error("Subgroup operation is invalid")]
     InvalidSubgroup(#[from] SubgroupError),
+    #[error("Argument {0} is not an immutable physical pointer")]
+    InvalidImmutablePointerArgument(usize),
     #[error("Invalid target type for a cooperative store")]
     InvalidCooperativeStoreTarget(Handle<crate::Expression>),
     #[error("Cooperative load/store data pointer has invalid type")]
@@ -539,7 +553,10 @@ impl super::Validator {
                         .with_span_handle(value, context.expressions)
                         .into_other());
                 }
-                if !matches!(pointer_space, crate::AddressSpace::Storage { .. }) {
+                if !matches!(
+                    pointer_space,
+                    crate::AddressSpace::Storage { .. } | crate::AddressSpace::PhysicalStorage
+                ) {
                     log::error!(
                         "Float32 atomic operations are only supported in the Storage address space"
                     );
@@ -822,9 +839,15 @@ impl super::Validator {
                             | Ex::Relational { .. }
                             | Ex::Math { .. }
                             | Ex::As { .. }
+                            | Ex::PointerCast { .. }
+                            | Ex::PointerOffset { .. }
+                            | Ex::PointerAlignment { .. }
+                            | Ex::CoherentPointer { .. }
+                            | Ex::AtomicPointer { .. }
                             | Ex::ArrayLength(_)
                             | Ex::RayQueryGetIntersection { .. }
                             | Ex::RayQueryVertexPositions { .. }
+                            | Ex::MatrixLoad { .. }
                             | Ex::CooperativeLoad { .. }
                             | Ex::CooperativeMultiplyAdd { .. } => {
                                 self.emit_expression(handle, context)?
@@ -1061,9 +1084,26 @@ impl super::Validator {
                     }
                 }
                 S::Store { pointer, value } => {
+                    if matches!(
+                        crate::proc::atomic_pointer_orders(context.expressions, pointer),
+                        Some((
+                            crate::AtomicMemoryOrder::Acquire
+                                | crate::AtomicMemoryOrder::AcquireRelease,
+                            _,
+                        ))
+                    ) {
+                        return Err(FunctionError::InvalidStorePointer(pointer)
+                            .with_span_static(span, "atomic stores cannot acquire"));
+                    }
+
                     let mut current = pointer;
                     loop {
                         match context.expressions[current] {
+                            _ if context.resolve_pointer_type(current).pointer_space()
+                                == Some(AddressSpace::PhysicalStorage) =>
+                            {
+                                break
+                            }
                             crate::Expression::Access { base, .. }
                             | crate::Expression::AccessIndex { base, .. } => current = base,
                             crate::Expression::LocalVariable(_)
@@ -1672,6 +1712,33 @@ impl super::Validator {
                     }
                     self.validate_subgroup_gather(mode, argument, result, context)?;
                 }
+                S::MatrixStore { target, ref data } => {
+                    if !self
+                        .capabilities
+                        .contains(super::Capabilities::SHADER_INT64)
+                    {
+                        return Err(FunctionError::MissingCapability(
+                            super::Capabilities::SHADER_INT64,
+                        )
+                        .with_span());
+                    }
+                    let target_type =
+                        context.resolve_type_inner(target, &self.valid_expression_set)?;
+                    let Ti::Matrix { scalar, .. } = *target_type else {
+                        return Err(FunctionError::InvalidCooperativeStoreTarget(target)
+                            .with_span_handle(target, context.expressions));
+                    };
+                    let ptr_ty =
+                        context.resolve_type_inner(data.pointer, &self.valid_expression_set)?;
+                    if ptr_ty.pointer_space() != Some(AddressSpace::PhysicalStorage)
+                        || !matches!(ptr_ty.pointer_base_type().map(|t| t.inner_with(context.types).clone()), Some(Ti::Scalar(s)) if s == scalar)
+                        || *context.resolve_type_inner(data.stride, &self.valid_expression_set)?
+                            != Ti::Scalar(crate::Scalar::U32)
+                    {
+                        return Err(FunctionError::InvalidCooperativeDataPointer(data.pointer)
+                            .with_span_handle(data.pointer, context.expressions));
+                    }
+                }
                 S::CooperativeStore { target, ref data } => {
                     stages &= super::ShaderStages::COMPUTE;
 
@@ -1686,6 +1753,19 @@ impl super::Validator {
                         };
 
                     let ptr_ty = context.resolve_pointer_type(data.pointer);
+                    if ptr_ty.pointer_space() == Some(AddressSpace::PhysicalStorage)
+                        && (!ptr_ty.pointer_base_type().is_some_and(|base| {
+                            matches!(
+                                base.inner_with(context.types),
+                                Ti::Scalar(_) | Ti::Vector { .. }
+                            )
+                        }) || *context
+                            .resolve_type_inner(data.stride, &self.valid_expression_set)?
+                            != Ti::Scalar(crate::Scalar::U32))
+                    {
+                        return Err(FunctionError::InvalidCooperativeDataPointer(data.pointer)
+                            .with_span_handle(data.pointer, context.expressions));
+                    }
                     let ptr_scalar = ptr_ty
                         .pointer_base_type()
                         .and_then(|tr| tr.inner_with(context.types).scalar());
@@ -1851,7 +1931,14 @@ impl super::Validator {
             .types
             .get(var.ty.index())
             .ok_or(LocalVariableError::InvalidType(var.ty))?;
-        if !type_info.flags.contains(super::TypeFlags::CONSTRUCTIBLE) {
+        if !(type_info.flags.contains(super::TypeFlags::CONSTRUCTIBLE)
+            || gctx.types[var.ty]
+                .inner
+                .contains_physical_pointer(gctx.types)
+                && type_info.flags.contains(
+                    super::TypeFlags::DATA | super::TypeFlags::COPY | super::TypeFlags::SIZED,
+                ))
+        {
             return Err(LocalVariableError::InvalidType(var.ty));
         }
 
@@ -1879,6 +1966,23 @@ impl super::Validator {
         mod_info: &ModuleInfo,
         entry_point: bool,
     ) -> Result<FunctionInfo, WithSpan<FunctionError>> {
+        for (index, argument) in fun.arguments.iter().enumerate() {
+            if !argument.immutable_pointee {
+                continue;
+            }
+            let ty = &module.types[argument.ty].inner;
+            let valid = !entry_point
+                && ty.pointer_space() == Some(crate::AddressSpace::PhysicalStorage)
+                && ty.pointer_base_type().is_some_and(|base| match base {
+                    TypeResolution::Handle(h) => {
+                        self.types[h.index()].flags.contains(super::TypeFlags::COPY)
+                    }
+                    TypeResolution::Value(_) => true,
+                });
+            if !valid {
+                return Err(FunctionError::InvalidImmutablePointerArgument(index).with_span());
+            }
+        }
         let mut info = mod_info.process_function(fun, module, self.flags, self.capabilities)?;
 
         let local_expr_kind = crate::proc::ExpressionKindTracker::from_arena(&fun.expressions);
@@ -1898,7 +2002,12 @@ impl super::Validator {
 
         for (index, argument) in fun.arguments.iter().enumerate() {
             match module.types[argument.ty].inner.pointer_space() {
-                Some(crate::AddressSpace::Private | crate::AddressSpace::Function) | None => {}
+                Some(
+                    crate::AddressSpace::Private
+                    | crate::AddressSpace::Function
+                    | crate::AddressSpace::PhysicalStorage,
+                )
+                | None => {}
                 Some(other) => {
                     return Err(FunctionError::InvalidArgumentPointerSpace {
                         index,
@@ -1929,9 +2038,15 @@ impl super::Validator {
         }
 
         if let Some(ref result) = fun.result {
-            if !self.types[result.ty.index()]
+            if !(self.types[result.ty.index()]
                 .flags
                 .contains(super::TypeFlags::CONSTRUCTIBLE)
+                || module.types[result.ty]
+                    .inner
+                    .contains_physical_pointer(&module.types)
+                    && self.types[result.ty.index()].flags.contains(
+                        super::TypeFlags::DATA | super::TypeFlags::COPY | super::TypeFlags::SIZED,
+                    ))
             {
                 return Err(FunctionError::NonConstructibleReturnType
                     .with_span_handle(result.ty, &module.types));
@@ -1985,6 +2100,8 @@ impl super::Validator {
                 )?
                 .stages;
             info.available_stages &= stages;
+            super::access::validate(fun, module, &info, &mod_info.functions)
+                .map_err(|error| error.with_span())?;
 
             if self.flags.contains(super::ValidationFlags::EXPRESSIONS) {
                 if let Some(handle) = self.needs_visit.iter().next() {

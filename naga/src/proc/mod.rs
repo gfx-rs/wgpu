@@ -133,6 +133,8 @@ pub enum HashableLiteral {
     F64(u64),
     F32(u32),
     F16(u16),
+    U8(u8),
+    I8(i8),
     U16(u16),
     I16(i16),
     U32(u32),
@@ -150,6 +152,8 @@ impl From<crate::Literal> for HashableLiteral {
             crate::Literal::F64(v) => Self::F64(v.to_bits()),
             crate::Literal::F32(v) => Self::F32(v.to_bits()),
             crate::Literal::F16(v) => Self::F16(v.to_bits()),
+            crate::Literal::U8(v) => Self::U8(v),
+            crate::Literal::I8(v) => Self::I8(v),
             crate::Literal::U16(v) => Self::U16(v),
             crate::Literal::I16(v) => Self::I16(v),
             crate::Literal::U32(v) => Self::U32(v),
@@ -171,6 +175,8 @@ impl crate::Literal {
             (value, crate::ScalarKind::Float, 2) => {
                 Some(Self::F16(half::f16::from_f32_const(value as _)))
             }
+            (value, crate::ScalarKind::Uint, 1) => Some(Self::U8(value)),
+            (value, crate::ScalarKind::Sint, 1) => Some(Self::I8(value as _)),
             (value, crate::ScalarKind::Uint, 2) => Some(Self::U16(value as _)),
             (value, crate::ScalarKind::Sint, 2) => Some(Self::I16(value as _)),
             (value, crate::ScalarKind::Uint, 4) => Some(Self::U32(value as _)),
@@ -200,6 +206,7 @@ impl crate::Literal {
             (crate::ScalarKind::Float, 2) => Some(Self::F16(half::f16::from_f32_const(-1.0))),
             (crate::ScalarKind::Sint, 8) => Some(Self::I64(-1)),
             (crate::ScalarKind::Sint, 4) => Some(Self::I32(-1)),
+            (crate::ScalarKind::Sint, 1) => Some(Self::I8(-1)),
             (crate::ScalarKind::Sint, 2) => Some(Self::I16(-1)),
             (crate::ScalarKind::AbstractInt, 8) => Some(Self::AbstractInt(-1)),
             _ => None,
@@ -210,6 +217,7 @@ impl crate::Literal {
         match *self {
             Self::F64(_) | Self::I64(_) | Self::U64(_) => 8,
             Self::F32(_) | Self::U32(_) | Self::I32(_) => 4,
+            Self::U8(_) | Self::I8(_) => 1,
             Self::F16(_) | Self::U16(_) | Self::I16(_) => 2,
             Self::Bool(_) => crate::BOOL_WIDTH,
             Self::AbstractInt(_) | Self::AbstractFloat(_) => crate::ABSTRACT_WIDTH,
@@ -220,6 +228,8 @@ impl crate::Literal {
             Self::F64(_) => crate::Scalar::F64,
             Self::F32(_) => crate::Scalar::F32,
             Self::F16(_) => crate::Scalar::F16,
+            Self::U8(_) => crate::Scalar::U8,
+            Self::I8(_) => crate::Scalar::I8,
             Self::U16(_) => crate::Scalar::U16,
             Self::I16(_) => crate::Scalar::I16,
             Self::U32(_) => crate::Scalar::U32,
@@ -244,6 +254,8 @@ impl TryFrom<crate::Literal> for u32 {
 
     fn try_from(value: crate::Literal) -> Result<Self, Self::Error> {
         match value {
+            crate::Literal::U8(value) => Ok(u32::from(value)),
+            crate::Literal::I8(value) => value.try_into().map_err(|_| ConstValueError::Negative),
             crate::Literal::U16(value) => Ok(value as u32),
             crate::Literal::I16(value) => value.try_into().map_err(|_| ConstValueError::Negative),
             crate::Literal::U32(value) => Ok(value),
@@ -273,6 +285,7 @@ impl super::AddressSpace {
             | crate::AddressSpace::WorkGroup => Sa::LOAD | Sa::STORE,
             crate::AddressSpace::Uniform => Sa::LOAD,
             crate::AddressSpace::Storage { access } => access,
+            crate::AddressSpace::PhysicalStorage => Sa::LOAD | Sa::STORE,
             crate::AddressSpace::Handle => Sa::LOAD,
             crate::AddressSpace::Immediate => Sa::LOAD,
             // TaskPayload isn't always writable, but this is checked for elsewhere,
@@ -1120,4 +1133,61 @@ impl TryFrom<&crate::TypeInner> for nt::glsl::GlslUniformType {
             _ => Err(()),
         }
     }
+}
+
+pub(crate) fn atomic_pointer_orders(
+    expressions: &crate::Arena<crate::Expression>,
+    mut pointer: crate::Handle<crate::Expression>,
+) -> Option<(crate::AtomicMemoryOrder, crate::AtomicMemoryOrder)> {
+    use crate::AtomicMemoryOrder as O;
+    loop {
+        match expressions[pointer] {
+            crate::Expression::AtomicPointer {
+                order,
+                failure_order,
+                ..
+            } => {
+                let failure = failure_order.unwrap_or(match order {
+                    O::Acquire | O::AcquireRelease => O::Acquire,
+                    O::Relaxed | O::Release => O::Relaxed,
+                });
+                return Some((order, failure));
+            }
+            crate::Expression::PointerAlignment { pointer: base, .. } => pointer = base,
+            _ => return None,
+        }
+    }
+}
+
+#[cfg(any(wgsl_out, glsl_out, hlsl_out, msl_out))]
+pub(crate) fn module_uses_int8(module: &crate::Module) -> bool {
+    module.types.iter().any(|(_, ty)| {
+        ty.inner.scalar().is_some_and(|scalar| {
+            scalar.width == 1
+                && matches!(
+                    scalar.kind,
+                    crate::ScalarKind::Sint | crate::ScalarKind::Uint
+                )
+        })
+    }) || core::iter::once(&module.global_expressions)
+        .chain(module.functions.iter().map(|(_, f)| &f.expressions))
+        .chain(
+            module
+                .entry_points
+                .iter()
+                .map(|entry| &entry.function.expressions),
+        )
+        .any(|expressions| {
+            expressions.iter().any(|(_, expression)| {
+                matches!(
+                    expression,
+                    crate::Expression::Literal(crate::Literal::I8(_) | crate::Literal::U8(_))
+                        | crate::Expression::As {
+                            kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                            convert: Some(1),
+                            ..
+                        }
+                )
+            })
+        })
 }

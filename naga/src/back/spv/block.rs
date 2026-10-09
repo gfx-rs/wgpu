@@ -809,7 +809,7 @@ impl BlockContext<'_> {
                 self.writer.constant_ids[init]
             }
             crate::Expression::Override(_) => return Err(Error::Override),
-            crate::Expression::ZeroValue(_) => self.writer.get_constant_null(result_type_id),
+            crate::Expression::ZeroValue(ty) => self.write_native_zero(ty, block)?,
             crate::Expression::Compose { ty, ref components } => {
                 self.temp_list.clear();
                 if self.expression_constness.is_const(expr_handle) {
@@ -825,8 +825,12 @@ impl BlockContext<'_> {
                     self.writer
                         .get_constant_composite(LookupType::Handle(ty), &self.temp_list)
                 } else {
-                    self.temp_list
-                        .extend(components.iter().map(|&component| self.cached[component]));
+                    let values = components
+                        .iter()
+                        .map(|&component| self.write_value(component, block))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    self.temp_list.clear();
+                    self.temp_list.extend(values);
 
                     let id = self.gen_id();
                     block.body.push(Instruction::composite_construct(
@@ -2054,6 +2058,92 @@ impl BlockContext<'_> {
             | crate::Expression::RayQueryProceedResult
             | crate::Expression::SubgroupBallotResult
             | crate::Expression::SubgroupOperationResult { .. } => self.cached[expr_handle],
+            crate::Expression::PointerCast { expr, .. } => {
+                let source_id = self.write_value(expr, block)?;
+                let id = self.gen_id();
+                let op = if self.fun_info[expr]
+                    .ty
+                    .inner_with(&self.ir_module.types)
+                    .pointer_space()
+                    == Some(crate::AddressSpace::PhysicalStorage)
+                {
+                    spirv::Op::ConvertPtrToU
+                } else {
+                    spirv::Op::ConvertUToPtr
+                };
+                block
+                    .body
+                    .push(Instruction::unary(op, result_type_id, id, source_id));
+                id
+            }
+            crate::Expression::PointerAlignment { .. }
+            | crate::Expression::CoherentPointer { .. }
+            | crate::Expression::AtomicPointer { .. } => 0,
+            crate::Expression::PointerOffset { pointer, offset } => {
+                self.writer
+                    .require_any("physical pointer arithmetic", &[spirv::Capability::Int64])?;
+                let scalar = crate::Scalar::U64;
+                let integer_type = self.writer.get_numeric_type_id(NumericType::Scalar(scalar));
+                let pointer_id = self.write_value(pointer, block)?;
+                let address = self.gen_id();
+                block.body.push(Instruction::unary(
+                    spirv::Op::ConvertPtrToU,
+                    integer_type,
+                    address,
+                    pointer_id,
+                ));
+                let base = self.fun_info[pointer]
+                    .ty
+                    .inner_with(&self.ir_module.types)
+                    .pointer_base_type()
+                    .unwrap();
+                let stride = base
+                    .inner_with(&self.ir_module.types)
+                    .size(self.ir_module.to_ctx());
+                let stride_id = self
+                    .writer
+                    .get_constant_scalar(crate::Literal::U64(u64::from(stride)));
+                let mut offset_id = self.cached[offset];
+                if self.fun_info[offset]
+                    .ty
+                    .inner_with(&self.ir_module.types)
+                    .scalar_kind()
+                    == Some(crate::ScalarKind::Sint)
+                {
+                    let id = self.gen_id();
+                    block.body.push(Instruction::unary(
+                        spirv::Op::Bitcast,
+                        integer_type,
+                        id,
+                        offset_id,
+                    ));
+                    offset_id = id;
+                }
+                let bytes = self.gen_id();
+                block.body.push(Instruction::binary(
+                    spirv::Op::IMul,
+                    integer_type,
+                    bytes,
+                    offset_id,
+                    stride_id,
+                ));
+                let sum = self.gen_id();
+                block.body.push(Instruction::binary(
+                    spirv::Op::IAdd,
+                    integer_type,
+                    sum,
+                    address,
+                    bytes,
+                ));
+                let id = self.gen_id();
+                block.body.push(Instruction::unary(
+                    spirv::Op::ConvertUToPtr,
+                    result_type_id,
+                    id,
+                    sum,
+                ));
+                id
+            }
             crate::Expression::As {
                 expr,
                 kind,
@@ -2104,8 +2194,8 @@ impl BlockContext<'_> {
             } => {
                 let id = self.gen_id();
                 let mut condition_id = self.cached[condition];
-                let accept_id = self.cached[accept];
-                let reject_id = self.cached[reject];
+                let accept_id = self.write_value(accept, block)?;
+                let reject_id = self.write_value(reject, block)?;
 
                 let condition_ty = self.fun_info[condition]
                     .ty
@@ -2219,11 +2309,30 @@ impl BlockContext<'_> {
                 )?;
                 self.write_ray_query_return_vertex_position(query, block, committed)
             }
+            crate::Expression::MatrixLoad {
+                columns,
+                rows,
+                ref data,
+            } => {
+                let scalar = self.fun_info[expr_handle]
+                    .ty
+                    .inner_with(&self.ir_module.types)
+                    .scalar()
+                    .unwrap();
+                self.write_matrix_memory(data, (columns, rows, scalar), None, block)?
+                    .unwrap()
+            }
             crate::Expression::CooperativeLoad { ref data, .. } => {
                 self.writer.require_any(
                     "CooperativeMatrix",
                     &[spirv::Capability::CooperativeMatrixKHR],
                 )?;
+                self.writer.require_any(
+                    "cooperative matrix memory model",
+                    &[spirv::Capability::VulkanMemoryModel],
+                )?;
+                self.writer.use_extension("SPV_KHR_cooperative_matrix");
+                self.writer.use_extension("SPV_KHR_vulkan_memory_model");
                 let layout = if data.row_major {
                     spirv::CooperativeMatrixLayout::RowMajorKHR
                 } else {
@@ -2231,6 +2340,8 @@ impl BlockContext<'_> {
                 };
                 let layout_id = self.get_index_constant(layout as u32);
                 let stride_id = self.cached[data.stride];
+                let alignment = self.physical_storage_alignment(data.pointer);
+                let coherent_scope = self.coherent_memory_scope(data.pointer)?;
                 match self.write_access_chain(data.pointer, block, AccessTypeAdjustment::None)? {
                     ExpressionPointer::Ready { pointer_id } => {
                         let id = self.gen_id();
@@ -2240,6 +2351,8 @@ impl BlockContext<'_> {
                             pointer_id,
                             layout_id,
                             stride_id,
+                            alignment,
+                            coherent_scope,
                         ));
                         id
                     }
@@ -2258,6 +2371,8 @@ impl BlockContext<'_> {
                                     pointer_id,
                                     layout_id,
                                     stride_id,
+                                    alignment,
+                                    coherent_scope,
                                 ));
                                 id
                             },
@@ -2269,6 +2384,12 @@ impl BlockContext<'_> {
                     "CooperativeMatrix",
                     &[spirv::Capability::CooperativeMatrixKHR],
                 )?;
+                self.writer.require_any(
+                    "cooperative matrix memory model",
+                    &[spirv::Capability::VulkanMemoryModel],
+                )?;
+                self.writer.use_extension("SPV_KHR_cooperative_matrix");
+                self.writer.use_extension("SPV_KHR_vulkan_memory_model");
                 let a_id = self.cached[a];
                 let b_id = self.cached[b];
                 let c_id = self.cached[c];
@@ -2577,7 +2698,25 @@ impl BlockContext<'_> {
         let result_type_id = {
             let resolution = &self.fun_info[expr_handle].ty;
             match type_adjustment {
-                AccessTypeAdjustment::None => self.writer.get_expression_type_id(resolution),
+                AccessTypeAdjustment::None => {
+                    if let crate::TypeInner::Pointer {
+                        base,
+                        space: crate::AddressSpace::PhysicalStorage,
+                    } = *resolution.inner_with(&self.ir_module.types)
+                    {
+                        if self.writer.physical_matrix_wrappers.contains_key(&base) {
+                            let base_id = self.writer.get_handle_type_id(base);
+                            self.writer.get_pointer_type_id(
+                                base_id,
+                                spirv::StorageClass::PhysicalStorageBuffer,
+                            )
+                        } else {
+                            self.writer.get_expression_type_id(resolution)
+                        }
+                    } else {
+                        self.writer.get_expression_type_id(resolution)
+                    }
+                }
                 AccessTypeAdjustment::IntroducePointer(class) => {
                     self.writer.get_resolution_pointer_id(resolution, class)
                 }
@@ -2623,7 +2762,28 @@ impl BlockContext<'_> {
                 break spilled.id;
             }
 
+            if let crate::Expression::Access { base, .. }
+            | crate::Expression::AccessIndex { base, .. } =
+                self.ir_function.expressions[expr_handle]
+            {
+                if self.fun_info[expr_handle]
+                    .ty
+                    .inner_with(&self.ir_module.types)
+                    .pointer_space()
+                    == Some(crate::AddressSpace::PhysicalStorage)
+                    && self.fun_info[base]
+                        .ty
+                        .inner_with(&self.ir_module.types)
+                        .pointer_space()
+                        .is_none()
+                {
+                    break self.cached[expr_handle];
+                }
+            }
             expr_handle = match self.ir_function.expressions[expr_handle] {
+                crate::Expression::PointerAlignment { pointer, .. }
+                | crate::Expression::CoherentPointer { pointer, .. }
+                | crate::Expression::AtomicPointer { pointer, .. } => pointer,
                 crate::Expression::Access { base, index } => {
                     is_non_uniform_binding_array |=
                         self.is_nonuniform_binding_array_access(base, index);
@@ -2713,9 +2873,30 @@ impl BlockContext<'_> {
                 crate::Expression::FunctionArgument(index) => {
                     break self.function.parameter_id(index);
                 }
+                _ if self.fun_info[expr_handle]
+                    .ty
+                    .inner_with(&self.ir_module.types)
+                    .pointer_space()
+                    == Some(crate::AddressSpace::PhysicalStorage) =>
+                {
+                    break self.cached[expr_handle];
+                }
                 ref other => unimplemented!("Unexpected pointer expression {:?}", other),
             }
         };
+
+        if let crate::TypeInner::Pointer {
+            base,
+            space: crate::AddressSpace::PhysicalStorage,
+        } = *self.fun_info[expr_handle]
+            .ty
+            .inner_with(&self.ir_module.types)
+        {
+            if self.writer.physical_matrix_wrappers.contains_key(&base) {
+                let zero = self.get_index_constant(0);
+                self.temp_list.push(zero);
+            }
+        }
 
         let (pointer_id, expr_pointer) = if self.temp_list.is_empty() {
             (
@@ -2853,6 +3034,550 @@ impl BlockContext<'_> {
         }
     }
 
+    // Projected physical pointers need an access chain before use as values.
+    fn write_value(
+        &mut self,
+        value: Handle<crate::Expression>,
+        block: &mut Block,
+    ) -> Result<Word, Error> {
+        if self.fun_info[value]
+            .ty
+            .inner_with(&self.ir_module.types)
+            .pointer_space()
+            == Some(crate::AddressSpace::PhysicalStorage)
+            && matches!(
+                self.ir_function.expressions[value],
+                crate::Expression::Access { .. }
+                    | crate::Expression::AccessIndex { .. }
+                    | crate::Expression::PointerAlignment { .. }
+                    | crate::Expression::CoherentPointer { .. }
+                    | crate::Expression::AtomicPointer { .. }
+            )
+        {
+            return match self.write_access_chain(value, block, AccessTypeAdjustment::None)? {
+                ExpressionPointer::Ready { pointer_id } => {
+                    if let crate::TypeInner::Pointer {
+                        base,
+                        space: crate::AddressSpace::PhysicalStorage,
+                    } = *self.fun_info[value].ty.inner_with(&self.ir_module.types)
+                    {
+                        if self.writer.physical_matrix_wrappers.contains_key(&base) {
+                            let ty = self.writer.get_expression_type_id(&self.fun_info[value].ty);
+                            let wrapped = self.gen_id();
+                            block.body.push(Instruction::unary(
+                                spirv::Op::Bitcast,
+                                ty,
+                                wrapped,
+                                pointer_id,
+                            ));
+                            return Ok(wrapped);
+                        }
+                    }
+                    Ok(pointer_id)
+                }
+                ExpressionPointer::Conditional { condition, access } => {
+                    let ty = self.get_expression_type_id(&self.fun_info[value].ty);
+                    let zero = self.write_null_pointer(ty, block);
+                    let cast = access.type_id != Some(ty);
+                    let pointer = access.result_id.unwrap();
+                    let mut selection = Selection::start(block, ty);
+                    selection.if_true(self, condition, zero);
+                    selection.block().body.push(access);
+                    let pointer = if cast {
+                        let id = self.gen_id();
+                        selection.block().body.push(Instruction::unary(
+                            spirv::Op::Bitcast,
+                            ty,
+                            id,
+                            pointer,
+                        ));
+                        id
+                    } else {
+                        pointer
+                    };
+                    Ok(selection.finish(self, pointer))
+                }
+            };
+        }
+        Ok(self.cached[value])
+    }
+
+    fn write_matrix_memory(
+        &mut self,
+        data: &crate::CooperativeData,
+        shape: (crate::VectorSize, crate::VectorSize, crate::Scalar),
+        value: Option<Word>,
+        block: &mut Block,
+    ) -> Result<Option<Word>, Error> {
+        let coherent_scope = self.coherent_memory_scope(data.pointer)?;
+        self.writer
+            .require_any("native matrix memory", &[spirv::Capability::Int64])?;
+        let (columns, rows, scalar) = shape;
+        let integer_type = self
+            .writer
+            .get_numeric_type_id(NumericType::Scalar(crate::Scalar::U64));
+        let scalar_type = self.writer.get_numeric_type_id(NumericType::Scalar(scalar));
+        let column_type = self
+            .writer
+            .get_numeric_type_id(NumericType::Vector { size: rows, scalar });
+        let pointer_type = self
+            .writer
+            .get_pointer_type_id(scalar_type, spirv::StorageClass::PhysicalStorageBuffer);
+        let pointer = self.write_value(data.pointer, block)?;
+        let address = self.gen_id();
+        block.body.push(Instruction::unary(
+            spirv::Op::ConvertPtrToU,
+            integer_type,
+            address,
+            pointer,
+        ));
+        let stride = self.gen_id();
+        block.body.push(Instruction::unary(
+            spirv::Op::UConvert,
+            integer_type,
+            stride,
+            self.cached[data.stride],
+        ));
+        let width = self
+            .writer
+            .get_constant_scalar(crate::Literal::U64(u64::from(scalar.width)));
+        let mut column_values = Vec::new();
+        for column in 0..columns as u32 {
+            let mut cells = Vec::new();
+            for row in 0..rows as u32 {
+                let (major, minor) = if data.row_major {
+                    (row, column)
+                } else {
+                    (column, row)
+                };
+                let major = self
+                    .writer
+                    .get_constant_scalar(crate::Literal::U64(u64::from(major)));
+                let minor = self
+                    .writer
+                    .get_constant_scalar(crate::Literal::U64(u64::from(minor)));
+                let major_offset = self.gen_id();
+                block.body.push(Instruction::binary(
+                    spirv::Op::IMul,
+                    integer_type,
+                    major_offset,
+                    stride,
+                    major,
+                ));
+                let offset = self.gen_id();
+                block.body.push(Instruction::binary(
+                    spirv::Op::IAdd,
+                    integer_type,
+                    offset,
+                    major_offset,
+                    minor,
+                ));
+                let bytes = self.gen_id();
+                block.body.push(Instruction::binary(
+                    spirv::Op::IMul,
+                    integer_type,
+                    bytes,
+                    offset,
+                    width,
+                ));
+                let cell_address = self.gen_id();
+                block.body.push(Instruction::binary(
+                    spirv::Op::IAdd,
+                    integer_type,
+                    cell_address,
+                    address,
+                    bytes,
+                ));
+                let cell_pointer = self.gen_id();
+                block.body.push(Instruction::unary(
+                    spirv::Op::ConvertUToPtr,
+                    pointer_type,
+                    cell_pointer,
+                    cell_address,
+                ));
+                let cell = self.gen_id();
+                let mut access = if let Some(value) = value {
+                    block.body.push(Instruction::composite_extract(
+                        scalar_type,
+                        cell,
+                        value,
+                        &[column, row],
+                    ));
+                    Instruction::store(cell_pointer, cell, None)
+                } else {
+                    cells.push(cell);
+                    Instruction::load(scalar_type, cell, cell_pointer, None)
+                };
+                access.add_native_memory_access(
+                    Some(u32::from(scalar.width)),
+                    coherent_scope,
+                    value.is_some(),
+                );
+                block.body.push(access);
+            }
+            if value.is_none() {
+                let id = self.gen_id();
+                block
+                    .body
+                    .push(Instruction::composite_construct(column_type, id, &cells));
+                column_values.push(id);
+            }
+        }
+        if value.is_some() {
+            Ok(None)
+        } else {
+            let matrix_type = self.writer.get_numeric_type_id(NumericType::Matrix {
+                columns,
+                rows,
+                scalar,
+            });
+            let id = self.gen_id();
+            block.body.push(Instruction::composite_construct(
+                matrix_type,
+                id,
+                &column_values,
+            ));
+            Ok(Some(id))
+        }
+    }
+
+    fn write_null_pointer(&mut self, ty: Word, block: &mut Block) -> Word {
+        let address_type = self.writer.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Bi,
+            scalar: crate::Scalar::U32,
+        });
+        let zero = self.writer.get_constant_null(address_type);
+        let id = self.gen_id();
+        block
+            .body
+            .push(Instruction::unary(spirv::Op::Bitcast, ty, id, zero));
+        id
+    }
+
+    pub(super) fn write_native_zero(
+        &mut self,
+        ty: Handle<crate::Type>,
+        block: &mut Block,
+    ) -> Result<Word, Error> {
+        let inner = &self.ir_module.types[ty].inner;
+        let result_type = self.get_handle_type_id(ty);
+        if !inner.contains_physical_pointer(&self.ir_module.types) {
+            return Ok(self.writer.get_constant_null(result_type));
+        }
+        if inner.pointer_space() == Some(crate::AddressSpace::PhysicalStorage) {
+            return Ok(self.write_null_pointer(result_type, block));
+        }
+        let components = match *inner {
+            crate::TypeInner::Struct { ref members, .. } => {
+                members.iter().map(|m| m.ty).collect::<Vec<_>>()
+            }
+            crate::TypeInner::Array {
+                base,
+                size: crate::ArraySize::Constant(size),
+                ..
+            } => alloc::vec![base; size.get() as usize],
+            _ => return Err(Error::Validation("invalid native zero type")),
+        };
+        let values = components
+            .into_iter()
+            .map(|ty| self.write_native_zero(ty, block))
+            .collect::<Result<Vec<_>, _>>()?;
+        let id = self.gen_id();
+        block
+            .body
+            .push(Instruction::composite_construct(result_type, id, &values));
+        Ok(id)
+    }
+
+    fn write_atomic(
+        &mut self,
+        pointer: (Handle<crate::Expression>, Word),
+        fun: crate::AtomicFunction,
+        value: Handle<crate::Expression>,
+        result: Option<Handle<crate::Expression>>,
+        id: Word,
+        block: &mut Block,
+    ) -> Result<Word, Error> {
+        let (pointer, pointer_id) = pointer;
+        let result_type_id =
+            self.get_expression_type_id(&self.fun_info[result.unwrap_or(value)].ty);
+        let (scope_constant_id, semantics_id) = self.atomic_scope_semantics(pointer).unwrap();
+        let value_id = self.write_value(value, block)?;
+        let value_inner = self.fun_info[value].ty.inner_with(&self.ir_module.types);
+
+        let crate::TypeInner::Scalar(scalar) = *value_inner else {
+            return Err(Error::FeatureNotImplemented(
+                "Atomics with non-scalar values",
+            ));
+        };
+
+        let instruction = match fun {
+            crate::AtomicFunction::Add => {
+                let spirv_op = match scalar.kind {
+                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => spirv::Op::AtomicIAdd,
+                    crate::ScalarKind::Float => spirv::Op::AtomicFAddEXT,
+                    _ => unimplemented!(),
+                };
+                Instruction::atomic_binary(
+                    spirv_op,
+                    result_type_id,
+                    id,
+                    pointer_id,
+                    scope_constant_id,
+                    semantics_id,
+                    value_id,
+                )
+            }
+            crate::AtomicFunction::Subtract => {
+                let (spirv_op, value_id) = match scalar.kind {
+                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                        (spirv::Op::AtomicISub, value_id)
+                    }
+                    crate::ScalarKind::Float => {
+                        // HACK: SPIR-V doesn't have a atomic subtraction,
+                        // so we add the negated value instead.
+                        let neg_result_id = self.gen_id();
+                        block.body.push(Instruction::unary(
+                            spirv::Op::FNegate,
+                            result_type_id,
+                            neg_result_id,
+                            value_id,
+                        ));
+                        (spirv::Op::AtomicFAddEXT, neg_result_id)
+                    }
+                    _ => unimplemented!(),
+                };
+                Instruction::atomic_binary(
+                    spirv_op,
+                    result_type_id,
+                    id,
+                    pointer_id,
+                    scope_constant_id,
+                    semantics_id,
+                    value_id,
+                )
+            }
+            crate::AtomicFunction::And => {
+                let spirv_op = match scalar.kind {
+                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => spirv::Op::AtomicAnd,
+                    _ => unimplemented!(),
+                };
+                Instruction::atomic_binary(
+                    spirv_op,
+                    result_type_id,
+                    id,
+                    pointer_id,
+                    scope_constant_id,
+                    semantics_id,
+                    value_id,
+                )
+            }
+            crate::AtomicFunction::InclusiveOr => {
+                let spirv_op = match scalar.kind {
+                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => spirv::Op::AtomicOr,
+                    _ => unimplemented!(),
+                };
+                Instruction::atomic_binary(
+                    spirv_op,
+                    result_type_id,
+                    id,
+                    pointer_id,
+                    scope_constant_id,
+                    semantics_id,
+                    value_id,
+                )
+            }
+            crate::AtomicFunction::ExclusiveOr => {
+                let spirv_op = match scalar.kind {
+                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => spirv::Op::AtomicXor,
+                    _ => unimplemented!(),
+                };
+                Instruction::atomic_binary(
+                    spirv_op,
+                    result_type_id,
+                    id,
+                    pointer_id,
+                    scope_constant_id,
+                    semantics_id,
+                    value_id,
+                )
+            }
+            crate::AtomicFunction::Min => {
+                let spirv_op = match scalar.kind {
+                    crate::ScalarKind::Sint => spirv::Op::AtomicSMin,
+                    crate::ScalarKind::Uint => spirv::Op::AtomicUMin,
+                    _ => unimplemented!(),
+                };
+                Instruction::atomic_binary(
+                    spirv_op,
+                    result_type_id,
+                    id,
+                    pointer_id,
+                    scope_constant_id,
+                    semantics_id,
+                    value_id,
+                )
+            }
+            crate::AtomicFunction::Max => {
+                let spirv_op = match scalar.kind {
+                    crate::ScalarKind::Sint => spirv::Op::AtomicSMax,
+                    crate::ScalarKind::Uint => spirv::Op::AtomicUMax,
+                    _ => unimplemented!(),
+                };
+                Instruction::atomic_binary(
+                    spirv_op,
+                    result_type_id,
+                    id,
+                    pointer_id,
+                    scope_constant_id,
+                    semantics_id,
+                    value_id,
+                )
+            }
+            crate::AtomicFunction::Exchange { compare: None } => Instruction::atomic_binary(
+                spirv::Op::AtomicExchange,
+                result_type_id,
+                id,
+                pointer_id,
+                scope_constant_id,
+                semantics_id,
+                value_id,
+            ),
+            crate::AtomicFunction::Exchange { compare: Some(cmp) } => {
+                let scalar_type_id = self.get_numeric_type_id(NumericType::Scalar(scalar));
+                let bool_type_id =
+                    self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::BOOL));
+
+                let cas_result_id = self.gen_id();
+                let equality_result_id = self.gen_id();
+                let equality_operator = match scalar.kind {
+                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => spirv::Op::IEqual,
+                    _ => unimplemented!(),
+                };
+
+                let mut cas_instr = Instruction::new(spirv::Op::AtomicCompareExchange);
+                cas_instr.set_type(scalar_type_id);
+                cas_instr.set_result(cas_result_id);
+                cas_instr.add_operand(pointer_id);
+                cas_instr.add_operand(scope_constant_id);
+                cas_instr.add_operand(semantics_id); // semantics if equal
+                let failure_order =
+                    crate::proc::atomic_pointer_orders(&self.ir_function.expressions, pointer)
+                        .map_or(crate::AtomicMemoryOrder::Relaxed, |(_, failure)| failure);
+                let failure_id =
+                    self.get_index_constant(Self::native_atomic_semantics(failure_order).bits());
+                cas_instr.add_operand(failure_id);
+                cas_instr.add_operand(value_id);
+                cas_instr.add_operand(self.cached[cmp]);
+                block.body.push(cas_instr);
+                block.body.push(Instruction::binary(
+                    equality_operator,
+                    bool_type_id,
+                    equality_result_id,
+                    cas_result_id,
+                    self.cached[cmp],
+                ));
+                Instruction::composite_construct(
+                    result_type_id,
+                    id,
+                    &[cas_result_id, equality_result_id],
+                )
+            }
+        };
+
+        block.body.push(instruction);
+        Ok(id)
+    }
+
+    fn native_atomic_semantics(order: crate::AtomicMemoryOrder) -> spirv::MemorySemantics {
+        use crate::AtomicMemoryOrder as O;
+        use spirv::MemorySemantics as M;
+        match order {
+            O::Relaxed => M::empty(),
+            O::Acquire => M::ACQUIRE | M::UNIFORM_MEMORY,
+            O::Release => M::RELEASE | M::UNIFORM_MEMORY,
+            O::AcquireRelease => M::ACQUIRE_RELEASE | M::UNIFORM_MEMORY,
+        }
+    }
+
+    fn atomic_scope_semantics(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+    ) -> Option<(Word, Word)> {
+        let ty = self.fun_info[pointer].ty.inner_with(&self.ir_module.types);
+        if let crate::TypeInner::Pointer { base, space } = *ty {
+            if matches!(
+                self.ir_module.types[base].inner,
+                crate::TypeInner::Atomic(_)
+            ) {
+                let (mut semantics, scope) = space.to_spirv_semantics_and_scope();
+                self.writer.uses_device_scope |= scope == spirv::Scope::Device;
+                if let Some((order, _)) =
+                    crate::proc::atomic_pointer_orders(&self.ir_function.expressions, pointer)
+                {
+                    semantics = Self::native_atomic_semantics(order);
+                }
+                return Some((
+                    self.get_scope_constant(scope as u32),
+                    self.get_index_constant(semantics.bits()),
+                ));
+            }
+        }
+        None
+    }
+
+    fn coherent_memory_scope(
+        &mut self,
+        mut pointer: Handle<crate::Expression>,
+    ) -> Result<Option<Word>, Error> {
+        loop {
+            match self.ir_function.expressions[pointer] {
+                crate::Expression::CoherentPointer { scope, .. } => {
+                    use crate::MemoryScope as S;
+                    let scope = match scope {
+                        S::Device => spirv::Scope::Device,
+                        S::QueueFamily => spirv::Scope::QueueFamily,
+                        S::Workgroup => spirv::Scope::Workgroup,
+                        S::Subgroup => spirv::Scope::Subgroup,
+                        S::Invocation => spirv::Scope::Invocation,
+                    };
+                    self.writer.require_any(
+                        "coherent physical memory",
+                        &[spirv::Capability::VulkanMemoryModel],
+                    )?;
+                    self.writer.use_extension("SPV_KHR_vulkan_memory_model");
+                    self.writer.uses_device_scope |= scope == spirv::Scope::Device;
+                    return Ok(Some(self.get_scope_constant(scope as u32)));
+                }
+                crate::Expression::PointerAlignment { pointer: base, .. } => pointer = base,
+                _ => return Ok(None),
+            }
+        }
+    }
+
+    fn physical_storage_alignment(&self, mut pointer: Handle<crate::Expression>) -> Option<u32> {
+        while let crate::Expression::CoherentPointer { pointer: base, .. } =
+            self.ir_function.expressions[pointer]
+        {
+            pointer = base;
+        }
+        if let crate::Expression::PointerAlignment { alignment, .. } =
+            self.ir_function.expressions[pointer]
+        {
+            return Some(alignment);
+        }
+        let ty = self.fun_info[pointer].ty.inner_with(&self.ir_module.types);
+        if ty.pointer_space() != Some(crate::AddressSpace::PhysicalStorage) {
+            return None;
+        }
+        let base = ty.pointer_base_type().unwrap();
+        Some(
+            base.inner_with(&self.ir_module.types)
+                .physical_scalar_layout(self.ir_module.to_ctx())
+                .expect("validated physical storage pointee"),
+        )
+    }
+
     fn write_checked_load(
         &mut self,
         pointer: Handle<crate::Expression>,
@@ -2860,6 +3585,7 @@ impl BlockContext<'_> {
         access_type_adjustment: AccessTypeAdjustment,
         result_type_id: Word,
     ) -> Result<Word, Error> {
+        let coherent_scope = self.coherent_memory_scope(pointer)?;
         if let Some(result_id) = self.maybe_write_immediate_vector_dynamic_access(pointer, block)? {
             Ok(result_id)
         } else if let Some(result_id) =
@@ -2919,10 +3645,9 @@ impl BlockContext<'_> {
                             }
                             _ => None,
                         };
-                    let instruction = if let Some(space) = atomic_space {
-                        let (semantics, scope) = space.to_spirv_semantics_and_scope();
-                        let scope_constant_id = self.get_scope_constant(scope as u32);
-                        let semantics_id = self.get_index_constant(semantics.bits());
+                    let instruction = if atomic_space.is_some() {
+                        let (scope_constant_id, semantics_id) =
+                            self.atomic_scope_semantics(pointer).unwrap();
                         Instruction::atomic_load(
                             result_type_id,
                             id,
@@ -2931,13 +3656,62 @@ impl BlockContext<'_> {
                             semantics_id,
                         )
                     } else {
-                        Instruction::load(load_type_id, id, pointer_id, None)
+                        {
+                            let mut instruction =
+                                Instruction::load(load_type_id, id, pointer_id, None);
+                            instruction.add_native_memory_access(
+                                self.physical_storage_alignment(pointer),
+                                coherent_scope,
+                                false,
+                            );
+                            instruction
+                        }
                     };
                     block.body.push(instruction);
                     id
                 }
                 ExpressionPointer::Conditional { condition, access } => {
-                    //TODO: support atomics?
+                    let pointee = self.fun_info[pointer]
+                        .ty
+                        .inner_with(&self.ir_module.types)
+                        .pointer_base_type()
+                        .unwrap();
+                    if let crate::proc::TypeResolution::Handle(ty) = pointee {
+                        if self.ir_module.types[ty]
+                            .inner
+                            .contains_physical_pointer(&self.ir_module.types)
+                        {
+                            let zero = self.write_native_zero(ty, block)?;
+                            let alignment = self.physical_storage_alignment(pointer);
+                            let mut selection = Selection::start(block, result_type_id);
+                            selection.if_true(self, condition, zero);
+                            let pointer_id = access.result_id.unwrap();
+                            selection.block().body.push(access);
+                            let value = self.gen_id();
+                            let mut load = Instruction::load(load_type_id, value, pointer_id, None);
+                            load.add_native_memory_access(alignment, coherent_scope, false);
+                            selection.block().body.push(load);
+                            let value = if let Some(ref wrapped_load) = wrapped_load {
+                                let converted = self.gen_id();
+                                let function = self.writer.wrapped_functions
+                                    [&WrappedFunction::ConvertFromStd140CompatType {
+                                        r#type: wrapped_load.r#type,
+                                    }];
+                                selection.block().body.push(Instruction::function_call(
+                                    result_type_id,
+                                    converted,
+                                    function,
+                                    &[value],
+                                ));
+                                converted
+                            } else {
+                                value
+                            };
+                            return Ok(selection.finish(self, value));
+                        }
+                    }
+                    let alignment = self.physical_storage_alignment(pointer);
+                    let atomic = self.atomic_scope_semantics(pointer);
                     self.write_conditional_indexed_load(
                         load_type_id,
                         condition,
@@ -2947,12 +3721,25 @@ impl BlockContext<'_> {
                             let pointer_id = access.result_id.unwrap();
                             let value_id = id_gen.next();
                             block.body.push(access);
-                            block.body.push(Instruction::load(
-                                load_type_id,
-                                value_id,
-                                pointer_id,
-                                None,
-                            ));
+                            let instruction = if let Some((scope, semantics)) = atomic {
+                                Instruction::atomic_load(
+                                    load_type_id,
+                                    value_id,
+                                    pointer_id,
+                                    scope,
+                                    semantics,
+                                )
+                            } else {
+                                let mut instruction =
+                                    Instruction::load(load_type_id, value_id, pointer_id, None);
+                                instruction.add_native_memory_access(
+                                    alignment,
+                                    coherent_scope,
+                                    false,
+                                );
+                                instruction
+                            };
+                            block.body.push(instruction);
                             value_id
                         },
                     )
@@ -3839,7 +4626,7 @@ impl BlockContext<'_> {
                     return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::Return { value: Some(value) } => {
-                    let value_id = self.cached[value];
+                    let value_id = self.write_value(value, &mut block)?;
                     let instruction = match self.function.entry_point_context {
                         // If this is an entry point, and we need to return anything,
                         // let's instead store the output variables and return `void`.
@@ -3869,7 +4656,8 @@ impl BlockContext<'_> {
                     self.writer.write_memory_barrier(flags, &mut block);
                 }
                 Statement::Store { pointer, value } => {
-                    let value_id = self.cached[value];
+                    let coherent_scope = self.coherent_memory_scope(pointer)?;
+                    let value_id = self.write_value(value, &mut block)?;
                     match self.write_access_chain(
                         pointer,
                         &mut block,
@@ -3888,10 +4676,9 @@ impl BlockContext<'_> {
                                 }
                                 _ => None,
                             };
-                            let instruction = if let Some(space) = atomic_space {
-                                let (semantics, scope) = space.to_spirv_semantics_and_scope();
-                                let scope_constant_id = self.get_scope_constant(scope as u32);
-                                let semantics_id = self.get_index_constant(semantics.bits());
+                            let instruction = if atomic_space.is_some() {
+                                let (scope_constant_id, semantics_id) =
+                                    self.atomic_scope_semantics(pointer).unwrap();
                                 Instruction::atomic_store(
                                     pointer_id,
                                     scope_constant_id,
@@ -3899,7 +4686,16 @@ impl BlockContext<'_> {
                                     value_id,
                                 )
                             } else {
-                                Instruction::store(pointer_id, value_id, None)
+                                {
+                                    let mut instruction =
+                                        Instruction::store(pointer_id, value_id, None);
+                                    instruction.add_native_memory_access(
+                                        self.physical_storage_alignment(pointer),
+                                        coherent_scope,
+                                        true,
+                                    );
+                                    instruction
+                                }
                             };
                             block.body.push(instruction);
                         }
@@ -3910,10 +4706,21 @@ impl BlockContext<'_> {
                             // The in-bounds path. Perform the access and the store.
                             let pointer_id = access.result_id.unwrap();
                             selection.block().body.push(access);
-                            selection
-                                .block()
-                                .body
-                                .push(Instruction::store(pointer_id, value_id, None));
+                            let instruction = if let Some((scope, semantics)) =
+                                self.atomic_scope_semantics(pointer)
+                            {
+                                Instruction::atomic_store(pointer_id, scope, semantics, value_id)
+                            } else {
+                                let mut instruction =
+                                    Instruction::store(pointer_id, value_id, None);
+                                instruction.add_native_memory_access(
+                                    self.physical_storage_alignment(pointer),
+                                    coherent_scope,
+                                    true,
+                                );
+                                instruction
+                            };
+                            selection.block().body.push(instruction);
 
                             // Finish the in-bounds block and start the merge block. This
                             // is the block we'll leave current on return.
@@ -3934,9 +4741,12 @@ impl BlockContext<'_> {
                 } => {
                     let id = self.gen_id();
                     self.temp_list.clear();
-                    for &argument in arguments {
-                        self.temp_list.push(self.cached[argument]);
-                    }
+                    let values = arguments
+                        .iter()
+                        .map(|&argument| self.write_value(argument, &mut block))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    self.temp_list.clear();
+                    self.temp_list.extend(values);
 
                     let type_id = match result {
                         Some(expr) => {
@@ -3955,234 +4765,46 @@ impl BlockContext<'_> {
                 }
                 Statement::Atomic {
                     pointer,
-                    ref fun,
+                    fun,
                     value,
                     result,
                 } => {
-                    let id = self.gen_id();
-                    // Compare-and-exchange operations produce a struct result,
-                    // so use `result`'s type if it is available. For no-result
-                    // operations, fall back to `value`'s type.
+                    let result_id = self.gen_id();
                     let result_type_id =
                         self.get_expression_type_id(&self.fun_info[result.unwrap_or(value)].ty);
-
-                    if let Some(result) = result {
-                        self.cached[result] = id;
-                    }
-
-                    let pointer_id = match self.write_access_chain(
+                    let id = match self.write_access_chain(
                         pointer,
                         &mut block,
                         AccessTypeAdjustment::None,
                     )? {
-                        ExpressionPointer::Ready { pointer_id } => pointer_id,
-                        ExpressionPointer::Conditional { .. } => {
-                            return Err(Error::FeatureNotImplemented(
-                                "Atomics out-of-bounds handling",
-                            ));
+                        ExpressionPointer::Ready { pointer_id } => self.write_atomic(
+                            (pointer, pointer_id),
+                            fun,
+                            value,
+                            result,
+                            result_id,
+                            &mut block,
+                        )?,
+                        ExpressionPointer::Conditional { condition, access } => {
+                            let zero = self.writer.get_constant_null(result_type_id);
+                            let mut selection = Selection::start(&mut block, result_type_id);
+                            selection.if_true(self, condition, zero);
+                            let pointer_id = access.result_id.unwrap();
+                            selection.block().body.push(access);
+                            let value_id = self.write_atomic(
+                                (pointer, pointer_id),
+                                fun,
+                                value,
+                                result,
+                                result_id,
+                                selection.block(),
+                            )?;
+                            selection.finish(self, value_id)
                         }
                     };
-
-                    let space = self.fun_info[pointer]
-                        .ty
-                        .inner_with(&self.ir_module.types)
-                        .pointer_space()
-                        .unwrap();
-                    let (semantics, scope) = space.to_spirv_semantics_and_scope();
-                    let scope_constant_id = self.get_scope_constant(scope as u32);
-                    let semantics_id = self.get_index_constant(semantics.bits());
-                    let value_id = self.cached[value];
-                    let value_inner = self.fun_info[value].ty.inner_with(&self.ir_module.types);
-
-                    let crate::TypeInner::Scalar(scalar) = *value_inner else {
-                        return Err(Error::FeatureNotImplemented(
-                            "Atomics with non-scalar values",
-                        ));
-                    };
-
-                    let instruction = match *fun {
-                        crate::AtomicFunction::Add => {
-                            let spirv_op = match scalar.kind {
-                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                                    spirv::Op::AtomicIAdd
-                                }
-                                crate::ScalarKind::Float => spirv::Op::AtomicFAddEXT,
-                                _ => unimplemented!(),
-                            };
-                            Instruction::atomic_binary(
-                                spirv_op,
-                                result_type_id,
-                                id,
-                                pointer_id,
-                                scope_constant_id,
-                                semantics_id,
-                                value_id,
-                            )
-                        }
-                        crate::AtomicFunction::Subtract => {
-                            let (spirv_op, value_id) = match scalar.kind {
-                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                                    (spirv::Op::AtomicISub, value_id)
-                                }
-                                crate::ScalarKind::Float => {
-                                    // HACK: SPIR-V doesn't have a atomic subtraction,
-                                    // so we add the negated value instead.
-                                    let neg_result_id = self.gen_id();
-                                    block.body.push(Instruction::unary(
-                                        spirv::Op::FNegate,
-                                        result_type_id,
-                                        neg_result_id,
-                                        value_id,
-                                    ));
-                                    (spirv::Op::AtomicFAddEXT, neg_result_id)
-                                }
-                                _ => unimplemented!(),
-                            };
-                            Instruction::atomic_binary(
-                                spirv_op,
-                                result_type_id,
-                                id,
-                                pointer_id,
-                                scope_constant_id,
-                                semantics_id,
-                                value_id,
-                            )
-                        }
-                        crate::AtomicFunction::And => {
-                            let spirv_op = match scalar.kind {
-                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                                    spirv::Op::AtomicAnd
-                                }
-                                _ => unimplemented!(),
-                            };
-                            Instruction::atomic_binary(
-                                spirv_op,
-                                result_type_id,
-                                id,
-                                pointer_id,
-                                scope_constant_id,
-                                semantics_id,
-                                value_id,
-                            )
-                        }
-                        crate::AtomicFunction::InclusiveOr => {
-                            let spirv_op = match scalar.kind {
-                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                                    spirv::Op::AtomicOr
-                                }
-                                _ => unimplemented!(),
-                            };
-                            Instruction::atomic_binary(
-                                spirv_op,
-                                result_type_id,
-                                id,
-                                pointer_id,
-                                scope_constant_id,
-                                semantics_id,
-                                value_id,
-                            )
-                        }
-                        crate::AtomicFunction::ExclusiveOr => {
-                            let spirv_op = match scalar.kind {
-                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                                    spirv::Op::AtomicXor
-                                }
-                                _ => unimplemented!(),
-                            };
-                            Instruction::atomic_binary(
-                                spirv_op,
-                                result_type_id,
-                                id,
-                                pointer_id,
-                                scope_constant_id,
-                                semantics_id,
-                                value_id,
-                            )
-                        }
-                        crate::AtomicFunction::Min => {
-                            let spirv_op = match scalar.kind {
-                                crate::ScalarKind::Sint => spirv::Op::AtomicSMin,
-                                crate::ScalarKind::Uint => spirv::Op::AtomicUMin,
-                                _ => unimplemented!(),
-                            };
-                            Instruction::atomic_binary(
-                                spirv_op,
-                                result_type_id,
-                                id,
-                                pointer_id,
-                                scope_constant_id,
-                                semantics_id,
-                                value_id,
-                            )
-                        }
-                        crate::AtomicFunction::Max => {
-                            let spirv_op = match scalar.kind {
-                                crate::ScalarKind::Sint => spirv::Op::AtomicSMax,
-                                crate::ScalarKind::Uint => spirv::Op::AtomicUMax,
-                                _ => unimplemented!(),
-                            };
-                            Instruction::atomic_binary(
-                                spirv_op,
-                                result_type_id,
-                                id,
-                                pointer_id,
-                                scope_constant_id,
-                                semantics_id,
-                                value_id,
-                            )
-                        }
-                        crate::AtomicFunction::Exchange { compare: None } => {
-                            Instruction::atomic_binary(
-                                spirv::Op::AtomicExchange,
-                                result_type_id,
-                                id,
-                                pointer_id,
-                                scope_constant_id,
-                                semantics_id,
-                                value_id,
-                            )
-                        }
-                        crate::AtomicFunction::Exchange { compare: Some(cmp) } => {
-                            let scalar_type_id =
-                                self.get_numeric_type_id(NumericType::Scalar(scalar));
-                            let bool_type_id =
-                                self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::BOOL));
-
-                            let cas_result_id = self.gen_id();
-                            let equality_result_id = self.gen_id();
-                            let equality_operator = match scalar.kind {
-                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                                    spirv::Op::IEqual
-                                }
-                                _ => unimplemented!(),
-                            };
-
-                            let mut cas_instr = Instruction::new(spirv::Op::AtomicCompareExchange);
-                            cas_instr.set_type(scalar_type_id);
-                            cas_instr.set_result(cas_result_id);
-                            cas_instr.add_operand(pointer_id);
-                            cas_instr.add_operand(scope_constant_id);
-                            cas_instr.add_operand(semantics_id); // semantics if equal
-                            cas_instr.add_operand(semantics_id); // semantics if not equal
-                            cas_instr.add_operand(value_id);
-                            cas_instr.add_operand(self.cached[cmp]);
-                            block.body.push(cas_instr);
-                            block.body.push(Instruction::binary(
-                                equality_operator,
-                                bool_type_id,
-                                equality_result_id,
-                                cas_result_id,
-                                self.cached[cmp],
-                            ));
-                            Instruction::composite_construct(
-                                result_type_id,
-                                id,
-                                &[cas_result_id, equality_result_id],
-                            )
-                        }
-                    };
-
-                    block.body.push(instruction);
+                    if let Some(result) = result {
+                        self.cached[result] = id;
+                    }
                 }
                 Statement::ImageAtomic {
                     image,
@@ -4240,6 +4862,22 @@ impl BlockContext<'_> {
                 } => {
                     self.write_subgroup_gather(mode, argument, result, &mut block)?;
                 }
+                Statement::MatrixStore { target, ref data } => {
+                    let crate::TypeInner::Matrix {
+                        columns,
+                        rows,
+                        scalar,
+                    } = *self.fun_info[target].ty.inner_with(&self.ir_module.types)
+                    else {
+                        unreachable!()
+                    };
+                    self.write_matrix_memory(
+                        data,
+                        (columns, rows, scalar),
+                        Some(self.cached[target]),
+                        &mut block,
+                    )?;
+                }
                 Statement::CooperativeStore { target, ref data } => {
                     let target_id = self.cached[target];
                     let layout = if data.row_major {
@@ -4249,6 +4887,8 @@ impl BlockContext<'_> {
                     };
                     let layout_id = self.get_index_constant(layout as u32);
                     let stride_id = self.cached[data.stride];
+                    let alignment = self.physical_storage_alignment(data.pointer);
+                    let coherent_scope = self.coherent_memory_scope(data.pointer)?;
                     match self.write_access_chain(
                         data.pointer,
                         &mut block,
@@ -4256,7 +4896,12 @@ impl BlockContext<'_> {
                     )? {
                         ExpressionPointer::Ready { pointer_id } => {
                             block.body.push(Instruction::coop_store(
-                                target_id, pointer_id, layout_id, stride_id,
+                                target_id,
+                                pointer_id,
+                                layout_id,
+                                stride_id,
+                                alignment,
+                                coherent_scope,
                             ));
                         }
                         ExpressionPointer::Conditional { condition, access } => {
@@ -4267,7 +4912,12 @@ impl BlockContext<'_> {
                             let pointer_id = access.result_id.unwrap();
                             selection.block().body.push(access);
                             selection.block().body.push(Instruction::coop_store(
-                                target_id, pointer_id, layout_id, stride_id,
+                                target_id,
+                                pointer_id,
+                                layout_id,
+                                stride_id,
+                                alignment,
+                                coherent_scope,
                             ));
 
                             // Finish the in-bounds block and start the merge block. This
