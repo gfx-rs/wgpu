@@ -1,0 +1,19 @@
+; SPIR-V
+; Version: 1.0
+
+               OpCapability Shader
+               OpExtension "SPV_KHR_non_semantic_info"
+     %printf = OpExtInstImport "NonSemantic.DebugPrintf"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+     %format = OpString "value = %u"
+       %void = OpTypeVoid
+       %uint = OpTypeInt 32 0
+         %fn = OpTypeFunction %void
+        %one = OpConstant %uint 1
+       %main = OpFunction %void None %fn
+      %label = OpLabel
+     %unused = OpExtInst %void %printf 1 %format %one
+               OpReturn
+               OpFunctionEnd
