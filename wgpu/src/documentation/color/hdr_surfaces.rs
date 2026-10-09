@@ -78,8 +78,8 @@ and, through [`DisplayHdrInfo`], the display's advisory capabilities;
    next [`Surface::display_hdr_info`] poll; re-query [`Surface::get_capabilities`]
    and re-run the steps above.
 
-The standalone [HDR surface example] implements every step, including the
-encoding transfer function for each color space.
+The standalone [HDR surface example] implements these steps for the named
+color spaces, including their encoding transfer functions.
 
 ### What to output from your fragment shader
 
@@ -96,11 +96,13 @@ each color space, and whether wgpu applies the transfer function for you:
 | `ExtendedDisplayP3` | `Rgba16Float` | extended sRGB-encoded, P3 primaries | no; apply the extended sRGB OETF (after gamut-mapping to P3) |
 | `Bt2100Pq` (HDR10) | `Rgb10a2Unorm` | PQ-encoded, BT.2020 primaries | no; apply the PQ OETF (after gamut-mapping to BT.2020) |
 | `Bt2100Hlg` | `Rgb10a2Unorm` | HLG-encoded, BT.2020 primaries | no; apply the HLG OETF (after gamut-mapping to BT.2020) |
+| `PassThrough` | any supported format | Application-defined; account for the texture view's encoding | only with an `*Srgb` texture view |
 
 In short, wgpu applies the transfer function for you only when you render to
 an `*Srgb` format. In every other case the values your shader writes to the
 surface texture must already carry both the transfer function and any gamut
-conversion. The [HDR surface example] implements every encoder in WGSL.
+conversion. The [HDR surface example] implements encoders for the named
+color spaces in WGSL.
 
 ### Glossary
 
@@ -110,7 +112,7 @@ conversion. The [HDR surface example] implements every encoder in WGSL.
   color space addresses, and so the range of colors it can express. [BT.709]
   is the sRGB gamut, [Display P3] is wider, and [BT.2020] is wider still.
 * **White point** --- the chromaticity of `R = G = B` (what "white" looks
-  like). Every color space here uses [D65], standard daylight.
+  like). The named color spaces here uses [D65], standard daylight.
 * **Transfer function (OETF / EOTF)** --- how stored values map to light. The
   *OETF* is the encoding transfer function your application applies; the
   *EOTF* is the inverse decoding transfer function the display applies.
