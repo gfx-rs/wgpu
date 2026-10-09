@@ -1,5 +1,7 @@
 use super::arena::HandleSet;
-use super::{FunctionMap, ModuleMap};
+use super::expressions::ForwardRefs;
+use super::reorder::Reorder;
+use super::{FunctionMap, HandleMap, ModuleMap};
 
 pub struct FunctionTracer<'a> {
     pub function: &'a crate::Function,
@@ -16,6 +18,9 @@ pub struct FunctionTracer<'a> {
 
     /// Function-local expressions used.
     pub expressions_used: HandleSet<crate::Expression>,
+
+    /// Forward references among the function's expressions.
+    pub forward_refs: ForwardRefs,
 }
 
 impl FunctionTracer<'_> {
@@ -68,6 +73,25 @@ impl FunctionTracer<'_> {
             overrides_used: self.overrides_used,
             expressions_used: &mut self.expressions_used,
             global_expressions_used: Some(&mut self.global_expressions_used),
+            visited_from: usize::MAX,
+            forward_refs: &mut self.forward_refs,
+        }
+    }
+}
+
+impl From<FunctionTracer<'_>> for FunctionMap {
+    fn from(used: FunctionTracer) -> Self {
+        if used.forward_refs.seen {
+            let (expressions, reorder) = Reorder::new(used.function, &used.expressions_used);
+            FunctionMap {
+                expressions,
+                reorder: Some(reorder),
+            }
+        } else {
+            FunctionMap {
+                expressions: HandleMap::from_set(used.expressions_used),
+                reorder: None,
+            }
         }
     }
 }
@@ -97,15 +121,25 @@ impl FunctionMap {
             }
         }
 
-        // Drop unused expressions, reusing existing storage.
-        function.expressions.retain_mut(|handle, expr| {
-            if self.expressions.used(handle) {
-                module_map.adjust_expression(expr, &self.expressions);
-                true
-            } else {
-                false
+        match self.reorder {
+            None => {
+                // Drop unused expressions, reusing existing storage.
+                function.expressions.retain_mut(|handle, expr| {
+                    if self.expressions.used(handle) {
+                        module_map.adjust_expression(expr, &self.expressions);
+                        true
+                    } else {
+                        false
+                    }
+                });
             }
-        });
+            Some(ref reorder) => {
+                log::trace!("reordering expressions of {:?}", function.name);
+                reorder.rebuild(&mut function.expressions, |expr| {
+                    module_map.adjust_expression(expr, &self.expressions);
+                });
+            }
+        }
 
         // Adjust named expressions.
         for (mut handle, name) in function.named_expressions.drain(..) {
