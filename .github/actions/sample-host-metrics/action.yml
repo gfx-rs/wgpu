@@ -1,20 +1,34 @@
 name: "Sample host metrics"
-description: "Start a background sampler that records host performance counters to a CSV."
+description: "Record host information, then start a background sampler that records host performance counters."
 inputs:
-  output:
-    description: "Path of the CSV file to write."
+  output-dir:
+    description: "Directory to write the host information and samples to."
     required: true
+  abort-on-bad-host:
+    description: "Kill cargo when the sampler judges the host unsuitable while the watchdog is armed."
+    default: "false"
 runs:
   using: "composite"
   steps:
     - shell: pwsh
       env:
-        INPUTS_OUTPUT: ${{ inputs.output }}
+        ACTION_PATH: ${{ github.action_path }}
+        INPUTS_OUTPUT_DIR: ${{ inputs.output-dir }}
+        INPUTS_ABORT_ON_BAD_HOST: ${{ inputs.abort-on-bad-host }}
       run: |
-        Start-Process pwsh -WindowStyle Hidden -ArgumentList @(
+        New-Item -ItemType Directory -Force -Path $env:INPUTS_OUTPUT_DIR | Out-Null
+        & "$env:ACTION_PATH/host-info.ps1" -Output (Join-Path $env:INPUTS_OUTPUT_DIR "host-info.txt")
+        # The host information is best effort, so don't let its commands fail the step.
+        $global:LASTEXITCODE = 0
+
+        $arguments = @(
             "-NoProfile"
             "-File"
-            "${{ github.action_path }}/sample.ps1"
-            "-Output"
-            $env:INPUTS_OUTPUT
+            "$env:ACTION_PATH/sample.ps1"
+            "-OutputDir"
+            $env:INPUTS_OUTPUT_DIR
         )
+        if ($env:INPUTS_ABORT_ON_BAD_HOST -eq "true") {
+            $arguments += "-AbortOnBadHost"
+        }
+        Start-Process pwsh -WindowStyle Hidden -ArgumentList $arguments
