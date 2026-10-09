@@ -193,7 +193,7 @@ impl StagingBelt {
             "StagingBelt allocation size {size} must be a multiple of `COPY_BUFFER_ALIGNMENT`"
         );
         assert!(
-            alignment.get().is_power_of_two(),
+            alignment.is_power_of_two(),
             "alignment must be a power of two, not {alignment}"
         );
         // At minimum, we must have alignment sufficient to map the buffer.
