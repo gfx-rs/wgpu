@@ -776,7 +776,11 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 16] = [
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 17] = [
+    (
+        wgt::Features::CORE_FEATURES_AND_LIMITS,
+        webgpu_sys::GpuFeatureName::CoreFeaturesAndLimits,
+    ),
     (
         wgt::Features::BGRA8UNORM_STORAGE,
         webgpu_sys::GpuFeatureName::Bgra8unormStorage,

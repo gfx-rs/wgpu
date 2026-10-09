@@ -244,7 +244,8 @@ pub fn apply_limit_buckets(mut raw: hal::DynExposedAdapter) -> Option<hal::DynEx
 /// at that point neither excluding the tier1 formats from WebIDL entirely nor allowing
 /// content to use them on a device that doesn't have the feature enabled will be
 /// acceptable. See <https://github.com/gfx-rs/wgpu/issues/8122>.
-pub(crate) const EXEMPT_FEATURES: Features = Features::EXTERNAL_TEXTURE
+pub(crate) const EXEMPT_FEATURES: Features = Features::CORE_FEATURES_AND_LIMITS
+    .union(Features::EXTERNAL_TEXTURE)
     .union(Features::TEXTURE_FORMAT_NV12)
     .union(Features::TEXTURE_FORMAT_P010)
     .union(Features::TEXTURE_FORMAT_16BIT_NORM);
@@ -332,7 +333,8 @@ const UPLEVEL: Bucket = Bucket {
         subgroup_min_size: 4,
         subgroup_max_size: 128,
     },
-    features: Features::DEPTH_CLIP_CONTROL
+    features: Features::CORE_FEATURES_AND_LIMITS
+        .union(Features::DEPTH_CLIP_CONTROL)
         .union(Features::DEPTH32FLOAT_STENCIL8)
         // omit TEXTURE_COMPRESSION_ASTC
         // omit TEXTURE_COMPRESSION_ASTC_SLICED_3D
@@ -558,7 +560,8 @@ mod tests {
     #[test]
     fn enumerate_webgpu_features() {
         let difference = Features::all_webgpu_mask().difference(
-            Features::DEPTH_CLIP_CONTROL
+            Features::CORE_FEATURES_AND_LIMITS
+                .union(Features::DEPTH_CLIP_CONTROL)
                 .union(Features::DEPTH32FLOAT_STENCIL8)
                 .union(Features::TEXTURE_COMPRESSION_ASTC)
                 .union(Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
