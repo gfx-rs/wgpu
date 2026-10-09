@@ -236,7 +236,7 @@ pub(super) fn flush_bindings_helper(
             .used
             .acceleration_structures
             .into_iter()
-            .map(|tlas| crate::ray_tracing::AsAction::UseTlas(tlas.clone()));
+            .map(|tlas| crate::ray_tracing::AsAction::BindTlas(tlas.clone()));
 
         state.base.as_actions.extend(used_resource);
 

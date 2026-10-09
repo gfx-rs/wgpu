@@ -65,6 +65,13 @@ pub struct TlasInstance {
     /// Mask for the instance used inside the shader to filter instances.
     /// Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`.
     pub mask: u8,
+    /// Intersection group index into a ray tracing pipeline. Must be less than the number of intersection groups in any ray tracing
+    /// pipeline a tlas built with this is used for. This can be read in ray queries. If this field is non-zero,
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`] must be enabled. This must only use the lower 24 bits, if any bits are
+    /// outside that range (byte 4 does not equal 0) the TlasInstance becomes invalid and generates a validation error when built.
+    ///
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_PIPELINES`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_PIPELINES
+    pub intersection_index: u32,
 }
 
 impl TlasInstance {
@@ -73,18 +80,26 @@ impl TlasInstance {
     /// - transform: Transform buffer offset in bytes (optional, required if transform buffer is present)
     /// - custom_data: Custom index for the instance used inside the shader (max 24 bits)
     /// - mask: Mask for the instance used inside the shader to filter instances
+    /// - intersection_index: Either an index into an intersection group in a ray tracing pipeline or data for ray queries
     ///
     /// Note: while one of these contains a reference to a BLAS that BLAS will not be dropped,
     /// but it can still be destroyed. Destroying a BLAS that is referenced by one or more
     /// TlasInstance(s) will immediately make them invalid. If one or more of those invalid
     /// TlasInstances is inside a TlasPackage that is attempted to be built, the build will
     /// generate a validation error.
-    pub fn new(blas: &Blas, transform: [f32; 12], custom_data: u32, mask: u8) -> Self {
+    pub fn new(
+        blas: &Blas,
+        transform: [f32; 12],
+        custom_data: u32,
+        mask: u8,
+        intersection_index: u32,
+    ) -> Self {
         Self {
             blas: blas.inner.clone(),
             transform,
             custom_data,
             mask,
+            intersection_index,
         }
     }
 
