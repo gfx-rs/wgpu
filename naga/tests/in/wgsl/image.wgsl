@@ -144,6 +144,10 @@ fn texture_sample() -> @location(0) vec4<f32> {
     a += textureSample(image_cube_array, sampler_reg, tc3, 0);
     a += textureSampleLevel(image_cube_array, sampler_reg, tc3, 0, level);
     a += textureSampleBias(image_cube_array, sampler_reg, tc3, 0, 2.0);
+    a += textureSampleGrad(image_2d, sampler_reg, tc, tc, tc);
+    a += textureSampleGrad(image_3d, sampler_reg, tc3, tc3, tc3);
+    a += textureSampleGrad(image_cube, sampler_reg, tc3, tc3, tc3);
+    a += textureSampleGrad(image_cube_array, sampler_reg, tc3, 0u, tc3, tc3);
     return a;
 }
 

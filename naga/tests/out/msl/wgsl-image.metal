@@ -133,7 +133,9 @@ fragment texture_sampleOutput texture_sample(
   metal::texture1d<float, metal::access::sample> image_1d [[user(fake0)]]
 , metal::texture2d<float, metal::access::sample> image_2d [[user(fake0)]]
 , metal::texture2d_array<float, metal::access::sample> image_2d_array [[user(fake0)]]
+, metal::texturecube<float, metal::access::sample> image_cube [[user(fake0)]]
 , metal::texturecube_array<float, metal::access::sample> image_cube_array [[user(fake0)]]
+, metal::texture3d<float, metal::access::sample> image_3d [[user(fake0)]]
 , metal::sampler sampler_reg [[user(fake0)]]
 ) {
     metal::float4 a = {};
@@ -210,7 +212,19 @@ fragment texture_sampleOutput texture_sample(
     metal::float4 _e146 = image_cube_array.sample(sampler_reg, _e3, 0, metal::bias(2.0));
     a = _e141 + _e146;
     metal::float4 _e148 = a;
-    return texture_sampleOutput { _e148 };
+    metal::float4 _e151 = image_2d.sample(sampler_reg, _e1, metal::gradient2d(_e1, _e1));
+    a = _e148 + _e151;
+    metal::float4 _e153 = a;
+    metal::float4 _e156 = image_3d.sample(sampler_reg, _e3, metal::gradient3d(_e3, _e3));
+    a = _e153 + _e156;
+    metal::float4 _e158 = a;
+    metal::float4 _e161 = image_cube.sample(sampler_reg, _e3, metal::gradientcube(_e3, _e3));
+    a = _e158 + _e161;
+    metal::float4 _e163 = a;
+    metal::float4 _e167 = image_cube_array.sample(sampler_reg, _e3, 0u, metal::gradientcube(_e3, _e3));
+    a = _e163 + _e167;
+    metal::float4 _e169 = a;
+    return texture_sampleOutput { _e169 };
 }
 
 

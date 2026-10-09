@@ -342,7 +342,19 @@ float4 texture_sample() : SV_Target0
     float4 _e146 = image_cube_array.SampleBias(sampler_reg, float4(_e3, int(0)), 2.0);
     a = (_e141 + _e146);
     float4 _e148 = a;
-    return _e148;
+    float4 _e151 = image_2d.SampleGrad(sampler_reg, _e1, _e1, _e1);
+    a = (_e148 + _e151);
+    float4 _e153 = a;
+    float4 _e156 = image_3d.SampleGrad(sampler_reg, _e3, _e3, _e3);
+    a = (_e153 + _e156);
+    float4 _e158 = a;
+    float4 _e161 = image_cube.SampleGrad(sampler_reg, _e3, _e3, _e3);
+    a = (_e158 + _e161);
+    float4 _e163 = a;
+    float4 _e167 = image_cube_array.SampleGrad(sampler_reg, float4(_e3, 0u), _e3, _e3);
+    a = (_e163 + _e167);
+    float4 _e169 = a;
+    return _e169;
 }
 
 float texture_sample_comparison() : SV_Target0
