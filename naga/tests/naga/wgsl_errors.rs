@@ -1703,25 +1703,16 @@ fn invalid_arrays() {
         naga::valid::Capabilities::SHADER_INT64
     }
 
-    check_validation! {
-        r#"
-            fn main() -> f32 {
-                let a = array<f32, 3>(0., 1., 2.);
-                return a[-1];
-            }
-        "#:
-        Err(
-            naga::valid::ValidationError::Function {
-                name,
-                source: naga::valid::FunctionError::Expression {
-                    source: naga::valid::ExpressionError::NegativeIndex(_),
-                    ..
-                },
-                ..
-            }
-        )
-            if name == "main"
-    }
+    check(
+        "fn main() -> f32 { let a = array<f32, 3>(0., 1., 2.); return a[-1]; }",
+        r###"error: must be non-negative (>= 0)
+  ┌─ wgsl:1:64
+  │
+1 │ fn main() -> f32 { let a = array<f32, 3>(0., 1., 2.); return a[-1]; }
+  │                                                                ^^ must be non-negative
+
+"###,
+    );
 
     check(
         "alias Bad = array<f32, true>;",
@@ -2637,6 +2628,45 @@ fn valid_access() {
         }
         ":
         Ok(_)
+    }
+}
+
+#[test]
+fn const_index_out_of_bounds() {
+    check_error_matches("const x = array(1, 2, 3)[-1];", "must be non-negative");
+    check_error_matches(
+        "fn f() { const x = array(1, 2, 3)[-1]; }",
+        "must be non-negative",
+    );
+    check_error_matches(
+        "fn f() -> f32 { return vec2<f32>()[-1]; }",
+        "must be non-negative",
+    );
+    check_error_matches(
+        "@group(0) @binding(0) var<storage> s: array<u32>;
+        fn f() -> u32 { return s[-1]; }",
+        "must be non-negative",
+    );
+
+    check_error_matches(
+        "fn f() -> f32 { const i = 2; var v = vec2<f32>(); return v[i]; }",
+        "out of bounds",
+    );
+    check_validation! {
+        "
+        fn f() -> f32 {
+            const i = 2;
+            var a = array<f32, 2>();
+            return a[i];
+        }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::Expression {
+                source: naga::valid::ExpressionError::IndexOutOfBounds(_, 2),
+                ..
+            },
+            ..
+        })
     }
 }
 
