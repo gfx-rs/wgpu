@@ -135,7 +135,7 @@ impl<'a, T: ?Sized> WriteOnly<'a, T> {
     /// For slices, use [`copy_from_slice()`][Self::copy_from_slice] or
     /// [`write_iter()`][Self::write_iter] instead.
     #[inline]
-    pub fn write(self, value: T)
+    pub const fn write(self, value: T)
     where
         // Ideally, we want "does not have a destructor" to avoid any need for dropping (which
         // would imply reading) or forgetting the values that write operations overwrite.
@@ -149,7 +149,7 @@ impl<'a, T: ?Sized> WriteOnly<'a, T> {
         // Not forgetting values:
         // `T` is `Copy`, so overwriting the old value of `*self.ptr` is trivial and does not
         // forget anything.
-        unsafe { self.ptr.write_volatile(value) }
+        unsafe { self.ptr.as_ptr().write_volatile(value) }
     }
 
     /// Returns a raw pointer to the memory this [`WriteOnly`] refers to.
@@ -327,8 +327,11 @@ impl<'a, T> WriteOnly<'a, [T]> {
     #[inline]
     pub fn fill(&mut self, value: T)
     where
-        T: Copy,
+        T: Copy + 'static,
     {
+        // Ideally this would be a “volatile memset” operation when T is one byte,
+        // but Rust’s standard library does not offer that yet.
+
         self.slice(..)
             .into_iter()
             .for_each(|elem| elem.write(value));
@@ -885,6 +888,25 @@ mod tests {
 
     /// Test that we can construct an empty `WriteOnly` in const eval.
     const _: WriteOnly<'static, [u8]> = WriteOnly::from_mut(&mut []);
+
+    /// Test that we can use a non-empty `WriteOnly` in const eval.
+    #[test]
+    fn const_write() {
+        let output = const {
+            let mut array = [0u8; 4];
+            let mut wo = WriteOnly::from_mut(array.as_mut_slice());
+
+            // We can't use iterators in const yet, but we can do this.
+            wo.split_off_first().unwrap().write(1);
+            wo.split_off_first().unwrap().write(2);
+            wo.split_off_first().unwrap().write(3);
+            wo.split_off_first().unwrap().write(4);
+
+            array
+        };
+
+        assert_eq!(output, [1, 2, 3, 4]);
+    }
 
     #[test]
     #[should_panic = "iterator given to write_iter() produced 3 elements but must produce 4 elements"]
