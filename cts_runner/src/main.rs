@@ -58,7 +58,7 @@ pub async fn run() -> Result<(), AnyError> {
         log::info!(
             "Environment variable `{}` is set to `{}`.",
             deno_webgpu::STRICT_COMPLIANCE_ENV_VAR,
-            &val.to_string_lossy(),
+            val.to_string_lossy(),
         );
     } else {
         log::info!(
