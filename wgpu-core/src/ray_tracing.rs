@@ -270,7 +270,7 @@ pub enum ValidateAsActionsError {
     #[error("Tlas {0:?} has an intersection index {1:?} out of bounds of the length of the intersection array {2:?}")]
     TlasIntersectionInvalid(ResourceErrorIdent, u32, u32),
 
-    #[error("An instance Tlas {0:?} requires an intersection type of {1:?} for index {2}, but got {3:?}")]
+    #[error("An instance of Tlas {0:?} requires an intersection type of {1:?} for index {2}, but got {3:?}")]
     TlasInstancesIntersectionIndicesDiffer(
         ResourceErrorIdent,
         crate::ray_tracing_pipeline::RayTracingIntersectionType,
