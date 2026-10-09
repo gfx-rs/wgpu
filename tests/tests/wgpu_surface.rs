@@ -7,21 +7,24 @@
 //! For web, this is covered by an ordinary gpu test,
 //! `tests/tests/wgpu-gpu/surface_configure_web.rs`.
 //!
-//! This test:
-//!  - only builds for native platforms,
-//!  - does not build for iOS/tvOS/watchOS,
+//! This test only supports environments where creating a window and running
+//! integration tests is readily supported, meaning it:
+//!  - does not build for wasm,
+//!  - does not build for iOS, tvOS, watchOS, or Android,
 //!  - marks itself as "ignored" on Linux if none of `WAYLAND_DISPLAY`, `WAYLAND_SOCKET`, or
 //!    `DISPLAY` is set.
 
 #[cfg(any(
     target_arch = "wasm32",
-    all(target_vendor = "apple", not(target_os = "macos"))
+    all(target_vendor = "apple", not(target_os = "macos")),
+    target_os = "android",
 ))]
 fn main() {}
 
 #[cfg(all(
     not(target_arch = "wasm32"),
-    any(not(target_vendor = "apple"), target_os = "macos")
+    any(not(target_vendor = "apple"), target_os = "macos"),
+    not(target_os = "android"),
 ))]
 fn main() {
     native::main();
@@ -29,7 +32,8 @@ fn main() {
 
 #[cfg(all(
     not(target_arch = "wasm32"),
-    any(not(target_vendor = "apple"), target_os = "macos")
+    any(not(target_vendor = "apple"), target_os = "macos"),
+    not(target_os = "android"),
 ))]
 mod native {
     use std::sync::Arc;
@@ -56,7 +60,14 @@ mod native {
             if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 surface_configure(window, display_handle)
             })) {
-                self.failure = Some(format!("{e:?}"));
+                let message = if let Some(s) = e.downcast_ref::<&str>() {
+                    (*s).to_owned()
+                } else if let Some(s) = e.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "panic with non-string payload".to_owned()
+                };
+                self.failure = Some(message);
             }
             event_loop.exit();
         }
@@ -102,30 +113,33 @@ mod native {
         config.height = 512;
         surface.configure(&device, &config);
 
-        if let wgpu::CurrentSurfaceTexture::Success(frame) = surface.get_current_texture() {
-            let view = frame
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
-            let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-            enc.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            queue.submit(Some(enc.finish()));
-            queue.present(frame);
-        }
+        let current = surface.get_current_texture();
+        let wgpu::CurrentSurfaceTexture::Success(frame) = current else {
+            panic!("Unexpected get_current_texture result: {:?}", current);
+        };
+
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        queue.submit(Some(enc.finish()));
+        queue.present(frame);
     }
 
     pub fn main() {

@@ -13,22 +13,25 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(SURFACE_CONFIGURE);
 }
 
-/// Configure a canvas surface, reconfigure it at a new size, then acquire,
-/// render to, and present a frame.
+/// Configure a canvas surface and then reconfigure it at a new size.
 ///
-/// Mirrors the native `surface_configure` test in `tests/tests/wgpu-surface.rs`.
+/// Similar to the native `surface_configure` test in `tests/tests/wgpu-surface.rs`,
+/// but doesn't do any rendering.
 #[apply(gpu_test!)]
 static SURFACE_CONFIGURE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(wgpu_test::TestParameters::default())
-    .run_async(|_ctx| async move {
+    .run_async(|ctx| async move {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = ctx;
         #[cfg(target_arch = "wasm32")]
         {
             // Not using the normal testing infrastructure: it creates a canvas for
             // adapter initialization but never exposes the resulting surface, and on
             // WebGL a surface is bound to its own canvas' context, so we cannot pair a
-            // fresh canvas with the context's device.
+            // fresh canvas with the context's device. Instead, mirror the harness'
+            // backend, features, and limits.
             let instance = wgpu_test::initialize_instance(
-                wgpu::Backends::all(),
+                wgpu::Backends::from(ctx.adapter_info.backend),
                 &wgpu_test::TestParameters::default(),
             );
             let canvas = wgpu_test::initialize_html_canvas();
@@ -48,9 +51,8 @@ static SURFACE_CONFIGURE: GpuTestConfiguration = GpuTestConfiguration::new()
             let (device, _queue) = adapter
                 .request_device(&wgpu::DeviceDescriptor {
                     label: None,
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_webgl2_defaults()
-                        .using_resolution(adapter.limits()),
+                    required_features: ctx.device_features,
+                    required_limits: ctx.device_limits.clone(),
                     default_queue: wgpu::QueueDescriptor { label: None },
                     experimental_features: wgpu::ExperimentalFeatures::disabled(),
                     memory_hints: wgpu::MemoryHints::MemoryUsage,
