@@ -40,6 +40,7 @@ This is a table of contents, in the form of the repository's directory structure
   - [compile](#wgpu-compile-tests)
   - [dependency](#wgpu-dependency-tests)
   - [gpu](#wgpu-gpu-tests)
+  - [surface](#wgpu-surface-tests)
   - [trace](#wgpu-trace-tests)
   - [validation](#wgpu-validation-tests)
 
@@ -208,6 +209,17 @@ management for tests that are expected to fail due to driver or wgpu bugs.
 Normal `#[test]`s will not be found in this test crate, as we use a custom harness.
 
 See also the [example tests](#example-tests) for additional GPU tests.
+
+## `wgpu` Surface Tests
+
+- Located in: `tests/tests/wgpu_surface.rs`
+- Run with `cargo nextest run --test wgpu_surface`
+- Use the standard `#[test]` harness.
+
+These tests exercise configuration of a presentation surface in a real window.
+Because they interact with the window system, they are not compatible with
+the regular GPU test harness, do not build for wasm or mobile targets, and
+are skipped on headless Linux systems.
 
 ## `wgpu` Trace Tests
 
