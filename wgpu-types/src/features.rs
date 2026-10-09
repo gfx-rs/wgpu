@@ -556,6 +556,7 @@ crate::bitflags_array! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
+        /// - Metal (simulated)
         ///
         /// This is a native only feature.
         ///
@@ -567,6 +568,7 @@ crate::bitflags_array! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
+        /// - Metal
         ///
         /// This is a native only feature.
         ///
