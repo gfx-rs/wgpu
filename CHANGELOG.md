@@ -146,6 +146,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### Hal
 
+- Add DMA-BUF format/modifier and DRM device queries for the GLES and Vulkan HALs, and GLES DMA-BUF texture import.
 - Add `BufferBinding::buffer`, a public read accessor for the bound buffer, which was previously inaccessible to out-of-tree `wgpu_hal::Api` implementations. By @danlehmann in [#9820](https://github.com/gfx-rs/wgpu/pull/9820).
 - Allow specifying a queue family ownership transfer when transitioning a texture. `hal::TextureBarrier` gained an optional `queue_family_ownership_transfer` field (honored only by the Vulkan backend) so that images imported from external memory can be acquired from and released back to the queue family of an external or foreign owner, described by the new `hal::QueueFamily` enum. Resolves [#2948](https://github.com/gfx-rs/wgpu/issues/2948). By @alexander-bruun in [#9668](https://github.com/gfx-rs/wgpu/pull/9668).
 - Add `wgpu_hal::vulkan::Surface::set_next_present_chain`, which attaches a caller-provided `pNext` chain to the `VkPresentInfoKHR` of the surface's next presentation. With `Adapter::open_with_callback` to enable the device extension, this supports presentation extensions wgpu has no dedicated support for, such as [VK_NV_present_metering](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_present_metering.html) for metering the display timing of frame-generation frames. By @stuartparmenter in [#9847](https://github.com/gfx-rs/wgpu/pull/9847).
@@ -260,6 +261,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### Vulkan
 
+- Fix empty pipeline stage masks in the Vulkan HAL's `transition_textures` when acquiring textures from or releasing them to an external or foreign queue family. Empty source masks on acquire now use `TOP_OF_PIPE`, and empty destination masks on release use `BOTTOM_OF_PIPE`, allowing DMA-BUF ownership transfers through the existing HAL API. Nonempty masks and transfers between explicit queue families are unchanged. See [#10522](https://github.com/gfx-rs/wgpu/pull/10522).
 - Fix `HalCounters::textures` drifting negative: `create_texture` never incremented it while `destroy_texture` always decremented it. By @dustyleary in [#10022](https://github.com/gfx-rs/wgpu/pull/10022).
 - Work around Arm proprietary drivers ignoring negative viewport heights, which flipped every render pass vertically. On these drivers, Y is now flipped in the vertex shader. By @lexoliu in [#10058](https://github.com/gfx-rs/wgpu/pull/10058).
 - Fix `VUID-VkImageViewCreateInfo-image-04441` validation errors when creating a view of a texture whose only usages are `COPY_SRC` and/or `COPY_DST`. By @MannXo in [#10200](https://github.com/gfx-rs/wgpu/issues/10200).

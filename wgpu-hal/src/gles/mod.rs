@@ -85,6 +85,12 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+
+#[cfg(all(unix, native))]
+mod dmabuf;
+#[cfg(all(unix, native))]
+pub use dmabuf::{DmabufFormat, DmabufModifier};
+
 ///cbindgen:ignore
 #[cfg(all(not(webgl), any(not(windows), windows_angle)))]
 mod egl;
@@ -335,6 +341,8 @@ pub struct Adapter {
 #[derive(Debug)]
 pub struct Device {
     shared: Arc<AdapterShared>,
+    #[cfg(all(unix, native))]
+    features: wgt::Features,
     main_vao: glow::VertexArray,
     #[cfg(all(native, feature = "renderdoc"))]
     render_doc: crate::auxil::renderdoc::RenderDoc,
@@ -461,8 +469,19 @@ impl TextureInner {
 }
 
 #[derive(Debug)]
+pub enum TextureBacking {
+    /// Ordinary GL allocation without additional backing objects.
+    Gl,
+
+    /// GL texture backed by an imported dmabuf as EGLImage.
+    #[cfg(all(unix, native))]
+    Dmabuf(dmabuf::DmabufImage),
+}
+
+#[derive(Debug)]
 pub struct Texture {
     pub inner: TextureInner,
+    pub backing: TextureBacking,
     pub mip_level_count: u32,
     pub array_layer_count: u32,
     pub format: wgt::TextureFormat,
@@ -494,6 +513,7 @@ impl Texture {
     pub fn default_framebuffer(format: wgt::TextureFormat) -> Self {
         Self {
             inner: TextureInner::DefaultRenderbuffer,
+            backing: TextureBacking::Gl,
             drop_guard: None,
             mip_level_count: 1,
             array_layer_count: 1,

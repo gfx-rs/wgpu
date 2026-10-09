@@ -29,6 +29,10 @@ mod command;
 pub mod conv;
 mod descriptor;
 mod device;
+#[cfg(unix)]
+mod dmabuf;
+#[cfg(unix)]
+pub use dmabuf::{DmabufFormat, DmabufModifier};
 mod drm;
 mod instance;
 mod memory;
