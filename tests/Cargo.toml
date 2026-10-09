@@ -31,7 +31,7 @@ name = "wgpu-validation"
 harness = true
 
 [[test]]
-name = "wgpu-surface"
+name = "wgpu_surface"
 harness = false
 
 [features]
