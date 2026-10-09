@@ -8435,10 +8435,10 @@ mod workgroup_mem_init {
         ) -> Result<(), core::fmt::Error> {
             match *self {
                 Access::GlobalVariable(handle) => {
-                    write!(writer, "{}", &names[&NameKey::GlobalVariable(handle)])
+                    write!(writer, "{}", names[&NameKey::GlobalVariable(handle)])
                 }
                 Access::StructMember(handle, index) => {
-                    write!(writer, ".{}", &names[&NameKey::StructMember(handle, index)])
+                    write!(writer, ".{}", names[&NameKey::StructMember(handle, index)])
                 }
                 Access::Array(depth) => write!(writer, ".{WRAPPED_ARRAY_FIELD}[__i{depth}]"),
             }
