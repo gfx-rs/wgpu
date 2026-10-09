@@ -396,6 +396,9 @@ impl crate::Device for Context {
         Ok(Resource)
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: Resource) {}
+    unsafe fn get_compute_pipeline_subgroup_size(&self, pipeline: &Resource) -> Option<u32> {
+        None
+    }
     unsafe fn create_ray_tracing_pipeline(
         &self,
         desc: &crate::RayTracingPipelineDescriptor<Resource, Resource, Resource>,

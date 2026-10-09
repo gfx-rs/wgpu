@@ -101,6 +101,7 @@ pub trait DynBindGroupLayout: DynResource + fmt::Debug {}
 pub trait DynBuffer: DynResource + fmt::Debug {}
 pub trait DynCommandBuffer: DynResource + fmt::Debug {}
 pub trait DynComputePipeline: DynResource + fmt::Debug {}
+
 pub trait DynFence: DynResource + fmt::Debug {}
 pub trait DynPipelineCache: DynResource + fmt::Debug {}
 pub trait DynPipelineLayout: DynResource + fmt::Debug {}

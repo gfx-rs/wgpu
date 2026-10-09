@@ -600,6 +600,13 @@ impl ComputePipeline {
         };
         bgl
     }
+
+    pub fn get_subgroup_size(self: &Arc<Self>) -> Option<u32> {
+        self.raw().ok().and_then(|pipeline| {
+            let device = self.device.raw();
+            unsafe { device.get_compute_pipeline_subgroup_size(pipeline) }
+        })
+    }
 }
 
 #[derive(Clone, Debug, Error)]
