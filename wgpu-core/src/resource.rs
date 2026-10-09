@@ -3593,7 +3593,7 @@ pub struct Tlas {
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
     pub(crate) built_index: RwLock<Option<NonZeroU64>>,
     pub(crate) dependencies: RwLock<Vec<Arc<Blas>>>,
-    pub(crate) max_intersection_index: RwLock<u32>,
+    pub(crate) max_intersection_index: RwLock<Option<u32>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
@@ -3654,7 +3654,7 @@ impl Tlas {
             built_index: RwLock::new(rank::TLAS_BUILT_INDEX, None),
             dependencies: RwLock::new(rank::TLAS_DEPENDENCIES, Vec::new()),
             device,
-            max_intersection_index: RwLock::new(rank::TLAS_MAX_INTERSECTION_IDX, 0),
+            max_intersection_index: RwLock::new(rank::TLAS_MAX_INTERSECTION_IDX, None),
             required_intersection_types: RwLock::new(
                 rank::TLAS_REQUIRED_INTERSECTION_TYPES,
                 Vec::new(),

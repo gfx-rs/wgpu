@@ -78,7 +78,7 @@ impl super::CommandEncoder {
                     build_command.tlas_s_built.push(TlasBuild {
                         tlas,
                         dependencies: Vec::new(),
-                        max_intersection_idx: 0,
+                        max_intersection_idx: None,
                         required_intersection_types: Vec::new(),
                     });
                 }
@@ -243,7 +243,7 @@ pub(crate) fn build_acceleration_structures(
 
         let mut instance_count = 0;
 
-        let mut max_intersection_idx = 0;
+        let mut max_intersection_idx = None;
         for (instance_idx, instance) in mem::take(&mut package.instances)
             .into_iter()
             .enumerate()
@@ -256,7 +256,9 @@ pub(crate) fn build_acceleration_structures(
                 ));
             }
 
-            max_intersection_idx = max_intersection_idx.max(instance.intersection_index);
+            let max_intersection_idx = max_intersection_idx.get_or_insert(0);
+
+            *max_intersection_idx = (*max_intersection_idx).max(instance.intersection_index);
 
             let blas = instance.blas;
             let is_new_dependency = seen_dependencies.insert(blas.tracker_index());
@@ -607,12 +609,15 @@ impl CommandBufferMutable {
 
                     let max_intersection_len = u32::try_from(intersection_types.len())
                         .expect("should be smaller than a u32");
-                    if *current_max >= max_intersection_len {
-                        return Err(ValidateAsActionsError::TlasIntersectionInvalid(
-                            tlas.error_ident(),
-                            *current_max,
-                            max_intersection_len,
-                        ));
+
+                    if let Some(current_max) = *current_max {
+                        if current_max >= max_intersection_len {
+                            return Err(ValidateAsActionsError::TlasIntersectionInvalid(
+                                tlas.error_ident(),
+                                current_max,
+                                max_intersection_len,
+                            ));
+                        }
                     }
                     drop(current_max);
 

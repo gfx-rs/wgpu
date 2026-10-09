@@ -349,7 +349,7 @@ pub struct TlasPackage<'a, Tlas = Arc<resource::Tlas>, Blas = Arc<resource::Blas
 pub(crate) struct TlasBuild {
     pub tlas: Arc<Tlas>,
     pub dependencies: Vec<Arc<Blas>>,
-    pub max_intersection_idx: u32,
+    pub max_intersection_idx: Option<u32>,
     pub required_intersection_types: Vec<resource::TlasIntersectionType>,
 }
 
