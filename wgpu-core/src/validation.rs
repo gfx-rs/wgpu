@@ -515,10 +515,29 @@ impl WebGpuError for InputError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum StageError {
+    #[error("Unable to find entry point {0:?}")]
+    NoEntryPointWithName(String),
+    #[error("Unable to find entry point '{name}' for stage `{stage:?}`")]
+    NoEntryPointWithNameForStage {
+        name: String,
+        stage: naga::ShaderStage,
+    },
+    #[error(
+        "Unable to select an entry point: no entry points found in the provided shader module"
+    )]
+    NoEntryPoints,
+    #[error("No entry point found for stage `{0:?}`")]
+    NoEntryPointForStage(naga::ShaderStage),
+    #[error(
+        "Unable to select an entry point: \
+        multiple entry points were found in the provided shader module, \
+        but no entry point was specified"
+    )]
+    AmbiguousEntryPoint,
+    #[error("More than one entry point present in module for stage `{0:?}`, entry point name must be provided")]
+    AmbiguousEntryPointForStage(naga::ShaderStage),
     #[error(transparent)]
     InvalidWorkgroupSize(#[from] InvalidWorkgroupSizeError),
-    #[error("Unable to find entry point '{0}'")]
-    MissingEntryPoint(String),
     #[error("Shader global {0:?} is not available in the pipeline layout")]
     Binding(naga::ResourceBinding, #[source] BindingError),
     #[error("Unable to filter the texture ({texture:?}) by the sampler ({sampler:?})")]
@@ -535,16 +554,6 @@ pub enum StageError {
         #[source]
         error: InputError,
     },
-    #[error(
-        "Unable to select an entry point: no entry point was found in the provided shader module"
-    )]
-    NoEntryPointFound,
-    #[error(
-        "Unable to select an entry point: \
-        multiple entry points were found in the provided shader module, \
-        but no entry point was specified"
-    )]
-    MultipleEntryPointsFound,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(
@@ -648,10 +657,13 @@ impl WebGpuError for StageError {
                 var: _,
                 error,
             } => error.webgpu_error_type(),
-            Self::InvalidWorkgroupSize { .. }
-            | Self::MissingEntryPoint(..)
-            | Self::NoEntryPointFound
-            | Self::MultipleEntryPointsFound
+            Self::NoEntryPointWithName { .. }
+            | Self::NoEntryPointWithNameForStage { .. }
+            | Self::NoEntryPoints
+            | Self::NoEntryPointForStage(_)
+            | Self::AmbiguousEntryPoint
+            | Self::AmbiguousEntryPointForStage(_)
+            | Self::InvalidWorkgroupSize { .. }
             | Self::VertexOutputLocationTooLarge { .. }
             | Self::TooManyUserDefinedVertexOutputs { .. }
             | Self::FragmentInputLocationTooLarge { .. }
@@ -1521,22 +1533,35 @@ impl Interface {
         stage: naga::ShaderStage,
         entry_point_name: Option<&str>,
     ) -> Result<String, StageError> {
-        entry_point_name
-            .map(|ep| ep.to_string())
-            .map(Ok)
-            .unwrap_or_else(|| {
-                let mut entry_points =
-                    self.entry_points
-                        .keys()
-                        .filter_map(|EntryPointKey(ep_stage, name)| {
-                            (ep_stage == &stage).then_some(name)
-                        });
-                let first = entry_points.next().ok_or(StageError::NoEntryPointFound)?;
-                if entry_points.next().is_some() {
-                    return Err(StageError::MultipleEntryPointsFound);
+        match entry_point_name {
+            Some(name) => {
+                // Ensure that there is an entry point for `stage` with the
+                // given name, and return the name.
+                let key = EntryPointKey(stage, name.to_string());
+                if !self.entry_points.contains_key(&key) {
+                    return Err(StageError::NoEntryPointWithNameForStage {
+                        stage,
+                        name: name.to_string(),
+                    });
                 }
-                Ok(first.clone())
-            })
+                Ok(key.1)
+            }
+            None => {
+                // Ensure that there is exactly one entry point for `stage`, and
+                // return its name.
+                let mut entry_points = self
+                    .entry_points
+                    .keys()
+                    .filter(|&&EntryPointKey(key_stage, _)| key_stage == stage);
+                let Some(EntryPointKey(_, first_name)) = entry_points.next() else {
+                    return Err(StageError::NoEntryPointForStage(stage));
+                };
+                if entry_points.next().is_some() {
+                    return Err(StageError::AmbiguousEntryPointForStage(stage));
+                }
+                Ok(first_name.clone())
+            }
+        }
     }
 
     /// Analyze and validate an entry point for use as a given shader stage.
@@ -1574,7 +1599,12 @@ impl Interface {
         let pair = EntryPointKeyRef(shader_stage.to_naga(), entry_point_name);
         let entry_point = match self.entry_points.get(&pair) {
             Some(some) => some,
-            None => return Err(StageError::MissingEntryPoint(pair.1.to_string())),
+            None => {
+                return Err(StageError::NoEntryPointWithNameForStage {
+                    name: pair.1.to_string(),
+                    stage: shader_stage.to_naga(),
+                })
+            }
         };
         let EntryPointKeyRef(_, entry_point_name) = pair;
 
