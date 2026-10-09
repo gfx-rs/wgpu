@@ -397,6 +397,7 @@ pub(crate) enum Error<'a> {
     InvalidAtomicOperandType(Span),
     InvalidAtomicAccess(Span),
     InvalidRayQueryPointer(Span),
+    InvalidHitObjectPointer(Span),
     NotPointer(Span),
     NotReference(&'static str, Span),
     InvalidAssignment {
@@ -614,6 +615,7 @@ pub(crate) enum Error<'a> {
     MissingIncomingPayload(Span),
     UnterminatedBlockComment(Span),
     RayQueryWithInitializer(Span),
+    HitObjectWithInitializer(Span),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -718,6 +720,7 @@ impl<'a> Error<'a> {
                 | Error::InvalidAtomicOperandType(span)
                 | Error::InvalidAtomicAccess(span)
                 | Error::InvalidRayQueryPointer(span)
+                | Error::InvalidHitObjectPointer(span)
                 | Error::NotPointer(span)
                 | Error::InvalidSwitchSelector { span }
                 | Error::InvalidSwitchCase { span }
@@ -791,6 +794,10 @@ impl<'a> Error<'a> {
                     Error::InvalidRayQueryPointer(_) => (
                         "ray query operation is done on a pointer to a non-ray-query",
                         "ray query pointer is invalid"
+                    ),
+                    Error::InvalidHitObjectPointer(_) => (
+                        "hit object operation is done on a pointer to a non-hit-object",
+                        "hit object pointer is invalid"
                     ),
                     Error::NotPointer(_) => (
                         "the operand of the `*` operator must be a pointer",
@@ -1742,6 +1749,14 @@ impl<'a> Error<'a> {
                 labels: vec![(
                     *span,
                     "variables with type `ray_query` are special and so cannot have initializers".into(),
+                )],
+                notes: vec![],
+            },
+            Error::HitObjectWithInitializer(span) => ParseError {
+                message: "Hit object with initialize".into(),
+                labels: vec![(
+                    *span,
+                    "variables with type `hit_object` are special and so cannot have initializers".into(),
                 )],
                 notes: vec![],
             },
