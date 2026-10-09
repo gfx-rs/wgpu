@@ -49,7 +49,7 @@
 //!   resource. For example, if a buffer is written to by a compute
 //!   shader, and then used as and index buffer to a draw call, you
 //!   must use [`CommandEncoder::transition_buffers`] between those two
-//!   operations.
+//!   operations, unless [`Capabilities::pass_barriers_are_noop`] is set.
 //!
 //! - Pipeline layouts are *explicitly specified* when setting bind groups.
 //!   Incompatible layouts disturb groups bound at higher indices.
@@ -2193,6 +2193,9 @@ pub struct Alignments {
 
 #[derive(Clone, Debug)]
 pub struct Capabilities {
+    /// Buffer/texture transitions and query resets are no-ops, so they may be
+    /// recorded after the pass that uses the resources.
+    pub pass_barriers_are_noop: bool,
     pub limits: wgt::Limits,
     pub alignments: Alignments,
     pub downlevel: wgt::DownlevelCapabilities,

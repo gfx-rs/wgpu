@@ -2563,6 +2563,7 @@ impl super::Instance {
                 || phd_capabilities.supports_extension(ext::load_store_op_none::NAME),
         };
         let capabilities = crate::Capabilities {
+            pass_barriers_are_noop: false,
             limits: phd_capabilities.to_wgpu_limits(),
             alignments,
             downlevel: wgt::DownlevelCapabilities {

@@ -54,6 +54,12 @@ pub(crate) struct CommandBufferTextureMemoryActions {
 }
 
 impl CommandBufferTextureMemoryActions {
+    pub(crate) fn has_discarded_texture(&self, texture: &Arc<Texture>) -> bool {
+        self.discards
+            .iter()
+            .any(|discard| discard.texture.is_equal(texture))
+    }
+
     pub(crate) fn drain_init_actions(&mut self) -> Drain<'_, TextureInitTrackerAction> {
         self.init_actions.drain(..)
     }

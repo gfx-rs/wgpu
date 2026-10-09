@@ -886,6 +886,7 @@ impl super::Adapter {
             info,
             features,
             capabilities: crate::Capabilities {
+                pass_barriers_are_noop: false,
                 limits: auxil::adjust_raw_limits(wgt::Limits {
                     //
                     // WebGPU LIMITS:
