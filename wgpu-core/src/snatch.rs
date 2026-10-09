@@ -93,21 +93,25 @@ mod trace {
                 backtrace: Backtrace::capture(),
             };
 
-            if let Some(prev) = SNATCH_LOCK_TRACE.take() {
-                let current = thread::current();
-                let name = current.name().unwrap_or("<unnamed>");
-                panic!(
-                    "thread '{name}' attempted to acquire a snatch lock recursively.\n\
+            // try_with() because lock may be unavailable due to TLS destruction
+            // call order
+            let _ = SNATCH_LOCK_TRACE.try_with(|trace| {
+                if let Some(prev) = trace.take() {
+                    let current = thread::current();
+                    let name = current.name().unwrap_or("<unnamed>");
+                    panic!(
+                        "thread '{name}' attempted to acquire a snatch lock recursively.\n\
                  - Currently trying to acquire {new}\n\
                  - Previously acquired {prev}",
-                );
-            } else {
-                SNATCH_LOCK_TRACE.set(Some(new));
-            }
+                    );
+                } else {
+                    trace.set(Some(new));
+                }
+            });
         }
 
         pub(super) fn exit() {
-            SNATCH_LOCK_TRACE.take();
+            let _ = SNATCH_LOCK_TRACE.try_with(|trace| trace.take());
         }
     }
 
@@ -198,5 +202,42 @@ impl Drop for SnatchGuard<'_> {
 impl Drop for ExclusiveSnatchGuard<'_> {
     fn drop(&mut self) {
         LockTrace::exit();
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod tests {
+    use super::SnatchLock;
+    use crate::lock::rank;
+    use core::cell::Cell;
+
+    /// A thing that reads a snatchlock during drop, to test destruction call order problems
+    struct LockOnDrop(SnatchLock);
+    impl Drop for LockOnDrop {
+        fn drop(&mut self) {
+            drop(self.0.read());
+        }
+    }
+
+    std::thread_local! {
+        static HOLDER: Cell<Option<LockOnDrop>> = const { Cell::new(None) };
+    }
+
+    #[test]
+    fn read_during_tls_destruction() {
+        std::thread::spawn(|| {
+            // our thread local is touched first, so its destructor will be called last
+            HOLDER.set(Some(LockOnDrop(unsafe {
+                SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK)
+            })));
+
+            // take the lock which causes SNATCH_LOCK_TRACE to be created. it
+            // will be destroyed first
+            let lock = unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) };
+            drop(lock.read());
+        })
+        .join()
+        .unwrap();
+        // just testing that the thread exited successfully
     }
 }
