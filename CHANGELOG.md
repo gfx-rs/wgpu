@@ -203,6 +203,12 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Sub-allocate `wgpu_hal::MemoryFlags::TRANSIENT` buffers and acceleration structure build scratch from a separate Vulkan memory pool, so short-lived allocations no longer pin memory blocks shared with long-lived resources. By @stuartparmenter in [#10232](https://github.com/gfx-rs/wgpu/pull/10232).
 - Allocate acceleration structures created with `AccelerationStructureFlags::ALLOW_COMPACTION` from the transient Vulkan memory pool, since they are usually replaced by their compacted copies. By @stuartparmenter in [#10233](https://github.com/gfx-rs/wgpu/pull/10233).
 
+### Performance
+
+#### General
+
+- `Instance::request_adapter` no longer exposes every adapter in the system to select one. Backends can answer a request from cheap native descriptors (`wgpu_hal::Instance::request_adapter`), and the DX12 backend does: adapters are ranked via `IDXGIFactory6::EnumAdapterByGpuPreference` and only the selected adapter gets an `ID3D12Device` created. On machines with more than one GPU (hybrid-graphics laptops, desktops with an iGPU) this removes seconds of per-adapter driver initialization from startup. On DX12 systems with several adapters of the same device type, `LowPower`/`HighPerformance` ties now resolve in DXGI's GPU-preference order instead of enumeration order. By @AdrianEddy in [#10011](https://github.com/gfx-rs/wgpu/pull/10011).
+
 ### Bug Fixes
 
 #### General
