@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use ash::{ext, vk};
+use ash::vk;
 
 /// Importable, single-plane DMA-BUF modifiers for a requested texture format and usage.
 #[derive(Clone, Debug)]
@@ -38,109 +38,6 @@ impl DmabufModifier {
                 | vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR,
         )
     }
-}
-
-impl super::CommandEncoder {
-    /// Records a foreign-to-device ownership and layout transition for sampling.
-    /// The barrier runs when the command buffer is submitted; this call does not wait.
-    /// Returns an error if `VK_EXT_queue_family_foreign` was not enabled.
-    /// Higher-level resource-state tracking is not updated by this raw barrier.
-    ///
-    /// # Safety
-    /// Recording must be active outside a render pass. The texture must be a
-    /// single-layer/mip RGB DMA-BUF from this device. Its producer must have
-    /// finished and released it in GENERAL before this command executes.
-    /// External producer completion must be synchronized separately.
-    pub unsafe fn acquire_dmabuf_texture(
-        &mut self,
-        texture: &super::Texture,
-    ) -> Result<(), crate::DeviceError> {
-        unsafe { self.transfer_dmabuf(texture, true) }
-    }
-
-    /// Records a device-to-foreign ownership transition to GENERAL.
-    /// The barrier runs when the command buffer is submitted; this call does not wait.
-    /// Returns an error if `VK_EXT_queue_family_foreign` was not enabled.
-    /// Higher-level resource-state tracking is not updated by this raw barrier.
-    ///
-    /// # Safety
-    /// Recording must be active outside a render pass. The texture must have
-    /// been acquired on this device; all sampling must precede this barrier.
-    /// Keep the texture alive until submission completes, and do not let the
-    /// producer reuse it before completion of this command.
-    pub unsafe fn release_dmabuf_texture(
-        &mut self,
-        texture: &super::Texture,
-    ) -> Result<(), crate::DeviceError> {
-        unsafe { self.transfer_dmabuf(texture, false) }
-    }
-
-    unsafe fn transfer_dmabuf(
-        &mut self,
-        texture: &super::Texture,
-        acquire: bool,
-    ) -> Result<(), crate::DeviceError> {
-        if !self
-            .device
-            .enabled_extensions
-            .contains(&ext::queue_family_foreign::NAME)
-        {
-            return Err(crate::DeviceError::Unexpected);
-        }
-        let barrier = ownership_barrier(texture.raw, self.device.family_index, acquire);
-        unsafe {
-            self.device.raw.cmd_pipeline_barrier(
-                self.active,
-                vk::PipelineStageFlags::ALL_COMMANDS,
-                vk::PipelineStageFlags::ALL_COMMANDS,
-                vk::DependencyFlags::empty(),
-                &[],
-                &[],
-                &[barrier],
-            );
-        }
-        Ok(())
-    }
-}
-
-fn ownership_barrier(
-    image: vk::Image,
-    family: u32,
-    acquire: bool,
-) -> vk::ImageMemoryBarrier<'static> {
-    let (source, destination, old, new, read, write) = if acquire {
-        (
-            vk::QUEUE_FAMILY_FOREIGN_EXT,
-            family,
-            vk::ImageLayout::GENERAL,
-            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            vk::AccessFlags::empty(),
-            vk::AccessFlags::SHADER_READ,
-        )
-    } else {
-        (
-            family,
-            vk::QUEUE_FAMILY_FOREIGN_EXT,
-            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            vk::ImageLayout::GENERAL,
-            vk::AccessFlags::SHADER_READ,
-            vk::AccessFlags::empty(),
-        )
-    };
-    vk::ImageMemoryBarrier::default()
-        .image(image)
-        .src_queue_family_index(source)
-        .dst_queue_family_index(destination)
-        .old_layout(old)
-        .new_layout(new)
-        .src_access_mask(read)
-        .dst_access_mask(write)
-        .subresource_range(
-            vk::ImageSubresourceRange::default()
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                .level_count(1)
-                .layer_count(1),
-        )
 }
 
 pub(super) unsafe fn query_modifiers(
