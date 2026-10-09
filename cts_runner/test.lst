@@ -21,12 +21,14 @@ webgpu:api,operation,buffers,map:mapAsync,read,*
 webgpu:api,operation,buffers,map:mapAsync,write,*
 webgpu:api,operation,command_buffer,basic:*
 webgpu:api,operation,command_buffer,copyBufferToBuffer:*
+webgpu:api,operation,command_buffer,copyTextureToTexture:color_textures,compressed,*
 fails-if(vulkan) webgpu:api,operation,command_buffer,copyTextureToTexture:copy_depth_stencil:format="depth16unorm"
 fails-if(vulkan) webgpu:api,operation,command_buffer,copyTextureToTexture:copy_depth_stencil:format="depth24plus"
 fails-if(vulkan) webgpu:api,operation,command_buffer,copyTextureToTexture:copy_depth_stencil:format="depth24plus-stencil8"
 fails-if(vulkan) webgpu:api,operation,command_buffer,copyTextureToTexture:copy_depth_stencil:format="depth32float"
 fails-if(vulkan) webgpu:api,operation,command_buffer,copyTextureToTexture:copy_depth_stencil:format="depth32float-stencil8"
 webgpu:api,operation,command_buffer,copyTextureToTexture:copy_depth_stencil:format="stencil8"
+webgpu:api,operation,command_buffer,image_copy:compressed_textures,*
 fails-if(dx12) webgpu:api,operation,command_buffer,image_copy:offsets_and_sizes:*
 webgpu:api,operation,command_buffer,image_copy:undefined_params:initMethod="CopyB2T";checkMethod="FullCopyT2B";dimension="1d"
 webgpu:api,operation,command_buffer,image_copy:undefined_params:initMethod="CopyB2T";checkMethod="FullCopyT2B";dimension="2d"
@@ -76,6 +78,7 @@ webgpu:api,validation,buffer,destroy:*
 webgpu:api,validation,capability_checks,features,clip_distances:*
 webgpu:api,validation,capability_checks,features,query_types:createQuerySet:*
 webgpu:api,validation,capability_checks,features,texture_component_swizzle:*
+webgpu:api,validation,capability_checks,features,texture_compression_unaligned:*
 webgpu:api,validation,capability_checks,features,texture_formats:color_target_state:*
 webgpu:api,validation,capability_checks,features,texture_formats:depth_stencil_state:*
 webgpu:api,validation,capability_checks,features,texture_formats:render_bundle_encoder_descriptor_depth_stencil_format:*

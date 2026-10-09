@@ -776,7 +776,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 16] = [
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 17] = [
     (
         wgt::Features::BGRA8UNORM_STORAGE,
         webgpu_sys::GpuFeatureName::Bgra8unormStorage,
@@ -840,6 +840,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 16] = [
     (
         wgt::Features::TIMESTAMP_QUERY,
         webgpu_sys::GpuFeatureName::TimestampQuery,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_UNALIGNED,
+        webgpu_sys::GpuFeatureName::TextureCompressionUnaligned,
     ),
 ];
 
