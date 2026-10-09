@@ -35,10 +35,6 @@ impl<T> Mutex<T> {
         MutexGuard(self.0.lock())
     }
 
-    pub fn get_mut(&mut self) -> &mut T {
-        self.0.get_mut()
-    }
-
     pub fn into_inner(self) -> T {
         self.0.into_inner()
     }
@@ -105,6 +101,14 @@ impl<T> RwLock<T> {
     /// - A read lock must be held which is not held by a guard.
     pub unsafe fn force_unlock_read(&self, _data: RankData) {
         unsafe { self.0.force_unlock_read() };
+    }
+
+    /// Returns a reference to the underlying [`wgpu_sync::RwLock`].
+    ///
+    /// Marked as unsafe because it allows bypassing the rank system,
+    /// defeating the purpose of this type.
+    pub unsafe fn underlying(&self) -> &wgpu_sync::RwLock<T> {
+        &self.0
     }
 }
 
