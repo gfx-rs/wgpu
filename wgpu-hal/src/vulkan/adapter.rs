@@ -363,6 +363,7 @@ impl PhysicalDeviceFeatures {
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::PRIMITIVE_INDEX))
                 .depth_clamp(requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL))
+                .depth_bias_clamp(downlevel_flags.contains(wgt::DownlevelFlags::DEPTH_BIAS_CLAMP))
                 .dual_src_blend(requested_features.contains(wgt::Features::DUAL_SOURCE_BLENDING)),
             descriptor_indexing: if requested_features.intersects(INDEXING_FEATURES) {
                 Some(
