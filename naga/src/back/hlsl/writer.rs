@@ -699,7 +699,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_modifier(binding)?;
             }
             self.write_type(module, m.ty)?;
-            write!(self.out, " {}", &m.name)?;
+            write!(self.out, " {}", m.name)?;
             self.write_semantic(&m.binding, Some(shader_stage))?;
             writeln!(self.out, ";")?;
         }
@@ -1205,7 +1205,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             write!(
                 self.out,
                 " {}",
-                &self.names[&NameKey::GlobalVariable(handle)]
+                self.names[&NameKey::GlobalVariable(handle)]
             )?;
 
             // need to write the array size if the type was emitted with `write_type`
@@ -1441,7 +1441,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(
                         self.out,
                         " {}",
-                        &self.names[&NameKey::StructMember(handle, index as u32)]
+                        self.names[&NameKey::StructMember(handle, index as u32)]
                     )?;
                     // Write [size]
                     self.write_array_size(module, base, size)?;
@@ -1461,7 +1461,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             write!(self.out, "; ")?;
                         }
                         self.write_value_type(module, &vec_ty)?;
-                        write!(self.out, " {}_{}", &self.names[&field_name_key], i)?;
+                        write!(self.out, " {}_{}", self.names[&field_name_key], i)?;
                     }
                 }
                 _ => {
@@ -1482,7 +1482,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(
                         self.out,
                         " {}",
-                        &self.names[&NameKey::StructMember(handle, index as u32)]
+                        self.names[&NameKey::StructMember(handle, index as u32)]
                     )?;
                 }
             }
@@ -2460,7 +2460,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 write!(
                                     self.out,
                                     ".{}_{}",
-                                    &self.names[&NameKey::StructMember(ty, index)],
+                                    self.names[&NameKey::StructMember(ty, index)],
                                     vec_index
                                 )?;
 
@@ -4128,7 +4128,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             write!(
                                 self.out,
                                 ".{}",
-                                &self.names[&NameKey::StructMember(ty, index)]
+                                self.names[&NameKey::StructMember(ty, index)]
                             )?
                         }
                         ref other => return Err(Error::Custom(format!("Cannot index {other:?}"))),
