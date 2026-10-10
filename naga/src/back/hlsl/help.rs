@@ -743,6 +743,37 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
+    /// Writes the [`WrappedConstructor`] functions needed to build a value of type `ty`
+    /// out of its members, if they have not been written yet.
+    ///
+    /// This covers `ty` itself and all of the structs and arrays nested within it.
+    /// It is used to assemble structs from [`Storage`] loads and from immediates.
+    ///
+    /// [`Storage`]: crate::AddressSpace::Storage
+    pub(super) fn write_wrapped_constructors_for_type(
+        &mut self,
+        module: &crate::Module,
+        ty: Handle<crate::Type>,
+    ) -> BackendResult {
+        match module.types[ty].inner {
+            crate::TypeInner::Struct { ref members, .. } => {
+                for member in members {
+                    self.write_wrapped_constructors_for_type(module, member.ty)?;
+                }
+            }
+            crate::TypeInner::Array { base, .. } => {
+                self.write_wrapped_constructors_for_type(module, base)?;
+            }
+            _ => return Ok(()),
+        }
+
+        let constructor = WrappedConstructor { ty };
+        if self.wrapped.insert(WrappedType::Constructor(constructor)) {
+            self.write_wrapped_constructor_function(module, constructor)?;
+        }
+        Ok(())
+    }
+
     pub(super) fn write_wrapped_constructor_function_name(
         &mut self,
         module: &crate::Module,
@@ -1938,40 +1969,8 @@ impl<W: Write> super::Writer<'_, W> {
 
                     if let Some(crate::AddressSpace::Storage { .. }) = pointer_space {
                         if let Some(ty) = func_ctx.info[handle].ty.handle() {
-                            write_wrapped_constructor(self, ty, module)?;
+                            self.write_wrapped_constructors_for_type(module, ty)?;
                         }
-                    }
-
-                    fn write_wrapped_constructor<W: Write>(
-                        writer: &mut super::Writer<'_, W>,
-                        ty: Handle<crate::Type>,
-                        module: &crate::Module,
-                    ) -> BackendResult {
-                        match module.types[ty].inner {
-                            crate::TypeInner::Struct { ref members, .. } => {
-                                for member in members {
-                                    write_wrapped_constructor(writer, member.ty, module)?;
-                                }
-
-                                let constructor = WrappedConstructor { ty };
-                                if writer.wrapped.insert(WrappedType::Constructor(constructor)) {
-                                    writer
-                                        .write_wrapped_constructor_function(module, constructor)?;
-                                }
-                            }
-                            crate::TypeInner::Array { base, .. } => {
-                                write_wrapped_constructor(writer, base, module)?;
-
-                                let constructor = WrappedConstructor { ty };
-                                if writer.wrapped.insert(WrappedType::Constructor(constructor)) {
-                                    writer
-                                        .write_wrapped_constructor_function(module, constructor)?;
-                                }
-                            }
-                            _ => {}
-                        };
-
-                        Ok(())
                     }
                 }
                 // We treat matrices of the form `matCx2` as a sequence of C `vec2`s
