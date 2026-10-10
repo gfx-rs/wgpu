@@ -342,6 +342,7 @@ impl BufferMapping {
     /// [`BufferMapping::mode`] must be [`MapMode::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set) otherwise it will panic.
     pub fn read(&self, dst: &mut [u8], offset: usize) {
         assert!(self.mode == MapMode::Read);
+        assert!(offset <= self.len as usize);
         let size = self.len - offset as u64;
         assert!(dst.len() <= size as usize);
         unsafe {
