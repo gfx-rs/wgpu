@@ -97,6 +97,18 @@ float3x2 GetMatmOnBaz(Baz obj) {
 We also emit an analogous `Set` function, as well as functions for
 accessing individual columns by dynamic index.
 
+## Layout of values in `immediate` buffers
+
+WGSL gives `immediate` variables the same layout as `storage` buffers, which is GLSL's
+`std430`: every member is placed at the next multiple of its own alignment. Immediates are
+root constants, which HLSL can only read through a `cbuffer`, and HLSL's `cbuffer` packing
+follows GLSL's `std140` instead: for example, every nested struct starts on a new 16-byte
+register. A struct member that WGSL places at offset 4 would be read from offset 16.
+
+To avoid the mismatch, immediates are declared as a raw array of `uint4` registers,
+and the typed value is assembled from those words at the start of each entry point.
+See the `immediates` module for details.
+
 ## Sampler Handling
 
 Due to limitations in how sampler heaps work in D3D12, we need to access samplers
@@ -145,6 +157,7 @@ it works for our purposes.
 
 mod conv;
 mod help;
+mod immediates;
 mod keywords;
 mod mesh_shader;
 mod ray;
@@ -782,6 +795,13 @@ pub struct Writer<'a, W> {
 
     function_task_payload_var:
         crate::FastHashMap<Handle<crate::Function>, Handle<crate::GlobalVariable>>,
+
+    /// The name of the raw `uint4` array that backs each [`Immediate`] global.
+    ///
+    /// See the [`immediates`] module for background.
+    ///
+    /// [`Immediate`]: crate::AddressSpace::Immediate
+    immediate_raw_names: crate::FastHashMap<Handle<crate::GlobalVariable>, String>,
 }
 
 pub fn supported_capabilities() -> crate::valid::Capabilities {
