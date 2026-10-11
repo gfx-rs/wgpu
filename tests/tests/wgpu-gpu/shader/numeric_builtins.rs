@@ -6,6 +6,7 @@ use wgpu_test::{apply, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestP
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
         NUMERIC_BUILTINS,
+        INT64_LITERALS,
         INT64_ATOMIC_MIN_MAX,
         INT64_ATOMIC_ALL_OPS,
         FLOAT32_ATOMIC,
@@ -59,6 +60,62 @@ static NUMERIC_BUILTINS: GpuTestConfiguration = GpuTestConfiguration::new()
             InputStorageType::Storage,
             create_numeric_builtin_test(),
         )
+    });
+
+#[apply(gpu_test!)]
+static INT64_LITERALS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::SHADER_INT64)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        let expected: Vec<u32> = [
+            1u64 << 31,
+            1u64 << 32,
+            u64::MAX,
+            i64::MAX as u64,
+            i64::MIN as u64,
+            -5_000_000_000i64 as u64,
+            1,
+            1,
+            1,
+        ]
+        .into_iter()
+        .flat_map(|value| [value as u32, (value >> 32) as u32])
+        .collect();
+        let test = ShaderTest::new(
+            "int64 literals".into(),
+            "value: i64".into(),
+            r#"
+                put_i(0u, 2147483648li);
+                put_i(1u, 4294967296li);
+                put_u(2u, 18446744073709551615lu);
+                put_i(3u, 9223372036854775807li);
+                put_i(4u, ~9223372036854775807li);
+                put_i(5u, -5000000000li);
+                put_i(6u, select(0li, 1li, input.value < 0li));
+                put_i(7u, select(0li, 1li, 0li > input.value));
+                put_i(8u, select(0li, 1li, input.value <= 0li));
+            "#
+            .into(),
+            &[-1i64],
+            &expected,
+        )
+        .header(
+            r#"
+                fn put_i(index: u32, value: i64) {
+                    output[index] = vec2<u32>(u32(value), u32(value >> 32u));
+                }
+                fn put_u(index: u32, value: u64) {
+                    output[index] = vec2<u32>(u32(value), u32(value >> 32u));
+                }
+            "#
+            .into(),
+        )
+        .output_type("array<vec2<u32>>".into());
+        shader_input_output_test(ctx, InputStorageType::Storage, vec![test])
     });
 
 fn create_int64_atomic_min_max_test() -> Vec<ShaderTest> {

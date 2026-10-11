@@ -60,7 +60,7 @@ void test_atomic_compare_exchange_i64_()
                 }
                 {
                     int64_t _e14 = old;
-                    int64_t new_ = (_e14 + 10L);
+                    int64_t new_ = (_e14 + 10LL);
                     uint _e19 = i;
                     int64_t _e21 = old;
                     _atomic_compare_exchange_result_Sint_8_ _e22; arr_i64_.InterlockedCompareExchange64(_e19*8, _e21, new_, _e22.old_value);
@@ -112,7 +112,7 @@ void test_atomic_compare_exchange_u64_()
                 }
                 {
                     uint64_t _e14 = old_1;
-                    uint64_t new_1 = (_e14 + 10uL);
+                    uint64_t new_1 = (_e14 + 10ULL);
                     uint _e19 = i_1;
                     uint64_t _e21 = old_1;
                     _atomic_compare_exchange_result_Uint_8_ _e22; arr_u64_.InterlockedCompareExchange64(_e19*8, _e21, new_1, _e22.old_value);
