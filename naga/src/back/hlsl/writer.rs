@@ -327,6 +327,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module_info: &valid::ModuleInfo,
         fragment_entry_point: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<super::ReflectionInfo, Error> {
+        if back::uses_bfloat16(module) {
+            return Err(Error::UnsupportedScalar(Scalar::BF16));
+        }
         self.reset(module);
 
         if module.uses_mesh_shaders() && self.options.shader_model < ShaderModel::V6_5 {
@@ -3635,6 +3638,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
     pub(super) fn write_literal(&mut self, literal: crate::Literal) -> BackendResult {
         match literal {
+            crate::Literal::BF16(_) => return Err(Error::UnsupportedScalar(Scalar::BF16)),
             crate::Literal::F64(value) => write!(self.out, "{value:?}L")?,
             crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
             crate::Literal::F16(value) => write!(self.out, "{value:?}h")?,

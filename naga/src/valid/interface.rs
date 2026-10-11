@@ -817,6 +817,9 @@ impl VaryingContext<'_> {
                     ));
                 }
 
+                if ty_inner.scalar_kind() == Some(crate::ScalarKind::BFloat) {
+                    return Err(VaryingError::InvalidType(ty));
+                }
                 if interpolation != Some(crate::Interpolation::PerVertex) {
                     match ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Float) => {

@@ -945,9 +945,18 @@ impl super::Validator {
                     Bo::Add | Bo::Subtract => match *left_inner {
                         Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
                             Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
-                            Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => false,
+                            Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat | Sk::BFloat => false,
                         },
-                        Ti::Matrix { .. } | Ti::CooperativeMatrix { .. } => {
+                        Ti::Matrix { scalar, .. } | Ti::CooperativeMatrix { scalar, .. } => {
+                            if scalar.kind == Sk::BFloat {
+                                return Err(ExpressionError::InvalidBinaryOperandTypes {
+                                    op,
+                                    lhs_expr: left,
+                                    lhs_type: left_inner.clone(),
+                                    rhs_expr: right,
+                                    rhs_type: right_inner.clone(),
+                                });
+                            }
                             left_inner == right_inner
                         }
                         _ => false,
@@ -955,14 +964,15 @@ impl super::Validator {
                     Bo::Divide | Bo::Modulo => match *left_inner {
                         Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
                             Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
-                            Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => false,
+                            Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat | Sk::BFloat => false,
                         },
                         _ => false,
                     },
                     Bo::Multiply => {
                         let kind_allowed = match left_inner.scalar_kind() {
                             Some(Sk::Uint | Sk::Sint | Sk::Float) => true,
-                            Some(Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat) | None => false,
+                            Some(Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat | Sk::BFloat)
+                            | None => false,
                         };
                         let types_match = match (left_inner, right_inner) {
                             // Straight scalar and mixed scalar/vector.
@@ -1040,12 +1050,18 @@ impl super::Validator {
                         let right_width = right_inner.scalar_width().unwrap_or(0);
                         kind_allowed && types_match && left_width == right_width
                     }
-                    Bo::Equal | Bo::NotEqual => left_inner.is_sized() && left_inner == right_inner,
+                    Bo::Equal | Bo::NotEqual => {
+                        left_inner.is_sized()
+                            && left_inner == right_inner
+                            && left_inner.scalar_kind() != Some(Sk::BFloat)
+                    }
                     Bo::Less | Bo::LessEqual | Bo::Greater | Bo::GreaterEqual => {
                         match *left_inner {
                             Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
                                 Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
-                                Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => false,
+                                Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat | Sk::BFloat => {
+                                    false
+                                }
                             },
                             ref other => {
                                 log::debug!("Op {op:?} left type {other:?}");
@@ -1067,7 +1083,7 @@ impl super::Validator {
                     Bo::And | Bo::InclusiveOr => match *left_inner {
                         Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
                             Sk::Bool | Sk::Sint | Sk::Uint => left_inner == right_inner,
-                            Sk::Float | Sk::AbstractInt | Sk::AbstractFloat => false,
+                            Sk::Float | Sk::AbstractInt | Sk::AbstractFloat | Sk::BFloat => false,
                         },
                         ref other => {
                             log::debug!("Op {op:?} left type {other:?}");
@@ -1077,7 +1093,11 @@ impl super::Validator {
                     Bo::ExclusiveOr => match *left_inner {
                         Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
                             Sk::Sint | Sk::Uint => left_inner == right_inner,
-                            Sk::Bool | Sk::Float | Sk::AbstractInt | Sk::AbstractFloat => false,
+                            Sk::Bool
+                            | Sk::Float
+                            | Sk::AbstractInt
+                            | Sk::AbstractFloat
+                            | Sk::BFloat => false,
                         },
                         ref other => {
                             log::debug!("Op {op:?} left type {other:?}");
@@ -1106,7 +1126,11 @@ impl super::Validator {
                         };
                         match base_scalar.kind {
                             Sk::Sint | Sk::Uint => base_size.is_ok() && base_size == shift_size,
-                            Sk::Float | Sk::AbstractInt | Sk::AbstractFloat | Sk::Bool => false,
+                            Sk::Float
+                            | Sk::AbstractInt
+                            | Sk::AbstractFloat
+                            | Sk::BFloat
+                            | Sk::Bool => false,
                         }
                     }
                 };
@@ -1311,6 +1335,20 @@ impl super::Validator {
                     crate::TypeInner::Matrix { scalar, .. } => scalar,
                     _ => return Err(ExpressionError::InvalidCastArgument),
                 };
+                if base_scalar.kind == Sk::BFloat || kind == Sk::BFloat {
+                    let target = Sc {
+                        kind,
+                        width: convert.unwrap_or(base_scalar.width),
+                    };
+                    if convert.is_none()
+                        || !matches!(
+                            (base_scalar, target),
+                            (Sc::BF16, Sc::F32 | Sc::BF16) | (Sc::F32, Sc::BF16)
+                        )
+                    {
+                        return Err(ExpressionError::InvalidCastArgument);
+                    }
+                }
                 base_scalar.kind = kind;
                 if let Some(width) = convert {
                     base_scalar.width = width;
@@ -1425,6 +1463,12 @@ impl super::Validator {
                         }
                     }
                 }
+                if (resolver[a].scalar_kind() == Some(Sk::BFloat)
+                    || resolver[b].scalar_kind() == Some(Sk::BFloat))
+                    && resolver[a].scalar() != resolver[b].scalar()
+                {
+                    return Err(ExpressionError::InvalidCooperativeOperand(b));
+                }
                 ShaderStages::COMPUTE
             }
         };
@@ -1468,6 +1512,7 @@ impl super::Validator {
 
 pub const fn check_literal_value(literal: crate::Literal) -> Result<(), LiteralError> {
     let is_nan = match literal {
+        crate::Literal::BF16(v) => v.is_nan(),
         crate::Literal::F64(v) => v.is_nan(),
         crate::Literal::F32(v) => v.is_nan(),
         _ => false,
@@ -1477,6 +1522,7 @@ pub const fn check_literal_value(literal: crate::Literal) -> Result<(), LiteralE
     }
 
     let is_infinite = match literal {
+        crate::Literal::BF16(v) => v.is_infinite(),
         crate::Literal::F64(v) => v.is_infinite(),
         crate::Literal::F32(v) => v.is_infinite(),
         _ => false,

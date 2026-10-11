@@ -226,6 +226,10 @@ bitflags::bitflags! {
         const LINEAR_INTERPOLATION = 1 << 44;
         /// Support for `debugPrintf`.
         const DEBUG_PRINTF = 1 << 45;
+        /// Support for BF16 storage, conversions, and cooperative-matrix operands.
+        ///
+        /// BF16 cooperative matrices also require [`Capabilities::COOPERATIVE_MATRIX`].
+        const SHADER_BFLOAT16 = 1 << 46;
     }
 }
 
@@ -241,6 +245,7 @@ impl Capabilities {
             Self::DUAL_SOURCE_BLENDING => Some(Ext::DualSourceBlending),
             // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
             Self::SHADER_FLOAT16 => Some(Ext::F16),
+            Self::SHADER_BFLOAT16 => Some(Ext::WgpuBfloat16),
             Self::SHADER_INT16 => Some(Ext::WgpuInt16),
             Self::CLIP_DISTANCES => Some(Ext::ClipDistances),
             Self::MESH_SHADER => Some(Ext::WgpuMeshShader),

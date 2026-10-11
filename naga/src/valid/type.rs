@@ -293,6 +293,16 @@ impl super::Validator {
         let mut immediates_compatibility = Ok(());
         let good = match scalar.kind {
             crate::ScalarKind::Bool => scalar.width == crate::BOOL_WIDTH,
+            crate::ScalarKind::BFloat => {
+                if !self.capabilities.contains(Capabilities::SHADER_BFLOAT16) {
+                    return Err(WidthError::MissingCapability {
+                        name: "bf16",
+                        flag: "SHADER_BFLOAT16",
+                    });
+                }
+                immediates_compatibility = Err(ImmediateError::InvalidScalar(scalar));
+                scalar.width == 2
+            }
             crate::ScalarKind::Float => match scalar.width {
                 8 => {
                     if !self.capabilities.contains(Capabilities::FLOAT64) {
@@ -456,9 +466,14 @@ impl super::Validator {
                 role: _,
             } => {
                 self.require_type_capability(Capabilities::COOPERATIVE_MATRIX)?;
+                if scalar.kind == crate::ScalarKind::BFloat {
+                    let _ = self.check_width(scalar)?;
+                }
                 // Allow f16 (width 2) and f32 (width 4) for cooperative matrices
-                if scalar.kind != crate::ScalarKind::Float
-                    || (scalar.width != 2 && scalar.width != 4)
+                if !matches!(
+                    scalar.kind,
+                    crate::ScalarKind::Float | crate::ScalarKind::BFloat
+                ) || (scalar.width != 2 && scalar.width != 4)
                 {
                     return Err(TypeError::MatrixElementNotFloat);
                 }

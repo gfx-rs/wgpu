@@ -282,6 +282,7 @@ gen_component_wise_extractor! {
 /// Vectors with a concrete element type.
 #[derive(Debug)]
 enum LiteralVector {
+    BF16(ArrayVec<half::bf16, { crate::VectorSize::MAX }>),
     F64(ArrayVec<f64, { crate::VectorSize::MAX }>),
     F32(ArrayVec<f32, { crate::VectorSize::MAX }>),
     F16(ArrayVec<f16, { crate::VectorSize::MAX }>),
@@ -300,6 +301,7 @@ impl LiteralVector {
     #[allow(clippy::missing_const_for_fn, reason = "MSRV")]
     fn len(&self) -> usize {
         match *self {
+            LiteralVector::BF16(ref v) => v.len(),
             LiteralVector::F64(ref v) => v.len(),
             LiteralVector::F32(ref v) => v.len(),
             LiteralVector::F16(ref v) => v.len(),
@@ -323,6 +325,7 @@ impl LiteralVector {
             v
         }
         match literal {
+            Literal::BF16(e) => Self::BF16(arrayvec_of(e)),
             Literal::F64(e) => Self::F64(arrayvec_of(e)),
             Literal::F32(e) => Self::F32(arrayvec_of(e)),
             Literal::U16(e) => Self::U16(arrayvec_of(e)),
@@ -360,6 +363,7 @@ impl LiteralVector {
             }};
         }
         Ok(match components[0] {
+            Literal::BF16(_) => compose_literals!(components, BF16, BF16),
             Literal::I16(_) => compose_literals!(components, I16, I16),
             Literal::U16(_) => compose_literals!(components, U16, U16),
             Literal::I32(_) => compose_literals!(components, I32, I32),
@@ -393,6 +397,7 @@ impl LiteralVector {
             LiteralVector::F64(ref v) => decompose_literals!(v, F64),
             LiteralVector::F32(ref v) => decompose_literals!(v, F32),
             LiteralVector::F16(ref v) => decompose_literals!(v, F16),
+            LiteralVector::BF16(ref v) => decompose_literals!(v, BF16),
             LiteralVector::U16(ref v) => decompose_literals!(v, U16),
             LiteralVector::I16(ref v) => decompose_literals!(v, I16),
             LiteralVector::U32(ref v) => decompose_literals!(v, U32),
@@ -2510,7 +2515,17 @@ impl<'a> ConstantEvaluator<'a> {
         let expr = match self.expressions[expr] {
             Expression::Literal(literal) => {
                 let literal = match target {
+                    Sc::BF16 => Literal::BF16(match literal {
+                        Literal::BF16(v) => v,
+                        Literal::F32(v) => half::bf16::from_f32(v),
+                        Literal::AbstractFloat(v) => {
+                            half::bf16::from_f32(f32::try_from_abstract(v)?)
+                        }
+                        Literal::AbstractInt(v) => half::bf16::from_f32(f32::try_from_abstract(v)?),
+                        _ => return make_error(),
+                    }),
                     Sc::I16 => Literal::I16(match literal {
+                        Literal::BF16(_) => return make_error(),
                         Literal::I16(v) => v,
                         Literal::U16(v) => v as i16,
                         Literal::I32(v) => v as i16,
@@ -2527,6 +2542,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => v as i16,
                     }),
                     Sc::U16 => Literal::U16(match literal {
+                        Literal::BF16(_) => return make_error(),
                         Literal::I16(v) => v as u16,
                         Literal::U16(v) => v,
                         Literal::I32(v) => v as u16,
@@ -2541,6 +2557,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => v as u16,
                     }),
                     Sc::I32 => Literal::I32(match literal {
+                        Literal::BF16(_) => return make_error(),
                         Literal::I16(v) => v as i32,
                         Literal::U16(v) => v as i32,
                         Literal::I32(v) => v,
@@ -2555,6 +2572,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => i32::try_from_abstract(v)?,
                     }),
                     Sc::U32 => Literal::U32(match literal {
+                        Literal::BF16(_) => return make_error(),
                         Literal::I16(v) => v as u32,
                         Literal::U16(v) => v as u32,
                         Literal::I32(v) => v as u32,
@@ -2570,6 +2588,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => u32::try_from_abstract(v)?,
                     }),
                     Sc::I64 => Literal::I64(match literal {
+                        Literal::BF16(_) => return make_error(),
                         Literal::I16(v) => v as i64,
                         Literal::U16(v) => v as i64,
                         Literal::I32(v) => v as i64,
@@ -2584,6 +2603,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => i64::try_from_abstract(v)?,
                     }),
                     Sc::U64 => Literal::U64(match literal {
+                        Literal::BF16(_) => return make_error(),
                         Literal::I16(v) => v as u64,
                         Literal::U16(v) => v as u64,
                         Literal::I32(v) => v as u64,
@@ -2599,6 +2619,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => u64::try_from_abstract(v)?,
                     }),
                     Sc::F16 => Literal::F16(match literal {
+                        Literal::BF16(_) => return make_error(),
                         Literal::F16(v) => v,
                         Literal::F32(v) => f16::from_f32(v),
                         Literal::F64(v) => f16::from_f64(v),
@@ -2613,6 +2634,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractInt(v) => f16::try_from_abstract(v)?,
                     }),
                     Sc::F32 => Literal::F32(match literal {
+                        Literal::BF16(v) => v.to_f32(),
                         Literal::I16(v) => v as f32,
                         Literal::U16(v) => v as f32,
                         Literal::I32(v) => v as f32,
@@ -2627,6 +2649,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => f32::try_from_abstract(v)?,
                     }),
                     Sc::F64 => Literal::F64(match literal {
+                        Literal::BF16(_) => return make_error(),
                         Literal::I16(v) => v as f64,
                         Literal::U16(v) => v as f64,
                         Literal::I32(v) => v as f64,
@@ -2640,6 +2663,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => f64::try_from_abstract(v)?,
                     }),
                     Sc::BOOL => Literal::Bool(match literal {
+                        Literal::BF16(_) => return make_error(),
                         Literal::I16(v) => v != 0,
                         Literal::U16(v) => v != 0,
                         Literal::I32(v) => v != 0,

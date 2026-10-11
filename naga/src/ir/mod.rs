@@ -578,6 +578,8 @@ pub enum ScalarKind {
     ///
     /// These are forbidden by validation, and should never reach backends.
     AbstractFloat,
+    /// Brain floating point, supported for storage, conversions and cooperative products.
+    BFloat,
 }
 
 /// Role of a cooperative variable in the equation "A * B + C"
@@ -1055,6 +1057,11 @@ pub enum Literal {
     Bool(bool),
     AbstractInt(i64),
     AbstractFloat(f64),
+    /// May not be NaN or infinity.
+    BF16(
+        #[cfg_attr(feature = "arbitrary", arbitrary(with = |u: &mut arbitrary::Unstructured<'_>| u.arbitrary::<u16>().map(half::bf16::from_bits)))]
+         half::bf16,
+    ),
 }
 
 /// Pipeline-overridable constant.

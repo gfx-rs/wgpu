@@ -130,6 +130,7 @@ impl From<super::StorageFormat> for super::Scalar {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HashableLiteral {
+    BF16(u16),
     F64(u64),
     F32(u32),
     F16(u16),
@@ -147,6 +148,7 @@ pub enum HashableLiteral {
 impl From<crate::Literal> for HashableLiteral {
     fn from(l: crate::Literal) -> Self {
         match l {
+            crate::Literal::BF16(v) => Self::BF16(v.to_bits()),
             crate::Literal::F64(v) => Self::F64(v.to_bits()),
             crate::Literal::F32(v) => Self::F32(v.to_bits()),
             crate::Literal::F16(v) => Self::F16(v.to_bits()),
@@ -166,6 +168,9 @@ impl From<crate::Literal> for HashableLiteral {
 impl crate::Literal {
     pub const fn new(value: u8, scalar: crate::Scalar) -> Option<Self> {
         match (value, scalar.kind, scalar.width) {
+            (value, crate::ScalarKind::BFloat, 2) => {
+                Some(Self::BF16(half::bf16::from_f32_const(value as _)))
+            }
             (value, crate::ScalarKind::Float, 8) => Some(Self::F64(value as _)),
             (value, crate::ScalarKind::Float, 4) => Some(Self::F32(value as _)),
             (value, crate::ScalarKind::Float, 2) => {
@@ -210,7 +215,7 @@ impl crate::Literal {
         match *self {
             Self::F64(_) | Self::I64(_) | Self::U64(_) => 8,
             Self::F32(_) | Self::U32(_) | Self::I32(_) => 4,
-            Self::F16(_) | Self::U16(_) | Self::I16(_) => 2,
+            Self::F16(_) | Self::BF16(_) | Self::U16(_) | Self::I16(_) => 2,
             Self::Bool(_) => crate::BOOL_WIDTH,
             Self::AbstractInt(_) | Self::AbstractFloat(_) => crate::ABSTRACT_WIDTH,
         }
@@ -220,6 +225,7 @@ impl crate::Literal {
             Self::F64(_) => crate::Scalar::F64,
             Self::F32(_) => crate::Scalar::F32,
             Self::F16(_) => crate::Scalar::F16,
+            Self::BF16(_) => crate::Scalar::BF16,
             Self::U16(_) => crate::Scalar::U16,
             Self::I16(_) => crate::Scalar::I16,
             Self::U32(_) => crate::Scalar::U32,

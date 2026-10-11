@@ -277,7 +277,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
             use crate::ScalarKind as Sk;
             let concretization_preferences = match scalar.kind {
                 // already concrete
-                Sk::Sint | Sk::Uint | Sk::Float | Sk::Bool => return Ok(expr),
+                Sk::Sint | Sk::Uint | Sk::Float | Sk::BFloat | Sk::Bool => return Ok(expr),
                 Sk::AbstractInt => {
                     [crate::Scalar::I32, crate::Scalar::U32, crate::Scalar::F32].as_slice()
                 }
@@ -449,6 +449,7 @@ impl crate::Scalar {
             | (Sk::Sint, Sk::Sint)
             | (Sk::Uint, Sk::Uint)
             | (Sk::Float, Sk::Float)
+            | (Sk::BFloat, Sk::BFloat)
             | (Sk::Bool, Sk::Bool) => {
                 if self.width == other.width {
                     // ... either no conversion is necessary ...
@@ -481,6 +482,11 @@ impl crate::Scalar {
             // Nothing can be reconciled with `bool`.
             (Sk::Bool, _) | (_, Sk::Bool) => None,
 
+            // Abstract numbers convert to BFloat, but no other type does.
+            (Sk::AbstractInt | Sk::AbstractFloat, Sk::BFloat) => Some(other),
+            (Sk::BFloat, Sk::AbstractInt | Sk::AbstractFloat) => Some(self),
+            (Sk::BFloat, _) | (_, Sk::BFloat) => None,
+
             // Different concrete types cannot be reconciled.
             (Sk::Sint | Sk::Uint | Sk::Float, Sk::Sint | Sk::Uint | Sk::Float) => None,
         }
@@ -494,7 +500,7 @@ impl crate::Scalar {
     pub(in crate::front::wgsl) const fn concretize(self) -> Self {
         use crate::ScalarKind as Sk;
         match self.kind {
-            Sk::Sint | Sk::Uint | Sk::Float | Sk::Bool => self,
+            Sk::Sint | Sk::Uint | Sk::Float | Sk::BFloat | Sk::Bool => self,
             Sk::AbstractInt => Self::I32,
             Sk::AbstractFloat => Self::F32,
         }

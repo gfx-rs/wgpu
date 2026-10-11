@@ -17,6 +17,7 @@ pub(crate) struct EnableExtensions {
     dual_source_blending: bool,
     /// Whether `enable f16;` was written earlier in the shader module.
     f16: bool,
+    wgpu_bfloat16: bool,
     /// Whether `enable wgpu_int16;` was written earlier in the shader module.
     wgpu_int16: bool,
     clip_distances: bool,
@@ -36,6 +37,7 @@ impl EnableExtensions {
             wgpu_ray_query_vertex_return: false,
             wgpu_ray_tracing_pipeline: false,
             f16: false,
+            wgpu_bfloat16: false,
             wgpu_int16: false,
             dual_source_blending: false,
             clip_distances: false,
@@ -61,6 +63,7 @@ impl EnableExtensions {
             }
             ImplementedEnableExtension::DualSourceBlending => &mut self.dual_source_blending,
             ImplementedEnableExtension::F16 => &mut self.f16,
+            ImplementedEnableExtension::WgpuBfloat16 => &mut self.wgpu_bfloat16,
             ImplementedEnableExtension::WgpuInt16 => &mut self.wgpu_int16,
             ImplementedEnableExtension::ClipDistances => &mut self.clip_distances,
             ImplementedEnableExtension::WgpuCooperativeMatrix => &mut self.wgpu_cooperative_matrix,
@@ -84,6 +87,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::WgpuRayTracingPipeline => self.wgpu_ray_tracing_pipeline,
             ImplementedEnableExtension::DualSourceBlending => self.dual_source_blending,
             ImplementedEnableExtension::F16 => self.f16,
+            ImplementedEnableExtension::WgpuBfloat16 => self.wgpu_bfloat16,
             ImplementedEnableExtension::WgpuInt16 => self.wgpu_int16,
             ImplementedEnableExtension::ClipDistances => self.clip_distances,
             ImplementedEnableExtension::WgpuCooperativeMatrix => self.wgpu_cooperative_matrix,
@@ -134,6 +138,7 @@ impl From<ImplementedEnableExtension> for EnableExtension {
 
 impl EnableExtension {
     const F16: &'static str = "f16";
+    const BFLOAT16: &'static str = "wgpu_bfloat16";
     const CLIP_DISTANCES: &'static str = "clip_distances";
     const DUAL_SOURCE_BLENDING: &'static str = "dual_source_blending";
     const MESH_SHADER: &'static str = "wgpu_mesh_shader";
@@ -153,6 +158,7 @@ impl EnableExtension {
     pub(crate) fn from_ident(word: &str, span: Span) -> Result<'_, Self> {
         Ok(match word {
             Self::F16 => Self::Implemented(ImplementedEnableExtension::F16),
+            Self::BFLOAT16 => Self::Implemented(ImplementedEnableExtension::WgpuBfloat16),
             Self::CLIP_DISTANCES => Self::Implemented(ImplementedEnableExtension::ClipDistances),
             Self::DUAL_SOURCE_BLENDING => {
                 Self::Implemented(ImplementedEnableExtension::DualSourceBlending)
@@ -191,6 +197,7 @@ impl EnableExtension {
                 ImplementedEnableExtension::WgpuCooperativeMatrix => Self::COOPERATIVE_MATRIX,
                 ImplementedEnableExtension::DualSourceBlending => Self::DUAL_SOURCE_BLENDING,
                 ImplementedEnableExtension::F16 => Self::F16,
+                ImplementedEnableExtension::WgpuBfloat16 => Self::BFLOAT16,
                 ImplementedEnableExtension::ClipDistances => Self::CLIP_DISTANCES,
                 ImplementedEnableExtension::DrawIndex => Self::DRAW_INDEX,
                 ImplementedEnableExtension::PrimitiveIndex => Self::PRIMITIVE_INDEX,
@@ -211,6 +218,8 @@ impl EnableExtension {
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(test, derive(strum::VariantArray))]
 pub enum ImplementedEnableExtension {
+    /// Enables native BF16 storage, conversions and cooperative-matrix operands.
+    WgpuBfloat16,
     /// Enables `f16`/`half` primitive support in all shader languages.
     ///
     /// In the WGSL standard, this corresponds to [`enable f16;`].
@@ -260,6 +269,7 @@ pub enum ImplementedEnableExtension {
 impl ImplementedEnableExtension {
     /// A slice of all variants of [`ImplementedEnableExtension`].
     pub const VARIANTS: &'static [Self] = &[
+        Self::WgpuBfloat16,
         Self::F16,
         Self::DualSourceBlending,
         Self::ClipDistances,
@@ -286,6 +296,7 @@ impl ImplementedEnableExtension {
         use crate::valid::Capabilities as C;
         match self {
             Self::F16 => C::SHADER_FLOAT16,
+            Self::WgpuBfloat16 => C::SHADER_BFLOAT16,
             Self::DualSourceBlending => C::DUAL_SOURCE_BLENDING,
             Self::ClipDistances => C::CLIP_DISTANCES,
             Self::WgpuMeshShader => C::MESH_SHADER,

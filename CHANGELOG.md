@@ -42,6 +42,10 @@ Bottom level categories:
 
 ## Unreleased
 
+### Added/New Features
+
+#### Naga
+
 ### Major changes
 
 #### `TEXTURE_COMPONENT_SWIZZLE` feature and `swizzle` field in `TextureViewDescriptor`
@@ -141,6 +145,8 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
 
 #### Naga
+
+- Add native `wgpu_bfloat16` storage, F32 conversions and cooperative matrix products for the SPIR-V and MSL backends.
 
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
 
