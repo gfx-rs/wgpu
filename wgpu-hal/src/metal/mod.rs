@@ -319,7 +319,6 @@ struct CapabilitiesQuery {
     supports_cooperative_matrix: bool,
     int64: bool,
     int64_atomics_min_max: bool,
-    int64_atomics: bool,
     float_atomics: bool,
     mesh_shaders: bool,
     max_task_workgroup_count: u32,
@@ -352,7 +351,7 @@ struct PrivateCapabilities {
 struct PrivateTextureFormatCapabilities {
     read_write_texture_tier: MTLReadWriteTextureTier,
     sample_count_mask: crate::TextureFormatCapabilities,
-    int64_atomics: bool,
+    int64_atomics_min_max: bool,
     msaa_desktop: bool,
     msaa_apple3: bool,
     msaa_apple7: bool,
