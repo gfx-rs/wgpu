@@ -1,3 +1,5 @@
+/*! The [`StageCompiler`] type, for validating and compiling programmable stages. */
+
 use alloc::{
     borrow::Cow,
     boxed::Box,
@@ -15,20 +17,55 @@ use crate::{
     validation,
 };
 
-/// Validates and compiles a pipeline's programmable stages, in pipeline order.
+/// State for validating and compiling a pipeline's programmable stages.
+///
+/// Lifecycle:
+///
+/// -   Call [`StageCompiler::new`] to begin building a pipeline.
+///
+/// -   For each programmable stage, in processing order:
+///
+///     -   Call [`StageCompiler::compile`] to validate the stage and compile a
+///         hal module for it. On success, this updates the IO tracking to
+///         reflect the stage's outputs and returns a [`CompiledStage`] owning
+///         the hal module. (For passthrough shaders, this just borrows a
+///         reference to the provided hal module.)
+///
+/// -   Construct your `wgpu_hal` pipeline, populating the descriptor with
+///     [`wgpu_hal::ProgrammableStage`]s obtained by calling [`as_hal`] on each
+///     `CompiledStage`.
+///
+/// -   Drop the `CompiledStage` values, to free any hal shader modules we
+///     generated just for this pipeline.
+///
+/// [dsm]: wgpu_hal::DynShaderModule
 pub(super) struct StageCompiler<'d> {
     device: &'d Arc<Device>,
+
+    /// The primitive topology for render and mesh pipelines. `None` on compute pipelines.
     primitive_topology: Option<wgt::PrimitiveTopology>,
+
+    /// Resource usage accumulated across all of the pipeline's stages.
     pub resources: validation::PipelineResources,
+
     /// The outputs of the most recently added stage.
     pub io: validation::StageIo,
+
     /// Stages checked against their Naga module's interface.
     pub validated: wgt::ShaderStages,
+
     /// Stages using passthrough shader modules, which we cannot check.
     pub passthrough: wgt::ShaderStages,
 }
 
-/// A validated stage, ready to be passed to `wgpu_hal`.
+/// A validated pipeline stage, ready to be passed to `wgpu_hal`.
+///
+/// For non-passthrough modules, this owns some stage's hal module while we
+/// create a pipeline that uses it. Call [`as_hal`] to borrow a
+/// [`wgpu_hal::ProgrammableStage`] from this that you can use in the hal
+/// pipeline descriptor.
+///
+/// [`as_hal`]: Self::as_hal
 pub(super) struct CompiledStage<'a> {
     module: StageModule<'a>,
     pub entry_point: String,
@@ -36,12 +73,19 @@ pub(super) struct CompiledStage<'a> {
     zero_initialize_workgroup_memory: bool,
 }
 
+/// A `wgpu_hal` shader module, either owned or borrowed.
+///
+/// For ordinary shader stages, this owns the hal module we generated especially
+/// for that stage. For passthrough modules, this borrows a reference to the
+/// provided hal module.
 enum StageModule<'a> {
     Generated(GeneratedModule<'a>),
     Passthrough(&'a dyn hal::DynShaderModule),
 }
 
-/// A `wgpu_hal` shader module generated for a single pipeline stage.
+/// A `wgpu_hal` shader module generated at pipeline creation time.
+///
+/// Dropping this value takes care of destroying the hal module.
 struct GeneratedModule<'a> {
     device: &'a Device,
     raw: ManuallyDrop<Box<dyn hal::DynShaderModule>>,
@@ -80,10 +124,16 @@ impl<'d> StageCompiler<'d> {
         }
     }
 
-    /// Validate the next stage of the pipeline.
+    /// Validate and compile the next stage of the pipeline.
     ///
-    /// For Naga shader modules, apply `desc`'s override values, validate the
-    /// result, and generate a `wgpu_hal` shader module from it.
+    /// For Naga shader modules, validate the module using the provided override
+    /// values, and generate a `wgpu_hal` shader module from it. Update `self`
+    /// to reflect this stage's outputs and resource usage.
+    ///
+    /// For passthrough modules, simply note that this stage was a passthrough.
+    ///
+    /// In either case, on success, return a [`CompiledStage`] that owns (in the
+    /// Naga case) or borrows (in the passthrough case) the hal module.
     pub fn compile<'a>(
         &mut self,
         desc: &'a pipeline::ProgrammableStageDescriptor<'_>,

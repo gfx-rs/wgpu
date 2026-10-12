@@ -5079,11 +5079,13 @@ impl Device {
             sc
         };
 
+        // Validate and compile each programmable shader stage.
         let mut compiler =
             StageCompiler::new(self, pipeline_layout, io, Some(desc.primitive.topology));
         let vertex_stage;
         let task_stage;
         let mesh_stage;
+
         match desc.vertex {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
                 let stage = validation::ShaderStageForValidation::Vertex {
@@ -5128,6 +5130,8 @@ impl Device {
             ));
         }
 
+        // Extract the information the `StageCompiler` has accumulated about the
+        // overall pipeline.
         let StageCompiler {
             resources,
             io,
