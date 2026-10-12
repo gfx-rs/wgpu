@@ -13,6 +13,8 @@ use crate::ShaderStage;
 
 mod matrix_components;
 
+mod matrix_interfaces;
+
 #[cfg(test)]
 use std::println;
 
