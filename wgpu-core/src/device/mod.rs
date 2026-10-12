@@ -25,6 +25,7 @@ mod life;
 pub mod queue;
 pub mod ray_tracing;
 pub mod resource;
+mod stage_compiler;
 pub(crate) mod surface_config;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;

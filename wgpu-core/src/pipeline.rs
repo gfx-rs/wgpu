@@ -503,8 +503,6 @@ pub type ImplicitBindGroupCount = u8;
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImplicitLayoutError {
-    #[error("Unable to reflect the shader {0:?} interface")]
-    ReflectionError(wgt::ShaderStages),
     #[error(transparent)]
     BindGroup(#[from] CreateBindGroupLayoutError),
     #[error(transparent)]
@@ -516,7 +514,6 @@ pub enum ImplicitLayoutError {
 impl WebGpuError for ImplicitLayoutError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
-            Self::ReflectionError(_) => ErrorType::Validation,
             Self::BindGroup(e) => e.webgpu_error_type(),
             Self::Pipeline(e) => e.webgpu_error_type(),
             Self::Passthrough(_) => ErrorType::Validation,
