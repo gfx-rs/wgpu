@@ -767,7 +767,7 @@ jobs:
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
         run: git add --intent-to-add -- naga/tests/out && git diff --exit-code HEAD -- naga/tests/out
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         name: Upload comparison images
         if: always() # We want artifacts even if the tests fail.
         with:
@@ -778,7 +778,7 @@ jobs:
 
       # Per-test timings and the host counter samples outlive the run logs,
       # which is what we need to chase intermittent timeouts (#9248).
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         name: Upload test timings
         if: always() # We want timings even if the tests fail.
         with:
