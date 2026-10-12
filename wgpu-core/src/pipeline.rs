@@ -76,9 +76,11 @@ pub struct PassthroughInterface {
 #[expect(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum ShaderModuleState {
+    /// A Naga module, from which we generate a `wgpu_hal` shader module
+    /// for each pipeline stage that uses it.
     NagaModule {
-        raw: Box<dyn hal::DynShaderModule>,
-        interface: validation::Interface,
+        shader: hal::NagaShader,
+        runtime_checks: wgt::ShaderRuntimeChecks,
     },
     Passthrough {
         raw: Box<dyn hal::DynShaderModule>,
@@ -113,8 +115,8 @@ impl Drop for ShaderModule {
             return;
         };
         match state {
-            ShaderModuleState::NagaModule { raw, .. }
-            | ShaderModuleState::Passthrough { raw, .. } => unsafe {
+            ShaderModuleState::NagaModule { .. } => {}
+            ShaderModuleState::Passthrough { raw, .. } => unsafe {
                 self.device.raw().destroy_shader_module(raw);
             },
         }
@@ -174,14 +176,39 @@ impl ShaderModule {
     ) -> Result<String, validation::StageError> {
         let state = self.state()?;
         match state {
-            ShaderModuleState::NagaModule { ref interface, .. } => {
-                interface.finalize_entry_point_name(stage, entry_point)
+            ShaderModuleState::NagaModule { ref shader, .. } => {
+                finalize_naga_entry_point_name(&shader.module, stage, entry_point)
             }
             ShaderModuleState::Passthrough { ref interface, .. } => {
                 finalize_passthrough_entry_point_name(interface, entry_point)
             }
         }
     }
+}
+
+fn finalize_naga_entry_point_name(
+    module: &naga::Module,
+    stage: naga::ShaderStage,
+    entry_point: Option<&str>,
+) -> Result<String, validation::StageError> {
+    let mut candidates = module.entry_points.iter().filter(|ep| ep.stage == stage);
+    if let Some(name) = entry_point {
+        return match candidates.find(|ep| ep.name == name) {
+            Some(ep) => Ok(ep.name.clone()),
+            None => Err(validation::StageError::NoEntryPointWithNameForStage {
+                stage,
+                name: name.to_owned(),
+            }),
+        };
+    }
+
+    let Some(first) = candidates.next() else {
+        return Err(validation::StageError::NoEntryPointForStage(stage));
+    };
+    if candidates.next().is_some() {
+        return Err(validation::StageError::AmbiguousEntryPointForStage(stage));
+    }
+    Ok(first.name.clone())
 }
 
 fn finalize_passthrough_entry_point_name(

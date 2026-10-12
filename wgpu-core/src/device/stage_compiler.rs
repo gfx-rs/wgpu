@@ -1,8 +1,15 @@
-use alloc::{string::String, sync::Arc};
+use alloc::{
+    borrow::Cow,
+    boxed::Box,
+    string::{String, ToString as _},
+    sync::Arc,
+};
+use core::mem::ManuallyDrop;
 
 use crate::{
     binding_model::PipelineLayout,
     device::Device,
+    hal_label,
     pipeline::{self, CreatePipelineError, ShaderModuleState},
     resource::ParentDevice as _,
     validation,
@@ -23,10 +30,29 @@ pub(super) struct StageCompiler<'d> {
 
 /// A validated stage, ready to be passed to `wgpu_hal`.
 pub(super) struct CompiledStage<'a> {
-    module: &'a dyn hal::DynShaderModule,
+    module: StageModule<'a>,
     pub entry_point: String,
-    constants: &'a naga::back::PipelineConstants,
+    constants: Cow<'a, naga::back::PipelineConstants>,
     zero_initialize_workgroup_memory: bool,
+}
+
+enum StageModule<'a> {
+    Generated(GeneratedModule<'a>),
+    Passthrough(&'a dyn hal::DynShaderModule),
+}
+
+/// A `wgpu_hal` shader module generated for a single pipeline stage.
+struct GeneratedModule<'a> {
+    device: &'a Device,
+    raw: ManuallyDrop<Box<dyn hal::DynShaderModule>>,
+}
+
+impl Drop for GeneratedModule<'_> {
+    fn drop(&mut self) {
+        // SAFETY: We never use `self.raw` again.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe { self.device.raw().destroy_shader_module(raw) };
+    }
 }
 
 impl<'d> StageCompiler<'d> {
@@ -55,11 +81,17 @@ impl<'d> StageCompiler<'d> {
     }
 
     /// Validate the next stage of the pipeline.
+    ///
+    /// For Naga shader modules, apply `desc`'s override values, validate the
+    /// result, and generate a `wgpu_hal` shader module from it.
     pub fn compile<'a>(
         &mut self,
         desc: &'a pipeline::ProgrammableStageDescriptor<'_>,
         stage: validation::ShaderStageForValidation,
-    ) -> Result<CompiledStage<'a>, CreatePipelineError> {
+    ) -> Result<CompiledStage<'a>, CreatePipelineError>
+    where
+        'd: 'a,
+    {
         let stage_bit = stage.to_wgt_bit();
         let stage_err = |error| CreatePipelineError::Stage {
             stage: stage_bit,
@@ -77,11 +109,24 @@ impl<'d> StageCompiler<'d> {
             .finalize_entry_point_name(stage.to_naga(), desc.entry_point.as_deref())
             .map_err(stage_err)?;
 
-        let module = match *state {
+        match *state {
             ShaderModuleState::NagaModule {
-                ref interface,
-                ref raw,
+                ref shader,
+                runtime_checks,
             } => {
+                let (module, info) = naga::back::pipeline_constants::process_overrides(
+                    &shader.module,
+                    &shader.info,
+                    Some((stage.to_naga(), &entry_point)),
+                    &desc.constants,
+                )
+                .map_err(|error| CreatePipelineError::PipelineConstants {
+                    stage: stage_bit,
+                    message: error.to_string(),
+                })?;
+
+                let interface =
+                    validation::Interface::new(&module, &info, self.device.limits.clone());
                 self.io = interface
                     .check_stage(
                         &mut self.resources,
@@ -92,29 +137,68 @@ impl<'d> StageCompiler<'d> {
                     )
                     .map_err(stage_err)?;
                 self.validated |= stage_bit;
-                &**raw
+
+                let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {
+                    module: Cow::Owned(module.into_owned()),
+                    info: info.into_owned(),
+                    debug_source: shader.debug_source.clone(),
+                });
+                let hal_desc = hal::ShaderModuleDescriptor {
+                    label: hal_label(
+                        Some(shader_module.label.as_str()).filter(|label| !label.is_empty()),
+                        self.device.instance_flags,
+                    ),
+                    runtime_checks,
+                };
+                let raw = unsafe {
+                    self.device
+                        .raw()
+                        .create_shader_module(&hal_desc, hal_shader)
+                }
+                .map_err(|error| match error {
+                    hal::ShaderError::Device(error) => {
+                        CreatePipelineError::Device(self.device.handle_hal_error(error))
+                    }
+                    hal::ShaderError::Compilation(message) => CreatePipelineError::Internal {
+                        stage: stage_bit,
+                        message,
+                    },
+                })?;
+
+                Ok(CompiledStage {
+                    module: StageModule::Generated(GeneratedModule {
+                        device: self.device,
+                        raw: ManuallyDrop::new(raw),
+                    }),
+                    entry_point,
+                    // The overrides have already been applied.
+                    constants: Cow::Owned(Default::default()),
+                    zero_initialize_workgroup_memory: desc.zero_initialize_workgroup_memory,
+                })
             }
             ShaderModuleState::Passthrough { ref raw, .. } => {
                 self.passthrough |= stage_bit;
-                &**raw
+                Ok(CompiledStage {
+                    module: StageModule::Passthrough(&**raw),
+                    entry_point,
+                    constants: Cow::Borrowed(&desc.constants),
+                    zero_initialize_workgroup_memory: desc.zero_initialize_workgroup_memory,
+                })
             }
-        };
-
-        Ok(CompiledStage {
-            module,
-            entry_point,
-            constants: &desc.constants,
-            zero_initialize_workgroup_memory: desc.zero_initialize_workgroup_memory,
-        })
+        }
     }
 }
 
 impl CompiledStage<'_> {
     pub fn to_hal(&self) -> hal::ProgrammableStage<'_, dyn hal::DynShaderModule> {
+        let module = match self.module {
+            StageModule::Generated(ref generated) => &**generated.raw,
+            StageModule::Passthrough(raw) => raw,
+        };
         hal::ProgrammableStage {
-            module: self.module,
+            module,
             entry_point: &self.entry_point,
-            constants: self.constants,
+            constants: &self.constants,
             zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
         }
     }
