@@ -168,6 +168,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             temp_access_chain: Vec::new(),
             need_bake_expressions: Default::default(),
             function_task_payload_var: Default::default(),
+            immediate_raw_names: crate::FastHashMap::default(),
         }
     }
 
@@ -189,6 +190,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.continue_ctx.clear();
         self.need_bake_expressions.clear();
         self.function_task_payload_var.clear();
+        self.immediate_raw_names.clear();
     }
 
     /// Generates statements to be inserted immediately before and at the very
@@ -436,6 +438,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         for (global, _) in module.global_variables.iter() {
             self.write_global(module, global)?;
         }
+
+        // Write the functions that assemble the values of immediates
+        self.write_immediate_constructors(module)?;
 
         if !module.global_variables.is_empty() {
             // Add extra newline for readability
@@ -1067,6 +1072,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             return self.write_global_sampler(module, handle, global);
         }
 
+        // Immediates are handled entirely differently, so defer entirely to that method.
+        if global.space == crate::AddressSpace::Immediate {
+            return self.write_global_immediate(module, handle, global);
+        }
+
         // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-variable-register
         let register_ty = match global.space {
             crate::AddressSpace::Function => unreachable!("Function address space"),
@@ -1114,55 +1124,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 register
             }
             crate::AddressSpace::Immediate => {
-                // The type of the immediates will be wrapped in `ConstantBuffer`
-                write!(self.out, "ConstantBuffer<")?;
-                "b"
+                unreachable!("Immediates are handled by `write_global_immediate`")
             }
             crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
                 unimplemented!()
             }
         };
 
-        // If the global is a immediate data write the type now because it will be a
-        // generic argument to `ConstantBuffer`
-        if global.space == crate::AddressSpace::Immediate {
-            self.write_global_type(module, global.ty)?;
-
-            // need to write the array size if the type was emitted with `write_type`
-            if let TypeInner::Array { base, size, .. } = module.types[global.ty].inner {
-                self.write_array_size(module, base, size)?;
-            }
-
-            // Close the angled brackets for the generic argument
-            write!(self.out, ">")?;
-        }
-
         let name = &self.names[&NameKey::GlobalVariable(handle)];
         write!(self.out, " {name}")?;
-
-        // Immediates need to be assigned a binding explicitly by the consumer
-        // since naga has no way to know the binding from the shader alone
-        if global.space == crate::AddressSpace::Immediate {
-            match module.types[global.ty].inner {
-                TypeInner::Struct { .. } => {}
-                _ => {
-                    return Err(Error::Unimplemented(format!(
-                        "push-constant '{name}' has non-struct type; tracked by: https://github.com/gfx-rs/wgpu/issues/5683"
-                    )));
-                }
-            }
-
-            let target = self
-                .options
-                .immediates_target
-                .as_ref()
-                .expect("No bind target was defined for the immediates block");
-            write!(self.out, ": register(b{}", target.register)?;
-            if target.space != 0 {
-                write!(self.out, ", space{}", target.space)?;
-            }
-            write!(self.out, ")")?;
-        }
 
         if let Some(ref binding) = global.binding {
             // this was already resolved earlier when we started evaluating an entry point.
@@ -1846,6 +1816,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         if let back::FunctionType::EntryPoint(index) = func_ctx.ty {
             self.write_ep_arguments_initialization(module, func, index)?;
+        }
+
+        if let back::FunctionType::EntryPoint(_) = func_ctx.ty {
+            self.write_immediates_initialization(module, info)?;
         }
 
         // Write function local variables

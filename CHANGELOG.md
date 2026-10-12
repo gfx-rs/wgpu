@@ -230,6 +230,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Report WGSL type mismatches in `return` statements, function call arguments and composite constructors as WGSL errors naming both types, instead of IR validation errors that could only name the operands by handle index (such as "The \`return\` expression Some([1]) does not match the declared return type Some([1])"). By @emilk in [#9973](https://github.com/gfx-rs/wgpu/pull/9973).
 - Implement constant evaluation of the `extractBits`, `insertBits`, `faceForward`, `reflect`, and `refract` built-in functions. Evaluates expression at compile time to report issues early like `offset` and `count` selecting bits beyond the width of the data. By @MinerSheep in [#10258](https://github.com/gfx-rs/wgpu/pull/10258).
 - Reject WGSL loads of structs and arrays that contain atomics, which previously caused a panic in the HLSL backend. By @drakeo338 in [#10458](https://github.com/gfx-rs/wgpu/issues/10458).
+- Fix `var<immediate>` members being read from the wrong offsets on DX12 when a nested struct is not 16-byte aligned. By @DouglasDwyer in [#10581](https://github.com/gfx-rs/wgpu/pull/10581).
 
 #### Validation
 
