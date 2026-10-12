@@ -5098,29 +5098,29 @@ impl Device {
                 self.require_features(wgt::Features::EXPERIMENTAL_MESH_SHADER)?;
 
                 vertex_stage = None;
-                task_stage = task
-                    .as_ref()
-                    .map(|task| {
-                        compiler.compile(&task.stage, validation::ShaderStageForValidation::Task)
-                    })
-                    .transpose()?;
+                task_stage = match task {
+                    Some(task) => Some(
+                        compiler
+                            .compile(&task.stage, validation::ShaderStageForValidation::Task)?,
+                    ),
+                    None => None,
+                };
                 mesh_stage = Some(
                     compiler.compile(&mesh.stage, validation::ShaderStageForValidation::Mesh)?,
                 );
             }
         }
 
-        let fragment_stage = desc
-            .fragment
-            .as_ref()
-            .map(|fragment| {
+        let fragment_stage = match desc.fragment {
+            None => None,
+            Some(ref fragment) => {
                 let stage = validation::ShaderStageForValidation::Fragment {
                     dual_source_blending,
                     has_depth_attachment,
                 };
-                compiler.compile(&fragment.stage, stage)
-            })
-            .transpose()?;
+                Some(compiler.compile(&fragment.stage, stage)?)
+            }
+        };
 
         if !compiler.passthrough.is_empty() && is_auto_layout {
             return Err(pipeline::CreatePipelineError::Implicit(
