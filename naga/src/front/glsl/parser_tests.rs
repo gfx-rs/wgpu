@@ -11,8 +11,23 @@ use super::{
 };
 use crate::ShaderStage;
 
+mod matrix_components;
+
 #[cfg(test)]
 use std::println;
+
+fn parse_and_validate(source: &str, stage: ShaderStage) -> crate::Module {
+    let module = Frontend::default()
+        .parse(&Options::from(stage), source)
+        .unwrap();
+    crate::valid::Validator::new(
+        crate::valid::ValidationFlags::all(),
+        crate::valid::Capabilities::all(),
+    )
+    .validate(&module)
+    .unwrap();
+    module
+}
 
 #[test]
 fn version() {
