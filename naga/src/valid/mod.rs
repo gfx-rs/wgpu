@@ -229,6 +229,54 @@ bitflags::bitflags! {
     }
 }
 
+/// A cooperative matrix tile shape, named columns × rows like `coop_mat{columns}x{rows}`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct CooperativeMatrixShape {
+    pub columns: crate::CooperativeSize,
+    pub rows: crate::CooperativeSize,
+}
+
+impl CooperativeMatrixShape {
+    /// `columns` and `rows` are the tile dimensions. Values other than 8 and 16
+    /// cannot appear in the IR.
+    pub fn from_dimensions(columns: u32, rows: u32) -> Option<Self> {
+        Some(Self {
+            columns: cooperative_size(columns)?,
+            rows: cooperative_size(rows)?,
+        })
+    }
+}
+
+const fn cooperative_size(value: u32) -> Option<crate::CooperativeSize> {
+    match value {
+        8 => Some(crate::CooperativeSize::Eight),
+        16 => Some(crate::CooperativeSize::Sixteen),
+        _ => None,
+    }
+}
+
+const fn all_cooperative_matrix_shapes() -> [CooperativeMatrixShape; 4] {
+    use crate::CooperativeSize::{Eight, Sixteen};
+    [
+        CooperativeMatrixShape {
+            columns: Eight,
+            rows: Eight,
+        },
+        CooperativeMatrixShape {
+            columns: Eight,
+            rows: Sixteen,
+        },
+        CooperativeMatrixShape {
+            columns: Sixteen,
+            rows: Eight,
+        },
+        CooperativeMatrixShape {
+            columns: Sixteen,
+            rows: Sixteen,
+        },
+    ]
+}
+
 impl Capabilities {
     /// Returns the extension corresponding to this capability, if there is one.
     ///
@@ -424,6 +472,11 @@ pub struct Validator {
     /// The type of the ray payload, this must always be the same type in a particular
     /// entrypoint
     trace_rays_payload_type: Option<Handle<crate::Type>>,
+
+    /// Tile shapes a cooperative matrix type is allowed to use.
+    ///
+    /// Empty means no cooperative matrix shape is supported.
+    cooperative_matrix_shapes: FastHashSet<CooperativeMatrixShape>,
 }
 
 #[derive(Debug)]
@@ -624,6 +677,10 @@ impl Validator {
             }
             stages
         };
+        let mut cooperative_matrix_shapes = FastHashSet::default();
+        if capabilities.contains(Capabilities::COOPERATIVE_MATRIX) {
+            cooperative_matrix_shapes.extend(all_cooperative_matrix_shapes());
+        }
 
         Validator {
             flags,
@@ -642,7 +699,23 @@ impl Validator {
             needs_visit: HandleSet::new(),
             trace_rays_vertex_return: TraceRayVertexReturnState::NoTraceRays,
             trace_rays_payload_type: None,
+            cooperative_matrix_shapes,
         }
+    }
+
+    /// Replace the allowed cooperative matrix tile shapes.
+    ///
+    /// [`Validator::new`] starts with every IR shape when
+    /// [`Capabilities::COOPERATIVE_MATRIX`] is set, and with an empty set
+    /// otherwise. An empty iterator allows no shapes. `wgpu` passes the shapes
+    /// derived from the adapter's cooperative matrix properties.
+    pub fn cooperative_matrix_shapes(
+        &mut self,
+        shapes: impl IntoIterator<Item = CooperativeMatrixShape>,
+    ) -> &mut Self {
+        self.cooperative_matrix_shapes.clear();
+        self.cooperative_matrix_shapes.extend(shapes);
+        self
     }
 
     // TODO(https://github.com/gfx-rs/wgpu/issues/8207): Consider removing this

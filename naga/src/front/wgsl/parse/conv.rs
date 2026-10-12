@@ -558,9 +558,17 @@ pub fn map_predeclared_type(
         "acceleration_structure" => TypeGenerator::AccelerationStructure.into(),
         // ray query
         "ray_query" => TypeGenerator::RayQuery.into(),
-        // cooperative matrix
+        // cooperative matrix, named `coop_mat{columns}x{rows}` like WGSL's `mat{c}x{r}`
         "coop_mat8x8" => TypeGenerator::CooperativeMatrix {
             columns: crate::CooperativeSize::Eight,
+            rows: crate::CooperativeSize::Eight,
+        }.into(),
+        "coop_mat8x16" => TypeGenerator::CooperativeMatrix {
+            columns: crate::CooperativeSize::Eight,
+            rows: crate::CooperativeSize::Sixteen,
+        }.into(),
+        "coop_mat16x8" => TypeGenerator::CooperativeMatrix {
+            columns: crate::CooperativeSize::Sixteen,
             rows: crate::CooperativeSize::Eight,
         }.into(),
         "coop_mat16x16" => TypeGenerator::CooperativeMatrix {
