@@ -89,7 +89,6 @@ impl Instruction {
     pub(super) const fn new(op: Op) -> Self {
         Instruction {
             op,
-            wc: 1, // Always start at 1 for the first word (OP + WC),
             type_id: None,
             result_id: None,
             operands: vec![],
@@ -99,18 +98,15 @@ impl Instruction {
     pub(super) fn set_type(&mut self, id: Word) {
         assert!(self.type_id.is_none(), "Type can only be set once");
         self.type_id = Some(id);
-        self.wc += 1;
     }
 
     pub(super) fn set_result(&mut self, id: Word) {
         assert!(self.result_id.is_none(), "Result can only be set once");
         self.result_id = Some(id);
-        self.wc += 1;
     }
 
     pub(super) fn add_operand(&mut self, operand: Word) {
         self.operands.push(operand);
-        self.wc += 1;
     }
 
     pub(super) fn add_operands(&mut self, operands: Vec<Word>) {
@@ -119,8 +115,17 @@ impl Instruction {
         }
     }
 
+    fn word_count(&self) -> usize {
+        const OPCODE_WORD_COUNT_FIELDS_SIZE: usize = 1;
+
+        OPCODE_WORD_COUNT_FIELDS_SIZE
+            + usize::from(self.type_id.is_some())
+            + usize::from(self.result_id.is_some())
+            + self.operands.len()
+    }
+
     pub(super) fn to_words(&self, sink: &mut impl Extend<Word>) {
-        sink.extend(Some((self.wc << 16) | self.op as u32));
+        sink.extend(Some(((self.word_count() as u32) << 16) | self.op as u32));
         sink.extend(self.type_id);
         sink.extend(self.result_id);
         sink.extend(self.operands.iter().cloned());
@@ -218,7 +223,7 @@ fn test_logical_layout_in_words() {
 
     let mut index: usize = 0;
     for instruction in instructions {
-        let wc = instruction.wc as usize;
+        let wc = instruction.word_count();
         instruction.validate(&output[index..index + wc]);
         index += wc;
     }
