@@ -125,7 +125,14 @@ impl Instruction {
     }
 
     pub(super) fn to_words(&self, sink: &mut impl Extend<Word>) {
-        sink.extend(Some(((self.word_count() as u32) << 16) | self.op as u32));
+        let word_count = self.word_count();
+        assert!(
+            word_count <= usize::from(u16::MAX),
+            "{:?} instruction is {word_count} words long, but SPIR-V instructions are limited to {} words",
+            self.op,
+            u16::MAX
+        );
+        sink.extend(Some(((word_count as u32) << 16) | self.op as u32));
         sink.extend(self.type_id);
         sink.extend(self.result_id);
         sink.extend(self.operands.iter().cloned());
@@ -227,4 +234,33 @@ fn test_logical_layout_in_words() {
         instruction.validate(&output[index..index + wc]);
         index += wc;
     }
+}
+
+#[cfg(test)]
+fn entry_point_of_word_count(word_count: usize) -> Vec<Word> {
+    let mut instruction = Instruction::new(Op::EntryPoint);
+    // `Instruction::new` already accounts for the opcode/word-count word.
+    instruction.add_operands(vec![1; word_count - 1]);
+
+    let mut output = vec![];
+    instruction.to_words(&mut output);
+    output
+}
+
+/// Ensure we allow `u16::MAX` words in an instruction.
+#[test]
+fn test_longest_encodable_instruction() {
+    let output = entry_point_of_word_count(u16::MAX as usize);
+
+    assert_eq!(output.len(), u16::MAX as usize);
+    assert_eq!(output[0] >> 16, u16::MAX as Word);
+}
+
+/// Ensure we panic when we have more than `u16::MAX` words in an instruction.
+#[test]
+#[should_panic(
+    expected = "EntryPoint instruction is 65536 words long, but SPIR-V instructions are limited to 65535 words"
+)]
+fn test_instruction_word_count_overflow() {
+    entry_point_of_word_count(u16::MAX as usize + 1);
 }
