@@ -33,9 +33,9 @@ use crate::{
     },
     command, conv,
     device::{
-        bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
-        BufferMapPendingClosure, DeviceLostInvocation, MapMode, MissingDownlevelFlags,
-        MissingFeatures, RenderPassContext,
+        bgl, create_validator, life::WaitIdleError, map_buffer, stage_compiler::StageCompiler,
+        AttachmentData, BufferMapPendingClosure, DeviceLostInvocation, MapMode,
+        MissingDownlevelFlags, MissingFeatures, RenderPassContext,
     },
     error::ErrorSink,
     hal_label,
@@ -4543,11 +4543,6 @@ impl Device {
 
         self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;
 
-        let shader_module = desc.stage.module;
-
-        let shader_module_state = shader_module.state()?;
-        shader_module.same_device(self)?;
-
         let is_auto_layout = desc.layout.is_none();
 
         // Get the pipeline layout from the desc if it is provided.
@@ -4560,65 +4555,12 @@ impl Device {
             None => None,
         };
 
-        let mut resources;
-        let final_entry_point_name;
-        let module;
+        let mut compiler =
+            StageCompiler::new(self, pipeline_layout, validation::StageIo::default(), None);
+        let compute_stage =
+            compiler.compile(&desc.stage, validation::ShaderStageForValidation::Compute)?;
 
-        {
-            let stage = validation::ShaderStageForValidation::Compute;
-            let stage_err = |error: validation::StageError| pipeline::CreatePipelineError::Stage {
-                stage: wgt::ShaderStages::COMPUTE,
-                error,
-            };
-
-            final_entry_point_name = shader_module
-                .finalize_entry_point_name(
-                    stage.to_naga(),
-                    desc.stage.entry_point.as_ref().map(|ep| ep.as_ref()),
-                )
-                .map_err(stage_err)?;
-
-            match shader_module_state {
-                pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
-                    resources = validation::PipelineResources::new(match pipeline_layout {
-                        Some(pipeline_layout) => {
-                            validation::BindingLayoutSource::Provided(pipeline_layout)
-                        }
-                        None => validation::BindingLayoutSource::new_derived(&self.limits),
-                    });
-
-                    interface
-                        .check_stage(
-                            &mut resources,
-                            &final_entry_point_name,
-                            stage,
-                            validation::StageIo::default(),
-                            None,
-                        )
-                        .map_err(stage_err)?;
-
-                    module = &**raw;
-                }
-                pipeline::ShaderModuleState::Passthrough { raw, .. } => {
-                    match pipeline_layout {
-                        Some(pipeline_layout) => {
-                            resources = validation::PipelineResources::new(
-                                validation::BindingLayoutSource::Provided(pipeline_layout),
-                            );
-                        }
-                        None => {
-                            return Err(pipeline::CreatePipelineError::Implicit(
-                                pipeline::ImplicitLayoutError::Passthrough(
-                                    wgt::ShaderStages::COMPUTE,
-                                ),
-                            ));
-                        }
-                    }
-
-                    module = &**raw;
-                }
-            }
-        }
+        let resources = compiler.resources;
 
         let pipeline_layout = match resources.layout {
             validation::BindingLayoutSource::Provided(pipeline_layout) => pipeline_layout,
@@ -4652,12 +4594,7 @@ impl Device {
         let pipeline_desc = hal::ComputePipelineDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             layout: pipeline_layout.raw()?,
-            stage: hal::ProgrammableStage {
-                module,
-                entry_point: final_entry_point_name.as_ref(),
-                constants: &desc.stage.constants,
-                zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
-            },
+            stage: compute_stage.to_hal(),
             cache: cache.as_ref().map(|it| it.raw()).transpose()?,
         };
 
@@ -4668,7 +4605,7 @@ impl Device {
             state: ResourceState::Valid(pipeline::ComputePipelineState {
                 raw: ManuallyDrop::new(raw),
                 layout: pipeline_layout.clone(),
-                _shader_module: shader_module,
+                _shader_module: desc.stage.module.clone(),
             }),
             device: self.clone(),
             late_sized_buffer_groups,
@@ -4777,7 +4714,6 @@ impl Device {
         }
 
         let mut io = validation::StageIo::default();
-        let mut validated_stages = wgt::ShaderStages::empty();
 
         let mut vertex_steps;
         let mut hal_vertex_buffer_layouts;
@@ -5156,11 +5092,6 @@ impl Device {
             None => None,
         };
 
-        let mut resources = validation::PipelineResources::new(match pipeline_layout {
-            Some(pipeline_layout) => validation::BindingLayoutSource::Provided(pipeline_layout),
-            None => validation::BindingLayoutSource::new_derived(&self.limits),
-        });
-
         let samples = {
             let sc = desc.multisample.count;
             if sc == 0 || sc > 32 || !sc.is_power_of_two() {
@@ -5169,252 +5100,59 @@ impl Device {
             sc
         };
 
-        let mut vertex_stage = None;
-        let mut task_stage = None;
-        let mut mesh_stage = None;
-        let vertex_entry_point_name;
-        let task_entry_point_name;
-        let mesh_entry_point_name;
-        let mut passthrough_stages = wgt::ShaderStages::empty();
+        // Validate and compile each programmable shader stage.
+        let mut compiler =
+            StageCompiler::new(self, pipeline_layout, io, Some(desc.primitive.topology));
+        let vertex_stage;
+        let task_stage;
+        let mesh_stage;
+
         match desc.vertex {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
-                vertex_stage = {
-                    let stage_desc = &vertex.stage;
-                    let stage = validation::ShaderStageForValidation::Vertex {
-                        topology: desc.primitive.topology,
-                        compare_function: desc.depth_stencil.as_ref().and_then(|d| d.depth_compare),
-                    };
-                    let stage_bit = stage.to_wgt_bit();
-                    let stage_err = |error| pipeline::CreatePipelineError::Stage {
-                        stage: stage_bit,
-                        error,
-                    };
-
-                    let vertex_shader_module = &stage_desc.module;
-                    let vertex_shader_module_state = vertex_shader_module
-                        .state()
-                        .map_err(Into::into)
-                        .map_err(stage_err)?;
-                    vertex_shader_module.same_device(self)?;
-
-                    vertex_entry_point_name = vertex_shader_module
-                        .finalize_entry_point_name(
-                            stage.to_naga(),
-                            stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
-                        )
-                        .map_err(stage_err)?;
-
-                    let module;
-                    match vertex_shader_module_state {
-                        pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
-                            io = interface
-                                .check_stage(
-                                    &mut resources,
-                                    &vertex_entry_point_name,
-                                    stage,
-                                    io,
-                                    Some(desc.primitive.topology),
-                                )
-                                .map_err(stage_err)?;
-                            validated_stages |= stage_bit;
-                            module = &**raw;
-                        }
-                        pipeline::ShaderModuleState::Passthrough { raw, .. } => {
-                            passthrough_stages |= stage_bit;
-                            module = &**raw;
-                        }
-                    }
-
-                    Some(hal::ProgrammableStage {
-                        module,
-                        entry_point: &vertex_entry_point_name,
-                        constants: &stage_desc.constants,
-                        zero_initialize_workgroup_memory: stage_desc
-                            .zero_initialize_workgroup_memory,
-                    })
+                let stage = validation::ShaderStageForValidation::Vertex {
+                    topology: desc.primitive.topology,
+                    compare_function: desc.depth_stencil.as_ref().and_then(|d| d.depth_compare),
                 };
+                vertex_stage = Some(compiler.compile(&vertex.stage, stage)?);
+                task_stage = None;
+                mesh_stage = None;
             }
             pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
                 self.require_features(wgt::Features::EXPERIMENTAL_MESH_SHADER)?;
 
-                task_stage = if let Some(task) = task {
-                    let stage_desc = &task.stage;
-                    let stage = validation::ShaderStageForValidation::Task;
-                    let stage_bit = stage.to_wgt_bit();
-                    let stage_err = |error| pipeline::CreatePipelineError::Stage {
-                        stage: stage_bit,
-                        error,
-                    };
-
-                    let task_shader_module = &stage_desc.module;
-                    let task_shader_module_state = task_shader_module
-                        .state()
-                        .map_err(Into::into)
-                        .map_err(stage_err)?;
-                    task_shader_module.same_device(self)?;
-
-                    task_entry_point_name = task_shader_module
-                        .finalize_entry_point_name(
-                            stage.to_naga(),
-                            stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
-                        )
-                        .map_err(stage_err)?;
-
-                    let module;
-                    match task_shader_module_state {
-                        pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
-                            io = interface
-                                .check_stage(
-                                    &mut resources,
-                                    &task_entry_point_name,
-                                    stage,
-                                    io,
-                                    Some(desc.primitive.topology),
-                                )
-                                .map_err(stage_err)?;
-                            validated_stages |= stage_bit;
-                            module = &**raw;
-                        }
-                        pipeline::ShaderModuleState::Passthrough { raw, .. } => {
-                            passthrough_stages |= stage_bit;
-                            module = &**raw;
-                        }
-                    }
-
-                    Some(hal::ProgrammableStage {
-                        module,
-                        entry_point: &task_entry_point_name,
-                        constants: &stage_desc.constants,
-                        zero_initialize_workgroup_memory: stage_desc
-                            .zero_initialize_workgroup_memory,
-                    })
-                } else {
-                    None
+                vertex_stage = None;
+                task_stage = match task {
+                    Some(task) => Some(
+                        compiler
+                            .compile(&task.stage, validation::ShaderStageForValidation::Task)?,
+                    ),
+                    None => None,
                 };
-                mesh_stage = {
-                    let stage_desc = &mesh.stage;
-                    let stage = validation::ShaderStageForValidation::Mesh;
-                    let stage_bit = stage.to_wgt_bit();
-                    let stage_err = |error| pipeline::CreatePipelineError::Stage {
-                        stage: stage_bit,
-                        error,
-                    };
-
-                    let mesh_shader_module = &stage_desc.module;
-                    let mesh_shader_module_state = mesh_shader_module
-                        .state()
-                        .map_err(Into::into)
-                        .map_err(stage_err)?;
-                    mesh_shader_module.same_device(self)?;
-
-                    mesh_entry_point_name = mesh_shader_module
-                        .finalize_entry_point_name(
-                            stage.to_naga(),
-                            stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
-                        )
-                        .map_err(stage_err)?;
-
-                    let module;
-                    match mesh_shader_module_state {
-                        pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
-                            io = interface
-                                .check_stage(
-                                    &mut resources,
-                                    &mesh_entry_point_name,
-                                    stage,
-                                    io,
-                                    Some(desc.primitive.topology),
-                                )
-                                .map_err(stage_err)?;
-                            validated_stages |= stage_bit;
-                            module = &**raw;
-                        }
-                        pipeline::ShaderModuleState::Passthrough { raw, .. } => {
-                            passthrough_stages |= stage_bit;
-                            module = &**raw;
-                        }
-                    }
-
-                    Some(hal::ProgrammableStage {
-                        module,
-                        entry_point: &mesh_entry_point_name,
-                        constants: &stage_desc.constants,
-                        zero_initialize_workgroup_memory: stage_desc
-                            .zero_initialize_workgroup_memory,
-                    })
-                };
+                mesh_stage = Some(
+                    compiler.compile(&mesh.stage, validation::ShaderStageForValidation::Mesh)?,
+                );
             }
         }
 
-        let fragment_entry_point_name;
         let fragment_stage = match desc.fragment {
-            Some(ref fragment_state) => {
+            Some(ref fragment) => {
                 let stage = validation::ShaderStageForValidation::Fragment {
                     dual_source_blending,
                     has_depth_attachment,
                 };
-                let stage_bit = stage.to_wgt_bit();
-                let stage_err = |error| pipeline::CreatePipelineError::Stage {
-                    stage: stage_bit,
-                    error,
-                };
-
-                let shader_module = &fragment_state.stage.module;
-                let shader_module_state = shader_module
-                    .state()
-                    .map_err(Into::into)
-                    .map_err(stage_err)?;
-                shader_module.same_device(self)?;
-
-                fragment_entry_point_name = shader_module
-                    .finalize_entry_point_name(
-                        stage.to_naga(),
-                        fragment_state
-                            .stage
-                            .entry_point
-                            .as_ref()
-                            .map(|ep| ep.as_ref()),
-                    )
-                    .map_err(stage_err)?;
-
-                let module;
-                match shader_module_state {
-                    pipeline::ShaderModuleState::NagaModule { ref interface, raw } => {
-                        io = interface
-                            .check_stage(
-                                &mut resources,
-                                &fragment_entry_point_name,
-                                stage,
-                                io,
-                                Some(desc.primitive.topology),
-                            )
-                            .map_err(stage_err)?;
-                        validated_stages |= stage_bit;
-                        module = &**raw;
-                    }
-                    pipeline::ShaderModuleState::Passthrough { raw, .. } => {
-                        passthrough_stages |= stage_bit;
-                        module = &**raw;
-                    }
-                }
-
-                Some(hal::ProgrammableStage {
-                    module,
-                    entry_point: &fragment_entry_point_name,
-                    constants: &fragment_state.stage.constants,
-                    zero_initialize_workgroup_memory: fragment_state
-                        .stage
-                        .zero_initialize_workgroup_memory,
-                })
+                Some(compiler.compile(&fragment.stage, stage)?)
             }
             None => None,
         };
 
-        if !passthrough_stages.is_empty() && is_auto_layout {
-            return Err(pipeline::CreatePipelineError::Implicit(
-                pipeline::ImplicitLayoutError::Passthrough(passthrough_stages),
-            ));
-        }
+        // Extract the information the `StageCompiler` has accumulated about the
+        // overall pipeline.
+        let StageCompiler {
+            resources,
+            io,
+            validated: validated_stages,
+            ..
+        } = compiler;
 
         let mut active_color_outputs = 0u64;
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
@@ -5430,7 +5168,7 @@ impl Device {
                             "The fragment stage {:?} output @location({}) values are ignored",
                             fragment_stage
                                 .as_ref()
-                                .map_or("", |stage| stage.entry_point),
+                                .map_or("", |stage| stage.entry_point.as_str()),
                             i
                         );
                     }
@@ -5445,14 +5183,6 @@ impl Device {
                 )
                 .into());
             }
-        }
-
-        let last_stage = match desc.fragment {
-            Some(_) => wgt::ShaderStages::FRAGMENT,
-            None => wgt::ShaderStages::VERTEX,
-        };
-        if is_auto_layout && !validated_stages.contains(last_stage) {
-            return Err(pipeline::ImplicitLayoutError::ReflectionError(last_stage).into());
         }
 
         let pipeline_layout = match resources.layout {
@@ -5550,19 +5280,19 @@ impl Device {
                 label: desc.label.to_hal(self.instance_flags),
                 layout: pipeline_layout.raw()?,
                 vertex_processor: match vertex_stage {
-                    Some(vertex_stage) => hal::VertexProcessor::Standard {
+                    Some(ref vertex_stage) => hal::VertexProcessor::Standard {
                         vertex_buffers: &hal_vertex_buffer_layouts,
-                        vertex_stage,
+                        vertex_stage: vertex_stage.to_hal(),
                     },
                     None => hal::VertexProcessor::Mesh {
-                        task_stage,
-                        mesh_stage: mesh_stage.unwrap(),
+                        task_stage: task_stage.as_ref().map(|stage| stage.to_hal()),
+                        mesh_stage: mesh_stage.as_ref().unwrap().to_hal(),
                     },
                 },
                 primitive: desc.primitive,
                 depth_stencil: desc.depth_stencil.clone(),
                 multisample: desc.multisample,
-                fragment_stage,
+                fragment_stage: fragment_stage.as_ref().map(|stage| stage.to_hal()),
                 color_targets,
                 multiview_mask: desc.multiview_mask,
                 cache: cache.as_ref().map(|it| it.raw()).transpose()?,
