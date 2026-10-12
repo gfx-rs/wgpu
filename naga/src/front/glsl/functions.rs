@@ -1246,9 +1246,10 @@ impl Frontend {
 
             let ty = ctx.module.global_variables[arg.handle].ty;
 
+            let mut binding = arg.binding.clone();
             ctx.arg_type_walker(
                 arg.name.clone(),
-                arg.binding.clone(),
+                &mut binding,
                 pointer,
                 ty,
                 &mut |ctx, name, pointer, ty, binding| {
@@ -1299,9 +1300,10 @@ impl Frontend {
 
             let ty = ctx.module.global_variables[arg.handle].ty;
 
+            let mut binding = arg.binding.clone();
             ctx.arg_type_walker(
                 arg.name.clone(),
-                arg.binding.clone(),
+                &mut binding,
                 pointer,
                 ty,
                 &mut |ctx, name, pointer, ty, binding| {
@@ -1399,7 +1401,7 @@ impl Context<'_> {
     fn arg_type_walker(
         &mut self,
         name: Option<String>,
-        binding: crate::Binding,
+        binding: &mut crate::Binding,
         pointer: Handle<Expression>,
         ty: Handle<Type>,
         f: &mut impl FnMut(
@@ -1411,89 +1413,99 @@ impl Context<'_> {
         ),
     ) -> Result<()> {
         match self.module.types[ty].inner {
-            // TODO: Better error reporting
-            // right now we just don't walk the array if the size isn't known at
-            // compile time and let validation catch it
-            TypeInner::Array {
-                base,
-                size: crate::ArraySize::Constant(size),
-                ..
+            TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
             } => {
-                let location = match binding {
-                    crate::Binding::Location { location, .. } => location,
-                    crate::Binding::BuiltIn(_) => return Ok(()),
-                };
-
-                let interpolation =
-                    self.module.types[base]
-                        .inner
-                        .scalar_kind()
-                        .map(|kind| match kind {
-                            ScalarKind::Float => crate::Interpolation::Perspective,
-                            _ => crate::Interpolation::Flat,
-                        });
-
-                for index in 0..size.get() {
-                    let member_pointer = self.add_expression(
+                let vector = self.module.types.insert(
+                    Type {
+                        name: None,
+                        inner: TypeInner::Vector { size: rows, scalar },
+                    },
+                    Span::default(),
+                );
+                for index in 0..columns as u32 {
+                    let column = self.add_expression(
                         Expression::AccessIndex {
                             base: pointer,
                             index,
                         },
                         Span::default(),
                     )?;
-
-                    let binding = crate::Binding::Location {
-                        location: location + index,
-                        interpolation,
-                        sampling: None,
-                        blend_src: None,
-                        per_primitive: false,
-                    };
-
-                    self.arg_type_walker(name.clone(), binding, member_pointer, base, f)?
+                    self.arg_type_walker(name.clone(), binding, column, vector, f)?;
                 }
             }
-            TypeInner::Struct { ref members, .. } => {
-                let mut location = match binding {
-                    crate::Binding::Location { location, .. } => location,
-                    crate::Binding::BuiltIn(_) => return Ok(()),
-                };
-
-                for (i, member) in members.clone().into_iter().enumerate() {
-                    let member_pointer = self.add_expression(
+            // Arrays without a compile-time size are left intact for validation to reject.
+            // TODO: Report unsupported interface arrays here instead.
+            TypeInner::Array {
+                base,
+                size: crate::ArraySize::Constant(size),
+                ..
+            } => {
+                if matches!(binding, crate::Binding::BuiltIn(_)) {
+                    return Ok(());
+                }
+                for index in 0..size.get() {
+                    let element = self.add_expression(
                         Expression::AccessIndex {
                             base: pointer,
-                            index: i as u32,
+                            index,
                         },
                         Span::default(),
                     )?;
-
-                    let binding = match member.binding {
-                        Some(binding) => binding,
-                        None => {
-                            let interpolation = self.module.types[member.ty]
-                                .inner
-                                .scalar_kind()
-                                .map(|kind| match kind {
-                                    ScalarKind::Float => crate::Interpolation::Perspective,
-                                    _ => crate::Interpolation::Flat,
-                                });
-                            let binding = crate::Binding::Location {
-                                location,
-                                interpolation,
-                                sampling: None,
-                                blend_src: None,
-                                per_primitive: false,
-                            };
-                            location += 1;
-                            binding
-                        }
-                    };
-
-                    self.arg_type_walker(member.name, binding, member_pointer, member.ty, f)?
+                    self.arg_type_walker(name.clone(), binding, element, base, f)?;
                 }
             }
-            _ => f(self, name, pointer, ty, binding),
+            TypeInner::Struct { ref members, .. } => {
+                for (index, member) in members.clone().into_iter().enumerate() {
+                    let member_pointer = self.add_expression(
+                        Expression::AccessIndex {
+                            base: pointer,
+                            index: index as u32,
+                        },
+                        Span::default(),
+                    )?;
+                    let mut member_binding = member.binding.unwrap_or_else(|| binding.clone());
+                    self.arg_type_walker(
+                        member.name,
+                        &mut member_binding,
+                        member_pointer,
+                        member.ty,
+                        f,
+                    )?;
+                    if let (
+                        &mut crate::Binding::Location {
+                            ref mut location, ..
+                        },
+                        crate::Binding::Location { location: next, .. },
+                    ) = (&mut *binding, member_binding)
+                    {
+                        *location = next;
+                    }
+                }
+            }
+            ref inner => {
+                let mut leaf_binding = binding.clone();
+                leaf_binding.apply_default_interpolation(inner);
+                let locations = match *inner {
+                    TypeInner::Vector {
+                        size: crate::VectorSize::Tri | crate::VectorSize::Quad,
+                        scalar: Scalar::F64,
+                    } => 2,
+                    _ => 1,
+                };
+                f(self, name, pointer, ty, leaf_binding);
+                if let crate::Binding::Location {
+                    ref mut location, ..
+                } = *binding
+                {
+                    *location = location.checked_add(locations).ok_or_else(|| Error {
+                        kind: ErrorKind::SemanticError("interface location overflow".into()),
+                        meta: self.module.types.get_span(ty),
+                    })?;
+                }
+            }
         }
 
         Ok(())
