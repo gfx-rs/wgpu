@@ -208,6 +208,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Allocate acceleration structures created with `AccelerationStructureFlags::ALLOW_COMPACTION` from the transient Vulkan memory pool, since they are usually replaced by their compacted copies. By @stuartparmenter in [#10233](https://github.com/gfx-rs/wgpu/pull/10233).
 - Texture import APIs have changed. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
   - They now return a `vulkan::ImportTextureError` with specific error information instead of always reporting `DeviceError::Unexpected`. In most cases they no longer log errors to the console; the caller should do so if desired.
+  - `vulkan::Device::texture_from_dmabuf_fd` now takes a slice of `vulkan::DmaBufPlaneLayout` instead of a single `stride` and `offset`, to support importing multi-planar DMA-bufs. It also takes an `alias` flag that optionally creates the image with `VK_IMAGE_CREATE_ALIAS_BIT`. .
 
 ### Bug Fixes
 
