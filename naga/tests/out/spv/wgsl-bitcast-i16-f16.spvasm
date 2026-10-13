@@ -1,0 +1,67 @@
+; SPIR-V
+; Version: 1.0
+; Generator: rspirv
+; Bound: 45
+OpCapability Shader
+OpCapability Float16
+OpCapability StorageBuffer16BitAccess
+OpCapability UniformAndStorageBuffer16BitAccess
+OpCapability StorageInputOutput16
+OpCapability Int16
+OpExtension "SPV_KHR_16bit_storage"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %9 "main"
+OpExecutionMode %9 LocalSize 1 1 1
+%2 = OpTypeVoid
+%3 = OpTypeFloat 16
+%4 = OpTypeInt 16 1
+%5 = OpTypeInt 16 0
+%6 = OpTypeVector %3 4
+%7 = OpTypeVector %5 4
+%10 = OpTypeFunction %2
+%11 = OpConstant  %3  0.000000000000000000000000000000000000000021524
+%12 = OpConstant  %4  1
+%13 = OpConstant  %5  2
+%14 = OpConstant  %3  0.000000000000000000000000000000000000000022959
+%15 = OpConstant  %3  0.000000000000000000000000000000000000000023676
+%16 = OpConstant  %3  0.000000000000000000000000000000000000000024394
+%17 = OpConstantComposite  %6  %11 %14 %15 %16
+%18 = OpConstant  %5  1
+%19 = OpConstant  %5  3
+%20 = OpConstant  %5  4
+%21 = OpConstantComposite  %7  %18 %13 %19 %20
+%23 = OpTypePointer Function %3
+%25 = OpTypePointer Function %4
+%27 = OpTypePointer Function %5
+%29 = OpTypePointer Function %6
+%31 = OpTypePointer Function %7
+%9 = OpFunction  %2  None %10
+%8 = OpLabel
+%30 = OpVariable  %31  Function %21
+%24 = OpVariable  %25  Function %12
+%28 = OpVariable  %29  Function %17
+%22 = OpVariable  %23  Function %11
+%26 = OpVariable  %27  Function %13
+OpBranch %32
+%32 = OpLabel
+%33 = OpLoad  %3  %22
+%34 = OpBitcast  %4  %33
+OpStore %24 %34
+%35 = OpLoad  %3  %22
+%36 = OpBitcast  %5  %35
+OpStore %26 %36
+%37 = OpLoad  %4  %24
+%38 = OpBitcast  %3  %37
+OpStore %22 %38
+%39 = OpLoad  %5  %26
+%40 = OpBitcast  %3  %39
+OpStore %22 %40
+%41 = OpLoad  %6  %28
+%42 = OpBitcast  %7  %41
+OpStore %30 %42
+%43 = OpLoad  %7  %30
+%44 = OpBitcast  %6  %43
+OpStore %28 %44
+OpReturn
+OpFunctionEnd

@@ -100,8 +100,10 @@
                     Override(0),
                     As(
                         expr: 1,
-                        kind: Uint,
-                        convert: Some(4),
+                        target: (
+                            kind: Uint,
+                            width: 4,
+                        ),
                     ),
                     Literal(U32(1)),
                     AtomicResult(
