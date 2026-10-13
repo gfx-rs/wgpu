@@ -902,7 +902,8 @@ pub struct SurfaceConfiguration<V> {
     /// The usage of the swap chain. The only usage guaranteed to be supported is [`TextureUsages::RENDER_ATTACHMENT`].
     pub usage: TextureUsages,
     /// The texture format of the swap chain. The only formats that are guaranteed are
-    /// [`TextureFormat::Bgra8Unorm`] and [`TextureFormat::Bgra8UnormSrgb`].
+    /// [`TextureFormat::Bgra8Unorm`] and [`TextureFormat::Bgra8UnormSrgb`]. Unlike
+    /// WebGPU canvases, `wgpu` supports sRGB surface formats.
     pub format: TextureFormat,
     /// The color space in which the presentation engine interprets the values
     /// written to the swap chain.
@@ -970,11 +971,18 @@ pub struct SurfaceConfiguration<V> {
     pub desired_maximum_frame_latency: u32,
     /// Specifies how the alpha channel of the textures should be handled during compositing.
     pub alpha_mode: CompositeAlphaMode,
-    /// Specifies what view formats will be allowed when calling `Texture::create_view` on the texture returned by `Surface::get_current_texture`.
+    /// Specifies what view formats will be allowed when calling `Texture::create_view` on
+    /// the texture returned by `Surface::get_current_texture`.
     ///
-    /// View formats of the same format as the texture are always allowed.
+    /// Views with the same format as the texture are always allowed. Views with a different
+    /// format than the texture require [`crate::DownlevelFlags::SURFACE_VIEW_FORMATS`].
+    /// Note that `wgpu` treats adapters as [WebGPU-compliant][`crate::DownlevelFlags::compliant`]
+    /// even if they lack [`crate::DownlevelFlags::SURFACE_VIEW_FORMATS`].
     ///
-    /// Note: currently, only the srgb-ness is allowed to change. (ex: `Rgba8Unorm` texture + `Rgba8UnormSrgb` view)
+    /// Currently, a view format may only differ from the surface in srgb-ness (ex: `Rgba8Unorm`
+    /// texture + `Rgba8UnormSrgb` view).
+    ///
+    /// Unlike WebGPU canvases, `wgpu` supports sRGB surface formats.
     pub view_formats: V,
 }
 
