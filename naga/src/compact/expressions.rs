@@ -228,11 +228,11 @@ impl ExpressionTracer<'_> {
                 self.expressions_used.insert_iter(arg2);
                 self.expressions_used.insert_iter(arg3);
             }
-            Ex::As {
-                expr,
-                kind: _,
-                convert: _,
-            } => {
+            Ex::As { expr, target: _ } => {
+                self.expressions_used.insert(expr);
+            }
+            Ex::Bitcast { expr, ty } => {
+                self.types_used.insert(ty);
                 self.expressions_used.insert(expr);
             }
             Ex::ArrayLength(expr) => {
@@ -407,9 +407,15 @@ impl ModuleMap {
             }
             Ex::As {
                 ref mut expr,
-                kind: _,
-                convert: _,
+                target: _,
             } => adjust(expr),
+            Ex::Bitcast {
+                ref mut expr,
+                ref mut ty,
+            } => {
+                adjust(expr);
+                self.types.adjust(ty);
+            }
             Ex::CallResult(ref mut function) => {
                 self.functions.adjust(function);
             }
