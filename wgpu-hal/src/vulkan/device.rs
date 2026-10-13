@@ -30,7 +30,19 @@ pub enum ImportTextureError {
         import_types: u32,
         flags: vk::MemoryPropertyFlags,
     },
+    #[error("Expected {expected:?} planes, got {actual}.")]
+    InvalidPlaneCount {
+        expected: core::ops::RangeInclusive<usize>,
+        actual: usize,
+    },
 }
+
+const MEMORY_PLANE_ASPECTS: [vk::ImageAspectFlags; 4] = [
+    vk::ImageAspectFlags::MEMORY_PLANE_0_EXT,
+    vk::ImageAspectFlags::MEMORY_PLANE_1_EXT,
+    vk::ImageAspectFlags::MEMORY_PLANE_2_EXT,
+    vk::ImageAspectFlags::MEMORY_PLANE_3_EXT,
+];
 
 impl super::DeviceShared {
     /// Set the name of `object` to `name`.
@@ -391,6 +403,7 @@ impl super::Device {
         let raw = self.create_vk_image(
             desc,
             vk::ImageTiling::OPTIMAL,
+            vk::ImageCreateFlags::empty(),
             external_memory_image_create_info,
             None,
         )?;
@@ -420,12 +433,13 @@ impl super::Device {
         &self,
         desc: &crate::TextureDescriptor,
         tiling: vk::ImageTiling,
+        extra_flags: vk::ImageCreateFlags,
         external_memory_image_create_info: Option<&mut vk::ExternalMemoryImageCreateInfo>,
         drm_modifier_info: Option<&mut vk::ImageDrmFormatModifierExplicitCreateInfoEXT>,
     ) -> Result<vk::Image, crate::DeviceError> {
         let copy_size = desc.copy_extent();
 
-        let mut raw_flags = vk::ImageCreateFlags::empty();
+        let mut raw_flags = extra_flags;
         if desc.dimension == wgt::TextureDimension::D3
             && desc.usage.contains(wgt::TextureUses::COLOR_TARGET)
         {
@@ -578,7 +592,12 @@ impl super::Device {
         })
     }
 
-    /// Import a DMA-buf as a texture. Currently only supports single-plane DMA-bufs.
+    /// Import a DMA-buf as a texture. All memory planes of the DMA-buf must be
+    /// in the single `fd`.
+    ///
+    /// If `alias` is true, the image is created with `VK_IMAGE_CREATE_ALIAS_BIT`.
+    /// This is needed if another image with identical creation parameters is
+    /// bound to the same memory and must interpret its contents consistently.
     ///
     /// # Safety
     ///
@@ -587,15 +606,16 @@ impl super::Device {
     /// - The `fd` must be a valid DMA-buf file descriptor matching `desc`
     /// - On success, Vulkan takes ownership of the file descriptor. On failure,
     ///   the file descriptor is closed.
-    /// - The `drm_modifier`, `stride`, and `offset` must match the DMA-buf layout
+    /// - The `drm_modifier` and `plane_layouts` must match the DMA-buf layout,
+    ///   with one entry in `plane_layouts` per memory plane of `drm_modifier`.
     #[cfg(unix)]
     pub unsafe fn texture_from_dmabuf_fd(
         &self,
         fd: std::os::unix::io::OwnedFd,
         desc: &crate::TextureDescriptor,
         drm_modifier: u64,
-        stride: u64,
-        offset: u64,
+        plane_layouts: &[super::DmaBufPlaneLayout],
+        alias: bool,
     ) -> Result<super::Texture, ImportTextureError> {
         if !self
             .shared
@@ -612,28 +632,44 @@ impl super::Device {
             .extension_fns
             .external_memory_fd
             .as_ref()
-            .ok_or_else(|| {
-                log::error!("VK_KHR_external_memory_fd extension not loaded");
-                ImportTextureError::MissingExtension(ash::khr::external_memory_fd::NAME)
-            })?;
+            .ok_or(ImportTextureError::MissingExtension(
+                ash::khr::external_memory_fd::NAME,
+            ))?;
 
         let mut external_memory_image_info = vk::ExternalMemoryImageCreateInfo::default()
             .handle_types(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT);
 
-        let plane_layout = vk::SubresourceLayout {
-            offset,
-            row_pitch: stride,
-            size: 0,
-            array_pitch: 0,
-            depth_pitch: 0,
-        };
+        if plane_layouts.is_empty() {
+            return Err(ImportTextureError::InvalidPlaneCount {
+                expected: 1..=MEMORY_PLANE_ASPECTS.len(),
+                actual: 0,
+            });
+        }
+
+        let vk_plane_layouts: Vec<_> = plane_layouts
+            .iter()
+            .map(|layout| vk::SubresourceLayout {
+                offset: layout.offset,
+                row_pitch: layout.stride,
+                size: 0,
+                array_pitch: 0,
+                depth_pitch: 0,
+            })
+            .collect();
         let mut drm_modifier_info = vk::ImageDrmFormatModifierExplicitCreateInfoEXT::default()
             .drm_format_modifier(drm_modifier)
-            .plane_layouts(core::slice::from_ref(&plane_layout));
+            .plane_layouts(&vk_plane_layouts);
+
+        let extra_flags = if alias {
+            vk::ImageCreateFlags::ALIAS
+        } else {
+            vk::ImageCreateFlags::empty()
+        };
 
         let raw = self.create_vk_image(
             desc,
             vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT,
+            extra_flags,
             Some(&mut external_memory_image_info),
             Some(&mut drm_modifier_info),
         )?;

@@ -955,6 +955,16 @@ pub enum TextureMemory {
     External,
 }
 
+/// Layout of one DRM memory plane of a DMA-buf, for
+/// [`Device::texture_from_dmabuf_fd`].
+#[derive(Clone, Copy, Debug)]
+pub struct DmaBufPlaneLayout {
+    /// Offset of the plane from the start of the DMA-buf, in bytes.
+    pub offset: u64,
+    /// Row pitch of the plane, in bytes.
+    pub stride: u64,
+}
+
 #[derive(Debug)]
 pub struct Texture {
     raw: vk::Image,
