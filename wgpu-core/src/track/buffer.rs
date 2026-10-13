@@ -696,7 +696,7 @@ impl DeviceBufferTracker {
 enum BufferStateProvider<'a> {
     /// Get a state that was provided directly.
     Direct { state: BufferUses },
-    /// Get a state from an an array of states.
+    /// Get a state from an array of states.
     Indirect { state: &'a [BufferUses] },
 }
 impl BufferStateProvider<'_> {

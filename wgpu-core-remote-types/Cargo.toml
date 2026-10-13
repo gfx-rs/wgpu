@@ -25,7 +25,7 @@ targets = [
 ]
 
 [dependencies]
-wgpu-types = { workspace = true, features = ["serde"] }
+hashbrown = { workspace = true }
 naga-types = { workspace = true }
 serde = { workspace = true }
-hashbrown = { workspace = true }
+wgpu-types = { workspace = true, features = ["serde"] }

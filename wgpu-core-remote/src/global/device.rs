@@ -1,6 +1,5 @@
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::ops::Deref;
-use core::ptr::NonNull;
 use wgpu_core_remote_types::{
     encoders::{RenderBundleDescriptor, RenderBundleEncoderDescriptor},
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
@@ -18,7 +17,7 @@ use wgpu_core::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
         ResolvedGeneralRenderPipelineDescriptor,
     },
-    resource::{self, BufferAccessError, BufferMapOperation, CreateBufferError},
+    resource::{self, BufferAccessError, BufferMapOperation, BufferMapping, CreateBufferError},
     Label, LabelHelpers, SubmissionIndex,
 };
 
@@ -994,7 +993,7 @@ impl Global {
     /// Returns an error if the pipeline creation fails instead of handling error in device.
     ///
     /// Id is assigned to the pipeline only if the creation succeeds.
-    pub fn create_render_pipeline_or_error(
+    pub fn device_create_render_pipeline_or_error(
         &self,
         device_id: DeviceId,
         desc: &RenderPipelineDescriptor,
@@ -1290,7 +1289,7 @@ impl Global {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-    ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
+    ) -> Result<BufferMapping, BufferAccessError> {
         let hub = self.hub.borrow();
 
         let buffer = hub.buffers.get(buffer_id);

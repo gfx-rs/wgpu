@@ -3109,6 +3109,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Dot4I8Packed,
             Dot4U8Packed,
             QuantizeToF16,
+            Sign,
             Regular(&'static str),
             MissingIntOverload(&'static str),
             MissingIntReturnType(&'static str),
@@ -3170,7 +3171,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Mf::Reflect => Function::Regular("reflect"),
             Mf::Refract => Function::Regular("refract"),
             // computational
-            Mf::Sign => Function::Regular("sign"),
+            Mf::Sign => Function::Sign,
             Mf::Fma => Function::Regular("mad"),
             Mf::Mix => Function::Regular("lerp"),
             Mf::Step => Function::Regular("step"),
@@ -3453,6 +3454,22 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "f16tof32(f32tof16(")?;
                 self.write_expr(module, arg, func_ctx)?;
                 write!(self.out, "))")?;
+            }
+            // HLSL's `sign` always returns a signed integer, even for floating-point
+            // arguments, so cast the result back to the WGSL result type.
+            Function::Sign => {
+                let inner = func_ctx.resolve_type(arg, &module.types);
+                let is_float = inner.scalar_kind() == Some(ScalarKind::Float);
+                if is_float {
+                    self.write_value_type(module, inner)?;
+                    write!(self.out, "(")?;
+                }
+                write!(self.out, "sign(")?;
+                self.write_expr(module, arg, func_ctx)?;
+                write!(self.out, ")")?;
+                if is_float {
+                    write!(self.out, ")")?;
+                }
             }
             Function::Regular(fun_name) => {
                 write!(self.out, "{fun_name}(")?;

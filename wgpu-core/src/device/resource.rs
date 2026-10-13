@@ -321,6 +321,84 @@ pub struct Device {
     pub(crate) trace: Mutex<Option<Box<dyn trace::Trace + Send + Sync + 'static>>>,
 }
 
+#[cfg(send_sync)]
+const _: () = {
+    // SAFETY: Bounds checked below
+    unsafe impl Send for Device {}
+    // SAFETY: Bounds checked below
+    unsafe impl Sync for Device {}
+
+    fn _device_fields_are_send_sync(obj: &Device) {
+        fn _check_bound<T: Send + Sync>(_: &T) {}
+        let Device {
+            queue,
+            zero_buffer,
+            empty_bgl,
+            label,
+            command_allocator,
+            command_indices,
+            last_successful_submission_index,
+            fence,
+            snatchable_lock,
+            valid,
+            device_lost_closure,
+            error_sink,
+            trackers,
+            tracker_indices,
+            bgl_pool,
+            alignments,
+            limits,
+            features,
+            downlevel,
+            ordered_buffer_usages,
+            ordered_texture_usages,
+            instance_flags,
+            deferred_destroy,
+            deferred_buffer_map_pending_closures,
+            usage_scopes,
+            indirect_validation,
+            timestamp_normalizer,
+            default_external_texture_params_buffer,
+            raw,
+            adapter,
+            #[cfg(feature = "trace")]
+            trace,
+        } = obj;
+        _check_bound(queue);
+        _check_bound(zero_buffer);
+        _check_bound(empty_bgl);
+        _check_bound(label);
+        _check_bound(command_allocator);
+        _check_bound(command_indices);
+        _check_bound(last_successful_submission_index);
+        _check_bound(fence);
+        _check_bound(snatchable_lock);
+        _check_bound(valid);
+        _check_bound(device_lost_closure);
+        _check_bound(error_sink);
+        _check_bound(trackers);
+        _check_bound(tracker_indices);
+        _check_bound(bgl_pool);
+        _check_bound(alignments);
+        _check_bound(limits);
+        _check_bound(features);
+        _check_bound(downlevel);
+        _check_bound(ordered_buffer_usages);
+        _check_bound(ordered_texture_usages);
+        _check_bound(instance_flags);
+        _check_bound(deferred_destroy);
+        _check_bound(deferred_buffer_map_pending_closures);
+        _check_bound(usage_scopes);
+        _check_bound(indirect_validation);
+        _check_bound(timestamp_normalizer);
+        _check_bound(default_external_texture_params_buffer);
+        _check_bound(raw);
+        _check_bound(adapter);
+        #[cfg(feature = "trace")]
+        _check_bound(trace);
+    }
+};
+
 pub(crate) enum DeferredDestroy {
     TextureViews(WeakVec<TextureView>),
     BindGroups(WeakVec<BindGroup>),
@@ -1296,7 +1374,10 @@ impl Device {
                 rank::BUFFER_INITIALIZATION_STATUS,
                 BufferInitTracker::new(tail_start),
             ),
-            map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
+            map_state: Arc::new(RwLock::new(
+                rank::BUFFER_MAP_STATE,
+                resource::BufferMapState::Idle,
+            )),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
@@ -1376,7 +1457,7 @@ impl Device {
                 map_buffer(&buffer, 0, map_size, MapMode::Write, &snatch_guard)?
             };
             drop(snatch_guard);
-            *buffer.map_state.lock() = resource::BufferMapState::Active {
+            *buffer.map_state.write() = resource::BufferMapState::Active {
                 mapping,
                 range: 0..map_size,
                 host: MapMode::Write,
@@ -1397,7 +1478,7 @@ impl Device {
             staging_buffer.write_zeros();
             buffer.initialization_status.write().drain(0..final_size);
 
-            *buffer.map_state.lock() = resource::BufferMapState::Init { staging_buffer };
+            *buffer.map_state.write() = resource::BufferMapState::Init { staging_buffer };
             wgt::BufferUses::COPY_DST
         };
 
@@ -1663,7 +1744,10 @@ impl Device {
                 rank::BUFFER_INITIALIZATION_STATUS,
                 BufferInitTracker::new(0),
             ),
-            map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
+            map_state: Arc::new(RwLock::new(
+                rank::BUFFER_MAP_STATE,
+                resource::BufferMapState::Idle,
+            )),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),

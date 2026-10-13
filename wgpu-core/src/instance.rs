@@ -25,15 +25,6 @@ use crate::{
 
 use wgt::{Backend, Backends, InstanceFlags, PowerPreference};
 
-#[test]
-fn downlevel_default_limits_less_than_default_limits() {
-    let res = check_limits(&wgt::Limits::downlevel_defaults(), &wgt::Limits::default());
-    assert!(
-        res.is_empty(),
-        "Downlevel limits are greater than default limits",
-    )
-}
-
 #[derive(Debug)]
 pub(crate) struct InstanceDevices(Mutex<WeakVec<Device>>);
 
@@ -913,7 +904,7 @@ impl Surface {
                     Err(WaitIdleError::Device(_)) => {
                         // we can ignore device lost errors here, since we are just cleaning up
                     }
-                    Err(WaitIdleError::Timeout) if cfg!(target_arch = "wasm32") => {
+                    Err(WaitIdleError::Timeout) if cfg!(target_family = "wasm") => {
                         // On wasm, you cannot actually successfully wait for the surface.
                         // However WebGL does not actually require you do this, so ignoring
                         // the failure is totally fine. See https://github.com/gfx-rs/wgpu/issues/7363
@@ -1632,6 +1623,20 @@ mod tests {
     }
 
     #[test]
+    fn missing_surface_view_formats_allowed_with_strict_compliance() {
+        let downlevel = wgt::DownlevelCapabilities {
+            flags: wgt::DownlevelFlags::all() - wgt::DownlevelFlags::SURFACE_VIEW_FORMATS,
+            ..Default::default()
+        };
+        assert!(adapter_allowed(
+            InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
+            &"",
+            &wgt::Limits::defaults(),
+            &downlevel
+        ));
+    }
+
+    #[test]
     fn fully_compliant_adapter_always_allowed() {
         assert!(adapter_allowed(
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
@@ -1748,5 +1753,14 @@ mod tests {
                 &wgt::Limits::defaults(),
             );
         }
+    }
+
+    #[test]
+    fn downlevel_default_limits_less_than_default_limits() {
+        let res = check_limits(&wgt::Limits::downlevel_defaults(), &wgt::Limits::default());
+        assert!(
+            res.is_empty(),
+            "Downlevel limits are greater than default limits",
+        )
     }
 }
