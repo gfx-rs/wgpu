@@ -128,6 +128,27 @@ crate::impl_dyn_resource!(
     TextureView
 );
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct VkVersion(pub u32);
+
+impl fmt::Display for VkVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}.{}.{}",
+            vk::api_version_major(self.0),
+            vk::api_version_minor(self.0),
+            vk::api_version_patch(self.0)
+        )
+    }
+}
+
+impl fmt::Debug for VkVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
 struct DebugUtils {
     extension: ext::debug_utils::Instance,
     messenger: vk::DebugUtilsMessengerEXT,
@@ -217,7 +238,7 @@ impl fmt::Debug for InstanceShared {
             .field("memory_budget_thresholds", memory_budget_thresholds)
             .field("has_nv_optimus", has_nv_optimus)
             .field("android_sdk_version", android_sdk_version)
-            .field("instance_api_version", instance_api_version)
+            .field("instance_api_version", &VkVersion(*instance_api_version))
             .finish_non_exhaustive()
     }
 }
@@ -948,8 +969,8 @@ pub enum TextureMemory {
     // shared memory in GPU allocator (owned by wgpu-hal)
     Allocation(MemoryAllocation),
 
-    // dedicated memory (owned by wgpu-hal)
-    Dedicated(vk::DeviceMemory),
+    // memory used only by this texture, freed with vkFreeMemory (owned by wgpu-hal)
+    DeviceMemory(Vec<vk::DeviceMemory>),
 
     // memory not owned by wgpu
     External,
@@ -963,6 +984,18 @@ pub struct DmaBufPlaneLayout {
     pub offset: u64,
     /// Row pitch of the plane, in bytes.
     pub stride: u64,
+}
+
+/// One memory plane of a texture imported with
+/// [`Device::texture_from_dmabuf_fds`]. The memory for each
+/// DMA-buf file descriptor may contain one or more image planes.
+#[derive(Clone, Copy, Debug)]
+pub struct DmaBufPlane {
+    /// Index of the DMA-buf object containing this plane.
+    pub fd_index: usize,
+    /// Layout of the plane, with offset relative to the start of the DMA-buf
+    /// object at `fd_index`.
+    pub layout: DmaBufPlaneLayout,
 }
 
 #[derive(Debug)]

@@ -186,6 +186,8 @@ By @sagudev in [#10109](https://github.com/gfx-rs/wgpu/pull/10109).
 - Texture import APIs have changed. By @andyleiserson in [#TODO](https://github.com/gfx-rs/wgpu/pull/TODO).
   - They now return a `vulkan::ImportTextureError` with specific error information instead of always reporting `DeviceError::Unexpected`. In most cases they no longer log errors to the console; the caller should do so if desired.
   - `vulkan::Device::texture_from_dmabuf_fd` now takes a slice of `vulkan::DmaBufPlaneLayout` instead of a single `stride` and `offset`, to support importing multi-planar DMA-bufs. It also takes an `alias` flag that optionally creates the image with `VK_IMAGE_CREATE_ALIAS_BIT`. .
+  - A new function `vulkan::Device::texture_from_dmabuf_fds` supports importing textures whose memory planes are in several DMA-buf objects, as an image with disjoint storage.
+  - `vulkan::TextureMemory::Dedicated` is replaced by `DeviceMemory`, which holds a `Vec<vk::DeviceMemory>`.
 
 ### Bug Fixes
 
