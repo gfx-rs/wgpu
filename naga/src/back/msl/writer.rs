@@ -1232,11 +1232,7 @@ impl<W: Write> Writer<W> {
         kind: crate::ScalarKind,
         context: &ExpressionContext,
     ) -> BackendResult {
-        if let crate::TypeInner::Image {
-            class: crate::ImageClass::External,
-            ..
-        } = *context.resolve_type(image)
-        {
+        if context.resolve_type(image).is_external_image() {
             write!(self.out, "{IMAGE_SIZE_EXTERNAL_FUNCTION}(")?;
             self.put_expression(image, context, true)?;
             write!(self.out, ")")?;
@@ -1500,11 +1496,7 @@ impl<W: Write> Writer<W> {
         mut address: TexelAddress,
         context: &ExpressionContext,
     ) -> BackendResult {
-        if let crate::TypeInner::Image {
-            class: crate::ImageClass::External,
-            ..
-        } = *context.resolve_type(image)
-        {
+        if context.resolve_type(image).is_external_image() {
             write!(self.out, "{IMAGE_LOAD_EXTERNAL_FUNCTION}(")?;
             self.put_expression(image, context, true)?;
             write!(self.out, ", ")?;
@@ -8174,11 +8166,7 @@ template <typename A>
                         )?;
                         self.put_inline_sampler_properties(back::Level(2), sampler, options)?;
                         writeln!(self.out, "{});", back::INDENT)?;
-                    } else if let crate::TypeInner::Image {
-                        class: crate::ImageClass::External,
-                        ..
-                    } = module.types[var.ty].inner
-                    {
+                    } else if module.types[var.ty].inner.is_external_image() {
                         // Wrap the individual arguments for each external texture global
                         // in a struct which can be easily passed around.
                         let wrapper_name = &self.names[&NameKey::GlobalVariable(handle)];

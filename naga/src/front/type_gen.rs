@@ -2,7 +2,7 @@
 Type generators.
 */
 
-use alloc::{string::ToString, vec};
+use alloc::{boxed::Box, string::ToString, vec};
 
 use crate::{arena::Handle, span::Span};
 
@@ -288,6 +288,8 @@ impl crate::Module {
     /// [`SpecialTypes::external_texture_params`]: crate::ir::SpecialTypes::external_texture_params
     /// [`SpecialTypes::external_texture_transfer_function`]: crate::ir::SpecialTypes::external_texture_transfer_function
     pub fn generate_external_texture_types(&mut self) {
+        use crate::common::ExternalTextureParameter as P;
+
         if self.special_types.external_texture_params.is_some() {
             return;
         }
@@ -387,65 +389,67 @@ impl crate::Module {
         );
         self.special_types.external_texture_transfer_function = Some(transfer_fn_handle);
 
-        let params_handle = self.types.insert(
-            crate::Type {
-                name: Some("NagaExternalTextureParams".to_string()),
-                inner: crate::TypeInner::Struct {
-                    members: vec![
-                        crate::StructMember {
-                            name: Some("yuv_conversion_matrix".to_string()),
-                            ty: ty_mat4x4f,
-                            binding: None,
-                            offset: 0,
-                        },
-                        crate::StructMember {
-                            name: Some("gamut_conversion_matrix".to_string()),
-                            ty: ty_mat3x3f,
-                            binding: None,
-                            offset: 64,
-                        },
-                        crate::StructMember {
-                            name: Some("src_tf".to_string()),
-                            ty: transfer_fn_handle,
-                            binding: None,
-                            offset: 112,
-                        },
-                        crate::StructMember {
-                            name: Some("dst_tf".to_string()),
-                            ty: transfer_fn_handle,
-                            binding: None,
-                            offset: 128,
-                        },
-                        crate::StructMember {
-                            name: Some("sample_transform".to_string()),
-                            ty: ty_mat3x2f,
-                            binding: None,
-                            offset: 144,
-                        },
-                        crate::StructMember {
-                            name: Some("load_transform".to_string()),
-                            ty: ty_mat3x2f,
-                            binding: None,
-                            offset: 168,
-                        },
-                        crate::StructMember {
-                            name: Some("size".to_string()),
-                            ty: ty_vec2u,
-                            binding: None,
-                            offset: 192,
-                        },
-                        crate::StructMember {
-                            name: Some("num_planes".to_string()),
-                            ty: ty_u32,
-                            binding: None,
-                            offset: 200,
-                        },
-                    ],
-                    span: 208,
-                },
+        // This definition must match [`wgpu_core::device::resource::ExternalTextureParams`].
+        let members: Box<[_; P::COUNT]> = Box::new([
+            crate::StructMember {
+                name: Some(P::YuvConversionMatrix.name().to_string()),
+                ty: ty_mat4x4f,
+                binding: None,
+                offset: 0,
             },
-            Span::UNDEFINED,
-        );
+            crate::StructMember {
+                name: Some(P::GamutConversionMatrix.name().to_string()),
+                ty: ty_mat3x3f,
+                binding: None,
+                offset: 64,
+            },
+            crate::StructMember {
+                name: Some(P::SrcTf.name().to_string()),
+                ty: transfer_fn_handle,
+                binding: None,
+                offset: 112,
+            },
+            crate::StructMember {
+                name: Some(P::DstTf.name().to_string()),
+                ty: transfer_fn_handle,
+                binding: None,
+                offset: 128,
+            },
+            crate::StructMember {
+                name: Some(P::SampleTransform.name().to_string()),
+                ty: ty_mat3x2f,
+                binding: None,
+                offset: 144,
+            },
+            crate::StructMember {
+                name: Some(P::LoadTransform.name().to_string()),
+                ty: ty_mat3x2f,
+                binding: None,
+                offset: 168,
+            },
+            crate::StructMember {
+                name: Some(P::Size.name().to_string()),
+                ty: ty_vec2u,
+                binding: None,
+                offset: 192,
+            },
+            crate::StructMember {
+                name: Some(P::NumPlanes.name().to_string()),
+                ty: ty_u32,
+                binding: None,
+                offset: 200,
+            },
+        ]);
+
+        let ty = crate::Type {
+            name: Some("NagaExternalTextureParams".to_string()),
+            inner: crate::TypeInner::Struct {
+                members: <[_]>::into_vec(members),
+                span: 208,
+            },
+        };
+
+        let params_handle = self.types.insert(ty, Span::UNDEFINED);
         self.special_types.external_texture_params = Some(params_handle);
     }
 
