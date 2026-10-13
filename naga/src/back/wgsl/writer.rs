@@ -1588,7 +1588,7 @@ impl<W: Write> Writer<W> {
                         write!(
                             self.out,
                             ".{}",
-                            &self.names[&NameKey::StructMember(ty, index)]
+                            self.names[&NameKey::StructMember(ty, index)]
                         )?
                     }
                     ref other => return Err(Error::Custom(format!("Cannot index {other:?}"))),
@@ -2063,7 +2063,7 @@ impl<W: Write> Writer<W> {
         write!(
             self.out,
             " {}: ",
-            &self.names[&NameKey::GlobalVariable(handle)]
+            self.names[&NameKey::GlobalVariable(handle)]
         )?;
 
         // Write global type
