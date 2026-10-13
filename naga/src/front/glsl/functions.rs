@@ -139,9 +139,8 @@ impl Frontend {
 
                 ctx.add_expression(
                     Expression::As {
-                        kind: scalar.kind,
+                        target: scalar,
                         expr,
-                        convert: Some(scalar.width),
                     },
                     meta,
                 )?
@@ -153,9 +152,8 @@ impl Frontend {
 
                 ctx.add_expression(
                     Expression::As {
-                        kind: scalar.kind,
+                        target: scalar,
                         expr: value,
-                        convert: Some(scalar.width),
                     },
                     meta,
                 )?

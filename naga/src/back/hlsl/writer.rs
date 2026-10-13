@@ -4425,97 +4425,97 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_expr(module, expr, func_ctx)?;
                 write!(self.out, ")")?;
             }
-            Expression::As {
-                expr,
-                kind,
-                convert,
-            } => {
+            Expression::As { expr, target } => {
                 let inner = func_ctx.resolve_type(expr, &module.types);
                 if inner.scalar_kind() == Some(ScalarKind::Float)
-                    && (kind == ScalarKind::Sint || kind == ScalarKind::Uint)
-                    && convert.is_some()
-                    && matches!(convert, Some(4) | Some(8))
+                    && (target.kind == ScalarKind::Sint || target.kind == ScalarKind::Uint)
+                    && matches!(target.width, 4 | 8)
                 {
                     // Use helper functions for float to int casts in order to
                     // avoid undefined behaviour when value is out of range for
                     // the target type.
-                    let fun_name = match (kind, convert) {
-                        (ScalarKind::Sint, Some(4)) => F2I32_FUNCTION,
-                        (ScalarKind::Uint, Some(4)) => F2U32_FUNCTION,
-                        (ScalarKind::Sint, Some(8)) => F2I64_FUNCTION,
-                        (ScalarKind::Uint, Some(8)) => F2U64_FUNCTION,
+                    let fun_name = match (target.kind, target.width) {
+                        (ScalarKind::Sint, 4) => F2I32_FUNCTION,
+                        (ScalarKind::Uint, 4) => F2U32_FUNCTION,
+                        (ScalarKind::Sint, 8) => F2I64_FUNCTION,
+                        (ScalarKind::Uint, 8) => F2U64_FUNCTION,
                         _ => unreachable!(),
                     };
                     write!(self.out, "{fun_name}(")?;
                     self.write_expr(module, expr, func_ctx)?;
                     write!(self.out, ")")?;
                 } else {
-                    let close_paren = match convert {
-                        Some(dst_width) => {
-                            let scalar = Scalar {
-                                kind,
-                                width: dst_width,
-                            };
-                            match *inner {
-                                TypeInner::Vector { size, .. } => {
-                                    write!(
-                                        self.out,
-                                        "{}{}(",
-                                        scalar.to_hlsl_str()?,
-                                        common::vector_size_str(size)
-                                    )?;
-                                }
-                                TypeInner::Scalar(_) => {
-                                    write!(self.out, "{}(", scalar.to_hlsl_str()?,)?;
-                                }
-                                TypeInner::Matrix { columns, rows, .. } => {
-                                    write!(
-                                        self.out,
-                                        "{}{}x{}(",
-                                        scalar.to_hlsl_str()?,
-                                        common::vector_size_str(columns),
-                                        common::vector_size_str(rows)
-                                    )?;
-                                }
-                                _ => {
-                                    return Err(Error::Unimplemented(format!(
-                                        "write_expr expression::as {inner:?}"
-                                    )));
-                                }
-                            };
-                            true
+                    match *inner {
+                        TypeInner::Vector { size, .. } => {
+                            write!(
+                                self.out,
+                                "{}{}(",
+                                target.to_hlsl_str()?,
+                                common::vector_size_str(size)
+                            )?;
                         }
-                        None => {
-                            if inner.scalar_width() == Some(8) {
-                                false
-                            } else if inner.scalar_width() == Some(2) {
-                                // HLSL's asint()/asuint() only work on 32-bit types.
-                                // For 16-bit bitcasts, use type constructor instead.
-                                let dst_scalar = Scalar { kind, width: 2 };
-                                match *inner {
-                                    TypeInner::Vector { size, .. } => {
-                                        write!(
-                                            self.out,
-                                            "{}{}(",
-                                            dst_scalar.to_hlsl_str()?,
-                                            common::vector_size_str(size)
-                                        )?;
-                                    }
-                                    _ => {
-                                        write!(self.out, "{}(", dst_scalar.to_hlsl_str()?)?;
-                                    }
-                                };
-                                true
-                            } else {
-                                write!(self.out, "{}(", kind.to_hlsl_cast(),)?;
-                                true
-                            }
+                        TypeInner::Scalar(_) => {
+                            write!(self.out, "{}(", target.to_hlsl_str()?,)?;
+                        }
+                        TypeInner::Matrix { columns, rows, .. } => {
+                            write!(
+                                self.out,
+                                "{}{}x{}(",
+                                target.to_hlsl_str()?,
+                                common::vector_size_str(columns),
+                                common::vector_size_str(rows)
+                            )?;
+                        }
+                        _ => {
+                            return Err(Error::Unimplemented(format!(
+                                "write_expr expression::as {inner:?}"
+                            )));
                         }
                     };
                     self.write_expr(module, expr, func_ctx)?;
-                    if close_paren {
-                        write!(self.out, ")")?;
-                    }
+                    write!(self.out, ")")?;
+                }
+            }
+            Expression::Bitcast { expr, ty } => {
+                let src_ty = func_ctx.resolve_type(expr, &module.types);
+                let dst_ty = &module.types[ty].inner;
+                let unsupported =
+                    || Error::Unimplemented(format!("bitcast from {src_ty:?} to {dst_ty:?}"));
+                let (Some((src_size, src)), Some((dst_size, dst))) = (
+                    src_ty.vector_size_and_scalar(),
+                    dst_ty.vector_size_and_scalar(),
+                ) else {
+                    return Err(unsupported());
+                };
+
+                if let Some(wrapped) = help::WrappedBitcast::new(src_ty, dst_ty) {
+                    write!(self.out, "{}(", wrapped.function_name()?)?;
+                    self.write_expr(module, expr, func_ctx)?;
+                    write!(self.out, ")")?;
+                } else if src == dst {
+                    self.write_expr(module, expr, func_ctx)?;
+                } else {
+                    debug_assert_eq!(src_size, dst_size);
+                    let is_int =
+                        |scalar: Scalar| matches!(scalar.kind, ScalarKind::Sint | ScalarKind::Uint);
+                    // HLSL's `asint()`, `asuint()` and `asfloat()` only work on
+                    // 32-bit types, and 16-bit types have `asint16()` and so
+                    // on. For other widths of integers, use a constructor
+                    // instead.
+                    match (src.width, is_int(src) && is_int(dst)) {
+                        (2 | 8, true) => {
+                            write!(self.out, "{}", dst.to_hlsl_str()?)?;
+                            if let Some(size) = dst_size {
+                                write!(self.out, "{}", common::vector_size_str(size))?;
+                            }
+                            write!(self.out, "(")?;
+                        }
+                        (2, false) => write!(self.out, "{}(", dst.kind.to_hlsl_cast_16bit())?,
+                        (4, _) => write!(self.out, "{}(", dst.kind.to_hlsl_cast())?,
+                        _ => return Err(unsupported()),
+                    };
+                    self.write_expr(module, expr, func_ctx)?;
+                    write!(self.out, ")")?;
                 }
             }
             Expression::Math {

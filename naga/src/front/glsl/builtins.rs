@@ -1775,8 +1775,7 @@ impl MacroCall {
                 ctx.add_expression(
                     Expression::As {
                         expr,
-                        kind: Sk::Sint,
-                        convert: Some(4),
+                        target: Scalar::I32,
                     },
                     Span::default(),
                 )?
@@ -1793,8 +1792,7 @@ impl MacroCall {
                 ctx.add_expression(
                     Expression::As {
                         expr,
-                        kind: Sk::Sint,
-                        convert: Some(4),
+                        target: Scalar::I32,
                     },
                     Span::default(),
                 )?
@@ -1860,8 +1858,7 @@ impl MacroCall {
                 ctx.add_expression(
                     Expression::As {
                         expr: res,
-                        kind: Sk::Sint,
-                        convert: Some(4),
+                        target: Scalar::I32,
                     },
                     Span::default(),
                 )?
@@ -1870,16 +1867,14 @@ impl MacroCall {
                 let conv_arg_2 = ctx.add_expression(
                     Expression::As {
                         expr: args[2],
-                        kind: Sk::Uint,
-                        convert: Some(4),
+                        target: Scalar::U32,
                     },
                     Span::default(),
                 )?;
                 let conv_arg_3 = ctx.add_expression(
                     Expression::As {
                         expr: args[3],
-                        kind: Sk::Uint,
-                        convert: Some(4),
+                        target: Scalar::U32,
                     },
                     Span::default(),
                 )?;
@@ -1898,16 +1893,14 @@ impl MacroCall {
                 let conv_arg_1 = ctx.add_expression(
                     Expression::As {
                         expr: args[1],
-                        kind: Sk::Uint,
-                        convert: Some(4),
+                        target: Scalar::U32,
                     },
                     Span::default(),
                 )?;
                 let conv_arg_2 = ctx.add_expression(
                     Expression::As {
                         expr: args[2],
-                        kind: Sk::Uint,
-                        convert: Some(4),
+                        target: Scalar::U32,
                     },
                     Span::default(),
                 )?;
@@ -2017,14 +2010,21 @@ impl MacroCall {
                     Span::default(),
                 )?
             }
-            MacroCall::BitCast(kind) => ctx.add_expression(
-                Expression::As {
-                    expr: args[0],
-                    kind,
-                    convert: None,
-                },
-                Span::default(),
-            )?,
+            MacroCall::BitCast(kind) => {
+                let inner = match *ctx.resolve_type(args[0], meta)? {
+                    TypeInner::Scalar(_) => TypeInner::Scalar(Scalar { kind, width: 4 }),
+                    TypeInner::Vector { size, .. } => TypeInner::Vector {
+                        size,
+                        scalar: Scalar { kind, width: 4 },
+                    },
+                    _ => unreachable!(),
+                };
+                let ty = ctx
+                    .module
+                    .types
+                    .insert(Type { name: None, inner }, Span::default());
+                ctx.add_expression(Expression::Bitcast { expr: args[0], ty }, meta)?
+            }
             MacroCall::Derivate(axis, ctrl) => ctx.add_expression(
                 Expression::Derivative {
                     axis,
