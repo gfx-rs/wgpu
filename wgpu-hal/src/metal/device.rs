@@ -264,10 +264,8 @@ impl super::Device {
                 .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {e:?}")))?;
 
                 log::debug!(
-                    "Naga generated shader for entry point '{}' and stage {:?}\n{}",
-                    stage.entry_point,
-                    naga_stage,
-                    &source
+                    "Naga generated shader for entry point '{ep}' and stage {naga_stage:?}\n{source}",
+                    ep = stage.entry_point,
                 );
 
                 let options = MTLCompileOptions::new();
