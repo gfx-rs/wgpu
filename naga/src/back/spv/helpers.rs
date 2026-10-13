@@ -208,10 +208,13 @@ impl super::Writer {
         let mut parameter_type_ids = Vec::with_capacity(N);
 
         let function_id = self.id_gen.next();
+        if self.flags.contains(WriterFlags::DEBUG) {
+            self.debugs.push(Instruction::name(function_id, name));
+        }
         let mut function = Function::default();
 
         let param_ids = array::from_fn(|i| {
-            let (param_type_id, _) = parameters[i];
+            let (param_type_id, param_name) = parameters[i];
             parameter_type_ids.push(param_type_id);
 
             let param_id = self.id_gen.next();
@@ -219,16 +222,11 @@ impl super::Writer {
                 instruction: Instruction::function_parameter(param_type_id, param_id),
                 handle_id: 0,
             });
+            if self.flags.contains(WriterFlags::DEBUG) {
+                self.debugs.push(Instruction::name(param_id, param_name));
+            }
             param_id
         });
-
-        if self.flags.contains(WriterFlags::DEBUG) {
-            self.debugs.push(Instruction::name(function_id, name));
-
-            for (id, name) in parameters.iter().copied() {
-                self.debugs.push(Instruction::name(id, name));
-            }
-        }
 
         let function_type_id = self.get_function_type(LookupFunctionType {
             parameter_type_ids,
