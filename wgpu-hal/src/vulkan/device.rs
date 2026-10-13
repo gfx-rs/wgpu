@@ -375,26 +375,54 @@ impl super::Device {
         None
     }
 
+    /// Create a [`vk::Image`].
+    ///
+    /// Create a [`vk::Image`] and query its memory requirements, but do not allocate or bind memory.
+    ///
+    /// If `desc.usage` contains [`wgt::TextureUses::TRANSIENT`], attempts to adjust the
+    /// memory requirements to include [`vk::MemoryPropertyFlags::LAZILY_ALLOCATED`].
+    ///
+    /// This helper is used by `create_texture` and `texture_from_d3d11_shared_handle`.
     fn create_image_without_memory(
         &self,
         desc: &crate::TextureDescriptor,
         external_memory_image_create_info: Option<&mut vk::ExternalMemoryImageCreateInfo>,
     ) -> Result<ImageWithoutMemory, crate::DeviceError> {
-        self.create_image_without_memory_with_tiling(
+        let raw = self.create_vk_image(
             desc,
             vk::ImageTiling::OPTIMAL,
             external_memory_image_create_info,
             None,
-        )
+        )?;
+        let mut req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
+
+        if desc.usage.contains(wgt::TextureUses::TRANSIENT) {
+            let mem_type_index = self.find_memory_type_index(
+                req.memory_type_bits,
+                vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
+            );
+            if let Some(mem_type_index) = mem_type_index {
+                req.memory_type_bits = 1 << mem_type_index;
+            }
+        }
+
+        Ok(ImageWithoutMemory {
+            raw,
+            requirements: req,
+        })
     }
 
-    fn create_image_without_memory_with_tiling(
+    /// Create a [`vk::Image`].
+    ///
+    /// This is the lowest-level image creation helper, used by various other image creation
+    /// paths. It does not allocate or bind memory.
+    fn create_vk_image(
         &self,
         desc: &crate::TextureDescriptor,
         tiling: vk::ImageTiling,
         external_memory_image_create_info: Option<&mut vk::ExternalMemoryImageCreateInfo>,
         drm_modifier_info: Option<&mut vk::ImageDrmFormatModifierExplicitCreateInfoEXT>,
-    ) -> Result<ImageWithoutMemory, crate::DeviceError> {
+    ) -> Result<vk::Image, crate::DeviceError> {
         let copy_size = desc.copy_extent();
 
         let mut raw_flags = vk::ImageCreateFlags::empty();
@@ -477,22 +505,7 @@ impl super::Device {
             // VK_ERROR_COMPRESSION_EXHAUSTED_EXT
             super::map_host_device_oom_and_ioca_err(err)
         }
-        let mut req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
-
-        if desc.usage.contains(wgt::TextureUses::TRANSIENT) {
-            let mem_type_index = self.find_memory_type_index(
-                req.memory_type_bits,
-                vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
-            );
-            if let Some(mem_type_index) = mem_type_index {
-                req.memory_type_bits = 1 << mem_type_index;
-            }
-        }
-
-        Ok(ImageWithoutMemory {
-            raw,
-            requirements: req,
-        })
+        Ok(raw)
     }
 
     /// # Safety
@@ -584,8 +597,6 @@ impl super::Device {
         stride: u64,
         offset: u64,
     ) -> Result<super::Texture, ImportTextureError> {
-        use std::os::unix::io::IntoRawFd;
-
         if !self
             .shared
             .features
@@ -620,36 +631,22 @@ impl super::Device {
             .drm_format_modifier(drm_modifier)
             .plane_layouts(core::slice::from_ref(&plane_layout));
 
-        let image = self.create_image_without_memory_with_tiling(
+        let raw = self.create_vk_image(
             desc,
             vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT,
             Some(&mut external_memory_image_info),
             Some(&mut drm_modifier_info),
         )?;
 
-        // Convert to raw fd. We must close it ourselves if any operation below
-        // fails, since Vulkan only takes ownership on successful vkAllocateMemory.
-        let fd_raw = fd.into_raw_fd();
-
-        let result = self.import_dmabuf_memory(
-            external_memory_fd_fn,
-            fd_raw,
-            image.raw,
-            &image.requirements,
-        );
+        let result = self.import_dmabuf_memory(external_memory_fd_fn, fd, raw);
 
         match result {
             Ok(memory) => Ok(unsafe {
-                self.texture_from_raw(
-                    image.raw,
-                    desc,
-                    None,
-                    super::TextureMemory::Dedicated(memory),
-                )
+                self.texture_from_raw(raw, desc, None, super::TextureMemory::Dedicated(memory))
             }),
             Err(e) => {
                 // Clean up the VkImage on failure.
-                unsafe { self.shared.raw.destroy_image(image.raw, None) };
+                unsafe { self.shared.raw.destroy_image(raw, None) };
                 Err(e)
             }
         }
@@ -657,68 +654,83 @@ impl super::Device {
 
     /// Import DMA-buf memory and bind it to the image.
     ///
-    /// On failure, the raw fd is closed (if not yet consumed by Vulkan) and the
+    /// On failure, the fd is closed (if not yet consumed by Vulkan) and the
     /// caller is responsible for destroying the VkImage.
     #[cfg(unix)]
     fn import_dmabuf_memory(
         &self,
         external_memory_fd_fn: &ash::khr::external_memory_fd::Device,
-        fd_raw: i32,
+        fd: std::os::unix::io::OwnedFd,
         image: vk::Image,
-        requirements: &vk::MemoryRequirements,
     ) -> Result<vk::DeviceMemory, ImportTextureError> {
-        let mut fd_props = vk::MemoryFdPropertiesKHR::default();
-        unsafe {
-            external_memory_fd_fn.get_memory_fd_properties(
-                vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT,
-                fd_raw,
-                &mut fd_props,
-            )
-        }
-        .map_err(|e| {
-            unsafe { libc::close(fd_raw) };
-            super::map_host_device_oom_err(e)
-        })?;
+        let requirements = unsafe { self.shared.raw.get_image_memory_requirements(image) };
+        let memory = self.import_dmabuf_fd(
+            external_memory_fd_fn,
+            fd,
+            requirements.memory_type_bits,
+            requirements.size,
+            Some(image),
+        )?;
 
-        let mem_type_index = self
-            .find_memory_type_index(
-                requirements.memory_type_bits & fd_props.memory_type_bits,
-                vk::MemoryPropertyFlags::empty(),
-            )
-            .ok_or_else(|| {
-                unsafe { libc::close(fd_raw) };
-                ImportTextureError::NoCompatibleMemoryType {
-                    image_types: requirements.memory_type_bits,
-                    import_types: fd_props.memory_type_bits,
-                    flags: vk::MemoryPropertyFlags::empty(),
-                }
-            })?;
-
-        let mut dedicated_allocate_info = vk::MemoryDedicatedAllocateInfo::default().image(image);
-
-        let mut import_memory_info = vk::ImportMemoryFdInfoKHR::default()
-            .handle_type(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT)
-            .fd(fd_raw);
-
-        let memory_allocate_info = vk::MemoryAllocateInfo::default()
-            .allocation_size(requirements.size)
-            .memory_type_index(mem_type_index as _)
-            .push_next(&mut import_memory_info)
-            .push_next(&mut dedicated_allocate_info);
-
-        // vkAllocateMemory takes ownership of the fd on success.
-        // On failure, the fd is NOT consumed and we must close it.
-        let memory = unsafe { self.shared.raw.allocate_memory(&memory_allocate_info, None) }
-            .map_err(|e| {
-                unsafe { libc::close(fd_raw) };
-                super::map_host_device_oom_err(e)
-            })?;
-
-        // From this point, the fd is consumed. Only VkDeviceMemory needs cleanup on error.
         unsafe { self.shared.raw.bind_image_memory(image, memory, 0) }.map_err(|e| {
             unsafe { self.shared.raw.free_memory(memory, None) };
             super::map_host_device_oom_err(e)
         })?;
+
+        Ok(memory)
+    }
+
+    /// Import a DMA-buf as device memory. If `dedicated_image` is provided,
+    /// the memory is allocated as a dedicated allocation for that image.
+    ///
+    /// On failure, the fd is closed (if not yet consumed by Vulkan).
+    #[cfg(unix)]
+    fn import_dmabuf_fd(
+        &self,
+        external_memory_fd_fn: &ash::khr::external_memory_fd::Device,
+        fd: std::os::unix::io::OwnedFd,
+        memory_type_bits: u32,
+        allocation_size: vk::DeviceSize,
+        dedicated_image: Option<vk::Image>,
+    ) -> Result<vk::DeviceMemory, ImportTextureError> {
+        use std::os::unix::io::{AsRawFd, IntoRawFd};
+
+        let mut fd_props = vk::MemoryFdPropertiesKHR::default();
+        unsafe {
+            external_memory_fd_fn.get_memory_fd_properties(
+                vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT,
+                fd.as_raw_fd(),
+                &mut fd_props,
+            )
+        }
+        .map_err(super::map_host_device_oom_err)?;
+
+        let flags = vk::MemoryPropertyFlags::empty();
+        let mem_type_index = self
+            .find_memory_type_index(memory_type_bits & fd_props.memory_type_bits, flags)
+            .ok_or(ImportTextureError::NoCompatibleMemoryType {
+                image_types: memory_type_bits,
+                import_types: fd_props.memory_type_bits,
+                flags,
+            })?;
+
+        let mut import_memory_info = vk::ImportMemoryFdInfoKHR::default()
+            .handle_type(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT)
+            .fd(fd.as_raw_fd());
+        let mut dedicated_allocate_info = vk::MemoryDedicatedAllocateInfo::default();
+        let mut memory_allocate_info = vk::MemoryAllocateInfo::default()
+            .allocation_size(allocation_size)
+            .memory_type_index(mem_type_index as _)
+            .push_next(&mut import_memory_info);
+        if let Some(image) = dedicated_image {
+            dedicated_allocate_info = dedicated_allocate_info.image(image);
+            memory_allocate_info = memory_allocate_info.push_next(&mut dedicated_allocate_info);
+        }
+
+        let memory = unsafe { self.shared.raw.allocate_memory(&memory_allocate_info, None) }
+            .map_err(super::map_host_device_oom_err)?;
+        // vkAllocateMemory took ownership of the fd.
+        let _ = fd.into_raw_fd();
 
         Ok(memory)
     }
