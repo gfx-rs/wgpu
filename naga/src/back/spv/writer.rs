@@ -686,7 +686,7 @@ impl Writer {
             _ => unreachable!(),
         };
 
-        let (mut function, [lhs_id, rhs_id]) = self.write_wrapped_function_preamble(
+        let (mut function, [lhs_id, rhs_id]) = self.write_wrapped_function_signature(
             wrapped,
             function_name,
             &[(left_type_id, "lhs"), (right_type_id, "rhs")],
@@ -867,7 +867,7 @@ impl Writer {
 
         let return_type_id = self.get_handle_type_id(r#type);
 
-        let (mut function, [param_id]) = self.write_wrapped_function_preamble(
+        let (mut function, [param_id]) = self.write_wrapped_function_signature(
             wrapped,
             &format!("{:?}_from_std140", r#type.for_debug(&ir_module.types)),
             &[(self.std140_compat_uniform_types[&r#type].type_id, "value")],
@@ -1093,7 +1093,7 @@ impl Writer {
         let column_index_type_id = self.get_u32_type_id();
         let column_type_id = self.get_numeric_type_id(NumericType::Vector { size: rows, scalar });
         let (mut function, [matrix_param_id, column_index_param_id]) = self
-            .write_wrapped_function_preamble(
+            .write_wrapped_function_signature(
                 wrapped,
                 &format!("{:?}_get_column", r#type.for_debug(&ir_module.types)),
                 &[

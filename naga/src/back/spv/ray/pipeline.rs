@@ -27,8 +27,12 @@ impl Writer {
                 .expect("ray desc should be set if `traceRays` is called"),
         );
 
-        let (func_id, mut function, arg_ids) = self.write_function_signature(
-            &[acceleration_structure_type_id, ray_desc_type_id],
+        let (mut function, func_id, arg_ids) = self.write_function_signature(
+            "trace_ray",
+            &[
+                (acceleration_structure_type_id, "as"),
+                (ray_desc_type_id, "ray_desc"),
+            ],
             self.void_type,
         );
 

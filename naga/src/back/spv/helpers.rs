@@ -188,7 +188,23 @@ pub fn is_uniform_matcx2_struct_member_access(
 }
 
 impl super::Writer {
-    /// Begin writing a new wrapped function.
+    /// Write the signature for a [`WrappedFunction`].
+    ///
+    /// Same as [`Self::write_function_signature`], but additionally adds the function
+    /// to `self.wrapped_functions`.
+    pub(super) fn write_wrapped_function_signature<const N: usize>(
+        &mut self,
+        wrapped: WrappedFunction,
+        name: &str,
+        parameters: &[(Word, &'static str); N],
+        return_type_id: Word,
+    ) -> (Function, [Word; N]) {
+        let (f, id, args) = self.write_function_signature(name, parameters, return_type_id);
+        self.wrapped_functions.insert(wrapped, id);
+        (f, args)
+    }
+
+    /// Write the signature for an internal helper function.
     ///
     /// Writes the SPIR-V `OpFunction` and `OpFunctionParameter` operations.
     ///
@@ -198,13 +214,12 @@ impl super::Writer {
     /// Does not otherwise emit any of the function prelude that
     /// [`Self::write_function`] would generate. In particular, does not load
     /// handle arguments or set `FunctionArgument::handle_id`.
-    pub(super) fn write_wrapped_function_preamble<const N: usize>(
+    pub(super) fn write_function_signature<const N: usize>(
         &mut self,
-        wrapped: WrappedFunction,
         name: &str,
         parameters: &[(Word, &'static str); N],
         return_type_id: Word,
-    ) -> (Function, [Word; N]) {
+    ) -> (Function, Word, [Word; N]) {
         let mut parameter_type_ids = Vec::with_capacity(N);
 
         let function_id = self.id_gen.next();
@@ -238,9 +253,8 @@ impl super::Writer {
             spirv::FunctionControl::empty(),
             function_type_id,
         ));
-        self.wrapped_functions.insert(wrapped, function_id);
 
-        (function, param_ids)
+        (function, function_id, param_ids)
     }
 }
 
