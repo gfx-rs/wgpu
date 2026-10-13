@@ -28,14 +28,14 @@ layout(set = 1, binding = 2) uniform texture2D image_2d_depth;
 layout(set = 1, binding = 3) uniform texture2DArray image_2d_array_depth;
 layout(set = 1, binding = 4) uniform textureCube image_cube_depth;
 
-ivec2 naga_mod(ivec2 lhs, ivec2 rhs)
+ivec2 naga_mod(ivec2 _71, ivec2 _72)
 {
-    bvec2 _79 = equal(rhs, ivec2(0));
-    bvec2 _84 = equal(lhs, ivec2(int(0x80000000)));
-    bvec2 _85 = equal(rhs, ivec2(-1));
+    bvec2 _79 = equal(_72, ivec2(0));
+    bvec2 _84 = equal(_71, ivec2(int(0x80000000)));
+    bvec2 _85 = equal(_72, ivec2(-1));
     bvec2 _86 = bvec2(_84.x && _85.x, _84.y && _85.y);
-    ivec2 _90 = mix(rhs, ivec2(1), bvec2(_79.x || _86.x, _79.y || _86.y));
-    return lhs - ((lhs / _90) * _90);
+    ivec2 _90 = mix(_72, ivec2(1), bvec2(_79.x || _86.x, _79.y || _86.y));
+    return _71 - ((_71 / _90) * _90);
 }
 
 void main()
@@ -77,14 +77,14 @@ layout(set = 1, binding = 2) uniform texture2D image_2d_depth;
 layout(set = 1, binding = 3) uniform texture2DArray image_2d_array_depth;
 layout(set = 1, binding = 4) uniform textureCube image_cube_depth;
 
-ivec2 naga_mod(ivec2 lhs, ivec2 rhs)
+ivec2 naga_mod(ivec2 _71, ivec2 _72)
 {
-    bvec2 _79 = equal(rhs, ivec2(0));
-    bvec2 _84 = equal(lhs, ivec2(int(0x80000000)));
-    bvec2 _85 = equal(rhs, ivec2(-1));
+    bvec2 _79 = equal(_72, ivec2(0));
+    bvec2 _84 = equal(_71, ivec2(int(0x80000000)));
+    bvec2 _85 = equal(_72, ivec2(-1));
     bvec2 _86 = bvec2(_84.x && _85.x, _84.y && _85.y);
-    ivec2 _90 = mix(rhs, ivec2(1), bvec2(_79.x || _86.x, _79.y || _86.y));
-    return lhs - ((lhs / _90) * _90);
+    ivec2 _90 = mix(_72, ivec2(1), bvec2(_79.x || _86.x, _79.y || _86.y));
+    return _71 - ((_71 / _90) * _90);
 }
 
 void main()

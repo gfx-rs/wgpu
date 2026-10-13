@@ -93,9 +93,9 @@ layout(set = 2, binding = 1) uniform sampler s_diffuse;
 layout(set = 2, binding = 2) uniform texture2D t_normal;
 layout(set = 2, binding = 3) uniform sampler s_normal;
 
-uint naga_div(uint lhs, uint rhs)
+uint naga_div(uint _314, uint _315)
 {
-    return lhs / ((rhs == 0u) ? 1u : rhs);
+    return _314 / ((_315 == 0u) ? 1u : _315);
 }
 
 vec2 index_to_p(uint vert_index, uvec2 chunk_size, ivec2 chunk_corner)
@@ -291,14 +291,14 @@ layout(set = 2, binding = 3) uniform sampler s_normal;
 layout(location = 0) flat out uint index;
 layout(location = 1) out vec2 uv;
 
-uint naga_div(uint lhs, uint rhs)
+uint naga_div(uint _314, uint _315)
 {
-    return lhs / ((rhs == 0u) ? 1u : rhs);
+    return _314 / ((_315 == 0u) ? 1u : _315);
 }
 
-uint naga_mod(uint lhs, uint rhs)
+uint naga_mod(uint _428, uint _429)
 {
-    return lhs % ((rhs == 0u) ? 1u : rhs);
+    return _428 % ((_429 == 0u) ? 1u : _429);
 }
 
 void main()
@@ -410,14 +410,14 @@ layout(location = 1) in vec2 uv;
 layout(location = 0) out uint vert_component;
 layout(location = 1) out uint index_1;
 
-uint naga_mod(uint lhs, uint rhs)
+uint naga_mod(uint _428, uint _429)
 {
-    return lhs % ((rhs == 0u) ? 1u : rhs);
+    return _428 % ((_429 == 0u) ? 1u : _429);
 }
 
-uint naga_div(uint lhs, uint rhs)
+uint naga_div(uint _314, uint _315)
 {
-    return lhs / ((rhs == 0u) ? 1u : rhs);
+    return _314 / ((_315 == 0u) ? 1u : _315);
 }
 
 vec2 index_to_p(uint vert_index, uvec2 chunk_size, ivec2 chunk_corner)

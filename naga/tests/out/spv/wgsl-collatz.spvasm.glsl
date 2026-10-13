@@ -6,14 +6,14 @@ layout(set = 0, binding = 0, std430) buffer PrimeIndices
     uint data[];
 } v_indices;
 
-uint naga_mod(uint lhs, uint rhs)
+uint naga_mod(uint _11, uint _12)
 {
-    return lhs % ((rhs == 0u) ? 1u : rhs);
+    return _11 % ((_12 == 0u) ? 1u : _12);
 }
 
-uint naga_div(uint lhs, uint rhs)
+uint naga_div(uint _22, uint _23)
 {
-    return lhs / ((rhs == 0u) ? 1u : rhs);
+    return _22 / ((_23 == 0u) ? 1u : _23);
 }
 
 uint collatz_iterations(uint n_base)
