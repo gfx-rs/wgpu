@@ -128,10 +128,7 @@ fn create_pack4xI8_test() -> Vec<ShaderTest> {
         ([-0xBB - 1, -0xCC - 1, -0xDD - 1, -0xEE - 1], 0x11223344),
     ];
     // Assure that test data of the first two cases end in equal bit values
-    for value in values.map(|value| value.0)[..2].chunks_exact(2) {
-        let [first, second] = value else {
-            panic!("Expected at least 2 test values")
-        };
+    for [first, second] in values.map(|value| value.0)[..2].as_chunks::<2>().0 {
         for (first, second) in first.iter().zip(second.iter()) {
             assert_eq!(
                 first & 0xFF,
