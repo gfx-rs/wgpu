@@ -44,7 +44,7 @@ OpDecorate %10 Binding 0
 %31 = OpConstant  %6  0
 %32 = OpTypePointer Function %3
 %34 = OpConstant  %3  0
-%36 = OpTypeFunction %2 %28 %4 %8 %29 %32
+%42 = OpTypeFunction %2 %28 %4 %8 %29 %32
 %44 = OpTypeBool
 %45 = OpTypeVector %44 3
 %66 = OpConstant  %6  256
@@ -62,22 +62,22 @@ OpDecorate %10 Binding 0
 %128 = OpConstant  %6  4294967295
 %129 = OpConstantComposite  %124  %128 %128
 %142 = OpTypePointer Function %44
-%143 = OpTypeFunction %44 %28 %29
+%146 = OpTypeFunction %44 %28 %29
 %149 = OpConstantFalse  %44
 %160 = OpConstant  %6  6
-%37 = OpFunction  %2  None %36
-%38 = OpFunctionParameter  %28
-%39 = OpFunctionParameter  %4
-%40 = OpFunctionParameter  %8
-%41 = OpFunctionParameter  %29
-%42 = OpFunctionParameter  %32
+%36 = OpFunction  %2  None %42
+%37 = OpFunctionParameter  %28
+%38 = OpFunctionParameter  %4
+%39 = OpFunctionParameter  %8
+%40 = OpFunctionParameter  %29
+%41 = OpFunctionParameter  %32
 %43 = OpLabel
-%46 = OpCompositeExtract  %6  %40 0
-%47 = OpCompositeExtract  %6  %40 1
-%48 = OpCompositeExtract  %3  %40 2
-%49 = OpCompositeExtract  %3  %40 3
-%50 = OpCompositeExtract  %7  %40 4
-%51 = OpCompositeExtract  %7  %40 5
+%46 = OpCompositeExtract  %6  %39 0
+%47 = OpCompositeExtract  %6  %39 1
+%48 = OpCompositeExtract  %3  %39 2
+%49 = OpCompositeExtract  %3  %39 3
+%50 = OpCompositeExtract  %7  %39 4
+%51 = OpCompositeExtract  %7  %39 5
 %52 = OpFOrdLessThanEqual  %44  %48 %49
 %53 = OpFOrdGreaterThanEqual  %44  %48 %34
 %54 = OpIsInf  %45  %50
@@ -134,24 +134,24 @@ OpDecorate %10 Binding 0
 %113 = OpLogicalAnd  %44  %112 %65
 %114 = OpLogicalAnd  %44  %113 %73
 %115 = OpLogicalAnd  %44  %114 %85
-OpStore %42 %49
+OpStore %41 %49
 OpSelectionMerge %116 None
 OpBranchConditional %115 %118 %117
 %118 = OpLabel
-OpRayQueryInitializeKHR %38 %39 %46 %47 %50 %48 %51 %49
-OpStore %41 %86
+OpRayQueryInitializeKHR %37 %38 %46 %47 %50 %48 %51 %49
+OpStore %40 %86
 OpBranch %116
 %117 = OpLabel
 OpBranch %116
 %116 = OpLabel
 OpReturn
 OpFunctionEnd
-%144 = OpFunction  %44  None %143
-%145 = OpFunctionParameter  %28
-%146 = OpFunctionParameter  %29
+%143 = OpFunction  %44  None %146
+%144 = OpFunctionParameter  %28
+%145 = OpFunctionParameter  %29
 %147 = OpLabel
 %148 = OpVariable  %142  Function %149
-%150 = OpLoad  %6  %146
+%150 = OpLoad  %6  %145
 %153 = OpBitwiseAnd  %6  %150 %86
 %154 = OpINotEqual  %44  %153 %31
 %155 = OpBitwiseAnd  %6  %150 %16
@@ -161,11 +161,11 @@ OpFunctionEnd
 OpSelectionMerge %151 None
 OpBranchConditional %158 %152 %151
 %152 = OpLabel
-%159 = OpRayQueryProceedKHR  %44  %145
+%159 = OpRayQueryProceedKHR  %44  %144
 OpStore %148 %159
 %161 = OpSelect  %6  %159 %89 %160
 %162 = OpBitwiseOr  %6  %150 %161
-OpStore %146 %162
+OpStore %145 %162
 OpBranch %151
 %151 = OpLabel
 %163 = OpLoad  %44  %148
@@ -180,7 +180,7 @@ OpFunctionEnd
 %15 = OpLoad  %4  %10
 OpBranch %35
 %35 = OpLabel
-%119 = OpFunctionCall  %2  %37 %27 %15 %26 %30 %33
+%119 = OpFunctionCall  %2  %36 %27 %15 %26 %30 %33
 OpBranch %120
 %120 = OpLabel
 OpLoopMerge %121 %123 None
@@ -200,7 +200,7 @@ OpBranchConditional %134 %121 %135
 OpStore %130 %140
 OpBranch %122
 %122 = OpLabel
-%141 = OpFunctionCall  %44  %144 %27 %30
+%141 = OpFunctionCall  %44  %143 %27 %30
 OpSelectionMerge %164 None
 OpBranchConditional %141 %164 %165
 %165 = OpLabel
