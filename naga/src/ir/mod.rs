@@ -345,6 +345,11 @@ pub enum AddressSpace {
     Uniform,
     /// Storage buffer data, potentially mutable.
     Storage { access: StorageAccess },
+    /// Raw device buffer pointers; not permitted as a global variable address space.
+    ///
+    /// Requires [`crate::valid::Capabilities::PHYSICAL_STORAGE_BUFFER_ADDRESSES`].
+    /// The caller must provide live addresses aligned for the selected native layout.
+    PhysicalStorage,
     /// Opaque handles, such as samplers and images.
     Handle,
 
@@ -673,6 +678,10 @@ pub enum Sampling {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct StructMember {
+    /// Restrictions on accesses to this member's storage, not to stored pointers' targets.
+    /// `None` permits both reads and writes. Only `LOAD` and `STORE` are meaningful.
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub access: Option<StorageAccess>,
     pub name: Option<String>,
     /// Type of the field.
     pub ty: Handle<Type>,
@@ -939,6 +948,8 @@ pub enum TypeInner {
     ///     pointer types may only appear as the types of such intermediate
     ///     expressions. They are not [`DATA`], and cannot be stored in
     ///     variables, held in arrays or structs, or passed as parameters.
+    ///     Physical-storage pointers are an exception: they are ordinary
+    ///     eight-byte values, but carry no array length.
     ///
     /// [`SIZED`]: crate::valid::TypeFlags::SIZED
     /// [`DATA`]: crate::valid::TypeFlags::DATA
@@ -1046,6 +1057,8 @@ pub enum Literal {
     F32(f32),
     /// May not be NaN or infinity.
     F16(f16),
+    U8(u8),
+    I8(i8),
     U16(u16),
     I16(i16),
     U32(u32),
@@ -1183,6 +1196,8 @@ pub struct LocalVariable {
     /// The type of this variable.
     pub ty: Handle<Type>,
     /// Initial value for this variable.
+    ///
+    /// Physical pointers default to address zero, which must not be dereferenced.
     ///
     /// This handle refers to an expression in this `LocalVariable`'s function's
     /// [`expressions`] arena, but it is required to be an evaluated override
@@ -1835,6 +1850,54 @@ pub enum Expression {
         arg2: Option<Handle<Expression>>,
         arg3: Option<Handle<Expression>>,
     },
+    /// Convert between a [`PhysicalStorage`] pointer and an unsigned 64-bit address.
+    ///
+    /// Only permitted in runtime expressions. The conversion does not check
+    /// address validity or alignment.
+    ///
+    /// [`PhysicalStorage`]: AddressSpace::PhysicalStorage
+    PointerCast {
+        expr: Handle<Expression>,
+        ty: Handle<Type>,
+    },
+    /// Offset a physical pointer by a signed or unsigned 64-bit element count.
+    ///
+    /// The stride is the pointee's IR size, including explicit struct padding.
+    /// Arithmetic wraps modulo 2^64; the producer must ensure that any resulting
+    /// memory access is in bounds and appropriately aligned.
+    PointerOffset {
+        pointer: Handle<Expression>,
+        offset: Handle<Expression>,
+    },
+
+    /// Set device-scope ordering for atomic accesses through this physical pointer.
+    ///
+    /// The pointee must be [`TypeInner::Atomic`]. Loads cannot use release orders;
+    /// stores cannot use acquire orders. An omitted failure order uses acquire
+    /// for acquiring success orders, and relaxed otherwise.
+    /// Ordering does not propagate through projections, calls, or memory.
+    AtomicPointer {
+        pointer: Handle<Expression>,
+        order: AtomicMemoryOrder,
+        /// Compare-exchange failure order, no stronger than success and never releasing.
+        failure_order: Option<AtomicMemoryOrder>,
+    },
+    /// Make direct physical-pointer loads visible and stores available at `scope`.
+    /// Requires the Vulkan memory model. Does not propagate through projections,
+    /// calls, or stored pointer values; does not replace execution synchronization.
+    CoherentPointer {
+        pointer: Handle<Expression>,
+        scope: MemoryScope,
+    },
+    /// Assert byte alignment for loads and stores through this physical pointer.
+    ///
+    /// The alignment must be a power of two, at least the pointee's scalar
+    /// alignment. The producer must guarantee it holds at runtime. The assertion
+    /// does not propagate through projections, calls, or memory.
+    PointerAlignment {
+        pointer: Handle<Expression>,
+        alignment: u32,
+    },
     /// Cast a simple type to another kind.
     As {
         /// Source expression, which can only be a scalar or a vector.
@@ -1879,6 +1942,7 @@ pub enum Expression {
     },
     /// Get the length of an array.
     /// The expression must resolve to a pointer to an array with a dynamic size.
+    /// Physical-storage pointers are excluded because they carry no length.
     ///
     /// This doesn't match the semantics of spirv's `OpArrayLength`, which must be passed
     /// a pointer to a structure containing a runtime array in its' last field.
@@ -1917,7 +1981,19 @@ pub enum Expression {
     /// [`SubgroupGather`]: Statement::SubgroupGather
     SubgroupOperationResult { ty: Handle<Type> },
 
-    /// Load a cooperative primitive from memory.
+    /// Load a matrix from a physical pointer to floating-point scalars.
+    ///
+    /// `data.stride` is a u32 distance in scalars between rows or columns.
+    /// Requires [`SHADER_INT64`]. The producer guarantees the entire footprint
+    /// is accessible and scalar-aligned; no implicit bounds checks are applied.
+    ///
+    /// [`SHADER_INT64`]: crate::valid::Capabilities::SHADER_INT64
+    MatrixLoad {
+        columns: VectorSize,
+        rows: VectorSize,
+        data: CooperativeData,
+    },
+    /// Load a cooperative matrix.
     CooperativeLoad {
         columns: CooperativeSize,
         rows: CooperativeSize,
@@ -2381,7 +2457,12 @@ pub enum Statement {
         /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
         result: Handle<Expression>,
     },
-    /// Store a cooperative primitive into memory.
+    /// Store a matrix using the memory layout and preconditions of [`Expression::MatrixLoad`].
+    MatrixStore {
+        target: Handle<Expression>,
+        data: CooperativeData,
+    },
+    /// Store a cooperative matrix.
     CooperativeStore {
         target: Handle<Expression>,
         data: CooperativeData,
@@ -2406,6 +2487,17 @@ pub struct FunctionArgument {
     /// For entry points, an argument has to have a binding
     /// unless it's a structure.
     pub binding: Option<Binding>,
+    /// Whether the pointee memory of this physical-pointer argument never
+    /// changes during shader execution.
+    ///
+    /// This may only be set on arguments whose type is a pointer in
+    /// [`AddressSpace::PhysicalStorage`]. The producer promises that the
+    /// pointee memory never changes during shader execution, including through
+    /// aliases, other invocations or the host. This is a producer promise, not
+    /// a runtime check or a read-only qualifier; it is stronger than read-only
+    /// and lets the SPIR-V backend decorate the parameter `Restrict`.
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub immutable_pointee: bool,
 }
 
 /// A function result.
@@ -2880,4 +2972,33 @@ pub struct Module {
     pub diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
     /// Doc comments.
     pub doc_comments: Option<Box<DocComments>>,
+}
+
+/// Visibility/availability scope for native coherent memory accesses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum MemoryScope {
+    Device,
+    QueueFamily,
+    Workgroup,
+    Subgroup,
+    Invocation,
+}
+
+/// Device-scope ordering for native physical-pointer atomic accesses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub enum AtomicMemoryOrder {
+    /// Atomic access without additional memory ordering.
+    Relaxed,
+    /// Order subsequent buffer accesses after this atomic access.
+    Acquire,
+    /// Order preceding buffer accesses before this atomic access.
+    Release,
+    /// Both [`Acquire`](Self::Acquire) and [`Release`](Self::Release) ordering.
+    AcquireRelease,
 }

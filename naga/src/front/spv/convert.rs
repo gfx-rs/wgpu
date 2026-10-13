@@ -172,6 +172,7 @@ pub(super) fn map_storage_class(word: spirv::Word) -> Result<super::ExtendedClas
     use spirv::StorageClass as Sc;
     Ok(match Sc::from_u32(word) {
         Some(Sc::Function) => Ec::Global(crate::AddressSpace::Function),
+        Some(Sc::PhysicalStorageBuffer) => Ec::Global(crate::AddressSpace::PhysicalStorage),
         Some(Sc::Input) => Ec::Input,
         Some(Sc::Output) => Ec::Output,
         Some(Sc::Private) => Ec::Global(crate::AddressSpace::Private),

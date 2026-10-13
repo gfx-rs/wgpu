@@ -58,36 +58,42 @@ impl crate::Module {
                 inner: crate::TypeInner::Struct {
                     members: vec![
                         crate::StructMember {
+                            access: None,
                             name: Some("flags".to_string()),
                             ty: ty_flag,
                             binding: None,
                             offset: 0,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("cull_mask".to_string()),
                             ty: ty_flag,
                             binding: None,
                             offset: 4,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("tmin".to_string()),
                             ty: ty_scalar,
                             binding: None,
                             offset: 8,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("tmax".to_string()),
                             ty: ty_scalar,
                             binding: None,
                             offset: 12,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("origin".to_string()),
                             ty: ty_vector,
                             binding: None,
                             offset: 16,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("dir".to_string()),
                             ty: ty_vector,
                             binding: None,
@@ -200,66 +206,77 @@ impl crate::Module {
                 inner: crate::TypeInner::Struct {
                     members: vec![
                         crate::StructMember {
+                            access: None,
                             name: Some("kind".to_string()),
                             ty: ty_flag,
                             binding: None,
                             offset: 0,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("t".to_string()),
                             ty: ty_scalar,
                             binding: None,
                             offset: 4,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("instance_custom_data".to_string()),
                             ty: ty_flag,
                             binding: None,
                             offset: 8,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("instance_index".to_string()),
                             ty: ty_flag,
                             binding: None,
                             offset: 12,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("sbt_record_offset".to_string()),
                             ty: ty_flag,
                             binding: None,
                             offset: 16,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("geometry_index".to_string()),
                             ty: ty_flag,
                             binding: None,
                             offset: 20,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("primitive_index".to_string()),
                             ty: ty_flag,
                             binding: None,
                             offset: 24,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("barycentrics".to_string()),
                             ty: ty_barycentrics,
                             binding: None,
                             offset: 28,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("front_face".to_string()),
                             ty: ty_bool,
                             binding: None,
                             offset: 36,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("object_to_world".to_string()),
                             ty: ty_transform,
                             binding: None,
                             offset: 48,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("world_to_object".to_string()),
                             ty: ty_transform,
                             binding: None,
@@ -356,24 +373,28 @@ impl crate::Module {
                 inner: crate::TypeInner::Struct {
                     members: vec![
                         crate::StructMember {
+                            access: None,
                             name: Some("a".to_string()),
                             ty: ty_f32,
                             binding: None,
                             offset: 0,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("b".to_string()),
                             ty: ty_f32,
                             binding: None,
                             offset: 4,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("g".to_string()),
                             ty: ty_f32,
                             binding: None,
                             offset: 8,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("k".to_string()),
                             ty: ty_f32,
                             binding: None,
@@ -393,48 +414,56 @@ impl crate::Module {
                 inner: crate::TypeInner::Struct {
                     members: vec![
                         crate::StructMember {
+                            access: None,
                             name: Some("yuv_conversion_matrix".to_string()),
                             ty: ty_mat4x4f,
                             binding: None,
                             offset: 0,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("gamut_conversion_matrix".to_string()),
                             ty: ty_mat3x3f,
                             binding: None,
                             offset: 64,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("src_tf".to_string()),
                             ty: transfer_fn_handle,
                             binding: None,
                             offset: 112,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("dst_tf".to_string()),
                             ty: transfer_fn_handle,
                             binding: None,
                             offset: 128,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("sample_transform".to_string()),
                             ty: ty_mat3x2f,
                             binding: None,
                             offset: 144,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("load_transform".to_string()),
                             ty: ty_mat3x2f,
                             binding: None,
                             offset: 168,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("size".to_string()),
                             ty: ty_vec2u,
                             binding: None,
                             offset: 192,
                         },
                         crate::StructMember {
+                            access: None,
                             name: Some("num_planes".to_string()),
                             ty: ty_u32,
                             binding: None,
@@ -483,12 +512,14 @@ impl crate::Module {
                     inner: crate::TypeInner::Struct {
                         members: vec![
                             crate::StructMember {
+                                access: None,
                                 name: Some("old_value".to_string()),
                                 ty: scalar_ty,
                                 binding: None,
                                 offset: 0,
                             },
                             crate::StructMember {
+                                access: None,
                                 name: Some("exchanged".to_string()),
                                 ty: bool_ty,
                                 binding: None,
@@ -526,12 +557,14 @@ impl crate::Module {
                     inner: crate::TypeInner::Struct {
                         members: vec![
                             crate::StructMember {
+                                access: None,
                                 name: Some("fract".to_string()),
                                 ty: member_ty,
                                 binding: None,
                                 offset: 0,
                             },
                             crate::StructMember {
+                                access: None,
                                 name: Some("whole".to_string()),
                                 ty: member_ty,
                                 binding: None,
@@ -593,12 +626,14 @@ impl crate::Module {
                     inner: crate::TypeInner::Struct {
                         members: vec![
                             crate::StructMember {
+                                access: None,
                                 name: Some("fract".to_string()),
                                 ty: fract_member_ty,
                                 binding: None,
                                 offset: 0,
                             },
                             crate::StructMember {
+                                access: None,
                                 name: Some("exp".to_string()),
                                 ty: exp_member_ty,
                                 binding: None,

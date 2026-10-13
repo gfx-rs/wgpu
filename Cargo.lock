@@ -2474,6 +2474,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "naga-physical-storage-gpu"
+version = "30.0.0"
+dependencies = [
+ "ash",
+ "half",
+ "naga",
+ "pollster",
+ "rspirv",
+ "wgpu",
+ "wgpu-hal",
+]
+
+[[package]]
 name = "naga-test"
 version = "30.0.0"
 dependencies = [

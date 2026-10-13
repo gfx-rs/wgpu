@@ -39,6 +39,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("size"),
                         ty: 2,
                         binding: None,
@@ -71,6 +72,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("gl_Position"),
                         ty: 5,
                         binding: Some(BuiltIn(Position(
@@ -79,18 +81,21 @@
                         offset: 0,
                     ),
                     (
+                        access: None,
                         name: Some("gl_PointSize"),
                         ty: 0,
                         binding: None,
                         offset: 16,
                     ),
                     (
+                        access: None,
                         name: Some("gl_ClipDistance"),
                         ty: 6,
                         binding: None,
                         offset: 20,
                     ),
                     (
+                        access: None,
                         name: Some("gl_CullDistance"),
                         ty: 6,
                         binding: None,
@@ -116,6 +121,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("ViewProj"),
                         ty: 8,
                         binding: None,
@@ -130,6 +136,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("Model"),
                         ty: 8,
                         binding: None,
@@ -144,6 +151,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: None,
                         ty: 2,
                         binding: Some(Location(
@@ -156,6 +164,7 @@
                         offset: 0,
                     ),
                     (
+                        access: None,
                         name: Some("gl_Position"),
                         ty: 5,
                         binding: Some(BuiltIn(Position(
@@ -521,6 +530,7 @@
                             blend_src: None,
                             per_primitive: false,
                         )),
+                        immutable_pointee: false,
                     ),
                     (
                         name: Some("Vertex_Position"),
@@ -532,6 +542,7 @@
                             blend_src: None,
                             per_primitive: false,
                         )),
+                        immutable_pointee: false,
                     ),
                     (
                         name: Some("Vertex_Normal"),
@@ -543,6 +554,7 @@
                             blend_src: None,
                             per_primitive: false,
                         )),
+                        immutable_pointee: false,
                     ),
                 ],
                 result: Some((

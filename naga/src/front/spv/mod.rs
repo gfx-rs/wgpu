@@ -31,6 +31,7 @@ mod convert;
 mod error;
 mod function;
 mod image;
+mod native;
 mod next_block;
 mod null;
 
@@ -53,6 +54,11 @@ use function::*;
 
 pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Shader,
+    spirv::Capability::PhysicalStorageBufferAddresses,
+    spirv::Capability::CooperativeMatrixKHR,
+    spirv::Capability::VulkanMemoryModelDeviceScope,
+    spirv::Capability::StorageBuffer8BitAccess,
+    spirv::Capability::UniformAndStorageBuffer8BitAccess,
     spirv::Capability::VulkanMemoryModel,
     spirv::Capability::ClipDistance,
     spirv::Capability::CullDistance,
@@ -71,6 +77,7 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Int64Atomics,
     spirv::Capability::Float16,
     spirv::Capability::AtomicFloat32AddEXT,
+    spirv::Capability::AtomicFloat64AddEXT,
     spirv::Capability::Float64,
     spirv::Capability::Geometry,
     spirv::Capability::MultiView,
@@ -91,6 +98,9 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
 ];
 pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "SPV_KHR_storage_buffer_storage_class",
+    "SPV_KHR_physical_storage_buffer",
+    "SPV_KHR_cooperative_matrix",
+    "SPV_KHR_8bit_storage",
     "SPV_KHR_vulkan_memory_model",
     "SPV_KHR_multiview",
     "SPV_EXT_descriptor_indexing",
@@ -613,6 +623,9 @@ pub struct Frontend<I> {
     data: I,
     data_offset: usize,
     state: ModuleState,
+    physical_addressing: bool,
+    physical_capability: bool,
+    vulkan_memory_model: bool,
     layouter: Layouter,
     temp_bytes: Vec<u8>,
     ext_glsl_id: Option<spirv::Word>,
@@ -681,6 +694,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             data,
             data_offset: 0,
             state: ModuleState::Empty,
+            physical_addressing: false,
+            physical_capability: false,
+            vulkan_memory_model: false,
             layouter: Layouter::default(),
             temp_bytes: Vec::new(),
             ext_glsl_id: None,
@@ -1477,13 +1493,22 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let result_type_id = self.next()?;
         let result_id = self.next()?;
         let pointer_id = self.next()?;
-        let _scope_id = self.next()?;
-        let _memory_semantics_id = self.next()?;
+        let scope_id = self.next()?;
+        let memory_semantics_id = self.next()?;
         let value_id = self.next()?;
         let span = self.span_from_with_op(start);
 
         let (p_lexp_handle, p_base_ty_handle) =
             self.get_exp_and_base_ty_handles(pointer_id, ctx, emitter, block, body_idx)?;
+        let p_lexp_handle = self.atomic_pointer(
+            pointer_id,
+            p_lexp_handle,
+            scope_id,
+            memory_semantics_id,
+            None,
+            ctx,
+            span,
+        )?;
 
         log::trace!("\t\t\tlooking up value expr {value_id:?}");
         let v_lexp_handle = self.lookup_expression.lookup(value_id)?.handle;
@@ -1626,6 +1651,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | S::ControlBarrier(_)
                 | S::MemoryBarrier(_)
                 | S::Store { .. }
+                | S::CooperativeStore { .. }
                 | S::ImageStore { .. }
                 | S::Atomic { .. }
                 | S::ImageAtomic { .. }
@@ -1664,7 +1690,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     }
                 }
                 S::WorkGroupUniformLoad { .. } => unreachable!(),
-                S::CooperativeStore { .. } => unreachable!(),
+                S::MatrixStore { .. } => unreachable!(),
                 // TODO: the SPIR-V frontend does not read `NonSemantic.DebugPrintf` extended
                 // instructions yet, so this statement is never produced here.
                 S::DebugPrintf { .. } => unreachable!(),
@@ -1760,6 +1786,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 Op::TypeFloat => self.parse_type_float(inst, &mut module),
                 Op::TypeVector => self.parse_type_vector(inst, &mut module),
                 Op::TypeMatrix => self.parse_type_matrix(inst, &mut module),
+                Op::TypeCooperativeMatrixKHR => {
+                    self.parse_type_cooperative_matrix(inst, &mut module)
+                }
                 Op::TypeFunction => self.parse_type_function(inst),
                 Op::TypePointer => self.parse_type_pointer(inst, &mut module),
                 Op::TypeArray => self.parse_type_array(inst, &mut module),
@@ -1872,6 +1901,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let capability = self.next()?;
         let cap =
             spirv::Capability::from_u32(capability).ok_or(Error::UnknownCapability(capability))?;
+        if cap == spirv::Capability::PhysicalStorageBufferAddresses {
+            self.physical_capability = true;
+        }
         if !SUPPORTED_CAPABILITIES.contains(&cap) {
             if self.options.strict_capabilities {
                 return Err(Error::UnsupportedCapability(cap));
@@ -1920,8 +1952,20 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     fn parse_memory_model(&mut self, inst: Instruction) -> Result<(), Error> {
         self.switch(ModuleState::MemoryModel, inst.op)?;
         inst.expect(3)?;
-        let _addressing_model = self.next()?;
-        let _memory_model = self.next()?;
+        let addressing_model = self.next()?;
+        let memory_model = self.next()?;
+        self.physical_addressing =
+            addressing_model == spirv::AddressingModel::PhysicalStorageBuffer64 as u32;
+        self.vulkan_memory_model = memory_model == spirv::MemoryModel::Vulkan as u32;
+        if self.physical_addressing
+            && (!self.physical_capability
+                || !matches!(
+                    spirv::MemoryModel::from_u32(memory_model),
+                    Some(spirv::MemoryModel::GLSL450 | spirv::MemoryModel::Vulkan)
+                ))
+        {
+            return Err(Error::InvalidOperand);
+        }
         Ok(())
     }
 
@@ -2317,12 +2361,25 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let id = self.next()?;
         let storage_class = self.next()?;
         let type_id = self.next()?;
+        if storage_class == spirv::StorageClass::PhysicalStorageBuffer as u32
+            && !self.physical_addressing
+        {
+            return Err(Error::InvalidOperand);
+        }
 
         let decor = self.future_decor.remove(&id);
         let base_lookup_ty = self.lookup_type.lookup(type_id)?;
         let base_inner = &module.types[base_lookup_ty.handle].inner;
 
-        let space = if let Some(space) = base_inner.pointer_space() {
+        // A local holding a physical pointer still has Function storage.
+        let space = if storage_class == spirv::StorageClass::PhysicalStorageBuffer as u32
+            || base_inner.contains_physical_pointer(&module.types)
+        {
+            match map_storage_class(storage_class)? {
+                ExtendedClass::Global(space) => space,
+                ExtendedClass::Input | ExtendedClass::Output => crate::AddressSpace::Private,
+            }
+        } else if let Some(space) = base_inner.pointer_space() {
             space
         } else if self
             .lookup_storage_buffer_types
@@ -2347,7 +2404,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         } = *base_inner
         {
             match space {
-                crate::AddressSpace::Storage { .. } => {}
+                crate::AddressSpace::Storage { .. } | crate::AddressSpace::PhysicalStorage => {}
                 _ => {
                     return Err(Error::UnsupportedRuntimeArrayStorageClass);
                 }
@@ -2583,6 +2640,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }
 
             members.push(crate::StructMember {
+                access: decor
+                    .flags
+                    .intersects(DecorationFlags::NON_READABLE | DecorationFlags::NON_WRITABLE)
+                    .then(|| decor.flags.to_storage_access()),
                 name: decor.name,
                 ty,
                 binding,
@@ -2778,6 +2839,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }) => {
                 let low = self.next()?;
                 match width {
+                    1 => crate::Literal::U8(low as u8),
+                    2 => crate::Literal::U16(low as u16),
                     4 => crate::Literal::U32(low),
                     8 => {
                         inst.expect(5)?;
@@ -2793,6 +2856,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }) => {
                 let low = self.next()?;
                 match width {
+                    1 => crate::Literal::I8(low as i8),
+                    2 => crate::Literal::I16(low as i16),
                     4 => crate::Literal::I32(low as i32),
                     8 => {
                         inst.expect(5)?;
@@ -3085,6 +3150,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     name: dec.name,
                     ty: unsigned_ty,
                     binding: Some(binding),
+                    immutable_pointee: false,
                 });
                 (inner, var)
             }
@@ -3185,6 +3251,16 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     ) -> Result<Handle<crate::Type>, Error> {
         log::debug!("\t\tlocating global variable in {handle:?}");
         match ctx.expressions[handle] {
+            crate::Expression::AtomicPointer { pointer, .. } => {
+                self.record_atomic_access(ctx, pointer)
+            }
+            crate::Expression::PointerCast { ty, .. } => match ctx.module.types[ty].inner {
+                crate::TypeInner::Pointer {
+                    base,
+                    space: crate::AddressSpace::PhysicalStorage,
+                } => Ok(base),
+                _ => Err(Error::InvalidOperand),
+            },
             crate::Expression::Access { base, index } => {
                 log::debug!("\t\t  access {handle:?} {index:?}");
                 let ty = self.record_atomic_access(ctx, base)?;

@@ -370,7 +370,10 @@ const RESERVED: &[&str] = &[
 // `Writer::get_dot_wrapper_function_helper_name`.
 static DOT_FUNCTION_NAMES: RacyLock<Vec<String>> = RacyLock::new(|| {
     let mut names = Vec::new();
-    for scalar in concrete_int_scalars().map(crate::Scalar::to_msl_name) {
+    for scalar in concrete_int_scalars()
+        .filter(|scalar| scalar.width != 1)
+        .map(crate::Scalar::to_msl_name)
+    {
         for size_suffix in vector_sizes().map(vector_size_str) {
             let fun_name = format!(
                 "{}_{}{}",

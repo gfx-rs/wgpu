@@ -20,6 +20,35 @@ pub(super) struct Case {
 }
 
 impl super::Instruction {
+    pub(super) fn add_native_memory_access(
+        &mut self,
+        alignment: Option<u32>,
+        scope: Option<Word>,
+        store: bool,
+    ) {
+        let mut flags = spirv::MemoryAccess::empty();
+        if alignment.is_some() {
+            flags |= spirv::MemoryAccess::ALIGNED;
+        }
+        if scope.is_some() {
+            flags |= spirv::MemoryAccess::NON_PRIVATE_POINTER;
+            flags |= if store {
+                spirv::MemoryAccess::MAKE_POINTER_AVAILABLE
+            } else {
+                spirv::MemoryAccess::MAKE_POINTER_VISIBLE
+            };
+        }
+        if !flags.is_empty() {
+            self.add_operand(flags.bits());
+            if let Some(alignment) = alignment {
+                self.add_operand(alignment);
+            }
+            if let Some(scope) = scope {
+                self.add_operand(scope);
+            }
+        }
+    }
+
     //
     //  Debug Instructions
     //
@@ -1309,6 +1338,8 @@ impl super::Instruction {
         pointer_id: Word,
         layout_id: Word,
         stride_id: Word,
+        alignment: Option<u32>,
+        scope: Option<Word>,
     ) -> Self {
         let mut instruction = Self::new(Op::CooperativeMatrixLoadKHR);
         instruction.set_type(result_type_id);
@@ -1316,14 +1347,23 @@ impl super::Instruction {
         instruction.add_operand(pointer_id);
         instruction.add_operand(layout_id);
         instruction.add_operand(stride_id);
+        instruction.add_native_memory_access(alignment, scope, false);
         instruction
     }
-    pub(super) fn coop_store(id: Word, pointer_id: Word, layout_id: Word, stride_id: Word) -> Self {
+    pub(super) fn coop_store(
+        id: Word,
+        pointer_id: Word,
+        layout_id: Word,
+        stride_id: Word,
+        alignment: Option<u32>,
+        scope: Option<Word>,
+    ) -> Self {
         let mut instruction = Self::new(Op::CooperativeMatrixStoreKHR);
         instruction.add_operand(pointer_id);
         instruction.add_operand(id);
         instruction.add_operand(layout_id);
         instruction.add_operand(stride_id);
+        instruction.add_native_memory_access(alignment, scope, true);
         instruction
     }
     pub(super) fn coop_mul_add(result_type_id: Word, id: Word, a: Word, b: Word, c: Word) -> Self {

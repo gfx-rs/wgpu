@@ -1258,6 +1258,7 @@ impl Frontend {
                         name,
                         ty,
                         binding: Some(binding),
+                        immutable_pointee: false,
                     });
 
                     let value = ctx
@@ -1306,6 +1307,7 @@ impl Frontend {
                 ty,
                 &mut |ctx, name, pointer, ty, binding| {
                     members.push(StructMember {
+                        access: None,
                         name,
                         ty,
                         binding: Some(binding),

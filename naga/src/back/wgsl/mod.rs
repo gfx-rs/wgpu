@@ -18,6 +18,10 @@ use crate::common::wgsl;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("8-bit integers are only supported by the SPIR-V backend")]
+    Int8Unsupported,
+    #[error("physical storage buffer pointers are unsupported by this backend")]
+    PhysicalStorageUnsupported,
     #[error(transparent)]
     FmtError(#[from] core::fmt::Error),
     #[error("{0}")]

@@ -34,6 +34,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("test_m"),
                         ty: 2,
                         binding: None,
@@ -48,6 +49,7 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("test_m"),
                         ty: 2,
                         binding: None,
@@ -62,12 +64,14 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("test_m"),
                         ty: 2,
                         binding: None,
                         offset: 0,
                     ),
                     (
+                        access: None,
                         name: Some("test_m2"),
                         ty: 2,
                         binding: None,
@@ -82,18 +86,21 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("test_m"),
                         ty: 2,
                         binding: None,
                         offset: 0,
                     ),
                     (
+                        access: None,
                         name: Some("test_m2"),
                         ty: 2,
                         binding: None,
                         offset: 4,
                     ),
                     (
+                        access: None,
                         name: Some("test_m3"),
                         ty: 2,
                         binding: None,

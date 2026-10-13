@@ -141,6 +141,16 @@ impl<W: Write> Writer<W> {
     }
 
     pub fn write(&mut self, module: &Module, info: &valid::ModuleInfo) -> BackendResult {
+        if module
+            .types
+            .iter()
+            .any(|(_, ty)| ty.inner.pointer_space() == Some(crate::AddressSpace::PhysicalStorage))
+        {
+            return Err(Error::PhysicalStorageUnsupported);
+        }
+        if proc::module_uses_int8(module) {
+            return Err(Error::Int8Unsupported);
+        }
         self.reset(module);
 
         // Write all `enable` declarations
@@ -1217,6 +1227,7 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::MatrixStore { .. } => return Err(Error::PhysicalStorageUnsupported),
             Statement::CooperativeStore { target, ref data } => {
                 let suffix = if data.row_major { "T" } else { "" };
                 write!(self.out, "{level}coopStore{suffix}(")?;
@@ -1422,6 +1433,9 @@ impl<W: Write> Writer<W> {
                 crate::Literal::F16(value) => write!(self.out, "{value}h")?,
                 crate::Literal::F32(value) => write!(self.out, "{value}f")?,
                 crate::Literal::U16(value) => write!(self.out, "u16({value})")?,
+                crate::Literal::I8(_) | crate::Literal::U8(_) => {
+                    return Err(Error::Int8Unsupported)
+                }
                 crate::Literal::I16(value) => write!(self.out, "i16({value})")?,
                 crate::Literal::U32(value) => write!(self.out, "{value}u")?,
                 crate::Literal::I32(value) => {
@@ -1762,6 +1776,12 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{name}")?;
             }
 
+            Expression::PointerCast { .. }
+            | Expression::PointerOffset { .. }
+            | Expression::MatrixLoad { .. }
+            | Expression::PointerAlignment { .. }
+            | Expression::CoherentPointer { .. }
+            | Expression::AtomicPointer { .. } => return Err(Error::PhysicalStorageUnsupported),
             Expression::As {
                 expr,
                 kind,

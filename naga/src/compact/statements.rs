@@ -152,7 +152,8 @@ impl FunctionTracer<'_> {
                         self.expressions_used.insert(argument);
                         self.expressions_used.insert(result);
                     }
-                    St::CooperativeStore { target, ref data } => {
+                    St::MatrixStore { target, ref data }
+                    | St::CooperativeStore { target, ref data } => {
                         self.expressions_used.insert(target);
                         self.expressions_used.insert(data.pointer);
                         self.expressions_used.insert(data.stride);
@@ -396,7 +397,11 @@ impl FunctionMap {
                         adjust(argument);
                         adjust(result);
                     }
-                    St::CooperativeStore {
+                    St::MatrixStore {
+                        ref mut target,
+                        ref mut data,
+                    }
+                    | St::CooperativeStore {
                         ref mut target,
                         ref mut data,
                     } => {

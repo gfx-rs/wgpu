@@ -24,6 +24,15 @@ use crate::{
     valid::{FunctionInfo, ModuleInfo},
 };
 
+fn physical_pointer_or_array(ty: &crate::TypeInner, types: &UniqueArena<crate::Type>) -> bool {
+    match *ty {
+        crate::TypeInner::Array { base, .. } => {
+            physical_pointer_or_array(&types[base].inner, types)
+        }
+        _ => ty.pointer_space() == Some(crate::AddressSpace::PhysicalStorage),
+    }
+}
+
 pub struct FunctionInterface<'a> {
     pub varying_ids: &'a mut Vec<Word>,
     pub stage: crate::ShaderStage,
@@ -85,6 +94,7 @@ impl Writer {
             id_gen,
             capabilities_available: options.capabilities.clone(),
             capabilities_used,
+            uses_device_scope: false,
             extensions_used: crate::FastIndexSet::default(),
             debug_strings: vec![],
             debugs: vec![],
@@ -100,6 +110,7 @@ impl Writer {
             void_type,
             tuple_of_u32s_ty_id: None,
             lookup_type: crate::FastHashMap::default(),
+            physical_matrix_wrappers: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
             lookup_function_type: crate::FastHashMap::default(),
             wrapped_functions: crate::FastHashMap::default(),
@@ -192,6 +203,7 @@ impl Writer {
 
             // Reclaimed:
             capabilities_used: take(&mut self.capabilities_used).reclaim(),
+            uses_device_scope: false,
             extensions_used: take(&mut self.extensions_used).reclaim(),
             physical_layout: self.physical_layout.clone().reclaim(),
             logical_layout: take(&mut self.logical_layout).reclaim(),
@@ -199,6 +211,7 @@ impl Writer {
             debugs: take(&mut self.debugs).reclaim(),
             annotations: take(&mut self.annotations).reclaim(),
             lookup_type: take(&mut self.lookup_type).reclaim(),
+            physical_matrix_wrappers: take(&mut self.physical_matrix_wrappers).reclaim(),
             lookup_function: take(&mut self.lookup_function).reclaim(),
             lookup_function_type: take(&mut self.lookup_function_type).reclaim(),
             wrapped_functions: take(&mut self.wrapped_functions).reclaim(),
@@ -485,7 +498,14 @@ impl Writer {
                 LocalType::Cooperative(CooperativeType::from_inner(inner).unwrap())
             }
             crate::TypeInner::Pointer { base, space } => {
-                let base_type_id = self.get_handle_type_id(base);
+                let base_type_id = if space == crate::AddressSpace::PhysicalStorage {
+                    self.physical_matrix_wrappers
+                        .get(&base)
+                        .copied()
+                        .unwrap_or_else(|| self.get_handle_type_id(base))
+                } else {
+                    self.get_handle_type_id(base)
+                };
                 LocalType::Pointer {
                     base: base_type_id,
                     class: map_storage_class(space),
@@ -751,6 +771,10 @@ impl Writer {
         let divisor_selector_id = match scalar.kind {
             crate::ScalarKind::Sint => {
                 let (const_min_id, const_neg_one_id) = match scalar.width {
+                    1 => Ok((
+                        self.get_constant_scalar(crate::Literal::I8(i8::MIN)),
+                        self.get_constant_scalar(crate::Literal::I8(-1i8)),
+                    )),
                     2 => Ok((
                         self.get_constant_scalar(crate::Literal::I16(i16::MIN)),
                         self.get_constant_scalar(crate::Literal::I16(-1i16)),
@@ -1361,6 +1385,36 @@ impl Writer {
             } else {
                 let argument_id = self.id_gen.next();
                 let instruction = Instruction::function_parameter(argument_type_id, argument_id);
+                if physical_pointer_or_array(&ir_module.types[argument.ty].inner, &ir_module.types)
+                {
+                    self.annotations.push(Instruction::decorate(
+                        argument_id,
+                        if argument.immutable_pointee {
+                            spirv::Decoration::Restrict
+                        } else {
+                            spirv::Decoration::Aliased
+                        },
+                        &[],
+                    ));
+                }
+                if ir_module.types[argument.ty].inner.pointer_space()
+                    != Some(crate::AddressSpace::PhysicalStorage)
+                    && ir_module.types[argument.ty]
+                        .inner
+                        .pointer_base_type()
+                        .is_some_and(|base| {
+                            physical_pointer_or_array(
+                                base.inner_with(&ir_module.types),
+                                &ir_module.types,
+                            )
+                        })
+                {
+                    self.annotations.push(Instruction::decorate(
+                        argument_id,
+                        spirv::Decoration::AliasedPointer,
+                        &[],
+                    ));
+                }
                 if self.flags.contains(WriterFlags::DEBUG) {
                     if let Some(ref name) = argument.name {
                         self.debugs.push(Instruction::name(argument_id, name));
@@ -1599,15 +1653,23 @@ impl Writer {
             writer: self,
             expression_constness: super::ExpressionConstnessTracker::from_arena(
                 &ir_function.expressions,
+                &ir_module.types,
             ),
             ray_query_tracker_expr: crate::FastHashMap::default(),
         };
 
         // fill up the pre-emitted and const expressions
         context.cached.reset(ir_function.expressions.len());
+        let expression_kinds =
+            crate::proc::ExpressionKindTracker::from_arena(&ir_function.expressions);
         for (handle, expr) in ir_function.expressions.iter() {
             if (expr.needs_pre_emit() && !matches!(*expr, crate::Expression::LocalVariable(_)))
                 || context.expression_constness.is_const(handle)
+                || (expression_kinds.is_const(handle)
+                    && context.fun_info[handle]
+                        .ty
+                        .inner_with(&ir_module.types)
+                        .contains_physical_pointer(&ir_module.types))
             {
                 context.cache_expression_value(handle, &mut prelude)?;
             }
@@ -1622,7 +1684,26 @@ impl Writer {
                 }
             }
 
-            let init_word = variable.init.map(|constant| context.cached[constant]);
+            let physical = ir_module.types[variable.ty]
+                .inner
+                .contains_physical_pointer(&ir_module.types);
+            if physical_pointer_or_array(&ir_module.types[variable.ty].inner, &ir_module.types) {
+                context.writer.annotations.push(Instruction::decorate(
+                    id,
+                    spirv::Decoration::AliasedPointer,
+                    &[],
+                ));
+            }
+            let init_word = if physical {
+                let value = match variable.init {
+                    Some(init) => context.cached[init],
+                    None => context.write_native_zero(variable.ty, &mut prelude)?,
+                };
+                prelude.body.push(Instruction::store(id, value, None));
+                None
+            } else {
+                variable.init.map(|constant| context.cached[constant])
+            };
             let pointer_type_id = context
                 .writer
                 .get_handle_pointer_type_id(variable.ty, spirv::StorageClass::Function);
@@ -1630,11 +1711,17 @@ impl Writer {
                 pointer_type_id,
                 id,
                 spirv::StorageClass::Function,
-                init_word.or_else(|| match ir_module.types[variable.ty].inner {
-                    crate::TypeInner::RayQuery { .. } => None,
-                    _ => {
-                        let type_id = context.get_handle_type_id(variable.ty);
-                        Some(context.writer.write_constant_null(type_id))
+                init_word.or_else(|| {
+                    if physical {
+                        None
+                    } else {
+                        match ir_module.types[variable.ty].inner {
+                            crate::TypeInner::RayQuery { .. } => None,
+                            _ => {
+                                let type_id = context.get_handle_type_id(variable.ty);
+                                Some(context.writer.write_constant_null(type_id))
+                            }
+                        }
                     }
                 }),
             );
@@ -2082,6 +2169,30 @@ impl Writer {
                 self.require_any("16 bit floating-point", &[spirv::Capability::Float16])?;
                 self.use_extension("SPV_KHR_16bit_storage");
             }
+            // 8 bit integer support requires Int8 capability
+            crate::TypeInner::Vector {
+                scalar:
+                    crate::Scalar {
+                        kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                        width: 1,
+                    },
+                ..
+            }
+            | crate::TypeInner::Scalar(crate::Scalar {
+                kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                width: 1,
+            }) => {
+                self.require_any("8 bit integer", &[spirv::Capability::Int8])?;
+                self.require_any(
+                    "8 bit storage",
+                    &[spirv::Capability::StorageBuffer8BitAccess],
+                )?;
+                self.require_any(
+                    "8 bit uniform storage",
+                    &[spirv::Capability::UniformAndStorageBuffer8BitAccess],
+                )?;
+                self.use_extension("SPV_KHR_8bit_storage");
+            }
             // 16 bit integer support requires Int16 capability
             crate::TypeInner::Vector {
                 scalar:
@@ -2297,6 +2408,33 @@ impl Writer {
 
         // Add this handle as a new alias for that type.
         self.lookup_type.insert(LookupType::Handle(handle), id);
+        // Matrix pointer values use a structure wrapper to retain SPIR-V layout provenance.
+        let mut leaf = &ty.inner;
+        while let crate::TypeInner::Array { base, .. } = *leaf {
+            leaf = &module.types[base].inner;
+        }
+        if matches!(leaf, crate::TypeInner::Matrix { .. })
+            && module.types.iter().any(|(_, ty)| {
+                ty.inner.pointer_space() == Some(crate::AddressSpace::PhysicalStorage)
+            })
+        {
+            let wrapper = self.id_gen.next();
+            self.decorate_struct_member(
+                wrapper,
+                0,
+                &crate::StructMember {
+                    access: None,
+                    name: None,
+                    ty: handle,
+                    binding: None,
+                    offset: 0,
+                },
+                &module.types,
+            )?;
+            Instruction::type_struct(wrapper, &[id])
+                .to_words(&mut self.logical_layout.declarations);
+            self.physical_matrix_wrappers.insert(handle, wrapper);
+        }
 
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(ref name) = ty.name {
@@ -2465,6 +2603,11 @@ impl Writer {
                                         scalar,
                                     });
                                 for column in 0..columns as u32 {
+                                    self.decorate_member_access(
+                                        std140_type_id,
+                                        next_index,
+                                        member.access,
+                                    );
                                     self.annotations.push(Instruction::member_decorate(
                                         std140_type_id,
                                         next_index,
@@ -2486,36 +2629,44 @@ impl Writer {
                                 }
                             }
                             _ => {
-                                let member_id =
-                                    match self.std140_compat_uniform_types.get(&member.ty) {
-                                        Some(std140_member_type_info) => {
-                                            self.annotations.push(Instruction::member_decorate(
-                                                std140_type_id,
-                                                next_index,
-                                                spirv::Decoration::Offset,
-                                                &[member.offset],
-                                            ));
-                                            if self.flags.contains(WriterFlags::DEBUG) {
-                                                if let Some(ref name) = member.name {
-                                                    self.debugs.push(Instruction::member_name(
-                                                        std140_type_id,
-                                                        next_index,
-                                                        name,
-                                                    ));
-                                                }
+                                let member_id = match self
+                                    .std140_compat_uniform_types
+                                    .get(&member.ty)
+                                    .map(|info| info.type_id)
+                                {
+                                    Some(std140_member_type_id) => {
+                                        self.decorate_member_access(
+                                            std140_type_id,
+                                            next_index,
+                                            member.access,
+                                        );
+                                        self.annotations.push(Instruction::member_decorate(
+                                            std140_type_id,
+                                            next_index,
+                                            spirv::Decoration::Offset,
+                                            &[member.offset],
+                                        ));
+                                        if self.flags.contains(WriterFlags::DEBUG) {
+                                            if let Some(ref name) = member.name {
+                                                self.debugs.push(Instruction::member_name(
+                                                    std140_type_id,
+                                                    next_index,
+                                                    name,
+                                                ));
                                             }
-                                            std140_member_type_info.type_id
                                         }
-                                        None => {
-                                            self.decorate_struct_member(
-                                                std140_type_id,
-                                                next_index as usize,
-                                                member,
-                                                &module.types,
-                                            )?;
-                                            self.get_handle_type_id(member.ty)
-                                        }
-                                    };
+                                        std140_member_type_id
+                                    }
+                                    None => {
+                                        self.decorate_struct_member(
+                                            std140_type_id,
+                                            next_index as usize,
+                                            member,
+                                            &module.types,
+                                        )?;
+                                        self.get_handle_type_id(member.ty)
+                                    }
+                                };
                                 member_ids.push(member_id);
                                 next_index += 1;
                             }
@@ -2655,6 +2806,10 @@ impl Writer {
             crate::Literal::F16(value) => {
                 let low = value.to_bits();
                 Instruction::constant_16bit(type_id, id, low as u32)
+            }
+            crate::Literal::U8(value) => Instruction::constant_32bit(type_id, id, u32::from(value)),
+            crate::Literal::I8(value) => {
+                Instruction::constant_32bit(type_id, id, i32::from(value) as u32)
             }
             crate::Literal::U16(value) => Instruction::constant_16bit(type_id, id, value as u32),
             crate::Literal::I16(value) => {
@@ -2812,6 +2967,7 @@ impl Writer {
         } else {
             self.get_index_constant(spirv::Scope::Workgroup as u32)
         };
+        self.uses_device_scope |= memory_scope == spirv::Scope::Device;
         let mem_scope_id = self.get_index_constant(memory_scope as u32);
         let semantics_id = self.get_index_constant(semantics.bits());
         body.push(Instruction::control_barrier(
@@ -2840,6 +2996,7 @@ impl Writer {
             flags.contains(crate::Barrier::TEXTURE),
         );
         let mem_scope_id = if flags.contains(crate::Barrier::STORAGE) {
+            self.uses_device_scope = true;
             self.get_index_constant(spirv::Scope::Device as u32)
         } else if flags.contains(crate::Barrier::SUB_GROUP) {
             self.get_index_constant(spirv::Scope::Subgroup as u32)
@@ -3458,6 +3615,9 @@ impl Writer {
 
         let id = self.id_gen.next();
         let class = map_storage_class(global_variable.space);
+        if physical_pointer_or_array(&ir_module.types[global_variable.ty].inner, &ir_module.types) {
+            self.decorate(id, Decoration::AliasedPointer, &[]);
+        }
 
         if let crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload =
             global_variable.space
@@ -3557,6 +3717,7 @@ impl Writer {
                 }
                 _ => {
                     let member = crate::StructMember {
+                        access: None,
                         name: None,
                         ty: global_variable.ty,
                         binding: None,
@@ -3655,8 +3816,11 @@ impl Writer {
             }
         }
 
+        self.decorate_member_access(struct_id, index as u32, member.access);
+
         // Matrices and (potentially nested) arrays of matrices both require decorations,
         // so "see through" any arrays to determine if they're needed.
+
         let mut member_array_subty_inner = &arena[member.ty].inner;
         while let crate::TypeInner::Array { base, .. } = *member_array_subty_inner {
             member_array_subty_inner = &arena[base].inner;
@@ -3684,6 +3848,30 @@ impl Writer {
         }
 
         Ok(())
+    }
+
+    fn decorate_member_access(
+        &mut self,
+        struct_id: Word,
+        index: Word,
+        access: Option<crate::StorageAccess>,
+    ) {
+        use spirv::Decoration;
+        if let Some(access) = access {
+            for (flag, decoration) in [
+                (crate::StorageAccess::LOAD, Decoration::NonReadable),
+                (crate::StorageAccess::STORE, Decoration::NonWritable),
+            ] {
+                if !access.contains(flag) {
+                    self.annotations.push(Instruction::member_decorate(
+                        struct_id,
+                        index,
+                        decoration,
+                        &[],
+                    ));
+                }
+            }
+        }
     }
 
     pub(super) fn get_function_type(&mut self, lookup_function_type: LookupFunctionType) -> Word {
@@ -3812,6 +4000,17 @@ impl Writer {
             }
         }
 
+        if ir_module
+            .types
+            .iter()
+            .any(|(_, ty)| ty.inner.pointer_space() == Some(crate::AddressSpace::PhysicalStorage))
+        {
+            self.require_any(
+                "physical storage buffer pointers",
+                &[spirv::Capability::PhysicalStorageBufferAddresses],
+            )?;
+            self.use_extension("SPV_KHR_physical_storage_buffer");
+        }
         // write all types
         for (handle, _) in ir_module.types.iter() {
             self.write_type_declaration_arena(ir_module, handle)?;
@@ -3900,6 +4099,17 @@ impl Writer {
             ep_instruction.to_words(&mut self.logical_layout.entry_points);
         }
 
+        if self.uses_device_scope
+            && self
+                .capabilities_used
+                .contains(&spirv::Capability::VulkanMemoryModel)
+        {
+            self.require_any(
+                "Vulkan device memory scope",
+                &[spirv::Capability::VulkanMemoryModelDeviceScope],
+            )?;
+        }
+
         for capability in self.capabilities_used.iter() {
             Instruction::capability(*capability).to_words(&mut self.logical_layout.capabilities);
         }
@@ -3912,7 +4122,14 @@ impl Writer {
                 .to_words(&mut self.logical_layout.capabilities);
         }
 
-        let addressing_model = spirv::AddressingModel::Logical;
+        let addressing_model = if self
+            .capabilities_used
+            .contains(&spirv::Capability::PhysicalStorageBufferAddresses)
+        {
+            spirv::AddressingModel::PhysicalStorageBuffer64
+        } else {
+            spirv::AddressingModel::Logical
+        };
         let memory_model = if self
             .capabilities_used
             .contains(&spirv::Capability::VulkanMemoryModel)

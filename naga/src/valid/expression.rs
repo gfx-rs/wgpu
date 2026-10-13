@@ -26,6 +26,12 @@ pub enum ExpressionError {
     FunctionArgumentDoesntExist(u32),
     #[error("Loading of {0:?} can't be done")]
     InvalidPointerType(Handle<crate::Expression>),
+    #[error("Physical pointer alignment must be a power of two at least as large as the pointee scalar alignment")]
+    InvalidPointerAlignment,
+    #[error(
+        "Compare-exchange failure ordering must be non-releasing and no stronger than success"
+    )]
+    InvalidAtomicFailureOrder,
     #[error("Array length of {0:?} can't be done")]
     InvalidArrayType(Handle<crate::Expression>),
     #[error("Get intersection of {0:?} can't be done")]
@@ -233,6 +239,9 @@ impl super::Validator {
         match gctx.global_expressions[handle] {
             E::Literal(literal) => {
                 self.validate_literal(literal)?;
+            }
+            E::ZeroValue(ty) if gctx.types[ty].inner.contains_physical_pointer(gctx.types) => {
+                return Err(ConstExpressionError::NonConstOrOverride);
             }
             E::Constant(_) | E::ZeroValue(_) => {}
             E::Compose { ref components, ty } => {
@@ -522,7 +531,13 @@ impl super::Validator {
             }
             E::Constant(_) | E::Override(_) => ShaderStages::all(),
             E::ZeroValue(ty) => {
-                if !mod_info[ty].contains(TypeFlags::CONSTRUCTIBLE) {
+                if !(mod_info[ty].contains(TypeFlags::CONSTRUCTIBLE)
+                    || module.types[ty]
+                        .inner
+                        .contains_physical_pointer(&module.types)
+                        && mod_info[ty]
+                            .contains(TypeFlags::DATA | TypeFlags::COPY | TypeFlags::SIZED))
+                {
                     return Err(ExpressionError::InvalidZeroValue(ty));
                 }
                 if matches!(module.types[ty].inner, crate::TypeInner::RayQuery { .. }) {
@@ -547,6 +562,28 @@ impl super::Validator {
             E::GlobalVariable(_handle) => ShaderStages::all(),
             E::LocalVariable(_handle) => ShaderStages::all(),
             E::Load { pointer } => {
+                if matches!(
+                    crate::proc::atomic_pointer_orders(&function.expressions, pointer),
+                    Some((
+                        crate::AtomicMemoryOrder::Release
+                            | crate::AtomicMemoryOrder::AcquireRelease,
+                        _,
+                    ))
+                ) {
+                    return Err(ExpressionError::InvalidPointerType(pointer));
+                }
+
+                if let Ti::Pointer {
+                    base,
+                    space: crate::AddressSpace::PhysicalStorage,
+                } = resolver[pointer]
+                {
+                    if !self.types[base.index()].flags.contains(TypeFlags::COPY)
+                        && !matches!(module.types[base].inner, Ti::Atomic(_))
+                    {
+                        return Err(ExpressionError::InvalidPointerType(pointer));
+                    }
+                }
                 match resolver[pointer] {
                     Ti::Pointer { base, .. }
                         if self.types[base.index()]
@@ -1156,6 +1193,14 @@ impl super::Validator {
                         // `reject` can be vectors or scalars.
                         match *accept_inner {
                             Ti::Scalar { .. } | Ti::Vector { .. } => true,
+                            Ti::Pointer {
+                                space: crate::AddressSpace::PhysicalStorage,
+                                ..
+                            }
+                            | Ti::ValuePointer {
+                                space: crate::AddressSpace::PhysicalStorage,
+                                ..
+                            } => true,
                             _ => false,
                         }
                     }
@@ -1299,6 +1344,114 @@ impl super::Validator {
 
                 ShaderStages::all()
             }
+            E::PointerCast { expr, ty } => {
+                let source = &resolver[expr];
+                let dest = &module.types[ty].inner;
+                let physical =
+                    |t: &Ti| t.pointer_space() == Some(crate::AddressSpace::PhysicalStorage);
+                let uint64 = |t: &Ti| matches!(t, Ti::Scalar(s) if *s == crate::Scalar::U64);
+                if !((physical(source) && uint64(dest)) || (uint64(source) && physical(dest))) {
+                    return Err(ExpressionError::InvalidCastArgument);
+                }
+                ShaderStages::all()
+            }
+            E::AtomicPointer {
+                pointer,
+                order,
+                failure_order,
+            } => {
+                use crate::AtomicMemoryOrder as O;
+                if failure_order.is_some_and(|failure| match failure {
+                    O::Relaxed => false,
+                    O::Acquire => !matches!(order, O::Acquire | O::AcquireRelease),
+                    O::Release | O::AcquireRelease => true,
+                }) {
+                    return Err(ExpressionError::InvalidAtomicFailureOrder);
+                }
+                let ty = &resolver[pointer];
+                if ty.pointer_space() != Some(crate::AddressSpace::PhysicalStorage)
+                    || !ty
+                        .pointer_base_type()
+                        .is_some_and(|base| matches!(base.inner_with(&module.types), Ti::Atomic(_)))
+                {
+                    return Err(ExpressionError::InvalidPointerType(pointer));
+                }
+                ShaderStages::all()
+            }
+            E::CoherentPointer { pointer, .. } => {
+                if !self
+                    .capabilities
+                    .contains(super::Capabilities::COHERENT_PHYSICAL_MEMORY)
+                {
+                    return Err(ExpressionError::MissingCapabilities(
+                        super::Capabilities::COHERENT_PHYSICAL_MEMORY,
+                    ));
+                }
+                let ty = &resolver[pointer];
+                if ty.pointer_space() != Some(crate::AddressSpace::PhysicalStorage)
+                    || !ty.pointer_base_type().is_some_and(|base| {
+                        !matches!(base.inner_with(&module.types), Ti::Atomic(_))
+                    })
+                {
+                    return Err(ExpressionError::InvalidPointerType(pointer));
+                }
+                ShaderStages::all()
+            }
+            E::PointerAlignment { pointer, alignment } => {
+                let ty = &resolver[pointer];
+                if ty.pointer_space() != Some(crate::AddressSpace::PhysicalStorage) {
+                    return Err(ExpressionError::InvalidPointerType(pointer));
+                }
+                let base = ty.pointer_base_type().unwrap();
+                let minimum = base
+                    .inner_with(&module.types)
+                    .physical_scalar_layout(module.to_ctx())
+                    .unwrap();
+                if !alignment.is_power_of_two() || alignment < minimum {
+                    return Err(ExpressionError::InvalidPointerAlignment);
+                }
+                ShaderStages::all()
+            }
+            E::PointerOffset { pointer, offset } => {
+                if resolver[pointer].pointer_space() != Some(crate::AddressSpace::PhysicalStorage)
+                    || !matches!(
+                        resolver[offset],
+                        Ti::Scalar(crate::Scalar {
+                            kind: Sk::Uint | Sk::Sint,
+                            width: 8
+                        })
+                    )
+                {
+                    return Err(ExpressionError::InvalidPointerType(pointer));
+                }
+                let base = resolver[pointer].pointer_base_type().unwrap();
+                if let crate::proc::TypeResolution::Handle(h) = base {
+                    if !self.types[h.index()].flags.contains(TypeFlags::SIZED) {
+                        return Err(ExpressionError::InvalidPointerType(pointer));
+                    }
+                }
+                let alignment = match base {
+                    crate::proc::TypeResolution::Handle(h) => self.layouter[h].alignment,
+                    crate::proc::TypeResolution::Value(Ti::Scalar(s)) => {
+                        crate::proc::Alignment::from_width(s.width)
+                    }
+                    crate::proc::TypeResolution::Value(Ti::Vector { size, scalar }) => {
+                        crate::proc::Alignment::from(size)
+                            * crate::proc::Alignment::from_width(scalar.width)
+                    }
+                    crate::proc::TypeResolution::Value(_) => {
+                        unreachable!("validated physical pointer base")
+                    }
+                };
+                if !self
+                    .capabilities
+                    .contains(super::Capabilities::PHYSICAL_STORAGE_SCALAR_LAYOUT)
+                    && !alignment.is_aligned(base.inner_with(&module.types).size(module.to_ctx()))
+                {
+                    return Err(ExpressionError::InvalidPointerType(pointer));
+                }
+                ShaderStages::all()
+            }
             E::As {
                 expr,
                 kind,
@@ -1341,7 +1494,7 @@ impl super::Validator {
                 }
             }
             E::ArrayLength(expr) => match resolver[expr] {
-                Ti::Pointer { base, .. } => {
+                Ti::Pointer { base, space } if space != crate::AddressSpace::PhysicalStorage => {
                     let base_ty = &resolver.types[base];
                     if let Ti::Array {
                         size: crate::ArraySize::Dynamic,
@@ -1400,12 +1553,64 @@ impl super::Validator {
                 }
             },
             E::SubgroupBallotResult | E::SubgroupOperationResult { .. } => self.subgroup_stages,
-            E::CooperativeLoad { ref data, .. } => {
-                if resolver[data.pointer]
-                    .pointer_base_type()
-                    .and_then(|tr| tr.inner_with(&module.types).scalar())
-                    .is_none()
+            E::MatrixLoad { ref data, .. } => {
+                let pointer = &resolver[data.pointer];
+                if pointer.pointer_space() != Some(crate::AddressSpace::PhysicalStorage)
+                    || !matches!(
+                        pointer
+                            .pointer_base_type()
+                            .map(|t| t.inner_with(&module.types).clone()),
+                        Some(Ti::Scalar(crate::Scalar {
+                            kind: Sk::Float,
+                            ..
+                        }))
+                    )
+                    || resolver[data.stride] != Ti::Scalar(crate::Scalar::U32)
                 {
+                    return Err(ExpressionError::InvalidPointerType(data.pointer));
+                }
+                if !self
+                    .capabilities
+                    .contains(super::Capabilities::SHADER_INT64)
+                {
+                    return Err(ExpressionError::MissingCapabilities(
+                        super::Capabilities::SHADER_INT64,
+                    ));
+                }
+                ShaderStages::all()
+            }
+            E::CooperativeLoad { ref data, .. } => {
+                if !self
+                    .capabilities
+                    .contains(super::Capabilities::COOPERATIVE_MATRIX)
+                {
+                    return Err(ExpressionError::MissingCapabilities(
+                        super::Capabilities::COOPERATIVE_MATRIX,
+                    ));
+                }
+                if resolver[data.pointer].pointer_space()
+                    == Some(crate::AddressSpace::PhysicalStorage)
+                    && (!resolver[data.pointer]
+                        .pointer_base_type()
+                        .is_some_and(|base| {
+                            matches!(
+                                base.inner_with(&module.types),
+                                Ti::Scalar(_) | Ti::Vector { .. }
+                            )
+                        })
+                        || resolver[data.stride] != Ti::Scalar(crate::Scalar::U32))
+                {
+                    return Err(ExpressionError::InvalidPointerType(data.pointer));
+                }
+                if !matches!(
+                    resolver[data.pointer]
+                        .pointer_base_type()
+                        .and_then(|tr| tr.inner_with(&module.types).scalar()),
+                    Some(crate::Scalar {
+                        kind: Sk::Float,
+                        width: 2 | 4
+                    })
+                ) {
                     return Err(ExpressionError::InvalidPointerType(data.pointer));
                 }
                 ShaderStages::COMPUTE

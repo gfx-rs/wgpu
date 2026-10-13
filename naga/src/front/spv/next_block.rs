@@ -729,20 +729,134 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         },
                     );
                 }
+                Op::CooperativeMatrixLoadKHR => {
+                    inst.expect_at_least(6)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let pointer_id = self.next()?;
+                    let layout_id = self.next()?;
+                    let stride_id = self.next()?;
+                    let row_major = self.cooperative_layout(layout_id, ctx.module)?;
+                    let lookup = self.lookup_expression.lookup(pointer_id)?;
+                    let pointer_type_id = lookup.type_id;
+                    let pointer = get_expr_handle!(pointer_id, lookup);
+                    let pointer = self.memory_access(
+                        pointer,
+                        pointer_type_id,
+                        inst.wc - 6,
+                        false,
+                        ctx,
+                        span,
+                    )?;
+                    let stride =
+                        get_expr_handle!(stride_id, self.lookup_expression.lookup(stride_id)?);
+                    let crate::TypeInner::CooperativeMatrix {
+                        columns,
+                        rows,
+                        role,
+                        ..
+                    } = ctx.module.types[self.lookup_type.lookup(result_type_id)?.handle].inner
+                    else {
+                        return Err(Error::InvalidInnerType(result_type_id));
+                    };
+                    let handle = ctx.expressions.append(
+                        crate::Expression::CooperativeLoad {
+                            columns,
+                            rows,
+                            role,
+                            data: crate::CooperativeData {
+                                pointer,
+                                stride,
+                                row_major,
+                            },
+                        },
+                        span,
+                    );
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+                }
+                Op::CooperativeMatrixStoreKHR => {
+                    inst.expect_at_least(5)?;
+                    let pointer_id = self.next()?;
+                    let value_id = self.next()?;
+                    let layout_id = self.next()?;
+                    let stride_id = self.next()?;
+                    let row_major = self.cooperative_layout(layout_id, ctx.module)?;
+                    let lookup = self.lookup_expression.lookup(pointer_id)?;
+                    let pointer_type_id = lookup.type_id;
+                    let pointer = get_expr_handle!(pointer_id, lookup);
+                    let pointer =
+                        self.memory_access(pointer, pointer_type_id, inst.wc - 5, true, ctx, span)?;
+                    let stride =
+                        get_expr_handle!(stride_id, self.lookup_expression.lookup(stride_id)?);
+                    let target =
+                        get_expr_handle!(value_id, self.lookup_expression.lookup(value_id)?);
+                    block.extend(emitter.finish(ctx.expressions));
+                    block.push(
+                        crate::Statement::CooperativeStore {
+                            target,
+                            data: crate::CooperativeData {
+                                pointer,
+                                stride,
+                                row_major,
+                            },
+                        },
+                        span,
+                    );
+                    emitter.start(ctx.expressions);
+                }
+                Op::CooperativeMatrixMulAddKHR => {
+                    inst.expect_at_least(6)?;
+                    let type_id = self.next()?;
+                    let id = self.next()?;
+                    let a_id = self.next()?;
+                    let b_id = self.next()?;
+                    let c_id = self.next()?;
+                    if inst.wc > 7 || (inst.wc == 7 && self.next()? != 0) {
+                        return Err(Error::InvalidOperand);
+                    }
+                    let a = get_expr_handle!(a_id, self.lookup_expression.lookup(a_id)?);
+                    let b = get_expr_handle!(b_id, self.lookup_expression.lookup(b_id)?);
+                    let c = get_expr_handle!(c_id, self.lookup_expression.lookup(c_id)?);
+                    let handle = ctx
+                        .expressions
+                        .append(crate::Expression::CooperativeMultiplyAdd { a, b, c }, span);
+                    self.lookup_expression.insert(
+                        id,
+                        LookupExpression {
+                            handle,
+                            type_id,
+                            block_id,
+                        },
+                    );
+                }
                 Op::Load => {
                     inst.expect_at_least(4)?;
 
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let pointer_id = self.next()?;
-                    if inst.wc != 4 {
-                        inst.expect(5)?;
-                        let _memory_access = self.next()?;
-                    }
-
                     let base_lexp = self.lookup_expression.lookup(pointer_id)?;
+                    let type_id = base_lexp.type_id;
+                    // Row-major overrides load before memory operands can be applied.
+                    if self.lookup_load_override.contains_key(&pointer_id)
+                        && ctx.module.types[self.lookup_type.lookup(type_id)?.handle]
+                            .inner
+                            .pointer_space()
+                            == Some(crate::AddressSpace::PhysicalStorage)
+                    {
+                        return Err(Error::InvalidOperand);
+                    }
                     let base_handle = get_expr_handle!(pointer_id, base_lexp);
-                    let type_lookup = self.lookup_type.lookup(base_lexp.type_id)?;
+                    let base_handle =
+                        self.memory_access(base_handle, type_id, inst.wc - 4, false, ctx, span)?;
+                    let type_lookup = self.lookup_type.lookup(type_id)?;
                     let handle = match ctx.module.types[type_lookup.handle].inner {
                         crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
                             base_handle
@@ -773,12 +887,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     let pointer_id = self.next()?;
                     let value_id = self.next()?;
-                    if inst.wc != 3 {
-                        inst.expect(4)?;
-                        let _memory_access = self.next()?;
-                    }
                     let base_expr = self.lookup_expression.lookup(pointer_id)?;
+                    let type_id = base_expr.type_id;
                     let base_handle = get_expr_handle!(pointer_id, base_expr);
+                    let base_handle =
+                        self.memory_access(base_handle, type_id, inst.wc - 3, true, ctx, span)?;
                     let value_expr = self.lookup_expression.lookup(value_id)?;
                     let value_handle = get_expr_handle!(value_id, value_expr);
 
@@ -1598,6 +1711,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     );
                 }
                 Op::Bitcast
+                | Op::ConvertUToPtr
+                | Op::ConvertPtrToU
                 | Op::ConvertSToF
                 | Op::ConvertUToF
                 | Op::ConvertFToU
@@ -1612,6 +1727,51 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     let value_lexp = self.lookup_expression.lookup(value_id)?;
                     let ty_lookup = self.lookup_type.lookup(result_type_id)?;
+                    let source = self.lookup_type.lookup(value_lexp.type_id)?.handle;
+                    let destination = ty_lookup.handle;
+                    if ctx.module.types[source].inner.pointer_space()
+                        == Some(crate::AddressSpace::PhysicalStorage)
+                        || ctx.module.types[destination].inner.pointer_space()
+                            == Some(crate::AddressSpace::PhysicalStorage)
+                    {
+                        if !matches!(inst.op, Op::Bitcast | Op::ConvertUToPtr | Op::ConvertPtrToU) {
+                            return Err(Error::InvalidOperand);
+                        }
+                        let unsigned_address = crate::TypeInner::Scalar(crate::Scalar::U64);
+                        if (inst.op == Op::ConvertUToPtr
+                            && (ctx.module.types[source].inner != unsigned_address
+                                || ctx.module.types[destination].inner.pointer_space()
+                                    != Some(crate::AddressSpace::PhysicalStorage)))
+                            || (inst.op == Op::ConvertPtrToU
+                                && (ctx.module.types[destination].inner != unsigned_address
+                                    || ctx.module.types[source].inner.pointer_space()
+                                        != Some(crate::AddressSpace::PhysicalStorage)))
+                        {
+                            return Err(Error::InvalidOperand);
+                        }
+                        let expr = get_expr_handle!(value_id, value_lexp);
+                        let handle = Self::pointer_cast(
+                            expr,
+                            source,
+                            destination,
+                            ctx,
+                            &mut emitter,
+                            &mut block,
+                            span,
+                        )?;
+                        self.lookup_expression.insert(
+                            result_id,
+                            LookupExpression {
+                                handle,
+                                type_id: result_type_id,
+                                block_id,
+                            },
+                        );
+                        continue;
+                    }
+                    if matches!(inst.op, Op::ConvertUToPtr | Op::ConvertPtrToU) {
+                        return Err(Error::InvalidOperand);
+                    }
                     let scalar = match ctx.module.types[ty_lookup.handle].inner {
                         crate::TypeInner::Scalar(scalar)
                         | crate::TypeInner::Vector { scalar, .. }
@@ -2841,13 +3001,22 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let pointer_id = self.next()?;
-                    let _scope_id = self.next()?;
-                    let _memory_semantics_id = self.next()?;
+                    let scope_id = self.next()?;
+                    let memory_semantics_id = self.next()?;
                     let span = self.span_from_with_op(start);
 
                     log::trace!("\t\t\tlooking up expr {pointer_id:?}");
                     let p_lexp_handle =
                         get_expr_handle!(pointer_id, self.lookup_expression.lookup(pointer_id)?);
+                    let p_lexp_handle = self.atomic_pointer(
+                        pointer_id,
+                        p_lexp_handle,
+                        scope_id,
+                        memory_semantics_id,
+                        None,
+                        ctx,
+                        span,
+                    )?;
 
                     // Create an expression for our result
                     let expr = crate::Expression::Load {
@@ -2870,14 +3039,23 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     inst.expect(5)?;
                     let start = self.data_offset;
                     let pointer_id = self.next()?;
-                    let _scope_id = self.next()?;
-                    let _memory_semantics_id = self.next()?;
+                    let scope_id = self.next()?;
+                    let memory_semantics_id = self.next()?;
                     let value_id = self.next()?;
                     let span = self.span_from_with_op(start);
 
                     log::trace!("\t\t\tlooking up pointer expr {pointer_id:?}");
                     let p_lexp_handle =
                         get_expr_handle!(pointer_id, self.lookup_expression.lookup(pointer_id)?);
+                    let p_lexp_handle = self.atomic_pointer(
+                        pointer_id,
+                        p_lexp_handle,
+                        scope_id,
+                        memory_semantics_id,
+                        None,
+                        ctx,
+                        span,
+                    )?;
 
                     log::trace!("\t\t\tlooking up value expr {pointer_id:?}");
                     let v_lexp_handle =
@@ -2901,8 +3079,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let pointer_id = self.next()?;
-                    let _scope_id = self.next()?;
-                    let _memory_semantics_id = self.next()?;
+                    let scope_id = self.next()?;
+                    let memory_semantics_id = self.next()?;
                     let span = self.span_from_with_op(start);
 
                     let (p_exp_h, p_base_ty_h) = self.get_exp_and_base_ty_handles(
@@ -2911,6 +3089,15 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         &mut emitter,
                         &mut block,
                         body_idx,
+                    )?;
+                    let p_exp_h = self.atomic_pointer(
+                        pointer_id,
+                        p_exp_h,
+                        scope_id,
+                        memory_semantics_id,
+                        None,
+                        ctx,
+                        span,
                     )?;
 
                     block.extend(emitter.finish(ctx.expressions));
@@ -2967,9 +3154,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let pointer_id = self.next()?;
-                    let _memory_scope_id = self.next()?;
-                    let _equal_memory_semantics_id = self.next()?;
-                    let _unequal_memory_semantics_id = self.next()?;
+                    let scope_id = self.next()?;
+                    let memory_semantics_id = self.next()?;
+                    let failure_id = self.next()?;
                     let value_id = self.next()?;
                     let comparator_id = self.next()?;
 
@@ -2979,6 +3166,15 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         &mut emitter,
                         &mut block,
                         body_idx,
+                    )?;
+                    let p_exp_h = self.atomic_pointer(
+                        pointer_id,
+                        p_exp_h,
+                        scope_id,
+                        memory_semantics_id,
+                        Some(failure_id),
+                        ctx,
+                        span,
                     )?;
 
                     log::trace!("\t\t\tlooking up value expr {value_id:?}");

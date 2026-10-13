@@ -303,6 +303,8 @@ impl TryToWgsl for crate::Scalar {
             Scalar::F16 => "f16",
             Scalar::F32 => "f32",
             Scalar::F64 => "f64",
+            Scalar::I8 => "i8",
+            Scalar::U8 => "u8",
             Scalar::I16 => "i16",
             Scalar::U16 => "u16",
             Scalar::I32 => "i32",
@@ -375,6 +377,7 @@ pub const fn address_space_str(
 
     (
         Some(match space {
+            As::PhysicalStorage => "physical_storage",
             As::Private => "private",
             As::Uniform => "uniform",
             As::Storage { access } => {

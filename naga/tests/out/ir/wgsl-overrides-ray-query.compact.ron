@@ -41,36 +41,42 @@
             inner: Struct(
                 members: [
                     (
+                        access: None,
                         name: Some("flags"),
                         ty: 3,
                         binding: None,
                         offset: 0,
                     ),
                     (
+                        access: None,
                         name: Some("cull_mask"),
                         ty: 3,
                         binding: None,
                         offset: 4,
                     ),
                     (
+                        access: None,
                         name: Some("tmin"),
                         ty: 0,
                         binding: None,
                         offset: 8,
                     ),
                     (
+                        access: None,
                         name: Some("tmax"),
                         ty: 0,
                         binding: None,
                         offset: 12,
                     ),
                     (
+                        access: None,
                         name: Some("origin"),
                         ty: 4,
                         binding: None,
                         offset: 16,
                     ),
                     (
+                        access: None,
                         name: Some("dir"),
                         ty: 4,
                         binding: None,

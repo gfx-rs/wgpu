@@ -658,6 +658,10 @@ pub struct PipelineOptions {
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("8-bit integers are only supported by the SPIR-V backend")]
+    Int8Unsupported,
+    #[error("physical storage buffer pointers are unsupported by this backend")]
+    PhysicalStorageUnsupported,
     #[error(transparent)]
     IoError(#[from] FmtError),
     #[error("A scalar with an unsupported width was requested: {0:?}")]

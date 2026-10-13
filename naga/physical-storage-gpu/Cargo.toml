@@ -1,0 +1,26 @@
+[package]
+name = "naga-physical-storage-gpu"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+extended-native-tests = []
+
+[[test]]
+name = "physical-storage-gpu"
+path = "physical_storage.rs"
+
+[dev-dependencies]
+naga = { workspace = true, features = ["spv-out", "spv-in"] }
+wgpu = { path = "../../wgpu", default-features = false, features = ["std", "vulkan", "naga-ir"] }
+wgpu-hal = { path = "../../wgpu-hal", features = ["vulkan", "validation_canary"] }
+half.workspace = true
+ash.workspace = true
+pollster.workspace = true
+rspirv.workspace = true
+
+[lints]
+workspace = true

@@ -91,6 +91,14 @@ impl BlockContext<'_> {
         array: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<Word, Error> {
+        if self.fun_info[array]
+            .ty
+            .inner_with(&self.ir_module.types)
+            .pointer_space()
+            == Some(crate::AddressSpace::PhysicalStorage)
+        {
+            return Err(Error::Validation("device pointers do not carry runtime array lengths; use explicit bounds and unchecked indexing"));
+        }
         // The index into the binding array, if any.
         let binding_array_index_id: Option<Word>;
 

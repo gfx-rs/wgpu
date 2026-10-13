@@ -1600,6 +1600,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     name: Some(arg.name.name.to_string()),
                     ty,
                     binding: self.binding(&arg.binding, ty, ctx)?,
+                    immutable_pointee: false,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -4364,6 +4365,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let allowed: Vec<String> = overloads
                         .allowed_args(arg_index, &ctx.module.to_ctx())
                         .iter()
+                        .filter(|ty| {
+                            !ty.inner_with(&ctx.module.types)
+                                .scalar()
+                                .is_some_and(|scalar| {
+                                    scalar.width == 1
+                                        && matches!(
+                                            scalar.kind,
+                                            crate::ScalarKind::Sint | crate::ScalarKind::Uint
+                                        )
+                                })
+                        })
                         .map(|ty| ctx.type_resolution_to_string(ty))
                         .collect();
 
@@ -4398,6 +4410,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let allowed: Vec<String> = remaining_overloads
                     .allowed_args(arg_index, &ctx.module.to_ctx())
                     .iter()
+                    .filter(|ty| {
+                        !ty.inner_with(&ctx.module.types)
+                            .scalar()
+                            .is_some_and(|scalar| {
+                                scalar.width == 1
+                                    && matches!(
+                                        scalar.kind,
+                                        crate::ScalarKind::Sint | crate::ScalarKind::Uint
+                                    )
+                            })
+                    })
                     .map(|ty| ctx.type_resolution_to_string(ty))
                     .collect();
 
@@ -4878,6 +4901,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 doc_comments.push(None);
             }
             members.push(ir::StructMember {
+                access: None,
                 name: Some(member.name.name.to_owned()),
                 ty,
                 binding,

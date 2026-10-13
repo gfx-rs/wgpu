@@ -730,6 +730,11 @@ impl<'a> ResolveContext<'a> {
 
                 rule.conclusion.into_resolution(self.special_types)?
             }
+            crate::Expression::PointerCast { ty, .. } => TypeResolution::Handle(ty),
+            crate::Expression::PointerOffset { pointer, .. }
+            | crate::Expression::PointerAlignment { pointer, .. }
+            | crate::Expression::CoherentPointer { pointer, .. }
+            | crate::Expression::AtomicPointer { pointer, .. } => past(pointer)?.clone(),
             crate::Expression::As {
                 expr,
                 kind,
@@ -802,6 +807,22 @@ impl<'a> ResolveContext<'a> {
                 scalar: crate::Scalar::U32,
                 size: crate::VectorSize::Quad,
             }),
+            crate::Expression::MatrixLoad {
+                columns,
+                rows,
+                ref data,
+            } => {
+                let scalar = past(data.pointer)?
+                    .inner_with(types)
+                    .pointer_base_type()
+                    .and_then(|tr| tr.inner_with(types).scalar())
+                    .ok_or(ResolveError::InvalidPointer(data.pointer))?;
+                TypeResolution::Value(Ti::Matrix {
+                    columns,
+                    rows,
+                    scalar,
+                })
+            }
             crate::Expression::CooperativeLoad {
                 columns,
                 rows,

@@ -97,11 +97,13 @@
                     name: Some("a"),
                     ty: 1,
                     binding: None,
+                    immutable_pointee: false,
                 ),
                 (
                     name: Some("i"),
                     ty: 0,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: Some((
@@ -139,11 +141,13 @@
                     name: Some("i"),
                     ty: 0,
                     binding: None,
+                    immutable_pointee: false,
                 ),
                 (
                     name: Some("j"),
                     ty: 0,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: Some((
@@ -227,11 +231,13 @@
                     name: Some("i"),
                     ty: 0,
                     binding: None,
+                    immutable_pointee: false,
                 ),
                 (
                     name: Some("j"),
                     ty: 0,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: Some((
@@ -303,6 +309,7 @@
                     name: Some("vi"),
                     ty: 7,
                     binding: None,
+                    immutable_pointee: false,
                 ),
             ],
             result: Some((
@@ -380,6 +387,7 @@
                         name: Some("vi"),
                         ty: 7,
                         binding: Some(BuiltIn(VertexIndex)),
+                        immutable_pointee: false,
                     ),
                 ],
                 result: Some((

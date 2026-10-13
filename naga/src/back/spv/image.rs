@@ -1364,6 +1364,7 @@ impl BlockContext<'_> {
         let id = self.gen_id();
         let space = crate::AddressSpace::Handle;
         let (semantics, scope) = space.to_spirv_semantics_and_scope();
+        self.writer.uses_device_scope |= scope == spirv::Scope::Device;
         let scope_constant_id = self.get_scope_constant(scope as u32);
         let semantics_id = self.get_index_constant(semantics.bits());
         let value_id = self.cached[value];

@@ -654,6 +654,23 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
                 adjust(e);
             }
         }
+        Expression::PointerCast { ref mut expr, .. } => adjust(expr),
+        Expression::PointerAlignment {
+            ref mut pointer, ..
+        }
+        | Expression::CoherentPointer {
+            ref mut pointer, ..
+        }
+        | Expression::AtomicPointer {
+            ref mut pointer, ..
+        } => adjust(pointer),
+        Expression::PointerOffset {
+            ref mut pointer,
+            ref mut offset,
+        } => {
+            adjust(pointer);
+            adjust(offset);
+        }
         Expression::As {
             ref mut expr,
             kind: _,
@@ -692,7 +709,8 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
         } => {
             adjust(query);
         }
-        Expression::CooperativeLoad { ref mut data, .. } => {
+        Expression::MatrixLoad { ref mut data, .. }
+        | Expression::CooperativeLoad { ref mut data, .. } => {
             adjust(&mut data.pointer);
             adjust(&mut data.stride);
         }
@@ -908,7 +926,11 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 crate::RayQueryFunction::Begin => {}
             }
         }
-        Statement::CooperativeStore {
+        Statement::MatrixStore {
+            ref mut target,
+            ref mut data,
+        }
+        | Statement::CooperativeStore {
             ref mut target,
             ref mut data,
         } => {
@@ -1039,6 +1061,32 @@ fn map_value_to_literal(value: f64, scalar: Scalar) -> Result<Literal, PipelineC
             // https://webidl.spec.whatwg.org/#js-boolean
             let value = value != 0.0 && !value.is_nan();
             Ok(Literal::Bool(value))
+        }
+        Scalar::I8 => {
+            if !value.is_finite() {
+                return Err(PipelineConstantError::SrcNeedsToBeFinite);
+            }
+
+            let value = value.trunc();
+            if value < f64::from(i8::MIN) || value > f64::from(i8::MAX) {
+                return Err(PipelineConstantError::DstRangeTooSmall);
+            }
+
+            let value = value as i8;
+            Ok(Literal::I8(value))
+        }
+        Scalar::U8 => {
+            if !value.is_finite() {
+                return Err(PipelineConstantError::SrcNeedsToBeFinite);
+            }
+
+            let value = value.trunc();
+            if value < f64::from(u8::MIN) || value > f64::from(u8::MAX) {
+                return Err(PipelineConstantError::DstRangeTooSmall);
+            }
+
+            let value = value as u8;
+            Ok(Literal::U8(value))
         }
         Scalar::I16 => {
             if !value.is_finite() {
@@ -1227,5 +1275,34 @@ fn test_map_value_to_literal() {
     assert_eq!(
         map_value_to_literal(f64::MAX, Scalar::F64),
         Ok(Literal::F64(f64::MAX))
+    );
+}
+
+#[test]
+fn byte_pipeline_constants() {
+    for (scalar, min, max) in [(Scalar::I8, -128.0, 127.0), (Scalar::U8, 0.0, 255.0)] {
+        for value in [min, max] {
+            assert!(map_value_to_literal(value, scalar).is_ok());
+        }
+        for value in [min - 1.0, max + 1.0] {
+            assert_eq!(
+                map_value_to_literal(value, scalar),
+                Err(PipelineConstantError::DstRangeTooSmall)
+            );
+        }
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert_eq!(
+                map_value_to_literal(value, scalar),
+                Err(PipelineConstantError::SrcNeedsToBeFinite)
+            );
+        }
+    }
+    assert_eq!(
+        map_value_to_literal(-127.9, Scalar::I8),
+        Ok(Literal::I8(-127))
+    );
+    assert_eq!(
+        map_value_to_literal(254.9, Scalar::U8),
+        Ok(Literal::U8(254))
     );
 }

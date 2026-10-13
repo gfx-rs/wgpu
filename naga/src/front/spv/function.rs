@@ -106,6 +106,9 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                         name: decor.name,
                         ty,
                         binding: None,
+                        // `Restrict` and `NonWritable` only promise no aliasing or no writes
+                        // through this parameter, which is weaker than `immutable_pointee`.
+                        immutable_pointee: false,
                     });
                 }
                 Instruction { op, .. } => return Err(Error::InvalidParameter(op)),
@@ -490,6 +493,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                         let member_alignment = self.layouter[result.ty].alignment;
                         next_member_offset = member_alignment.round_up(next_member_offset);
                         members.push(crate::StructMember {
+                            access: None,
                             name: None,
                             ty: result.ty,
                             binding,

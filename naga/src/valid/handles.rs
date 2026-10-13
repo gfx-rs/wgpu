@@ -188,6 +188,7 @@ impl super::Validator {
                     name: _,
                     ty,
                     binding: _,
+                    immutable_pointee: _,
                 } = arg;
                 validate_type(ty)?;
             }
@@ -636,6 +637,18 @@ impl super::Validator {
                     .check_dep_opt(arg2)?
                     .check_dep_opt(arg3)?;
             }
+            crate::Expression::PointerCast { expr, ty } => {
+                handle.check_dep(expr)?;
+                Self::validate_type_handle(ty, types)?;
+            }
+            crate::Expression::PointerAlignment { pointer, .. }
+            | crate::Expression::CoherentPointer { pointer, .. }
+            | crate::Expression::AtomicPointer { pointer, .. } => {
+                handle.check_dep(pointer)?;
+            }
+            crate::Expression::PointerOffset { pointer, offset } => {
+                handle.check_dep(pointer)?.check_dep(offset)?;
+            }
             crate::Expression::As {
                 expr: input,
                 kind: _,
@@ -667,7 +680,8 @@ impl super::Validator {
             } => {
                 handle.check_dep(query)?;
             }
-            crate::Expression::CooperativeLoad { ref data, .. } => {
+            crate::Expression::MatrixLoad { ref data, .. }
+            | crate::Expression::CooperativeLoad { ref data, .. } => {
                 handle.check_dep(data.pointer)?.check_dep(data.stride)?;
             }
             crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
@@ -862,7 +876,8 @@ impl super::Validator {
                 validate_expr(result)?;
                 Ok(())
             }
-            crate::Statement::CooperativeStore { target, ref data } => {
+            crate::Statement::MatrixStore { target, ref data }
+            | crate::Statement::CooperativeStore { target, ref data } => {
                 validate_expr(target)?;
                 validate_expr(data.pointer)?;
                 validate_expr(data.stride)?;
