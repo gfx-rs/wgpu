@@ -15,6 +15,23 @@ use wgpu_sync::{Mutex, RwLock};
 use super::{conv, descriptor::DescriptorCounts, RawTlasInstance};
 use crate::TlasInstance;
 
+#[derive(Debug, thiserror::Error)]
+pub enum ImportTextureError {
+    #[error(transparent)]
+    DeviceError(#[from] crate::DeviceError),
+    #[error("Vulkan driver does not support {}", .0.to_string_lossy())]
+    MissingExtension(&'static CStr),
+    #[error(
+        "No suitable memory type found. \
+        Image types = {image_types:#x}, import types = {import_types:#x}, flags = {flags:?}."
+    )]
+    NoCompatibleMemoryType {
+        image_types: u32,
+        import_types: u32,
+        flags: vk::MemoryPropertyFlags,
+    },
+}
+
 impl super::DeviceShared {
     /// Set the name of `object` to `name`.
     ///
@@ -488,14 +505,15 @@ impl super::Device {
         &self,
         d3d11_shared_handle: windows::Win32::Foundation::HANDLE,
         desc: &crate::TextureDescriptor,
-    ) -> Result<super::Texture, crate::DeviceError> {
+    ) -> Result<super::Texture, ImportTextureError> {
         if !self
             .shared
             .features
             .contains(wgt::Features::VULKAN_EXTERNAL_MEMORY_WIN32)
         {
-            log::error!("Vulkan driver does not support VK_KHR_external_memory_win32");
-            return Err(crate::DeviceError::Unexpected);
+            return Err(ImportTextureError::MissingExtension(
+                ash::khr::external_memory_win32::NAME,
+            ));
         }
 
         let mut external_memory_image_info = vk::ExternalMemoryImageCreateInfo::default()
@@ -518,12 +536,14 @@ impl super::Device {
             import_memory_info.p_next = <*const _>::cast(&mut dedicated_allocate_info);
         }
 
+        let flags = vk::MemoryPropertyFlags::DEVICE_LOCAL;
         let mem_type_index = self
-            .find_memory_type_index(
-                image.requirements.memory_type_bits,
-                vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            )
-            .ok_or(crate::DeviceError::Unexpected)?;
+            .find_memory_type_index(image.requirements.memory_type_bits, flags)
+            .ok_or(ImportTextureError::NoCompatibleMemoryType {
+                image_types: image.requirements.memory_type_bits,
+                import_types: !0,
+                flags,
+            })?;
 
         let memory_allocate_info = vk::MemoryAllocateInfo::default()
             .allocation_size(image.requirements.size)
@@ -563,7 +583,7 @@ impl super::Device {
         drm_modifier: u64,
         stride: u64,
         offset: u64,
-    ) -> Result<super::Texture, crate::DeviceError> {
+    ) -> Result<super::Texture, ImportTextureError> {
         use std::os::unix::io::IntoRawFd;
 
         if !self
@@ -571,11 +591,9 @@ impl super::Device {
             .features
             .contains(wgt::Features::VULKAN_EXTERNAL_MEMORY_DMA_BUF)
         {
-            log::error!(
-                "Vulkan driver does not support VK_EXT_external_memory_dma_buf \
-                 or VK_EXT_image_drm_format_modifier"
-            );
-            return Err(crate::DeviceError::Unexpected);
+            return Err(ImportTextureError::MissingExtension(
+                ash::khr::external_memory_fd::NAME,
+            ));
         }
 
         let external_memory_fd_fn = self
@@ -585,7 +603,7 @@ impl super::Device {
             .as_ref()
             .ok_or_else(|| {
                 log::error!("VK_KHR_external_memory_fd extension not loaded");
-                crate::DeviceError::Unexpected
+                ImportTextureError::MissingExtension(ash::khr::external_memory_fd::NAME)
             })?;
 
         let mut external_memory_image_info = vk::ExternalMemoryImageCreateInfo::default()
@@ -648,7 +666,7 @@ impl super::Device {
         fd_raw: i32,
         image: vk::Image,
         requirements: &vk::MemoryRequirements,
-    ) -> Result<vk::DeviceMemory, crate::DeviceError> {
+    ) -> Result<vk::DeviceMemory, ImportTextureError> {
         let mut fd_props = vk::MemoryFdPropertiesKHR::default();
         unsafe {
             external_memory_fd_fn.get_memory_fd_properties(
@@ -669,7 +687,11 @@ impl super::Device {
             )
             .ok_or_else(|| {
                 unsafe { libc::close(fd_raw) };
-                crate::DeviceError::Unexpected
+                ImportTextureError::NoCompatibleMemoryType {
+                    image_types: requirements.memory_type_bits,
+                    import_types: fd_props.memory_type_bits,
+                    flags: vk::MemoryPropertyFlags::empty(),
+                }
             })?;
 
         let mut dedicated_allocate_info = vk::MemoryDedicatedAllocateInfo::default().image(image);
