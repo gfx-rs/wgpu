@@ -1515,6 +1515,7 @@ impl super::CapabilitiesQuery {
             // NATIVE (Non-WebGPU) LIMITS:
             //
             max_non_sampler_bindings: u32::MAX,
+            min_texel_copy_buffer_row_alignment: 1,
 
             max_binding_array_elements_per_shader_stage: self.max_binding_array_elements,
             max_binding_array_sampler_elements_per_shader_stage: self

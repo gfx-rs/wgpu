@@ -19,4 +19,8 @@ static STRICT_WEBGPU_COMPLIANCE_ADAPTER: GpuTestConfiguration = GpuTestConfigura
         let mut limits = wgpu::Limits::defaults();
         limits.zero_native_only();
         assert!(limits.check_limits(&ctx.adapter.limits()));
+        assert_eq!(
+            ctx.adapter.limits().min_texel_copy_buffer_row_alignment,
+            wgpu::COPY_BYTES_PER_ROW_ALIGNMENT
+        );
     });

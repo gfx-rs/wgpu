@@ -8,7 +8,7 @@ use crate::{link_to_wgpu_docs, link_to_wgpu_item, ConstDefault, Extent3d, Origin
 use serde::{Deserialize, Serialize};
 
 #[cfg(doc)]
-use crate::{BindingType, Features};
+use crate::{BindingType, Features, Limits};
 
 mod external_image;
 mod external_texture;
@@ -959,7 +959,8 @@ pub struct TexelCopyBufferLayout {
     ///
     /// This value is required if there are multiple rows (i.e. height or depth is more than one pixel or pixel block for compressed textures)
     ///
-    /// Must be a multiple of 256 for [`CommandEncoder::copy_buffer_to_texture`][CEcbtt]
+    /// Must be a multiple of [`Limits::min_texel_copy_buffer_row_alignment`], 256 by default,
+    /// for [`CommandEncoder::copy_buffer_to_texture`][CEcbtt]
     /// and [`CommandEncoder::copy_texture_to_buffer`][CEcttb]. You must manually pad the
     /// buffer as if the image width is a multiple of 256. An image of size (500, 500) can be
     /// written to a buffer of size (512, 500) with `bytes_per_row` of 512,

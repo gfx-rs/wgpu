@@ -966,6 +966,8 @@ impl super::Adapter {
                     // NATIVE (Non-WebGPU) LIMITS:
                     //
                     max_non_sampler_bindings: 1_000_000,
+                    min_texel_copy_buffer_row_alignment:
+                        Direct3D12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT,
                     max_binding_array_elements_per_shader_stage: full_heap_count,
                     max_binding_array_sampler_elements_per_shader_stage:
                         Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
