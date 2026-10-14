@@ -593,11 +593,6 @@ impl DeviceBufferTracker {
         }
     }
 
-    /// Returns a list of all buffers tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = &Weak<Buffer>> + '_ {
-        self.metadata.owned_resources()
-    }
-
     /// Inserts a single buffer and its state into the resource tracker.
     ///
     /// If the resource already exists in the tracker, it will be overwritten.
