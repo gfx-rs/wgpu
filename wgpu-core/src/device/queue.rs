@@ -1780,6 +1780,13 @@ impl Queue {
         Ok(submit_index)
     }
 
+    /// Submits `command_buffers` for execution.
+    ///
+    /// If an error is encountered, two things happen:
+    ///
+    /// 1. The error is submitted to the device's error sink.
+    /// 2. The returned index might not refer to actually submitted work; waiting on it can fail
+    ///    with [`WaitIdleError::WrongSubmissionIndex`].
     pub fn submit(&self, command_buffers: &[Arc<CommandBuffer>]) -> SubmissionIndex {
         match self.submit_inner(command_buffers) {
             Ok(submit_index) => submit_index,
