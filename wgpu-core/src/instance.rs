@@ -122,12 +122,12 @@ impl Instance {
     ) -> Arc<Self> {
         let mut this = InstanceBuilder::new(name, instance_desc, telemetry);
 
-        #[cfg(all(vulkan, not(target_os = "netbsd")))]
-        this.try_add_hal(hal::api::Vulkan);
         #[cfg(metal)]
         this.try_add_hal(hal::api::Metal);
         #[cfg(dx12)]
         this.try_add_hal(hal::api::Dx12);
+        #[cfg(all(vulkan, not(target_os = "netbsd")))]
+        this.try_add_hal(hal::api::Vulkan);
         #[cfg(gles)]
         this.try_add_hal(hal::api::Gles);
         #[cfg(feature = "noop")]
