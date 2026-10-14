@@ -325,13 +325,18 @@ impl Buffer {
     ///
     /// This terminates the effect of all previous [`map_async()`](Self::map_async) operations and
     /// makes the buffer available for use by the GPU again.
+    ///
+    /// Panics if there is any [`BufferView`] or [`BufferViewMut`] alive.
     pub fn unmap(&self) {
         self.map_context.lock().reset();
         self.inner.unmap();
     }
 
     /// Destroy the associated native resources as soon as possible.
+    ///
+    /// Panics if there is any [`BufferView`] or [`BufferViewMut`] alive.
     pub fn destroy(&self) {
+        self.map_context.lock().reset();
         self.inner.destroy();
     }
 
@@ -923,7 +928,8 @@ static_assertions::assert_impl_all!(MapMode: Send, Sync);
 /// `AsRef<[u8]>`, if that's more convenient.
 ///
 /// Before the buffer can be unmapped, all `BufferView`s observing it
-/// must be dropped. Otherwise, the call to [`Buffer::unmap`] will panic.
+/// must be dropped. Otherwise, the call to [`Buffer::unmap`] or
+/// [`Buffer::destroy`] will panic.
 ///
 /// For example code, see the documentation on [mapping buffers][map].
 ///
@@ -950,7 +956,8 @@ pub struct BufferView {
 /// and there are also a few convenience methods such as [`BufferViewMut::copy_from_slice()`].
 ///
 /// Before the buffer can be unmapped, all `BufferViewMut`s observing it
-/// must be dropped. Otherwise, the call to [`Buffer::unmap`] will panic.
+/// must be dropped. Otherwise, the call to [`Buffer::unmap`] or
+/// [`Buffer::destroy`] will panic.
 ///
 /// For example code, see the documentation on [mapping buffers][map].
 ///

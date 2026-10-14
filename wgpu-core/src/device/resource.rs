@@ -976,12 +976,10 @@ impl Device {
         // and we have a DeviceLostClosure, return the closure to be called by
         // our caller. This will complete the steps for both destroy and for
         // "lose the device".
-        let mut should_release_gpu_resource = false;
+        //
+        // The resources of a lost device are not destroyed here: each one stays
+        // until it drops, since the views of a mapped buffer read its raw buffer.
         if !device_valid && queue_empty {
-            // We can release gpu resources associated with this device (but not
-            // while holding the life_tracker lock).
-            should_release_gpu_resource = true;
-
             // If we have a DeviceLostClosure, build an invocation with the
             // reason DeviceLostReason::Destroyed and no message.
             if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {
@@ -993,10 +991,6 @@ impl Device {
                         message: String::new(),
                     });
             }
-        }
-
-        if should_release_gpu_resource {
-            self.release_gpu_resources();
         }
 
         (user_closures, result)
@@ -5431,29 +5425,6 @@ impl Device {
         // since that will prevent any new work from being added to the queues.
         // Future calls to poll_devices will continue to check the work queues
         // until they are cleared, and then drop the device.
-    }
-
-    fn release_gpu_resources(&self) {
-        // This is called when the device is lost, which makes every associated
-        // resource invalid and unusable. This is an opportunity to release all of
-        // the underlying gpu resources, even though the objects remain visible to
-        // the user agent. We purge this memory naturally when resources have been
-        // moved into the appropriate buckets, so this function just needs to
-        // initiate movement into those buckets, and it can do that by calling
-        // "destroy" on all the resources we know about.
-
-        // During these iterations, we discard all errors. We don't care!
-        let trackers = self.trackers.lock();
-        for buffer in trackers.buffers.used_resources() {
-            if let Some(buffer) = Weak::upgrade(buffer) {
-                buffer.destroy();
-            }
-        }
-        for texture in trackers.textures.used_resources() {
-            if let Some(texture) = Weak::upgrade(texture) {
-                texture.destroy();
-            }
-        }
     }
 
     pub(crate) fn new_usage_scope(&self) -> UsageScope<'_> {

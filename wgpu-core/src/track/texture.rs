@@ -714,11 +714,6 @@ impl DeviceTextureTracker {
         }
     }
 
-    /// Returns a list of all textures tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = &Weak<Texture>> + '_ {
-        self.metadata.owned_resources()
-    }
-
     /// Inserts a single texture and a state into the resource tracker.
     ///
     /// If the resource already exists in the tracker, it will be overwritten.
