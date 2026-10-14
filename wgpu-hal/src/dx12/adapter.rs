@@ -476,6 +476,7 @@ impl super::Adapter {
             | wgt::Features::POLYGON_MODE_LINE
             | wgt::Features::PRIMITIVE_INDEX
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
+            | wgt::Features::SHADER_EARLY_DEPTH_TEST
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::TEXTURE_ATOMIC
             | wgt::Features::TEXTURE_COMPONENT_SWIZZLE
