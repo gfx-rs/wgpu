@@ -181,6 +181,9 @@ enum ResolvedBinding {
     },
     Resource(BindTarget),
     Payload,
+    /// A fragment shader's depth output, qualified by how it may differ from
+    /// the depth calculated by the rasterizer.
+    ConservativeDepth(crate::ConservativeDepth),
 }
 
 #[derive(Copy, Clone)]
@@ -713,6 +716,15 @@ impl ResolvedBinding {
                 write!(out, "{name}")?;
             }
             Self::Attribute(index) => write!(out, "attribute({index})")?,
+            Self::ConservativeDepth(conservative) => {
+                use crate::ConservativeDepth as Cd;
+                let qualifier = match conservative {
+                    Cd::GreaterEqual => "greater",
+                    Cd::LessEqual => "less",
+                    Cd::Unchanged => "any",
+                };
+                write!(out, "depth({qualifier})")?
+            }
             Self::Color {
                 location,
                 blend_src,
@@ -846,7 +858,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         // No CULL_DISTANCE
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
         | Caps::MULTIVIEW
-        // No EARLY_DEPTH_TEST
+        | Caps::EARLY_DEPTH_TEST
         | Caps::MULTISAMPLED_SHADING
         | Caps::RAY_QUERY
         | Caps::DUAL_SOURCE_BLENDING
