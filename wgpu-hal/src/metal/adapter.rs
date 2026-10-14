@@ -1134,7 +1134,8 @@ impl super::CapabilitiesQuery {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             int64: family_check && (metal3 || device.supportsFamily(MTLGPUFamily::Apple3)),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
-            // Apple8 supports 64-bit atomic min/max on buffers and textures on macOS.
+            // There is also a footnote that says
+            // "Some GPU devices in the Apple8 family support 64-bit atomic minimum and maximum..."
             int64_atomics_min_max: family_check
                 && (device.supportsFamily(MTLGPUFamily::Apple9)
                     || (device.supportsFamily(MTLGPUFamily::Apple8)
