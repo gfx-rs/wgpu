@@ -55,7 +55,7 @@ fn trace_test(test_type: TestType) {
             device.push_error_scope(wgpu::ErrorFilter::Validation);
             encoder.clear_buffer(buffer, 0, None);
             let cmdbuf = encoder.finish(&wgt::CommandBufferDescriptor::default());
-            queue.submit(&[cmdbuf]);
+            queue.submit(&[cmdbuf]).unwrap();
             assert!(matches!(device.pop_error_scope(), Ok(None)));
         }
         TestType::FailedCommands => {
@@ -73,7 +73,7 @@ fn trace_test(test_type: TestType) {
             assert!(matches!(device.pop_error_scope(), Ok(None)));
             buffer.destroy();
             device.push_error_scope(wgpu::ErrorFilter::Validation);
-            queue.submit(&[cmdbuf]);
+            queue.submit(&[cmdbuf]).unwrap_err();
             assert!(matches!(device.pop_error_scope(), Ok(Some(_))));
         }
     }
