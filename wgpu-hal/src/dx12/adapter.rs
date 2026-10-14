@@ -486,6 +486,10 @@ impl super::Adapter {
             | wgt::Features::TIMESTAMP_QUERY
             | wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
             | wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES;
+        features.set(
+            wgt::Features::UNRESTRICTED_BYTES_PER_ROW,
+            unrestricted_buffer_texture_copy_pitch_supported,
+        );
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
