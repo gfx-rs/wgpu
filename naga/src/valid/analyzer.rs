@@ -293,6 +293,17 @@ pub struct FunctionInfo {
     /// [`GlobalVariable`]: crate::GlobalVariable
     sampling: crate::FastHashSet<Sampling>,
 
+    /// Indices of this function's arguments that are storage images written
+    /// by an [`ImageStore`] in this function or in its callees.
+    ///
+    /// When analyzing a call, the global passed for such an argument is
+    /// recorded as [`GlobalUse::WRITE`] rather than [`GlobalUse::READ`].
+    ///
+    /// [`ImageStore`]: crate::Statement::ImageStore
+    #[cfg_attr(feature = "serialize", serde(skip_serializing))]
+    #[cfg_attr(feature = "deserialize", serde(skip_deserializing))]
+    image_store_arguments: crate::FastHashSet<u32>,
+
     /// Indicates that the function is using dual source blending.
     pub dual_source_blending: bool,
 
@@ -1079,6 +1090,9 @@ impl FunctionInfo {
                     value,
                 } => {
                     let _ = self.add_ref_impl(image, GlobalUse::WRITE);
+                    if let crate::Expression::FunctionArgument(i) = expression_arena[image] {
+                        self.image_store_arguments.insert(i);
+                    }
                     if let Some(expr) = array_index {
                         let _ = self.add_ref(expr);
                     }
@@ -1091,10 +1105,19 @@ impl FunctionInfo {
                     ref arguments,
                     result: _,
                 } => {
-                    for &argument in arguments {
-                        let _ = self.add_ref(argument);
-                    }
                     let info = &other_functions[function.index()];
+                    for (i, &argument) in arguments.iter().enumerate() {
+                        if info.image_store_arguments.contains(&(i as u32)) {
+                            let _ = self.add_ref_impl(argument, GlobalUse::WRITE);
+                            if let crate::Expression::FunctionArgument(j) =
+                                expression_arena[argument]
+                            {
+                                self.image_store_arguments.insert(j);
+                            }
+                        } else {
+                            let _ = self.add_ref(argument);
+                        }
+                    }
                     //Note: the result is validated by the Validator, not here
                     self.process_call(info, arguments, expression_arena)?
                 }
@@ -1265,6 +1288,7 @@ impl ModuleInfo {
             global_uses: vec![GlobalUse::empty(); module.global_variables.len()].into_boxed_slice(),
             expressions: vec![ExpressionInfo::new(); fun.expressions.len()].into_boxed_slice(),
             sampling: crate::FastHashSet::default(),
+            image_store_arguments: crate::FastHashSet::default(),
             dual_source_blending: false,
             diagnostic_filter_leaf: fun.diagnostic_filter_leaf,
         };
@@ -1400,6 +1424,7 @@ fn uniform_control_flow() {
         global_uses: vec![GlobalUse::empty(); global_var_arena.len()].into_boxed_slice(),
         expressions: vec![ExpressionInfo::new(); expressions.len()].into_boxed_slice(),
         sampling: crate::FastHashSet::default(),
+        image_store_arguments: crate::FastHashSet::default(),
         dual_source_blending: false,
         diagnostic_filter_leaf: None,
     };
