@@ -65,7 +65,7 @@ impl GPUQueue {
       .map(|cb| cb.wgpu_command_buffer.clone())
       .collect::<Vec<_>>();
 
-    self.wgpu_queue.submit(&ids);
+    let _ = self.wgpu_queue.submit(&ids);
 
     Ok(())
   }
