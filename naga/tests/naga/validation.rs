@@ -2066,3 +2066,97 @@ fn spv_longest_entry_point_name() {
 fn spv_entry_point_name_too_long() {
     write_spv_with_entry_point_name_len(LONGEST_SPV_ENTRY_POINT_NAME_LEN + 1);
 }
+
+#[test]
+fn image_store_through_function_argument() {
+    let cases = [
+        // Called directly from the entry point.
+        r#"
+            @group(0) @binding(0) var tex: texture_storage_2d<r32uint, write>;
+            fn store(t: texture_storage_2d<r32uint, write>, p: vec2u) {
+                textureStore(t, p, vec4u(1u));
+            }
+            @compute @workgroup_size(1)
+            fn main() {
+                store(tex, vec2u(0u));
+            }
+        "#,
+        // Passed through a second function before the store.
+        r#"
+            @group(0) @binding(0) var tex: texture_storage_2d<r32uint, write>;
+            fn inner(t: texture_storage_2d<r32uint, write>, p: vec2u) {
+                textureStore(t, p, vec4u(1u));
+            }
+            fn outer(t: texture_storage_2d<r32uint, write>) {
+                inner(t, vec2u(0u));
+            }
+            @compute @workgroup_size(1)
+            fn main() {
+                outer(tex);
+            }
+        "#,
+        // Two call sites with different textures.
+        r#"
+            @group(0) @binding(0) var tex: texture_storage_2d<r32uint, write>;
+            @group(0) @binding(1) var tex2: texture_storage_2d<r32uint, write>;
+            fn store(t: texture_storage_2d<r32uint, write>, p: vec2u) {
+                textureStore(t, p, vec4u(1u));
+            }
+            @compute @workgroup_size(1)
+            fn main() {
+                store(tex, vec2u(0u));
+                store(tex2, vec2u(1u));
+            }
+        "#,
+        // A helper that is never called.
+        r#"
+            @group(0) @binding(0) var tex: texture_storage_2d<r32uint, write>;
+            fn store(t: texture_storage_2d<r32uint, write>, p: vec2u) {
+                textureStore(t, p, vec4u(1u));
+            }
+            @compute @workgroup_size(1)
+            fn main() {
+                _ = tex;
+            }
+        "#,
+    ];
+
+    for source in cases {
+        let module = naga::front::wgsl::parse_str(source).unwrap();
+        let info = valid::Validator::new(Default::default(), valid::Capabilities::all())
+            .validate(&module)
+            .unwrap_or_else(|err| panic!("{}", err.emit_to_string(source)));
+        for (tex, _) in module.global_variables.iter() {
+            let usage = info.get_entry_point(0)[tex];
+            assert!(!usage.contains(valid::GlobalUse::READ), "{usage:?}");
+        }
+    }
+}
+
+#[test]
+fn image_store_through_function_argument_read_only() {
+    let source = r#"
+        @group(0) @binding(0) var tex: texture_storage_2d<r32uint, read>;
+        fn store(t: texture_storage_2d<r32uint, read>, p: vec2u) {
+            textureStore(t, p, vec4u(1u));
+        }
+        @compute @workgroup_size(1)
+        fn main() {
+            store(tex, vec2u(0u));
+        }
+    "#;
+    let module = naga::front::wgsl::parse_str(source).unwrap();
+    let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .unwrap_err();
+    assert!(
+        matches!(
+            err.into_inner(),
+            valid::ValidationError::EntryPoint {
+                source: valid::EntryPointError::InvalidGlobalUsage(_, usage),
+                ..
+            } if usage.contains(valid::GlobalUse::WRITE)
+        ),
+        "expected InvalidGlobalUsage with WRITE"
+    );
+}

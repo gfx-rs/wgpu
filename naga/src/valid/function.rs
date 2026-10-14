@@ -1139,12 +1139,22 @@ impl super::Validator {
                 } => {
                     //Note: this code uses a lot of `FunctionError::InvalidImageStore`,
                     // and could probably be refactored.
-                    let global_var;
+                    let decl_ty;
                     let image_ty;
                     match *context.get_expression(image) {
                         crate::Expression::GlobalVariable(var_handle) => {
-                            global_var = &context.global_vars[var_handle];
-                            image_ty = global_var.ty;
+                            decl_ty = context.global_vars[var_handle].ty;
+                            image_ty = decl_ty;
+                        }
+                        crate::Expression::FunctionArgument(_) => {
+                            let Some(ty) = context.info[image].ty.handle() else {
+                                return Err(FunctionError::InvalidImageStore(
+                                    ExpressionError::ExpectedGlobalOrArgument,
+                                )
+                                .with_span_handle(image, context.expressions));
+                            };
+                            decl_ty = ty;
+                            image_ty = ty;
                         }
                         // The `image` operand is indexing into a binding array,
                         // so punch through the `Access`* expression and look at
@@ -1159,22 +1169,21 @@ impl super::Validator {
                                 )
                                 .with_span_handle(image, context.expressions));
                             };
-                            global_var = &context.global_vars[var_handle];
+                            decl_ty = context.global_vars[var_handle].ty;
 
                             // The global variable must be a binding array.
-                            let Ti::BindingArray { base, .. } = context.types[global_var.ty].inner
-                            else {
+                            let Ti::BindingArray { base, .. } = context.types[decl_ty].inner else {
                                 return Err(FunctionError::InvalidImageStore(
-                                    ExpressionError::ExpectedBindingArrayType(global_var.ty),
+                                    ExpressionError::ExpectedBindingArrayType(decl_ty),
                                 )
-                                .with_span_handle(global_var.ty, context.types));
+                                .with_span_handle(decl_ty, context.types));
                             };
 
                             image_ty = base;
                         }
                         _ => {
                             return Err(FunctionError::InvalidImageStore(
-                                ExpressionError::ExpectedGlobalVariable,
+                                ExpressionError::ExpectedGlobalOrArgument,
                             )
                             .with_span_handle(image, context.expressions))
                         }
@@ -1188,10 +1197,10 @@ impl super::Validator {
                     } = context.types[image_ty].inner
                     else {
                         return Err(FunctionError::InvalidImageStore(
-                            ExpressionError::ExpectedImageType(global_var.ty),
+                            ExpressionError::ExpectedImageType(decl_ty),
                         )
                         .with_span()
-                        .with_handle(global_var.ty, context.types)
+                        .with_handle(decl_ty, context.types)
                         .with_handle(image, context.expressions));
                     };
 
