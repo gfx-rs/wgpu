@@ -435,12 +435,8 @@ impl FunctionInfo {
         arguments: &[Handle<crate::Expression>],
         expression_arena: &Arena<crate::Expression>,
     ) -> Result<FunctionUniformity, WithSpan<FunctionError>> {
-        self.sampling_map.extend(
-            callee
-                .sampling_map
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone())),
-        );
+        self.sampling_map
+            .extend(callee.sampling_map.iter().map(|(k, v)| (*k, *v)));
         for sampling in callee.sampling.iter() {
             // If the callee was passed the texture or sampler as an argument,
             // we may now be able to determine which globals those referred to.
