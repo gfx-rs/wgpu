@@ -513,11 +513,11 @@ impl FunctionInfo {
     ///
     /// Adjust the reference counts on all expressions we use.
     ///
-    /// Also populate the [`sampling_set`], [`sampling`] and
+    /// Also populate the [`sampling_map`], [`sampling`] and
     /// [`global_uses`] fields of `self`.
     ///
     /// [`self.expressions`]: FunctionInfo::expressions
-    /// [`sampling_set`]: FunctionInfo::sampling_set
+    /// [`sampling_map`]: FunctionInfo::sampling_map
     /// [`sampling`]: FunctionInfo::sampling
     /// [`global_uses`]: FunctionInfo::global_uses
     #[allow(clippy::or_fun_call)]
