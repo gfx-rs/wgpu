@@ -484,6 +484,20 @@ impl super::Device {
         if desc.format.is_multi_planar_format() {
             raw_flags |=
                 vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
+
+            // DRM format modifier tiling requires a format list with MUTABLE_FORMAT.
+            if tiling == vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT && vk_view_formats.is_empty() {
+                vk_view_formats = [
+                    wgt::TextureAspect::Plane0,
+                    wgt::TextureAspect::Plane1,
+                    wgt::TextureAspect::Plane2,
+                ]
+                .into_iter()
+                .filter_map(|aspect| desc.format.aspect_specific_format(aspect))
+                .map(|format| self.shared.private_caps.map_texture_format(format))
+                .collect();
+                vk_view_formats.push(original_format);
+            }
         }
 
         let mut usage = conv::map_texture_usage(desc.usage);
