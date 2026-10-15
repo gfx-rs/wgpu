@@ -970,6 +970,7 @@ pub enum TextureMemory {
 
 /// Layout of one DRM memory plane of a DMA-buf, for
 /// [`Device::texture_from_dmabuf_fd`].
+#[cfg(unix)]
 #[derive(Clone, Copy, Debug)]
 pub struct DmaBufPlaneLayout {
     /// Offset of the plane from the start of the DMA-buf, in bytes.
@@ -981,6 +982,7 @@ pub struct DmaBufPlaneLayout {
 /// One memory plane of a texture imported with
 /// [`Device::texture_from_dmabuf_fds`]. The memory for each
 /// DMA-buf file descriptor may contain one or more image planes.
+#[cfg(unix)]
 #[derive(Clone, Copy, Debug)]
 pub struct DmaBufPlane {
     /// Index of the DMA-buf object containing this plane.
