@@ -54,6 +54,7 @@ pub enum ImportTextureError {
     InvalidMultiPlaneDedicatedAllocation,
 }
 
+#[cfg(unix)]
 const MEMORY_PLANE_ASPECTS: [vk::ImageAspectFlags; 4] = [
     vk::ImageAspectFlags::MEMORY_PLANE_0_EXT,
     vk::ImageAspectFlags::MEMORY_PLANE_1_EXT,
