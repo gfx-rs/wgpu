@@ -460,9 +460,9 @@ impl super::CommandState {
         // Extend with the sizes of the mapped vertex buffers, in the order they were added
         // to the map. Note that zeros in the sizes buffer can be for either an unused
         // binding index (no entry in map) or a zero-size binding (map entry that is zero).
-        result_sizes.extend(stage_info.vertex_buffer_mappings.iter().map(|vbm| {
+        result_sizes.extend(stage_info.vertex_buffer_ids.iter().map(|id| {
             self.vertex_buffer_size_map
-                .get(&vbm.id)
+                .get(id)
                 .map(|&size| u32::try_from(size).unwrap_or(u32::MAX))
                 .unwrap_or_default()
         }));
