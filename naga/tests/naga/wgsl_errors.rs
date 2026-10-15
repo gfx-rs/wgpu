@@ -225,6 +225,61 @@ error: wrong type passed as argument #1 to `cross`
 }
 
 #[test]
+fn sign_unsigned() {
+    check(
+        r#"
+            @compute @workgroup_size(1)
+            fn main() {
+                var input = vec4<u32>(1u);
+                let value = sign(input);
+            }
+        "#,
+        "\
+error: wrong type passed as argument #1 to `sign`
+  ┌─ wgsl:5:29
+  │
+5 │                 let value = sign(input);
+  │                             ^^^^
+  │
+  = note: `sign` accepts the following types for argument #1:
+  = note: allowed type: {AbstractInt}
+  = note: allowed type: {AbstractFloat}
+  = note: allowed type: i32
+  = note: allowed type: i16
+  = note: allowed type: i64
+  = note: allowed type: f32
+  = note: allowed type: f16
+  = note: allowed type: f64
+  = note: allowed type: vec2<{AbstractInt}>
+  = note: allowed type: vec2<{AbstractFloat}>
+  = note: allowed type: vec2<i32>
+  = note: allowed type: vec2<i16>
+  = note: allowed type: vec2<i64>
+  = note: allowed type: vec2<f32>
+  = note: allowed type: vec2<f16>
+  = note: allowed type: vec2<f64>
+  = note: allowed type: vec3<{AbstractInt}>
+  = note: allowed type: vec3<{AbstractFloat}>
+  = note: allowed type: vec3<i32>
+  = note: allowed type: vec3<i16>
+  = note: allowed type: vec3<i64>
+  = note: allowed type: vec3<f32>
+  = note: allowed type: vec3<f16>
+  = note: allowed type: vec3<f64>
+  = note: allowed type: vec4<{AbstractInt}>
+  = note: allowed type: vec4<{AbstractFloat}>
+  = note: allowed type: vec4<i32>
+  = note: allowed type: vec4<i16>
+  = note: allowed type: vec4<i64>
+  = note: allowed type: vec4<f32>
+  = note: allowed type: vec4<f16>
+  = note: allowed type: vec4<f64>
+
+",
+    );
+}
+
+#[test]
 fn cross_vec4() {
     check(
         r#"
@@ -2034,7 +2089,7 @@ fn invalid_functions() {
         if function_name == "return_pointer"
     }
 
-    check_validation! {
+    check_error_matches(
         "
         struct Atom {
             a: atomic<u32>
@@ -2045,14 +2100,72 @@ fn invalid_functions() {
         fn return_atomic() -> Atom {
            return atom;
         }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            name: function_name,
-            source: naga::valid::FunctionError::NonConstructibleReturnType,
-            ..
-        })
-        if function_name == "return_atomic"
-    }
+        ",
+        "direct access to atomic variable is not allowed",
+    );
+}
+
+/// Regression test for <https://github.com/gfx-rs/wgpu/issues/10046>.
+///
+/// Loading a value whose type contains an atomic, even nested inside a
+/// struct or array, must be rejected by the front end. It used to reach the
+/// backends, where the HLSL writer panicked.
+#[test]
+fn load_type_containing_atomic() {
+    check(
+        "
+        struct Inner { a: atomic<u32> }
+        struct Outer { inner: Inner }
+        @group(0) @binding(0) var<storage, read_write> s: Outer;
+        fn f() {
+            let x = s;
+        }
+        ",
+        r#"error: direct access to atomic variable is not allowed
+  ┌─ wgsl:6:21
+  │
+6 │             let x = s;
+  │                     ^ atomic variables cannot be accessed directly; use atomic built-in functions
+
+"#,
+    );
+
+    check_error_matches(
+        "
+        struct S { a: atomic<u32> }
+        @group(0) @binding(0) var<storage, read_write> s: S;
+        fn f() {
+            _ = s;
+        }
+        ",
+        "direct access to atomic variable is not allowed",
+    );
+
+    check_error_matches(
+        "
+        struct S { a: array<atomic<u32>, 2> }
+        @group(0) @binding(0) var<storage, read_write> s: S;
+        fn f() {
+            let x = s.a;
+        }
+        ",
+        "direct access to atomic variable is not allowed",
+    );
+
+    // Accessing the atomic through the built-in functions is still fine.
+    check_success(
+        "
+        struct Inner { a: atomic<u32> }
+        struct Outer { inner: Inner, arr: array<atomic<u32>, 2> }
+        @group(0) @binding(0) var<storage, read_write> s: Outer;
+        fn f() -> u32 {
+            atomicStore(&s.inner.a, 1u);
+            atomicAdd(&s.arr[1], 1u);
+            let p = &s.inner;
+            return atomicLoad(&(*p).a);
+        }
+        ",
+    );
 }
 
 #[test]

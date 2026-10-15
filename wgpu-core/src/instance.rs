@@ -25,15 +25,6 @@ use crate::{
 
 use wgt::{Backend, Backends, InstanceFlags, PowerPreference};
 
-#[test]
-fn downlevel_default_limits_less_than_default_limits() {
-    let res = check_limits(&wgt::Limits::downlevel_defaults(), &wgt::Limits::default());
-    assert!(
-        res.is_empty(),
-        "Downlevel limits are greater than default limits",
-    )
-}
-
 #[derive(Debug)]
 pub(crate) struct InstanceDevices(Mutex<WeakVec<Device>>);
 
@@ -126,85 +117,23 @@ pub struct Instance {
 impl Instance {
     pub fn new(
         name: &str,
-        mut instance_desc: wgt::InstanceDescriptor,
+        instance_desc: wgt::InstanceDescriptor,
         telemetry: Option<hal::Telemetry>,
     ) -> Arc<Self> {
-        let mut this = Self {
-            _name: name.to_owned(),
-            instance_per_backend: Vec::new(),
-            requested_backends: instance_desc.backends,
-            supported_backends: Backends::empty(),
-            flags: instance_desc.flags,
-            // HACK: We must take ownership of the field here, without being able to pass it into
-            // try_add_hal(). Remove it from the mutable descriptor instead, while try_add_hal()
-            // borrows the handle from `this.display` instead.
-            display: instance_desc.display.take(),
-            devices: InstanceDevices::new(),
-        };
+        let mut this = InstanceBuilder::new(name, instance_desc, telemetry);
 
         #[cfg(all(vulkan, not(target_os = "netbsd")))]
-        this.try_add_hal(hal::api::Vulkan, &instance_desc, telemetry);
+        this.try_add_hal(hal::api::Vulkan);
         #[cfg(metal)]
-        this.try_add_hal(hal::api::Metal, &instance_desc, telemetry);
+        this.try_add_hal(hal::api::Metal);
         #[cfg(dx12)]
-        this.try_add_hal(hal::api::Dx12, &instance_desc, telemetry);
+        this.try_add_hal(hal::api::Dx12);
         #[cfg(gles)]
-        this.try_add_hal(hal::api::Gles, &instance_desc, telemetry);
+        this.try_add_hal(hal::api::Gles);
         #[cfg(feature = "noop")]
-        this.try_add_hal(hal::api::Noop, &instance_desc, telemetry);
+        this.try_add_hal(hal::api::Noop);
 
-        Arc::new(this)
-    }
-
-    /// Helper for `Instance::new()`; attempts to add a single `wgpu-hal` backend to this instance.
-    fn try_add_hal<A: hal::Api>(
-        &mut self,
-        _: A,
-        instance_desc: &wgt::InstanceDescriptor,
-        telemetry: Option<hal::Telemetry>,
-    ) {
-        // Whether or not the backend was requested, and whether or not it succeeds,
-        // note that we *could* try it.
-        self.supported_backends |= A::VARIANT.into();
-
-        if !instance_desc.backends.contains(A::VARIANT.into()) {
-            log::trace!("Instance::new: backend {:?} not requested", A::VARIANT);
-            return;
-        }
-
-        // If this was Some, it was moved into self
-        assert!(instance_desc.display.is_none());
-
-        let hal_desc = hal::InstanceDescriptor {
-            name: "wgpu",
-            flags: self.flags,
-            memory_budget_thresholds: instance_desc.memory_budget_thresholds,
-            backend_options: instance_desc.backend_options.clone(),
-            telemetry,
-            // Pass a borrow, the core instance here keeps the owned handle alive already
-            // WARNING: Using self here, not instance_desc!
-            display: self.display.as_ref().map(|hdh| {
-                hdh.display_handle()
-                    .expect("Implementation did not provide a DisplayHandle")
-            }),
-        };
-
-        use hal::Instance as _;
-        // SAFETY: ???
-        match unsafe { A::Instance::init(&hal_desc) } {
-            Ok(instance) => {
-                log::debug!("Instance::new: created {:?} backend", A::VARIANT);
-                self.instance_per_backend
-                    .push((A::VARIANT, Box::new(instance)));
-            }
-            Err(err) => {
-                log::debug!(
-                    "Instance::new: failed to create {:?} backend: {:?}",
-                    A::VARIANT,
-                    err
-                );
-            }
-        }
+        this.build()
     }
 
     pub fn from_hal_instance<A: hal::Api>(
@@ -759,6 +688,98 @@ impl Instance {
     }
 }
 
+pub struct InstanceBuilder {
+    instance: Instance,
+    instance_desc: wgt::InstanceDescriptor,
+    telemetry: Option<hal::Telemetry>,
+}
+
+impl InstanceBuilder {
+    pub fn new(
+        name: &str,
+        mut desc: wgt::InstanceDescriptor,
+        telemetry: Option<hal::Telemetry>,
+    ) -> Self {
+        Self {
+            instance: Instance {
+                _name: name.to_owned(),
+                instance_per_backend: Vec::new(),
+                requested_backends: desc.backends,
+                supported_backends: Backends::empty(),
+                flags: desc.flags,
+                // HACK: We must take ownership of the field here, without being able to pass it into
+                // try_add_hal(). Remove it from the mutable descriptor instead, while try_add_hal()
+                // borrows the handle from `this.display` instead.
+                display: desc.display.take(),
+                devices: InstanceDevices::new(),
+            },
+            instance_desc: desc,
+            telemetry,
+        }
+    }
+
+    pub fn try_add_hal<A: hal::Api>(&mut self, api: A) {
+        use hal::Instance as _;
+        self.try_add_custom_hal(api, |hal_desc| unsafe { A::Instance::init(hal_desc) });
+    }
+
+    pub fn try_add_custom_hal<A: hal::Api>(
+        &mut self,
+        _: A,
+        f: impl FnOnce(&hal::InstanceDescriptor) -> Result<A::Instance, hal::InstanceError>,
+    ) {
+        if self.instance.supported_backends.contains(A::VARIANT.into()) {
+            return;
+        }
+
+        // Whether or not the backend was requested, and whether or not it succeeds,
+        // note that we *could* try it.
+        self.instance.supported_backends |= A::VARIANT.into();
+
+        if !self.instance_desc.backends.contains(A::VARIANT.into()) {
+            log::trace!("Instance::new: backend {:?} not requested", A::VARIANT);
+            return;
+        }
+
+        // If this was Some, it was moved into self
+        assert!(self.instance_desc.display.is_none());
+
+        let hal_desc = hal::InstanceDescriptor {
+            name: "wgpu",
+            flags: self.instance.flags,
+            memory_budget_thresholds: self.instance_desc.memory_budget_thresholds,
+            backend_options: self.instance_desc.backend_options.clone(),
+            telemetry: self.telemetry,
+            // Pass a borrow, the core instance here keeps the owned handle alive already
+            // WARNING: Using self here, not instance_desc!
+            display: self.instance.display.as_ref().map(|hdh| {
+                hdh.display_handle()
+                    .expect("Implementation did not provide a DisplayHandle")
+            }),
+        };
+
+        match f(&hal_desc) {
+            Ok(instance) => {
+                log::debug!("Instance::new: created {:?} backend", A::VARIANT);
+                self.instance
+                    .instance_per_backend
+                    .push((A::VARIANT, Box::new(instance)));
+            }
+            Err(err) => {
+                log::debug!(
+                    "Instance::new: failed to create {:?} backend: {:?}",
+                    A::VARIANT,
+                    err
+                );
+            }
+        }
+    }
+
+    pub fn build(self) -> Arc<Instance> {
+        Arc::new(self.instance)
+    }
+}
+
 pub struct Surface {
     pub(crate) presentation: Mutex<Option<Presentation>>,
     pub surface_per_backend: HashMap<Backend, Box<dyn hal::DynSurface>>,
@@ -883,7 +904,7 @@ impl Surface {
                     Err(WaitIdleError::Device(_)) => {
                         // we can ignore device lost errors here, since we are just cleaning up
                     }
-                    Err(WaitIdleError::Timeout) if cfg!(target_arch = "wasm32") => {
+                    Err(WaitIdleError::Timeout) if cfg!(target_family = "wasm") => {
                         // On wasm, you cannot actually successfully wait for the surface.
                         // However WebGL does not actually require you do this, so ignoring
                         // the failure is totally fine. See https://github.com/gfx-rs/wgpu/issues/7363
@@ -1602,6 +1623,20 @@ mod tests {
     }
 
     #[test]
+    fn missing_surface_view_formats_allowed_with_strict_compliance() {
+        let downlevel = wgt::DownlevelCapabilities {
+            flags: wgt::DownlevelFlags::all() - wgt::DownlevelFlags::SURFACE_VIEW_FORMATS,
+            ..Default::default()
+        };
+        assert!(adapter_allowed(
+            InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
+            &"",
+            &wgt::Limits::defaults(),
+            &downlevel
+        ));
+    }
+
+    #[test]
     fn fully_compliant_adapter_always_allowed() {
         assert!(adapter_allowed(
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
@@ -1718,5 +1753,14 @@ mod tests {
                 &wgt::Limits::defaults(),
             );
         }
+    }
+
+    #[test]
+    fn downlevel_default_limits_less_than_default_limits() {
+        let res = check_limits(&wgt::Limits::downlevel_defaults(), &wgt::Limits::default());
+        assert!(
+            res.is_empty(),
+            "Downlevel limits are greater than default limits",
+        )
     }
 }

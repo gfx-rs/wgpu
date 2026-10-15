@@ -33,6 +33,26 @@ impl ShaderModule {
     }
 }
 
+#[cfg(wgpu_core)]
+impl ShaderModule {
+    /// Create a new shader module of wgpu from a wgpu-core shader module.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_shader_module` - wgpu-core shader module.
+    pub fn from_core(core_shader_module: alloc::sync::Arc<wgc::pipeline::ShaderModule>) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreShaderModule::from_core(core_shader_module)
+                .into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core shader module if this `ShaderModule` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::pipeline::ShaderModule>> {
+        self.inner.as_core_opt().map(|sm| sm.as_core())
+    }
+}
+
 /// Source of a shader module.
 ///
 /// The source will be parsed and validated.

@@ -699,7 +699,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_modifier(binding)?;
             }
             self.write_type(module, m.ty)?;
-            write!(self.out, " {}", &m.name)?;
+            write!(self.out, " {}", m.name)?;
             self.write_semantic(&m.binding, Some(shader_stage))?;
             writeln!(self.out, ";")?;
         }
@@ -1037,14 +1037,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // External textures are handled entirely differently, so defer entirely to that method.
         // We do so prior to calling resolve_resource_binding() below, as we even need to resolve
         // their bindings separately.
-        let is_external_texture = matches!(
-            *handle_ty,
-            TypeInner::Image {
-                class: crate::ImageClass::External,
-                ..
-            }
-        );
-        if is_external_texture {
+        if handle_ty.is_external_image() {
             return self.write_global_external_texture(module, handle, global);
         }
 
@@ -1205,7 +1198,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             write!(
                 self.out,
                 " {}",
-                &self.names[&NameKey::GlobalVariable(handle)]
+                self.names[&NameKey::GlobalVariable(handle)]
             )?;
 
             // need to write the array size if the type was emitted with `write_type`
@@ -1441,7 +1434,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(
                         self.out,
                         " {}",
-                        &self.names[&NameKey::StructMember(handle, index as u32)]
+                        self.names[&NameKey::StructMember(handle, index as u32)]
                     )?;
                     // Write [size]
                     self.write_array_size(module, base, size)?;
@@ -1461,7 +1454,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             write!(self.out, "; ")?;
                         }
                         self.write_value_type(module, &vec_ty)?;
-                        write!(self.out, " {}_{}", &self.names[&field_name_key], i)?;
+                        write!(self.out, " {}_{}", self.names[&field_name_key], i)?;
                     }
                 }
                 _ => {
@@ -1482,7 +1475,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(
                         self.out,
                         " {}",
-                        &self.names[&NameKey::StructMember(handle, index as u32)]
+                        self.names[&NameKey::StructMember(handle, index as u32)]
                     )?;
                 }
             }
@@ -1935,11 +1928,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         // External texture arguments must be expanded into separate
         // arguments for each plane and the params buffer.
-        if let TypeInner::Image {
-            class: crate::ImageClass::External,
-            ..
-        } = module.types[arg.ty].inner
-        {
+        if module.types[arg.ty].inner.is_external_image() {
             return self.write_function_external_texture_argument(module, handle, index);
         }
 
@@ -2460,7 +2449,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 write!(
                                     self.out,
                                     ".{}_{}",
-                                    &self.names[&NameKey::StructMember(ty, index)],
+                                    self.names[&NameKey::StructMember(ty, index)],
                                     vec_index
                                 )?;
 
@@ -3109,6 +3098,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Dot4I8Packed,
             Dot4U8Packed,
             QuantizeToF16,
+            Sign,
             Regular(&'static str),
             MissingIntOverload(&'static str),
             MissingIntReturnType(&'static str),
@@ -3170,7 +3160,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Mf::Reflect => Function::Regular("reflect"),
             Mf::Refract => Function::Regular("refract"),
             // computational
-            Mf::Sign => Function::Regular("sign"),
+            Mf::Sign => Function::Sign,
             Mf::Fma => Function::Regular("mad"),
             Mf::Mix => Function::Regular("lerp"),
             Mf::Step => Function::Regular("step"),
@@ -3453,6 +3443,22 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "f16tof32(f32tof16(")?;
                 self.write_expr(module, arg, func_ctx)?;
                 write!(self.out, "))")?;
+            }
+            // HLSL's `sign` always returns a signed integer, even for floating-point
+            // arguments, so cast the result back to the WGSL result type.
+            Function::Sign => {
+                let inner = func_ctx.resolve_type(arg, &module.types);
+                let is_float = inner.scalar_kind() == Some(ScalarKind::Float);
+                if is_float {
+                    self.write_value_type(module, inner)?;
+                    write!(self.out, "(")?;
+                }
+                write!(self.out, "sign(")?;
+                self.write_expr(module, arg, func_ctx)?;
+                write!(self.out, ")")?;
+                if is_float {
+                    write!(self.out, ")")?;
+                }
             }
             Function::Regular(fun_name) => {
                 write!(self.out, "{fun_name}(")?;
@@ -4111,7 +4117,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             write!(
                                 self.out,
                                 ".{}",
-                                &self.names[&NameKey::StructMember(ty, index)]
+                                self.names[&NameKey::StructMember(ty, index)]
                             )?
                         }
                         ref other => return Err(Error::Custom(format!("Cannot index {other:?}"))),
@@ -4130,11 +4136,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // also know that external textures can only ever be used as an argument to another
                 // function. Therefore we can simply emit each of the expanded arguments in a
                 // consecutive comma-separated list.
-                if let TypeInner::Image {
-                    class: crate::ImageClass::External,
-                    ..
-                } = *ty
-                {
+                if ty.is_external_image() {
                     let plane_names = [0, 1, 2].map(|i| {
                         &self.names[&func_ctx
                             .external_texture_argument_key(pos, ExternalTextureNameKey::Plane(i))]
@@ -4330,11 +4332,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // will have been expanded to separate consecutive arguments for each
                 // plane and the parameters buffer. Therefore we can simply emit each of
                 // the expanded global variables in a consecutive comma-separated list.
-                if let TypeInner::Image {
-                    class: crate::ImageClass::External,
-                    ..
-                } = *ty
-                {
+                if ty.is_external_image() {
                     let plane_names = [0, 1, 2].map(|i| {
                         &self.names[&NameKey::ExternalTextureGlobalVariable(
                             handle,

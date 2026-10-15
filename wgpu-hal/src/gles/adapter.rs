@@ -274,7 +274,7 @@ impl super::Adapter {
 
         let shading_language_version = {
             let sl_version = unsafe { gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION) };
-            log::debug!("SL version: {}", &sl_version);
+            log::debug!("SL version: {sl_version}");
             if full_ver.is_some() {
                 let (sl_major, sl_minor) = Self::parse_full_version(&sl_version).ok()?;
                 let mut value = sl_major as u16 * 100 + sl_minor as u16 * 10;
@@ -384,10 +384,10 @@ impl super::Adapter {
             || (supported((3, 1), (4, 0)) && extensions.contains("GL_EXT_texture_cube_map_array"));
 
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
-            | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::COMPARISON_SAMPLERS
-            | wgt::DownlevelFlags::SHADER_F16_IN_F32
-            | wgt::DownlevelFlags::MSL2_1;
+            | wgt::DownlevelFlags::MSL2_1
+            | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
+            | wgt::DownlevelFlags::SHADER_F16_IN_F32;
         downlevel_flags.set(
             wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
             supports_cube_array,
@@ -487,11 +487,11 @@ impl super::Adapter {
             };
 
         let mut features = wgt::Features::empty()
-            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::CLEAR_TEXTURE
-            | wgt::Features::IMMEDIATES
             | wgt::Features::DEPTH32FLOAT_STENCIL8
-            | wgt::Features::PASSTHROUGH_SHADERS;
+            | wgt::Features::IMMEDIATES
+            | wgt::Features::PASSTHROUGH_SHADERS
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
         features.set(
             wgt::Features::TEXTURE_FORMAT_16BIT_NORM,
             supports_16bit_norm,

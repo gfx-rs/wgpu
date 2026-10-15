@@ -15,7 +15,7 @@ use core::{
     ptr::NonNull,
     slice,
 };
-use wgc::resource::ParentDevice as _;
+use wgc::resource::{BufferMapping, ParentDevice as _};
 use wgt::error::WebGpuError;
 
 use arrayvec::ArrayVec;
@@ -25,8 +25,8 @@ use wgt::WasmNotSendSync;
 
 use crate::{
     api,
-    dispatch::{self, BlasCompactCallback, BufferMappedRangeInterface},
-    BindingResource, Blas, BufferBinding, BufferDescriptor, Features, LoadOp, MapMode, Operations,
+    dispatch::{self, BlasCompactCallback},
+    BindingResource, Blas, BufferBinding, BufferDescriptor, Features, LoadOp, Operations,
     ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas, WriteOnly,
 };
 use crate::{dispatch::DispatchAdapter, util::Mutex};
@@ -80,6 +80,10 @@ impl ContextWgpuCore {
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> Arc<wgc::instance::Adapter> {
         unsafe { self.0.create_adapter_from_hal(hal_adapter.into()) }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::instance::Instance> {
+        self.0.clone()
     }
 }
 
@@ -200,6 +204,16 @@ impl CoreAdapter {
         let queue = CoreQueue { wgpu_queue: queue };
         Ok((device, queue))
     }
+
+    pub(crate) fn from_core(core_adapter: Arc<wgc::instance::Adapter>) -> Self {
+        Self {
+            wgpu_adapter: core_adapter,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::instance::Adapter> {
+        self.wgpu_adapter.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -263,6 +277,16 @@ impl CoreDevice {
         use wgc::resource::ParentDevice as _;
         texture.wgpu_texture.same_device(&self.wgpu_device).is_ok()
     }
+
+    pub(crate) fn from_core(core_device: Arc<wgc::device::Device>) -> Self {
+        Self {
+            wgpu_device: core_device,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::device::Device> {
+        self.wgpu_device.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -274,6 +298,16 @@ impl CoreBuffer {
     pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::Buffer>> {
         unsafe { self.wgpu_buffer.clone().as_hal::<A>() }
     }
+
+    pub(crate) fn from_core(core_buffer: Arc<wgc::resource::Buffer>) -> Self {
+        Self {
+            wgpu_buffer: core_buffer,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::resource::Buffer> {
+        self.wgpu_buffer.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -281,14 +315,51 @@ pub struct CoreShaderModule {
     pub(crate) wgpu_shader_module: Arc<wgc::pipeline::ShaderModule>,
 }
 
+impl CoreShaderModule {
+    pub(crate) fn from_core(core_shader_module: Arc<wgc::pipeline::ShaderModule>) -> Self {
+        Self {
+            wgpu_shader_module: core_shader_module,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::pipeline::ShaderModule> {
+        self.wgpu_shader_module.clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CoreBindGroupLayout {
     pub(crate) wgpu_bind_group_layout: Arc<wgc::binding_model::BindGroupLayout>,
 }
 
+impl CoreBindGroupLayout {
+    pub(crate) fn from_core(
+        core_bind_group_layout: Arc<wgc::binding_model::BindGroupLayout>,
+    ) -> Self {
+        Self {
+            wgpu_bind_group_layout: core_bind_group_layout,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::binding_model::BindGroupLayout> {
+        self.wgpu_bind_group_layout.clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CoreBindGroup {
     pub(crate) wgpu_bind_group: Arc<wgc::binding_model::BindGroup>,
+}
+impl CoreBindGroup {
+    pub(crate) fn from_core(core_bind_group: Arc<wgc::binding_model::BindGroup>) -> Self {
+        Self {
+            wgpu_bind_group: core_bind_group,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::binding_model::BindGroup> {
+        self.wgpu_bind_group.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -299,6 +370,16 @@ pub struct CoreTexture {
 impl CoreTexture {
     pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::Texture>> {
         unsafe { self.wgpu_texture.clone().as_hal::<A>() }
+    }
+
+    pub(crate) fn from_core(core_texture: Arc<wgc::resource::Texture>) -> Self {
+        Self {
+            wgpu_texture: core_texture,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::resource::Texture> {
+        self.wgpu_texture.clone()
     }
 }
 
@@ -311,6 +392,16 @@ impl CoreTextureView {
     pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::TextureView>> {
         unsafe { self.wgpu_texture_view.clone().as_hal::<A>() }
     }
+
+    pub(crate) fn from_core(core_texture_view: Arc<wgc::resource::TextureView>) -> Self {
+        Self {
+            wgpu_texture_view: core_texture_view,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::resource::TextureView> {
+        self.wgpu_texture_view.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -318,9 +409,33 @@ pub struct CoreExternalTexture {
     pub(crate) wgpu_external_texture: Arc<wgc::resource::ExternalTexture>,
 }
 
+impl CoreExternalTexture {
+    pub(crate) fn from_core(core_external_texture: Arc<wgc::resource::ExternalTexture>) -> Self {
+        Self {
+            wgpu_external_texture: core_external_texture,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::resource::ExternalTexture> {
+        self.wgpu_external_texture.clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CoreSampler {
     pub(crate) wgpu_sampler: Arc<wgc::resource::Sampler>,
+}
+
+impl CoreSampler {
+    pub(crate) fn from_core(core_sampler: Arc<wgc::resource::Sampler>) -> Self {
+        Self {
+            wgpu_sampler: core_sampler,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::resource::Sampler> {
+        self.wgpu_sampler.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -328,9 +443,33 @@ pub struct CoreQuerySet {
     pub(crate) wgpu_query_set: Arc<wgc::resource::QuerySet>,
 }
 
+impl CoreQuerySet {
+    pub(crate) fn from_core(core_query_set: Arc<wgc::resource::QuerySet>) -> Self {
+        Self {
+            wgpu_query_set: core_query_set,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::resource::QuerySet> {
+        self.wgpu_query_set.clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CorePipelineLayout {
     pub(crate) wgpu_pipeline_layout: Arc<wgc::binding_model::PipelineLayout>,
+}
+
+impl CorePipelineLayout {
+    pub(crate) fn from_core(core_pipeline_layout: Arc<wgc::binding_model::PipelineLayout>) -> Self {
+        Self {
+            wgpu_pipeline_layout: core_pipeline_layout,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::binding_model::PipelineLayout> {
+        self.wgpu_pipeline_layout.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -340,6 +479,17 @@ pub struct CorePipelineCache {
 
 pub struct CoreCommandBuffer {
     pub(crate) wgpu_command_buffer: Arc<wgc::command::CommandBuffer>,
+}
+impl CoreCommandBuffer {
+    pub(crate) fn from_core(core_buffer: Arc<wgc::command::CommandBuffer>) -> Self {
+        Self {
+            wgpu_command_buffer: core_buffer,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::command::CommandBuffer> {
+        self.wgpu_command_buffer.clone()
+    }
 }
 
 impl fmt::Debug for CoreCommandBuffer {
@@ -382,6 +532,16 @@ impl CoreQueue {
     ) -> Option<impl Deref<Target = A::Queue> + WasmNotSendSync> {
         unsafe { self.wgpu_queue.clone().as_hal::<A>() }
     }
+
+    pub(crate) fn from_core(core_queue: Arc<wgc::device::queue::Queue>) -> Self {
+        Self {
+            wgpu_queue: core_queue,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::device::queue::Queue> {
+        self.wgpu_queue.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -389,9 +549,33 @@ pub struct CoreComputePipeline {
     pub(crate) wgpu_compute_pipeline: Arc<wgc::pipeline::ComputePipeline>,
 }
 
+impl CoreComputePipeline {
+    pub(crate) fn from_core(core_compute_pipeline: Arc<wgc::pipeline::ComputePipeline>) -> Self {
+        Self {
+            wgpu_compute_pipeline: core_compute_pipeline,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::pipeline::ComputePipeline> {
+        self.wgpu_compute_pipeline.clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CoreRenderPipeline {
     pub(crate) wgpu_render_pipeline: Arc<wgc::pipeline::RenderPipeline>,
+}
+
+impl CoreRenderPipeline {
+    pub(crate) fn from_core(core_render_pipeline: Arc<wgc::pipeline::RenderPipeline>) -> Self {
+        Self {
+            wgpu_render_pipeline: core_render_pipeline,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::pipeline::RenderPipeline> {
+        self.wgpu_render_pipeline.clone()
+    }
 }
 
 #[derive(Debug)]
@@ -433,6 +617,16 @@ impl CoreCommandEncoder {
             self.wgpu_command_encoder
                 .as_hal_mut::<A, F, R>(hal_command_encoder_callback)
         }
+    }
+
+    pub(crate) fn from_core(core_encoder: Arc<wgc::command::CommandEncoder>) -> Self {
+        Self {
+            wgpu_command_encoder: core_encoder,
+        }
+    }
+
+    pub(crate) fn as_core(&self) -> Arc<wgc::command::CommandEncoder> {
+        self.wgpu_command_encoder.clone()
     }
 }
 
@@ -479,14 +673,10 @@ impl fmt::Debug for CoreSurfaceOutputDetail {
 #[derive(Debug)]
 pub struct CoreQueueWriteBuffer {
     wgpu_staging_buffer: wgc::resource::StagingBuffer,
-    mapping: CoreBufferMappedRange,
 }
 
 #[derive(Debug)]
-pub struct CoreBufferMappedRange {
-    ptr: NonNull<u8>,
-    size: usize,
-}
+pub struct CoreBufferMappedRange(BufferMapping);
 
 #[cfg(send_sync)]
 unsafe impl Send for CoreBufferMappedRange {}
@@ -527,8 +717,32 @@ crate::cmp::impl_eq_ord_hash_box_address!(CoreRenderBundleEncoder => .encoder);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreRenderBundle => .wgpu_render_bundle);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreSurface => .wgpu_surface);
 crate::cmp::impl_eq_ord_hash_arc_address!(CoreSurfaceOutputDetail => .wgpu_surface);
-crate::cmp::impl_eq_ord_hash_proxy!(CoreQueueWriteBuffer => .mapping.ptr);
-crate::cmp::impl_eq_ord_hash_proxy!(CoreBufferMappedRange => .ptr);
+impl PartialEq for CoreQueueWriteBuffer {
+    fn eq(&self, other: &Self) -> bool {
+        unsafe { self.wgpu_staging_buffer.ptr() == other.wgpu_staging_buffer.ptr() }
+    }
+}
+impl Eq for CoreQueueWriteBuffer {}
+impl PartialOrd for CoreQueueWriteBuffer {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for CoreQueueWriteBuffer {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        unsafe {
+            self.wgpu_staging_buffer
+                .ptr()
+                .cmp(&other.wgpu_staging_buffer.ptr())
+        }
+    }
+}
+impl core::hash::Hash for CoreQueueWriteBuffer {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        unsafe { self.wgpu_staging_buffer.ptr().hash(state) }
+    }
+}
+crate::cmp::impl_eq_ord_hash_proxy!(CoreBufferMappedRange => .0.ptr());
 
 impl dispatch::InstanceInterface for ContextWgpuCore {
     fn new(desc: wgt::InstanceDescriptor) -> Self
@@ -1424,13 +1638,9 @@ impl dispatch::QueueInterface for CoreQueue {
         size: crate::BufferSize,
     ) -> Option<dispatch::DispatchQueueWriteBuffer> {
         match self.wgpu_queue.create_staging_buffer(size) {
-            Ok((wgpu_staging_buffer, ptr)) => Some(
+            Ok((wgpu_staging_buffer, _)) => Some(
                 CoreQueueWriteBuffer {
                     wgpu_staging_buffer,
-                    mapping: CoreBufferMappedRange {
-                        ptr,
-                        size: size.get() as usize,
-                    },
                 }
                 .into(),
             ),
@@ -1613,10 +1823,7 @@ impl dispatch::BufferInterface for CoreBuffer {
         callback: dispatch::BufferMapCallback,
     ) {
         let operation = wgc::resource::BufferMapOperation {
-            host: match mode {
-                MapMode::Read => wgc::device::HostMap::Read,
-                MapMode::Write => wgc::device::HostMap::Write,
-            },
+            mode,
             callback: Some(Box::new(|status| {
                 let res = status.map_err(|_| crate::BufferAsyncError);
                 callback(res);
@@ -1634,13 +1841,7 @@ impl dispatch::BufferInterface for CoreBuffer {
         let size = sub_range.end - sub_range.start;
         self.wgpu_buffer
             .get_mapped_range(sub_range.start, Some(size))
-            .map(|(ptr, size)| {
-                CoreBufferMappedRange {
-                    ptr,
-                    size: size as usize,
-                }
-                .into()
-            })
+            .map(|mapping| CoreBufferMappedRange(mapping).into())
             .map_err(|err| crate::MapRangeError(format_error(&err)))
     }
 
@@ -2762,29 +2963,31 @@ impl dispatch::SurfaceOutputDetailInterface for CoreSurfaceOutputDetail {
 impl dispatch::QueueWriteBufferInterface for CoreQueueWriteBuffer {
     #[inline]
     fn len(&self) -> usize {
-        self.mapping.len()
+        self.wgpu_staging_buffer.size().get() as usize
     }
 
     #[inline]
     unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
-        unsafe { self.mapping.write_slice() }
+        unsafe {
+            WriteOnly::new(NonNull::slice_from_raw_parts(
+                self.wgpu_staging_buffer.ptr(),
+                self.len(),
+            ))
+        }
     }
 }
 
 impl dispatch::BufferMappedRangeInterface for CoreBufferMappedRange {
     #[inline]
-    fn len(&self) -> usize {
-        self.size
-    }
-
-    #[inline]
     unsafe fn read_slice(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.ptr.as_ptr(), self.size) }
+        // FIXME: We currently tolerate this
+        // https://github.com/gfx-rs/wgpu/issues/10549
+        unsafe { slice::from_raw_parts(self.0.ptr().as_ptr(), self.0.len() as usize) }
     }
 
     #[inline]
     unsafe fn write_slice(&mut self) -> WriteOnly<'_, [u8]> {
-        unsafe { WriteOnly::new(NonNull::slice_from_raw_parts(self.ptr, self.size)) }
+        self.0.write_slice()
     }
 
     #[cfg(webgpu)]
