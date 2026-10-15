@@ -331,7 +331,7 @@ struct EntryPoint {
     /// together.
     ///
     /// This is the same information that Naga provides in
-    /// [`naga::valid::FunctionInfo::sampling_set`] (used for generating GLSL),
+    /// [`naga::valid::FunctionInfo::sampling_map`] (used for generating GLSL),
     /// but adjusted to use handles referring to [`Interface::resources`].
     sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
 
