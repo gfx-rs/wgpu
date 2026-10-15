@@ -1429,9 +1429,9 @@ impl Interface {
                 }
             }
 
-            for key in func_info.sampling_set.iter() {
+            for (image, sampler) in func_info.sampling_map.iter() {
                 ep.sampling_pairs
-                    .insert((resource_mapping[&key.image], resource_mapping[&key.sampler]));
+                    .insert((resource_mapping[image], resource_mapping[sampler]));
             }
             ep.dual_source_blending = func_info.dual_source_blending;
             ep.workgroup_size = entry_point.workgroup_size;

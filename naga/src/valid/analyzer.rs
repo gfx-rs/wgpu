@@ -139,14 +139,6 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct SamplingKey {
-    pub image: Handle<crate::GlobalVariable>,
-    pub sampler: Handle<crate::GlobalVariable>,
-}
-
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -261,7 +253,8 @@ pub struct FunctionInfo {
     ///
     /// The GLSL back end uses this table to construct reflection info that
     /// clients need to construct texture-combined sampler values.
-    pub sampling_set: crate::FastHashSet<SamplingKey>,
+    pub sampling_map:
+        crate::FastHashMap<Handle<crate::GlobalVariable>, Handle<crate::GlobalVariable>>,
 
     /// How this function and its callees use this module's globals.
     ///
@@ -442,8 +435,12 @@ impl FunctionInfo {
         arguments: &[Handle<crate::Expression>],
         expression_arena: &Arena<crate::Expression>,
     ) -> Result<FunctionUniformity, WithSpan<FunctionError>> {
-        self.sampling_set
-            .extend(callee.sampling_set.iter().cloned());
+        self.sampling_map.extend(
+            callee
+                .sampling_map
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone())),
+        );
         for sampling in callee.sampling.iter() {
             // If the callee was passed the texture or sampler as an argument,
             // we may now be able to determine which globals those referred to.
@@ -485,7 +482,7 @@ impl FunctionInfo {
             // callers to sort out.
             match (image_storage, sampler_storage) {
                 (GlobalOrArgument::Global(image), GlobalOrArgument::Global(sampler)) => {
-                    self.sampling_set.insert(SamplingKey { image, sampler });
+                    self.sampling_map.insert(image, sampler);
                 }
                 (image, sampler) => {
                     self.sampling.insert(Sampling { image, sampler });
@@ -695,7 +692,7 @@ impl FunctionInfo {
 
                 match (image_storage, sampler_storage) {
                     (GlobalOrArgument::Global(image), GlobalOrArgument::Global(sampler)) => {
-                        self.sampling_set.insert(SamplingKey { image, sampler });
+                        self.sampling_map.insert(image, sampler);
                     }
                     _ => {
                         self.sampling.insert(Sampling {
@@ -1261,7 +1258,7 @@ impl ModuleInfo {
             available_stages: ShaderStages::all(),
             uniformity: Uniformity::new(),
             may_kill: false,
-            sampling_set: crate::FastHashSet::default(),
+            sampling_map: crate::FastHashMap::default(),
             global_uses: vec![GlobalUse::empty(); module.global_variables.len()].into_boxed_slice(),
             expressions: vec![ExpressionInfo::new(); fun.expressions.len()].into_boxed_slice(),
             sampling: crate::FastHashSet::default(),
@@ -1396,7 +1393,7 @@ fn uniform_control_flow() {
         available_stages: ShaderStages::all(),
         uniformity: Uniformity::new(),
         may_kill: false,
-        sampling_set: crate::FastHashSet::default(),
+        sampling_map: crate::FastHashMap::default(),
         global_uses: vec![GlobalUse::empty(); global_var_arena.len()].into_boxed_slice(),
         expressions: vec![ExpressionInfo::new(); expressions.len()].into_boxed_slice(),
         sampling: crate::FastHashSet::default(),

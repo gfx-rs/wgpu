@@ -320,6 +320,10 @@ impl<'a, W: Write> Writer<'a, W> {
             .options
             .writer_flags
             .contains(WriterFlags::INCLUDE_UNUSED_ITEMS);
+        let sampling_map = &self
+            .info
+            .get_entry_point(self.entry_point_idx as usize)
+            .sampling_map;
         for (handle, global) in self.module.global_variables.iter() {
             let is_unused = ep_info[handle].is_empty();
             if !include_unused && is_unused {
@@ -380,11 +384,20 @@ impl<'a, W: Write> Writer<'a, W> {
                     // The trailing space is important
                     write!(self.out, "uniform ")?;
 
+                    let sampler = sampling_map.get(&handle);
+                    let comparison = sampler.is_some_and(|s| {
+                        let v = &self.module.global_variables[*s];
+                        let ty = &self.module.types[v.ty];
+                        match ty.inner {
+                            TypeInner::Sampler { comparison } => comparison,
+                            _ => false,
+                        }
+                    });
                     // write the type
                     //
                     // This is way we need the leading space because `write_image_type` doesn't add
                     // any spaces at the beginning or end
-                    self.write_image_type(dim, arrayed, class)?;
+                    self.write_image_type(dim, arrayed, class, comparison)?;
 
                     // Finally write the name and end the global with a `;`
                     // The leading space is important
@@ -573,6 +586,7 @@ impl<'a, W: Write> Writer<'a, W> {
         dim: crate::ImageDimension,
         arrayed: bool,
         class: crate::ImageClass,
+        comparison: bool,
     ) -> BackendResult {
         // glsl images consist of four parts the scalar prefix, the image "type", the dimensions
         // and modifiers
@@ -596,7 +610,9 @@ impl<'a, W: Write> Writer<'a, W> {
             Ic::Sampled { kind, multi: true } => ("sampler", S { kind, width: 4 }, "MS", ""),
             Ic::Sampled { kind, multi: false } => ("sampler", S { kind, width: 4 }, "", ""),
             Ic::Depth { multi: true } => ("sampler", float, "MS", ""),
-            Ic::Depth { multi: false } => ("sampler", float, "", "Shadow"),
+            Ic::Depth { multi: false } => {
+                ("sampler", float, "", if comparison { "Shadow" } else { "" })
+            }
             Ic::Storage { format, .. } => ("image", format.into(), "", ""),
             Ic::External => unimplemented!(),
         };
@@ -1299,7 +1315,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     //
                     // This is way we need the leading space because `write_image_type` doesn't add
                     // any spaces at the beginning or end
-                    this.write_image_type(dim, arrayed, class)?;
+                    this.write_image_type(dim, arrayed, class, false)?;
                 }
                 TypeInner::Pointer { base, .. } => {
                     // write parameter qualifiers
@@ -2552,7 +2568,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // Furthermore if `depth_ref` is some we need to append it to the coordinate vector
             Expression::ImageSample {
                 image,
-                sampler: _, //TODO?
+                sampler, //TODO?
                 gather,
                 coordinate,
                 array_index,
@@ -2728,7 +2744,20 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
 
                 // End the function
-                write!(self.out, ")")?
+                write!(self.out, ")")?;
+
+                // If sampling a depth texture, add `.r` to convert the returned vec4 to float.
+                let comparison = match *ctx.resolve_type(sampler, &self.module.types) {
+                    TypeInner::Sampler { comparison } => comparison,
+                    _ => unreachable!(),
+                };
+                let is_depth_texture = match class {
+                    crate::ImageClass::Depth { .. } => true,
+                    _ => false,
+                };
+                if is_depth_texture && !comparison {
+                    write!(self.out, ".r")?;
+                }
             }
             Expression::ImageLoad {
                 image,
@@ -4519,18 +4548,18 @@ impl<'a, W: Write> Writer<'a, W> {
         let mut texture_mapping = crate::FastHashMap::default();
         let mut uniforms = crate::FastHashMap::default();
 
-        for sampling in info.sampling_set.iter() {
-            let tex_name = self.reflection_names_globals[&sampling.image].clone();
+        for (image, sampler) in info.sampling_map.iter() {
+            let tex_name = self.reflection_names_globals[image].clone();
 
             match texture_mapping.entry(tex_name) {
                 hash_map::Entry::Vacant(v) => {
                     v.insert(TextureMapping {
-                        texture: sampling.image,
-                        sampler: Some(sampling.sampler),
+                        texture: *image,
+                        sampler: Some(*sampler),
                     });
                 }
                 hash_map::Entry::Occupied(e) => {
-                    if e.get().sampler != Some(sampling.sampler) {
+                    if e.get().sampler != Some(*sampler) {
                         log::error!("Conflicting samplers for {}", e.key());
                         return Err(Error::ImageMultipleSamplers);
                     }

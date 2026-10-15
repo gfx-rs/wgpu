@@ -14,7 +14,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
             ],
@@ -286,7 +286,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 ("READ | WRITE"),
             ],

@@ -19,7 +19,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 ("READ"),
                 (""),
@@ -164,7 +164,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 ("READ"),

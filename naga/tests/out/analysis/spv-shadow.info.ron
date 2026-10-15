@@ -24,12 +24,9 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [
-                (
-                    image: 0,
-                    sampler: 1,
-                ),
-            ],
+            sampling_map: {
+                0: 1,
+            },
             global_uses: [
                 ("READ"),
                 ("READ"),
@@ -422,12 +419,9 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [
-                (
-                    image: 0,
-                    sampler: 1,
-                ),
-            ],
+            sampling_map: {
+                0: 1,
+            },
             global_uses: [
                 ("READ"),
                 ("READ"),
@@ -1602,12 +1596,9 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [
-                (
-                    image: 0,
-                    sampler: 1,
-                ),
-            ],
+            sampling_map: {
+                0: 1,
+            },
             global_uses: [
                 ("READ"),
                 ("READ"),

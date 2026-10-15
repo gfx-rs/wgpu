@@ -48,7 +48,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -1206,7 +1206,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -2532,7 +2532,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -2572,7 +2572,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -2621,7 +2621,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -2664,7 +2664,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -2758,7 +2758,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -2879,7 +2879,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -2931,7 +2931,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -2986,7 +2986,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -3038,7 +3038,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -3093,7 +3093,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -3157,7 +3157,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -3230,7 +3230,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -3306,7 +3306,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -3406,7 +3406,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
@@ -3604,7 +3604,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 ("READ"),
                 ("READ | QUERY"),
@@ -4299,7 +4299,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 ("WRITE"),
@@ -4751,7 +4751,7 @@
                 requirements: (""),
             ),
             may_kill: false,
-            sampling_set: [],
+            sampling_map: {},
             global_uses: [
                 (""),
                 (""),
