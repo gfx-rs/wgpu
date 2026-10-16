@@ -24,6 +24,8 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+#[cfg(target_os = "macos")]
+mod display_link;
 mod library_from_metallib;
 mod surface;
 mod time;
@@ -649,6 +651,8 @@ pub struct Surface {
     render_layer: Mutex<Retained<CAMetalLayer>>,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,
     extent: RwLock<wgt::Extent3d>,
+    #[cfg(target_os = "macos")]
+    display_link: Mutex<Option<display_link::DisplayLink>>,
 }
 
 unsafe impl Send for Surface {}
