@@ -208,6 +208,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### General
 
+- `multi_draw_indirect` and `multi_draw_indexed_indirect` with a `count` of 0 no longer issue a draw when indirect validation is enabled. By @HashimTheArab in [#10639](https://github.com/gfx-rs/wgpu/pull/10639).
 - Zero-initialize padding (if any) at the end of a buffer allocation. This was application-visible in rare cases on Vulkan when a shader read beyond the valid range of a vertex buffer. By @andyleiserson in [#9791](https://github.com/gfx-rs/wgpu/pull/9791).
 - Fix required immediate slots calculation and remove `naga::valid::FunctionInfo::immediate_slots_used`. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
 - Fix a spurious assertion failure in `Device::maintain` when multiple threads race polling the same device. By @AdrianEddy in [#9958](https://github.com/gfx-rs/wgpu/pull/9958).
@@ -304,6 +305,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 ### Performance
 
+- Validate consecutive draws of `multi_draw_indirect` and `multi_draw_indexed_indirect` as ranges, reducing CPU recording time for large draw counts by about 20%. By @HashimTheArab in [#10639](https://github.com/gfx-rs/wgpu/pull/10639).
 - Added explicit `Send` and `Sync` implementations to key `wgpu` types so that the compiler can do less work checking those bounds. If you previously added a `#![recursion_limit = ...]` attribute to your crate due to overflow errors involving `wgpu` types, you may now be able to remove it. By @kpreid in [#10177](https://github.com/gfx-rs/wgpu/pull/10177).
 
 ### Documentation
