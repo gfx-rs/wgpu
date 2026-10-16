@@ -7,7 +7,7 @@
 #   a user with write access approved it. Trusted actors are users with write
 #   access and Mergify.
 # - The commit is the head of a Mergify merge queue pull request, and each of
-#   its parents passed or is in the default branch.
+#   the PRs that was combined to make that merge queue pull request passes.
 #
 # Branch protection on `trunk` requires this check. Check results belong to a
 # commit, so a new push has no result. Thus GitHub blocks the merge of commits
@@ -42,12 +42,24 @@ on: # zizmor: ignore[dangerous-triggers] This workflow does not run pull request
   workflow_run:
     workflows: ["Head approved review"]
     types: [completed]
+  # Re-evaluates the approval of the current head of a pull request, in case an
+  # event was missed.
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+        type: number
 
 permissions: {}
 
 jobs:
   head-approved:
     name: Post head-approved check
+    # The `workflow_dispatch` trigger can be invoked for branches other than
+    # trunk. On other branches, it won't have access to the app's key, so we
+    # don't have to filter the branch here, but do so for clarity.
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/trunk'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -91,6 +103,7 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           BEFORE: ${{ github.event.before }}
           SENDER: ${{ github.event.sender.login }}
-          RUN_HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
           RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          DISPATCH_PR: ${{ inputs.pr }}
         run: python3 .github/scripts/head-approved.py

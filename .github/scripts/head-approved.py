@@ -5,6 +5,7 @@ through environment variables. Read the security rules in that file before you
 change this script.
 """
 
+import functools
 import json
 import os
 import time
@@ -134,12 +135,103 @@ def in_default_branch(sha):
     return comparison["status"] in ("behind", "identical")
 
 
-def parents_ok(sha):
-    """Returns true if each parent of the commit passes or is in the default branch."""
-    commit = api(READ_TOKEN, f"repos/{REPO}/commits/{quote(sha)}")
+@functools.cache
+def git_commit(sha):
+    """Returns the tree and parents of the commit."""
+    return api(READ_TOKEN, f"repos/{REPO}/git/commits/{quote(sha)}")
+
+
+@functools.cache
+def mergify_check_heads():
+    """Returns the head commits of the open mergify check pull requests."""
+    heads = []
+    page = 1
+    while True:
+        pulls = api(
+            READ_TOKEN,
+            f"repos/{REPO}/pulls",
+            {"state": "open", "per_page": 100, "page": page},
+        )
+        for pull in pulls:
+            repo = pull["head"]["repo"]
+            if (
+                pull["user"]["login"] == "mergify[bot]"
+                and repo
+                and repo["full_name"] == REPO
+            ):
+                heads.append(pull["head"]["sha"])
+        if len(pulls) < 100:
+            break
+        page += 1
+    return heads
+
+
+def same_tree_passes(sha, exclude):
+    """Returns true if a merge queue head other than `exclude` has the same tree
+    as the commit and passes.
+
+    Only the check on the matching commit is trusted. Merge queue heads are
+    searched because Mergify builds stacked merge queue heads on copies of the
+    merge queue heads ahead of them.
+    """
+    tree = git_commit(sha)["tree"]["sha"]
+    matches = [
+        head
+        for head in mergify_check_heads()
+        if head not in (sha, exclude) and git_commit(head)["tree"]["sha"] == tree
+    ]
+    return any(passed(head) for head in matches) or any(
+        will_pass(head) for head in matches
+    )
+
+
+@functools.cache
+def commit_ok(sha, exclude, depth):
+    """Check an individual commit for `mergify_check_parents_ok`
+
+    Returns true if any of following are true:
+     - The commit passes head approval
+     - The commit is in the default branch
+     - The commit has the same tree as a commit that passes head approval, and
+       each of its parents is ok.
+
+    `exclude` is the mergify check PR head being evaluated. `depth` limits the
+    recursion through parents.
+    """
+    if in_default_branch(sha) or will_pass(sha):
+        return True
+    # `not same_tree_passes(...)` is the tricky case. Mergify constructs each
+    # check branch from scratch, so there won't be a head approval job for the
+    # exact commit SHA of previous merges in the stack. But there should be a
+    # head approval job of some other SHA with the same tree, so we can look
+    # for that.
+    if depth == 0 or not same_tree_passes(sha, exclude):
+        return False
     return all(
-        in_default_branch(parent["sha"]) or will_pass(parent["sha"])
-        for parent in commit["parents"]
+        commit_ok(parent["sha"], exclude, depth - 1)
+        for parent in git_commit(sha)["parents"]
+    )
+
+
+def mergify_check_parents_ok(sha):
+    """Determines head approval for pull requests opened by Mergify to check queued PRs.
+
+    These PRs run CI on a combination of up to 5 PRs in the merge queue.
+    Head approval requires that each of the PRs involved have head approval.
+
+    Limitations:
+
+    - A stacked mergify check passes only if the mergify checks ahead of
+      it are still open when this runs. If Mergify closes one of them and then
+      pushes this head again, this head does not pass.
+    - If two mergify checks have the same tree (for example, because of an
+      empty pull request in the queue), each can wait for the other until the
+      job times out, and neither passes.
+    """
+    max_depth = 5
+    return all(
+        commit_ok(parent["sha"], sha, max_depth)
+        for parent in git_commit(sha)["parents"]
     )
 
 
@@ -168,11 +260,11 @@ def on_pull_request_target():
 
     if os.environ["PR_AUTHOR"] == "mergify[bot]" and os.environ["HEAD_REPO"] == REPO:
         # A merge queue head merges queued pull request heads into the default branch.
-        if parents_ok(head_sha):
+        if mergify_check_parents_ok(head_sha):
             post(
                 head_sha,
                 "Merge queue",
-                f"Each parent of this merge queue commit passed or is in {DEFAULT_BRANCH}.",
+                "Each constituent of this mergify check PR passed.",
             )
     elif approved_at(pr, head_sha):
         post(head_sha, "Approved", "A user with write access approved this commit.")
@@ -189,15 +281,51 @@ def on_pull_request_target():
 
 
 def on_workflow_run():
-    """Evaluates the head commits of the pull request that got a review."""
-    head = f"{os.environ['RUN_HEAD_OWNER']}:{os.environ['RUN_HEAD_BRANCH']}"
-    for pull in api(READ_TOKEN, f"repos/{REPO}/pulls", {"state": "open", "head": head}):
-        sha = pull["head"]["sha"]
-        if approved_at(pull["number"], sha):
-            post(sha, "Approved", "A user with write access approved this commit.")
+    """Evaluates the head commit of the pull request that got a review."""
+    # The run's `head_repository` is the base repository, even for pull
+    # requests from forks, so find the pull request by branch and commit.
+    branch = os.environ["RUN_HEAD_BRANCH"]
+    run_sha = os.environ["RUN_HEAD_SHA"]
+    page = 1
+    while True:
+        pulls = api(
+            READ_TOKEN,
+            f"repos/{REPO}/pulls",
+            {"state": "open", "per_page": 100, "page": page},
+        )
+        for pull in pulls:
+            sha = pull["head"]["sha"]
+            if (
+                pull["head"]["ref"] == branch
+                and sha == run_sha
+                and approved_at(pull["number"], sha)
+            ):
+                post(sha, "Approved", "A user with write access approved this commit.")
+        if len(pulls) < 100:
+            break
+        page += 1
 
 
-if os.environ["EVENT"] == "pull_request_target":
+def on_workflow_dispatch():
+    """Evaluates the head commit of the pull request given as input."""
+    pr = int(os.environ["DISPATCH_PR"])
+    pull = api(READ_TOKEN, f"repos/{REPO}/pulls/{pr}")
+    if pull["state"] != "open":
+        print(f"Pull request {pr} is not open.")
+        return
+    sha = pull["head"]["sha"]
+    if approved_at(pr, sha):
+        post(sha, "Approved", "A user with write access approved this commit.")
+    else:
+        print(f"{sha}: No approval from a user with write access.")
+
+
+event = os.environ["EVENT"]
+if event == "pull_request_target":
     on_pull_request_target()
-else:
+elif event == "workflow_run":
     on_workflow_run()
+elif event == "workflow_dispatch":
+    on_workflow_dispatch()
+else:
+    raise ValueError(f"Unexpected event: {event}")
