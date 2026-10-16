@@ -3277,94 +3277,31 @@ fn multi_draw_indirect(
             .buffers
             .merge_single(&indirect_buffer, wgt::BufferUses::STORAGE_READ_ONLY)?;
 
-        struct DrawData {
-            buffer_index: usize,
-            offset: u64,
-            count: u32,
-        }
-
-        struct DrawContext<'a> {
-            raw_encoder: &'a mut dyn hal::DynCommandEncoder,
-            device: &'a Device,
-
-            indirect_draw_validation_resources: &'a mut crate::indirect_validation::DrawResources,
-            indirect_draw_validation_batcher: &'a mut crate::indirect_validation::DrawBatcher,
-
-            indirect_buffer: Arc<Buffer>,
-            family: DrawCommandFamily,
-            vertex_or_index_limit: u64,
-            instance_limit: u64,
-        }
-
-        impl<'a> DrawContext<'a> {
-            fn add(&mut self, offset: u64) -> Result<DrawData, DeviceError> {
-                let (dst_resource_index, dst_offset) = self.indirect_draw_validation_batcher.add(
-                    self.indirect_draw_validation_resources,
-                    self.device,
-                    &self.indirect_buffer,
-                    offset,
-                    self.family,
-                    self.vertex_or_index_limit,
-                    self.instance_limit,
-                )?;
-                Ok(DrawData {
-                    buffer_index: dst_resource_index,
-                    offset: dst_offset,
-                    count: 1,
-                })
-            }
-            fn draw(&mut self, draw_data: DrawData) {
-                let dst_buffer = self
-                    .indirect_draw_validation_resources
-                    .get_dst_buffer(draw_data.buffer_index);
-                draw(
-                    self.raw_encoder,
-                    self.family,
-                    dst_buffer,
-                    draw_data.offset,
-                    draw_data.count,
-                );
-            }
-        }
-
-        let mut draw_ctx = DrawContext {
-            raw_encoder: state.pass.base.raw_encoder,
-            device: state.pass.base.device,
-            indirect_draw_validation_resources: state.pass.base.indirect_draw_validation_resources,
-            indirect_draw_validation_batcher,
-            indirect_buffer,
-            family,
-            vertex_or_index_limit: if family == DrawCommandFamily::DrawIndexed {
-                state.index.limit
-            } else {
-                state.vertex.limits.vertex_limit
-            },
-            instance_limit: state.vertex.limits.instance_limit,
+        let vertex_or_index_limit = if family == DrawCommandFamily::DrawIndexed {
+            state.index.limit
+        } else {
+            state.vertex.limits.vertex_limit
         };
-
-        let mut current_draw_data = draw_ctx.add(offset)?;
-
-        for i in 1..count {
-            let draw_data = draw_ctx.add(offset + stride * i as u64)?;
-
-            if draw_data.buffer_index == current_draw_data.buffer_index {
-                #[cfg(debug_assertions)]
-                {
-                    let dst_stride =
-                        get_dst_stride_of_indirect_args(state.pass.base.device.backend(), family);
-                    debug_assert_eq!(
-                        draw_data.offset,
-                        current_draw_data.offset + dst_stride * current_draw_data.count as u64
-                    );
-                }
-                current_draw_data.count += 1;
-            } else {
-                draw_ctx.draw(current_draw_data);
-                current_draw_data = draw_data;
-            }
-        }
-
-        draw_ctx.draw(current_draw_data);
+        let raw_encoder = &mut *state.pass.base.raw_encoder;
+        indirect_draw_validation_batcher.add_range(
+            state.pass.base.indirect_draw_validation_resources,
+            state.pass.base.device,
+            &indirect_buffer,
+            offset,
+            count,
+            family,
+            vertex_or_index_limit,
+            state.vertex.limits.instance_limit,
+            |resources, dst_resource_index, dst_offset, run| {
+                draw(
+                    raw_encoder,
+                    family,
+                    resources.get_dst_buffer(dst_resource_index),
+                    dst_offset,
+                    run,
+                );
+            },
+        )?;
     } else {
         state
             .pass
