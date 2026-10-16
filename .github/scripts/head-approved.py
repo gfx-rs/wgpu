@@ -189,15 +189,35 @@ def on_pull_request_target():
 
 
 def on_workflow_run():
-    """Evaluates the head commits of the pull request that got a review."""
-    head = f"{os.environ['RUN_HEAD_OWNER']}:{os.environ['RUN_HEAD_BRANCH']}"
-    for pull in api(READ_TOKEN, f"repos/{REPO}/pulls", {"state": "open", "head": head}):
-        sha = pull["head"]["sha"]
-        if approved_at(pull["number"], sha):
-            post(sha, "Approved", "A user with write access approved this commit.")
+    """Evaluates the head commit of the pull request that got a review."""
+    # The run's `head_repository` is the base repository, even for pull
+    # requests from forks, so find the pull request by branch and commit.
+    branch = os.environ["RUN_HEAD_BRANCH"]
+    run_sha = os.environ["RUN_HEAD_SHA"]
+    page = 1
+    while True:
+        pulls = api(
+            READ_TOKEN,
+            f"repos/{REPO}/pulls",
+            {"state": "open", "per_page": 100, "page": page},
+        )
+        for pull in pulls:
+            sha = pull["head"]["sha"]
+            if (
+                pull["head"]["ref"] == branch
+                and sha == run_sha
+                and approved_at(pull["number"], sha)
+            ):
+                post(sha, "Approved", "A user with write access approved this commit.")
+        if len(pulls) < 100:
+            break
+        page += 1
 
 
-if os.environ["EVENT"] == "pull_request_target":
+event = os.environ["EVENT"]
+if event == "pull_request_target":
     on_pull_request_target()
-else:
+elif event == "workflow_run":
     on_workflow_run()
+else:
+    raise ValueError(f"Unexpected event: {event}")
