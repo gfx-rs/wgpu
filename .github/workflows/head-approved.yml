@@ -42,12 +42,24 @@ on: # zizmor: ignore[dangerous-triggers] This workflow does not run pull request
   workflow_run:
     workflows: ["Head approved review"]
     types: [completed]
+  # Re-evaluates the approval of the current head of a pull request, in case an
+  # event was missed.
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+        type: number
 
 permissions: {}
 
 jobs:
   head-approved:
     name: Post head-approved check
+    # The `workflow_dispatch` trigger can be invoked for branches other than
+    # trunk. On other branches, it won't have access to the app's key, so we
+    # don't have to filter the branch here, but do so for clarity.
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/trunk'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -93,4 +105,5 @@ jobs:
           SENDER: ${{ github.event.sender.login }}
           RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          DISPATCH_PR: ${{ inputs.pr }}
         run: python3 .github/scripts/head-approved.py

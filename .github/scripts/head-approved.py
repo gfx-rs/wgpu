@@ -214,10 +214,26 @@ def on_workflow_run():
         page += 1
 
 
+def on_workflow_dispatch():
+    """Evaluates the head commit of the pull request given as input."""
+    pr = int(os.environ["DISPATCH_PR"])
+    pull = api(READ_TOKEN, f"repos/{REPO}/pulls/{pr}")
+    if pull["state"] != "open":
+        print(f"Pull request {pr} is not open.")
+        return
+    sha = pull["head"]["sha"]
+    if approved_at(pr, sha):
+        post(sha, "Approved", "A user with write access approved this commit.")
+    else:
+        print(f"{sha}: No approval from a user with write access.")
+
+
 event = os.environ["EVENT"]
 if event == "pull_request_target":
     on_pull_request_target()
 elif event == "workflow_run":
     on_workflow_run()
+elif event == "workflow_dispatch":
+    on_workflow_dispatch()
 else:
     raise ValueError(f"Unexpected event: {event}")
