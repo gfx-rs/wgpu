@@ -64,6 +64,7 @@ webgpu = [
     "naga?/wgsl-out",
     "dep:wasm-bindgen-futures",
     "web-sys/Document",
+    "web-sys/DomException",
     "web-sys/Event",
     "web-sys/MediaQueryList",
     "web-sys/Navigator",
