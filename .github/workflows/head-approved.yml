@@ -7,7 +7,7 @@
 #   a user with write access approved it. Trusted actors are users with write
 #   access and Mergify.
 # - The commit is the head of a Mergify merge queue pull request, and each of
-#   its parents passed or is in the default branch.
+#   the PRs that was combined to make that merge queue pull request passes.
 #
 # Branch protection on `trunk` requires this check. Check results belong to a
 # commit, so a new push has no result. Thus GitHub blocks the merge of commits
