@@ -304,6 +304,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 ### Performance
 
+- `wgpu-core` no longer evaluates trace and debug log arguments when the logger rejects the record in `Log::enabled`. This reduces recording overhead with logging bridges such as `tracing-log`. By @HashimTheArab in [#10640](https://github.com/gfx-rs/wgpu/pull/10640).
 - Added explicit `Send` and `Sync` implementations to key `wgpu` types so that the compiler can do less work checking those bounds. If you previously added a `#![recursion_limit = ...]` attribute to your crate due to overflow errors involving `wgpu` types, you may now be able to remove it. By @kpreid in [#10177](https://github.com/gfx-rs/wgpu/pull/10177).
 
 ### Documentation
