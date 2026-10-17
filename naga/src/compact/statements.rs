@@ -250,9 +250,12 @@ impl FunctionMap {
             for stmt in last {
                 use crate::Statement as St;
                 match *stmt {
-                    St::Emit(ref mut range) => {
-                        self.expressions.adjust_range(range, &function.expressions);
-                    }
+                    St::Emit(ref mut range) => match self.reorder {
+                        Some(ref reorder) => {
+                            reorder.adjust_range(range, &function.expressions);
+                        }
+                        None => self.expressions.adjust_range(range, &function.expressions),
+                    },
                     St::Block(ref mut block) => worklist.push(block),
                     St::If {
                         ref mut condition,
