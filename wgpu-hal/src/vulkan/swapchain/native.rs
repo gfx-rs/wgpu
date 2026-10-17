@@ -278,11 +278,16 @@ impl Surface for NativeSurface {
         let images = unsafe { functor.get_swapchain_images(raw) }
             .map_err(crate::vulkan::map_host_device_oom_err)?;
 
-        // This fence is only used to throttle acquisition on Windows. It is very important to
+        // This fence is only used to throttle FIFO acquisition on Windows. It is very important to
         // avoid bad frame pacing when the Vulkan driver is using a DXGI swapchain. See
         // https://github.com/gfx-rs/wgpu/issues/8310 and
-        // https://github.com/gfx-rs/wgpu/issues/8354 for more details.
-        let fence = if cfg!(target_os = "windows") {
+        // https://github.com/gfx-rs/wgpu/issues/8354 for more details. In other present modes it
+        // only adds acquire latency, see https://github.com/gfx-rs/wgpu/issues/9559.
+        let fence = if cfg!(target_os = "windows")
+            && matches!(
+                config.present_mode,
+                wgt::PresentMode::Fifo | wgt::PresentMode::FifoRelaxed
+            ) {
             let raw = unsafe {
                 device
                     .shared

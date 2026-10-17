@@ -264,6 +264,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### Vulkan
 
+- On Windows, only wait for the swapchain acquire fence in `Fifo` and `FifoRelaxed` present modes. It added acquire latency in `Immediate` and `Mailbox`. By @HashimTheArab in [#10641](https://github.com/gfx-rs/wgpu/pull/10641).
 - Fix `HalCounters::textures` drifting negative: `create_texture` never incremented it while `destroy_texture` always decremented it. By @dustyleary in [#10022](https://github.com/gfx-rs/wgpu/pull/10022).
 - Work around Arm proprietary drivers ignoring negative viewport heights, which flipped every render pass vertically. On these drivers, Y is now flipped in the vertex shader. By @lexoliu in [#10058](https://github.com/gfx-rs/wgpu/pull/10058).
 - Fix `VUID-VkImageViewCreateInfo-image-04441` validation errors when creating a view of a texture whose only usages are `COPY_SRC` and/or `COPY_DST`. By @MannXo in [#10200](https://github.com/gfx-rs/wgpu/issues/10200).
