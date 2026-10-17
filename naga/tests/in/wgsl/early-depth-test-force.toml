@@ -1,2 +1,2 @@
 capabilities = "EARLY_DEPTH_TEST"
-targets = "SPIRV | GLSL"
+targets = "SPIRV | GLSL | HLSL"

@@ -1,0 +1,2 @@
+capabilities = "EARLY_DEPTH_TEST"
+targets = "HLSL"
