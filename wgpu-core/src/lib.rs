@@ -167,9 +167,15 @@ const DOWNLEVEL_ERROR_MESSAGE: &str = concat!(
 macro_rules! api_log {
     ($($arg:tt)+) => (log::info!($($arg)+))
 }
+// Check `log_enabled!` first so arguments aren't evaluated for loggers that set a high
+// `max_level` and filter records in `Log::enabled`.
 #[cfg(not(feature = "api_log_info"))]
 macro_rules! api_log {
-    ($($arg:tt)+) => (log::trace!($($arg)+))
+    ($($arg:tt)+) => {
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!($($arg)+)
+        }
+    };
 }
 
 #[cfg(feature = "api_log_info")]
@@ -178,7 +184,11 @@ macro_rules! api_log_debug {
 }
 #[cfg(not(feature = "api_log_info"))]
 macro_rules! api_log_debug {
-    ($($arg:tt)+) => (log::debug!($($arg)+))
+    ($($arg:tt)+) => {
+        if log::log_enabled!(log::Level::Debug) {
+            log::debug!($($arg)+)
+        }
+    };
 }
 
 pub(crate) use api_log;
@@ -190,7 +200,11 @@ macro_rules! resource_log {
 }
 #[cfg(not(feature = "resource_log_info"))]
 macro_rules! resource_log {
-    ($($arg:tt)+) => (log::trace!($($arg)+))
+    ($($arg:tt)+) => {
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!($($arg)+)
+        }
+    };
 }
 pub(crate) use resource_log;
 
