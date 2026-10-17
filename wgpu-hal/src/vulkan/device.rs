@@ -545,6 +545,123 @@ impl super::Device {
         })
     }
 
+    /// Queries importable, single-plane DMA-BUF modifiers for `formats` and `usage`.
+    /// The query assumes 2D, single-mip, single-layer, single-sample images with no
+    /// view-format overrides. Unsupported formats are omitted; an empty result also
+    /// means the required Vulkan capabilities are unavailable. An invalid mapped
+    /// image usage returns an error.
+    ///
+    /// The caller maps wgpu formats to DRM FourCCs and checks any needed sampling
+    /// features on each modifier. A listed pair does not guarantee that a particular
+    /// allocation, stride, or offset can be imported. Only explicit modifiers are listed.
+    /// Foreign ownership support must be checked separately.
+    #[cfg(unix)]
+    pub fn get_dmabuf_formats(
+        &self,
+        formats: &[wgt::TextureFormat],
+        usage: wgt::TextureUses,
+    ) -> Result<Vec<super::DmabufFormat>, crate::DeviceError> {
+        use super::dmabuf::DmabufFormat;
+
+        let mut result = Vec::new();
+        let supports_dmabuf_import = self
+            .shared
+            .features
+            .contains(wgt::Features::VULKAN_EXTERNAL_MEMORY_DMA_BUF);
+        if !supports_dmabuf_import {
+            return Ok(result);
+        }
+
+        let Some(properties) = &self.shared.instance.get_physical_device_properties else {
+            return Ok(result);
+        };
+
+        let image_usage = conv::map_texture_usage(usage);
+        if image_usage.is_empty() {
+            return Err(crate::DeviceError::Unexpected);
+        }
+
+        let mut modifiers = Vec::new();
+        for &texture_format in formats {
+            let unsupported_format = texture_format.is_multi_planar_format()
+                || texture_format.is_depth_stencil_format()
+                || texture_format.is_compressed();
+
+            if unsupported_format {
+                continue;
+            }
+
+            let vk_format = self.shared.private_caps.map_texture_format(texture_format);
+            let supported_modifiers = unsafe {
+                super::dmabuf::query_modifiers(
+                    properties,
+                    self.shared.physical_device,
+                    vk_format,
+                    image_usage,
+                    &mut modifiers,
+                )?
+            };
+
+            if !supported_modifiers.is_empty() {
+                result.push(DmabufFormat {
+                    format: texture_format,
+                    modifiers: supported_modifiers,
+                });
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Whether `VK_EXT_queue_family_foreign` is enabled for ownership barriers.
+    /// This requires Vulkan 1.1 or later; it does not synchronize the DMA-BUF producer.
+    #[cfg(unix)]
+    pub fn supports_dmabuf_foreign_ownership(&self) -> bool {
+        self.shared
+            .enabled_extensions
+            .contains(&ext::queue_family_foreign::NAME)
+    }
+
+    /// Returns the DRM render-node device ID in the OS `dev_t` representation,
+    /// cast to `u64` as in `MetadataExt::rdev`. Returns `None` if the Vulkan DRM
+    /// extension or a render node is unavailable.
+    #[cfg(unix)]
+    pub fn get_dmabuf_device_id(&self) -> Result<Option<u64>, crate::DeviceError> {
+        if !self
+            .shared
+            .enabled_extensions
+            .contains(&ext::physical_device_drm::NAME)
+        {
+            return Ok(None);
+        }
+
+        let Some(properties) = &self.shared.instance.get_physical_device_properties else {
+            return Ok(None);
+        };
+
+        let mut drm = vk::PhysicalDeviceDrmPropertiesEXT::default();
+        let mut props = vk::PhysicalDeviceProperties2::default().push_next(&mut drm);
+        unsafe {
+            properties.get_physical_device_properties2(self.shared.physical_device, &mut props)
+        };
+
+        if drm.has_render == vk::FALSE {
+            return Ok(None);
+        }
+
+        let device = libc::makedev(
+            drm.render_major
+                .try_into()
+                .map_err(|_| crate::DeviceError::Unexpected)?,
+            drm.render_minor
+                .try_into()
+                .map_err(|_| crate::DeviceError::Unexpected)?,
+        );
+
+        #[allow(trivial_numeric_casts)] // libc's dev_t and major/minor types vary by OS.
+        Ok(Some(device as u64))
+    }
+
     /// Import a DMA-buf as a texture. Currently only supports single-plane DMA-bufs.
     ///
     /// # Safety

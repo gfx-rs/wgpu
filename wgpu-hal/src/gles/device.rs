@@ -142,6 +142,7 @@ impl super::Device {
                 raw: glow::NativeTexture(name),
                 target: super::Texture::get_info_from_desc(desc),
             },
+            backing: super::TextureBacking::Gl,
             drop_guard: crate::DropGuard::from_option(drop_callback),
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
@@ -168,6 +169,7 @@ impl super::Device {
             inner: super::TextureInner::Renderbuffer {
                 raw: glow::NativeRenderbuffer(name),
             },
+            backing: super::TextureBacking::Gl,
             drop_guard: crate::DropGuard::from_option(drop_callback),
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
@@ -175,6 +177,397 @@ impl super::Device {
             format_desc: self.shared.describe_texture_format(desc.format),
             copy_size: desc.copy_extent(),
         }
+    }
+
+    /// Queries DMA-BUF formats usable as ordinary GLES 2D textures for sampling.
+    /// Only unambiguous wgpu mappings with enabled format features and explicit
+    /// LINEAR, non-external-only modifiers are listed. Returns an empty list if
+    /// EGL, the required extensions, or import entry points are unavailable;
+    /// a failed EGL capability query returns an error.
+    ///
+    /// Import still requires a descriptor matching the FourCC with one plane,
+    /// layer, mip and sample. A listed pair does not guarantee that a particular
+    /// allocation, stride, or offset can be imported.
+    #[cfg(all(unix, native))]
+    pub fn get_dmabuf_formats(&self) -> Result<Vec<super::DmabufFormat>, crate::DeviceError> {
+        use super::dmabuf::*;
+
+        let context = self.context();
+        let (Some(egl), Some(display)) = (context.egl_instance(), context.raw_display()) else {
+            return Ok(Vec::new());
+        };
+
+        let extensions = egl
+            .query_string(Some(*display), khronos_egl::EXTENSIONS)
+            .map_err(|_| crate::DeviceError::Unexpected)?
+            .to_string_lossy();
+
+        let has_import = has_extension(&extensions, EXT_IMAGE_DMA_BUF_IMPORT);
+        let has_modifiers = has_extension(&extensions, EXT_IMAGE_DMA_BUF_IMPORT_MODIFIERS);
+        if !has_import || !has_modifiers {
+            return Ok(Vec::new());
+        }
+
+        let supports_egl_image = context
+            .lock()
+            .supported_extensions()
+            .contains("GL_OES_EGL_image");
+        if !supports_egl_image {
+            return Ok(Vec::new());
+        }
+
+        let image_entry_points = [
+            "eglCreateImageKHR",
+            "eglDestroyImageKHR",
+            "glEGLImageTargetTexture2DOES",
+        ];
+        for name in image_entry_points {
+            if egl.get_proc_address(name).is_none() {
+                return Ok(Vec::new());
+            }
+        }
+
+        let (Some(formats), Some(modifiers)) = (
+            egl.get_proc_address("eglQueryDmaBufFormatsEXT"),
+            egl.get_proc_address("eglQueryDmaBufModifiersEXT"),
+        ) else {
+            return Ok(Vec::new());
+        };
+
+        let query_formats: QueryFormats = unsafe { core::mem::transmute(formats) };
+        let query_modifiers: QueryModifiers = unsafe { core::mem::transmute(modifiers) };
+        let display = display.as_ptr();
+        let mut count = 0;
+
+        let query_succeeded =
+            unsafe { query_formats(display, 0, ptr::null_mut(), &mut count) } != 0;
+        if !query_succeeded || count < 0 {
+            return Err(crate::DeviceError::Unexpected);
+        }
+
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+
+        let capacity = count as usize;
+        let mut formats = alloc::vec![0; capacity];
+        let query_succeeded =
+            unsafe { query_formats(display, count, formats.as_mut_ptr(), &mut count) } != 0;
+        if !query_succeeded || count < 0 || count as usize > formats.len() {
+            return Err(crate::DeviceError::Unexpected);
+        }
+
+        formats.truncate(count as usize);
+        let mut result = Vec::new();
+        let mut modifiers = Vec::new();
+        let mut external = Vec::new();
+        for format in formats {
+            let Some(texture_format) = self.dmabuf_fourcc_to_texture_format(format as u32) else {
+                continue;
+            };
+            let supported_modifiers = unsafe {
+                super::dmabuf::query_modifiers(
+                    display,
+                    query_modifiers,
+                    format,
+                    &mut modifiers,
+                    &mut external,
+                )?
+            };
+            if !supported_modifiers.is_empty() {
+                result.push(DmabufFormat {
+                    fourcc: format as u32,
+                    texture_format,
+                    modifiers: supported_modifiers,
+                });
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Returns the EGL device's DRM render-node ID (`st_rdev`) as a `u64`.
+    /// Returns `None` if device queries or a render-node character device are
+    /// unavailable. This identifies the DRM device, not a DMA-BUF allocation.
+    #[cfg(all(unix, native))]
+    pub fn get_dmabuf_device_id(&self) -> Result<Option<u64>, crate::DeviceError> {
+        use super::dmabuf::*;
+
+        let context = self.context();
+        let (Some(egl), Some(display)) = (context.egl_instance(), context.raw_display()) else {
+            return Ok(None);
+        };
+
+        let Ok(extensions) = egl.query_string(None, khronos_egl::EXTENSIONS) else {
+            return Ok(None);
+        };
+
+        let extensions = extensions.to_string_lossy();
+        if !has_extension(&extensions, "EGL_EXT_device_query")
+            && !has_extension(&extensions, "EGL_EXT_device_base")
+        {
+            return Ok(None);
+        }
+
+        let (Some(display_query), Some(device_query)) = (
+            egl.get_proc_address("eglQueryDisplayAttribEXT"),
+            egl.get_proc_address("eglQueryDeviceStringEXT"),
+        ) else {
+            return Ok(None);
+        };
+
+        let query_display: QueryDisplay = unsafe { core::mem::transmute(display_query) };
+        let query_device: QueryDeviceString = unsafe { core::mem::transmute(device_query) };
+        unsafe { query_device_id(display.as_ptr(), query_display, query_device) }
+    }
+
+    /// Imports a single-plane DMA-BUF as a GLES `GL_TEXTURE_2D` without copying.
+    /// `None` for `drm_modifier` requests an implicit layout, which the format
+    /// query does not advertise. The supplied FD is closed on both success and
+    /// failure; the resulting texture retains the EGL image until it is destroyed.
+    ///
+    /// # Safety
+    ///
+    /// - `fd`, `drm_format`, `stride`, `offset` and `drm_modifier` must describe
+    ///   the same DMA-BUF allocation.
+    /// - `desc.format` must correctly describe `drm_format`.
+    /// - Only one 2D plane, one array layer, one mip level and one sample are
+    ///   currently supported.
+    /// - Synchronization with the DMA-BUF producer must be handled separately.
+    #[cfg(all(unix, native))]
+    pub unsafe fn texture_from_dmabuf_fd(
+        &self,
+        fd: std::os::fd::OwnedFd,
+        desc: &crate::TextureDescriptor,
+        drm_format: u32,
+        drm_modifier: Option<u64>,
+        stride: u64,
+        offset: u64,
+    ) -> Result<super::Texture, crate::DeviceError> {
+        use super::dmabuf::*;
+        use core::ptr;
+        use glow::HasContext as _;
+        use std::os::fd::AsRawFd as _;
+
+        if desc.dimension != wgt::TextureDimension::D2
+            || desc.size.depth_or_array_layers != 1
+            || desc.mip_level_count != 1
+            || desc.sample_count != 1
+        {
+            log::error!("DMA-BUF GLES import supports only a single-layer, single-sampled 2D texture with one mip level");
+            return Err(crate::DeviceError::Unexpected);
+        }
+
+        let width = i32::try_from(desc.size.width).map_err(|error| {
+            log::error!("DMA-BUF width does not fit EGLint: {error}");
+            crate::DeviceError::Unexpected
+        })?;
+
+        let height = i32::try_from(desc.size.height).map_err(|error| {
+            log::error!("DMA-BUF height does not fit EGLint: {error}");
+            crate::DeviceError::Unexpected
+        })?;
+
+        let stride = i32::try_from(stride).map_err(|error| {
+            log::error!("DMA-BUF stride does not fit EGLint: {error}");
+            crate::DeviceError::Unexpected
+        })?;
+
+        let offset = i32::try_from(offset).map_err(|error| {
+            log::error!("DMA-BUF offset does not fit EGLint: {error}");
+            crate::DeviceError::Unexpected
+        })?;
+
+        let drm_format = i32::try_from(drm_format).map_err(|error| {
+            log::error!("DRM FourCC does not fit EGLint: {error}");
+            crate::DeviceError::Unexpected
+        })?;
+
+        let context = self.context();
+
+        let egl = context.egl_instance().ok_or_else(|| {
+            log::error!("GLES device was not created from an EGL context");
+            crate::DeviceError::Unexpected
+        })?;
+
+        let display = *context.raw_display().ok_or_else(|| {
+            log::error!("GLES device does not expose an EGLDisplay");
+            crate::DeviceError::Unexpected
+        })?;
+
+        let extensions = egl
+            .query_string(Some(display), khronos_egl::EXTENSIONS)
+            .map_err(|error| {
+                log::error!("failed to query EGL display extensions: {error}");
+                crate::DeviceError::Unexpected
+            })?;
+
+        let extensions = extensions.to_string_lossy();
+
+        let has_extension = |required: &str| {
+            extensions
+                .split_ascii_whitespace()
+                .any(|extension| extension == required)
+        };
+
+        if !has_extension(EXT_IMAGE_DMA_BUF_IMPORT) {
+            log::error!("{EXT_IMAGE_DMA_BUF_IMPORT} is not supported");
+            return Err(crate::DeviceError::Unexpected);
+        }
+
+        if drm_modifier.is_some() && !has_extension(EXT_IMAGE_DMA_BUF_IMPORT_MODIFIERS) {
+            log::error!(
+                "DMA-BUF has an explicit DRM modifier, but \
+             {EXT_IMAGE_DMA_BUF_IMPORT_MODIFIERS} is not supported"
+            );
+            return Err(crate::DeviceError::Unexpected);
+        }
+
+        let create_image: EglCreateImageKhr = {
+            let address = egl.get_proc_address("eglCreateImageKHR").ok_or_else(|| {
+                log::error!("eglCreateImageKHR is unavailable");
+                crate::DeviceError::Unexpected
+            })?;
+
+            unsafe { core::mem::transmute(address) }
+        };
+
+        let destroy_image: EglDestroyImageKhr = {
+            let address = egl.get_proc_address("eglDestroyImageKHR").ok_or_else(|| {
+                log::error!("eglDestroyImageKHR is unavailable");
+                crate::DeviceError::Unexpected
+            })?;
+
+            unsafe { core::mem::transmute(address) }
+        };
+
+        let image_target_texture: GlEglImageTargetTexture2DOes = {
+            let address = egl
+                .get_proc_address("glEGLImageTargetTexture2DOES")
+                .ok_or_else(|| {
+                    log::error!("glEGLImageTargetTexture2DOES is unavailable");
+                    crate::DeviceError::Unexpected
+                })?;
+
+            unsafe { core::mem::transmute(address) }
+        };
+
+        let mut attributes = vec![
+            khronos_egl::WIDTH,
+            width,
+            khronos_egl::HEIGHT,
+            height,
+            LINUX_DRM_FOURCC_EXT,
+            drm_format,
+            DMA_BUF_PLANE0_FD_EXT,
+            fd.as_raw_fd(),
+            DMA_BUF_PLANE0_OFFSET_EXT,
+            offset,
+            DMA_BUF_PLANE0_PITCH_EXT,
+            stride,
+        ];
+
+        if let Some(modifier) = drm_modifier {
+            let modifier_low = modifier as u32;
+            let modifier_high = (modifier >> 32) as u32;
+
+            attributes.extend_from_slice(&[
+                DMA_BUF_PLANE0_MODIFIER_LO_EXT,
+                i32::from_ne_bytes(modifier_low.to_ne_bytes()),
+                DMA_BUF_PLANE0_MODIFIER_HI_EXT,
+                i32::from_ne_bytes(modifier_high.to_ne_bytes()),
+            ]);
+        }
+
+        attributes.push(khronos_egl::NONE);
+
+        let egl_image = unsafe {
+            create_image(
+                display.as_ptr(),
+                ptr::null_mut(),
+                LINUX_DMA_BUF_EXT,
+                ptr::null_mut(),
+                attributes.as_ptr(),
+            )
+        };
+
+        if egl_image.is_null() {
+            /*
+             * EGL never takes ownership of the fd. OwnedFd closes it
+             * automatically when this function returns.
+             */
+            log::error!("eglCreateImageKHR failed to import DMA-BUF");
+            return Err(crate::DeviceError::Unexpected);
+        }
+
+        /*
+         * EGL retained its own reference to the DMA-BUF, but did not take
+         * ownership of our fd. Close our descriptor now.
+         */
+        drop(fd);
+
+        let gl = context.lock();
+
+        let raw_texture = match unsafe { gl.create_texture() } {
+            Ok(texture) => texture,
+
+            Err(error) => {
+                log::error!("failed to create GL texture: {error}");
+
+                if unsafe { destroy_image(display.as_ptr(), egl_image) } == 0 {
+                    log::error!("eglDestroyImageKHR failed after GL texture creation failure");
+                }
+
+                return Err(crate::DeviceError::Unexpected);
+            }
+        };
+
+        /*
+         * Discard pre-existing GL errors so the following check belongs to this
+         * import operation.
+         */
+        while unsafe { gl.get_error() } != glow::NO_ERROR {}
+
+        unsafe {
+            gl.bind_texture(glow::TEXTURE_2D, Some(raw_texture));
+            image_target_texture(glow::TEXTURE_2D, egl_image);
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_BASE_LEVEL, 0);
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAX_LEVEL, 0);
+            gl.bind_texture(glow::TEXTURE_2D, None);
+        }
+
+        let gl_error = unsafe { gl.get_error() };
+
+        if gl_error != glow::NO_ERROR {
+            log::error!("glEGLImageTargetTexture2DOES failed: {gl_error:#x}");
+
+            unsafe {
+                gl.delete_texture(raw_texture);
+            }
+
+            if unsafe { destroy_image(display.as_ptr(), egl_image) } == 0 {
+                log::error!("eglDestroyImageKHR failed after EGLImage binding failure");
+            }
+
+            return Err(crate::DeviceError::Unexpected);
+        }
+
+        /*
+         * Release the AdapterContext lock before constructing the HAL texture.
+         */
+        drop(gl);
+
+        /*
+         * Passing None transfers ownership of the GL texture to wgpu-hal.
+         * This is equivalent to the Vulkan implementation using no
+         * drop_callback for its owned VkImage/VkDeviceMemory.
+         */
+        let mut texture = unsafe { self.texture_from_raw(raw_texture.0, desc, None) };
+
+        texture.backing =
+            super::TextureBacking::Dmabuf(DmabufImage::new(display, egl_image, destroy_image));
+
+        Ok(texture)
     }
 
     /// Wrap an existing `WebGlTexture` as a wgpu-hal texture, without copying.
@@ -219,6 +612,7 @@ impl super::Device {
                 raw,
                 target: super::Texture::target_for_view_dimension(view_dimension),
             },
+            backing: super::TextureBacking::Gl,
             // Always a guard, even without a callback: its presence is what
             // marks the handle as externally owned in `destroy_texture`.
             drop_guard: Some(crate::DropGuard::external(drop_callback)),
@@ -675,6 +1069,32 @@ impl super::Device {
             immediates_descs: uniforms,
             clip_distance_count,
         }))
+    }
+
+    #[cfg(all(unix, native))]
+    fn dmabuf_fourcc_to_texture_format(&self, fourcc: u32) -> Option<wgt::TextureFormat> {
+        // Decode the FourCC identifier independently of host endianness.
+        // X-channel formats are excluded because they require alpha fixup.
+        let format = match &fourcc.to_le_bytes() {
+            b"AR24" => wgt::TextureFormat::Bgra8Unorm,
+            b"AB24" => wgt::TextureFormat::Rgba8Unorm,
+            b"AB30" => wgt::TextureFormat::Rgb10a2Unorm,
+            b"AB4H" => wgt::TextureFormat::Rgba16Float,
+            b"R16 " => wgt::TextureFormat::R16Unorm,
+            b"GR32" => wgt::TextureFormat::Rg16Unorm,
+            b"AB48" => wgt::TextureFormat::Rgba16Unorm,
+            b"R8  " => wgt::TextureFormat::R8Unorm,
+            b"GR88" => wgt::TextureFormat::Rg8Unorm,
+            b"R  H" => wgt::TextureFormat::R16Float,
+            b"GR H" => wgt::TextureFormat::Rg16Float,
+            b"R  F" => wgt::TextureFormat::R32Float,
+            b"GR F" => wgt::TextureFormat::Rg32Float,
+            b"AB8F" => wgt::TextureFormat::Rgba32Float,
+            _ => return None,
+        };
+        self.features
+            .contains(format.required_features())
+            .then_some(format)
     }
 }
 
@@ -1169,6 +1589,7 @@ impl crate::Device for super::Device {
 
         Ok(super::Texture {
             inner,
+            backing: super::TextureBacking::Gl,
             drop_guard: None,
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
@@ -1203,6 +1624,21 @@ impl crate::Device for super::Device {
             #[cfg(webgl)]
             if let super::TextureInner::Texture { raw, .. } = texture.inner {
                 self.shared.context.lock().unregister_external_texture(raw);
+            }
+        }
+
+        /*
+         * The GL texture must be deleted before the EGLImage from which its
+         * storage was created.
+         */
+        match texture.backing {
+            super::TextureBacking::Gl => {}
+
+            #[cfg(all(unix, native))]
+            super::TextureBacking::Dmabuf(dmabuf) => {
+                if !unsafe { dmabuf.destroy() } {
+                    log::error!("eglDestroyImageKHR failed for imported DMA-BUF");
+                }
             }
         }
 

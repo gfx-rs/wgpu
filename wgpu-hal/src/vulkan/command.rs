@@ -262,22 +262,20 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 bar.texture.format,
                 &self.device.private_caps,
             );
-            let (src_stage, src_access) = conv::map_texture_usage_to_barrier(
+            let (mut src_stage, src_access) = conv::map_texture_usage_to_barrier(
                 bar.usage.from,
                 self.device.queue_flags,
                 self.device.private_caps.store_op_none,
                 self.device.features,
             );
             let src_layout = conv::derive_image_layout(bar.usage.from, bar.texture.format);
-            src_stages |= src_stage;
-            let (dst_stage, dst_access) = conv::map_texture_usage_to_barrier(
+            let (mut dst_stage, dst_access) = conv::map_texture_usage_to_barrier(
                 bar.usage.to,
                 self.device.queue_flags,
                 self.device.private_caps.store_op_none,
                 self.device.features,
             );
             let dst_layout = conv::derive_image_layout(bar.usage.to, bar.texture.format);
-            dst_stages |= dst_stage;
 
             // Insert a queue family ownership transfer if the caller requested
             // one (used for textures imported from external memory). When no
@@ -285,12 +283,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
             // which the spec treats as "no transfer".
             let (src_queue_family_index, dst_queue_family_index) =
                 match bar.queue_family_ownership_transfer {
-                    Some(transfer) => (
-                        conv::map_queue_family(transfer.src),
-                        conv::map_queue_family(transfer.dst),
-                    ),
+                    Some(transfer) => {
+                        adjust_external_ownership_stages(transfer, &mut src_stage, &mut dst_stage);
+                        (
+                            conv::map_queue_family(transfer.src),
+                            conv::map_queue_family(transfer.dst),
+                        )
+                    }
                     None => (vk::QUEUE_FAMILY_IGNORED, vk::QUEUE_FAMILY_IGNORED),
                 };
+            src_stages |= src_stage;
+            dst_stages |= dst_stage;
 
             vk_barriers.push(
                 vk::ImageMemoryBarrier::default()
@@ -1563,6 +1566,27 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     },
                 );
         }
+    }
+}
+
+fn adjust_external_ownership_stages(
+    transfer: crate::QueueFamilyOwnershipTransfer,
+    src_stage: &mut vk::PipelineStageFlags,
+    dst_stage: &mut vk::PipelineStageFlags,
+) {
+    use crate::QueueFamily;
+
+    let is_src_external = matches!(transfer.src, QueueFamily::External | QueueFamily::Foreign);
+    let is_src_explicit = matches!(transfer.src, QueueFamily::Explicit(_));
+    let is_dst_external = matches!(transfer.dst, QueueFamily::External | QueueFamily::Foreign);
+    let is_dst_explicit = matches!(transfer.dst, QueueFamily::Explicit(_));
+
+    if is_src_external && is_dst_explicit && src_stage.is_empty() {
+        *src_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
+    }
+
+    if is_src_explicit && is_dst_external && dst_stage.is_empty() {
+        *dst_stage = vk::PipelineStageFlags::BOTTOM_OF_PIPE;
     }
 }
 

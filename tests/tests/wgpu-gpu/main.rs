@@ -33,6 +33,8 @@ mod compute_pass_transition_resources;
 mod create_surface_error;
 mod device;
 mod dispatch_workgroups_indirect;
+#[cfg(all(target_os = "linux", not(wasm_test)))]
+mod dmabuf;
 mod draw_index;
 mod draw_indirect;
 mod dual_source_blending;
@@ -110,6 +112,8 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     create_surface_error::all_tests(&mut tests);
 
     device::all_tests(&mut tests);
+    #[cfg(all(target_os = "linux", not(wasm_test)))]
+    dmabuf::all_tests(&mut tests);
     dispatch_workgroups_indirect::all_tests(&mut tests);
     draw_index::all_tests(&mut tests);
     draw_indirect::all_tests(&mut tests);
