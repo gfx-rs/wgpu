@@ -1558,6 +1558,7 @@ impl super::CapabilitiesQuery {
         });
 
         crate::Capabilities {
+            pass_barriers_are_noop: true,
             limits,
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),

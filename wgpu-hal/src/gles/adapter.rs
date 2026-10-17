@@ -973,6 +973,7 @@ impl super::Adapter {
             info: Self::make_info(vendor, renderer, version),
             features,
             capabilities: crate::Capabilities {
+                pass_barriers_are_noop: false,
                 limits,
                 downlevel: wgt::DownlevelCapabilities {
                     flags: downlevel_flags,
