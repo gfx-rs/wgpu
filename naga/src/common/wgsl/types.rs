@@ -78,6 +78,7 @@ pub trait TypeContext {
             crate::ScalarKind::Sint
             | crate::ScalarKind::Uint
             | crate::ScalarKind::Float
+            | crate::ScalarKind::BFloat
             | crate::ScalarKind::Bool => write!(out, "{{non-WGSL Naga scalar {scalar:?}}}"),
 
             // The abstract types are kind of an odd quasi-WGSL category:

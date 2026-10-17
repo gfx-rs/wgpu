@@ -22,6 +22,7 @@ pub(in crate::back::glsl) const fn glsl_scalar(
     use crate::ScalarKind as Sk;
 
     Ok(match scalar.kind {
+        Sk::BFloat => return Err(Error::UnsupportedScalar(scalar)),
         Sk::Sint => match scalar.width {
             2 => ScalarString {
                 prefix: "i16",
