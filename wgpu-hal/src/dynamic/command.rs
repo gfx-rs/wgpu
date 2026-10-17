@@ -16,19 +16,27 @@ use super::{
 };
 
 pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
+    /// Dynamic version of [CommandEncoder::begin_encoding]
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
 
+    /// Dynamic version of [CommandEncoder::discard_encoding]
     unsafe fn discard_encoding(&mut self);
 
+    /// Dynamic version of [CommandEncoder::end_encoding]
     unsafe fn end_encoding(&mut self) -> Result<Box<dyn DynCommandBuffer>, DeviceError>;
 
+    /// Dynamic version of [CommandEncoder::reset_all]
     unsafe fn reset_all(&mut self, command_buffers: Vec<Box<dyn DynCommandBuffer>>);
 
+    /// Dynamic version of [CommandEncoder::transition_buffers]
     unsafe fn transition_buffers(&mut self, barriers: &[BufferBarrier<'_, dyn DynBuffer>]);
+    /// Dynamic version of [CommandEncoder::transition_textures]
     unsafe fn transition_textures(&mut self, barriers: &[TextureBarrier<'_, dyn DynTexture>]);
 
+    /// Dynamic version of [CommandEncoder::clear_buffer]
     unsafe fn clear_buffer(&mut self, buffer: &dyn DynBuffer, range: MemoryRange);
 
+    /// Dynamic version of [CommandEncoder::copy_buffer_to_buffer]
     unsafe fn copy_buffer_to_buffer(
         &mut self,
         src: &dyn DynBuffer,
@@ -36,6 +44,7 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         regions: &[BufferCopy],
     );
 
+    /// Dynamic version of [CommandEncoder::copy_texture_to_texture]
     unsafe fn copy_texture_to_texture(
         &mut self,
         src: &dyn DynTexture,
@@ -44,6 +53,7 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         regions: &[TextureCopy],
     );
 
+    /// Dynamic version of [CommandEncoder::copy_buffer_to_texture]
     unsafe fn copy_buffer_to_texture(
         &mut self,
         src: &dyn DynBuffer,
@@ -51,6 +61,7 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         regions: &[BufferTextureCopy],
     );
 
+    /// Dynamic version of [CommandEncoder::copy_texture_to_buffer]
     unsafe fn copy_texture_to_buffer(
         &mut self,
         src: &dyn DynTexture,
@@ -59,6 +70,7 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         regions: &[BufferTextureCopy],
     );
 
+    /// Dynamic version of [CommandEncoder::set_bind_group]
     unsafe fn set_bind_group(
         &mut self,
         layout: &dyn DynPipelineLayout,
@@ -67,6 +79,7 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         dynamic_offsets: &[wgt::DynamicOffset],
     );
 
+    /// Dynamic version of [CommandEncoder::set_immediates]
     unsafe fn set_immediates(
         &mut self,
         layout: &dyn DynPipelineLayout,
@@ -74,14 +87,22 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         data: &[u32],
     );
 
+    /// Dynamic version of [CommandEncoder::insert_debug_marker]
     unsafe fn insert_debug_marker(&mut self, label: &str);
+    /// Dynamic version of [CommandEncoder::begin_debug_marker]
     unsafe fn begin_debug_marker(&mut self, group_label: &str);
+    /// Dynamic version of [CommandEncoder::end_debug_marker]
     unsafe fn end_debug_marker(&mut self);
 
+    /// Dynamic version of [CommandEncoder::begin_query]
     unsafe fn begin_query(&mut self, set: &dyn DynQuerySet, index: u32);
+    /// Dynamic version of [CommandEncoder::end_query]
     unsafe fn end_query(&mut self, set: &dyn DynQuerySet, index: u32);
+    /// Dynamic version of [CommandEncoder::write_timestamp]
     unsafe fn write_timestamp(&mut self, set: &dyn DynQuerySet, index: u32);
+    /// Dynamic version of [CommandEncoder::reset_queries]
     unsafe fn reset_queries(&mut self, set: &dyn DynQuerySet, range: Range<u32>);
+    /// Dynamic version of [CommandEncoder::copy_query_results]
     unsafe fn copy_query_results(
         &mut self,
         set: &dyn DynQuerySet,
@@ -91,30 +112,40 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         stride: wgt::BufferSize,
     );
 
+    /// Dynamic version of [CommandEncoder::begin_render_pass]
     unsafe fn begin_render_pass(
         &mut self,
         desc: &RenderPassDescriptor<dyn DynQuerySet, dyn DynTextureView>,
     ) -> Result<(), DeviceError>;
+    /// Dynamic version of [CommandEncoder::end_render_pass]
     unsafe fn end_render_pass(&mut self);
 
+    /// Dynamic version of [CommandEncoder::set_render_pipeline]
     unsafe fn set_render_pipeline(&mut self, pipeline: &dyn DynRenderPipeline);
 
+    /// Dynamic version of [CommandEncoder::set_index_buffer]
     unsafe fn set_index_buffer<'a>(
         &mut self,
         binding: BufferBinding<'a, dyn DynBuffer, wgt::BufferAddress>,
         format: wgt::IndexFormat,
     );
 
+    /// Dynamic version of [CommandEncoder::set_vertex_buffer]
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
         binding: BufferBinding<'a, dyn DynBuffer, wgt::BufferAddress>,
     );
+    /// Dynamic version of [CommandEncoder::set_viewport]
     unsafe fn set_viewport(&mut self, rect: &Rect<f32>, depth_range: Range<f32>);
+    /// Dynamic version of [CommandEncoder::set_scissor_rect]
     unsafe fn set_scissor_rect(&mut self, rect: &Rect<u32>);
+    /// Dynamic version of [CommandEncoder::set_stencil_reference]
     unsafe fn set_stencil_reference(&mut self, value: u32);
+    /// Dynamic version of [CommandEncoder::set_blend_constants]
     unsafe fn set_blend_constants(&mut self, color: &[f32; 4]);
 
+    /// Dynamic version of [CommandEncoder::draw]
     unsafe fn draw(
         &mut self,
         first_vertex: u32,
@@ -122,6 +153,7 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         first_instance: u32,
         instance_count: u32,
     );
+    /// Dynamic version of [CommandEncoder::draw_indexed]
     unsafe fn draw_indexed(
         &mut self,
         first_index: u32,
@@ -130,30 +162,35 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         first_instance: u32,
         instance_count: u32,
     );
+    /// Dynamic version of [CommandEncoder::draw_mesh_tasks]
     unsafe fn draw_mesh_tasks(
         &mut self,
         group_count_x: u32,
         group_count_y: u32,
         group_count_z: u32,
     );
+    /// Dynamic version of [CommandEncoder::draw_indirect]
     unsafe fn draw_indirect(
         &mut self,
         buffer: &dyn DynBuffer,
         offset: wgt::BufferAddress,
         draw_count: u32,
     );
+    /// Dynamic version of [CommandEncoder::draw_indexed_indirect]
     unsafe fn draw_indexed_indirect(
         &mut self,
         buffer: &dyn DynBuffer,
         offset: wgt::BufferAddress,
         draw_count: u32,
     );
+    /// Dynamic version of [CommandEncoder::draw_mesh_tasks_indirect]
     unsafe fn draw_mesh_tasks_indirect(
         &mut self,
         buffer: &dyn DynBuffer,
         offset: wgt::BufferAddress,
         draw_count: u32,
     );
+    /// Dynamic version of [CommandEncoder::draw_indirect_count]
     unsafe fn draw_indirect_count(
         &mut self,
         buffer: &dyn DynBuffer,
@@ -162,6 +199,7 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     );
+    /// Dynamic version of [CommandEncoder::draw_indexed_indirect_count]
     unsafe fn draw_indexed_indirect_count(
         &mut self,
         buffer: &dyn DynBuffer,
@@ -170,6 +208,7 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     );
+    /// Dynamic version of [CommandEncoder::draw_mesh_tasks_indirect_count]
     unsafe fn draw_mesh_tasks_indirect_count(
         &mut self,
         buffer: &dyn DynBuffer,
@@ -179,21 +218,29 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         max_count: u32,
     );
 
+    /// Dynamic version of [CommandEncoder::begin_compute_pass]
     unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<dyn DynQuerySet>);
+    /// Dynamic version of [CommandEncoder::end_compute_pass]
     unsafe fn end_compute_pass(&mut self);
 
+    /// Dynamic version of [CommandEncoder::set_compute_pipeline]
     unsafe fn set_compute_pipeline(&mut self, pipeline: &dyn DynComputePipeline);
 
+    /// Dynamic version of [CommandEncoder::dispatch_workgroups]
     unsafe fn dispatch_workgroups(&mut self, count: [u32; 3]);
+    /// Dynamic version of [CommandEncoder::dispatch_workgroups_indirect]
     unsafe fn dispatch_workgroups_indirect(
         &mut self,
         buffer: &dyn DynBuffer,
         offset: wgt::BufferAddress,
     );
 
+    /// Dynamic version of [CommandEncoder::begin_ray_tracing_pass]
     unsafe fn begin_ray_tracing_pass(&mut self, desc: &RayTracingPassDescriptor);
+    /// Dynamic version of [CommandEncoder::end_ray_tracing_pass]
     unsafe fn end_ray_tracing_pass(&mut self);
 
+    /// Dynamic version of [CommandEncoder::trace_rays]
     unsafe fn trace_rays(
         &mut self,
         count: [u32; 3],
@@ -202,8 +249,10 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         intersection_group_data: crate::PipelineGroupData<dyn DynBuffer>,
     );
 
+    /// Dynamic version of [CommandEncoder::set_ray_tracing_pipeline]
     unsafe fn set_ray_tracing_pipeline(&mut self, pipeline: &dyn DynRayTracingPipeline);
 
+    /// Dynamic version of [CommandEncoder::build_acceleration_structures]
     unsafe fn build_acceleration_structures<'a>(
         &mut self,
         descriptors: &'a [BuildAccelerationStructureDescriptor<
@@ -212,21 +261,25 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
             dyn DynAccelerationStructure,
         >],
     );
+    /// Dynamic version of [CommandEncoder::place_acceleration_structure_barrier]
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
         barrier: AccelerationStructureBarrier,
     );
+    /// Dynamic version of [CommandEncoder::copy_acceleration_structure_to_acceleration_structure]
     unsafe fn copy_acceleration_structure_to_acceleration_structure(
         &mut self,
         src: &dyn DynAccelerationStructure,
         dst: &dyn DynAccelerationStructure,
         copy: wgt::AccelerationStructureCopy,
     );
+    /// Dynamic version of [CommandEncoder::read_acceleration_structure_compact_size]
     unsafe fn read_acceleration_structure_compact_size(
         &mut self,
         acceleration_structure: &dyn DynAccelerationStructure,
         buf: &dyn DynBuffer,
     );
+    /// Dynamic version of [CommandEncoder::set_acceleration_structure_dependencies]
     unsafe fn set_acceleration_structure_dependencies(
         &self,
         command_buffers: &[Box<dyn DynCommandBuffer>],

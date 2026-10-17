@@ -8,18 +8,22 @@ use crate::{
 use super::DynResourceExt as _;
 
 pub trait DynQueue: DynResource {
+    /// Dynamic version of [Queue::submit]
     unsafe fn submit(
         &self,
         command_buffers: &[&dyn DynCommandBuffer],
         surface_textures: &[&dyn DynSurfaceTexture],
         signal_fence: (&dyn DynFence, FenceValue),
     ) -> Result<(), DeviceError>;
+    /// Dynamic version of [Queue::present]
     unsafe fn present(
         &self,
         surface: &dyn DynSurface,
         texture: Box<dyn DynSurfaceTexture>,
     ) -> Result<(), SurfaceError>;
+    /// Dynamic version of [Queue::get_timestamp_period]
     unsafe fn get_timestamp_period(&self) -> f32;
+    /// Dynamic version of [Queue::wait_for_idle]
     unsafe fn wait_for_idle(&self) -> Result<(), DeviceError>;
 }
 
