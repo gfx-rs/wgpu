@@ -2692,33 +2692,18 @@ impl Device {
             })
         })?;
 
-        let interface = validation::Interface::new(&module, &info, self.limits.clone());
-        let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {
-            module,
-            info,
-            debug_source,
-        });
-        let hal_desc = hal::ShaderModuleDescriptor {
-            label: desc.label.to_hal(self.instance_flags),
-            runtime_checks: desc.runtime_checks,
-        };
-        let raw = match unsafe { self.raw().create_shader_module(&hal_desc, hal_shader) } {
-            Ok(raw) => raw,
-            Err(error) => {
-                return Err(match error {
-                    hal::ShaderError::Device(error) => {
-                        pipeline::CreateShaderModuleError::Device(self.handle_hal_error(error))
-                    }
-                    hal::ShaderError::Compilation(ref msg) => {
-                        log::error!("Shader error: {msg}");
-                        pipeline::CreateShaderModuleError::Generation
-                    }
-                })
-            }
-        };
-
+        // Defer creating the `wgpu_hal` shader module until pipeline creation,
+        // when we can apply the pipeline's override values and validate the
+        // result.
         let module = pipeline::ShaderModule {
-            state: ResourceState::Valid(pipeline::ShaderModuleState::NagaModule { raw, interface }),
+            state: ResourceState::Valid(pipeline::ShaderModuleState::NagaModule {
+                shader: hal::NagaShader {
+                    module,
+                    info,
+                    debug_source,
+                },
+                runtime_checks: desc.runtime_checks,
+            }),
             device: self.clone(),
             label: desc.label.to_string(),
             compilation_info: wgt::CompilationInfo::default(),
@@ -4600,12 +4585,13 @@ impl Device {
 
         let raw = unsafe { self.raw().create_compute_pipeline(&pipeline_desc) }
             .map_err(|error| self.handle_hal_pipeline_error(error))?;
+        drop(compute_stage);
 
         let pipeline = pipeline::ComputePipeline {
             state: ResourceState::Valid(pipeline::ComputePipelineState {
                 raw: ManuallyDrop::new(raw),
                 layout: pipeline_layout.clone(),
-                _shader_module: desc.stage.module.clone(),
+                _shader_module: desc.stage.module,
             }),
             device: self.clone(),
             late_sized_buffer_groups,
@@ -5300,6 +5286,7 @@ impl Device {
             unsafe { self.raw().create_render_pipeline(&pipeline_desc) }
                 .map_err(|err| self.handle_hal_pipeline_error(err))?
         };
+        drop((vertex_stage, task_stage, mesh_stage, fragment_stage));
 
         let pass_context = RenderPassContext {
             attachments: AttachmentData {
