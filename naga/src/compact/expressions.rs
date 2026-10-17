@@ -253,6 +253,9 @@ impl ExpressionTracer<'_> {
             } => {
                 self.expressions_used.insert(query);
             }
+            Ex::HitObjectQuery { hit_object, .. } => {
+                self.expressions_used.insert(hit_object);
+            }
             Ex::CooperativeLoad { ref data, .. } => {
                 self.expressions_used.insert(data.pointer);
                 self.expressions_used.insert(data.stride);
@@ -428,6 +431,10 @@ impl ModuleMap {
                 ref mut query,
                 committed: _,
             } => adjust(query),
+            Ex::HitObjectQuery {
+                ref mut hit_object,
+                query: _,
+            } => adjust(hit_object),
             Ex::CooperativeLoad { ref mut data, .. } => {
                 adjust(&mut data.pointer);
                 adjust(&mut data.stride);
