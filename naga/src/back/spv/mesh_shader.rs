@@ -131,29 +131,8 @@ impl super::Writer {
             _ => unreachable!(),
         };
         // In the final return, we do a giant memcpy, for which this is helpful
-        let local_invocation_index_var_id = match local_invocation_index_id {
-            Some(a) => a,
-            None => {
-                let u32_id = self.get_u32_type_id();
-                let var = self.id_gen.next();
-                Instruction::variable(
-                    self.get_pointer_type_id(u32_id, spirv::StorageClass::Input),
-                    var,
-                    spirv::StorageClass::Input,
-                    None,
-                )
-                .to_words(&mut self.logical_layout.declarations);
-                Instruction::decorate(
-                    var,
-                    spirv::Decoration::BuiltIn,
-                    &[spirv::BuiltIn::LocalInvocationIndex as u32],
-                )
-                .to_words(&mut self.logical_layout.annotations);
-                iface.varying_ids.push(var);
-
-                var
-            }
-        };
+        let local_invocation_index_var_id = local_invocation_index_id
+            .expect("mesh entry points always declare LocalInvocationIndex");
         // This is the information that is passed to the function writer
         // so that it can write the final return logic
         let mut mesh_return_info = MeshReturnInfo {
