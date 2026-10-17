@@ -624,7 +624,7 @@ struct Relay {
 pub struct QueueShared {
     raw: Retained<ProtocolObject<dyn MTLCommandQueue>>,
     // Tracks command buffers created via `CommandEncoder::begin_encoding` that
-    // have not yet been submitted or discarded. Used to proactively fail
+    // have not been committed, including skipped empty buffers. Used to proactively fail
     // before hitting Metal's `maxCommandBufferCount`.
     //
     // (In a few places we call `.commandBuffer{,WithUnretainedReferences}` directly
@@ -792,7 +792,8 @@ impl crate::Queue for Queue {
                 if cmd_buffer.has_commands || index + 1 == command_buffers.len() {
                     cmd_buffer.raw.commit();
                 } else {
-                    cmd_buffer.skipped.store(true, atomic::Ordering::Release);
+                    // Skipped buffers still occupy a native allocation slot until dropped.
+                    continue;
                 }
                 // One command buffer per `end_encoding` call moves from the
                 // "created but not yet submitted" bucket into the submitted
@@ -1395,8 +1396,6 @@ unsafe impl Sync for CommandEncoder {}
 #[derive(Debug)]
 pub struct CommandBuffer {
     has_commands: bool,
-    /// Set when `Queue::submit` skips this empty buffer instead of committing it.
-    skipped: atomic::AtomicBool,
     raw: Retained<ProtocolObject<dyn MTLCommandBuffer>>,
     queue_shared: Arc<QueueShared>,
 }
@@ -1497,6 +1496,7 @@ mod tests {
                 })
                 .unwrap();
             let fence = device.create_fence().unwrap();
+            let mut retained = Vec::new();
             for value in 1..=4 {
                 if value == 3 {
                     queue.enable_strict_event_sync().unwrap();
@@ -1530,10 +1530,71 @@ mod tests {
                         MTLCommandBufferStatus::Completed,
                     ]
                 );
-                drop(commands);
-                assert_eq!(outstanding_command_buffers(&queue), 0);
+                retained.push(commands);
+                assert_eq!(outstanding_command_buffers(&queue), 2 * value as usize);
             }
+            drop(retained);
+            assert_eq!(outstanding_command_buffers(&queue), 0);
             device.destroy_buffer(buffer);
+            device.destroy_fence(fence);
+        }
+    }
+
+    /// Retained skipped buffers must reach the allocation guard before exhausting the native pool.
+    #[test]
+    fn retained_skipped_buffers_gate_native_allocation() {
+        let Some(crate::OpenDevice { device, queue }) = open_device() else {
+            eprintln!("skipping allocation budget test: missing Metal adapter");
+            return;
+        };
+        unsafe {
+            let mut encoder = device
+                .create_command_encoder(&crate::CommandEncoderDescriptor {
+                    label: None,
+                    queue: &queue,
+                })
+                .unwrap();
+            let fence = device.create_fence().unwrap();
+            let mut retained = Vec::new();
+            let mut value = 0;
+            while retained.len() < adapter::MAX_COMMAND_BUFFERS {
+                // Leave a slot for the committed fence buffer until the last batch.
+                let remaining = adapter::MAX_COMMAND_BUFFERS - retained.len();
+                if remaining == 1 {
+                    encoder.begin_encoding(None).unwrap();
+                    retained.push(encoder.end_encoding().unwrap());
+                    break;
+                }
+                let count = remaining.min(128);
+                let mut commands = (0..count)
+                    .map(|_| {
+                        encoder.begin_encoding(None).unwrap();
+                        encoder.end_encoding().unwrap()
+                    })
+                    .collect::<Vec<_>>();
+                value += 1;
+                queue
+                    .submit(&commands.iter().collect::<Vec<_>>(), &[], (&fence, value))
+                    .unwrap();
+                assert!(device.wait(&fence, value, None).unwrap());
+                // Keep the skipped buffers alive after all committed work has finished.
+                drop(commands.pop());
+                retained.extend(commands);
+                assert_eq!(outstanding_command_buffers(&queue), retained.len());
+            }
+            assert!(matches!(
+                encoder.begin_encoding(None),
+                Err(crate::DeviceError::Lost)
+            ));
+            assert_eq!(
+                outstanding_command_buffers(&queue),
+                adapter::MAX_COMMAND_BUFFERS
+            );
+            drop(retained);
+            assert_eq!(outstanding_command_buffers(&queue), 0);
+            encoder.begin_encoding(None).unwrap();
+            encoder.discard_encoding();
+            assert_eq!(outstanding_command_buffers(&queue), 0);
             device.destroy_fence(fence);
         }
     }

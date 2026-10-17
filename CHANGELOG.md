@@ -308,7 +308,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### Metal
 
-- Skip committing empty intermediate command buffers on submit. By @JustTalDevelops and @HashimTheArab in [#10642](https://github.com/gfx-rs/wgpu/pull/10642).
+- Skip committing empty intermediate command buffers on submit, keeping their allocation slots charged until they are dropped. By @JustTalDevelops and @HashimTheArab in [#10642](https://github.com/gfx-rs/wgpu/pull/10642).
 
 ### Documentation
 

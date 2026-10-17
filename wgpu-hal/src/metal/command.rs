@@ -496,6 +496,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .command_buffer_created_not_submitted
             .fetch_add(1, atomic::Ordering::AcqRel);
         if previous >= adapter::MAX_COMMAND_BUFFERS {
+            self.queue_shared
+                .command_buffer_created_not_submitted
+                .fetch_sub(1, atomic::Ordering::AcqRel);
             let current = previous + 1;
             log::warn!(
                 "metal: refusing to create new command buffer; {current} outstanding command \
@@ -576,7 +579,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         Ok(super::CommandBuffer {
             has_commands: self.has_commands.load(atomic::Ordering::Relaxed),
-            skipped: atomic::AtomicBool::new(false),
             raw: self.raw_cmd_buf.take().unwrap(),
             queue_shared: Arc::clone(&self.queue_shared),
         })
@@ -1983,9 +1985,8 @@ impl Drop for super::CommandBuffer {
         // buffer is submitted. But if we're dropping a command buffer that was never
         // submitted, we need to decrement the count here.
         let status = self.raw.status();
-        if !self.skipped.load(atomic::Ordering::Acquire)
-            && (status == MTLCommandBufferStatus::NotEnqueued
-                || status == MTLCommandBufferStatus::Enqueued)
+        if status == MTLCommandBufferStatus::NotEnqueued
+            || status == MTLCommandBufferStatus::Enqueued
         {
             let previous = self
                 .queue_shared
