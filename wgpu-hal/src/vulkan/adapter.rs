@@ -1060,25 +1060,6 @@ impl PhysicalDeviceFeatures {
         }
 
         features.set(
-            F::VULKAN_GOOGLE_DISPLAY_TIMING,
-            caps.supports_extension(google::display_timing::NAME),
-        );
-
-        features.set(
-            F::VULKAN_EXTERNAL_MEMORY_WIN32,
-            caps.supports_extension(khr::external_memory_win32::NAME),
-        );
-        features.set(
-            F::VULKAN_EXTERNAL_MEMORY_FD,
-            caps.supports_extension(khr::external_memory_fd::NAME),
-        );
-        features.set(
-            F::VULKAN_EXTERNAL_MEMORY_DMA_BUF,
-            caps.supports_extension(khr::external_memory_fd::NAME)
-                && caps.supports_extension(ext::external_memory_dma_buf::NAME)
-                && caps.supports_extension(ext::image_drm_format_modifier::NAME),
-        );
-        features.set(
             F::EXPERIMENTAL_MESH_SHADER,
             caps.supports_extension(ext::mesh_shader::NAME),
         );
@@ -1424,6 +1405,11 @@ impl PhysicalDeviceProperties {
             extensions.push(ext::image_drm_format_modifier::NAME);
         }
 
+        // Optional `VK_GOOGLE_display_timing`
+        if self.supports_extension(google::display_timing::NAME) {
+            extensions.push(google::display_timing::NAME);
+        }
+
         // Optional `VK_EXT_memory_budget`
         if self.supports_extension(ext::memory_budget::NAME) {
             extensions.push(ext::memory_budget::NAME);
@@ -1491,11 +1477,6 @@ impl PhysicalDeviceProperties {
         // Require `VK_EXT_shader_atomic_float` if the associated feature was requested
         if requested_features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC) {
             extensions.push(ext::shader_atomic_float::NAME);
-        }
-
-        // Require VK_GOOGLE_display_timing if the associated feature was requested
-        if requested_features.contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING) {
-            extensions.push(google::display_timing::NAME);
         }
 
         if requested_features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
