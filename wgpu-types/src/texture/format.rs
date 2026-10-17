@@ -467,9 +467,14 @@ pub enum TextureFormat {
 // There are some additional texture format helpers in `wgpu-core/src/conv.rs`,
 // that may need to be modified along with the ones here.
 impl TextureFormat {
-    /// Returns the aspect-specific format of the original format
+    /// Returns the format of a view on specific aspect(s) of this format.
     ///
-    /// see <https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureaspect>
+    /// Depth/stencil formats may be viewed as they are (with `TextureAspect::All`), or
+    /// as either depth or stencil separately.
+    ///
+    /// Multi-plane formats may only be viewed as a single plane.
+    ///
+    /// See <https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureaspect>.
     #[must_use]
     pub fn aspect_specific_format(&self, aspect: TextureAspect) -> Option<Self> {
         match (*self, aspect) {
@@ -538,14 +543,22 @@ impl TextureFormat {
     }
 
     /// Returns the subsampling factor for the indicated plane of a multi-planar format.
+    ///
+    /// Although it does not make sense for `plane` to be `Some` when `self` is a
+    /// single-plane format, it is accepted for backwards compatibility.
+    /// `(1, 1)` is returned for any single-plane format, regardless of `plane`.
+    ///
+    /// # Panics
+    ///
+    /// - If `self` is a multi-planar format and `plane` does not specify a valid plane.
     #[must_use]
     pub fn subsampling_factors(&self, plane: Option<u32>) -> (u32, u32) {
         match *self {
             Self::NV12 | Self::P010 => match plane {
                 Some(0) => (1, 1),
                 Some(1) => (2, 2),
-                Some(plane) => unreachable!("plane {plane} is not valid for {self:?}"),
-                None => unreachable!("the plane must be specified for multi-planar formats"),
+                Some(plane) => panic!("plane {plane} is not valid for {self:?}"),
+                None => panic!("the plane must be specified for multi-planar formats"),
             },
             _ => (1, 1),
         }
