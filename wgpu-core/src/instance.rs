@@ -904,7 +904,7 @@ impl Surface {
                     Err(WaitIdleError::Device(_)) => {
                         // we can ignore device lost errors here, since we are just cleaning up
                     }
-                    Err(WaitIdleError::Timeout) if cfg!(target_arch = "wasm32") => {
+                    Err(WaitIdleError::Timeout) if cfg!(target_family = "wasm") => {
                         // On wasm, you cannot actually successfully wait for the surface.
                         // However WebGL does not actually require you do this, so ignoring
                         // the failure is totally fine. See https://github.com/gfx-rs/wgpu/issues/7363
@@ -1615,6 +1615,20 @@ mod tests {
             ..Default::default()
         };
         assert!(!adapter_allowed(
+            InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
+            &"",
+            &wgt::Limits::defaults(),
+            &downlevel
+        ));
+    }
+
+    #[test]
+    fn missing_surface_view_formats_allowed_with_strict_compliance() {
+        let downlevel = wgt::DownlevelCapabilities {
+            flags: wgt::DownlevelFlags::all() - wgt::DownlevelFlags::SURFACE_VIEW_FORMATS,
+            ..Default::default()
+        };
+        assert!(adapter_allowed(
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
             &"",
             &wgt::Limits::defaults(),

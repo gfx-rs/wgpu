@@ -314,7 +314,7 @@ impl BufferMapping {
     /// - Reading is allowed if [`BufferMapping::mode`] is [`MapMode::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set).
     /// - Writing is allowed if [`BufferMapping::mode`] is [`MapMode::Write`] (buffer has [`wgt::BufferUsages::MAP_WRITE`] set).
     /// - Atomics must not be used through the pointer since read-modify-write operations may not function on write-combining memory.
-    ///   This also means that it's not safe to create rust references from this pointer since rust's memory model requires atomic operations to work.
+    ///   This also means that it's not safe to create mutable rust references from this pointer since rust's memory model requires atomic operations to work.
     pub fn ptr(&self) -> NonNull<u8> {
         self.ptr
     }
@@ -328,30 +328,11 @@ impl BufferMapping {
         self.len
     }
 
-    /// Read the contents of the mapped buffer from `offset` into a `Vec<u8>`.
+    /// Returns a read-only slice to the mapped buffer.
     /// [`BufferMapping::mode`] must be [`MapMode::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set) otherwise it will panic.
-    pub fn read_into_vec(&self, offset: usize) -> Vec<u8> {
+    pub fn read_slice(&self) -> &[u8] {
         assert!(self.mode == MapMode::Read);
-        assert!(offset <= self.len as usize);
-        let mut vec = alloc::vec![0u8; self.len as usize - offset];
-        self.read(&mut vec, offset);
-        vec
-    }
-
-    /// Read the contents of the mapped buffer into `dst` starting from `offset`.
-    /// [`BufferMapping::mode`] must be [`MapMode::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set) otherwise it will panic.
-    pub fn read(&self, dst: &mut [u8], offset: usize) {
-        assert!(self.mode == MapMode::Read);
-        assert!(offset <= self.len as usize);
-        let size = self.len - offset as u64;
-        assert!(dst.len() <= size as usize);
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                self.ptr.as_ptr().add(offset),
-                dst.as_mut_ptr(),
-                dst.len(),
-            )
-        };
+        unsafe { core::slice::from_raw_parts(self.ptr.as_ptr(), self.len as usize) }
     }
 
     /// Returns a write-only slice to the mapped buffer.
