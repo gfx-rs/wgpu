@@ -61,13 +61,18 @@ pub enum TransferError {
         buffer_size: BufferAddress,
         side: CopySide,
     },
-    #[error("Copy of {dimension:?} {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} texture of {dimension:?} size {texture_size}")]
+    #[error(
+        "Copy of {dimension:?} {start_offset}..{end_offset} would end up overrunning the \
+        bounds{plane} of the {side:?} texture of {dimension:?} size {texture_size}",
+        plane = plane.map(|plane| format!(" of plane {plane}")).unwrap_or("".into()),
+    )]
     TextureOverrun {
         start_offset: u32,
         end_offset: u32,
         texture_size: u32,
         dimension: TextureErrorDimension,
         side: CopySide,
+        plane: Option<u32>,
     },
     #[error("Partial copy of {start_offset}..{end_offset} on {dimension:?} dimension with size {texture_size} \
              is not supported for the {side:?} texture format {format:?} with {sample_count} samples")]
@@ -109,13 +114,13 @@ pub enum TransferError {
     UnalignedBufferOffset(BufferAddress),
     #[error("Copy size {0} does not respect `COPY_BUFFER_ALIGNMENT`")]
     UnalignedCopySize(BufferAddress),
-    #[error("Copy width is not a multiple of block width")]
+    #[error("Copy width is not a multiple of the required alignment")]
     UnalignedCopyWidth,
-    #[error("Copy height is not a multiple of block height")]
+    #[error("Copy height is not a multiple of the required alignment")]
     UnalignedCopyHeight,
-    #[error("Copy origin's x component is not a multiple of block width")]
+    #[error("Copy origin's x component is not a multiple of the required alignment")]
     UnalignedCopyOriginX,
-    #[error("Copy origin's y component is not a multiple of block height")]
+    #[error("Copy origin's y component is not a multiple of the required alignment")]
     UnalignedCopyOriginY,
     #[error("Bytes per row does not respect `COPY_BYTES_PER_ROW_ALIGNMENT`")]
     UnalignedBytesPerRow,
@@ -155,12 +160,19 @@ pub enum TransferError {
         "Copying to textures with format {0:?} is forbidden when copying from external texture"
     )]
     ExternalCopyToForbiddenTextureFormat(wgt::TextureFormat),
+    // Copies in or out of a plane of a multi-planar texture use the plane's format,
+    // e.g. `R8Unorm` or `Rg8Unorm`. Report this as `R8Unorm, in plane 0 of NV12`.
     #[error(
-        "Source format ({src_format:?}) and destination format ({dst_format:?}) are not copy-compatible (they may only differ in srgb-ness)"
+        "Source format ({src_format:?}{src_plane_info}) and destination format ({dst_format:?}{dst_plane_info}) \
+        are not copy-compatible (they may only differ in srgb-ness)",
+        src_plane_info = src_multi_planar.map(|(format, plane)| format!(", in plane {plane} of {format:?}")).unwrap_or("".into()),
+        dst_plane_info = dst_multi_planar.map(|(format, plane)| format!(", in plane {plane} of {format:?}")).unwrap_or("".into()),
     )]
     TextureFormatsNotCopyCompatible {
         src_format: wgt::TextureFormat,
+        src_multi_planar: Option<(wgt::TextureFormat, u32)>,
         dst_format: wgt::TextureFormat,
+        dst_multi_planar: Option<(wgt::TextureFormat, u32)>,
     },
     #[error(transparent)]
     MemoryInitFailure(#[from] ClearError),
@@ -329,11 +341,13 @@ pub(crate) fn validate_linear_texture_data(
     Ok((bytes_in_copy, image_stride_bytes, is_contiguous))
 }
 
-/// Validate the source format of a texture copy.
+/// Validate the source format of a texture-to-buffer copy.
 ///
 /// This performs the check from WebGPU's [validating texture buffer copy][vtbc]
 /// algorithm that ensures that the format and aspect form a valid texel copy source
-/// as defined in the [depth-stencil formats][dsf].
+/// as defined in the [depth-stencil formats][dsf]. This check differs depending
+/// on whether the copy is buffer-to-texture or texture-to-buffer. Other checks
+/// that do not differ by direction are implemented in [`validate_texture_buffer_copy`].
 ///
 /// [vtbc]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-texture-buffer-copy
 /// [dsf]: https://gpuweb.github.io/gpuweb/#depth-formats
@@ -352,11 +366,13 @@ pub(crate) fn validate_texture_copy_src_format(
     }
 }
 
-/// Validate the destination format of a texture copy.
+/// Validate the destination format of a buffer-to-texture copy.
 ///
 /// This performs the check from WebGPU's [validating texture buffer copy][vtbc]
 /// algorithm that ensures that the format and aspect form a valid texel copy destination
-/// as defined in the [depth-stencil formats][dsf].
+/// as defined in the [depth-stencil formats][dsf]. This check differs depending
+/// on whether the copy is buffer-to-texture or texture-to-buffer. Other checks
+/// that do not differ by direction are implemented in [`validate_texture_buffer_copy`].
 ///
 /// [vtbc]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-texture-buffer-copy
 /// [dsf]: https://gpuweb.github.io/gpuweb/#depth-formats
@@ -455,9 +471,9 @@ pub(crate) struct CopyRange {
 
 /// Validate the extent and alignment of a texture copy.
 ///
-/// Copied with minor modifications from WebGPU standard. This mostly follows
-/// the [validating GPUTexelCopyTextureInfo][vtcti] and [validating texture copy
-/// range][vtcr] algorithms.
+/// Mostly follows the [validating GPUTexelCopyTextureInfo][vtcti] and [validating texture
+/// copy range][vtcr] algorithms in the WebGPU standard, with some modifications for
+/// wgpu extensions.
 ///
 /// Returns a validated [`CopyRange`].
 ///
@@ -477,14 +493,31 @@ pub(crate) fn validate_texture_copy_range<T>(
         });
     }
 
-    let (block_width, block_height) = desc.format.block_dimensions();
+    let is_multi_planar_all =
+        desc.format.is_multi_planar_format() && texture_copy_view.aspect == wgt::TextureAspect::All;
 
-    let extent_virtual = desc.mip_level_size(texture_copy_view.mip_level).ok_or(
-        TransferError::InvalidTextureMipLevel {
-            level: texture_copy_view.mip_level,
+    let (block_width, block_height) = if is_multi_planar_all {
+        // An all-planes copy is specified in luma (plane 0) coordinates, but must be
+        // aligned with the chroma subsampling. Single-plane copies do not have this
+        // requirement.
+        desc.format.size_multiple_requirement()
+    } else {
+        desc.format.block_dimensions()
+    };
+
+    let mip_level = texture_copy_view.mip_level;
+    let plane = texture_copy_view.aspect.to_plane();
+    if mip_level >= desc.mip_level_count {
+        return Err(TransferError::InvalidTextureMipLevel {
+            level: mip_level,
             total: desc.mip_level_count,
-        },
-    )?;
+        });
+    }
+    // For copies to or from a single plane of a multi-planar format, `copy_size` and
+    // `origin` are interpreted in *plane* texels, i.e. the valid copy range for a 2->1
+    // subsampled chroma plane is (W/2, H/2). For copies of all planes, they are
+    // interpreted in plane 0 texels.
+    let extent_virtual = desc.plane_size(mip_level, plane.or(is_multi_planar_all.then_some(0)));
     // physical size can be larger than the virtual
     let extent = extent_virtual.physical_size(desc.format);
 
@@ -519,6 +552,7 @@ pub(crate) fn validate_texture_copy_range<T>(
                 texture_size,
                 dimension,
                 side: texture_side,
+                plane,
             })
         } else {
             Ok(())
@@ -571,6 +605,8 @@ pub(crate) fn validate_texture_copy_range<T>(
         height: copy_size.height,
         depth,
     };
+
+    // Prepare `hal::TextureCopyBase` and `hal::TextureSelector`.
 
     let (layers, origin_z) = match desc.dimension {
         wgt::TextureDimension::D1 => (0..1, 0),
@@ -1472,31 +1508,6 @@ pub(super) fn copy_texture_to_texture(
     src_texture.same_device(state.device)?;
     dst_texture.same_device(state.device)?;
 
-    // src and dst texture format must be copy-compatible
-    // (https://gpuweb.github.io/gpuweb/#copy-compatible), with an
-    // extension allowing one plane of a planar source to be copied
-    // into a single-plane destination of the matching format
-    // (e.g. NV12 Plane0 -> R8Unorm, NV12 Plane1 -> Rg8Unorm).
-    //
-    // When taking this path, `copy_size` and `source.origin` are
-    // interpreted in *plane* texels, not luma texels: copying NV12
-    // Plane1 into an Rg8Unorm of size (W/2, H/2) requires
-    // `copy_size = (W/2, H/2)`. The plane-extent check further down
-    // enforces this against the subsampled plane extent, so a caller
-    // passing luma-sized values gets a source-side error pointing at
-    // the actual mistake rather than an opaque destination overrun.
-    let src_fmt_no_srgb = src_texture.desc.format.remove_srgb_suffix();
-    let dst_fmt_no_srgb = dst_texture.desc.format.remove_srgb_suffix();
-    let planar_split_ok = src_fmt_no_srgb.is_multi_planar_format()
-        && src_fmt_no_srgb.aspect_specific_format(source.aspect) == Some(dst_fmt_no_srgb);
-    if src_fmt_no_srgb != dst_fmt_no_srgb && !planar_split_ok {
-        return Err(TransferError::TextureFormatsNotCopyCompatible {
-            src_format: src_texture.desc.format,
-            dst_format: dst_texture.desc.format,
-        }
-        .into());
-    }
-
     let CopyRange {
         hal_copy_extent: src_copy_size,
         hal_base: src_tex_base,
@@ -1515,43 +1526,54 @@ pub(super) fn copy_texture_to_texture(
         copy_size,
     )?;
 
-    // For planar -> single-plane copies, re-check the source extent
-    // in plane coordinates. `validate_texture_copy_range` above used
-    // the full luma extent of the planar source, so it does not
-    // catch a caller treating `copy_size` / `origin` as luma-sized
-    // when targeting a subsampled plane (NV12/P010 plane 1).
-    if planar_split_ok {
-        // `planar_split_ok` implies `aspect_specific_format(source.aspect)`
-        // returned `Some`, which is only true for `Plane{0,1,2}`.
-        let plane = source.aspect.to_plane().expect("planar_split_ok aspect");
-        let plane_extent = src_texture
-            .desc
-            .compute_render_extent(source.mip_level, Some(plane));
-        let check = |dimension, start: u32, size: u32, plane_size: u32| {
-            if start > plane_size || plane_size - start < size {
-                Err(TransferError::TextureOverrun {
-                    start_offset: start,
-                    end_offset: start.wrapping_add(size),
-                    texture_size: plane_size,
-                    dimension,
-                    side: CopySide::Source,
-                })
-            } else {
-                Ok(())
+    // src and dst texture format must be [copy-compatible]. For multi-planar formats (which
+    // are a wgpu extension), a copy is either between a single plane and a format matching
+    // that plane, or between two `TextureAspect::All` copies of the same multi-planar
+    // format.
+    //
+    // Multi-planar formats don't have sRGB variants, so we never have to both remove
+    // an sRGB suffix and call `aspect_specific_format` to look up a plane format.
+    //
+    // `validate_texture_copy_range` rejected aspects that the format does not have, so
+    // `aspect_specific_format` could return `None` here only for multi-planar textures with
+    // `TextureAspect::All`, and in that case we avoid calling it.
+    //
+    // [copy-compatible]: https://gpuweb.github.io/gpuweb/#copy-compatible
+    let copy_format =
+        |format: wgt::TextureFormat, aspect: wgt::TextureAspect| match aspect.to_plane() {
+            Some(_) => {
+                // Single-plane copy to/from multi-planar texture.
+                let plane_fmt = format
+                    .aspect_specific_format(aspect)
+                    .expect("aspect was validated previously");
+                (plane_fmt, plane_fmt)
+            }
+            None => {
+                // Copy between ordinary single-plane textures, or all planes of
+                // multi-planar textures.
+                (format, format.remove_srgb_suffix())
             }
         };
-        check(
-            TextureErrorDimension::X,
-            source.origin.x,
-            copy_size.width,
-            plane_extent.width,
-        )?;
-        check(
-            TextureErrorDimension::Y,
-            source.origin.y,
-            copy_size.height,
-            plane_extent.height,
-        )?;
+    let (src_format, src_format_no_srgb) = copy_format(src_texture.desc.format, source.aspect);
+    let (dst_format, dst_format_no_srgb) = copy_format(dst_texture.desc.format, destination.aspect);
+    if src_format_no_srgb != dst_format_no_srgb {
+        // We report original source and destination formats, not the versions with an sRGB
+        // suffix removed. For single-plane copies to/from multi-planar textures,
+        // `{src,dst}_format` is the plane format, and `{src,dst}_multi_planar` is used
+        // by the error variant to add annotations like `in plane 0 of NV12`.
+        return Err(TransferError::TextureFormatsNotCopyCompatible {
+            src_format,
+            src_multi_planar: source
+                .aspect
+                .to_plane()
+                .map(|plane| (src_texture.desc.format, plane)),
+            dst_format,
+            dst_multi_planar: destination
+                .aspect
+                .to_plane()
+                .map(|plane| (dst_texture.desc.format, plane)),
+        }
+        .into());
     }
 
     if Arc::as_ptr(src_texture) == Arc::as_ptr(dst_texture) {
@@ -1565,11 +1587,14 @@ pub(super) fn copy_texture_to_texture(
 
     let src_texture_aspects = hal::FormatAspects::from(src_texture.desc.format);
     let dst_texture_aspects = hal::FormatAspects::from(dst_texture.desc.format);
-    // `planar_split_ok` already constrains `source.aspect` to a single plane.
-    if src_tex_base.aspect != src_texture_aspects && !planar_split_ok {
+    if src_texture.desc.format.is_depth_stencil_format()
+        && src_tex_base.aspect != src_texture_aspects
+    {
         return Err(TransferError::CopySrcMissingAspects.into());
     }
-    if dst_tex_base.aspect != dst_texture_aspects {
+    if dst_texture.desc.format.is_depth_stencil_format()
+        && dst_tex_base.aspect != dst_texture_aspects
+    {
         return Err(TransferError::CopyDstMissingAspects.into());
     }
 
@@ -1653,7 +1678,9 @@ pub(super) fn copy_texture_to_texture(
                 [depth, stencil]
             })
             .collect::<Vec<_>>()
-    } else if let Some(plane_count) = dst_format.planes() {
+    } else if let (Some(plane_count), wgt::TextureAspect::All) =
+        (dst_format.planes(), destination.aspect)
+    {
         regions
             .into_iter()
             .flat_map(|region| {

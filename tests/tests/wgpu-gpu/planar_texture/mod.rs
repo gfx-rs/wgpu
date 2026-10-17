@@ -12,6 +12,10 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         NV12_TEXTURE_COPYING,
         P010_TEXTURE_COPYING,
         NV12_PLANE_TO_SINGLE_PLANE_COPY,
+        NV12_ALL_PLANES_PARTIAL_COPY,
+        P010_ALL_PLANES_PARTIAL_COPY,
+        NV12_COPY_INTO_PLANE,
+        P010_COPY_INTO_PLANE,
     ]);
 }
 
@@ -603,6 +607,330 @@ static NV12_PLANE_TO_SINGLE_PLANE_COPY: GpuTestConfiguration = GpuTestConfigurat
         assert_eq!(r8_data, luma_bytes, "luma plane mismatch");
         assert_eq!(rg8_data, chroma_bytes, "chroma plane mismatch");
     });
+
+const PLANAR_COPY_SIZE: wgpu::Extent3d = wgpu::Extent3d {
+    width: 256,
+    height: 128,
+    depth_or_array_layers: 1,
+};
+
+/// Size of a plane of a `PLANAR_COPY_SIZE` texture.
+struct PlaneLayout {
+    width: u32,
+    height: u32,
+    texel_size: u32,
+}
+
+impl PlaneLayout {
+    fn new(format: wgpu::TextureFormat, plane: u32) -> Self {
+        let aspect = wgpu::TextureAspect::from_plane(plane).unwrap();
+        let plane_format = format.aspect_specific_format(aspect).unwrap();
+        let (w_subsampling, h_subsampling) = format.subsampling_factors(Some(plane));
+        Self {
+            width: PLANAR_COPY_SIZE.width / w_subsampling,
+            height: PLANAR_COPY_SIZE.height / h_subsampling,
+            texel_size: plane_format.block_copy_size(None).unwrap(),
+        }
+    }
+
+    fn row_bytes(&self) -> u32 {
+        self.width * self.texel_size
+    }
+
+    fn extent(&self) -> wgpu::Extent3d {
+        wgpu::Extent3d {
+            width: self.width,
+            height: self.height,
+            depth_or_array_layers: 1,
+        }
+    }
+
+    /// Copies a rectangle of texels from `src` into `dst`, both laid out as this plane.
+    fn copy_rect(
+        &self,
+        src: &[u8],
+        (src_x, src_y): (u32, u32),
+        dst: &mut [u8],
+        (dst_x, dst_y): (u32, u32),
+        (width, height): (u32, u32),
+    ) {
+        let row_bytes = self.row_bytes() as usize;
+        let ts = self.texel_size as usize;
+        let len = width as usize * ts;
+        for row in 0..height as usize {
+            let src_start = (src_y as usize + row) * row_bytes + src_x as usize * ts;
+            let dst_start = (dst_y as usize + row) * row_bytes + dst_x as usize * ts;
+            dst[dst_start..dst_start + len].copy_from_slice(&src[src_start..src_start + len]);
+        }
+    }
+}
+
+fn planar_copy_texture(
+    ctx: &TestingContext,
+    format: wgpu::TextureFormat,
+    size: wgpu::Extent3d,
+) -> wgpu::Texture {
+    ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        dimension: wgpu::TextureDimension::D2,
+        size,
+        format,
+        usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
+        mip_level_count: 1,
+        sample_count: 1,
+        view_formats: &[],
+    })
+}
+
+/// Distinct, position-dependent bytes for each `seed`, so that misplaced or missing
+/// texels change the result.
+fn planar_copy_pattern(seed: u32, len: u32) -> Vec<u8> {
+    (0..len)
+        .map(|i| (i.wrapping_add(seed << 20).wrapping_mul(2654435761) >> 24) as u8)
+        .collect()
+}
+
+/// Fills `aspect` of `texture` with a pattern laid out as `plane`, and returns the pattern.
+fn planar_copy_fill(
+    ctx: &TestingContext,
+    texture: &wgpu::Texture,
+    aspect: wgpu::TextureAspect,
+    plane: &PlaneLayout,
+    seed: u32,
+) -> Vec<u8> {
+    let data = planar_copy_pattern(seed, plane.row_bytes() * plane.height);
+    ctx.queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect,
+        },
+        &data,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(plane.row_bytes()),
+            rows_per_image: None,
+        },
+        plane.extent(),
+    );
+    data
+}
+
+async fn planar_copy_read(
+    ctx: &TestingContext,
+    texture: &wgpu::Texture,
+    aspect: wgpu::TextureAspect,
+    plane: &PlaneLayout,
+) -> Vec<u8> {
+    let padded_row_bytes = plane
+        .row_bytes()
+        .next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
+    let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: u64::from(padded_row_bytes * plane.height),
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(padded_row_bytes),
+                rows_per_image: None,
+            },
+        },
+        plane.extent(),
+    );
+    ctx.queue.submit([encoder.finish()]);
+
+    let slice = buffer.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| ());
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+    let mapped = slice.get_mapped_range().unwrap();
+    mapped
+        .chunks(padded_row_bytes as usize)
+        .flat_map(|row| &row[..plane.row_bytes() as usize])
+        .copied()
+        .collect()
+}
+
+fn texel_copy_info(
+    texture: &wgpu::Texture,
+    aspect: wgpu::TextureAspect,
+    (x, y): (u32, u32),
+) -> wgpu::TexelCopyTextureInfo<'_> {
+    wgpu::TexelCopyTextureInfo {
+        texture,
+        mip_level: 0,
+        origin: wgpu::Origin3d { x, y, z: 0 },
+        aspect,
+    }
+}
+
+/// Copies a partial, offset region of all planes between two multi-planar textures and
+/// checks that each plane received the correspondingly subsampled region.
+async fn planar_all_planes_partial_copy(ctx: TestingContext, format: wgpu::TextureFormat) {
+    use wgpu::TextureAspect as Ta;
+
+    let planes = [PlaneLayout::new(format, 0), PlaneLayout::new(format, 1)];
+    let aspects = [Ta::Plane0, Ta::Plane1];
+
+    let src = planar_copy_texture(&ctx, format, PLANAR_COPY_SIZE);
+    let dst = planar_copy_texture(&ctx, format, PLANAR_COPY_SIZE);
+    let mut expected = Vec::new();
+    for (i, (plane, aspect)) in planes.iter().zip(aspects).enumerate() {
+        let src_data = planar_copy_fill(&ctx, &src, aspect, plane, 1 + i as u32);
+        let dst_data = planar_copy_fill(&ctx, &dst, aspect, plane, 3 + i as u32);
+        expected.push((src_data, dst_data));
+    }
+
+    let (src_origin, dst_origin, size) = ((4, 2), (2, 6), (240, 112));
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    encoder.copy_texture_to_texture(
+        texel_copy_info(&src, Ta::All, src_origin),
+        texel_copy_info(&dst, Ta::All, dst_origin),
+        wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        },
+    );
+    ctx.queue.submit([encoder.finish()]);
+
+    for (i, (plane, aspect)) in planes.iter().zip(aspects).enumerate() {
+        let (w_sub, h_sub) = format.subsampling_factors(Some(i as u32));
+        let sub = |(x, y): (u32, u32)| (x / w_sub, y / h_sub);
+        let (src_data, dst_data) = &mut expected[i];
+        plane.copy_rect(
+            src_data,
+            sub(src_origin),
+            dst_data,
+            sub(dst_origin),
+            sub(size),
+        );
+
+        let actual = planar_copy_read(&ctx, &dst, aspect, plane).await;
+        assert!(actual == *dst_data, "plane {i} mismatch");
+    }
+}
+
+/// Ensures that copying a partial, offset region of all planes of an NV12 texture
+/// copies the subsampled region of each plane.
+#[apply(gpu_test!)]
+static NV12_ALL_PLANES_PARTIAL_COPY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
+    .run_async(|ctx| planar_all_planes_partial_copy(ctx, wgpu::TextureFormat::NV12));
+
+/// Ensures that copying a partial, offset region of all planes of a P010 texture
+/// copies the subsampled region of each plane.
+#[apply(gpu_test!)]
+static P010_ALL_PLANES_PARTIAL_COPY: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().features(
+            wgpu::Features::TEXTURE_FORMAT_P010 | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM,
+        ))
+        .run_async(|ctx| planar_all_planes_partial_copy(ctx, wgpu::TextureFormat::P010));
+
+/// Copies regions into individual planes of a multi-planar texture, from single-plane
+/// textures and from the planes of another multi-planar texture, and checks that only
+/// the targeted region of the targeted plane changed.
+async fn planar_copy_into_plane(ctx: TestingContext, format: wgpu::TextureFormat) {
+    use wgpu::TextureAspect as Ta;
+
+    let planes = [PlaneLayout::new(format, 0), PlaneLayout::new(format, 1)];
+    let aspects = [Ta::Plane0, Ta::Plane1];
+
+    let dst = planar_copy_texture(&ctx, format, PLANAR_COPY_SIZE);
+    let planar_src = planar_copy_texture(&ctx, format, PLANAR_COPY_SIZE);
+    let mut dst_data = Vec::new();
+    let mut planar_src_data = Vec::new();
+    let mut single_srcs = Vec::new();
+    for (i, (plane, aspect)) in planes.iter().zip(aspects).enumerate() {
+        dst_data.push(planar_copy_fill(&ctx, &dst, aspect, plane, 1 + i as u32));
+        planar_src_data.push(planar_copy_fill(
+            &ctx,
+            &planar_src,
+            aspect,
+            plane,
+            3 + i as u32,
+        ));
+
+        let single_format = format.aspect_specific_format(aspect).unwrap();
+        let single = planar_copy_texture(&ctx, single_format, plane.extent());
+        let single_data = planar_copy_fill(&ctx, &single, Ta::All, plane, 5 + i as u32);
+        single_srcs.push((single, single_data));
+    }
+
+    // (plane, copy from the multi-planar source, source origin, destination origin, size)
+    let copies = [
+        (0, false, (8, 4), (16, 2), (64, 32)),
+        (1, false, (4, 2), (8, 10), (32, 16)),
+        (0, true, (0, 2), (100, 80), (40, 20)),
+        (1, true, (10, 0), (60, 40), (20, 12)),
+    ];
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    for (plane, from_planar, src_origin, dst_origin, size) in copies {
+        let source = if from_planar {
+            texel_copy_info(&planar_src, aspects[plane], src_origin)
+        } else {
+            texel_copy_info(&single_srcs[plane].0, Ta::All, src_origin)
+        };
+        encoder.copy_texture_to_texture(
+            source,
+            texel_copy_info(&dst, aspects[plane], dst_origin),
+            wgpu::Extent3d {
+                width: size.0,
+                height: size.1,
+                depth_or_array_layers: 1,
+            },
+        );
+        let src_data = if from_planar {
+            &planar_src_data[plane]
+        } else {
+            &single_srcs[plane].1
+        };
+        planes[plane].copy_rect(src_data, src_origin, &mut dst_data[plane], dst_origin, size);
+    }
+    ctx.queue.submit([encoder.finish()]);
+
+    for (i, (plane, aspect)) in planes.iter().zip(aspects).enumerate() {
+        let actual = planar_copy_read(&ctx, &dst, aspect, plane).await;
+        assert!(actual == dst_data[i], "plane {i} mismatch");
+    }
+}
+
+/// Ensures that copies into a single plane of an NV12 texture only modify that plane.
+#[apply(gpu_test!)]
+static NV12_COPY_INTO_PLANE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
+    .run_async(|ctx| planar_copy_into_plane(ctx, wgpu::TextureFormat::NV12));
+
+/// Ensures that copies into a single plane of a P010 texture only modify that plane.
+#[apply(gpu_test!)]
+static P010_COPY_INTO_PLANE: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().features(
+            wgpu::Features::TEXTURE_FORMAT_P010 | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM,
+        ))
+        .run_async(|ctx| planar_copy_into_plane(ctx, wgpu::TextureFormat::P010));
 
 /// Ensures that copying P010 texture to P010 texture works as expected
 #[apply(gpu_test!)]

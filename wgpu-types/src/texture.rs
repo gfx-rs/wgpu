@@ -712,25 +712,55 @@ impl<L, V> TextureDescriptor<L, V> {
         Some(self.size.mip_level_size(level, self.dimension))
     }
 
-    /// Computes the render extent of this texture.
+    /// Computes the [render extent] of this texture.
     ///
     /// This is a low-level helper exported for use by wgpu-core.
     ///
-    /// <https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent>
-    ///
     /// # Panics
     ///
-    /// If the mip level is out of range.
+    /// - If the mip level is out of range.
+    /// - If `self` is a multi-planar format and `plane` does not specify a valid plane.
+    /// - If `self` is a single-plane format and a `plane` is specified.
+    ///
+    /// [render extent]: https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent
     #[doc(hidden)]
     #[must_use]
     pub fn compute_render_extent(&self, mip_level: u32, plane: Option<u32>) -> Extent3d {
+        // Rendering never targets more than one mip level, array layer, volume slice, or
+        // texture plane. The two-dimensional render extent is the full plane.
+        Extent3d {
+            depth_or_array_layers: 1,
+            ..self.plane_size(mip_level, plane)
+        }
+    }
+
+    /// Computes the size of the indicated plane of this texture.
+    ///
+    /// This is a low-level helper used by [`compute_render_extent`], and exported for use
+    /// by texture copy validation in wgpu-core.
+    ///
+    /// # Panics
+    ///
+    /// - If the mip level is out of range.
+    /// - If `self` is a multi-planar format and `plane` does not specify a valid plane.
+    /// - If `self` is a single-plane format and a `plane` is specified.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn plane_size(&self, mip_level: u32, plane: Option<u32>) -> Extent3d {
+        // This ought to be a panic condition within `subsampling_factors`, but it is a
+        // documented public function, and did not previously panic in this case.
+        assert_eq!(plane.is_some(), self.format.is_multi_planar_format());
+
         let Extent3d {
             width,
             height,
-            depth_or_array_layers: _,
+            depth_or_array_layers,
         } = self.mip_level_size(mip_level).expect("invalid mip level");
 
         let (w_subsampling, h_subsampling) = self.format.subsampling_factors(plane);
+
+        debug_assert!(width % w_subsampling == 0);
+        debug_assert!(height % h_subsampling == 0);
 
         let width = width / w_subsampling;
         let height = height / h_subsampling;
@@ -738,7 +768,7 @@ impl<L, V> TextureDescriptor<L, V> {
         Extent3d {
             width,
             height,
-            depth_or_array_layers: 1,
+            depth_or_array_layers,
         }
     }
 
