@@ -1362,7 +1362,8 @@ fn map_surface_color_space(
         | Scs::DisplayP3
         | Scs::Bt2100Hlg
         | Scs::ExtendedSrgb
-        | Scs::ExtendedDisplayP3 => {
+        | Scs::ExtendedDisplayP3
+        | Scs::PassThrough => {
             unreachable!("`{color_space:?}` is never reported in the DX12 surface capabilities")
         }
     }
