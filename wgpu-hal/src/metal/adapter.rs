@@ -1282,6 +1282,10 @@ impl super::CapabilitiesQuery {
             F::DUAL_SOURCE_BLENDING,
             self.msl_version >= MTLLanguageVersion::Version1_2 && self.dual_source_blending,
         );
+        features.set(
+            F::SHADER_EARLY_DEPTH_TEST,
+            MTLLanguageVersion::Version1_2 <= self.msl_version,
+        );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
         features.set(F::TEXTURE_COMPRESSION_ASTC_SLICED_3D, self.format_astc_3d);
