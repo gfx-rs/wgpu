@@ -377,8 +377,13 @@ impl crate::Adapter for super::Adapter {
                 }
                 flags
             }
-            Tf::NV12 => return Tfc::empty(),
-            Tf::P010 => return Tfc::empty(),
+            Tf::NV12 | Tf::P010 => {
+                return Tfc::COLOR_ATTACHMENT
+                    | Tfc::COLOR_ATTACHMENT_BLEND
+                    | Tfc::SAMPLED_LINEAR
+                    | Tfc::COPY_SRC
+                    | Tfc::COPY_DST
+            }
             Tf::Rgb9e5Ufloat => {
                 if pc.msaa_apple3 {
                     all_caps
@@ -1258,7 +1263,9 @@ impl super::CapabilitiesQuery {
             | F::SHADER_I16
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::TEXTURE_FORMAT_16BIT_NORM
-            | F::VERTEX_WRITABLE_STORAGE;
+            | F::VERTEX_WRITABLE_STORAGE
+            | F::TEXTURE_FORMAT_NV12
+            | F::TEXTURE_FORMAT_P010;
 
         features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);

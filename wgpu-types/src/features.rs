@@ -708,6 +708,7 @@ features! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
+        /// - Metal (simulated)
         ///
         /// This is a native only feature.
         ///
@@ -719,6 +720,7 @@ features! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
+        /// - Metal
         ///
         /// This is a native only feature.
         ///
