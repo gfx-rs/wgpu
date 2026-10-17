@@ -1,4 +1,4 @@
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{borrow::Cow, format, string::String, vec, vec::Vec};
 
 use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
@@ -20,7 +20,7 @@ use crate::{
         BindingInfo, Std140CompatTypeInfo, WrappedFunction,
     },
     common::ForDebugWithTypes as _,
-    proc::{Alignment, TypeResolution},
+    proc::{Alignment, FlattenedComponent, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
 };
 
@@ -62,6 +62,126 @@ impl Function {
             }
         }
         Instruction::function_end().to_words(sink);
+    }
+}
+
+pub(in crate::back::spv) enum ConstExprContext<'ctx> {
+    Global {
+        writer: &'ctx mut Writer,
+        mod_info: &'ctx ModuleInfo,
+        module: &'ctx crate::Module,
+        expressions: &'ctx crate::Arena<crate::Expression>,
+    },
+    Local {
+        writer: &'ctx mut Writer,
+        cached: &'ctx CachedExpressions,
+        fun_info: &'ctx FunctionInfo,
+        module: &'ctx crate::Module,
+        expressions: &'ctx crate::Arena<crate::Expression>,
+    },
+}
+
+impl<'ctx> ConstExprContext<'ctx> {
+    const fn writer(&mut self) -> &mut Writer {
+        match *self {
+            ConstExprContext::Global { ref mut writer, .. }
+            | ConstExprContext::Local { ref mut writer, .. } => writer,
+        }
+    }
+
+    const fn expressions(&self) -> &'ctx crate::Arena<crate::Expression> {
+        match *self {
+            ConstExprContext::Global { expressions, .. }
+            | ConstExprContext::Local { expressions, .. } => expressions,
+        }
+    }
+
+    const fn module(&self) -> &'ctx crate::Module {
+        match *self {
+            ConstExprContext::Global { module, .. } | ConstExprContext::Local { module, .. } => {
+                module
+            }
+        }
+    }
+
+    fn resolve_expr(&mut self, expr: Handle<crate::Expression>) -> Result<Word, Error> {
+        match *self {
+            ConstExprContext::Global { .. } => self.write_constant_expr(expr),
+            ConstExprContext::Local { cached, .. } => Ok(cached[expr]),
+        }
+    }
+
+    fn get_expression_lookup_type(&mut self, handle: Handle<crate::Expression>) -> LookupType {
+        let tr = match *self {
+            ConstExprContext::Global { mod_info, .. } => &mod_info[handle],
+            ConstExprContext::Local { fun_info, .. } => &fun_info[handle].ty,
+        };
+        self.writer().get_expression_lookup_type(tr)
+    }
+
+    pub(in crate::back::spv) fn write_constant_expr(
+        &mut self,
+        handle: Handle<crate::Expression>,
+    ) -> Result<Word, Error> {
+        let id = match self.expressions()[handle] {
+            crate::Expression::Literal(literal) => self.writer().get_constant_scalar(literal),
+            crate::Expression::Constant(constant) => {
+                let constant = &self.module().constants[constant];
+                self.writer().constant_ids[constant.init]
+            }
+            crate::Expression::ZeroValue(ty) => {
+                let type_id = self.writer().get_handle_type_id(ty);
+                self.writer().get_constant_null(type_id)
+            }
+            crate::Expression::Compose { ty, ref components } => {
+                let mut zero_id = None;
+                let components = match crate::proc::flatten_compose(
+                    ty,
+                    components,
+                    self.expressions(),
+                    &self.module().types,
+                ) {
+                    Some(flattened) => flattened
+                        .map(|component| match component {
+                            FlattenedComponent::Expression(expr) => self.resolve_expr(expr),
+                            FlattenedComponent::Zero => Ok(zero_id
+                                .get_or_insert_with(|| match self.module().types[ty].inner {
+                                    crate::TypeInner::Vector { size: _, scalar } => {
+                                        let type_id = self
+                                            .writer()
+                                            .get_numeric_type_id(NumericType::Scalar(scalar));
+                                        Some(self.writer().get_constant_null(type_id))
+                                    }
+                                    _ => None,
+                                })
+                                .expect("zeros only in flattened vectors")),
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    None => components
+                        .iter()
+                        .copied()
+                        .map(|c| self.resolve_expr(c))
+                        .collect::<Result<Vec<_>, _>>()?,
+                };
+                self.writer()
+                    .get_constant_composite(LookupType::Handle(ty), components)
+            }
+            crate::Expression::Splat { size, value } => {
+                let value_id = match *self {
+                    ConstExprContext::Global { .. } => self.writer().constant_ids[value],
+                    ConstExprContext::Local { cached, .. } => cached[value],
+                };
+                let component_ids = &[value_id; 4][..size as usize];
+
+                let ty = self.get_expression_lookup_type(handle);
+                self.writer().get_constant_composite(ty, component_ids)
+            }
+            _ => {
+                return Err(Error::Override);
+            }
+        };
+
+        Ok(id)
     }
 }
 
@@ -2681,11 +2801,16 @@ impl Writer {
         instruction.to_words(&mut self.logical_layout.declarations);
     }
 
-    pub(super) fn get_constant_composite(
+    /// Produce an `OpConstantComposite` instruction and return the result ID.
+    ///
+    /// The length of `constituent_ids` must match the number of components in the composite
+    /// type (nesting vectors within vectors is not allowed).
+    pub(super) fn get_constant_composite<'c>(
         &mut self,
         ty: LookupType,
-        constituent_ids: &[Word],
+        constituent_ids: impl Into<Cow<'c, [Word]>>,
     ) -> Word {
+        let constituent_ids = constituent_ids.into();
         let composite = CachedConstant::Composite {
             ty,
             constituent_ids: constituent_ids.to_vec(),
@@ -2694,7 +2819,7 @@ impl Writer {
             return id;
         }
         let id = self.id_gen.next();
-        self.write_constant_composite(id, ty, constituent_ids, None);
+        self.write_constant_composite(id, ty, constituent_ids.as_ref(), None);
         self.cached_constants.insert(composite, id);
         id
     }
@@ -2731,51 +2856,6 @@ impl Writer {
         Instruction::constant_null(type_id, null_id)
             .to_words(&mut self.logical_layout.declarations);
         null_id
-    }
-
-    fn write_constant_expr(
-        &mut self,
-        handle: Handle<crate::Expression>,
-        ir_module: &crate::Module,
-        mod_info: &ModuleInfo,
-    ) -> Result<Word, Error> {
-        let id = match ir_module.global_expressions[handle] {
-            crate::Expression::Literal(literal) => self.get_constant_scalar(literal),
-            crate::Expression::Constant(constant) => {
-                let constant = &ir_module.constants[constant];
-                self.constant_ids[constant.init]
-            }
-            crate::Expression::ZeroValue(ty) => {
-                let type_id = self.get_handle_type_id(ty);
-                self.get_constant_null(type_id)
-            }
-            crate::Expression::Compose { ty, ref components } => {
-                let component_ids: Vec<_> = crate::proc::flatten_compose(
-                    ty,
-                    components,
-                    &ir_module.global_expressions,
-                    &ir_module.types,
-                )
-                .map(|component| self.constant_ids[component])
-                .collect();
-                self.get_constant_composite(LookupType::Handle(ty), component_ids.as_slice())
-            }
-            crate::Expression::Splat { size, value } => {
-                let value_id = self.constant_ids[value];
-                let component_ids = &[value_id; 4][..size as usize];
-
-                let ty = self.get_expression_lookup_type(&mod_info[handle]);
-
-                self.get_constant_composite(ty, component_ids)
-            }
-            _ => {
-                return Err(Error::Override);
-            }
-        };
-
-        self.constant_ids[handle] = id;
-
-        Ok(id)
     }
 
     pub(super) fn write_control_barrier(
@@ -3828,7 +3908,14 @@ impl Writer {
         self.constant_ids
             .resize(ir_module.global_expressions.len(), 0);
         for (handle, _) in ir_module.global_expressions.iter() {
-            self.write_constant_expr(handle, ir_module, mod_info)?;
+            let id = ConstExprContext::Global {
+                writer: self,
+                mod_info,
+                module: ir_module,
+                expressions: &ir_module.global_expressions,
+            }
+            .write_constant_expr(handle)?;
+            self.constant_ids[handle] = id;
         }
         debug_assert!(self.constant_ids.iter().all(|&id| id != 0));
 
