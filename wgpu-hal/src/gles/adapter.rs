@@ -1099,6 +1099,11 @@ impl crate::Adapter for super::Adapter {
             unsafe { gl.create_vertex_array() }.map_err(|_| crate::DeviceError::OutOfMemory)?;
         unsafe { gl.bind_vertex_array(Some(main_vao)) };
 
+        // Desktop GL defaults to non-seamless cube sampling; ES 3.0+ and other backends are seamless by spec.
+        if !self.shared.es {
+            unsafe { gl.enable(glow::TEXTURE_CUBE_MAP_SEAMLESS) };
+        }
+
         let zero_buffer =
             unsafe { gl.create_buffer() }.map_err(|_| crate::DeviceError::OutOfMemory)?;
         unsafe { gl.bind_buffer(glow::COPY_READ_BUFFER, Some(zero_buffer)) };
