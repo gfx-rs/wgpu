@@ -249,8 +249,17 @@ impl Frontend {
         name: &str,
         meta: Span,
     ) -> Result<Handle<Expression>> {
+        let vector_type;
         let (ty, is_pointer) = match *ctx.resolve_type(expression, meta)? {
             TypeInner::Pointer { base, .. } => (&ctx.module.types[base].inner, true),
+            TypeInner::ValuePointer {
+                size: Some(size),
+                scalar,
+                ..
+            } => {
+                vector_type = TypeInner::Vector { size, scalar };
+                (&vector_type, true)
+            }
             ref ty => (ty, false),
         };
         match *ty {
