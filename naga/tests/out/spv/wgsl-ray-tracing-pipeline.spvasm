@@ -68,7 +68,7 @@ OpDecorate %193 BuiltIn PrimitiveId
 %35 = OpConstant  %7  0.01
 %36 = OpConstant  %7  100
 %37 = OpConstantComposite  %8  %28 %28 %28
-%49 = OpTypeFunction %2 %5 %9
+%52 = OpTypeFunction %2 %5 %9
 %54 = OpTypeBool
 %55 = OpTypeVector %54 3
 %76 = OpConstant  %3  256
@@ -101,16 +101,16 @@ OpDecorate %193 BuiltIn PrimitiveId
 %179 = OpVariable  %152  HitAttributeKHR
 %191 = OpVariable  %143  Input
 %193 = OpVariable  %143  Input
-%50 = OpFunction  %2  None %49
-%51 = OpFunctionParameter  %5
-%52 = OpFunctionParameter  %9
+%49 = OpFunction  %2  None %52
+%50 = OpFunctionParameter  %5
+%51 = OpFunctionParameter  %9
 %53 = OpLabel
-%56 = OpCompositeExtract  %3  %52 0
-%57 = OpCompositeExtract  %3  %52 1
-%58 = OpCompositeExtract  %7  %52 2
-%59 = OpCompositeExtract  %7  %52 3
-%60 = OpCompositeExtract  %8  %52 4
-%61 = OpCompositeExtract  %8  %52 5
+%56 = OpCompositeExtract  %3  %51 0
+%57 = OpCompositeExtract  %3  %51 1
+%58 = OpCompositeExtract  %7  %51 2
+%59 = OpCompositeExtract  %7  %51 3
+%60 = OpCompositeExtract  %8  %51 4
+%61 = OpCompositeExtract  %8  %51 5
 %62 = OpFOrdLessThanEqual  %54  %58 %59
 %63 = OpFOrdGreaterThanEqual  %54  %58 %28
 %64 = OpIsInf  %55  %60
@@ -170,7 +170,7 @@ OpDecorate %193 BuiltIn PrimitiveId
 OpSelectionMerge %126 None
 OpBranchConditional %125 %128 %127
 %128 = OpLabel
-OpTraceRayKHR %51 %56 %57 %32 %32 %32 %60 %58 %61 %59 %12
+OpTraceRayKHR %50 %56 %57 %32 %32 %32 %60 %58 %61 %59 %12
 OpBranch %126
 %127 = OpLabel
 OpBranch %126
@@ -195,7 +195,7 @@ OpStore %12 %27
 %46 = OpFSub  %8  %45 %31
 %47 = OpFAdd  %8  %33 %46
 %48 = OpCompositeConstruct  %9  %32 %34 %35 %36 %37 %47
-%129 = OpFunctionCall  %2  %50 %26 %48
+%129 = OpFunctionCall  %2  %49 %26 %48
 OpReturn
 OpFunctionEnd
 %139 = OpFunction  %2  None %25
