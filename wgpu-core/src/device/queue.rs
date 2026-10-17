@@ -1016,7 +1016,7 @@ impl Queue {
             dst_base.aspect,
             &dst.desc,
             data_layout,
-            false, // alignment not required for buffer offset or bytes per row
+            None, // alignment not required for buffer offset or bytes per row
         )?;
 
         // Note: `_source_bytes_per_array_layer` is ignored since we

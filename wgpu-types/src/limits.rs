@@ -73,6 +73,7 @@ macro_rules! with_limits {
 
         $macro_name!(max_immediate_size, Ordering::Less);
         $macro_name!(max_non_sampler_bindings, Ordering::Less);
+        $macro_name!(min_texel_copy_buffer_row_alignment, Ordering::Greater);
 
         $macro_name!(max_task_workgroup_total_count, Ordering::Less);
         $macro_name!(max_task_workgroups_per_dimension, Ordering::Less);
@@ -298,6 +299,11 @@ pub struct Limits {
     /// This limit only affects the d3d12 backend. Using a large number will allow the device
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
+    /// Required alignment for `TexelCopyBufferLayout::bytes_per_row` in
+    /// `CommandEncoder::copy_buffer_to_texture` and `copy_texture_to_buffer`.
+    /// `bytes_per_row` must also be a multiple of the texture block copy size.
+    /// Defaults to 256. Lower is "better".
+    pub min_texel_copy_buffer_row_alignment: u32,
 
     /// The maximum total value for a `RenderPass::draw_mesh_tasks(x, y, z)` call on a mesh pipeline with a task shader.
     /// Higher is "better".
@@ -427,6 +433,7 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 65535,
     ///     max_immediate_size: 0,
     ///     max_non_sampler_bindings: 1_000_000,
+    ///     min_texel_copy_buffer_row_alignment: 256,
     ///     max_task_workgroup_total_count: 0,
     ///     max_task_workgroups_per_dimension: 0,
     ///     max_mesh_workgroup_total_count: 0,
@@ -496,6 +503,7 @@ impl Limits {
             max_compute_workgroups_per_dimension: 65535,
             max_immediate_size: 0,
             max_non_sampler_bindings: 1_000_000,
+            min_texel_copy_buffer_row_alignment: 256,
 
             max_task_workgroup_total_count: 0,
             max_task_workgroups_per_dimension: 0,
@@ -570,6 +578,7 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 65535,
     ///     max_buffer_size: 256 << 20, // (256 MiB)
     ///     max_non_sampler_bindings: 1_000_000,
+    ///     min_texel_copy_buffer_row_alignment: 256,
     ///
     ///     max_task_workgroup_total_count: 0,
     ///     max_task_workgroups_per_dimension: 0,
@@ -663,6 +672,7 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 0, // +
     ///     max_buffer_size: 256 << 20, // (256 MiB),
     ///     max_non_sampler_bindings: 1_000_000,
+    ///     min_texel_copy_buffer_row_alignment: 256,
     ///
     ///     max_task_workgroup_total_count: 0,
     ///     max_task_workgroups_per_dimension: 0,
@@ -775,6 +785,7 @@ impl Limits {
             max_compute_workgroups_per_dimension: ALLOC_MAX_U32,
             max_immediate_size: ALLOC_MAX_U32,
             max_non_sampler_bindings: ALLOC_MAX_U32,
+            min_texel_copy_buffer_row_alignment: 1,
 
             max_task_workgroup_total_count: ALLOC_MAX_U32,
             max_task_workgroups_per_dimension: ALLOC_MAX_U32,
@@ -1004,7 +1015,8 @@ impl Limits {
         self
     }
 
-    /// Sets all native-only limits to zero, except for `max_non_sampler_bindings`.
+    /// Sets all native-only limits to zero, except for `max_non_sampler_bindings`, and
+    /// `min_texel_copy_buffer_row_alignment` which is set to its WebGPU value.
     pub fn zero_native_only(&mut self) {
         let Self {
             max_texture_dimension_1d: _,
@@ -1044,6 +1056,7 @@ impl Limits {
             max_compute_workgroups_per_dimension: _,
             max_immediate_size: _,
             max_non_sampler_bindings: _, // This is more of an internal setting rather than a limit and it can't be 0.
+            min_texel_copy_buffer_row_alignment,
 
             max_binding_array_elements_per_shader_stage,
             max_binding_array_acceleration_structure_elements_per_shader_stage,
@@ -1070,6 +1083,7 @@ impl Limits {
             max_ray_dispatch_count,
             max_ray_recursion_depth,
         } = self;
+        *min_texel_copy_buffer_row_alignment = crate::COPY_BYTES_PER_ROW_ALIGNMENT;
         *max_binding_array_elements_per_shader_stage = 0;
         *max_binding_array_acceleration_structure_elements_per_shader_stage = 0;
         *max_binding_array_sampler_elements_per_shader_stage = 0;

@@ -186,6 +186,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_compute_workgroups_per_dimension,
         max_immediate_size,
         max_non_sampler_bindings,
+        min_texel_copy_buffer_row_alignment,
 
         max_task_workgroup_total_count,
         max_task_workgroups_per_dimension,
@@ -243,6 +244,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                   Max Inter-stage Shader Variables: {max_inter_stage_shader_variables}")?;
     writeln!(output, "\t\t                Min Uniform Buffer Offset Alignment: {min_uniform_buffer_offset_alignment}")?;
     writeln!(output, "\t\t                Min Storage Buffer Offset Alignment: {min_storage_buffer_offset_alignment}")?;
+    writeln!(output, "\t\t                Min Texel Copy Buffer Row Alignment: {min_texel_copy_buffer_row_alignment}")?;
     writeln!(output, "\t\t                              Max Color Attachments: {max_color_attachments}")?;
     writeln!(output, "\t\t              Max Color Attachment Bytes Per Sample: {max_color_attachment_bytes_per_sample}")?;
     writeln!(output, "\t\t                 Max Compute Workgroup Storage Size: {max_compute_workgroup_storage_size}")?;

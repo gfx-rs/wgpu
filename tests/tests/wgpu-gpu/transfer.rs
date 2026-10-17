@@ -7,6 +7,7 @@ use wgpu_test::{
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(COPY_OVERFLOW_Z);
     vec.push(COPY_TEXTURE_TO_TEXTURE_3D);
+    vec.push(COPY_UNALIGNED_ROWS);
 }
 
 #[apply(gpu_test!)]
@@ -186,3 +187,79 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new()
             Some("unable to select texture mip level"),
         );
     });
+
+#[apply(gpu_test!)]
+static COPY_UNALIGNED_ROWS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().limits(wgpu::Limits {
+        min_texel_copy_buffer_row_alignment: 1,
+        ..wgpu::Limits::downlevel_webgl2_defaults()
+    }))
+    .run_async(copy_unaligned_rows);
+
+/// Copies tightly packed rows, whose `bytes_per_row` is odd,
+/// from a buffer to a texture and back.
+async fn copy_unaligned_rows(ctx: wgpu_test::TestingContext) {
+    const SIZE: wgpu::Extent3d = wgpu::Extent3d {
+        width: 7,
+        height: 4,
+        depth_or_array_layers: 1,
+    };
+    let layout = wgpu::TexelCopyBufferLayout {
+        offset: 0,
+        bytes_per_row: Some(SIZE.width),
+        rows_per_image: None,
+    };
+    let data: Vec<u8> = (0..SIZE.width * SIZE.height)
+        .map(|index| index as u8)
+        .collect();
+    let upload = ctx
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: &data,
+            usage: wgpu::BufferUsages::COPY_SRC,
+        });
+    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        dimension: wgpu::TextureDimension::D2,
+        size: SIZE,
+        format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
+        mip_level_count: 1,
+        sample_count: 1,
+        view_formats: &[],
+    });
+    let readback = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: data.len() as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    encoder.copy_buffer_to_texture(
+        wgpu::TexelCopyBufferInfo {
+            buffer: &upload,
+            layout,
+        },
+        texture.as_image_copy(),
+        SIZE,
+    );
+    encoder.copy_texture_to_buffer(
+        texture.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout,
+        },
+        SIZE,
+    );
+    ctx.queue.submit(Some(encoder.finish()));
+
+    readback.slice(..).map_async(wgpu::MapMode::Read, |_| ());
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+    assert_eq!(*readback.slice(..).get_mapped_range().unwrap(), data[..]);
+}

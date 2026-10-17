@@ -139,6 +139,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 - Added `Utf16SourceLocation` which is analogue to `SourceLocation` but using UTF-16 code units. Added `Utf16SourceLocation::to_utf8` and `SourceLocation::to_utf16` to convert between them. By @sagudev in [#10294](https://github.com/gfx-rs/wgpu/pull/10294).
 - Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
+- Added `Limits::min_texel_copy_buffer_row_alignment`. Vulkan, Metal and GL report 1, so `copy_buffer_to_texture` and `copy_texture_to_buffer` accept `bytes_per_row` that are not multiples of 256 on devices that request it. By @michael-dm in [#10619](https://github.com/gfx-rs/wgpu/pull/10619).
 
 #### Naga
 
