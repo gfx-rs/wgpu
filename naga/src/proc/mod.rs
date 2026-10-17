@@ -973,14 +973,10 @@ impl crate::Module {
                 }
             }
         }
-        if self
-            .global_variables
+
+        self.global_variables
             .iter()
             .any(|gv| gv.1.space == crate::AddressSpace::TaskPayload)
-        {
-            return true;
-        }
-        false
     }
 
     /// Whether this module uses ray tracing invocation reordering: either the

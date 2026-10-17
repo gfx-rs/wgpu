@@ -232,10 +232,8 @@ impl GPUBuffer {
       let data = data
         .as_mut()
         .ok_or(JsErrorBox::range_error("Buffer failed allocating"))?;
-      mapping.read(
-        &mut data[offset as usize..(offset + mapping.len()) as usize],
-        0,
-      );
+      data[offset as usize..(offset + mapping.len()) as usize]
+        .copy_from_slice(mapping.read_slice());
     }
 
     self.map_state.replace(BufferMapState::Mapped {
