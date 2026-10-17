@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use super::{HandleMap, HandleSet, ModuleMap};
 use crate::arena::{Arena, Handle};
 
@@ -32,6 +34,38 @@ pub struct ExpressionTracer<'tracer> {
     /// If `None`, we are already tracing the constant expressions,
     /// and `expressions_used` already refers to their handle set.
     pub global_expressions_used: Option<&'tracer mut HandleSet<crate::Expression>>,
+
+    /// The index of the first expression that [`trace_expressions`]'s
+    /// back-to-front pass has already visited.
+    ///
+    /// Marking an expression at or after this index as used means that some
+    /// expression refers to a later expression: a forward reference. See
+    /// [`ForwardRefs`].
+    ///
+    /// [`trace_expressions`]: ExpressionTracer::trace_expressions
+    pub visited_from: usize,
+
+    /// Forward references found while tracing.
+    pub forward_refs: &'tracer mut ForwardRefs,
+}
+
+/// Forward references found while tracing an expression arena.
+///
+/// A valid module has no forward references: every expression refers only to
+/// expressions that precede it in the arena. But compaction also accepts
+/// function expression arenas that violate this rule, as long as the
+/// function's statements are otherwise valid, and reorders their expressions
+/// to make them valid again. See [`Reorder`].
+///
+/// [`Reorder`]: super::reorder::Reorder
+#[derive(Default)]
+pub struct ForwardRefs {
+    /// Whether any used expression refers to a later expression.
+    pub seen: bool,
+
+    /// Expressions marked as used after the back-to-front pass had already
+    /// visited them. They still need to be traced.
+    deferred: Vec<Handle<crate::Expression>>,
 }
 
 impl ExpressionTracer<'_> {
@@ -57,11 +91,10 @@ impl ExpressionTracer<'_> {
             }
         );
 
-        // We don't need recursion or a work list. Because an
-        // expression may only refer to other expressions that precede
-        // it in the arena, it suffices to make a single pass over the
-        // arena from back to front, marking the referents of used
-        // expressions as used themselves.
+        // In a valid module, an expression may only refer to other
+        // expressions that precede it in the arena, so it suffices to make a
+        // single pass over the arena from back to front, marking the referents
+        // of used expressions as used themselves.
         for (handle, expr) in self.expressions.iter().rev() {
             // If this expression isn't used, it doesn't matter what it uses.
             if !self.expressions_used.contains(handle) {
@@ -69,7 +102,39 @@ impl ExpressionTracer<'_> {
             }
 
             log::trace!("tracing new expression {expr:?}");
+            self.visited_from = handle.index() + 1;
             self.trace_expression(expr);
+        }
+
+        // Function expression arenas may contain forward references, though.
+        // An expression that only became used after the pass had visited it
+        // has not been traced yet, so trace it now. Everything has been
+        // visited at this point, so any expression newly marked from here on
+        // is deferred as well.
+        self.visited_from = 0;
+        while let Some(handle) = self.forward_refs.deferred.pop() {
+            log::trace!("tracing forward-referenced expression {handle:?}");
+            self.trace_expression(&self.expressions[handle]);
+        }
+    }
+
+    /// Mark `handle` as used, deferring it if the back-to-front pass in
+    /// [`trace_expressions`] has already visited it.
+    ///
+    /// [`trace_expressions`]: ExpressionTracer::trace_expressions
+    fn mark(&mut self, handle: Handle<crate::Expression>) {
+        let newly_used = self.expressions_used.insert(handle);
+        if handle.index() >= self.visited_from {
+            self.forward_refs.seen = true;
+            if newly_used {
+                self.forward_refs.deferred.push(handle);
+            }
+        }
+    }
+
+    fn mark_iter(&mut self, iter: impl IntoIterator<Item = Handle<crate::Expression>>) {
+        for handle in iter {
+            self.mark(handle);
         }
     }
 
@@ -118,28 +183,27 @@ impl ExpressionTracer<'_> {
             }
             Ex::Compose { ty, ref components } => {
                 self.types_used.insert(ty);
-                self.expressions_used
-                    .insert_iter(components.iter().cloned());
+                self.mark_iter(components.iter().cloned());
             }
-            Ex::Access { base, index } => self.expressions_used.insert_iter([base, index]),
+            Ex::Access { base, index } => self.mark_iter([base, index]),
             Ex::AccessIndex { base, index: _ } => {
-                self.expressions_used.insert(base);
+                self.mark(base);
             }
             Ex::Splat { size: _, value } => {
-                self.expressions_used.insert(value);
+                self.mark(value);
             }
             Ex::Swizzle {
                 size: _,
                 vector,
                 pattern: _,
             } => {
-                self.expressions_used.insert(vector);
+                self.mark(vector);
             }
             Ex::GlobalVariable(handle) => {
                 self.global_variables_used.insert(handle);
             }
             Ex::Load { pointer } => {
-                self.expressions_used.insert(pointer);
+                self.mark(pointer);
             }
             Ex::ImageSample {
                 image,
@@ -152,19 +216,18 @@ impl ExpressionTracer<'_> {
                 depth_ref,
                 clamp_to_edge: _,
             } => {
-                self.expressions_used
-                    .insert_iter([image, sampler, coordinate]);
-                self.expressions_used.insert_iter(array_index);
-                self.expressions_used.insert_iter(offset);
+                self.mark_iter([image, sampler, coordinate]);
+                self.mark_iter(array_index);
+                self.mark_iter(offset);
                 use crate::SampleLevel as Sl;
                 match *level {
                     Sl::Auto | Sl::Zero => {}
                     Sl::Exact(expr) | Sl::Bias(expr) => {
-                        self.expressions_used.insert(expr);
+                        self.mark(expr);
                     }
-                    Sl::Gradient { x, y } => self.expressions_used.insert_iter([x, y]),
+                    Sl::Gradient { x, y } => self.mark_iter([x, y]),
                 }
-                self.expressions_used.insert_iter(depth_ref);
+                self.mark_iter(depth_ref);
             }
             Ex::ImageLoad {
                 image,
@@ -173,17 +236,17 @@ impl ExpressionTracer<'_> {
                 sample,
                 level,
             } => {
-                self.expressions_used.insert(image);
-                self.expressions_used.insert(coordinate);
-                self.expressions_used.insert_iter(array_index);
-                self.expressions_used.insert_iter(sample);
-                self.expressions_used.insert_iter(level);
+                self.mark(image);
+                self.mark(coordinate);
+                self.mark_iter(array_index);
+                self.mark_iter(sample);
+                self.mark_iter(level);
             }
             Ex::ImageQuery { image, ref query } => {
-                self.expressions_used.insert(image);
+                self.mark(image);
                 use crate::ImageQuery as Iq;
                 match *query {
-                    Iq::Size { level } => self.expressions_used.insert_iter(level),
+                    Iq::Size { level } => self.mark_iter(level),
                     Iq::NumLevels | Iq::NumLayers | Iq::NumSamples => {}
                 }
             }
@@ -191,30 +254,28 @@ impl ExpressionTracer<'_> {
                 query,
                 committed: _,
             } => {
-                self.expressions_used.insert(query);
+                self.mark(query);
             }
             Ex::Unary { op: _, expr } => {
-                self.expressions_used.insert(expr);
+                self.mark(expr);
             }
             Ex::Binary { op: _, left, right } => {
-                self.expressions_used.insert_iter([left, right]);
+                self.mark_iter([left, right]);
             }
             Ex::Select {
                 condition,
                 accept,
                 reject,
-            } => self
-                .expressions_used
-                .insert_iter([condition, accept, reject]),
+            } => self.mark_iter([condition, accept, reject]),
             Ex::Derivative {
                 axis: _,
                 ctrl: _,
                 expr,
             } => {
-                self.expressions_used.insert(expr);
+                self.mark(expr);
             }
             Ex::Relational { fun: _, argument } => {
-                self.expressions_used.insert(argument);
+                self.mark(argument);
             }
             Ex::Math {
                 fun: _,
@@ -223,20 +284,20 @@ impl ExpressionTracer<'_> {
                 arg2,
                 arg3,
             } => {
-                self.expressions_used.insert(arg);
-                self.expressions_used.insert_iter(arg1);
-                self.expressions_used.insert_iter(arg2);
-                self.expressions_used.insert_iter(arg3);
+                self.mark(arg);
+                self.mark_iter(arg1);
+                self.mark_iter(arg2);
+                self.mark_iter(arg3);
             }
             Ex::As {
                 expr,
                 kind: _,
                 convert: _,
             } => {
-                self.expressions_used.insert(expr);
+                self.mark(expr);
             }
             Ex::ArrayLength(expr) => {
-                self.expressions_used.insert(expr);
+                self.mark(expr);
             }
             // `CallResult` expressions do contain a function handle, but any used
             // `CallResult` expression should have an associated `ir::Statement::Call`
@@ -251,17 +312,158 @@ impl ExpressionTracer<'_> {
                 query,
                 committed: _,
             } => {
-                self.expressions_used.insert(query);
+                self.mark(query);
             }
             Ex::CooperativeLoad { ref data, .. } => {
-                self.expressions_used.insert(data.pointer);
-                self.expressions_used.insert(data.stride);
+                self.mark(data.pointer);
+                self.mark(data.stride);
             }
             Ex::CooperativeMultiplyAdd { a, b, c } => {
-                self.expressions_used.insert(a);
-                self.expressions_used.insert(b);
-                self.expressions_used.insert(c);
+                self.mark(a);
+                self.mark(b);
+                self.mark(c);
             }
+        }
+    }
+}
+
+/// Call `f` on each expression that `expr` refers to directly.
+pub fn for_each_operand(expr: &crate::Expression, mut f: impl FnMut(Handle<crate::Expression>)) {
+    use crate::Expression as Ex;
+    match *expr {
+        // Expressions that do not refer to other expressions.
+        Ex::Literal(_)
+        | Ex::Constant(_)
+        | Ex::Override(_)
+        | Ex::ZeroValue(_)
+        | Ex::FunctionArgument(_)
+        | Ex::GlobalVariable(_)
+        | Ex::LocalVariable(_)
+        | Ex::CallResult(_)
+        | Ex::AtomicResult { .. }
+        | Ex::WorkGroupUniformLoadResult { .. }
+        | Ex::SubgroupBallotResult
+        | Ex::SubgroupOperationResult { .. }
+        | Ex::RayQueryProceedResult => {}
+
+        Ex::Compose {
+            ty: _,
+            ref components,
+        } => components.iter().copied().for_each(f),
+        Ex::Access { base, index } => {
+            f(base);
+            f(index);
+        }
+        Ex::AccessIndex { base, index: _ } => f(base),
+        Ex::Splat { size: _, value } => f(value),
+        Ex::Swizzle {
+            size: _,
+            vector,
+            pattern: _,
+        } => f(vector),
+        Ex::Load { pointer } => f(pointer),
+        Ex::ImageSample {
+            image,
+            sampler,
+            gather: _,
+            coordinate,
+            array_index,
+            offset,
+            ref level,
+            depth_ref,
+            clamp_to_edge: _,
+        } => {
+            f(image);
+            f(sampler);
+            f(coordinate);
+            array_index.into_iter().for_each(&mut f);
+            offset.into_iter().for_each(&mut f);
+            use crate::SampleLevel as Sl;
+            match *level {
+                Sl::Auto | Sl::Zero => {}
+                Sl::Exact(expr) | Sl::Bias(expr) => f(expr),
+                Sl::Gradient { x, y } => {
+                    f(x);
+                    f(y);
+                }
+            }
+            depth_ref.into_iter().for_each(f);
+        }
+        Ex::ImageLoad {
+            image,
+            coordinate,
+            array_index,
+            sample,
+            level,
+        } => {
+            f(image);
+            f(coordinate);
+            array_index.into_iter().for_each(&mut f);
+            sample.into_iter().for_each(&mut f);
+            level.into_iter().for_each(f);
+        }
+        Ex::ImageQuery { image, ref query } => {
+            f(image);
+            use crate::ImageQuery as Iq;
+            match *query {
+                Iq::Size { level } => level.into_iter().for_each(f),
+                Iq::NumLevels | Iq::NumLayers | Iq::NumSamples => {}
+            }
+        }
+        Ex::Unary { op: _, expr } => f(expr),
+        Ex::Binary { op: _, left, right } => {
+            f(left);
+            f(right);
+        }
+        Ex::Select {
+            condition,
+            accept,
+            reject,
+        } => {
+            f(condition);
+            f(accept);
+            f(reject);
+        }
+        Ex::Derivative {
+            axis: _,
+            ctrl: _,
+            expr,
+        } => f(expr),
+        Ex::Relational { fun: _, argument } => f(argument),
+        Ex::Math {
+            fun: _,
+            arg,
+            arg1,
+            arg2,
+            arg3,
+        } => {
+            f(arg);
+            arg1.into_iter().for_each(&mut f);
+            arg2.into_iter().for_each(&mut f);
+            arg3.into_iter().for_each(f);
+        }
+        Ex::As {
+            expr,
+            kind: _,
+            convert: _,
+        } => f(expr),
+        Ex::ArrayLength(expr) => f(expr),
+        Ex::RayQueryGetIntersection {
+            query,
+            committed: _,
+        }
+        | Ex::RayQueryVertexPositions {
+            query,
+            committed: _,
+        } => f(query),
+        Ex::CooperativeLoad { ref data, .. } => {
+            f(data.pointer);
+            f(data.stride);
+        }
+        Ex::CooperativeMultiplyAdd { a, b, c } => {
+            f(a);
+            f(b);
+            f(c);
         }
     }
 }
