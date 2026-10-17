@@ -152,7 +152,7 @@ impl crate::framework::Example for Example {
             update_mode: AccelerationStructureUpdateMode::Build,
         });
 
-        tlas[0] = Some(TlasInstance::new(
+        tlas[0] = Some(TlasInstance::from_blas_transformed(
             &blas,
             Mat4::from_translation(Vec3 {
                 x: 0.0,
@@ -163,11 +163,9 @@ impl crate::framework::Example for Example {
             .to_cols_array()[..12]
                 .try_into()
                 .unwrap(),
-            0,
-            0xff,
         ));
 
-        tlas[1] = Some(TlasInstance::new(
+        tlas[1] = Some(TlasInstance::from_blas_transformed(
             &blas,
             Mat4::from_translation(Vec3 {
                 x: -1.0,
@@ -178,11 +176,9 @@ impl crate::framework::Example for Example {
             .to_cols_array()[..12]
                 .try_into()
                 .unwrap(),
-            0,
-            0xff,
         ));
 
-        tlas[2] = Some(TlasInstance::new(
+        tlas[2] = Some(TlasInstance::from_blas_transformed(
             &blas,
             Mat4::from_translation(Vec3 {
                 x: 1.0,
@@ -193,8 +189,6 @@ impl crate::framework::Example for Example {
             .to_cols_array()[..12]
                 .try_into()
                 .unwrap(),
-            0,
-            0xff,
         ));
 
         let uniforms = {
