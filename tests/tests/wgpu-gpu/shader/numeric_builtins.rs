@@ -62,6 +62,9 @@ static NUMERIC_BUILTINS: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
+/// Regression test for DXC truncating 64-bit integer literals and treating signed
+/// comparisons against zero as unsigned under HLSL 2018.
+/// See https://github.com/gfx-rs/wgpu/issues/10572.
 #[apply(gpu_test!)]
 static INT64_LITERALS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
