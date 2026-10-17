@@ -420,7 +420,7 @@ impl crate::Surface for super::Surface {
             .map(|link| link.receiver.clone());
         #[cfg(target_os = "macos")]
         let drawable = match receiver {
-            Some(receiver) => receiver.take(_timeout.unwrap_or(core::time::Duration::from_secs(1))),
+            Some(receiver) => receiver.take(_timeout),
             None => next_drawable(),
         };
         #[cfg(not(target_os = "macos"))]

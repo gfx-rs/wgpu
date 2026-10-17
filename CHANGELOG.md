@@ -197,7 +197,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### Metal
 
-- On macOS 14 and later, FIFO surfaces configured on the main thread in an AppKit window receive drawables from a `CAMetalDisplayLink` instead of `nextDrawable`. By @JustTalDevelops and @HashimTheArab in [#10643](https://github.com/gfx-rs/wgpu/pull/10643).
+- On macOS 14 and later, FIFO surfaces configured on the main thread in an AppKit window receive drawables from a `CAMetalDisplayLink` instead of `nextDrawable`. Acquisition respects indefinite waits, and callbacks pause between requests. By @JustTalDevelops and @HashimTheArab in [#10643](https://github.com/gfx-rs/wgpu/pull/10643).
 - Removed the `size` argument to `wgpu_hal::metal::Device::buffer_from_raw`. The passed size value was previously used only to resolve vertex buffer bindings without an explicit size, possibly incorrectly. Binding sizes are now resolved in `wgpu-core`. By @andyleiserson in [#9848](https://github.com/gfx-rs/wgpu/pull/9848).
 
 #### Vulkan
