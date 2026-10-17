@@ -1567,7 +1567,10 @@ impl crate::Device for super::Device {
                             immediates: desc.layout.immediates_infos.vs,
                             sizes_slot: desc.layout.per_stage_map.vs.sizes_buffer,
                             sized_bindings: vs.sized_bindings,
-                            vertex_buffer_mappings,
+                            vertex_buffer_ids: vertex_buffer_mappings
+                                .iter()
+                                .map(|vbm| vbm.id)
+                                .collect(),
                             library: Some(vs.library),
                             raw_wg_size: MTLSize {
                                 width: 0,
@@ -1661,7 +1664,7 @@ impl crate::Device for super::Device {
                             immediates: desc.layout.immediates_infos.ts,
                             sizes_slot: desc.layout.per_stage_map.ts.sizes_buffer,
                             sized_bindings: ts.sized_bindings,
-                            vertex_buffer_mappings: vec![],
+                            vertex_buffer_ids: vec![],
                             library: Some(ts.library),
                             raw_wg_size: ts.wg_size,
                             work_group_memory_sizes: ts.wg_memory_sizes,
@@ -1690,7 +1693,7 @@ impl crate::Device for super::Device {
                             immediates: desc.layout.immediates_infos.ms,
                             sizes_slot: desc.layout.per_stage_map.ms.sizes_buffer,
                             sized_bindings: ms.sized_bindings,
-                            vertex_buffer_mappings: vec![],
+                            vertex_buffer_ids: vec![],
                             library: Some(ms.library),
                             raw_wg_size: ms.wg_size,
                             work_group_memory_sizes: ms.wg_memory_sizes,
@@ -1733,7 +1736,7 @@ impl crate::Device for super::Device {
                         immediates: desc.layout.immediates_infos.fs,
                         sizes_slot: desc.layout.per_stage_map.fs.sizes_buffer,
                         sized_bindings: fs.sized_bindings,
-                        vertex_buffer_mappings: vec![],
+                        vertex_buffer_ids: vec![],
                         library: Some(fs.library),
                         raw_wg_size: MTLSize {
                             width: 0,
@@ -1941,7 +1944,7 @@ impl crate::Device for super::Device {
                 immediates: desc.layout.immediates_infos.cs,
                 sizes_slot: desc.layout.per_stage_map.cs.sizes_buffer,
                 sized_bindings: cs.sized_bindings,
-                vertex_buffer_mappings: vec![],
+                vertex_buffer_ids: vec![],
                 raw_wg_size: cs.wg_size,
                 work_group_memory_sizes: cs.wg_memory_sizes,
             };
