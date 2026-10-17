@@ -2321,6 +2321,8 @@ impl Device {
             .iter()
             .enumerate()
             .map(|(i, plane)| {
+                plane.same_device(self)?;
+
                 if plane.samples != 1 {
                     return Err(CreateExternalTextureError::InvalidPlaneMultisample(
                         plane.samples,
