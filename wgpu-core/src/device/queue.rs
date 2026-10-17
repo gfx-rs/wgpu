@@ -1432,6 +1432,7 @@ impl Queue {
                 texture_size: src_width,
                 dimension: crate::resource::TextureErrorDimension::X,
                 side: CopySide::Source,
+                plane: None,
             }
             .into());
         }
@@ -1442,6 +1443,7 @@ impl Queue {
                 texture_size: src_height,
                 dimension: crate::resource::TextureErrorDimension::Y,
                 side: CopySide::Source,
+                plane: None,
             }
             .into());
         }
@@ -1452,6 +1454,7 @@ impl Queue {
                 texture_size: 1,
                 dimension: crate::resource::TextureErrorDimension::Z,
                 side: CopySide::Source,
+                plane: None,
             }
             .into());
         }
