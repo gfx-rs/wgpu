@@ -1,0 +1,11 @@
+[package]
+name = "wgpu-bug-repro-03-composite-alpha-postmultiplied"
+edition = "2021"
+rust-version = "1.87"
+publish = false
+
+[dependencies]
+env_logger.workspace = true
+pollster.workspace = true
+wgpu.workspace = true
+winit.workspace = true
