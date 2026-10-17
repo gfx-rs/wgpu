@@ -13,7 +13,7 @@ use crate::{
     track::TrackerIndex,
     FastHashMap,
 };
-use alloc::{boxed::Box, string::ToString, sync::Arc, vec, vec::Vec};
+use alloc::{boxed::Box, string::ToString, sync::Arc, vec::Vec};
 use core::{mem::size_of, num::NonZeroU64};
 use scopeguard::{guard, ScopeGuard};
 use wgt::Limits;
@@ -846,11 +846,14 @@ impl DrawResources {
             .as_ref()
     }
 
-    fn get_dst_subrange(
+    /// Returns the buffer index, offset and length of a run of up to `count` consecutive
+    /// `size`-byte subranges.
+    fn get_dst_subranges(
         &mut self,
         size: u64,
+        count: u32,
         current_entry: &mut Option<CurrentEntry>,
-    ) -> Result<(usize, u64), DeviceError> {
+    ) -> Result<(usize, u64, u32), DeviceError> {
         let indirect_draw_validation = &self.device.indirect_validation.as_ref().unwrap().draw;
         let ensure_entry = |index: usize| {
             if self.dst_entries.len() <= index {
@@ -860,8 +863,8 @@ impl DrawResources {
             }
             Ok(())
         };
-        let entry_data = Self::get_subrange_impl(ensure_entry, current_entry, size)?;
-        Ok((entry_data.index, entry_data.offset))
+        let (entry_data, run) = Self::get_subranges_impl(ensure_entry, current_entry, size, count)?;
+        Ok((entry_data.index, entry_data.offset, run))
     }
 
     fn get_metadata_subrange(
@@ -887,28 +890,36 @@ impl DrawResources {
         current_entry: &mut Option<CurrentEntry>,
         size: u64,
     ) -> Result<CurrentEntry, DeviceError> {
-        let index = if let Some(current_entry) = current_entry.as_mut() {
-            if current_entry.offset + size <= BUFFER_SIZE.get() {
-                let entry_data = current_entry.clone();
-                current_entry.offset += size;
-                return Ok(entry_data);
-            } else {
-                current_entry.index + 1
+        Self::get_subranges_impl(ensure_entry, current_entry, size, 1).map(|(entry, _)| entry)
+    }
+
+    /// Reserves up to `count` consecutive `size`-byte subranges in a single entry, moving to
+    /// the next entry if the current one is full. Returns the first subrange and how many
+    /// were reserved, which is at least one if `size <= BUFFER_SIZE`.
+    fn get_subranges_impl(
+        ensure_entry: impl FnOnce(usize) -> Result<(), hal::DeviceError>,
+        current_entry: &mut Option<CurrentEntry>,
+        size: u64,
+        count: u32,
+    ) -> Result<(CurrentEntry, u32), DeviceError> {
+        let entry_data = match current_entry {
+            Some(entry) if entry.offset + size <= BUFFER_SIZE.get() => entry.clone(),
+            _ => {
+                let index = current_entry.as_ref().map_or(0, |entry| entry.index + 1);
+                ensure_entry(index).map_err(DeviceError::from_hal)?;
+                CurrentEntry { index, offset: 0 }
             }
-        } else {
-            0
         };
 
-        ensure_entry(index).map_err(DeviceError::from_hal)?;
-
-        let entry_data = CurrentEntry { index, offset: 0 };
+        let available = (BUFFER_SIZE.get() - entry_data.offset) / size;
+        let run = available.min(u64::from(count)) as u32;
 
         *current_entry = Some(CurrentEntry {
-            index,
-            offset: size,
+            index: entry_data.index,
+            offset: entry_data.offset + size * u64::from(run),
         });
 
-        Ok(entry_data)
+        Ok((entry_data, run))
     }
 }
 
@@ -1019,52 +1030,99 @@ impl DrawBatcher {
         vertex_or_index_limit: u64,
         instance_limit: u64,
     ) -> Result<(usize, u64), DeviceError> {
-        let stride = crate::command::get_dst_stride_of_indirect_args(device.backend(), family);
-
-        let (dst_resource_index, dst_offset) = indirect_draw_validation_resources
-            .get_dst_subrange(stride, &mut self.current_dst_entry)?;
-
-        let buffer_size = src_buffer.size;
-        let limits = device.adapter.limits();
-        let data_size = get_src_stride_of_indirect_args(family);
-        let (src_dynamic_offset, src_offset) =
-            calculate_src_offsets(buffer_size, &limits, offset, data_size);
-
-        let src_buffer_tracker_index = src_buffer.tracker_index();
-
-        let entry = MetadataEntry::new(
-            family == crate::command::DrawCommandFamily::DrawIndexed,
-            src_offset,
-            dst_offset,
+        let mut dst = (0, 0);
+        self.add_range(
+            indirect_draw_validation_resources,
+            device,
+            src_buffer,
+            offset,
+            1,
+            family,
             vertex_or_index_limit,
             instance_limit,
-        );
+            |_, dst_resource_index, dst_offset, _| dst = (dst_resource_index, dst_offset),
+        )?;
+        Ok(dst)
+    }
 
-        match self.batches.entry((
-            src_buffer_tracker_index,
-            src_dynamic_offset,
-            dst_resource_index,
-        )) {
-            hashbrown::hash_map::Entry::Occupied(mut occupied_entry) => {
-                occupied_entry.get_mut().entries.push(entry)
-            }
-            hashbrown::hash_map::Entry::Vacant(vacant_entry) => {
-                vacant_entry.insert(DrawIndirectValidationBatch {
-                    src_buffer: src_buffer.clone(),
-                    src_dynamic_offset,
-                    dst_resource_index,
-                    entries: vec![entry],
+    /// Add `count` tightly packed indirect draws starting at `offset` to be validated.
+    ///
+    /// Calls `draw` with the index of the validated indirect buffer, the offset and the
+    /// number of draws for each run of consecutive validated draws, in order.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn add_range(
+        &mut self,
+        indirect_draw_validation_resources: &mut DrawResources,
+        device: &Device,
+        src_buffer: &Arc<crate::resource::Buffer>,
+        offset: u64,
+        count: u32,
+        family: crate::command::DrawCommandFamily,
+        vertex_or_index_limit: u64,
+        instance_limit: u64,
+        mut draw: impl FnMut(&DrawResources, usize, u64, u32),
+    ) -> Result<(), DeviceError> {
+        let src_stride = get_src_stride_of_indirect_args(family);
+        let dst_stride = crate::command::get_dst_stride_of_indirect_args(device.backend(), family);
+        let indexed = family == crate::command::DrawCommandFamily::DrawIndexed;
+        let limits = device.adapter.limits();
+        let src_buffer_tracker_index = src_buffer.tracker_index();
 
-                    // these will be initialized once we accumulated all entries for the batch
-                    staging_buffer_index: 0,
-                    staging_buffer_offset: 0,
-                    metadata_resource_index: 0,
-                    metadata_buffer_offset: 0,
-                });
+        let mut first = 0;
+        while first < count {
+            let (dst_resource_index, dst_offset, run) = indirect_draw_validation_resources
+                .get_dst_subranges(dst_stride, count - first, &mut self.current_dst_entry)?;
+
+            let mut batch: Option<&mut DrawIndirectValidationBatch> = None;
+            for i in 0..run {
+                let (src_dynamic_offset, src_offset) = calculate_src_offsets(
+                    src_buffer.size,
+                    &limits,
+                    offset + src_stride * u64::from(first + i),
+                    src_stride,
+                );
+                let current = match batch.take() {
+                    Some(batch) if batch.src_dynamic_offset == src_dynamic_offset => batch,
+                    _ => self
+                        .batches
+                        .entry((
+                            src_buffer_tracker_index,
+                            src_dynamic_offset,
+                            dst_resource_index,
+                        ))
+                        .or_insert_with(|| DrawIndirectValidationBatch {
+                            src_buffer: src_buffer.clone(),
+                            src_dynamic_offset,
+                            dst_resource_index,
+                            entries: Vec::new(),
+
+                            // these will be initialized once we accumulated all entries for the batch
+                            staging_buffer_index: 0,
+                            staging_buffer_offset: 0,
+                            metadata_resource_index: 0,
+                            metadata_buffer_offset: 0,
+                        }),
+                };
+                current.entries.push(MetadataEntry::new(
+                    indexed,
+                    src_offset,
+                    dst_offset + dst_stride * u64::from(i),
+                    vertex_or_index_limit,
+                    instance_limit,
+                ));
+                batch = Some(current);
             }
+
+            draw(
+                indirect_draw_validation_resources,
+                dst_resource_index,
+                dst_offset,
+                run,
+            );
+            first += run;
         }
 
-        Ok((dst_resource_index, dst_offset))
+        Ok(())
     }
 }
 
@@ -1159,6 +1217,67 @@ mod tests {
                  data_size={data_size} \
                  offset={offset}"
             );
+        }
+    }
+
+    /// Reserving a range must yield the same subranges as reserving each one separately.
+    #[test]
+    fn get_subranges_matches_single_subranges() {
+        fn single(
+            current_entry: &mut Option<CurrentEntry>,
+            size: u64,
+            count: u32,
+        ) -> Vec<(usize, u64)> {
+            (0..count)
+                .map(|_| {
+                    let entry =
+                        DrawResources::get_subrange_impl(|_| Ok(()), current_entry, size).unwrap();
+                    (entry.index, entry.offset)
+                })
+                .collect()
+        }
+
+        fn ranged(
+            current_entry: &mut Option<CurrentEntry>,
+            size: u64,
+            count: u32,
+        ) -> Vec<(usize, u64)> {
+            let mut out = Vec::new();
+            let mut remaining = count;
+            while remaining > 0 {
+                let (entry, run) =
+                    DrawResources::get_subranges_impl(|_| Ok(()), current_entry, size, remaining)
+                        .unwrap();
+                assert!(run > 0);
+                out.extend((0..run).map(|i| (entry.index, entry.offset + size * u64::from(i))));
+                remaining -= run;
+            }
+            out
+        }
+
+        let per_buffer = (BUFFER_SIZE.get() / 20) as u32;
+        for size in [16, 20, 28, 32] {
+            for (first, count) in [
+                (0, 1),
+                (0, 70_000),
+                (1, 52_428),
+                (per_buffer - 1, 3),
+                (5, 0),
+            ] {
+                let mut single_entry = None;
+                let mut ranged_entry = None;
+                single(&mut single_entry, size, first);
+                single(&mut ranged_entry, size, first);
+                assert_eq!(
+                    single(&mut single_entry, size, count),
+                    ranged(&mut ranged_entry, size, count),
+                    "size={size} first={first} count={count}"
+                );
+                assert_eq!(
+                    single_entry.map(|e| (e.index, e.offset)),
+                    ranged_entry.map(|e| (e.index, e.offset))
+                );
+            }
         }
     }
 }

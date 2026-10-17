@@ -29,6 +29,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         INDIRECT_BUFFER_OFFSETS,
         MULTI_DRAW_INDEXED_INDIRECT,
         MULTI_DRAW_INDIRECT,
+        MULTI_DRAW_INDIRECT_ZERO_COUNT,
+        MULTI_DRAW_INDIRECT_ACROSS_VALIDATION_BUFFERS,
     ]);
 }
 
@@ -833,3 +835,197 @@ static MULTI_DRAW_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
             .limits(wgpu::Limits::downlevel_defaults()),
     )
     .run_async(|ctx| run_test_inner(ctx, get_draw_test_data(0, 6), false, true));
+
+#[apply(gpu_test!)]
+static MULTI_DRAW_INDIRECT_ZERO_COUNT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(multi_draw_indirect_zero_count);
+
+/// A multi-draw with a count of 0 must not draw anything.
+async fn multi_draw_indirect_zero_count(ctx: TestingContext) {
+    let data = draw_halves(&ctx, &[[6, 1, 0, 0], [6, 1, 6, 0]], &[(0, 0), (16, 0)]).await;
+    assert!(data.iter().all(|b| *b == 0));
+}
+
+#[apply(gpu_test!)]
+static MULTI_DRAW_INDIRECT_ACROSS_VALIDATION_BUFFERS: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
+                .limits(wgpu::Limits::downlevel_defaults()),
+        )
+        .run_async(multi_draw_indirect_across_validation_buffers);
+
+/// Each draw of a multi-draw that spans several internal validation buffers must be validated
+/// against its own arguments.
+async fn multi_draw_indirect_across_validation_buffers(ctx: TestingContext) {
+    // More draws than fit in one internal validation buffer.
+    const DRAWS: usize = 70_000;
+
+    let mut args = vec![[0, 1, 0, 0]; DRAWS + 1];
+    // Draws the top half.
+    args[DRAWS - 1] = [6, 1, 0, 0];
+    // Reads one vertex past the end of the vertex buffer, so it must be skipped.
+    args[DRAWS] = [7, 1, 6, 0];
+
+    // Start with a single draw so the multi-draw doesn't begin at the start of a buffer.
+    let data = draw_halves(&ctx, &args, &[(0, 1), (16, DRAWS as u32)]).await;
+    let half = data.len() / 2;
+    assert!(data[..half].iter().all(|b| *b == u8::MAX));
+    assert!(data[half..].iter().all(|b| *b == 0));
+}
+
+/// Draws `draws` as `(offset, count)` multi-draws from `args` with a vertex buffer whose first
+/// six vertices cover the top half of the target and whose next six cover the bottom half.
+async fn draw_halves(ctx: &TestingContext, args: &[[u32; 4]], draws: &[(u64, u32)]) -> Vec<u8> {
+    #[rustfmt::skip]
+    let vertices: [f32; 24] = [
+        -1.0, 0.0, 1.0, 0.0, -1.0, 1.0,
+        -1.0, 1.0, 1.0, 0.0, 1.0, 1.0,
+        -1.0, -1.0, 1.0, -1.0, -1.0, 0.0,
+        -1.0, 0.0, 1.0, -1.0, 1.0, 0.0,
+    ];
+    let vertex_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(&vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let indirect_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(args),
+        usage: wgpu::BufferUsages::INDIRECT,
+    });
+
+    let shader = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(
+                "
+                @vertex
+                fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
+                    return vec4f(position, 0.0, 1.0);
+                }
+
+                @fragment
+                fn fs_main() -> @location(0) vec4f {
+                    return vec4f(1.0);
+                }
+                "
+                .into(),
+            ),
+        });
+    let pipeline = ctx
+        .device
+        .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: None,
+            vertex: wgpu::VertexState {
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: 8,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &vertex_attr_array![0 => Float32x2],
+                })],
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::R8Unorm,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+
+    let out_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 256,
+            height: 256,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 256 * 256,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations::default(),
+                resolve_target: None,
+                view: &out_texture_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        rpass.set_pipeline(&pipeline);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        for &(offset, count) in draws {
+            rpass.multi_draw_indirect(&indirect_buffer, offset, count);
+        }
+    }
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &out_texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback_buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(256),
+                rows_per_image: None,
+            },
+        },
+        wgpu::Extent3d {
+            width: 256,
+            height: 256,
+            depth_or_array_layers: 1,
+        },
+    );
+    ctx.queue.submit([encoder.finish()]);
+
+    let slice = readback_buffer.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| ());
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
+    let data = slice.get_mapped_range().unwrap().to_vec();
+    readback_buffer.unmap();
+    data
+}
