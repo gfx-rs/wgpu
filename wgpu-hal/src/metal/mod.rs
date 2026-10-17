@@ -624,7 +624,7 @@ struct Relay {
 pub struct QueueShared {
     raw: Retained<ProtocolObject<dyn MTLCommandQueue>>,
     // Tracks command buffers created via `CommandEncoder::begin_encoding` that
-    // have not yet been submitted or discarded. Used to proactively fail
+    // have not been committed, including skipped empty buffers. Used to proactively fail
     // before hitting Metal's `maxCommandBufferCount`.
     //
     // (In a few places we call `.commandBuffer{,WithUnretainedReferences}` directly
@@ -786,8 +786,15 @@ impl crate::Queue for Queue {
                 }
             };
 
-            for cmd_buffer in command_buffers {
-                cmd_buffer.raw.commit();
+            for (index, cmd_buffer) in command_buffers.iter().enumerate() {
+                // Empty command buffers do no work, so only commit them if they carry the
+                // completion signal.
+                if cmd_buffer.has_commands || index + 1 == command_buffers.len() {
+                    cmd_buffer.raw.commit();
+                } else {
+                    // Skipped buffers still occupy a native allocation slot until dropped.
+                    continue;
+                }
                 // One command buffer per `end_encoding` call moves from the
                 // "created but not yet submitted" bucket into the submitted
                 // set, so update the counter.
@@ -1368,6 +1375,8 @@ pub struct CommandEncoder {
     shared: Arc<AdapterShared>,
     queue_shared: Arc<QueueShared>,
     raw_cmd_buf: Option<Retained<ProtocolObject<dyn MTLCommandBuffer>>>,
+    /// Whether `raw_cmd_buf` may contain commands.
+    has_commands: atomic::AtomicBool,
     state: CommandState,
     temp: Temp,
     counters: Arc<wgt::HalCounters>,
@@ -1386,6 +1395,7 @@ unsafe impl Sync for CommandEncoder {}
 
 #[derive(Debug)]
 pub struct CommandBuffer {
+    has_commands: bool,
     raw: Retained<ProtocolObject<dyn MTLCommandBuffer>>,
     queue_shared: Arc<QueueShared>,
 }
@@ -1421,4 +1431,202 @@ pub enum OsType {
     Ios,
     Tvos,
     VisionOs,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Adapter as _, CommandEncoder as _, Device as _, Instance as _, Queue as _};
+
+    fn open_device() -> Option<crate::OpenDevice<Api>> {
+        let instance = unsafe {
+            Instance::init(&crate::InstanceDescriptor {
+                name: "metal tests",
+                flags: wgt::InstanceFlags::VALIDATION,
+                memory_budget_thresholds: Default::default(),
+                backend_options: Default::default(),
+                telemetry: None,
+                display: None,
+            })
+        }
+        .unwrap();
+        let adapter = unsafe { instance.enumerate_adapters(None) }
+            .into_iter()
+            .next()?
+            .adapter;
+        Some(
+            unsafe {
+                adapter.open(
+                    wgt::Features::empty(),
+                    &wgt::Limits::default(),
+                    &wgt::MemoryHints::default(),
+                )
+            }
+            .unwrap(),
+        )
+    }
+
+    fn outstanding_command_buffers(queue: &Queue) -> usize {
+        queue
+            .shared
+            .command_buffer_created_not_submitted
+            .load(atomic::Ordering::Acquire)
+    }
+
+    /// Empty command buffers before the last one are not committed, the last one still signals
+    /// the fence, and every buffer releases its command buffer budget exactly once.
+    #[test]
+    fn submit_skips_empty_command_buffers() {
+        let Some(crate::OpenDevice { device, queue }) = open_device() else {
+            return;
+        };
+        unsafe {
+            let mut encoder = device
+                .create_command_encoder(&crate::CommandEncoderDescriptor {
+                    label: None,
+                    queue: &queue,
+                })
+                .unwrap();
+            let (buffer, _) = device
+                .create_buffer(&crate::BufferDescriptor {
+                    label: None,
+                    size: 64,
+                    usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::MAP_READ,
+                    memory_flags: crate::MemoryFlags::empty(),
+                })
+                .unwrap();
+            let fence = device.create_fence().unwrap();
+            let mut retained = Vec::new();
+            for value in 1..=4 {
+                if value == 3 {
+                    queue.enable_strict_event_sync().unwrap();
+                }
+                let commands = (0..4)
+                    .map(|index| {
+                        encoder.begin_encoding(None).unwrap();
+                        if index == 1 {
+                            encoder.clear_buffer(&buffer, 0..64);
+                        }
+                        encoder.end_encoding().unwrap()
+                    })
+                    .collect::<Vec<_>>();
+                queue
+                    .submit(&commands.iter().collect::<Vec<_>>(), &[], (&fence, value))
+                    .unwrap();
+                assert!(device
+                    .wait(&fence, value, Some(core::time::Duration::from_secs(10)))
+                    .unwrap());
+
+                let statuses = commands
+                    .iter()
+                    .map(|command| command.raw.status())
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    statuses,
+                    [
+                        MTLCommandBufferStatus::NotEnqueued,
+                        MTLCommandBufferStatus::Completed,
+                        MTLCommandBufferStatus::NotEnqueued,
+                        MTLCommandBufferStatus::Completed,
+                    ]
+                );
+                retained.push(commands);
+                assert_eq!(outstanding_command_buffers(&queue), 2 * value as usize);
+            }
+            drop(retained);
+            assert_eq!(outstanding_command_buffers(&queue), 0);
+            device.destroy_buffer(buffer);
+            device.destroy_fence(fence);
+        }
+    }
+
+    /// Retained skipped buffers must reach the allocation guard before exhausting the native pool.
+    #[test]
+    fn retained_skipped_buffers_gate_native_allocation() {
+        let Some(crate::OpenDevice { device, queue }) = open_device() else {
+            eprintln!("skipping allocation budget test: missing Metal adapter");
+            return;
+        };
+        unsafe {
+            let mut encoder = device
+                .create_command_encoder(&crate::CommandEncoderDescriptor {
+                    label: None,
+                    queue: &queue,
+                })
+                .unwrap();
+            let fence = device.create_fence().unwrap();
+            let mut retained = Vec::new();
+            let mut value = 0;
+            while retained.len() < adapter::MAX_COMMAND_BUFFERS {
+                // Leave a slot for the committed fence buffer until the last batch.
+                let remaining = adapter::MAX_COMMAND_BUFFERS - retained.len();
+                if remaining == 1 {
+                    encoder.begin_encoding(None).unwrap();
+                    retained.push(encoder.end_encoding().unwrap());
+                    break;
+                }
+                let count = remaining.min(128);
+                let mut commands = (0..count)
+                    .map(|_| {
+                        encoder.begin_encoding(None).unwrap();
+                        encoder.end_encoding().unwrap()
+                    })
+                    .collect::<Vec<_>>();
+                value += 1;
+                queue
+                    .submit(&commands.iter().collect::<Vec<_>>(), &[], (&fence, value))
+                    .unwrap();
+                assert!(device.wait(&fence, value, None).unwrap());
+                // Keep the skipped buffers alive after all committed work has finished.
+                drop(commands.pop());
+                retained.extend(commands);
+                assert_eq!(outstanding_command_buffers(&queue), retained.len());
+            }
+            assert!(matches!(
+                encoder.begin_encoding(None),
+                Err(crate::DeviceError::Lost)
+            ));
+            assert_eq!(
+                outstanding_command_buffers(&queue),
+                adapter::MAX_COMMAND_BUFFERS
+            );
+            drop(retained);
+            assert_eq!(outstanding_command_buffers(&queue), 0);
+            encoder.begin_encoding(None).unwrap();
+            encoder.discard_encoding();
+            assert_eq!(outstanding_command_buffers(&queue), 0);
+            device.destroy_fence(fence);
+        }
+    }
+
+    /// A command buffer exposed through `raw_command_buffer` may hold commands recorded outside
+    /// of wgpu-hal, so it is always committed.
+    #[test]
+    fn submit_commits_exposed_command_buffers() {
+        let Some(crate::OpenDevice { device, queue }) = open_device() else {
+            return;
+        };
+        unsafe {
+            let mut encoder = device
+                .create_command_encoder(&crate::CommandEncoderDescriptor {
+                    label: None,
+                    queue: &queue,
+                })
+                .unwrap();
+            encoder.begin_encoding(None).unwrap();
+            assert!(encoder.raw_command_buffer().is_some());
+            let exposed = encoder.end_encoding().unwrap();
+            encoder.begin_encoding(None).unwrap();
+            let last = encoder.end_encoding().unwrap();
+            let fence = device.create_fence().unwrap();
+            queue.submit(&[&exposed, &last], &[], (&fence, 1)).unwrap();
+            assert!(device
+                .wait(&fence, 1, Some(core::time::Duration::from_secs(10)))
+                .unwrap());
+            assert_eq!(exposed.raw.status(), MTLCommandBufferStatus::Completed);
+            drop((exposed, last));
+            assert_eq!(outstanding_command_buffers(&queue), 0);
+            device.destroy_fence(fence);
+        }
+    }
 }

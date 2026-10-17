@@ -155,10 +155,13 @@ impl Encoder<'_> {
 
 impl super::CommandEncoder {
     pub fn raw_command_buffer(&self) -> Option<&ProtocolObject<dyn MTLCommandBuffer>> {
+        // The caller may record commands we can't see.
+        self.has_commands.store(true, atomic::Ordering::Relaxed);
         self.raw_cmd_buf.as_deref()
     }
 
     fn enter_blit(&mut self) -> Retained<ProtocolObject<dyn MTLBlitCommandEncoder>> {
+        self.has_commands.store(true, atomic::Ordering::Relaxed);
         if self.state.blit.is_none() {
             self.leave_acceleration_structure_builder();
             debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
@@ -265,6 +268,7 @@ impl super::CommandEncoder {
     fn enter_acceleration_structure_builder(
         &mut self,
     ) -> Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>> {
+        self.has_commands.store(true, atomic::Ordering::Relaxed);
         if self.state.acceleration_structure_builder.is_none() {
             self.leave_blit();
             debug_assert!(
@@ -302,6 +306,7 @@ impl super::CommandEncoder {
     }
 
     fn begin_pass(&mut self) {
+        self.has_commands.store(true, atomic::Ordering::Relaxed);
         self.state.reset();
         self.leave_blit();
         self.leave_acceleration_structure_builder();
@@ -491,6 +496,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .command_buffer_created_not_submitted
             .fetch_add(1, atomic::Ordering::AcqRel);
         if previous >= adapter::MAX_COMMAND_BUFFERS {
+            self.queue_shared
+                .command_buffer_created_not_submitted
+                .fetch_sub(1, atomic::Ordering::AcqRel);
             let current = previous + 1;
             log::warn!(
                 "metal: refusing to create new command buffer; {current} outstanding command \
@@ -528,6 +536,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         debug_assert!(self.state.pending_timer_queries.is_empty());
 
         self.raw_cmd_buf = Some(raw);
+        self.has_commands.store(false, atomic::Ordering::Relaxed);
 
         Ok(())
     }
@@ -569,6 +578,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         debug_assert!(self.state.pending_timer_queries.is_empty());
 
         Ok(super::CommandBuffer {
+            has_commands: self.has_commands.load(atomic::Ordering::Relaxed),
             raw: self.raw_cmd_buf.take().unwrap(),
             queue_shared: Arc::clone(&self.queue_shared),
         })
