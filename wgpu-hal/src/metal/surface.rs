@@ -38,6 +38,8 @@ impl super::Surface {
             render_layer: Mutex::new(layer),
             swapchain_format: RwLock::new(None),
             extent: RwLock::new(wgt::Extent3d::default()),
+            #[cfg(target_os = "macos")]
+            display_link: Mutex::new(None),
         }
     }
 
@@ -252,6 +254,10 @@ impl crate::Surface for super::Surface {
     ) -> Result<(), crate::SurfaceError> {
         log::debug!("build swapchain {config:?}");
 
+        // Stop callbacks and release prefetched drawables before changing any layer property.
+        #[cfg(target_os = "macos")]
+        drop(self.display_link.lock().take());
+
         let caps = &device.shared.private_texture_format_caps;
         *self.swapchain_format.write() = Some(config.format);
         *self.extent.write() = config.extent;
@@ -349,10 +355,27 @@ impl crate::Surface for super::Surface {
             render_layer.setDisplaySyncEnabled(display_sync);
         }
 
+        // AppKit display properties are read on the main thread; the link runs on its own thread.
+        #[cfg(target_os = "macos")]
+        if let Some(main) = objc2::MainThreadMarker::new()
+            .filter(|_| display_sync && super::display_link::supported())
+        {
+            if let Some(window) = hosting_window(Retained::into_super(render_layer.clone())) {
+                *self.display_link.lock() = super::display_link::DisplayLink::new(
+                    render_layer.clone(),
+                    &window,
+                    config.maximum_frame_latency,
+                    main,
+                );
+            }
+        }
+
         Ok(())
     }
 
     unsafe fn unconfigure(&self, _device: &super::Device) {
+        #[cfg(target_os = "macos")]
+        drop(self.display_link.lock().take());
         *self.swapchain_format.write() = None;
     }
 
@@ -382,14 +405,31 @@ impl crate::Surface for super::Surface {
             }
         }
 
-        let (drawable, texture) = match autoreleasepool(|_| {
-            render_layer
-                .nextDrawable()
-                .map(|drawable| (drawable.to_owned(), drawable.texture().to_owned()))
-        }) {
-            Some(pair) => pair,
-            None => return Err(crate::SurfaceError::Timeout),
+        let next_drawable = || {
+            autoreleasepool(|_| {
+                render_layer
+                    .nextDrawable()
+                    .map(|drawable| drawable.to_owned())
+            })
         };
+        #[cfg(target_os = "macos")]
+        let receiver = self
+            .display_link
+            .lock()
+            .as_ref()
+            .map(|link| link.receiver.clone());
+        #[cfg(target_os = "macos")]
+        let drawable = match receiver {
+            Some(receiver) => receiver.take(_timeout),
+            None => next_drawable(),
+        };
+        #[cfg(not(target_os = "macos"))]
+        let drawable = next_drawable();
+
+        let Some(drawable) = drawable else {
+            return Err(crate::SurfaceError::Timeout);
+        };
+        let texture = drawable.texture().to_owned();
 
         let swapchain_format = self.swapchain_format.read().unwrap();
         let extent = self.extent.read();
