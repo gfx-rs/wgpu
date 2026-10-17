@@ -1184,6 +1184,14 @@ impl FunctionInfo {
                     }
                     FunctionUniformity::new()
                 }
+                S::SubgroupBallotFindBit {
+                    order: _,
+                    argument,
+                    result: _,
+                } => {
+                    let _ = self.add_ref(argument);
+                    FunctionUniformity::new()
+                }
                 S::CooperativeStore { target, ref data } => FunctionUniformity {
                     result: Uniformity {
                         non_uniform_result: self

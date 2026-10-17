@@ -404,6 +404,18 @@ impl StatementGraph {
                         },
                     }
                 }
+                S::SubgroupBallotFindBit {
+                    order,
+                    argument,
+                    result,
+                } => {
+                    self.dependencies.push((id, argument, "arg"));
+                    self.emits.push((id, result));
+                    match order {
+                        crate::BallotFindBitOrder::Lsb => "SubgroupBallotFindLSB",
+                        crate::BallotFindBitOrder::Msb => "SubgroupBallotFindMSB",
+                    }
+                }
                 S::CooperativeStore { target, data } => {
                     self.dependencies.push((id, target, "target"));
                     self.dependencies.push((id, data.pointer, "pointer"));
