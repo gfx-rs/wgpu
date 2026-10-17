@@ -1514,47 +1514,6 @@ impl Interface {
             .unwrap_or_default()
     }
 
-    /// Select an entry point name, given an optional name and a shader stage.
-    ///
-    /// See [`ShaderModule::finalize_entry_point_name`] for details.
-    ///
-    /// [`ShaderModule::finalize_entry_point_name`]: crate::pipeline::ShaderModule::finalize_entry_point_name
-    pub fn finalize_entry_point_name(
-        &self,
-        stage: naga::ShaderStage,
-        entry_point_name: Option<&str>,
-    ) -> Result<String, StageError> {
-        match entry_point_name {
-            Some(name) => {
-                // Ensure that there is an entry point for `stage` with the
-                // given name, and return the name.
-                let key = EntryPointKey(stage, name.to_string());
-                if !self.entry_points.contains_key(&key) {
-                    return Err(StageError::NoEntryPointWithNameForStage {
-                        stage,
-                        name: name.to_string(),
-                    });
-                }
-                Ok(key.1)
-            }
-            None => {
-                // Ensure that there is exactly one entry point for `stage`, and
-                // return its name.
-                let mut entry_points = self
-                    .entry_points
-                    .keys()
-                    .filter(|&&EntryPointKey(key_stage, _)| key_stage == stage);
-                let Some(EntryPointKey(_, first_name)) = entry_points.next() else {
-                    return Err(StageError::NoEntryPointForStage(stage));
-                };
-                if entry_points.next().is_some() {
-                    return Err(StageError::AmbiguousEntryPointForStage(stage));
-                }
-                Ok(first_name.clone())
-            }
-        }
-    }
-
     /// Analyze and validate an entry point for use as a given shader stage.
     ///
     /// Validate the entry point named `entry_point_name` for use in
