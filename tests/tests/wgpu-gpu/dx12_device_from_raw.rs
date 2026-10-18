@@ -74,7 +74,11 @@ mod windows_impl {
             .unwrap()
             .AdapterLuid;
 
-        let raw_device = native_create_device(hal_adapter.as_raw());
+        // Use the device created by wgpu, so it comes from the same D3D12 runtime as the adapter.
+        let raw_device = unsafe { ctx.device.as_hal::<dx12::Api>() }
+            .unwrap()
+            .raw_device()
+            .clone();
         let raw_queue = native_create_queue(&raw_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 
         // A queue that is not a direct queue is rejected.
