@@ -1657,6 +1657,24 @@ fn used() {
 }
 
 #[test]
+fn override_in_array_size_expression() {
+    // The array size expression creates an anonymous override that sits in
+    // the overrides arena ahead of `ov2`.
+    override_test(
+        "
+var<workgroup> arr: array<u32, ov * 2>;
+override ov2: u32 = ov + 1;
+
+@compute @workgroup_size(ov2)
+fn used() {
+    _ = arr[0];
+}
+",
+        None,
+    );
+}
+
+#[test]
 fn override_in_global_init() {
     override_test(
         "
