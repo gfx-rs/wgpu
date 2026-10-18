@@ -990,7 +990,7 @@ static DYNAMIC_OFFSET_BUFFER_BINDING_INIT: GpuTestConfiguration = GpuTestConfigu
         );
     });
 
-#[gpu_test]
+#[apply(gpu_test!)]
 static ZERO_INIT_MULTIPLANAR_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgt::Features::TEXTURE_FORMAT_NV12))
     .run_sync(|ctx| {
