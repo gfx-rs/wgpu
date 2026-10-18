@@ -2058,6 +2058,16 @@ bitflags!(
 );
 
 impl FormatAspects {
+    /// Computes a [`FormatAspects`] mask from a [`wgt::TextureFormat`] and [`wgt::TextureAspect`].
+    ///
+    /// When called from `wgpu-core`, additional validation of the return value is typically
+    /// required:
+    ///
+    /// - This function returns an empty mask, if `aspect` does not identify any
+    ///   valid aspect(s) of `format`.
+    /// - This function returns a mask of all valid aspects, if `aspect` is
+    ///   [`wgt::TextureAspect::All`], but some texture operations do not
+    ///   support that.
     pub fn new(format: wgt::TextureFormat, aspect: wgt::TextureAspect) -> Self {
         let aspect_mask = match aspect {
             wgt::TextureAspect::All => Self::all(),

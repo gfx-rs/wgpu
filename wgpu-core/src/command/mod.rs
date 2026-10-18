@@ -72,8 +72,8 @@ pub(crate) use self::{
     memory_init::CommandBufferTextureMemoryActions,
     render::{get_dst_stride_of_indirect_args, get_src_stride_of_indirect_args, VertexState},
     transfer::{
-        extract_texture_selector, validate_linear_texture_data, validate_texture_buffer_copy,
-        validate_texture_copy_dst_format, validate_texture_copy_range,
+        validate_linear_texture_data, validate_texture_buffer_copy,
+        validate_texture_copy_dst_format, validate_texture_copy_range, CopyRange,
     },
 };
 

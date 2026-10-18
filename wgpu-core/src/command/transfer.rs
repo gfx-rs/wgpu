@@ -239,47 +239,6 @@ impl From<BufferTextureCopyInfoError> for TransferError {
     }
 }
 
-pub(crate) fn extract_texture_selector<T>(
-    copy_texture: &wgt::TexelCopyTextureInfo<T>,
-    copy_size: &Extent3d,
-    texture: &Texture,
-) -> Result<(TextureSelector, hal::TextureCopyBase), TransferError> {
-    let format = texture.desc.format;
-    let copy_aspect = hal::FormatAspects::new(format, copy_texture.aspect);
-    if copy_aspect.is_empty() {
-        return Err(TransferError::InvalidTextureAspect {
-            format,
-            aspect: copy_texture.aspect,
-        });
-    }
-
-    let (layers, origin_z) = match texture.desc.dimension {
-        wgt::TextureDimension::D1 => (0..1, 0),
-        wgt::TextureDimension::D2 => (
-            copy_texture.origin.z..copy_texture.origin.z + copy_size.depth_or_array_layers,
-            0,
-        ),
-        wgt::TextureDimension::D3 => (0..1, copy_texture.origin.z),
-    };
-    let base = hal::TextureCopyBase {
-        origin: wgt::Origin3d {
-            x: copy_texture.origin.x,
-            y: copy_texture.origin.y,
-            z: origin_z,
-        },
-        // this value will be incremented per copied layer
-        array_layer: layers.start,
-        mip_level: copy_texture.mip_level,
-        aspect: copy_aspect,
-    };
-    let selector = TextureSelector {
-        mips: copy_texture.mip_level..copy_texture.mip_level + 1,
-        layers,
-    };
-
-    Ok((selector, base))
-}
-
 /// WebGPU's [validating linear texture data][vltd] algorithm.
 ///
 /// Copied with some modifications from WebGPU standard.
@@ -487,13 +446,20 @@ pub(crate) fn validate_texture_buffer_copy<T>(
     Ok(())
 }
 
+pub(crate) struct CopyRange {
+    pub hal_copy_extent: hal::CopyExtent,
+    pub hal_base: hal::TextureCopyBase,
+    pub array_layer_count: u32,
+    pub selector: TextureSelector,
+}
+
 /// Validate the extent and alignment of a texture copy.
 ///
 /// Copied with minor modifications from WebGPU standard. This mostly follows
 /// the [validating GPUTexelCopyTextureInfo][vtcti] and [validating texture copy
 /// range][vtcr] algorithms.
 ///
-/// Returns the HAL copy extent and the layer count.
+/// Returns a validated [`CopyRange`].
 ///
 /// [vtcti]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-gputexelcopytextureinfo
 /// [vtcr]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-texture-copy-range
@@ -502,7 +468,15 @@ pub(crate) fn validate_texture_copy_range<T>(
     desc: &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
     texture_side: CopySide,
     copy_size: &Extent3d,
-) -> Result<(hal::CopyExtent, u32), TransferError> {
+) -> Result<CopyRange, TransferError> {
+    let hal_aspects = hal::FormatAspects::new(desc.format, texture_copy_view.aspect);
+    if hal_aspects.is_empty() {
+        return Err(TransferError::InvalidTextureAspect {
+            format: desc.format,
+            aspect: texture_copy_view.aspect,
+        });
+    }
+
     let (block_width, block_height) = desc.format.block_dimensions();
 
     let extent_virtual = desc.mip_level_size(texture_copy_view.mip_level).ok_or(
@@ -592,12 +566,43 @@ pub(crate) fn validate_texture_copy_range<T>(
         wgt::TextureDimension::D3 => (copy_size.depth_or_array_layers, 1),
     };
 
-    let copy_extent = hal::CopyExtent {
+    let hal_copy_extent = hal::CopyExtent {
         width: copy_size.width,
         height: copy_size.height,
         depth,
     };
-    Ok((copy_extent, array_layer_count))
+
+    let (layers, origin_z) = match desc.dimension {
+        wgt::TextureDimension::D1 => (0..1, 0),
+        wgt::TextureDimension::D2 => (
+            texture_copy_view.origin.z
+                ..texture_copy_view.origin.z + copy_size.depth_or_array_layers,
+            0,
+        ),
+        wgt::TextureDimension::D3 => (0..1, texture_copy_view.origin.z),
+    };
+    let hal_base = hal::TextureCopyBase {
+        origin: wgt::Origin3d {
+            x: texture_copy_view.origin.x,
+            y: texture_copy_view.origin.y,
+            z: origin_z,
+        },
+        // this value will be incremented per copied layer
+        array_layer: layers.start,
+        mip_level: texture_copy_view.mip_level,
+        aspect: hal_aspects,
+    };
+    let selector = TextureSelector {
+        mips: texture_copy_view.mip_level..texture_copy_view.mip_level + 1,
+        layers,
+    };
+
+    Ok(CopyRange {
+        hal_copy_extent,
+        hal_base,
+        array_layer_count,
+        selector,
+    })
 }
 
 /// Validate a copy within the same texture.
@@ -1219,14 +1224,17 @@ pub(super) fn copy_buffer_to_texture(
     dst_texture.same_device(state.device)?;
     src_buffer.same_device(state.device)?;
 
-    let (hal_copy_size, array_layer_count) = validate_texture_copy_range(
+    let CopyRange {
+        hal_copy_extent,
+        hal_base: dst_base,
+        array_layer_count,
+        selector: dst_range,
+    } = validate_texture_copy_range(
         destination,
         &dst_texture.desc,
         CopySide::Destination,
         copy_size,
     )?;
-
-    let (dst_range, dst_base) = extract_texture_selector(destination, copy_size, dst_texture)?;
 
     let src_raw = src_buffer.try_raw(state.snatch_guard)?;
     src_buffer
@@ -1309,7 +1317,7 @@ pub(super) fn copy_buffer_to_texture(
             hal::BufferTextureCopy {
                 buffer_layout,
                 texture_base,
-                size: hal_copy_size,
+                size: hal_copy_extent,
             }
         })
         .collect::<Vec<_>>();
@@ -1337,10 +1345,12 @@ pub(super) fn copy_texture_to_buffer(
     src_texture.same_device(state.device)?;
     dst_buffer.same_device(state.device)?;
 
-    let (hal_copy_size, array_layer_count) =
-        validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;
-
-    let (src_range, src_base) = extract_texture_selector(source, copy_size, src_texture)?;
+    let CopyRange {
+        hal_copy_extent,
+        hal_base: src_base,
+        array_layer_count,
+        selector: src_range,
+    } = validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;
 
     let src_raw = src_texture.try_inner(state.snatch_guard)?.raw();
     src_texture
@@ -1432,7 +1442,7 @@ pub(super) fn copy_texture_to_buffer(
             hal::BufferTextureCopy {
                 buffer_layout,
                 texture_base,
-                size: hal_copy_size,
+                size: hal_copy_extent,
             }
         })
         .collect::<Vec<_>>();
@@ -1487,9 +1497,18 @@ pub(super) fn copy_texture_to_texture(
         .into());
     }
 
-    let (src_copy_size, array_layer_count) =
-        validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;
-    let (dst_copy_size, _) = validate_texture_copy_range(
+    let CopyRange {
+        hal_copy_extent: src_copy_size,
+        hal_base: src_tex_base,
+        array_layer_count,
+        selector: src_range,
+    } = validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;
+    let CopyRange {
+        hal_copy_extent: dst_copy_size,
+        hal_base: dst_tex_base,
+        array_layer_count: _,
+        selector: dst_range,
+    } = validate_texture_copy_range(
         destination,
         &dst_texture.desc,
         CopySide::Destination,
@@ -1544,8 +1563,6 @@ pub(super) fn copy_texture_to_texture(
         )?;
     }
 
-    let (src_range, src_tex_base) = extract_texture_selector(source, copy_size, src_texture)?;
-    let (dst_range, dst_tex_base) = extract_texture_selector(destination, copy_size, dst_texture)?;
     let src_texture_aspects = hal::FormatAspects::from(src_texture.desc.format);
     let dst_texture_aspects = hal::FormatAspects::from(dst_texture.desc.format);
     // `planar_split_ok` already constrains `source.aspect` to a single plane.
