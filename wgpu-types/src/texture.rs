@@ -119,7 +119,11 @@ impl TextureViewDimension {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum TextureAspect {
-    /// Depth, Stencil, and Color.
+    /// All applicable aspects
+    ///
+    /// For formats with a single aspect (including regular color formats), this means that
+    /// aspect. For combined depth+stencil formats, this means both the depth and stencil
+    /// aspects. For multi-planar formats, this means all planes.
     #[custom(default)]
     All,
     /// Stencil.
