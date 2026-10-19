@@ -856,6 +856,10 @@ unsafe impl Sync for Buffer {}
 impl crate::DynBuffer for Buffer {}
 
 impl Buffer {
+    pub fn raw_handle(&self) -> &ProtocolObject<dyn MTLBuffer> {
+        &self.raw
+    }
+
     fn as_raw(&self) -> NonNull<ProtocolObject<dyn MTLBuffer>> {
         unsafe { NonNull::new_unchecked(Retained::as_ptr(&self.raw) as *mut _) }
     }
