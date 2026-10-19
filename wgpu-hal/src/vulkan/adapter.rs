@@ -363,6 +363,7 @@ impl PhysicalDeviceFeatures {
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::PRIMITIVE_INDEX))
                 .depth_clamp(requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL))
+                .depth_bias_clamp(downlevel_flags.contains(wgt::DownlevelFlags::DEPTH_BIAS_CLAMP))
                 .dual_src_blend(requested_features.contains(wgt::Features::DUAL_SOURCE_BLENDING)),
             descriptor_indexing: if requested_features.intersects(INDEXING_FEATURES) {
                 Some(
@@ -2481,12 +2482,16 @@ impl super::Instance {
         let private_caps = super::PrivateCapabilities {
             image_view_usage: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(khr::maintenance2::NAME),
-            timeline_semaphores: match phd_features.timeline_semaphore {
-                Some(features) => features.timeline_semaphore == vk::TRUE,
-                None => phd_features
-                    .timeline_semaphore
-                    .is_some_and(|ext| ext.timeline_semaphore != 0),
-            },
+            // VeriSilicon's proprietary driver, as on NXP's i.MX 8 SoCs, advertises timeline
+            // semaphores but crashes in `vkQueueSubmit` when wgpu uses them. It reports
+            // `VK_DRIVER_ID_MESA_RADV` as its driver ID, so only the vendor ID identifies it.
+            timeline_semaphores: phd_capabilities.properties.vendor_id != db::verisilicon::VENDOR
+                && match phd_features.timeline_semaphore {
+                    Some(features) => features.timeline_semaphore == vk::TRUE,
+                    None => phd_features
+                        .timeline_semaphore
+                        .is_some_and(|ext| ext.timeline_semaphore != 0),
+                },
             texture_d24: supports_format(
                 &self.shared.raw,
                 phd,
