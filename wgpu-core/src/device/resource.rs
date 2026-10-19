@@ -2806,7 +2806,15 @@ impl Device {
             descriptor
                 .entry_points
                 .iter()
-                .map(|e| (e.name.to_string(), e.workgroup_size))
+                .map(|e| {
+                    (
+                        e.name.to_string(),
+                        hal::MetalShaderEntryPoint {
+                            workgroup_size: e.workgroup_size,
+                            workgroup_memory_sizes: e.workgroup_memory_sizes.to_vec(),
+                        },
+                    )
+                })
                 .collect()
         };
 
@@ -2830,12 +2838,12 @@ impl Device {
                 if let Some(metallib) = &descriptor.metallib {
                     hal::ShaderInput::MetalLib {
                         file: metallib,
-                        num_workgroups: entry_point_hashmap(),
+                        entry_points: entry_point_hashmap(),
                     }
                 } else if let Some(msl) = &descriptor.msl {
                     hal::ShaderInput::Msl {
                         shader: msl,
-                        num_workgroups: entry_point_hashmap(),
+                        entry_points: entry_point_hashmap(),
                     }
                 } else {
                     return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
