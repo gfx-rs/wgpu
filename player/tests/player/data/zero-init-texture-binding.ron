@@ -79,21 +79,21 @@
                 (
                     binding: 0,
                     visibility: "COMPUTE",
-                    ty: Texture (
+                    texture: Some(TextureBindingLayout(
                         sample_type: Float(filterable: true),
                         view_dimension: r#2d,
                         multisampled: false,
-                    ),
+                    )),
                     count: None,
                 ),
                 (
                     binding: 1,
                     visibility: "COMPUTE",
-                    ty: StorageTexture (
+                    storage_texture: Some(StorageTextureBindingLayout(
                         access: r#write-only,
                         format: "rgba8unorm",
                         view_dimension: r#2d,
-                    ),
+                    )),
                     count: None,
                 ),
             ],

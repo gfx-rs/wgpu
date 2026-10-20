@@ -4,6 +4,8 @@ edition = "2024"
 rust-version = "1.87"
 publish = false
 
+[lints]
+
 [dependencies]
 bytemuck = { version = "1.22.0", features = ["extern_crate_alloc"] }
 env_logger = "0.11"

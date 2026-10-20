@@ -824,6 +824,7 @@ impl super::Validator {
                     }
                     crate::RayQueryFunction::ConfirmIntersection => {}
                     crate::RayQueryFunction::Terminate => {}
+                    crate::RayQueryFunction::Begin => {}
                 }
                 Ok(())
             }
@@ -879,6 +880,15 @@ impl super::Validator {
                     Ok(())
                 }
             },
+            crate::Statement::DebugPrintf {
+                format: _,
+                ref arguments,
+            } => {
+                for &arg in arguments {
+                    validate_expr(arg)?;
+                }
+                Ok(())
+            }
             crate::Statement::Break
             | crate::Statement::Continue
             | crate::Statement::Kill

@@ -87,7 +87,6 @@ metal = [
     "dep:profiling",
     "dep:smallvec",
     "dep:raw-window-metal",
-    "dep:wgpu-sync",
 ]
 vulkan = [
     "naga/spv-out",
@@ -102,7 +101,6 @@ vulkan = [
     "dep:profiling",
     "dep:raw-window-metal",
     "dep:smallvec",
-    "dep:wgpu-sync",
     "dep:windows",
     "dep:windows-core",
     "gpu-allocator/vulkan",
@@ -127,7 +125,6 @@ gles = [
     "dep:wasm-bindgen",
     "dep:wayland-sys",
     "dep:web-sys",
-    "dep:wgpu-sync",
     "dep:windows-result",
     "naga/glsl-out",
     "wgpu-sync/std", # Required for send/sync
@@ -148,7 +145,6 @@ dx12 = [
     "dep:ordered-float",
     "dep:profiling",
     "dep:range-alloc",
-    "dep:wgpu-sync",
     "dep:windows-core",
     "gpu-allocator/d3d12",
     "naga/hlsl-out",
@@ -179,7 +175,7 @@ renderdoc = ["dep:libloading", "dep:renderdoc-sys"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
-portable-atomic = ["dep:portable-atomic", "dep:portable-atomic-util"]
+portable-atomic = ["wgpu-sync/portable-atomic"]
 
 ###################################
 ### Internal Debugging Features ###
@@ -196,7 +192,6 @@ device_lost_panic = []
 internal_error_panic = []
 # Tracks validation errors in a `VALIDATION_CANARY` static.
 validation_canary = [
-    "dep:wgpu-sync",
     "wgpu-sync/std", # Required for send/sync
 ]
 
@@ -215,7 +210,7 @@ required-features = ["gles"]
 naga.workspace = true
 wgpu-naga-bridge.workspace = true
 naga-types = { workspace = true }
-wgpu-sync = { workspace = true, default-features = false, optional = true }
+wgpu-sync = { workspace = true, default-features = false }
 wgpu-types = { workspace = true, default-features = false }
 
 # Dependencies in the lib and empty backend
@@ -347,14 +342,6 @@ khronos-egl = { workspace = true, optional = true, features = [
 ] }
 # Note: it's unused by emscripten, but we keep it to have single code base in egl.rs
 libloading = { workspace = true, optional = true }
-
-[target.'cfg(any(not(target_has_atomic = "64"), not(target_has_atomic = "ptr")))'.dependencies]
-portable-atomic = { workspace = true, optional = true }
-
-[target.'cfg(not(target_has_atomic = "ptr"))'.dependencies]
-portable-atomic-util = { workspace = true, features = [
-    "alloc",
-], optional = true }
 
 ### Platform: Windows + MacOS + Linux for "raw-gles" example ###
 [target.'cfg(not(any(target_family = "wasm", target_os = "ios", target_os = "visionos", target_env = "ohos")))'.dev-dependencies]

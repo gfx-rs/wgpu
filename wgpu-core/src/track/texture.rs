@@ -23,8 +23,8 @@ use crate::{
     resource::{RawResourceAccess, Texture, TextureInner, TextureView, Trackable},
     snatch::SnatchGuard,
     track::{
-        invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
-        ResourceUsageCompatibilityError, ResourceUses,
+        skip_barrier, ResourceMetadata, ResourceMetadataProvider, ResourceUsageCompatibilityError,
+        ResourceUses,
     },
 };
 use hal::TextureBarrier;
@@ -40,17 +40,48 @@ use alloc::{
 };
 use core::iter;
 
+/// Returns true if the transition from `old` to `new` does not require a barrier,
+/// ignoring which read-only aspect was sampled (`DEPTH_SAMPLED`/`STENCIL_SAMPLED`).
+fn skip_barrier_ignore_texture_flags(
+    old: TextureUses,
+    ordered_uses_mask: TextureUses,
+    new: TextureUses,
+) -> bool {
+    let aspect_sampled = TextureUses::DEPTH_SAMPLED | TextureUses::STENCIL_SAMPLED;
+    skip_barrier(
+        old - aspect_sampled,
+        ordered_uses_mask,
+        new - aspect_sampled,
+    )
+}
+
 impl ResourceUses for TextureUses {
     const EXCLUSIVE: Self = Self::EXCLUSIVE;
 
     type Selector = TextureSelector;
 
-    fn bits(self) -> u16 {
+    fn bits(self) -> u32 {
         Self::bits(&self)
     }
 
     fn any_exclusive(self) -> bool {
         self.intersects(Self::EXCLUSIVE)
+    }
+
+    fn is_invalid(self) -> bool {
+        let valid_ds = [
+            Self::DEPTH_WRITE | Self::STENCIL_WRITE,
+            Self::DEPTH_WRITE | Self::STENCIL_READ,
+            Self::STENCIL_WRITE | Self::DEPTH_READ,
+            Self::DEPTH_WRITE | Self::RESOURCE | Self::STENCIL_READ,
+            Self::STENCIL_WRITE | Self::RESOURCE | Self::DEPTH_READ,
+            Self::DEPTH_WRITE | Self::RESOURCE | Self::STENCIL_READ | Self::STENCIL_SAMPLED,
+            Self::STENCIL_WRITE | Self::RESOURCE | Self::DEPTH_READ | Self::DEPTH_SAMPLED,
+        ];
+        (self.any_exclusive() && self.bits().count_ones() != 1)
+            || (self.intersects(Self::DEPTH_WRITE | Self::STENCIL_WRITE)
+                && self.bits().count_ones() != 1
+                && !valid_ds.contains(&self))
     }
 }
 
@@ -102,7 +133,7 @@ impl ComplexTextureState {
 
             // This should only ever happen with a wgpu bug, but let's just double
             // check that resource states don't have any conflicts.
-            strict_assert_eq!(invalid_resource_state(desired_state), false);
+            strict_assert_eq!(desired_state.is_invalid(), false);
 
             let mips = selector.mips.start as usize..selector.mips.end as usize;
             for mip in unsafe { complex.mips.get_unchecked_mut(mips) } {
@@ -1113,7 +1144,7 @@ unsafe fn insert<T: Clone>(
         SingleOrManyStates::Single(state) => {
             // This should only ever happen with a wgpu bug, but let's just double
             // check that resource states don't have any conflicts.
-            strict_assert_eq!(invalid_resource_state(state), false);
+            strict_assert_eq!(state.is_invalid(), false);
 
             if let Some(start_state) = start_state {
                 unsafe { start_state.insert_simple_unchecked(index, state) };
@@ -1146,7 +1177,7 @@ unsafe fn insert<T: Clone>(
             SingleOrManyStates::Single(state) => {
                 // This should only ever happen with a wgpu bug, but let's just double
                 // check that resource states don't have any conflicts.
-                strict_assert_eq!(invalid_resource_state(state), false);
+                strict_assert_eq!(state.is_invalid(), false);
 
                 // We only need to insert into the end, as there is guaranteed to be
                 // a start state provider.
@@ -1188,7 +1219,7 @@ unsafe fn merge(
         (SingleOrManyStates::Single(current_simple), SingleOrManyStates::Single(new_simple)) => {
             let merged_state = *current_simple | new_simple;
 
-            if invalid_resource_state(merged_state) {
+            if merged_state.is_invalid() {
                 return Err(ResourceUsageCompatibilityError::from_texture(
                     unsafe { metadata_provider.get(index) },
                     texture_selector.clone(),
@@ -1213,7 +1244,7 @@ unsafe fn merge(
             for (selector, new_state) in new_many {
                 let merged_state = *current_simple | new_state;
 
-                if invalid_resource_state(merged_state) {
+                if merged_state.is_invalid() {
                     return Err(ResourceUsageCompatibilityError::from_texture(
                         unsafe { metadata_provider.get(index) },
                         selector,
@@ -1248,7 +1279,7 @@ unsafe fn merge(
                     // simple states are never unknown.
                     let merged_state = merged_state - TextureUses::UNKNOWN;
 
-                    if invalid_resource_state(merged_state) {
+                    if merged_state.is_invalid() {
                         return Err(ResourceUsageCompatibilityError::from_texture(
                             unsafe { metadata_provider.get(index) },
                             TextureSelector {
@@ -1284,7 +1315,7 @@ unsafe fn merge(
                             continue;
                         }
 
-                        if invalid_resource_state(merged_state) {
+                        if merged_state.is_invalid() {
                             return Err(ResourceUsageCompatibilityError::from_texture(
                                 unsafe { metadata_provider.get(index) },
                                 TextureSelector {
@@ -1321,7 +1352,7 @@ unsafe fn barrier(
 
     match (current_state, new_state) {
         (SingleOrManyStates::Single(current_simple), SingleOrManyStates::Single(new_simple)) => {
-            if skip_barrier(current_simple, ordered_uses_mask, new_simple) {
+            if skip_barrier_ignore_texture_flags(current_simple, ordered_uses_mask, new_simple) {
                 return;
             }
 
@@ -1340,7 +1371,7 @@ unsafe fn barrier(
                     continue;
                 }
 
-                if skip_barrier(current_simple, ordered_uses_mask, new_state) {
+                if skip_barrier_ignore_texture_flags(current_simple, ordered_uses_mask, new_state) {
                     continue;
                 }
 
@@ -1363,7 +1394,11 @@ unsafe fn barrier(
                         continue;
                     }
 
-                    if skip_barrier(current_layer_state, ordered_uses_mask, new_simple) {
+                    if skip_barrier_ignore_texture_flags(
+                        current_layer_state,
+                        ordered_uses_mask,
+                        new_simple,
+                    ) {
                         continue;
                     }
 
@@ -1395,7 +1430,11 @@ unsafe fn barrier(
                             continue;
                         }
 
-                        if skip_barrier(*current_layer_state, ordered_uses_mask, new_state) {
+                        if skip_barrier_ignore_texture_flags(
+                            *current_layer_state,
+                            ordered_uses_mask,
+                            new_state,
+                        ) {
                             continue;
                         }
 

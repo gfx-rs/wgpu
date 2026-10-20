@@ -11,7 +11,7 @@ spec becomes more concrete, we will implement to follow the spec more closely.
 
 In addition, setting the `DENO_WEBGPU_TRACE` environmental variable will output
 a
-[wgpu trace](https://github.com/gfx-rs/wgpu/wiki/Debugging-wgpu-Applications#tracing-infrastructure)
+[wgpu trace](https://docs.rs/wgpu/latest/wgpu/documentation/debugging/debugging_applications/index.html#tracing-infrastructure)
 to the specified directory.
 
 This op crate is tested primarily by running the

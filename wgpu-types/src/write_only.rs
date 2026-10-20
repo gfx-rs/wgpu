@@ -46,7 +46,7 @@ pub struct WriteOnly<'a, T: ?Sized> {
     /// The data which this write-only reference allows **writing** to.
     ///
     /// This field is not `&mut T`, because if it were, it would assert to the compiler
-    /// that spurious reads may be inserted, and is is unclear whether those spurious reads
+    /// that spurious reads may be inserted, and it is unclear whether those spurious reads
     /// are acceptable.
     ptr: NonNull<T>,
 
@@ -648,7 +648,7 @@ impl<'a, T> WriteOnly<'a, [T]> {
     /// or if the alignment of type `U` is greater than the alignment of type `T`.
     ///
     /// This panic occurs regardless of the run-time length or alignment of the slice;
-    /// any call to `cast_elements()` with a particular type `T` and typ` U` will
+    /// any call to `cast_elements()` with particular types `T` and `U` will
     /// either always succeed or always fail.
     #[inline]
     #[track_caller]

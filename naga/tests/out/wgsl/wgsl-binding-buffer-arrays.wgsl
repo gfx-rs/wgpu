@@ -22,14 +22,14 @@ struct FragmentIn {
     @location(0) @interpolate(flat) index: u32,
 }
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage> storage_array: binding_array<Foo>;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage> plain_storage: PlainData;
-@group(0) @binding(10) 
+@group(0) @binding(10)
 var<uniform> uni: UniformIndex;
 
-@fragment 
+@fragment
 fn main(fragment_in: FragmentIn) -> @location(0) u32 {
     var u1_: u32 = 0u;
 

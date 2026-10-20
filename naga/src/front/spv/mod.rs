@@ -1665,6 +1665,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 }
                 S::WorkGroupUniformLoad { .. } => unreachable!(),
                 S::CooperativeStore { .. } => unreachable!(),
+                // TODO: the SPIR-V frontend does not read `NonSemantic.DebugPrintf` extended
+                // instructions yet, so this statement is never produced here.
+                S::DebugPrintf { .. } => unreachable!(),
             }
             i += 1;
         }
@@ -3042,7 +3045,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         | crate::BuiltIn::SampleIndex
                         | crate::BuiltIn::VertexIndex
                         | crate::BuiltIn::PrimitiveIndex
-                        | crate::BuiltIn::LocalInvocationIndex => {
+                        | crate::BuiltIn::LocalInvocationIndex
+                        | crate::BuiltIn::ViewIndex => {
                             Some(crate::TypeInner::Scalar(crate::Scalar::U32))
                         }
                         crate::BuiltIn::GlobalInvocationId

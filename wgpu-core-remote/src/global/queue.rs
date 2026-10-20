@@ -1,7 +1,8 @@
+use wgpu_core_remote_types::encoders::TexelCopyTextureInfo;
 use wgpu_core_remote_types::{SubmissionIndex, SubmittedWorkDoneClosure};
 
 use crate::global::Global;
-use crate::id::{BufferId, CommandBufferId, QueueId, TextureId};
+use crate::id::{BufferId, CommandBufferId, QueueId};
 
 impl Global {
     pub fn queue_write_buffer(
@@ -21,7 +22,7 @@ impl Global {
     pub fn queue_write_texture(
         &self,
         queue_id: QueueId,
-        destination: &wgt::TexelCopyTextureInfo<TextureId>,
+        destination: &TexelCopyTextureInfo,
         data: &[u8],
         data_layout: &wgt::TexelCopyBufferLayout,
         size: &wgt::Extent3d,

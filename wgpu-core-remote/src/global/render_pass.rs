@@ -4,11 +4,11 @@ use wgpu_core_remote_types::encoders::{
 };
 
 use wgpu_core::command::{
-    PassTimestampWrites, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
+    PassTimestampWrites, RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
     ResolvedRenderPassDescriptor,
 };
 use wgpu_core_remote_types::ffi::FfiOption;
-use wgt::{BufferAddress, BufferSize, Color, DynamicOffset, IndexFormat};
+use wgt::{BufferAddress, Color, DynamicOffset, IndexFormat};
 
 use crate::global::Global;
 use crate::hub::Hub;
@@ -108,9 +108,9 @@ impl Global {
         pass.end()
     }
 
-    pub fn render_pass_drop(&self, pass: id::RenderPassEncoderId) {
+    pub fn render_pass_remove(&self, pass: id::RenderPassEncoderId) -> RenderPass {
         let mut hub = self.hub.borrow_mut();
-        hub.render_passes.remove(pass);
+        hub.render_passes.remove(pass)
     }
 }
 
@@ -162,7 +162,7 @@ impl Global {
         buffer_id: id::BufferId,
         index_format: IndexFormat,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+        size: Option<BufferAddress>,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -180,7 +180,7 @@ impl Global {
         slot: u32,
         buffer_id: Option<id::BufferId>,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+        size: Option<BufferAddress>,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -466,25 +466,13 @@ impl Global {
                     index_format,
                     offset,
                     size,
-                } => self.render_pass_set_index_buffer(
-                    pass_id,
-                    buffer,
-                    index_format,
-                    offset,
-                    size.and_then(core::num::NonZeroU64::new), // pass size directly once https://github.com/gfx-rs/wgpu/issues/3170 is resolved
-                ),
+                } => self.render_pass_set_index_buffer(pass_id, buffer, index_format, offset, size),
                 RenderCommand::SetVertexBuffer {
                     slot,
                     buffer,
                     offset,
                     size,
-                } => self.render_pass_set_vertex_buffer(
-                    pass_id,
-                    slot,
-                    buffer,
-                    offset,
-                    size.and_then(core::num::NonZeroU64::new), // pass size directly once https://github.com/gfx-rs/wgpu/issues/3170 is resolved
-                ),
+                } => self.render_pass_set_vertex_buffer(pass_id, slot, buffer, offset, size),
                 RenderCommand::Draw {
                     vertex_count,
                     instance_count,

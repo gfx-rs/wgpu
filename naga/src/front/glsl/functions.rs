@@ -1364,8 +1364,10 @@ impl Frontend {
         ctx.module.entry_points.push(EntryPoint {
             name: "main".to_string(),
             stage: self.meta.stage,
-            early_depth_test: Some(crate::EarlyDepthTest::Force)
-                .filter(|_| self.meta.early_fragment_tests),
+            early_depth_test: self
+                .meta
+                .early_fragment_tests
+                .then_some(crate::EarlyDepthTest::Force),
             workgroup_size: self.meta.workgroup_size,
             workgroup_size_overrides: None,
             function: Function {
@@ -1419,7 +1421,7 @@ impl Context<'_> {
                 size: crate::ArraySize::Constant(size),
                 ..
             } => {
-                let mut location = match binding {
+                let location = match binding {
                     crate::Binding::Location { location, .. } => location,
                     crate::Binding::BuiltIn(_) => return Ok(()),
                 };
@@ -1443,13 +1445,12 @@ impl Context<'_> {
                     )?;
 
                     let binding = crate::Binding::Location {
-                        location,
+                        location: location + index,
                         interpolation,
                         sampling: None,
                         blend_src: None,
                         per_primitive: false,
                     };
-                    location += 1;
 
                     self.arg_type_walker(name.clone(), binding, member_pointer, base, f)?
                 }
@@ -1597,10 +1598,10 @@ fn builtin_required_variations<'a>(args: impl Iterator<Item = &'a TypeInner>) ->
             TypeInner::ValuePointer { scalar, .. }
             | TypeInner::Scalar(scalar)
             | TypeInner::Vector { scalar, .. }
-            | TypeInner::Matrix { scalar, .. } => {
-                if scalar == Scalar::F64 {
-                    variations |= BuiltinVariations::DOUBLE
-                }
+            | TypeInner::Matrix { scalar, .. }
+                if scalar == Scalar::F64 =>
+            {
+                variations |= BuiltinVariations::DOUBLE
             }
             TypeInner::Image {
                 dim,

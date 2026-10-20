@@ -44,9 +44,9 @@ test-build-with-profiling = ["profiling/type-check"]
 [dependencies]
 # Passthrough backend uses as_hal for the GLES backend, and there's not a great way to cfg-gate that.
 # These are all enabled for any testing on CI anyway, and won't do anything if no devices are detected.
-wgpu = { workspace = true, features = ["noop", "gles", "webgl", "angle"] }
-wgpu-core = { workspace = true, features = ["trace"] }
-wgpu-hal = { workspace = true, features = ["validation_canary"] }
+wgpu = { workspace = true, features = ["noop", "gles", "webgl", "angle", "counters"] }
+wgpu-core = { workspace = true, default-features = true, features = ["trace"] }
+wgpu-hal = { workspace = true, default-features = true, features = ["validation_canary"] }
 wgpu-sync.workspace = true
 wgpu-types.workspace = true
 naga = { workspace = true, features = [
@@ -88,8 +88,6 @@ trybuild.workspace = true
 
 # Non-Webassembly
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# Cargo-metadata doesn't compile on wasm due to old cargo-util-schemas dependency.
-cargo_metadata.workspace = true
 env_logger.workspace = true
 ureq.workspace = true
 
@@ -109,7 +107,17 @@ image.workspace = true
 js-sys.workspace = true
 wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }
+web-sys = { workspace = true, features = [
+    "CanvasRenderingContext2d",
+    "Blob",
+    "OffscreenCanvas",
+    "OffscreenCanvasRenderingContext2d",
+] }
+
+# Non-Webassembly Dev Dependencies
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+# Cargo-metadata doesn't compile on wasm due to old cargo-util-schemas dependency.
+cargo_metadata.workspace = true
 
 [lints.clippy]
 bool_assert_comparison = "allow"

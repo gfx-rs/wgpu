@@ -15,13 +15,7 @@
 //! See <https://github.com/bitflags/bitflags/issues/470>.
 
 use crate::{link_to_wgpu_docs, link_to_wgpu_item, VertexFormat};
-#[cfg(feature = "serde")]
-use alloc::fmt;
 use alloc::vec::Vec;
-#[cfg(feature = "serde")]
-use bitflags::parser::{ParseError, ParseHex, WriteHex};
-#[cfg(feature = "serde")]
-use bitflags::Bits;
 use bitflags::Flags;
 #[cfg(feature = "serde")]
 use core::mem::size_of;
@@ -88,67 +82,118 @@ mod webgpu_impl {
 
     #[doc(hidden)]
     pub const WEBGPU_FEATURE_PRIMITIVE_INDEX: u64 = 1 << 17;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE: u64 = 1 << 18;
 }
 
-macro_rules! bitflags_array_impl {
-    ($impl_name:ident $inner_name:ident $name:ident $op:tt $($struct_names:ident)*) => (
-        impl core::ops::$impl_name for $name {
-            type Output = Self;
+/// Prefer `From<(FeaturesWGPU, FeaturesWebGPU)>` instead, which protects against swapping
+/// the two feature sets.
+impl From<FeatureBits> for Features {
+    fn from(value: FeatureBits) -> Self {
+        Self::from_bits_retain(value)
+    }
+}
 
-            #[inline]
-            fn $inner_name(self, other: Self) -> Self {
-                Self {
-                    $($struct_names: self.$struct_names $op other.$struct_names,)*
-                }
-            }
+impl From<(FeaturesWGPU, FeaturesWebGPU)> for Features {
+    fn from(value: (FeaturesWGPU, FeaturesWebGPU)) -> Self {
+        let (wgpu, webgpu) = value;
+        Self::from_parts(wgpu, webgpu)
+    }
+}
+
+impl From<Features> for FeatureBits {
+    fn from(value: Features) -> Self {
+        value.bits()
+    }
+}
+
+/// Maps a feature's `#[web(...)]` attribute to whether the feature is allowed on the web
+/// backend, rejecting a missing or unrecognized value.
+macro_rules! web_attr_allows {
+    ($flag:tt; allow) => {
+        true
+    };
+    ($flag:tt; ignore) => {
+        false
+    };
+    ($flag:tt; $other:tt) => {
+        compile_error!(concat!(
+            "`#[web(",
+            stringify!($other),
+            ")]` on `",
+            stringify!($flag),
+            "`: the value must be `allow` or `ignore`",
+        ))
+    };
+    ($flag:tt;) => {
+        compile_error!(concat!(
+            "WebGPU feature `",
+            stringify!($flag),
+            "` needs a `#[web(allow)]` or `#[web(ignore)]` attribute",
+        ))
+    };
+}
+
+/// Generate the `Features::ALLOWED_ON_WEB_BACKEND` constant.
+///
+/// Each [`FeaturesWebGPU`] feature must have the `web` attribute, specifying
+/// whether or not to expose it on the web backend (typically yes, unless
+/// there are known deficiencies in the bindings that prevent using the
+/// feature). Standards-track native-only features can be added as special
+/// cases.
+macro_rules! features_web {
+    (FeaturesWebGPU; $($flag:tt [$($web:tt)?])*) => {
+        impl Features {
+            /// The features that the web backend will allow through from an underlying
+            /// browser WebGPU implementation.
+            ///
+            /// This may include bits in [`FeaturesWGPU`] for standards-track features
+            /// that have not yet been migrated to [`FeaturesWebGPU`].
+            pub const ALLOWED_ON_WEB_BACKEND: Self = Self::from_parts(
+                FeaturesWGPU::SUBGROUP,
+                FeaturesWebGPU::from_bits_retain(
+                    0 $(| if web_attr_allows!($flag; $($web)?) {
+                        FeaturesWebGPU::$flag.bits()
+                    } else {
+                        0
+                    })*
+                ),
+            );
         }
-    )
+    };
+    ($inner_name:tt; $($flag:tt [$($web:tt)?])*) => {
+        $($(
+            compile_error!(concat!(
+                "`#[web(", stringify!($web), ")]` on `", stringify!($flag),
+                "`: only `FeaturesWebGPU` features have a `web` attribute, and `",
+                stringify!($flag), "` is a `", stringify!($inner_name), "` feature",
+            ));
+        )?)*
+    };
 }
 
-macro_rules! bitflags_array_impl_assign {
-    ($impl_name:ident $inner_name:ident $name:ident $op:tt $($struct_names:ident)*) => (
-        impl core::ops::$impl_name for $name {
-            #[inline]
-            fn $inner_name(&mut self, other: Self) {
-                $(self.$struct_names $op other.$struct_names;)*
-            }
-        }
-    )
-}
-
-macro_rules! bit_array_impl {
-    ($impl_name:ident $inner_name:ident $name:ident $op:tt) => (
-        impl core::ops::$impl_name for $name {
-            type Output = Self;
-
-            #[inline]
-            fn $inner_name(mut self, other: Self) -> Self {
-                for (inner, other) in self.0.iter_mut().zip(other.0.iter()) {
-                    *inner $op *other;
-                }
-                self
-            }
-        }
-    )
-}
-
-macro_rules! bitflags_independent_two_arg {
-    ($(#[$meta:meta])* $func_name:ident $($struct_names:ident)*) => (
-        $(#[$meta])*
-        pub const fn $func_name(self, other:Self) -> Self {
-            Self { $($struct_names: self.$struct_names.$func_name(other.$struct_names),)* }
-        }
-    )
-}
-
-// For the most part this macro should not be modified, most configuration should be possible
-// without changing this macro.
-/// Macro for creating sets of bitflags, we need this because there are almost more flags than bits
-/// in a u64, we can't use a u128 because of FFI, and the number of flags is increasing.
-macro_rules! bitflags_array {
+/// Defines the feature bitflags, using [`bitflags_array`](crate::bitflags_array) for storage.
+///
+/// On top of what `bitflags_array!` accepts, each flag carries feature-specific attributes,
+/// written after its doc comments. These are consumed here rather than passed on to
+/// `bitflags_array!`. Adding another one means adding a matcher for it, in a fixed position
+/// relative to the existing ones, and generating whatever it should produce.
+///
+/// `#[name("kebab-case-name", "alias", ...)]` gives the names that the WebGPU API uses for
+/// the feature: the name from the spec, for features in [`FeaturesWebGPU`], and otherwise a
+/// `wgpu-` prefixed name. It is required on every feature.
+///
+/// `#[web(allow)]` or `#[web(ignore)]` controls whether `wgpu`'s WebGPU backend will
+/// offer the feature when the underlying WebGPU implementation does. Typically should be
+/// `allow`, but `ignore` may be appropriate in cases where missing logic in the WebGPU
+/// backend means the feature will not work via `wgpu` even though it is supported by the
+/// underlying backend, or where there is concern about interactions or confusion with
+/// `wgpu` native features having subtly different API or behavior.
+macro_rules! features {
     (
         $(#[$outer:meta])*
-        pub struct $name:ident: [$T:ty; $Len:expr];
+        pub struct ($name:ident, $name_bits:ident): [$T:ty; $Len:expr];
 
         $(
             $(#[$bit_outer:meta])*
@@ -156,381 +201,28 @@ macro_rules! bitflags_array {
                 $(
                     $(#[doc $($args:tt)*])*
                     #[name($str_name:literal $(, $alias:literal)*)]
+                    $(#[web($web:tt)])?
                     const $Flag:tt = $value:expr;
                 )*
             }
         )*
     ) => {
-        $(
-            bitflags::bitflags! {
+        crate::bitflags_array! {
+            $(#[$outer])*
+            pub struct ($name, $name_bits): [$T; $Len];
+
+            $(
                 $(#[$bit_outer])*
-                $vis struct $inner_name: $T {
+                $vis struct $inner_name $lower_inner_name {
                     $(
                         $(#[doc $($args)*])*
                         const $Flag = $value;
                     )*
                 }
-            }
-        )*
-
-        $(#[$outer])*
-        pub struct $name {
-            $(
-                #[allow(missing_docs)]
-                $vis $lower_inner_name: $inner_name,
             )*
         }
 
-        /// Bits from `Features` in array form
-        #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-        pub struct FeatureBits(pub [$T; $Len]);
-
-        bitflags_array_impl! { BitOr bitor $name | $($lower_inner_name)* }
-        bitflags_array_impl! { BitAnd bitand $name & $($lower_inner_name)* }
-        bitflags_array_impl! { BitXor bitxor $name ^ $($lower_inner_name)* }
-        impl core::ops::Not for $name {
-            type Output = Self;
-
-            #[inline]
-            fn not(self) -> Self {
-                Self {
-                   $($lower_inner_name: !self.$lower_inner_name,)*
-                }
-            }
-        }
-        bitflags_array_impl! { Sub sub $name - $($lower_inner_name)* }
-
-        #[cfg(feature = "serde")]
-        impl Serialize for $name {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: serde::Serializer,
-            {
-                bitflags::serde::serialize(self, serializer)
-            }
-        }
-
-        #[cfg(feature = "serde")]
-        impl<'de> Deserialize<'de> for $name {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                bitflags::serde::deserialize(deserializer)
-            }
-        }
-
-        impl core::fmt::Display for $name {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                let mut iter = self.iter_names();
-                // simple look ahead
-                let mut next = iter.next();
-                while let Some((name, _)) = next {
-                    f.write_str(name)?;
-                    next = iter.next();
-                    if next.is_some() {
-                        f.write_str(" | ")?;
-                    }
-                }
-                Ok(())
-            }
-        }
-
-        bitflags_array_impl_assign! { BitOrAssign bitor_assign $name |= $($lower_inner_name)* }
-        bitflags_array_impl_assign! { BitAndAssign bitand_assign $name &= $($lower_inner_name)* }
-        bitflags_array_impl_assign! { BitXorAssign bitxor_assign $name ^= $($lower_inner_name)* }
-
-        bit_array_impl! { BitOr bitor FeatureBits |= }
-        bit_array_impl! { BitAnd bitand FeatureBits &= }
-        bit_array_impl! { BitXor bitxor FeatureBits ^= }
-
-        impl core::ops::Not for FeatureBits {
-            type Output = Self;
-
-            #[inline]
-            fn not(self) -> Self {
-                let [$($lower_inner_name,)*] = self.0;
-                Self([$(!$lower_inner_name,)*])
-            }
-        }
-
-        #[cfg(feature = "serde")]
-        impl WriteHex for FeatureBits {
-            fn write_hex<W: fmt::Write>(&self, mut writer: W) -> fmt::Result {
-                let [$($lower_inner_name,)*] = self.0;
-                let mut wrote = false;
-                let mut stager = alloc::string::String::with_capacity(size_of::<$T>() * 2);
-                // we don't want to write it if it's just zero as there may be multiple zeros
-                // resulting in something like "00" being written out. We do want to write it if
-                // there has already been something written though.
-                $(if ($lower_inner_name != 0) || wrote {
-                    // First we write to a staging string, then we add any zeros (e.g if #1
-                    // is f and a u8 and #2 is a then the two combined would be f0a which requires
-                    // a 0 inserted)
-                    $lower_inner_name.write_hex(&mut stager)?;
-                    if (stager.len() != size_of::<$T>() * 2) && wrote {
-                        let zeros_to_write = (size_of::<$T>() * 2) - stager.len();
-                        for _ in 0..zeros_to_write {
-                            writer.write_char('0')?
-                        }
-                    }
-                    writer.write_str(&stager)?;
-                    stager.clear();
-                    wrote = true;
-                })*
-                if !wrote {
-                    writer.write_str("0")?;
-                }
-                Ok(())
-            }
-        }
-
-        #[cfg(feature = "serde")]
-        impl ParseHex for FeatureBits {
-            fn parse_hex(input: &str) -> Result<Self, ParseError> {
-
-                let mut unset = Self::EMPTY;
-                let mut end = input.len();
-                if end == 0 {
-                    return Err(ParseError::empty_flag())
-                }
-                // we iterate starting at the least significant places and going up
-                for (idx, _) in [$(stringify!($lower_inner_name),)*].iter().enumerate().rev() {
-                    // A byte is two hex places - u8 (1 byte) = 0x00 (2 hex places).
-                    let checked_start = end.checked_sub(size_of::<$T>() * 2);
-                    let start = checked_start.unwrap_or(0);
-
-                    let cur_input = &input[start..end];
-                    unset.0[idx] = <$T>::from_str_radix(cur_input, 16)
-                        .map_err(|_|ParseError::invalid_hex_flag(cur_input))?;
-
-                    end = start;
-
-                    if let None = checked_start {
-                        break;
-                    }
-                }
-                Ok(unset)
-            }
-        }
-
-        impl bitflags::Bits for FeatureBits {
-            const EMPTY: Self = $name::empty().bits();
-
-            const ALL: Self = $name::all().bits();
-        }
-
-        impl Flags for $name {
-            const FLAGS: &'static [bitflags::Flag<Self>] = $name::FLAGS;
-
-            type Bits = FeatureBits;
-
-            fn bits(&self) -> FeatureBits {
-                FeatureBits([
-                    $(self.$lower_inner_name.bits(),)*
-                ])
-            }
-
-            fn from_bits_retain(bits: FeatureBits) -> Self {
-                let [$($lower_inner_name,)*] = bits.0;
-                Self {
-                    $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)*
-                }
-            }
-
-            fn empty() -> Self {
-                Self::empty()
-            }
-
-            fn all() -> Self {
-                Self::all()
-            }
-        }
-
-        impl $name {
-            pub(crate) const FLAGS: &'static [bitflags::Flag<Self>] = &[
-                $(
-                    $(
-                        bitflags::Flag::new(stringify!($Flag), $name::$Flag),
-                    )*
-                )*
-            ];
-
-            /// Gets the set flags as a container holding an array of bits.
-            pub const fn bits(&self) -> FeatureBits {
-                FeatureBits([
-                    $(self.$lower_inner_name.bits(),)*
-                ])
-            }
-
-            /// Returns self with no flags set.
-            pub const fn empty() -> Self {
-                Self {
-                    $($lower_inner_name: $inner_name::empty(),)*
-                }
-            }
-
-            /// Returns self with all flags set.
-            pub const fn all() -> Self {
-                Self {
-                    $($lower_inner_name: $inner_name::all(),)*
-                }
-            }
-
-            /// Whether all the bits set in `other` are all set in `self`
-            pub const fn contains(self, other:Self) -> bool {
-                // we need an annoying true to catch the last && >:(
-                $(self.$lower_inner_name.contains(other.$lower_inner_name) &&)* true
-            }
-
-            /// Returns whether any bit set in `self` matched any bit set in `other`.
-            pub const fn intersects(self, other:Self) -> bool {
-                $(self.$lower_inner_name.intersects(other.$lower_inner_name) ||)* false
-            }
-
-            /// Returns whether there is no flag set.
-            pub const fn is_empty(self) -> bool {
-                $(self.$lower_inner_name.is_empty() &&)* true
-            }
-
-            /// Returns whether the struct has all flags set.
-            pub const fn is_all(self) -> bool {
-                $(self.$lower_inner_name.is_all() &&)* true
-            }
-
-            bitflags_independent_two_arg! {
-                /// Bitwise or - `self | other`
-                union $($lower_inner_name)*
-            }
-
-            bitflags_independent_two_arg! {
-                /// Bitwise and - `self & other`
-                intersection $($lower_inner_name)*
-            }
-
-            bitflags_independent_two_arg! {
-                /// Bitwise and of the complement of other - `self & !other`
-                difference $($lower_inner_name)*
-            }
-
-            bitflags_independent_two_arg! {
-                /// Bitwise xor - `self ^ other`
-                symmetric_difference $($lower_inner_name)*
-            }
-
-            /// Bitwise not - `!self`
-            pub const fn complement(self) -> Self {
-                Self {
-                    $($lower_inner_name: self.$lower_inner_name.complement(),)*
-                }
-            }
-
-            /// Calls [`Self::insert`] if `set` is true and otherwise calls [`Self::remove`].
-            pub fn set(&mut self, other:Self, set: bool) {
-                $(self.$lower_inner_name.set(other.$lower_inner_name, set);)*
-            }
-
-            /// Inserts specified flag(s) into self
-            pub fn insert(&mut self, other:Self) {
-                $(self.$lower_inner_name.insert(other.$lower_inner_name);)*
-            }
-
-            /// Removes specified flag(s) from self
-            pub fn remove(&mut self, other:Self) {
-                $(self.$lower_inner_name.remove(other.$lower_inner_name);)*
-            }
-
-            /// Toggles specified flag(s) in self
-            pub fn toggle(&mut self, other:Self) {
-                $(self.$lower_inner_name.toggle(other.$lower_inner_name);)*
-            }
-
-            /// Takes in [`FeatureBits`] and returns None if there are invalid bits or otherwise Self with
-            /// those bits set
-            pub const fn from_bits(bits:FeatureBits) -> Option<Self> {
-                let [$($lower_inner_name,)*] = bits.0;
-                // The ? operator does not work in a const context.
-                Some(Self {
-                    $(
-                        $lower_inner_name: match $inner_name::from_bits($lower_inner_name) {
-                            Some(some) => some,
-                            None => return None,
-                        },
-                    )*
-                })
-            }
-
-            /// Takes in [`FeatureBits`] and returns Self with only valid bits (all other bits removed)
-            pub const fn from_bits_truncate(bits:FeatureBits) -> Self {
-                let [$($lower_inner_name,)*] = bits.0;
-                Self { $($lower_inner_name: $inner_name::from_bits_truncate($lower_inner_name),)* }
-            }
-
-            /// Takes in [`FeatureBits`] and returns Self with all bits that were set without removing
-            /// invalid bits
-            pub const fn from_bits_retain(bits:FeatureBits) -> Self {
-                let [$($lower_inner_name,)*] = bits.0;
-                Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
-            }
-
-            /// Takes in a bitflags flag name (in `SCREAMING_SNAKE_CASE`) and returns Self
-            /// if it matches or none if the name does not match the name of any of the
-            /// flags. Name is capitalisation dependent.
-            ///
-            /// [`impl FromStr`] can be used to recognize kebab-case names, like are used in
-            /// the WebGPU spec.
-            pub fn from_name(name: &str) -> Option<Self> {
-                match name {
-                    $(
-                        $(
-                            stringify!($Flag) => Some(Self::$Flag),
-                        )*
-                    )*
-                    _ => None,
-                }
-            }
-
-            /// Combines the features from the internal flags into the entire features struct
-            pub fn from_internal_flags($($lower_inner_name: $inner_name,)*) -> Self {
-                Self {
-                    $($lower_inner_name,)*
-                }
-            }
-
-            /// Returns an iterator over the set flags.
-            pub const fn iter(&self) -> bitflags::iter::Iter<$name> {
-                bitflags::iter::Iter::__private_const_new($name::FLAGS, *self, *self)
-            }
-
-            /// Returns an iterator over the set flags and their names.
-            ///
-            /// These are bitflags names in `SCREAMING_SNAKE_CASE`.
-            pub const fn iter_names(&self) -> bitflags::iter::IterNames<$name> {
-                bitflags::iter::IterNames::__private_const_new($name::FLAGS, *self, *self)
-            }
-
-            /// If the argument is a single [`Features`] flag, returns the corresponding
-            /// `kebab-case` feature name, otherwise `None`.
-            #[must_use]
-            pub fn as_str(&self) -> Option<&'static str> {
-                Some(match *self {
-                    $($(Self::$Flag => $str_name,)*)*
-                    _ => return None,
-                })
-            }
-
-            $(
-                $(
-                    $(#[doc $($args)*])*
-                    #[allow(clippy::needless_update, reason = "only useless if there is 1 member")]
-                    pub const $Flag: Self = Self {
-                        $lower_inner_name: $inner_name::from_bits_truncate($value),
-                        ..Self::empty()
-                    };
-                )*
-            )*
-        }
+        $( features_web! { $inner_name; $($Flag [$($web)?])* } )*
 
         // Parses kebab-case feature names (i.e. the names given in the spec, for features
         // in FeaturesWebGPU, and otherwise the `wgpu-` prefixed names).
@@ -545,33 +237,21 @@ macro_rules! bitflags_array {
             }
         }
 
-        $(
-            impl From<$inner_name> for Features {
-                #[allow(clippy::needless_update, reason = "only useless if there is 1 member")]
-                fn from($lower_inner_name: $inner_name) -> Self {
-                    Self {
-                        $lower_inner_name,
-                        ..Self::empty()
-                    }
-                }
+        impl $name {
+            #[doc = concat!("If the argument is a single [`", stringify!($name), "`] flag,")]
+            /// returns the corresponding `kebab-case` flag name, otherwise `None`.
+            #[must_use]
+            pub fn as_str(&self) -> Option<&'static str> {
+                Some(match *self {
+                    $($(Self::$Flag => $str_name,)*)*
+                    _ => return None,
+                })
             }
-        )*
+        }
     };
 }
 
-impl From<FeatureBits> for Features {
-    fn from(value: FeatureBits) -> Self {
-        Self::from_bits_retain(value)
-    }
-}
-
-impl From<Features> for FeatureBits {
-    fn from(value: Features) -> Self {
-        value.bits()
-    }
-}
-
-bitflags_array! {
+features! {
     /// Features that are not guaranteed to be supported.
     ///
     /// These are either part of the webgpu standard, or are extension features supported by
@@ -585,7 +265,7 @@ bitflags_array! {
     /// https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename).
     #[repr(C)]
     #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct Features: [u64; 2];
+    pub struct (Features, FeatureBits): [u64; 2];
 
     /// Features that are not guaranteed to be supported.
     ///
@@ -628,8 +308,6 @@ bitflags_array! {
         // ? const NORM16_RESOLVE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3839)
         // ? const 32BIT_FORMAT_MULTISAMPLE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3844)
         // ? const 32BIT_FORMAT_RESOLVE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3844)
-        // ? const TEXTURE_COMPRESSION_ASTC_HDR = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3856)
-        // TEXTURE_FORMAT_16BIT_NORM & TEXTURE_COMPRESSION_ASTC_HDR will most likely become web features as well
         // TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES might not be necessary if we have all the texture features implemented
 
         // Texture Formats:
@@ -866,6 +544,26 @@ bitflags_array! {
         /// This is a native only feature.
         #[name("wgpu-partially-bound-binding-array", "partially-bound-binding-array")]
         const PARTIALLY_BOUND_BINDING_ARRAY = 1 << 13;
+
+        /// Allows the user to print debug messages from shaders using `debugPrintf()`.
+        ///
+        /// Each WGSL module using `debugPrintf` must opt in with `enable wgpu_debug_printf;`.
+        /// See the [`debugPrintf` extension specification][debug_printf]
+        /// for the syntax, how to receive the output, and per-backend requirements.
+        ///
+        /// Supported platforms:
+        /// - Metal (3.2+, lowered to shader logging)
+        /// - Vulkan (lowered to SPIR-V `NonSemantic.DebugPrintf`; output requires the
+        ///   validation layer's debug-printf path, enabled with
+        ///   [`InstanceFlags::VALIDATION`](crate::InstanceFlags::VALIDATION) and
+        ///   [`InstanceFlags::DEBUG_PRINTF`](crate::InstanceFlags::DEBUG_PRINTF))
+        ///
+        /// This is a native only feature.
+        ///
+        #[doc = link_to_wgpu_docs!(["debug_printf"]: "documentation/extensions/debug_printf/index.html")]
+        #[name("wgpu-debug-printf")]
+        const DEBUG_PRINTF = 1 << 14;
+
         /// Allows the user to call [`RenderPass::multi_draw_indirect_count`] and [`RenderPass::multi_draw_indexed_indirect_count`].
         ///
         /// This allows the use of a buffer containing the actual number of draw calls. This feature being present also implies
@@ -922,6 +620,7 @@ bitflags_array! {
         /// - DX12
         /// - Vulkan
         /// - Metal
+        /// - OpenGL (not GLES)
         ///
         /// This is a native only feature.
         ///
@@ -935,6 +634,7 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - Vulkan
+        /// - OpenGL (not GLES)
         ///
         /// This is a native only feature.
         ///
@@ -1129,10 +829,11 @@ bitflags_array! {
         /// - Vulkan
         /// - DX12
         /// - Metal
+        /// - WebGPU
         ///
         /// The `subgroups` feature has been added to WebGPU, but there may be
         /// differences between the standard and the `wgpu` implementation,
-        /// so it remains a native-only feature in wgpu for now.
+        /// so it has not yet been moved to [`FeaturesWebGPU`].
         /// See <https://github.com/gfx-rs/wgpu/issues/5555>.
         ///
         /// Because it is expected to move to the WebGPU feature set in the
@@ -1519,6 +1220,7 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("depth-clip-control")]
+        #[web(allow)]
         const DEPTH_CLIP_CONTROL = WEBGPU_FEATURE_DEPTH_CLIP_CONTROL;
 
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
@@ -1534,6 +1236,7 @@ bitflags_array! {
         ///
         /// [`TextureFormat::Depth32FloatStencil8`]: super::TextureFormat::Depth32FloatStencil8
         #[name("depth32float-stencil8")]
+        #[web(allow)]
         const DEPTH32FLOAT_STENCIL8 = WEBGPU_FEATURE_DEPTH32FLOAT_STENCIL8;
 
         /// Enables BCn family of compressed textures. All BCn textures use 4x4 pixel blocks
@@ -1554,6 +1257,7 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("texture-compression-bc")]
+        #[web(allow)]
         const TEXTURE_COMPRESSION_BC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC;
 
 
@@ -1569,6 +1273,7 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("texture-compression-bc-sliced-3d")]
+        #[web(allow)]
         const TEXTURE_COMPRESSION_BC_SLICED_3D = WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D;
 
         /// Enables ETC family of compressed textures. All ETC textures use 4x4 pixel blocks.
@@ -1587,6 +1292,7 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("texture-compression-etc2")]
+        #[web(allow)]
         const TEXTURE_COMPRESSION_ETC2 = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2;
 
         /// Enables ASTC family of compressed textures. ASTC textures use pixel blocks varying from 4x4 to 12x12.
@@ -1608,6 +1314,7 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("texture-compression-astc")]
+        #[web(allow)]
         const TEXTURE_COMPRESSION_ASTC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC;
 
 
@@ -1627,6 +1334,7 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("texture-compression-astc-sliced-3d")]
+        #[web(allow)]
         const TEXTURE_COMPRESSION_ASTC_SLICED_3D = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D;
 
         /// Enables use of Timestamp Queries. These queries tell the current gpu timestamp when
@@ -1659,6 +1367,7 @@ bitflags_array! {
         #[doc = link_to_wgpu_docs!(["`CommandEncoder::resolve_query_set`"]: "struct.CommandEncoder.html#method.resolve_query_set")]
         #[doc = link_to_wgpu_docs!(["`Queue::get_timestamp_period`"]: "struct.Queue.html#method.get_timestamp_period")]
         #[name("timestamp-query")]
+        #[web(allow)]
         const TIMESTAMP_QUERY = WEBGPU_FEATURE_TIMESTAMP_QUERY;
 
         /// Allows non-zero value for the `first_instance` member in indirect draw calls.
@@ -1680,6 +1389,7 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("indirect-first-instance")]
+        #[web(allow)]
         const INDIRECT_FIRST_INSTANCE = WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE;
 
         /// Allows shaders to use 16-bit floating point types. You may use them uniform buffers,
@@ -1696,6 +1406,7 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("shader-f16")]
+        #[web(allow)]
         const SHADER_F16 = WEBGPU_FEATURE_SHADER_F16;
 
         /// Allows for usage of textures of format [`TextureFormat::Rg11b10Ufloat`] as a render target
@@ -1710,6 +1421,7 @@ bitflags_array! {
         ///
         /// [`TextureFormat::Rg11b10Ufloat`]: super::TextureFormat::Rg11b10Ufloat
         #[name("rg11b10ufloat-renderable")]
+        #[web(allow)]
         const RG11B10UFLOAT_RENDERABLE = WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE;
 
         /// Allows the [`TextureUsages::STORAGE_BINDING`] usage on textures with format [`TextureFormat::Bgra8Unorm`]
@@ -1725,6 +1437,7 @@ bitflags_array! {
         /// [`TextureFormat::Bgra8Unorm`]: super::TextureFormat::Bgra8Unorm
         /// [`TextureUsages::STORAGE_BINDING`]: super::TextureUsages::STORAGE_BINDING
         #[name("bgra8unorm-storage")]
+        #[web(allow)]
         const BGRA8UNORM_STORAGE = WEBGPU_FEATURE_BGRA8UNORM_STORAGE;
 
 
@@ -1739,6 +1452,7 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("float32-filterable")]
+        #[web(allow)]
         const FLOAT32_FILTERABLE = WEBGPU_FEATURE_FLOAT32_FILTERABLE;
 
         /// Allows textures with formats "r32float", "rg32float", and "rgba32float" to be blendable.
@@ -1747,6 +1461,7 @@ bitflags_array! {
         /// - Vulkan
         /// - WebGPU
         #[name("float32-blendable")]
+        #[web(allow)]
         const FLOAT32_BLENDABLE = WEBGPU_FEATURE_FLOAT32_BLENDABLE;
 
         /// Allows two outputs from a shader to be used for blending.
@@ -1763,6 +1478,7 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("dual-source-blending")]
+        #[web(allow)]
         const DUAL_SOURCE_BLENDING = WEBGPU_FEATURE_DUAL_SOURCE_BLENDING;
 
         /// Allows the use of `@builtin(clip_distances)` in WGSL.
@@ -1775,6 +1491,7 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         #[name("clip-distances")]
+        #[web(allow)]
         const CLIP_DISTANCES = WEBGPU_FEATURE_CLIP_DISTANCES;
 
         /// Allows the use of immediate data: small, fast bits of memory that can be updated
@@ -1808,6 +1525,7 @@ bitflags_array! {
         #[doc = link_to_wgpu_docs!(["`RenderPass::set_immediates`"]: "struct.RenderPass.html#method.set_immediates")]
         /// [`Limits::max_immediate_size`]: super::Limits
         #[name("immediates")]
+        #[web(allow)]
         const IMMEDIATES = WEBGPU_FEATURE_IMMEDIATES;
 
         /// Enables `builtin(primitive_index)` in fragment shaders.
@@ -1826,42 +1544,62 @@ bitflags_array! {
         /// WebGPU-defined name, and `shader-primitive-index` is accepted to
         /// remain compatible with previous wgpu behavior.
         #[name("primitive-index", "shader-primitive-index")]
+        #[web(allow)]
         const PRIMITIVE_INDEX = WEBGPU_FEATURE_PRIMITIVE_INDEX;
+
+        /// Allows `TextureView`s to rearrange or replace the color components
+        /// from texture's red/green/blue/alpha channels when used as a `TEXTURE_BINDING`.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal on Apple2+ or Mac2+
+        ///
+        /// Not yet implemented:
+        /// - OpenGL
+        ///
+        /// This is a web and native feature.
+        #[name("texture-component-swizzle")]
+        #[web(allow)]
+        const TEXTURE_COMPONENT_SWIZZLE = WEBGPU_FEATURE_TEXTURE_COMPONENT_SWIZZLE;
     }
 }
 
 impl Features {
+    /// Construct a [`Features`] from separate [`FeaturesWGPU`] and [`FeaturesWebGPU`].
+    ///
+    /// This `const` constructor is also available as a `From` impl.
+    pub const fn from_parts(wgpu: FeaturesWGPU, webgpu: FeaturesWebGPU) -> Self {
+        Self::from_bits_retain(FeatureBits([wgpu.bits(), webgpu.bits()]))
+    }
+
     /// Mask of all features which are part of the upstream WebGPU standard.
     #[must_use]
     pub const fn all_webgpu_mask() -> Self {
-        Self::from_bits_truncate(FeatureBits([
-            FeaturesWGPU::empty().bits(),
-            FeaturesWebGPU::all().bits(),
-        ]))
+        Self::from_parts(FeaturesWGPU::empty(), FeaturesWebGPU::all())
     }
 
     /// Mask of all features that are only available when targeting native (not web).
     #[must_use]
     pub const fn all_native_mask() -> Self {
-        Self::from_bits_truncate(FeatureBits([
-            FeaturesWGPU::all().bits(),
-            FeaturesWebGPU::empty().bits(),
-        ]))
+        Self::from_parts(FeaturesWGPU::all(), FeaturesWebGPU::empty())
     }
 
     /// Mask of all features which are experimental.
     #[must_use]
     pub const fn all_experimental_mask() -> Self {
-        Self::from_bits_truncate(FeatureBits([
-            FeaturesWGPU::EXPERIMENTAL_MESH_SHADER.bits()
-                | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_MULTIVIEW.bits()
-                | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_POINTS.bits()
-                | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
-                | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
-                | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits()
-                | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits(),
-            FeaturesWebGPU::empty().bits(),
-        ]))
+        Self::from_parts(
+            FeaturesWGPU::from_bits_truncate(
+                FeaturesWGPU::EXPERIMENTAL_MESH_SHADER.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_MULTIVIEW.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_POINTS.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits()
+                    | FeaturesWGPU::EXPERIMENTAL_RAY_TRACING_PIPELINES.bits(),
+            ),
+            FeaturesWebGPU::empty(),
+        )
     }
 
     /// Vertex formats allowed for creating and building BLASes
@@ -1921,6 +1659,16 @@ mod tests {
                 "{hex}"
             );
         }
+    }
+
+    #[test]
+    fn allowed_on_web_backend() {
+        // Every WebGPU feature is currently allowed on the web backend,
+        // as well as `subgroups`.
+        assert_eq!(
+            Features::ALLOWED_ON_WEB_BACKEND,
+            Features::from_parts(FeaturesWGPU::SUBGROUP, FeaturesWebGPU::all()),
+        );
     }
 
     #[test]

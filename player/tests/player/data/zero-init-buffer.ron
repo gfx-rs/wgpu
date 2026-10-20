@@ -92,13 +92,13 @@
                 (
                     binding: 0,
                     visibility: "COMPUTE",
-                    ty: Buffer(
+                    buffer: Some(BufferBindingLayout(
                         ty: Storage(
                             read_only: false,
                         ),
                         has_dynamic_offset: false,
                         min_binding_size: Some(16),
-                    ),
+                    )),
                     count: None,
                 ),
             ],

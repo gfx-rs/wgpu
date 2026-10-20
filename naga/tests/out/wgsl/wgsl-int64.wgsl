@@ -21,15 +21,15 @@ struct StorageCompatible {
 const constant_variable: u64 = 20lu;
 
 var<private> private_variable: i64 = 1li;
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<uniform> input_uniform: UniformCompatible;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage> input_storage: UniformCompatible;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var<storage> input_arrays: StorageCompatible;
-@group(0) @binding(3) 
+@group(0) @binding(3)
 var<storage, read_write> output: UniformCompatible;
-@group(0) @binding(4) 
+@group(0) @binding(4)
 var<storage, read_write> output_arrays: StorageCompatible;
 
 fn int64_function(x: i64) -> i64 {
@@ -184,7 +184,7 @@ fn uint64_function(x_1: u64) -> u64 {
     return _e144;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     let _e3 = uint64_function(67lu);
     let _e5 = int64_function(60li);

@@ -12,7 +12,7 @@ fn f(x: f64) -> f64 {
     return (((x + y) + k) + 5.0lf);
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     let _e1 = f(6.0lf);
     return;

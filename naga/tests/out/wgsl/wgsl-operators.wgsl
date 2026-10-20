@@ -334,7 +334,7 @@ fn negation_avoids_prefix_decrement() {
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main(@builtin(workgroup_id) id: vec3<u32>) {
     let _e1 = builtins();
     let _e6 = splat(f32(id.x), i32(id.y));

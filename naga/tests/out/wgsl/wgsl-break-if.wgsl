@@ -53,7 +53,7 @@ fn breakIfSeparateVariable() {
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     breakIfEmpty();
     breakIfEmptyBody(false);

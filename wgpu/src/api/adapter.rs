@@ -1,7 +1,10 @@
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::future::Future;
 #[cfg(wgpu_core)]
 use core::ops::Deref;
+use hashbrown::HashSet;
+use wgpu_sync::Mutex;
 
 use crate::*;
 
@@ -61,9 +64,15 @@ impl Adapter {
     ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + WasmNotSend {
         let device = self.inner.request_device(desc);
         async move {
-            device
-                .await
-                .map(|(device, queue)| (Device { inner: device }, Queue { inner: queue }))
+            device.await.map(|(device, queue)| {
+                (
+                    Device {
+                        inner: device,
+                        buffers: Arc::new(Mutex::new(HashSet::new())),
+                    },
+                    Queue { inner: queue },
+                )
+            })
         }
     }
 
@@ -80,15 +89,12 @@ impl Adapter {
         desc: &DeviceDescriptor<'_>,
     ) -> Result<(Device, Queue), RequestDeviceError> {
         let core_adapter = self.inner.as_core();
-        let (device, queue) = unsafe {
-            core_adapter
-                .context
-                .create_device_from_hal(core_adapter, hal_device, desc)
-        }?;
+        let (device, queue) = unsafe { core_adapter.create_device_from_hal(hal_device, desc) }?;
 
         Ok((
             Device {
                 inner: device.into(),
+                buffers: Arc::new(Mutex::new(HashSet::new())),
             },
             Queue {
                 inner: queue.into(),
@@ -133,7 +139,7 @@ impl Adapter {
     ) -> Option<impl Deref<Target = A::Adapter> + WasmNotSendSync> {
         let adapter = self.inner.as_core_opt()?;
 
-        unsafe { adapter.context.adapter_as_hal::<A>(adapter) }
+        unsafe { adapter.as_hal::<A>() }
     }
 
     #[cfg(custom)]
@@ -218,5 +224,26 @@ impl Adapter {
     /// Requires [`Features::EXPERIMENTAL_COOPERATIVE_MATRIX`] to be meaningful.
     pub fn cooperative_matrix_properties(&self) -> Vec<CooperativeMatrixProperties> {
         self.inner.cooperative_matrix_properties()
+    }
+}
+
+#[cfg(wgpu_core)]
+impl Adapter {
+    /// Create a new adapter of wgpu from a wgpu-core adapter.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_adapter` - wgpu-core adapter.
+    pub fn from_core(core_adapter: alloc::sync::Arc<wgc::instance::Adapter>) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreAdapter::from_core(core_adapter).into(),
+        }
+    }
+
+    /// Get the [`wgpu_core`] adapter from this `Adapter`.
+    ///
+    /// Returns `None` if the adapter is not from the `wgpu_core` backend
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::instance::Adapter>> {
+        self.inner.as_core_opt().map(|adapter| adapter.as_core())
     }
 }

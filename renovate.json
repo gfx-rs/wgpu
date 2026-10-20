@@ -4,7 +4,7 @@
   "dependencyDashboard": true,
   "prConcurrentLimit": 20,
   "prHourlyLimit": 200,
-  "prCreation": "not-pending",
+  "prCreation": "immediate",
   "internalChecksFilter": "strict",
   "labels": ["dependencies"],
   "lockFileMaintenance": {

@@ -234,7 +234,7 @@ impl Blas {
         &mut self,
     ) -> Option<impl Deref<Target = A::AccelerationStructure> + WasmNotSendSync> {
         let blas = self.inner.as_core_opt()?;
-        unsafe { blas.context.blas_as_hal::<A>(blas) }
+        unsafe { blas.as_hal::<A>() }
     }
 
     #[cfg(custom)]

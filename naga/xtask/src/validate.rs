@@ -214,15 +214,59 @@ fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Resul
     else {
         bail!("no {expected_header_prefix:?} header found in {path:?}");
     };
+
+    // We pipe the snapshot into `spirv-as` instead of passing its path, so that we
+    // can rewrite `NonSemantic.DebugPrintf` instructions on the way in.
+    //
+    // Our `.spvasm` snapshots are produced by rspirv's disassembler, which prints the
+    // instruction operand of an `OpExtInst` for that set by its symbolic name:
+    //
+    //     %17 = OpExtInst %void %15 DebugPrintf %16 %12 %13 %14
+    //
+    // `spirv-as` doesn't accept that name:
+    //
+    //     error: Couldn't translate unknown extended instruction name 'DebugPrintf'
+    //     to unsigned integer.
+    //
+    // SPIRV-Tools treats `NonSemantic.DebugPrintf` as an unknown non-semantic set, and
+    // its assembler only accepts numeric instruction operands for such sets. (Its own
+    // `spirv-dis` emits the numeric form for the same reason.) So we replace the name
+    // with its instruction number, `1`, which is the only instruction in that set.
     let mut spirv_as_cmd = EasyCommand::new(spirv_as, |cmd| {
-        cmd.stdout(Stdio::piped())
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
             .arg("--target-env")
             .arg(format!("spv{version}"))
-            .args([path.to_str().unwrap(), "-o", "-"])
+            .args(["-o", "-", "-"])
     });
-    let assembled_spirv = spirv_as_cmd
-        .output()
+    let mut spirv_as_process = spirv_as_cmd
+        .spawn()
         .with_context(|| format!("Failed to run {spirv_as_cmd}"))?;
+    {
+        let mut file = BufReader::new(open_file(path)?);
+        let spirv_as_stdin = spirv_as_process.stdin.as_mut().unwrap();
+        let mut line = String::new();
+        loop {
+            let bytes_read = file
+                .read_line(&mut line)
+                .with_context(|| format!("failed to read {path:?}"))?;
+            if bytes_read == 0 {
+                break;
+            }
+
+            if line.contains(" OpExtInst ") {
+                let normalized_line = line.replace(" DebugPrintf ", " 1 ");
+                spirv_as_stdin.write_all(normalized_line.as_bytes())?;
+            } else {
+                spirv_as_stdin.write_all(line.as_bytes())?;
+            }
+
+            line.clear();
+        }
+    }
+    let assembled_spirv = spirv_as_process
+        .wait_with_output()
+        .with_context(|| format!("Failed to wait for {spirv_as_cmd}"))?;
 
     if !assembled_spirv.status.success() {
         bail!(

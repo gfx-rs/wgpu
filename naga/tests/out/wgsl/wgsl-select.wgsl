@@ -1,4 +1,4 @@
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     var x0_: vec2<i32> = vec2<i32>(1i, 2i);
     var i1_: vec2<f32>;

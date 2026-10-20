@@ -425,7 +425,7 @@ impl LifetimeTracker {
             Vec::with_capacity(self.ready_to_compact.len());
 
         for blas in self.ready_to_compact.drain(..) {
-            match blas.read_back_compact_size() {
+            match blas.read_back_compact_size(blas.compacted_state.lock()) {
                 Some(cb) => pending_callbacks.push(cb),
                 None => continue,
             }

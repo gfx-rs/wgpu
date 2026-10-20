@@ -1,49 +1,49 @@
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var image_mipmapped_src: texture_2d<u32>;
-@group(0) @binding(3) 
+@group(0) @binding(3)
 var image_multisampled_src: texture_multisampled_2d<u32>;
-@group(0) @binding(4) 
+@group(0) @binding(4)
 var image_depth_multisampled_src: texture_depth_multisampled_2d;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var image_storage_src: texture_storage_2d<rgba8uint,read>;
-@group(0) @binding(5) 
+@group(0) @binding(5)
 var image_array_src: texture_2d_array<u32>;
-@group(0) @binding(6) 
+@group(0) @binding(6)
 var image_dup_src: texture_storage_1d<r32uint,read>;
-@group(0) @binding(7) 
+@group(0) @binding(7)
 var image_1d_src: texture_1d<u32>;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var image_dst: texture_storage_1d<r32uint,write>;
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var image_1d: texture_1d<f32>;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var image_2d: texture_2d<f32>;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var image_2d_u32_: texture_2d<u32>;
-@group(0) @binding(3) 
+@group(0) @binding(3)
 var image_2d_i32_: texture_2d<i32>;
-@group(0) @binding(4) 
+@group(0) @binding(4)
 var image_2d_array: texture_2d_array<f32>;
-@group(0) @binding(5) 
+@group(0) @binding(5)
 var image_cube: texture_cube<f32>;
-@group(0) @binding(6) 
+@group(0) @binding(6)
 var image_cube_array: texture_cube_array<f32>;
-@group(0) @binding(7) 
+@group(0) @binding(7)
 var image_3d: texture_3d<f32>;
-@group(0) @binding(8) 
+@group(0) @binding(8)
 var image_aa: texture_multisampled_2d<f32>;
-@group(1) @binding(0) 
+@group(1) @binding(0)
 var sampler_reg: sampler;
-@group(1) @binding(1) 
+@group(1) @binding(1)
 var sampler_cmp: sampler_comparison;
-@group(1) @binding(2) 
+@group(1) @binding(2)
 var image_2d_depth: texture_depth_2d;
-@group(1) @binding(3) 
+@group(1) @binding(3)
 var image_2d_array_depth: texture_depth_2d_array;
-@group(1) @binding(4) 
+@group(1) @binding(4)
 var image_cube_depth: texture_depth_cube;
 
-@compute @workgroup_size(16, 1, 1) 
+@compute @workgroup_size(16, 1, 1)
 fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     let dim = textureDimensions(image_storage_src);
     let itc = (vec2<i32>((dim * local_id.xy)) % vec2<i32>(10i, 20i));
@@ -68,7 +68,7 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     return;
 }
 
-@compute @workgroup_size(16, 1, 1) 
+@compute @workgroup_size(16, 1, 1)
 fn depth_load(@builtin(local_invocation_id) local_id_1: vec3<u32>) {
     let dim_1 = textureDimensions(image_storage_src);
     let itc_1 = (vec2<i32>((dim_1 * local_id_1.xy)) % vec2<i32>(10i, 20i));
@@ -77,7 +77,7 @@ fn depth_load(@builtin(local_invocation_id) local_id_1: vec3<u32>) {
     return;
 }
 
-@vertex 
+@vertex
 fn queries() -> @builtin(position) vec4<f32> {
     let dim_1d = textureDimensions(image_1d);
     let dim_1d_lod = textureDimensions(image_1d, i32(dim_1d));
@@ -96,7 +96,7 @@ fn queries() -> @builtin(position) vec4<f32> {
     return vec4(f32(sum));
 }
 
-@vertex 
+@vertex
 fn levels_queries() -> @builtin(position) vec4<f32> {
     let num_levels_2d = textureNumLevels(image_2d);
     let num_layers_2d = textureNumLayers(image_2d_array);
@@ -111,7 +111,7 @@ fn levels_queries() -> @builtin(position) vec4<f32> {
     return vec4(f32(sum_1));
 }
 
-@fragment 
+@fragment
 fn texture_sample() -> @location(0) vec4<f32> {
     var a: vec4<f32>;
 
@@ -191,7 +191,7 @@ fn texture_sample() -> @location(0) vec4<f32> {
     return _e148;
 }
 
-@fragment 
+@fragment
 fn texture_sample_comparison() -> @location(0) f32 {
     var a_1: f32;
 
@@ -225,7 +225,7 @@ fn texture_sample_comparison() -> @location(0) f32 {
     return _e50;
 }
 
-@fragment 
+@fragment
 fn gather() -> @location(0) vec4<f32> {
     let tc_1 = vec2(0.5f);
     let s2d = textureGather(1, image_2d, sampler_reg, tc_1);
@@ -238,7 +238,7 @@ fn gather() -> @location(0) vec4<f32> {
     return ((((s2d + s2d_offset) + s2d_depth) + s2d_depth_offset) + f);
 }
 
-@fragment 
+@fragment
 fn depth_no_comparison() -> @location(0) vec4<f32> {
     let tc_2 = vec2(0.5f);
     let s2d_1 = textureSample(image_2d_depth, sampler_reg, tc_2);

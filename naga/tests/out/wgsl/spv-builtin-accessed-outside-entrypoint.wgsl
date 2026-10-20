@@ -20,7 +20,7 @@ fn main_1() {
     return;
 }
 
-@vertex 
+@vertex
 fn main(@builtin(vertex_index) gl_VertexIndex: u32) -> @builtin(position) vec4<f32> {
     gl_VertexIndex_1 = i32(gl_VertexIndex);
     main_1();

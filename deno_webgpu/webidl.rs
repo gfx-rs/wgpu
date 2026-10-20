@@ -475,14 +475,10 @@ impl<'a> WebIdlConverter<'a> for GPUShaderStageFlags {
       },
     )?;
 
-    let flags =
-      wgpu_types::ShaderStages::from_bits(flags_value).ok_or_else(|| {
-        WebIdlError::other(
-          prefix,
-          context,
-          JsErrorBox::type_error("shader stage is not valid"),
-        )
-      })?;
+    let flags = wgpu_types::ShaderStages::from_internal_flags(
+      wgpu_types::ShaderStagesWebGPU::from_bits_retain(flags_value),
+      wgpu_types::ShaderStagesWGPU::empty(),
+    );
 
     Ok(GPUShaderStageFlags(flags))
   }

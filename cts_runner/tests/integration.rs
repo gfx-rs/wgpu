@@ -58,27 +58,43 @@ fn exec_js_file(script_file: impl AsRef<OsStr>) -> Result<(), Error> {
     Ok(())
 }
 
-fn check_js_stderr(script: &str, expected: &str) -> Result<(), Error> {
+fn check_js_stderr(script: &str, expected_stderr: &str) -> Result<(), Error> {
+    check_js_stdout(script, "", expected_stderr)
+}
+
+fn check_js_stdout(
+    script: &str,
+    expected_stdout: &str,
+    expected_stderr: &str,
+) -> Result<(), Error> {
     let mut tempfile = NamedTempFile::new().unwrap();
     tempfile.write_all(script.as_bytes()).unwrap();
     tempfile.flush().unwrap();
     let output = exec_cts_runner(tempfile.path());
-    if !output.stdout.is_empty() {
+
+    let stdout_str = str::from_utf8(&output.stdout).unwrap();
+    if expected_stdout.is_empty() && !output.stdout.is_empty() {
         return Err(Error(format!(
-            "unexpected output on stdout: {}",
-            str::from_utf8(&output.stdout).unwrap(),
+            "unexpected output on stdout: {:?}",
+            stdout_str,
+        )));
+    } else if stdout_str != expected_stdout {
+        return Err(Error(format!(
+            "expected the following output on stdout:\n{:?}\n\nbut observed:\n{:?}",
+            expected_stdout, stdout_str,
         )));
     }
+
     let stderr_str = str::from_utf8(&output.stderr).unwrap();
-    if expected.is_empty() && !stderr_str.is_empty() {
+    if expected_stderr.is_empty() && !stderr_str.is_empty() {
         return Err(Error(format!(
-            "unexpected output on stderr: {}",
+            "unexpected output on stderr: {:?}",
             stderr_str,
         )));
-    } else if stderr_str != expected {
+    } else if stderr_str != expected_stderr {
         return Err(Error(format!(
-            "expected the following output on stderr:\n{}\n\nbut observed:\n{}",
-            expected, stderr_str,
+            "expected the following output on stderr:\n{:?}\n\nbut observed:\n{:?}",
+            expected_stderr, stderr_str,
         )));
     }
     if !output.status.success() {
@@ -143,13 +159,48 @@ fn uncaptured_error() -> Result<(), Error> {
             const device = await adapter.requestDevice();
             device.createShaderModule({ code })
         "#,
-        "cts_runner caught WebGPU error:\x20
-Shader '' parsing error: the type of `val` is expected to be `u32`, but got `{AbstractFloat}`
-  ┌─ wgsl:1:7
-  │
-1 │ const val: u32 = 1.1;
-  │       ^^^ definition of `val`\n\n\n",
+        "cts_runner caught WebGPU error: Shader '' parsing error. Concrete error is available via `get_compilation_info`\n",
     )
+}
+
+#[test]
+fn shader_compilation_message() {
+    check_js_stdout(
+        r#"
+            const code = `const val: u32 = 1.1;`;
+
+            const adapter = await navigator.gpu.requestAdapter();
+            const device = await adapter.requestDevice();
+            const shaderModule = device.createShaderModule({ code });
+            console.log(await shaderModule.getCompilationInfo());
+
+            // Keep the event loop alive so the `uncapturederror` event is
+            // dispatched before the script exits.
+            await new Promise((r) => setTimeout(r, 100));
+        "#,
+        concat!(
+            "GPUCompilationInfo {\n",
+            "  messages: [\n",
+            "    GPUCompilationMessage {\n",
+            "      message: \x1b[32m\"\\n\"\x1b[39m +\n",
+            "        \x1b[32m\"Shader '' parsing error: the type of `val` is expected to be `u32`, but got `{AbstractFloat}`\\n\"\x1b[39m +\n",
+            "        \x1b[32m\"  ┌─ wgsl:1:7\\n\"\x1b[39m +\n",
+            "        \x1b[32m\"  │\\n\"\x1b[39m +\n",
+            "        \x1b[32m\"1 │ const val: u32 = 1.1;\\n\"\x1b[39m +\n",
+            "        \x1b[32m\"  │       ^^^ definition of `val`\\n\"\x1b[39m +\n",
+            "        \x1b[32m\"\\n\"\x1b[39m,\n",
+            "      type: \x1b[32m\"error\"\x1b[39m,\n",
+            "      lineNum: \x1b[33m1\x1b[39m,\n",
+            "      linePos: \x1b[33m7\x1b[39m,\n",
+            "      offset: \x1b[33m6\x1b[39m,\n",
+            "      length: \x1b[33m3\x1b[39m\n",
+            "    }\n",
+            "  ]\n",
+            "}\n",
+        ),
+        "cts_runner caught WebGPU error: Shader '' parsing error. Concrete error is available via `get_compilation_info`\n",
+    )
+    .unwrap();
 }
 
 #[test]

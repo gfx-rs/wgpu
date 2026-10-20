@@ -46,7 +46,7 @@ impl crate::global::Global {
         slot: u32,
         buffer_id: Option<id::BufferId>,
         offset: wgt::BufferAddress,
-        size: Option<wgt::BufferSize>,
+        size: Option<wgt::BufferAddress>,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -65,7 +65,7 @@ impl crate::global::Global {
         buffer: id::BufferId,
         index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
-        size: Option<wgt::BufferSize>,
+        size: Option<wgt::BufferAddress>,
     ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
@@ -225,7 +225,7 @@ impl crate::global::Global {
                     buffer,
                     index_format,
                     offset,
-                    size.and_then(core::num::NonZeroU64::new), // pass size directly once https://github.com/gfx-rs/wgpu/issues/3170 is resolved
+                    size,
                 ),
                 RenderCommand::SetVertexBuffer {
                     slot,
@@ -237,7 +237,7 @@ impl crate::global::Global {
                     slot,
                     buffer,
                     offset,
-                    size.and_then(core::num::NonZeroU64::new), // pass size directly once https://github.com/gfx-rs/wgpu/issues/3170 is resolved
+                    size,
                 ),
                 RenderCommand::Draw {
                     vertex_count,

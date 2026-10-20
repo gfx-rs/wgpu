@@ -1,0 +1,45 @@
+name: "AI Commit Check"
+description: "Detect AI-authored commits or AI metadata trailers in a pull request."
+inputs:
+  repository:
+    description: "The `owner/name` of the repository that holds the pull request. Defaults to the repository of the workflow."
+    default: ""
+  pull-request:
+    description: "The number of the pull request to check. Defaults to the pull request that started the workflow."
+    default: ""
+  expected-count:
+    description: "The number of commits that the pull request contains. The action fails if the API returns fewer commits than this, because the API truncates long lists. Defaults to the count in the pull request event."
+    default: ""
+  fail-on-detection:
+    description: 'When "true", exit non-zero if the action detects AI-authored commits. Set this to "false" to report through the outputs only.'
+    default: "true"
+  pattern:
+    description: "The regular expression that flags AI metadata. When empty, the action uses a built-in pattern."
+    default: ""
+  token:
+    description: "The token that reads the commits of the pull request. Defaults to the token of the workflow."
+    default: ""
+outputs:
+  ai-commits-found:
+    description: '"true" if the action detected AI-authored commits, otherwise "false".'
+    value: ${{ steps.check.outputs.ai-commits-found }}
+  count:
+    description: "The number of commits that the action flagged as AI-authored."
+    value: ${{ steps.check.outputs.count }}
+  commits:
+    description: "The flagged commit SHAs, separated by newlines."
+    value: ${{ steps.check.outputs.commits }}
+runs:
+  using: "composite"
+  steps:
+    - name: Check commits for AI authorship
+      id: check
+      shell: bash
+      env:
+        AICC_REPOSITORY: ${{ inputs.repository || github.repository }}
+        AICC_PULL_REQUEST: ${{ inputs.pull-request || github.event.pull_request.number }}
+        AICC_EXPECTED_COUNT: ${{ inputs.expected-count || github.event.pull_request.commits }}
+        AICC_FAIL_ON_DETECTION: ${{ inputs.fail-on-detection }}
+        AICC_PATTERN: ${{ inputs.pattern }}
+        GH_TOKEN: ${{ inputs.token || github.token }}
+      run: bash "${{ github.action_path }}/scripts/check.sh"

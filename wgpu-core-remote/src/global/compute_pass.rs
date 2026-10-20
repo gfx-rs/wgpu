@@ -1,6 +1,6 @@
 use alloc::borrow::Cow;
 
-use wgpu_core::command::PassTimestampWrites;
+use wgpu_core::command::{ComputePass, PassTimestampWrites};
 use wgpu_core_remote_types::encoders::{
     BindingCommand, ComputePassDescriptor, ComputePassEncoderCommand, DebugCommand,
 };
@@ -58,9 +58,9 @@ impl Global {
         pass.end()
     }
 
-    pub fn compute_pass_drop(&self, pass_id: id::ComputePassEncoderId) {
+    pub fn compute_pass_remove(&self, pass_id: id::ComputePassEncoderId) -> ComputePass {
         let mut hub = self.hub.borrow_mut();
-        hub.compute_passes.remove(pass_id);
+        hub.compute_passes.remove(pass_id)
     }
 }
 

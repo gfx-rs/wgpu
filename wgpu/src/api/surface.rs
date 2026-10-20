@@ -111,7 +111,6 @@ impl Surface<'_> {
     ///
     /// # Panics
     ///
-    /// - An old [`SurfaceTexture`] is still alive referencing an old surface.
     /// - Texture format requested is unsupported on the surface.
     /// - The requested color space is unsupported for the requested format
     ///   (see [`SurfaceCapabilities::format_capabilities`]).
@@ -229,7 +228,7 @@ impl Surface<'_> {
     ) -> Option<impl Deref<Target = A::Surface> + WasmNotSendSync> {
         let core_surface = self.inner.as_core_opt()?;
 
-        unsafe { core_surface.context.surface_as_hal::<A>(core_surface) }
+        unsafe { core_surface.as_hal::<A>() }
     }
 
     #[cfg(custom)]

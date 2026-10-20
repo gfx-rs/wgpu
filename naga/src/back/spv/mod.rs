@@ -152,7 +152,6 @@ struct LogicalLayout {
 #[derive(Clone)]
 struct Instruction {
     op: spirv::Op,
-    wc: u32,
     type_id: Option<Word>,
     result_id: Option<Word>,
     operands: Vec<Word>,
@@ -1227,4 +1226,5 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::MEMORY_DECORATION_COHERENT
         | Caps::MEMORY_DECORATION_VOLATILE
         | Caps::LINEAR_INTERPOLATION
+        | Caps::DEBUG_PRINTF
 }

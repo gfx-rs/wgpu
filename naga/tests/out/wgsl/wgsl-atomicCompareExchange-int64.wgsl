@@ -1,11 +1,11 @@
 const SIZE: u32 = 128u;
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage, read_write> arr_i64_: array<atomic<i64>, 128>;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage, read_write> arr_u64_: array<atomic<u64>, 128>;
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn test_atomic_compare_exchange_i64_() {
     var i: u32 = 0u;
     var old: i64;
@@ -47,7 +47,7 @@ fn test_atomic_compare_exchange_i64_() {
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn test_atomic_compare_exchange_u64_() {
     var i_1: u32 = 0u;
     var old_1: u64;

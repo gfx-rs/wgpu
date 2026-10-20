@@ -3,8 +3,37 @@ use alloc::borrow::Cow;
 use crate::ffi::FfiOption;
 use crate::{assert_ffi_safe, id, Label};
 
+pub type TexelCopyBufferInfo = wgt::TexelCopyBufferInfo<id::BufferId>;
+pub type TexelCopyTextureInfo = wgt::TexelCopyTextureInfo<id::TextureId>;
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 pub type CommandBufferDescriptor<'a> = wgt::CommandBufferDescriptor<Label<'a>>;
+
+/// Describes a `RenderBundleEncoder`.
+///
+/// Corresponds to [WebGPU `GPURenderBundleEncoderDescriptor`](https://gpuweb.github.io/gpuweb/#dictdef-gpurenderbundleencoderdescriptor).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct RenderBundleEncoderDescriptor<'a> {
+    /// Debug label of the render bundle encoder.
+    ///
+    /// This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+    /// The formats of the color attachments that this render bundle is capable
+    /// to rendering to.
+    ///
+    /// This must match the formats of the color attachments in the
+    /// renderpass this render bundle is executed in.
+    pub color_formats: Cow<'a, [Option<wgt::TextureFormat>]>,
+    /// Information about the depth attachment that this render bundle is
+    /// capable to rendering to.
+    ///
+    /// The format must match the format of the depth attachments in the
+    /// renderpass this render bundle is executed in.
+    pub depth_stencil: Option<wgt::RenderBundleDepthStencil>,
+    /// Sample count this render bundle is capable of rendering to.
+    ///
+    /// This must match the pipelines and the renderpasses it is used in.
+    pub sample_count: u32,
+}
 
 /// Operation to perform to the output attachment at the start of a render pass.
 ///
@@ -146,7 +175,7 @@ pub struct ComputePassDescriptor<'a> {
     pub timestamp_writes: Option<PassTimestampWrites>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPUCommandEncoder`](https://www.w3.org/TR/webgpu/#gpucommandencoder).
 pub enum CommandEncoderCommand<'a> {
     BeginRenderPass {
@@ -198,7 +227,7 @@ pub enum CommandEncoderCommand<'a> {
     },
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPURenderPassEncoder`](https://www.w3.org/TR/webgpu/#gpurenderpassencoder).
 pub enum RenderPassEncoderCommand {
     SetViewport {
@@ -226,7 +255,7 @@ pub enum RenderPassEncoderCommand {
     End,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPURenderBundleEncoder`](https://www.w3.org/TR/webgpu/#gpurenderbundleencoder).
 pub enum RenderBundleEncoderCommand<'a> {
     BindingCommand(BindingCommand),
@@ -238,7 +267,7 @@ pub enum RenderBundleEncoderCommand<'a> {
     },
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPUComputePassEncoder`](https://www.w3.org/TR/webgpu/#gpucomputepassencoder).
 pub enum ComputePassEncoderCommand {
     BindingCommand(BindingCommand),
@@ -256,7 +285,7 @@ pub enum ComputePassEncoderCommand {
     End,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPUDebugCommandsMixin`](https://www.w3.org/TR/webgpu/#gpudebugcommandsmixin).
 pub enum DebugCommand {
     PushDebugGroup(String),
@@ -264,7 +293,7 @@ pub enum DebugCommand {
     InsertDebugMarker(String),
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPUBindingCommandsMixin`](https://www.w3.org/TR/webgpu/#gpubindingcommandsmixin).
 pub enum BindingCommand {
     SetBindGroup {
@@ -278,7 +307,7 @@ pub enum BindingCommand {
     },
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 /// Corresponds to [`GPURenderCommandsMixin`](https://www.w3.org/TR/webgpu/#gpurendercommandsmixin).
 pub enum RenderCommand {
     SetPipeline(id::RenderPipelineId),

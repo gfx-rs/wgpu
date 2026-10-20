@@ -15,6 +15,7 @@ use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 use wgpu_core::command::PassChannel;
+use wgpu_core::resource::Labeled as _;
 use wgpu_types::{BufferAddress, TexelCopyBufferInfo};
 
 use crate::buffer::GPUBuffer;
@@ -27,7 +28,6 @@ use crate::webidl::GPUExtent3D;
 
 pub struct GPUCommandEncoder {
   pub wgpu_command_encoder: Arc<wgpu_core::command::CommandEncoder>,
-  pub label: String,
 
   // Weak reference to the JS object so we can attach a finalizer.
   // See `GPUDevice::create_command_encoder`.
@@ -52,7 +52,7 @@ impl GPUCommandEncoder {
   #[getter]
   #[string]
   fn label(&self) -> String {
-    self.label.clone()
+    self.wgpu_command_encoder.label().to_string()
   }
   #[setter]
   #[string]
@@ -60,6 +60,7 @@ impl GPUCommandEncoder {
     // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
   }
 
+  #[reentrant]
   #[required(1)]
   #[cppgc]
   fn begin_render_pass(
@@ -139,6 +140,7 @@ impl GPUCommandEncoder {
     })
   }
 
+  #[reentrant]
   #[cppgc]
   fn begin_compute_pass(
     &self,
@@ -253,6 +255,7 @@ impl GPUCommandEncoder {
     Ok(())
   }
 
+  #[reentrant]
   #[required(3)]
   #[undefined]
   fn copy_buffer_to_texture(
@@ -283,6 +286,7 @@ impl GPUCommandEncoder {
     );
   }
 
+  #[reentrant]
   #[required(3)]
   #[undefined]
   fn copy_texture_to_buffer(
@@ -313,6 +317,7 @@ impl GPUCommandEncoder {
     );
   }
 
+  #[reentrant]
   #[required(3)]
   #[undefined]
   fn copy_texture_to_texture(
@@ -375,6 +380,7 @@ impl GPUCommandEncoder {
     );
   }
 
+  #[reentrant]
   #[cppgc]
   fn finish(
     &self,
@@ -389,7 +395,6 @@ impl GPUCommandEncoder {
 
     GPUCommandBuffer {
       wgpu_command_buffer,
-      label: descriptor.label,
     }
   }
 

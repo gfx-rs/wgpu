@@ -35,7 +35,7 @@ const NEEDS_MAPPABLE_PRIMARY_BUFFERS: &[Bu; 7] = &[
     // these two require acceleration_structures feature
     Bu::all().intersection(Bu::BLAS_INPUT.union(Bu::TLAS_INPUT).complement()),
 ];
-const INVALID_BITS: Bu = Bu::from_bits_retain(0b1111111111111);
+const INVALID_BITS: Bu = Bu::from_bits_retain(wgpu::wgt::BufferUsagesBits([u32::MAX, u32::MAX]));
 const ALWAYS_FAIL: &[Bu; 2] = &[Bu::empty(), INVALID_BITS];
 
 fn try_create(ctx: TestingContext, usages: &[(bool, &[wgpu::BufferUsages])]) {
@@ -106,7 +106,7 @@ async fn map_test(
     let usage = match usage_type {
         "read" => Bu::COPY_DST | Bu::MAP_READ,
         "write" => Bu::COPY_SRC | Bu::MAP_WRITE,
-        _ => Bu::from_bits(0).unwrap(),
+        _ => Bu::empty(),
     };
     let buffer_creation_validation_error = usage.is_empty();
 
@@ -161,9 +161,15 @@ async fn map_test(
         .unwrap();
 
     if !before_unmap && !before_destroy {
-        {
-            let view = buffer.slice(0..size).get_mapped_range().unwrap();
-            assert!(!view.is_empty());
+        match map_mode_type {
+            Ma::Read => {
+                let view = buffer.slice(0..size).get_mapped_range().unwrap();
+                assert!(!view.is_empty());
+            }
+            Ma::Write => {
+                let view = buffer.slice(0..size).get_mapped_range_mut().unwrap();
+                assert!(!view.is_empty());
+            }
         }
 
         if after_unmap {

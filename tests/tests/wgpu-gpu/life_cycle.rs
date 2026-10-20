@@ -310,16 +310,15 @@ fn record_encoder_with_resource(
                 pass.set_bind_group(0, &bind_group, &[]);
                 pass.draw(0..0, 0..0);
             } else {
-                let mut rbe = ctx
-                    .device
-                    .create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
-                        label: None,
-                        color_formats: &[Some(wgpu::TextureFormat::Rgba8Unorm)],
-                        depth_stencil: None,
-                        sample_count: 1,
-                        multiview: None,
-                    })
-                    .unwrap();
+                let mut rbe =
+                    ctx.device
+                        .create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+                            label: None,
+                            color_formats: &[Some(wgpu::TextureFormat::Rgba8Unorm)],
+                            depth_stencil: None,
+                            sample_count: 1,
+                            multiview: None,
+                        });
                 rbe.set_pipeline(&pipeline);
                 rbe.set_bind_group(0, &bind_group, &[]);
                 rbe.draw(0..0, 0..0);
@@ -1025,16 +1024,15 @@ fn test_replaced_bind_group(ctx: &TestingContext, usage: UsageKind) {
                 pass.set_bind_group(0, &bind_group_b, &[]);
                 pass.draw(0..0, 0..0);
             } else {
-                let mut rbe = ctx
-                    .device
-                    .create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
-                        label: None,
-                        color_formats: &[Some(wgpu::TextureFormat::Rgba8Unorm)],
-                        depth_stencil: None,
-                        sample_count: 1,
-                        multiview: None,
-                    })
-                    .unwrap();
+                let mut rbe =
+                    ctx.device
+                        .create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+                            label: None,
+                            color_formats: &[Some(wgpu::TextureFormat::Rgba8Unorm)],
+                            depth_stencil: None,
+                            sample_count: 1,
+                            multiview: None,
+                        });
                 rbe.set_pipeline(&pipeline);
                 rbe.set_bind_group(0, &bind_group_a, &[]);
                 rbe.set_bind_group(0, &bind_group_b, &[]);

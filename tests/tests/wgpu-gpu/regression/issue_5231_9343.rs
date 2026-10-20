@@ -16,7 +16,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 ///
 /// #9343 is a crash on dx12 when using a texture created without `TEXTURE_BINDING` as a
 /// read-only depth attachment. With read-only depth, wgpu-core transitioned the depth
-/// texture to `DEPTH_STENCIL_READ | RESOURCE`. This is normally a valid usage combination,
+/// texture to `DEPTH_READ | RESOURCE`. This is normally a valid usage combination,
 /// but when the texture view does not have `TEXTURE_BINDING` usage, the `RESOURCE` usage
 /// is not allowed, and dx12 raises an error.
 #[apply(gpu_test!)]
@@ -24,35 +24,19 @@ static READ_ONLY_DEPTH_WITHOUT_TEXTURE_BINDING: GpuTestConfiguration = GpuTestCo
     .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
-            .enable_noop()
-            // <https://github.com/gfx-rs/wgpu/issues/5231>
-            .expect_fail(wgpu_test::FailureCase {
-                backends: Some(wgpu::Backends::VULKAN),
-                reasons: vec![wgpu_test::FailureReason::validation_error()
-                    .with_message("WRITE_AFTER_WRITE hazard detected.")],
-                behavior: wgpu_test::FailureBehavior::AssertFailure,
-                ..Default::default()
-            }),
+            .enable_noop(),
     )
     .run_sync(|ctx| read_only_depth_test(&ctx, false));
 
 /// Test that a read-only depth attachment can simultaneously be sampled as a texture
-/// binding within the same render pass. This exercises the `DEPTH_STENCIL_READ | RESOURCE`
+/// binding within the same render pass. This exercises the `DEPTH_READ | RESOURCE`
 /// usage combination that wgpu-core sets up in render.rs.
 #[apply(gpu_test!)]
 static READ_ONLY_DEPTH_WITH_SAMPLED_BINDING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
-            .enable_noop()
-            // <https://github.com/gfx-rs/wgpu/issues/5231>
-            .expect_fail(wgpu_test::FailureCase {
-                backends: Some(wgpu::Backends::VULKAN),
-                reasons: vec![wgpu_test::FailureReason::validation_error()
-                    .with_message("WRITE_AFTER_WRITE hazard detected.")],
-                behavior: wgpu_test::FailureBehavior::AssertFailure,
-                ..Default::default()
-            }),
+            .enable_noop(),
     )
     .run_sync(|ctx| read_only_depth_test(&ctx, true));
 
@@ -60,7 +44,7 @@ static READ_ONLY_DEPTH_WITH_SAMPLED_BINDING: GpuTestConfiguration = GpuTestConfi
 ///
 /// When `sample_depth` is true, the depth texture is created with `TEXTURE_BINDING` and
 /// the second (read-only) pass also binds it as a `texture_depth_2d` for sampling. This
-/// exercises the `DEPTH_STENCIL_READ | RESOURCE` usage combination.
+/// exercises the `DEPTH_READ | RESOURCE` usage combination.
 ///
 /// When `sample_depth` is false, the depth texture has only `RENDER_ATTACHMENT` usage and
 /// the second pass only uses it as a read-only depth attachment.
@@ -255,7 +239,7 @@ fn read_only_depth_test(ctx: &TestingContext, sample_depth: bool) {
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
 
-    // First pass: writable depth, puts the depth texture in `DEPTH_STENCIL_WRITE` state.
+    // First pass: writable depth, puts the depth texture in `DEPTH_WRITE` state.
     {
         let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("depth write pass"),
@@ -284,9 +268,9 @@ fn read_only_depth_test(ctx: &TestingContext, sample_depth: bool) {
         rpass.draw(0..1, 0..1);
     }
 
-    // Second pass: read-only depth attachment, triggers the `DEPTH_STENCIL_WRITE` ->
-    // `DEPTH_STENCIL_READ` transition. When `sample_depth` is true, the depth texture
-    // is also bound as a sampled texture, exercising `DEPTH_STENCIL_READ | RESOURCE`.
+    // Second pass: read-only depth attachment, triggers the `DEPTH_WRITE` ->
+    // `DEPTH_READ` transition. When `sample_depth` is true, the depth texture
+    // is also bound as a sampled texture, exercising `DEPTH_READ | RESOURCE`.
     {
         let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("depth read pass"),

@@ -30,7 +30,7 @@ fn function_() {
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main(@builtin(num_subgroups) param: u32, @builtin(subgroup_id) param_1: u32, @builtin(subgroup_size) param_2: u32, @builtin(subgroup_invocation_id) param_3: u32) {
     global = param;
     global_1 = param_1;

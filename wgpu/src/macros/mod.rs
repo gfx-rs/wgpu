@@ -67,17 +67,6 @@ macro_rules! _vertex_attr_array_helper {
     };
 }
 
-#[test]
-fn test_vertex_attr_array() {
-    let attrs = vertex_attr_array![0 => Float32x2, 3 => Uint16x4];
-    // VertexAttribute does not support PartialEq, so we cannot test directly
-    assert_eq!(attrs.len(), 2);
-    assert_eq!(attrs[0].offset, 0);
-    assert_eq!(attrs[0].shader_location, 0);
-    assert_eq!(attrs[1].offset, size_of::<(f32, f32)>() as u64);
-    assert_eq!(attrs[1].shader_location, 3);
-}
-
 #[macro_export]
 #[doc(hidden)]
 macro_rules! include_spirv_source {
@@ -94,16 +83,30 @@ macro_rules! include_spirv_source {
     }
 }
 
-#[test]
-fn make_spirv_le_pass() {
-    static SPIRV: &[u32] = include_spirv_source!("le-aligned.spv");
-    assert_eq!(SPIRV, &[0x07230203, 0x11223344]);
-}
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_vertex_attr_array() {
+        let attrs = vertex_attr_array![0 => Float32x2, 3 => Uint16x4];
+        // VertexAttribute does not support PartialEq, so we cannot test directly
+        assert_eq!(attrs.len(), 2);
+        assert_eq!(attrs[0].offset, 0);
+        assert_eq!(attrs[0].shader_location, 0);
+        assert_eq!(attrs[1].offset, size_of::<(f32, f32)>() as u64);
+        assert_eq!(attrs[1].shader_location, 3);
+    }
 
-#[test]
-fn make_spirv_be_pass() {
-    static SPIRV: &[u32] = include_spirv_source!("be-aligned.spv");
-    assert_eq!(SPIRV, &[0x07230203, 0x11223344]);
+    #[test]
+    fn make_spirv_le_pass() {
+        static SPIRV: &[u32] = include_spirv_source!("le-aligned.spv");
+        assert_eq!(SPIRV, &[0x07230203, 0x11223344]);
+    }
+
+    #[test]
+    fn make_spirv_be_pass() {
+        static SPIRV: &[u32] = include_spirv_source!("be-aligned.spv");
+        assert_eq!(SPIRV, &[0x07230203, 0x11223344]);
+    }
 }
 
 /// Macro to load a SPIR-V module statically.
@@ -254,6 +257,50 @@ macro_rules! hal_type_gles {
     };
 }
 pub(crate) use hal_type_gles;
+
+// Reference an image from the crate's `src/documentation/images/` directory. Put
+// the expansion in a `#[doc]` attribute and reference the image by file name
+// elsewhere in the same docs:
+//
+//     #![doc = crate::macros::doc_image!("foo.png")]
+//     //! ![alt text][foo.png]
+//
+// Local builds resolve the image from the on-disk `src/documentation/images/`
+// directory (which, because it lives inside the crate, is also present when a
+// downstream user builds `wgpu`'s docs as a dependency); `docsrs` builds resolve
+// it from the repository over HTTP, pinned to the commit being built. Both base
+// URLs are set in `build.rs`. The expansion must be a single line, as it is used
+// in a `#[doc]` attribute.
+//
+// Place these attributes *before* the module's doc comment, as shown above.
+// rustdoc strips trailing blank lines from each doc fragment and joins the
+// fragments with a single newline, so a definition placed after a doc comment
+// that ends in a paragraph is swallowed by that paragraph as a lazy
+// continuation, and every image reference in the module silently fails to
+// resolve.
+
+/// Expands to a Markdown reference-style link definition for a `src/documentation/images/` image.
+#[cfg(docsrs)]
+macro_rules! doc_image {
+    ($name:literal) => {
+        concat!(
+            "[",
+            $name,
+            "]: https://raw.githubusercontent.com/gfx-rs/wgpu/",
+            env!("WGPU_DOCS_COMMIT"),
+            "/wgpu/src/documentation/images/",
+            $name
+        )
+    };
+}
+/// Expands to a Markdown reference-style link definition for a `src/documentation/images/` image.
+#[cfg(not(docsrs))]
+macro_rules! doc_image {
+    ($name:literal) => {
+        concat!("[", $name, "]: ", env!("WGPU_DOCS_URL_BASE"), "/", $name)
+    };
+}
+pub(crate) use doc_image;
 
 #[doc(hidden)]
 pub mod helpers {

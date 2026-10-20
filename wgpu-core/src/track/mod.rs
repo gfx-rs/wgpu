@@ -146,7 +146,7 @@ impl TrackerIndex {
 /// wgpu-core internally use some array-like storage for tracking resources.
 /// To that end, there needs to be a uniquely assigned index for each live resource
 /// of a certain type. This index is separate from the resource ID for various reasons:
-/// - There can be multiple resource IDs pointing the the same resource.
+/// - There can be multiple resource IDs pointing to the same resource.
 /// - IDs of dead handles can be recycled while resources are internally held alive (and tracked).
 /// - The plan is to remove IDs in the long run
 ///   ([#5121](https://github.com/gfx-rs/wgpu/issues/5121)).
@@ -324,17 +324,16 @@ pub(crate) trait ResourceUses:
     type Selector: fmt::Debug;
 
     /// Turn the resource into a pile of bits.
-    fn bits(self) -> u16;
+    fn bits(self) -> u32;
     /// Returns true if any of the uses are exclusive.
     fn any_exclusive(self) -> bool;
-}
 
-/// Returns true if the given states violates the usage scope rule
-/// of any(inclusive) XOR one(exclusive)
-fn invalid_resource_state<T: ResourceUses>(state: T) -> bool {
-    // Is power of two also means "is one bit set". We check for this as if
-    // we're in any exclusive state, we must only be in a single state.
-    state.any_exclusive() && !state.bits().is_power_of_two()
+    /// Returns true if the given states violates the usage scope rule
+    /// of any(inclusive) XOR one(exclusive)
+    fn is_invalid(self) -> bool {
+        // If we're in any exclusive state, we must only be in a single state.
+        self.any_exclusive() && self.bits().count_ones() != 1
+    }
 }
 
 /// Returns true if the transition from one state to another does not require

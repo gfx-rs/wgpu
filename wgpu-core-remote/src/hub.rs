@@ -84,6 +84,7 @@ flagged as errors as well. This is called [Contagious Invalidity].
 */
 
 use alloc::sync::Arc;
+use core::fmt;
 
 use crate::registry::Registry;
 use wgpu_core::{
@@ -93,7 +94,7 @@ use wgpu_core::{
     },
     device::{queue::Queue, Device},
     instance::Adapter,
-    pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
+    pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     resource::{Buffer, ExternalTexture, QuerySet, Sampler, Texture, TextureView},
 };
 
@@ -129,7 +130,6 @@ pub struct Hub {
     pub(crate) render_bundles: Registry<Arc<RenderBundle>>,
     pub(crate) render_pipelines: Registry<Arc<RenderPipeline>>,
     pub(crate) compute_pipelines: Registry<Arc<ComputePipeline>>,
-    pub(crate) pipeline_caches: Registry<Arc<PipelineCache>>,
     pub(crate) query_sets: Registry<Arc<QuerySet>>,
     pub(crate) buffers: Registry<Arc<Buffer>>,
     pub(crate) textures: Registry<Arc<Texture>>,
@@ -139,6 +139,15 @@ pub struct Hub {
     pub(crate) render_passes: Registry<RenderPass>,
     pub(crate) compute_passes: Registry<ComputePass>,
     pub(crate) render_bundle_encoders: Registry<RenderBundleEncoder>,
+}
+
+impl fmt::Debug for Hub {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Placeholder impl just so that Debug is always implemented, even though not all of our
+        // fields implement Debug.
+        // If you find a need for printing actual data here, feel free to add it.
+        f.debug_struct("Hub").finish_non_exhaustive()
+    }
 }
 
 impl Hub {
@@ -156,7 +165,6 @@ impl Hub {
             render_bundles: Registry::new(),
             render_pipelines: Registry::new(),
             compute_pipelines: Registry::new(),
-            pipeline_caches: Registry::new(),
             query_sets: Registry::new(),
             buffers: Registry::new(),
             textures: Registry::new(),

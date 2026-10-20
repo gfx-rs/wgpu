@@ -48,9 +48,12 @@ pub fn map_texture_usage_to_resource_flags(
     if usage.contains(wgt::TextureUses::COLOR_TARGET) {
         flags |= Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     }
-    if usage
-        .intersects(wgt::TextureUses::DEPTH_STENCIL_READ | wgt::TextureUses::DEPTH_STENCIL_WRITE)
-    {
+    if usage.intersects(
+        wgt::TextureUses::DEPTH_READ
+            | wgt::TextureUses::DEPTH_WRITE
+            | wgt::TextureUses::STENCIL_READ
+            | wgt::TextureUses::STENCIL_WRITE,
+    ) {
         flags |= Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
         if !usage.contains(wgt::TextureUses::RESOURCE) {
             flags |= Direct3D12::D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
@@ -202,10 +205,10 @@ pub fn map_texture_usage_to_state(usage: wgt::TextureUses) -> Direct3D12::D3D12_
     if usage.intersects(Tu::COLOR_TARGET) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_RENDER_TARGET;
     }
-    if usage.intersects(Tu::DEPTH_STENCIL_READ) {
+    if usage.intersects(Tu::DEPTH_READ | Tu::STENCIL_READ) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_DEPTH_READ;
     }
-    if usage.intersects(Tu::DEPTH_STENCIL_WRITE) {
+    if usage.intersects(wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
     if usage.intersects(Tu::STORAGE_READ_ONLY | Tu::STORAGE_WRITE_ONLY | Tu::STORAGE_READ_WRITE) {
@@ -463,5 +466,37 @@ pub(crate) const fn make_shader_component_mapping(
             | (src3.0 & M) << (S * 3)
             | Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_ALWAYS_SET_BIT_AVOIDING_ZEROMEM_MISTAKES
                 as i32,
+    )
+}
+
+pub(crate) fn map_component_swizzle(
+    swizzle: wgt::ComponentSwizzle,
+) -> Direct3D12::D3D12_SHADER_COMPONENT_MAPPING {
+    match swizzle {
+        wgt::ComponentSwizzle::Zero => Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0,
+        wgt::ComponentSwizzle::One => Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1,
+        wgt::ComponentSwizzle::R => {
+            Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_0
+        }
+        wgt::ComponentSwizzle::G => {
+            Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1
+        }
+        wgt::ComponentSwizzle::B => {
+            Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2
+        }
+        wgt::ComponentSwizzle::A => {
+            Direct3D12::D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_3
+        }
+    }
+}
+
+pub(crate) fn map_texture_component_swizzle(
+    swizzle: wgt::TextureComponentSwizzle,
+) -> Direct3D12::D3D12_SHADER_COMPONENT_MAPPING {
+    make_shader_component_mapping(
+        map_component_swizzle(swizzle.r),
+        map_component_swizzle(swizzle.g),
+        map_component_swizzle(swizzle.b),
+        map_component_swizzle(swizzle.a),
     )
 }

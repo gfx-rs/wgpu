@@ -21,7 +21,7 @@ mod multi_instance {
     #[test]
     pub fn multi_instance() {
         {
-            env_logger::init();
+            wgpu_test::init_logger();
 
             // Sequential instances.
             for _ in 0..3 {

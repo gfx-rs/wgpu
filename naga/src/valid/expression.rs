@@ -525,6 +525,9 @@ impl super::Validator {
                 if !mod_info[ty].contains(TypeFlags::CONSTRUCTIBLE) {
                     return Err(ExpressionError::InvalidZeroValue(ty));
                 }
+                if matches!(module.types[ty].inner, crate::TypeInner::RayQuery { .. }) {
+                    return Err(ExpressionError::InvalidZeroValue(ty));
+                }
                 ShaderStages::all()
             }
             E::Compose { ref components, ty } => {

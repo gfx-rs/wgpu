@@ -25,6 +25,25 @@ impl BindGroup {
     }
 }
 
+#[cfg(wgpu_core)]
+impl BindGroup {
+    /// Create a new bind group of wgpu from a wgpu-core bind group.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_bind_group` - wgpu-core bind group.
+    pub fn from_core(core_bind_group: alloc::sync::Arc<wgc::binding_model::BindGroup>) -> Self {
+        Self {
+            inner: crate::backend::wgpu_core::CoreBindGroup::from_core(core_bind_group).into(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core bind group if this `BindGroup` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::binding_model::BindGroup>> {
+        self.inner.as_core_opt().map(|bg| bg.as_core())
+    }
+}
+
 /// Resource to be bound by a [`BindGroup`] for use with a pipeline.
 ///
 /// The pipeline’s [`BindGroupLayout`] must contain a matching [`BindingType`].

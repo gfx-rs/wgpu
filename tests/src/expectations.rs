@@ -355,7 +355,10 @@ impl FailureReason {
         message: None,
     };
 
-    /// Match a validation error.
+    /// Match an error caught by [`wgpu_hal::VALIDATION_CANARY`].
+    ///
+    /// These are errors from platform debug/validation layers, _not_
+    /// WebGPU validation errors.
     #[allow(dead_code, reason = "Not constructed on wasm")]
     pub fn validation_error() -> Self {
         Self {
@@ -365,6 +368,9 @@ impl FailureReason {
     }
 
     /// Match a panic.
+    ///
+    /// This includes WebGPU validation errors caught by the default (panicking)
+    /// error handler.
     pub fn panic() -> Self {
         Self {
             kind: Some(FailureResultKind::Panic),

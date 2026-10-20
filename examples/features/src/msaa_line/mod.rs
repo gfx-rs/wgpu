@@ -80,15 +80,14 @@ impl Example {
             multiview_mask: None,
             cache: None,
         });
-        let mut encoder = device
-            .create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+        let mut encoder =
+            device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                 label: None,
                 color_formats: &[Some(config.view_formats[0])],
                 depth_stencil: None,
                 sample_count,
                 multiview: None,
-            })
-            .unwrap();
+            });
         encoder.set_pipeline(&pipeline);
         encoder.set_vertex_buffer(0, vertex_buffer.slice(..));
         encoder.draw(0..vertex_count, 0..1);
@@ -230,17 +229,13 @@ impl crate::framework::Example for Example {
             } => match logical_key {
                 // TODO: Switch back to full scans of possible options when we expose
                 //       supported sample counts to the user.
-                Key::Named(NamedKey::ArrowLeft) => {
-                    if self.sample_count == self.max_sample_count {
-                        self.sample_count = 1;
-                        self.rebuild_bundle = true;
-                    }
+                Key::Named(NamedKey::ArrowLeft) if self.sample_count == self.max_sample_count => {
+                    self.sample_count = 1;
+                    self.rebuild_bundle = true;
                 }
-                Key::Named(NamedKey::ArrowRight) => {
-                    if self.sample_count == 1 {
-                        self.sample_count = self.max_sample_count;
-                        self.rebuild_bundle = true;
-                    }
+                Key::Named(NamedKey::ArrowRight) if self.sample_count == 1 => {
+                    self.sample_count = self.max_sample_count;
+                    self.rebuild_bundle = true;
                 }
                 _ => {}
             },

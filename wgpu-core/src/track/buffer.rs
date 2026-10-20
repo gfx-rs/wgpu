@@ -17,8 +17,8 @@ use crate::{
     resource::{Buffer, Trackable},
     snatch::SnatchGuard,
     track::{
-        invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
-        ResourceUsageCompatibilityError, ResourceUses,
+        skip_barrier, ResourceMetadata, ResourceMetadataProvider, ResourceUsageCompatibilityError,
+        ResourceUses,
     },
 };
 
@@ -27,8 +27,8 @@ impl ResourceUses for BufferUses {
 
     type Selector = ();
 
-    fn bits(self) -> u16 {
-        Self::bits(&self)
+    fn bits(self) -> u32 {
+        Self::bits(&self).into()
     }
 
     fn any_exclusive(self) -> bool {
@@ -696,7 +696,7 @@ impl DeviceBufferTracker {
 enum BufferStateProvider<'a> {
     /// Get a state that was provided directly.
     Direct { state: BufferUses },
-    /// Get a state from an an array of states.
+    /// Get a state from an array of states.
     Indirect { state: &'a [BufferUses] },
 }
 impl BufferStateProvider<'_> {
@@ -733,11 +733,11 @@ unsafe fn insert<T: Clone>(
 
     // This should only ever happen with a wgpu bug, but let's just double
     // check that resource states don't have any conflicts.
-    strict_assert_eq!(invalid_resource_state(new_start_state), false);
-    strict_assert_eq!(invalid_resource_state(new_end_state), false);
+    strict_assert_eq!(new_start_state.is_invalid(), false);
+    strict_assert_eq!(new_end_state.is_invalid(), false);
 
     unsafe {
-        if let Some(&mut ref mut start_state) = start_states {
+        if let Some(start_state) = start_states {
             *start_state.get_unchecked_mut(index) = new_start_state;
         }
         *current_states.get_unchecked_mut(index) = new_end_state;
@@ -760,7 +760,7 @@ unsafe fn merge(
 
     let merged_state = *current_state | new_state;
 
-    if invalid_resource_state(merged_state) {
+    if merged_state.is_invalid() {
         return Err(ResourceUsageCompatibilityError::from_buffer(
             unsafe { metadata_provider.get(index) },
             *current_state,

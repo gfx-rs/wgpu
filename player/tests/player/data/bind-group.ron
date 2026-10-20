@@ -14,9 +14,9 @@
                 (
                     binding: 0,
                     visibility: "VERTEX | FRAGMENT",
-                    ty: Buffer(
+                    buffer: Some(BufferBindingLayout(
                         ty: Uniform,
-                    ),
+                    )),
                 ),
             ],
         )),

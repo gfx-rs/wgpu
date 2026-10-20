@@ -9,26 +9,26 @@ struct NeedsPadding {
     @location(2) f3_: f32,
 }
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<uniform> no_padding_uniform: NoPadding;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage, read_write> no_padding_storage: NoPadding;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var<uniform> needs_padding_uniform: NeedsPadding;
-@group(0) @binding(3) 
+@group(0) @binding(3)
 var<storage, read_write> needs_padding_storage: NeedsPadding;
 
-@fragment 
+@fragment
 fn no_padding_frag(input: NoPadding) -> @location(0) vec4<f32> {
     return vec4(0f);
 }
 
-@vertex 
+@vertex
 fn no_padding_vert(input_1: NoPadding) -> @builtin(position) vec4<f32> {
     return vec4(0f);
 }
 
-@compute @workgroup_size(16, 1, 1) 
+@compute @workgroup_size(16, 1, 1)
 fn no_padding_comp() {
     var x: NoPadding;
 
@@ -39,17 +39,17 @@ fn no_padding_comp() {
     return;
 }
 
-@fragment 
+@fragment
 fn needs_padding_frag(input_2: NeedsPadding) -> @location(0) vec4<f32> {
     return vec4(0f);
 }
 
-@vertex 
+@vertex
 fn needs_padding_vert(input_3: NeedsPadding) -> @builtin(position) vec4<f32> {
     return vec4(0f);
 }
 
-@compute @workgroup_size(16, 1, 1) 
+@compute @workgroup_size(16, 1, 1)
 fn needs_padding_comp() {
     var x_1: NeedsPadding;
 

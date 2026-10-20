@@ -36,15 +36,15 @@ struct LayoutTest {
 const constant_variable: f16 = 15.203125h;
 
 var<private> private_variable: f16 = 1h;
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<uniform> input_uniform: UniformCompatible;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage> input_storage: UniformCompatible;
-@group(0) @binding(2) 
+@group(0) @binding(2)
 var<storage> input_arrays: StorageCompatible;
-@group(0) @binding(3) 
+@group(0) @binding(3)
 var<storage, read_write> output: UniformCompatible;
-@group(0) @binding(4) 
+@group(0) @binding(4)
 var<storage, read_write> output_arrays: StorageCompatible;
 
 fn f16_function(x: f16) -> f16 {
@@ -167,7 +167,7 @@ fn f16_function(x: f16) -> f16 {
     return _e287;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     let _e3 = f16_function(2h);
     output.final_value = _e3;

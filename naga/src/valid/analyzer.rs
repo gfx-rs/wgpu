@@ -1142,6 +1142,7 @@ impl FunctionInfo {
                         }
                         crate::RayQueryFunction::ConfirmIntersection => {}
                         crate::RayQueryFunction::Terminate => {}
+                        crate::RayQueryFunction::Begin => {}
                     }
                     FunctionUniformity::new()
                 }
@@ -1206,6 +1207,23 @@ impl FunctionInfo {
                         }
                     }
                     FunctionUniformity::new()
+                }
+                S::DebugPrintf {
+                    format: _,
+                    ref arguments,
+                } => {
+                    let mut requirements = UniformityRequirements::empty();
+                    for &expr in arguments {
+                        let _ = self.add_ref(expr);
+                        requirements |= self.expressions[expr.index()].uniformity.requirements;
+                    }
+                    FunctionUniformity {
+                        result: Uniformity {
+                            non_uniform_result: None,
+                            requirements,
+                        },
+                        exit: ExitFlags::empty(),
+                    }
                 }
             };
 

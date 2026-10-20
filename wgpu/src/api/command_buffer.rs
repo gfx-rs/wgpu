@@ -30,3 +30,23 @@ impl CommandBuffer {
     // so callers can schedule after finishing encoding.
     impl_deferred_command_buffer_actions!();
 }
+
+#[cfg(wgpu_core)]
+impl CommandBuffer {
+    /// Create a new command buffer of wgpu from a wgpu-core command buffer.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_buffer` - wgpu-core command buffer.
+    pub fn from_core(core_buffer: alloc::sync::Arc<wgc::command::CommandBuffer>) -> Self {
+        Self {
+            buffer: crate::backend::wgpu_core::CoreCommandBuffer::from_core(core_buffer).into(),
+            actions: SharedDeferredCommandBufferActions::default(),
+        }
+    }
+
+    /// Returns the underlying wgpu-core command buffer if this `CommandBuffer` is on the wgpu-core backend, otherwise `None`.
+    pub fn as_core(&self) -> Option<alloc::sync::Arc<wgc::command::CommandBuffer>> {
+        self.buffer.as_core_opt().map(|cb| cb.as_core())
+    }
+}

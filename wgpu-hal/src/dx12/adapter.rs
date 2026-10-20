@@ -1,8 +1,8 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
-use core::{ptr, sync::atomic::AtomicU64};
+use core::ptr;
 use std::thread;
 
-use wgpu_sync::Mutex;
+use wgpu_sync::{atomic::AtomicU64, Mutex};
 use windows::{
     core::Interface as _,
     Win32::{
@@ -458,33 +458,34 @@ impl super::Adapter {
 
         // these should always be available on d3d12
         let mut features = wgt::Features::empty()
-            | wgt::Features::DEPTH_CLIP_CONTROL
-            | wgt::Features::DEPTH32FLOAT_STENCIL8
-            | wgt::Features::INDIRECT_FIRST_INSTANCE
-            | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
-            | wgt::Features::MULTI_DRAW_INDIRECT_COUNT
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO
-            | wgt::Features::POLYGON_MODE_LINE
-            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | wgt::Features::TIMESTAMP_QUERY
-            | wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
-            | wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES
-            | wgt::Features::TEXTURE_COMPRESSION_BC
-            | wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D
             | wgt::Features::CLEAR_TEXTURE
-            | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
+            | wgt::Features::DEPTH32FLOAT_STENCIL8
+            | wgt::Features::DEPTH_CLIP_CONTROL
+            | wgt::Features::DUAL_SOURCE_BLENDING
+            | wgt::Features::EXTERNAL_TEXTURE
+            | wgt::Features::FLOAT32_BLENDABLE
+            | wgt::Features::FLOAT32_FILTERABLE
             | wgt::Features::IMMEDIATES
+            | wgt::Features::INDIRECT_FIRST_INSTANCE
+            | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
+            | wgt::Features::MEMORY_DECORATION_COHERENT
+            | wgt::Features::MULTI_DRAW_INDIRECT_COUNT
+            | wgt::Features::PASSTHROUGH_SHADERS
+            | wgt::Features::POLYGON_MODE_LINE
             | wgt::Features::PRIMITIVE_INDEX
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
-            | wgt::Features::DUAL_SOURCE_BLENDING
-            | wgt::Features::TEXTURE_FORMAT_NV12
-            | wgt::Features::FLOAT32_FILTERABLE
-            | wgt::Features::FLOAT32_BLENDABLE
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::TEXTURE_ATOMIC
-            | wgt::Features::PASSTHROUGH_SHADERS
-            | wgt::Features::EXTERNAL_TEXTURE
-            | wgt::Features::MEMORY_DECORATION_COHERENT;
+            | wgt::Features::TEXTURE_COMPONENT_SWIZZLE
+            | wgt::Features::TEXTURE_COMPRESSION_BC
+            | wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D
+            | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
+            | wgt::Features::TEXTURE_FORMAT_NV12
+            | wgt::Features::TIMESTAMP_QUERY
+            | wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
+            | wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
@@ -905,8 +906,12 @@ impl super::Adapter {
                     max_bindings_per_bind_group: u32::MAX,
                     max_sampled_textures_per_shader_stage,
                     max_samplers_per_shader_stage,
-                    max_storage_textures_per_shader_stage,
                     max_storage_buffers_per_shader_stage,
+                    max_storage_buffers_in_vertex_stage: 0,
+                    max_storage_buffers_in_fragment_stage: 0,
+                    max_storage_textures_per_shader_stage,
+                    max_storage_textures_in_vertex_stage: 0,
+                    max_storage_textures_in_fragment_stage: 0,
                     max_uniform_buffers_per_shader_stage,
                     // See `InputSlot` param docs: https://learn.microsoft.com/en-ca/windows/win32/api/d3d12/ns-d3d12-d3d12_input_element_desc
                     max_vertex_buffers: 16,
@@ -1397,7 +1402,8 @@ impl crate::Adapter for super::Adapter {
     fn get_ordered_texture_usages(&self) -> wgt::TextureUses {
         wgt::TextureUses::INCLUSIVE
             | wgt::TextureUses::COLOR_TARGET
-            | wgt::TextureUses::DEPTH_STENCIL_WRITE
+            | wgt::TextureUses::DEPTH_WRITE
+            | wgt::TextureUses::STENCIL_WRITE
     }
 }
 

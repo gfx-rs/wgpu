@@ -158,6 +158,7 @@ impl crate::framework::Example for Example {
             mip_level_count: None,
             base_array_layer: 0,
             array_layer_count: None,
+            swizzle: wgpu::TextureComponentSwizzle::default(),
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -172,8 +173,9 @@ impl crate::framework::Example for Example {
         });
 
         let uniforms = {
-            let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
-            let proj = Mat4::perspective_rh(
+            let view =
+                glam::camera::rh::view::look_at_mat4(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
+            let proj = glam::camera::rh::proj::directx::perspective(
                 59.0_f32.to_radians(),
                 config.width as f32 / config.height as f32,
                 0.001,

@@ -30,7 +30,10 @@ ignored = ["cfg_aliases"]
 
 [lints.rust]
 missing_debug_implementations = "warn"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(wgpu_validate_locks)',
+    'cfg(wgpu_validate_locks_debug)',
+] }
 
 [lib]
 
@@ -121,7 +124,7 @@ std = ["wgpu-sync/std"]
 static-dxc = ["wgpu-hal/static-dxc"]
 
 ## Enable portable atomics on platforms that do not support 64bit atomics.
-portable-atomic = ["dep:portable-atomic", "wgpu-hal/portable-atomic"]
+portable-atomic = ["wgpu-sync/portable-atomic", "wgpu-hal/portable-atomic"]
 
 #! ### Target Conditional Features
 # --------------------------------------------------------------------
@@ -175,7 +178,7 @@ wgpu-core-deps-emscripten = { workspace = true, optional = true }
 [target.'cfg(all(target_family = "wasm", not(target_os = "emscripten")))'.dependencies]
 wgpu-core-deps-wasm = { workspace = true, optional = true }
 
-[target.'cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))'.dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd", target_os = "netbsd"))'.dependencies]
 wgpu-core-deps-linux-android-bsd = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
@@ -185,7 +188,7 @@ wgpu-core-deps-windows = { workspace = true, optional = true }
 naga.workspace = true
 naga-types.workspace = true
 wgpu-naga-bridge.workspace = true
-wgpu-hal.workspace = true
+wgpu-hal = { workspace = true, default-features = true }
 wgpu-sync = { workspace = true, default-features = false }
 wgpu-types.workspace = true
 
@@ -204,12 +207,10 @@ profiling = { workspace = true, default-features = false }
 raw-window-handle.workspace = true
 ron = { workspace = true, optional = true }
 rustc-hash.workspace = true
+scopeguard.workspace = true
 serde = { workspace = true, features = ["derive"], default-features = false, optional = true }
 smallvec.workspace = true
 thiserror.workspace = true
-
-[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
-portable-atomic = { workspace = true, optional = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 proptest.workspace = true

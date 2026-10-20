@@ -8,7 +8,9 @@ runs:
   using: "composite"
   steps:
     - shell: bash
+      env:
+        INPUTS_TARGET_DIR: ${{ inputs.target-dir }}
       run: |
         set -e
 
-        cargo xtask install-warp --target-dir ${{ inputs.target-dir }}
+        cargo xtask install-warp --target-dir ${INPUTS_TARGET_DIR}

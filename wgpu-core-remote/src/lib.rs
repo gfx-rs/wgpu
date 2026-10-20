@@ -31,14 +31,23 @@ extern crate alloc;
 extern crate wgpu_hal as hal;
 extern crate wgpu_types as wgt;
 
-pub type TexelCopyBufferInfo = wgt::TexelCopyBufferInfo<id::BufferId>;
-pub type TexelCopyTextureInfo = wgt::TexelCopyTextureInfo<id::TextureId>;
-pub type CopyExternalImageDestInfo = wgt::CopyExternalImageDestInfo<id::TextureId>;
-
-pub type Command = wgpu_core::command::Command<id::IdReferences>;
-
 pub mod global;
 pub mod hub;
 pub mod id;
 pub mod registry;
 pub mod storage;
+
+pub fn map_buffer_access_error(
+    err: wgpu_core::resource::BufferAccessError,
+) -> wgpu_core_remote_types::BufferMapError {
+    match err {
+        e
+        @ wgpu_core::resource::BufferAccessError::Device(wgpu_core::device::DeviceError::Lost) => {
+            wgpu_core_remote_types::BufferMapError::Aborted(e.to_string())
+        }
+        e @ wgpu_core::resource::BufferAccessError::MapAborted => {
+            wgpu_core_remote_types::BufferMapError::Aborted(e.to_string())
+        }
+        e => wgpu_core_remote_types::BufferMapError::Operation(e.to_string()),
+    }
+}

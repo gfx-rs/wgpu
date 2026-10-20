@@ -42,7 +42,7 @@ fn func_f_i(a_10: f32, b: i32) {
     return;
 }
 
-@compute @workgroup_size(1, 1, 1) 
+@compute @workgroup_size(1, 1, 1)
 fn main() {
     func_f(0f);
     func_f(0f);

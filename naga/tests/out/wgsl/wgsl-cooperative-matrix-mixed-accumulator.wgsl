@@ -1,12 +1,12 @@
 enable f16;
 enable wgpu_cooperative_matrix;
 
-@group(0) @binding(0) 
+@group(0) @binding(0)
 var<storage, read_write> ab: array<f16>;
-@group(0) @binding(1) 
+@group(0) @binding(1)
 var<storage, read_write> accum: array<f32>;
 
-@compute @workgroup_size(8, 8, 1) 
+@compute @workgroup_size(8, 8, 1)
 fn main() {
     var c: coop_mat8x8<f32,C>;
 

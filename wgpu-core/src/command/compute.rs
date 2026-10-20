@@ -887,6 +887,8 @@ pub(super) fn encode_compute_pass(
             device.instance_flags,
         ))
         .map_pass_err(pass_scope)?;
+    // If the compute pass reads any surfaces that were discarded by a previous
+    // render pass in the same command buffer, initialize them.
     fixup_discarded_surfaces(
         pending_discard_init_fixups.into_iter(),
         transit,

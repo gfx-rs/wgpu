@@ -1,4 +1,10 @@
-use alloc::{borrow::Cow, borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec::Vec};
+use alloc::{
+    borrow::{Cow, ToOwned as _},
+    boxed::Box,
+    string::String,
+    sync::Arc,
+    vec::Vec,
+};
 use core::{
     borrow::Borrow,
     fmt,
@@ -11,7 +17,8 @@ use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
-    TextureSelector,
+    math::align_to,
+    MapMode, TextureSelector, WriteOnly,
 };
 
 #[cfg(feature = "trace")]
@@ -21,11 +28,11 @@ use crate::{
     binding_model::{BindGroup, BindingError},
     device::{
         queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError,
-        DeviceMismatch, HostMap, MissingDownlevelFlags, MissingFeatures,
+        DeviceMismatch, MissingDownlevelFlags, MissingFeatures,
     },
     hal_label,
     init_tracker::{BufferInitTracker, TextureInitTracker},
-    lock::{rank, Mutex, RwLock},
+    lock::{rank, Mutex, MutexGuard, RwLock},
     ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -255,7 +262,7 @@ pub(crate) enum BufferMapState {
     Active {
         mapping: hal::BufferMapping,
         range: hal::MemoryRange,
-        host: HostMap,
+        host: MapMode,
     },
     /// Not mapped
     Idle,
@@ -266,20 +273,90 @@ unsafe impl Send for BufferMapState {}
 #[cfg(send_sync)]
 unsafe impl Sync for BufferMapState {}
 
+/// Represents a mapped range in the buffer.
+///
+/// While returned [`BufferMapping`] is alive, [`Buffer::destroy`] and [`Buffer::unmap`] calls will block until [`BufferMapping`] is dropped.
+#[derive(Debug)]
+pub struct BufferMapping {
+    ptr: NonNull<u8>,
+    len: u64,
+    mode: MapMode,
+    // guard needs to be dropped before the lock
+    _guard: wgpu_sync::RwLockReadGuard<'static, BufferMapState>,
+    _lock: Arc<RwLock<BufferMapState>>,
+}
+
+impl BufferMapping {
+    fn new(ptr: NonNull<u8>, len: u64, mode: MapMode, lock: Arc<RwLock<BufferMapState>>) -> Self {
+        // SAFETY: We want to bypass the lock ranking system here,
+        // because the lock is exposed to users.
+        let guard = unsafe { lock.underlying() }.read();
+        Self {
+            ptr,
+            len,
+            mode,
+            // SAFETY: Guard is tied to the lifetime of the lock,
+            // and it will be dropped before the lock.
+            _guard: unsafe {
+                mem::transmute::<
+                    wgpu_sync::RwLockReadGuard<'_, BufferMapState>,
+                    wgpu_sync::RwLockReadGuard<'static, BufferMapState>,
+                >(guard)
+            },
+            _lock: lock,
+        }
+    }
+
+    /// ### How to safely use the pointer
+    ///
+    /// - Pointer is only accessed for the length returned by [`BufferMapping::len`].
+    /// - Pointer is only accessed while [`BufferMapping`] is alive.
+    /// - Reading is allowed if [`BufferMapping::mode`] is [`MapMode::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set).
+    /// - Writing is allowed if [`BufferMapping::mode`] is [`MapMode::Write`] (buffer has [`wgt::BufferUsages::MAP_WRITE`] set).
+    /// - Atomics must not be used through the pointer since read-modify-write operations may not function on write-combining memory.
+    ///   This also means that it's not safe to create mutable rust references from this pointer since rust's memory model requires atomic operations to work.
+    pub fn ptr(&self) -> NonNull<u8> {
+        self.ptr
+    }
+
+    pub fn mode(&self) -> MapMode {
+        self.mode
+    }
+
+    #[expect(clippy::len_without_is_empty)]
+    pub fn len(&self) -> u64 {
+        self.len
+    }
+
+    /// Returns a read-only slice to the mapped buffer.
+    /// [`BufferMapping::mode`] must be [`MapMode::Read`] (buffer has [`wgt::BufferUsages::MAP_READ`] set) otherwise it will panic.
+    pub fn read_slice(&self) -> &[u8] {
+        assert!(self.mode == MapMode::Read);
+        unsafe { core::slice::from_raw_parts(self.ptr.as_ptr(), self.len as usize) }
+    }
+
+    /// Returns a write-only slice to the mapped buffer.
+    /// [`BufferMapping::mode`] must be [`MapMode::Write`] (buffer has [`wgt::BufferUsages::MAP_WRITE`] set) otherwise it will panic.
+    pub fn write_slice(&'_ self) -> WriteOnly<'_, [u8]> {
+        assert!(self.mode == MapMode::Write);
+        unsafe { WriteOnly::new(NonNull::slice_from_raw_parts(self.ptr, self.len as usize)) }
+    }
+}
+
 #[cfg(send_sync)]
 pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static>;
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
 
 pub struct BufferMapOperation {
-    pub host: HostMap,
+    pub mode: MapMode,
     pub callback: Option<BufferMapCallback>,
 }
 
 impl fmt::Debug for BufferMapOperation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("BufferMapOperation")
-            .field("host", &self.host)
+            .field("mode", &self.mode)
             .field("callback", &self.callback.as_ref().map(|_| "?"))
             .finish()
     }
@@ -456,7 +533,7 @@ pub struct Buffer {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
-    pub(crate) map_state: Mutex<BufferMapState>,
+    pub(crate) map_state: Arc<RwLock<BufferMapState>>,
     // Bind groups that reference this buffer. May contain duplicates.
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
     pub(crate) timestamp_normalization_bind_group: Snatchable<TimestampNormalizationBindGroup>,
@@ -481,7 +558,7 @@ impl Drop for Buffer {
             raw.dispose(self.device.raw());
         }
 
-        let map_state = mem::replace(self.map_state.get_mut(), BufferMapState::Idle);
+        let map_state = mem::replace(&mut *self.map_state.write(), BufferMapState::Idle);
         let active_map = match map_state {
             BufferMapState::Init { staging_buffer } => {
                 staging_buffer.dispose();
@@ -580,7 +657,7 @@ impl Buffer {
                 rank::BUFFER_INITIALIZATION_STATUS,
                 BufferInitTracker::new(0),
             ),
-            map_state: Mutex::new(rank::BUFFER_MAP_STATE, BufferMapState::Idle),
+            map_state: Arc::new(RwLock::new(rank::BUFFER_MAP_STATE, BufferMapState::Idle)),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
@@ -597,36 +674,73 @@ impl Buffer {
     ///
     /// If the binding would overflow the buffer, then an error is returned.
     ///
-    /// Zero-size bindings are permitted here for historical reasons. Although
-    /// zero-size bindings are permitted by WebGPU, they are not permitted by
-    /// some backends. See [`Buffer::binding`] and
-    /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
-    pub fn resolve_binding_size(
+    /// `S` is `wgt::BufferSize` (`NonZeroU64`) when called from [`Buffer::binding`]
+    /// for a storage or uniform buffer binding. `S` is `wgt::BufferAddress` (`u64`)
+    /// when called from `resolve_vertex_or_index_binding_range` for a vertex or
+    /// index buffer binding.
+    fn resolve_binding_size<S: Copy + Into<wgt::BufferAddress> + TryFrom<wgt::BufferAddress>>(
         &self,
         offset: wgt::BufferAddress,
-        binding_size: Option<wgt::BufferSize>,
-    ) -> Result<u64, BindingError> {
+        binding_size: Option<S>,
+    ) -> Result<S, BindingError> {
         let buffer_size = self.size;
 
         match binding_size {
-            Some(binding_size) => match offset.checked_add(binding_size.get()) {
-                Some(end) if end <= buffer_size => Ok(binding_size.get()),
+            Some(binding_size) => match offset.checked_add(binding_size.into()) {
+                Some(end) if end <= buffer_size => Ok(binding_size),
                 _ => Err(BindingError::BindingRangeTooLarge {
                     buffer: self.error_ident(),
                     offset,
-                    binding_size: binding_size.get(),
+                    binding_size: binding_size.into(),
                     buffer_size,
                 }),
             },
-            None => {
-                buffer_size
-                    .checked_sub(offset)
-                    .ok_or_else(|| BindingError::BindingOffsetTooLarge {
-                        buffer: self.error_ident(),
-                        offset,
-                        buffer_size,
-                    })
-            }
+            None => buffer_size
+                .checked_sub(offset)
+                .and_then(|remaining| S::try_from(remaining).ok())
+                .ok_or_else(|| {
+                    if offset <= buffer_size {
+                        debug_assert_eq!(offset, buffer_size);
+                        BindingError::BindingOffsetEqualsSize {
+                            buffer: self.error_ident(),
+                            offset,
+                            buffer_size,
+                        }
+                    } else {
+                        BindingError::BindingOffsetTooLarge {
+                            buffer: self.error_ident(),
+                            offset,
+                            buffer_size,
+                        }
+                    }
+                }),
+        }
+    }
+
+    /// Resolve the binding range for a vertex or index buffer.
+    ///
+    /// This function is for vertex and index buffer bindings, which WebGPU
+    /// allows to have zero size. For storage and uniform buffer bindings,
+    /// which must have non-zero size, use [`Buffer::binding`].
+    ///
+    /// Returns an error if the binding would overflow the buffer.
+    pub fn resolve_vertex_or_index_binding_range(
+        &self,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
+    ) -> Result<Range<wgt::BufferAddress>, BindingError> {
+        let resolved_size = self.resolve_binding_size(offset, size)?;
+        if resolved_size != 0 {
+            Ok(offset..offset + resolved_size)
+        } else {
+            // Relocate zero-size binding to end of buffer, because hal does not support
+            // zero-size bindings (ignores end offsets). `create_buffer` must have
+            // ensured sufficient padding.
+            const _: () = {
+                assert!(wgt::VERTEX_ALIGNMENT == wgt::COPY_BUFFER_ALIGNMENT);
+            };
+            let target = align_to(self.size, wgt::VERTEX_ALIGNMENT);
+            Ok(target..target)
         }
     }
 
@@ -636,32 +750,24 @@ impl Buffer {
     /// If `binding_size` is `None`, then the remainder of the buffer starting
     /// from `offset` is used.
     ///
-    /// If the binding would overflow the buffer, then an error is returned.
+    /// Returns an error if the binding would overflow the buffer.
     ///
-    /// A zero-size binding at the end of the buffer is permitted here for historical reasons. Although
-    /// zero-size bindings are permitted by WebGPU, they are not permitted by
-    /// some backends. The zero-size binding need to be quashed or remapped to a
-    /// non-zero size, either universally in wgpu-core, or in specific backends
-    /// that do not support them. See
-    /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
-    ///
-    /// Although it seems like it would be simpler and safer to use the resolved
-    /// size in the returned [`hal::BufferBinding`], doing this (and removing
-    /// redundant logic in backends to resolve the implicit size) was observed
-    /// to cause problems in certain CTS tests, so an implicit size
-    /// specification is preserved in the output.
+    /// This function is for storage and uniform buffer bindings, which must have
+    /// non-zero size. For vertex and index buffer bindings, which may have zero
+    /// size, use [`Buffer::resolve_vertex_or_index_binding_range`].
     pub fn binding<'a>(
         &'a self,
         offset: wgt::BufferAddress,
         binding_size: Option<wgt::BufferSize>,
         snatch_guard: &'a SnatchGuard,
-    ) -> Result<(hal::BufferBinding<'a, dyn hal::DynBuffer>, u64), BindingError> {
+    ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer, wgt::BufferSize>, BindingError> {
         let buf_raw = self.try_raw(snatch_guard)?;
         let resolved_size = self.resolve_binding_size(offset, binding_size)?;
         // SAFETY: The offset and size passed to hal::BufferBinding::new_unchecked must
         // define a binding contained within the buffer.
-        Ok((
-            hal::BufferBinding::new_unchecked(buf_raw, offset, binding_size),
+        Ok(hal::BufferBinding::new_unchecked(
+            buf_raw,
+            offset,
             resolved_size,
         ))
     }
@@ -674,7 +780,7 @@ impl Buffer {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<SubmissionIndex, BufferAccessError> {
+    ) -> Option<SubmissionIndex> {
         profiling::scope!("Buffer::map_async");
         api_log!(
             "Buffer::map_async {:?} offset {offset:?} size {size:?} op: {op:?}",
@@ -683,11 +789,13 @@ impl Buffer {
 
         self.try_map_async(offset, size, op)
             .map_err(|(mut operation, err)| {
+                self.device
+                    .handle_error(err.clone(), Some(&self.label), "Buffer::map_async");
                 if let Some(callback) = operation.callback.take() {
-                    callback(Err(err.clone()));
+                    callback(Err(err));
                 }
-                err
             })
+            .ok()
     }
 
     /// Try to schedule buffer mapping.
@@ -763,9 +871,9 @@ impl Buffer {
             return Err((op, BufferAccessError::UnalignedRange));
         }
 
-        let (pub_usage, internal_use) = match op.host {
-            HostMap::Read => (wgt::BufferUsages::MAP_READ, wgt::BufferUses::MAP_READ),
-            HostMap::Write => (wgt::BufferUsages::MAP_WRITE, wgt::BufferUses::MAP_WRITE),
+        let (pub_usage, internal_use) = match op.mode {
+            MapMode::Read => (wgt::BufferUsages::MAP_READ, wgt::BufferUses::MAP_READ),
+            MapMode::Write => (wgt::BufferUsages::MAP_WRITE, wgt::BufferUses::MAP_WRITE),
         };
 
         if let Err(e) = self.check_usage(pub_usage) {
@@ -784,7 +892,7 @@ impl Buffer {
             }
 
             {
-                let map_state = &mut *self.map_state.lock();
+                let map_state = &mut *self.map_state.write();
                 *map_state = match *map_state {
                     BufferMapState::Init { .. } | BufferMapState::Active { .. } => {
                         return Err((op, BufferAccessError::AlreadyMapped));
@@ -803,7 +911,8 @@ impl Buffer {
             if let Some(queue) = device.get_queue().as_ref() {
                 match queue.flush_writes_for_buffer(self, snatch_guard) {
                     Err(err) => {
-                        let state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
+                        let state =
+                            mem::replace(&mut *self.map_state.write(), BufferMapState::Idle);
                         let BufferMapState::Waiting(BufferPendingMapping { op, .. }) = state else {
                             unreachable!();
                         };
@@ -852,11 +961,15 @@ impl Buffer {
         }
     }
 
+    /// Get a guarded pointer to the mapped range of the buffer.
+    ///
+    /// While returned [`BufferMapping`] is alive,
+    /// [`Buffer::destroy`] and [`Buffer::unmap`] calls will block until [`BufferMapping`] is dropped.
     pub fn get_mapped_range(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
-    ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
+    ) -> Result<BufferMapping, BufferAccessError> {
         profiling::scope!("Buffer::get_mapped_range");
         api_log!(
             "Buffer::get_mapped_range {:?} offset {offset:?} size {size:?}",
@@ -881,7 +994,7 @@ impl Buffer {
         if !range_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err(BufferAccessError::UnalignedRangeSize { range_size });
         }
-        let map_state = &*self.map_state.lock();
+        let map_state = &*self.map_state.read();
         match *map_state {
             BufferMapState::Init { ref staging_buffer } => {
                 if offset > self.size {
@@ -900,12 +1013,17 @@ impl Buffer {
                 }
                 let ptr = unsafe { staging_buffer.ptr() };
                 let ptr = unsafe { NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)) };
-                Ok((ptr, range_size))
+                Ok(BufferMapping::new(
+                    ptr,
+                    range_size,
+                    MapMode::Write,
+                    self.map_state.clone(),
+                ))
             }
             BufferMapState::Active {
                 ref mapping,
                 ref range,
-                ..
+                ref host,
             } => {
                 if offset > range.end {
                     return Err(BufferAccessError::OutOfBoundsStartOffsetOverrun {
@@ -930,9 +1048,11 @@ impl Buffer {
                 // rather than the beginning of the buffer.
                 let relative_offset = (offset - range.start) as isize;
                 unsafe {
-                    Ok((
+                    Ok(BufferMapping::new(
                         NonNull::new_unchecked(mapping.ptr.as_ptr().offset(relative_offset)),
                         range_size,
+                        *host,
+                        self.map_state.clone(),
                     ))
                 }
             }
@@ -943,24 +1063,31 @@ impl Buffer {
     /// Other errors are returned within `BufferMapPendingClosure`.
     #[must_use]
     pub(crate) fn map(&self, snatch_guard: &SnatchGuard) -> Option<BufferMapPendingClosure> {
-        // This _cannot_ be inlined into the match. If it is, the lock will be held
-        // open through the whole match, resulting in a deadlock when we try to re-lock
-        // the buffer back to active.
-        let mapping = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
-        let pending_mapping = match mapping {
+        // Hold the lock on `map_state` until we have updated it with the
+        // outcome of the mapping, to prevent concurrent activity from
+        // observing an intermediate state.
+        //
+        // Unfortunately this does mean that we hold the guard across
+        // `crate::device::map_buffer` and the associated call to
+        // `handle_hal_error`, which may invoke a device loss callback.
+        // See <https://github.com/gfx-rs/wgpu/issues/10031>.
+        let mut map_state = self.map_state.write();
+        let pending_mapping = match mem::replace(&mut *map_state, BufferMapState::Idle) {
             BufferMapState::Waiting(pending_mapping) => pending_mapping,
             // Mapping cancelled
             BufferMapState::Idle => return None,
             // Mapping queued at least twice by map -> unmap -> map
             // and was already successfully mapped below
-            BufferMapState::Active { .. } => {
-                *self.map_state.lock() = mapping;
+            mapping @ BufferMapState::Active { .. } => {
+                *map_state = mapping;
                 return None;
             }
             _ => panic!("No pending mapping."),
         };
-        let status = if pending_mapping.range.start != pending_mapping.range.end {
-            let host = pending_mapping.op.host;
+        let status = if let Err(error) = self.device.check_is_valid() {
+            Err(error.into())
+        } else if pending_mapping.range.start != pending_mapping.range.end {
+            let host = pending_mapping.op.mode;
             let size = pending_mapping.range.end - pending_mapping.range.start;
             match crate::device::map_buffer(
                 self,
@@ -970,7 +1097,7 @@ impl Buffer {
                 snatch_guard,
             ) {
                 Ok(mapping) => {
-                    *self.map_state.lock() = BufferMapState::Active {
+                    *map_state = BufferMapState::Active {
                         mapping,
                         range: pending_mapping.range.clone(),
                         host,
@@ -980,13 +1107,13 @@ impl Buffer {
                 Err(e) => Err(e),
             }
         } else {
-            *self.map_state.lock() = BufferMapState::Active {
+            *map_state = BufferMapState::Active {
                 mapping: hal::BufferMapping {
                     ptr: NonNull::dangling(),
                     is_coherent: true,
                 },
                 range: pending_mapping.range,
-                host: pending_mapping.op.host,
+                host: pending_mapping.op.mode,
             };
             Ok(())
         };
@@ -994,28 +1121,38 @@ impl Buffer {
     }
 
     // Note: This must not be called while holding a lock.
-    pub fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
+    pub fn unmap(self: &Arc<Self>) {
         profiling::scope!("unmap", "Buffer");
         api_log!("Buffer::unmap {:?}", Arc::as_ptr(self));
-        if let Some((mut operation, status)) = self.unmap_inner()? {
+        if let Some((mut operation, status)) = self.unmap_inner() {
             if let Some(callback) = operation.callback.take() {
                 callback(status);
             }
         }
-
-        Ok(())
     }
 
-    fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
+    /// Per the WebGPU spec, unmap does not raise any errors
+    /// it just resolves any pending map_async calls with a MapAborted error.
+    /// It is okay to ignore errors because:
+    /// - if the buffer or device was invalid from the start it couldn't have been mapped via `map_async` anyway (no callback to resolve)
+    /// - if the device becomes invalid it calls the callback in `poll`/`maintain`
+    /// - if the buffer was destroyed (via `Buffer::destroy`) it was first unmapped
+    ///
+    /// <https://gpuweb.github.io/gpuweb/#dom-gpubuffer-unmap>
+    fn unmap_inner(self: &Arc<Self>) -> Option<BufferMapPendingClosure> {
         let device = &self.device;
-        self.check_is_valid()?;
-        self.device.check_is_valid()?;
         let snatch_guard = device.snatchable_lock.read();
-        self.check_destroyed(&snatch_guard)?;
-        let raw_buf = self.try_raw(&snatch_guard)?;
-        let map_state = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
+        // We can stop here if the buffer is invalid or destroyed because:
+        // - if the device was invalid from the start it couldn't have been mapped via `map_async` anyway
+        // - if the buffer was destroyed (via `Buffer::destroy`) it was first unmapped
+        let raw_buf = self.try_raw(&snatch_guard).ok()?;
+        let map_state = mem::replace(&mut *self.map_state.write(), BufferMapState::Idle);
         match map_state {
             BufferMapState::Init { staging_buffer } => {
+                if !self.device.is_valid() {
+                    staging_buffer.dispose();
+                    return None;
+                }
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
                     use crate::device::trace::{DataKind, IntoTrace};
@@ -1070,19 +1207,19 @@ impl Buffer {
                     pending_writes.consume(staging_buffer);
                     pending_writes.insert_buffer(self);
                 }
+                None
             }
-            BufferMapState::Idle => {
-                return Err(BufferAccessError::NotMapped);
-            }
+            BufferMapState::Idle => None,
             BufferMapState::Waiting(pending) => {
-                return Ok(Some((pending.op, Err(BufferAccessError::MapAborted))));
+                Some((pending.op, Err(BufferAccessError::MapAborted)))
             }
             BufferMapState::Active {
                 mapping,
                 range,
                 host,
             } => {
-                if host == HostMap::Write {
+                self.device.check_is_valid().ok()?;
+                if host == MapMode::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
                         use crate::device::trace::{DataKind, IntoTrace};
@@ -1104,9 +1241,9 @@ impl Buffer {
                     }
                 }
                 unsafe { device.raw().unmap_buffer(raw_buf) };
+                None
             }
         }
-        Ok(None)
     }
 
     pub fn destroy(self: &Arc<Self>) {
@@ -1125,7 +1262,7 @@ impl Buffer {
             return;
         };
 
-        let _ = self.unmap();
+        self.unmap();
 
         let temp = {
             let mut snatch_guard = device.snatchable_lock.write();
@@ -1325,7 +1462,7 @@ impl StagingBuffer {
             memory_flags: hal::MemoryFlags::TRANSIENT,
         };
 
-        let raw = unsafe { device.raw().create_buffer(&stage_desc) }
+        let (raw, _) = unsafe { device.raw().create_buffer(&stage_desc) }
             .map_err(|e| device.handle_hal_error(e))?;
         let mapping = unsafe { device.raw().map_buffer(raw.as_ref(), 0..size.get()) }
             .map_err(|e| device.handle_hal_error(e))?;
@@ -1341,10 +1478,15 @@ impl StagingBuffer {
         Ok(staging_buffer)
     }
 
-    /// SAFETY: You must not call any functions of `self`
+    /// # Safety
+    /// You must not call any functions of `self`
     /// until you stopped using the returned pointer.
-    pub(crate) unsafe fn ptr(&self) -> NonNull<u8> {
+    pub unsafe fn ptr(&self) -> NonNull<u8> {
         self.ptr
+    }
+
+    pub fn size(&self) -> wgt::BufferSize {
+        self.size
     }
 
     #[cfg(feature = "trace")]
@@ -1356,8 +1498,13 @@ impl StagingBuffer {
         unsafe { core::ptr::write_bytes(self.ptr.as_ptr(), 0, self.size.get() as usize) };
     }
 
-    pub(crate) fn write(&mut self, data: &[u8]) {
-        assert!(data.len() >= self.size.get() as usize);
+    /// Write the entire staging buffer.
+    ///
+    /// # Panics
+    ///
+    /// If `data.len()` is not equal to the size of the staging buffer.
+    pub(crate) fn write_exact(&mut self, data: &[u8]) {
+        assert_eq!(data.len(), self.size.get() as usize);
         // SAFETY: With the assert above, all of `copy_nonoverlapping`'s
         // requirements are satisfied.
         unsafe {
@@ -1365,6 +1512,25 @@ impl StagingBuffer {
                 data.as_ptr(),
                 self.ptr.as_ptr(),
                 self.size.get() as usize,
+            );
+        }
+    }
+
+    /// Write `data` to the staging buffer, filling any remainder with zeros.
+    ///
+    /// # Panics
+    ///
+    /// If `data` exceeds the size of the staging buffer.
+    pub(crate) fn write_with_zero_padding(&mut self, data: &[u8]) {
+        assert!(data.len() <= self.size.get() as usize);
+        // SAFETY: The assert ensures the requirements of `copy_nonoverlapping`
+        // and `write_bytes` are satisfied.
+        unsafe {
+            core::ptr::copy_nonoverlapping(data.as_ptr(), self.ptr.as_ptr(), data.len());
+            core::ptr::write_bytes(
+                self.ptr.as_ptr().add(data.len()),
+                0,
+                self.size.get() as usize - data.len(),
             );
         }
     }
@@ -1788,6 +1954,11 @@ impl Texture {
         let device = &self.device;
         device.check_is_valid()?;
 
+        if desc.swizzle != wgt::TextureComponentSwizzle::default() {
+            self.device
+                .require_features(wgt::Features::TEXTURE_COMPONENT_SWIZZLE)?;
+        }
+
         let snatch_guard = device.snatchable_lock.read();
 
         let texture_raw = self.try_inner(&snatch_guard)?.raw();
@@ -1952,36 +2123,34 @@ impl Texture {
         match resolved_dimension {
             wgt::TextureViewDimension::D1
             | wgt::TextureViewDimension::D2
-            | wgt::TextureViewDimension::D3 => {
-                if resolved_array_layer_count != 1 {
-                    return Err(CreateTextureViewError::InvalidArrayLayerCount {
-                        requested: resolved_array_layer_count,
-                        dim: resolved_dimension,
-                    });
-                }
+            | wgt::TextureViewDimension::D3
+                if resolved_array_layer_count != 1 =>
+            {
+                return Err(CreateTextureViewError::InvalidArrayLayerCount {
+                    requested: resolved_array_layer_count,
+                    dim: resolved_dimension,
+                });
             }
-            wgt::TextureViewDimension::Cube => {
-                if resolved_array_layer_count != 6 {
-                    return Err(CreateTextureViewError::InvalidCubemapTextureDepth {
-                        depth: resolved_array_layer_count,
-                    });
-                }
+            wgt::TextureViewDimension::Cube if resolved_array_layer_count != 6 => {
+                return Err(CreateTextureViewError::InvalidCubemapTextureDepth {
+                    depth: resolved_array_layer_count,
+                });
             }
-            wgt::TextureViewDimension::CubeArray => {
-                if !resolved_array_layer_count.is_multiple_of(6) {
-                    return Err(CreateTextureViewError::InvalidCubemapArrayTextureDepth {
-                        depth: resolved_array_layer_count,
-                    });
-                }
+            wgt::TextureViewDimension::CubeArray
+                if !resolved_array_layer_count.is_multiple_of(6) =>
+            {
+                return Err(CreateTextureViewError::InvalidCubemapArrayTextureDepth {
+                    depth: resolved_array_layer_count,
+                });
             }
             _ => {}
         }
 
         match resolved_dimension {
-            wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
-                if self.desc.size.width != self.desc.size.height {
-                    return Err(CreateTextureViewError::InvalidCubeTextureViewSize);
-                }
+            wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray
+                if self.desc.size.width != self.desc.size.height =>
+            {
+                return Err(CreateTextureViewError::InvalidCubeTextureViewSize);
             }
             _ => {}
         }
@@ -2059,6 +2228,10 @@ impl Texture {
                 break 'error Err(TextureViewNotRenderableReason::Aspects(aspects));
             }
 
+            if desc.swizzle != wgt::TextureComponentSwizzle::default() {
+                break 'error Err(TextureViewNotRenderableReason::Swizzle(desc.swizzle));
+            }
+
             Ok(self
                 .desc
                 .compute_render_extent(desc.range.base_mip_level, desc.range.aspect.to_plane()))
@@ -2113,6 +2286,7 @@ impl Texture {
             dimension: resolved_dimension,
             usage,
             range: resolved_range,
+            swizzle: desc.swizzle,
         };
 
         let raw = unsafe { device.raw().create_texture_view(texture_raw, &hal_desc) }
@@ -2136,6 +2310,7 @@ impl Texture {
                 dimension: resolved_dimension,
                 usage: resolved_usage,
                 range: resolved_range,
+                swizzle: desc.swizzle,
             },
             format_features: self.format_features,
             samples: self.desc.sample_count,
@@ -2153,16 +2328,14 @@ impl Texture {
         Ok(view)
     }
 
-    pub fn create_view(
-        self: &Arc<Self>,
-        desc: &TextureViewDescriptor,
-    ) -> (Arc<TextureView>, Option<CreateTextureViewError>) {
+    pub fn create_view(self: &Arc<Self>, desc: &TextureViewDescriptor) -> Arc<TextureView> {
         profiling::scope!("Texture::create_view");
 
-        let (view, error) = match self.create_view_inner(desc) {
-            Ok(view) => (view, None),
-            Err(e) => (TextureView::invalid(&self.device, self, desc), Some(e)),
-        };
+        let view = self.create_view_inner(desc).unwrap_or_else(|err| {
+            self.device
+                .handle_error(err, desc.label.as_deref(), "Texture::create_view failed");
+            TextureView::invalid(&self.device, self, desc)
+        });
 
         api_log!(
             "Texture::create_view({:?}) -> {:?}",
@@ -2181,11 +2354,24 @@ impl Texture {
             });
         }
 
-        (view, error)
+        view
     }
 
     pub fn descriptor(&self) -> &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>> {
         &self.desc
+    }
+
+    /// Marks the texture's entire contents as already initialized,
+    /// skipping wgpu-core's lazy zero-initialization of it.
+    ///
+    /// # Safety
+    ///
+    /// The entire contents of the texture must already be initialized.
+    pub unsafe fn mark_externally_initialized(&self) {
+        let mut initialization_status = self.initialization_status.write();
+        for mip_tracker in initialization_status.mips.iter_mut() {
+            mip_tracker.drain(0..self.desc.array_layer_count());
+        }
     }
 }
 
@@ -2415,6 +2601,10 @@ pub struct TextureViewDescriptor<'a> {
     pub usage: Option<wgt::TextureUsages>,
     /// Range within the texture that is accessible via this view.
     pub range: wgt::ImageSubresourceRange,
+    /// Texture component swizzle.
+    /// When the texture view is accessed by a shader, the red/green/blue/alpha channels are replaced
+    /// by the value corresponding to the component specified in [`wgt::TextureComponentSwizzle`].
+    pub swizzle: wgt::TextureComponentSwizzle,
 }
 
 #[derive(Debug)]
@@ -2424,6 +2614,7 @@ pub(crate) struct HalTextureViewDescriptor {
     pub usage: wgt::TextureUsages,
     pub dimension: wgt::TextureViewDimension,
     pub range: wgt::ImageSubresourceRange,
+    pub swizzle: wgt::TextureComponentSwizzle,
 }
 
 impl HalTextureViewDescriptor {
@@ -2446,6 +2637,8 @@ pub enum TextureViewNotRenderableReason {
         "The aspects of this texture view are a subset of the aspects in the original texture. Aspects: {0:?}"
     )]
     Aspects(hal::FormatAspects),
+    #[error("The texture view swizzle must be identity. View swizzle: {0:?}")]
+    Swizzle(wgt::TextureComponentSwizzle),
 }
 
 #[derive(Debug)]
@@ -2562,6 +2755,7 @@ impl TextureView {
                     wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
                 }),
                 range: desc.range,
+                swizzle: desc.swizzle,
             },
             format_features: texture.format_features,
             samples: texture.desc.sample_count,
@@ -2571,6 +2765,10 @@ impl TextureView {
             },
             label: desc.label.to_string(),
         })
+    }
+
+    pub fn texture(&self) -> &Arc<Texture> {
+        &self.parent
     }
 }
 
@@ -3398,10 +3596,11 @@ impl Blas {
         };
 
         let submit_index = if let Some(queue) = device.get_queue() {
+            drop(state);
             queue.lock_life().prepare_compact(self).unwrap_or(0) // '0' means no wait is necessary
         } else {
             // We can safely unwrap below since we just set the `compacted_state` to `BlasCompactState::Waiting`.
-            let (mut callback, status) = self.read_back_compact_size().unwrap();
+            let (mut callback, status) = self.read_back_compact_size(state).unwrap();
             if let Some(callback) = callback.take() {
                 callback(status);
             }
@@ -3413,8 +3612,10 @@ impl Blas {
 
     /// This function returns [`None`] only if [`Self::compacted_state`] is not [`BlasCompactState::Waiting`].
     #[must_use]
-    pub(crate) fn read_back_compact_size(&self) -> Option<BlasCompactReadyPendingClosure> {
-        let mut state = self.compacted_state.lock();
+    pub(crate) fn read_back_compact_size(
+        &self,
+        mut state: MutexGuard<'_, BlasCompactState>,
+    ) -> Option<BlasCompactReadyPendingClosure> {
         let pending_compact = match mem::replace(&mut *state, BlasCompactState::Idle) {
             BlasCompactState::Waiting(pending_mapping) => pending_mapping,
             // Compaction cancelled e.g. by rebuild

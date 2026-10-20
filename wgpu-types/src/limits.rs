@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(doc)]
 use crate::{Features, TextureFormat};
 
+use crate::link_to_wgpu_item;
+
 /// Invoke a macro for each of the limits.
 ///
 /// The supplied macro should take two arguments. The first is a limit name, as
@@ -35,7 +37,11 @@ macro_rules! with_limits {
         $macro_name!(max_sampled_textures_per_shader_stage, Ordering::Less);
         $macro_name!(max_samplers_per_shader_stage, Ordering::Less);
         $macro_name!(max_storage_buffers_per_shader_stage, Ordering::Less);
+        $macro_name!(max_storage_buffers_in_vertex_stage, Ordering::Less);
+        $macro_name!(max_storage_buffers_in_fragment_stage, Ordering::Less);
         $macro_name!(max_storage_textures_per_shader_stage, Ordering::Less);
+        $macro_name!(max_storage_textures_in_vertex_stage, Ordering::Less);
+        $macro_name!(max_storage_textures_in_fragment_stage, Ordering::Less);
         $macro_name!(max_uniform_buffers_per_shader_stage, Ordering::Less);
         $macro_name!(max_binding_array_elements_per_shader_stage, Ordering::Less);
         $macro_name!(
@@ -171,8 +177,32 @@ pub struct Limits {
     pub max_samplers_per_shader_stage: u32,
     /// Amount of storage buffers visible in a single shader stage. Defaults to 8. Higher is "better".
     pub max_storage_buffers_per_shader_stage: u32,
+    /// Amount of storage buffers visible in a vertex shader stage. Defaults to 8. Higher is "better".
+    ///
+    /// Outside of compat mode (which is not implemented, see
+    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is set to the value of
+    /// `max_storage_buffers_per_shader_stage`.
+    pub max_storage_buffers_in_vertex_stage: u32,
+    /// Amount of storage buffers visible in a fragment shader stage. Defaults to 8. Higher is "better".
+    ///
+    /// Outside of compat mode (which is not implemented, see
+    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is set to the value of
+    /// `max_storage_buffers_per_shader_stage`.
+    pub max_storage_buffers_in_fragment_stage: u32,
     /// Amount of storage textures visible in a single shader stage. Defaults to 4. Higher is "better".
     pub max_storage_textures_per_shader_stage: u32,
+    /// Amount of storage textures visible in a vertex shader stage. Defaults to 4. Higher is "better".
+    ///
+    /// Outside of compat mode (which is not implemented, see
+    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is set to the value of
+    /// `max_storage_textures_per_shader_stage`.
+    pub max_storage_textures_in_vertex_stage: u32,
+    /// Amount of storage textures visible in a fragment shader stage. Defaults to 4. Higher is "better".
+    ///
+    /// Outside of compat mode (which is not implemented, see
+    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is set to the value of
+    /// `max_storage_textures_per_shader_stage`.
+    pub max_storage_textures_in_fragment_stage: u32,
     /// Amount of uniform buffers visible in a single shader stage. Defaults to 12. Higher is "better".
     pub max_uniform_buffers_per_shader_stage: u32,
     /// Amount of individual resources within binding arrays that can be accessed in a single shader stage. Applies
@@ -369,7 +399,11 @@ impl Limits {
     ///     max_sampled_textures_per_shader_stage: 16,
     ///     max_samplers_per_shader_stage: 16,
     ///     max_storage_buffers_per_shader_stage: 8,
+    ///     max_storage_buffers_in_vertex_stage: 8,
+    ///     max_storage_buffers_in_fragment_stage: 8,
     ///     max_storage_textures_per_shader_stage: 4,
+    ///     max_storage_textures_in_vertex_stage: 4,
+    ///     max_storage_textures_in_fragment_stage: 4,
     ///     max_uniform_buffers_per_shader_stage: 12,
     ///     max_binding_array_elements_per_shader_stage: 0,
     ///     max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
@@ -434,7 +468,11 @@ impl Limits {
             max_sampled_textures_per_shader_stage: 16,
             max_samplers_per_shader_stage: 16,
             max_storage_buffers_per_shader_stage: 8,
+            max_storage_buffers_in_vertex_stage: 8,
+            max_storage_buffers_in_fragment_stage: 8,
             max_storage_textures_per_shader_stage: 4,
+            max_storage_textures_in_vertex_stage: 4,
+            max_storage_textures_in_fragment_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
             max_binding_array_elements_per_shader_stage: 0,
             max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
@@ -504,7 +542,11 @@ impl Limits {
     ///     max_sampled_textures_per_shader_stage: 16,
     ///     max_samplers_per_shader_stage: 16,
     ///     max_storage_buffers_per_shader_stage: 4, // *
+    ///     max_storage_buffers_in_vertex_stage: 4, // *
+    ///     max_storage_buffers_in_fragment_stage: 4, // *
     ///     max_storage_textures_per_shader_stage: 4,
+    ///     max_storage_textures_in_vertex_stage: 4,
+    ///     max_storage_textures_in_fragment_stage: 4,
     ///     max_uniform_buffers_per_shader_stage: 12,
     ///     max_binding_array_elements_per_shader_stage: 0,
     ///     max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
@@ -562,6 +604,8 @@ impl Limits {
             max_texture_dimension_2d: 2048,
             max_texture_dimension_3d: 256,
             max_storage_buffers_per_shader_stage: 4,
+            max_storage_buffers_in_vertex_stage: 4,
+            max_storage_buffers_in_fragment_stage: 4,
             max_uniform_buffer_binding_size: 16 << 10, // (16 KiB)
             max_inter_stage_shader_variables: 15,
             max_color_attachments: 4,
@@ -591,7 +635,11 @@ impl Limits {
     ///     max_sampled_textures_per_shader_stage: 16,
     ///     max_samplers_per_shader_stage: 16,
     ///     max_storage_buffers_per_shader_stage: 0, // * +
+    ///     max_storage_buffers_in_vertex_stage: 0, // * +
+    ///     max_storage_buffers_in_fragment_stage: 0, // * +
     ///     max_storage_textures_per_shader_stage: 0, // +
+    ///     max_storage_textures_in_vertex_stage: 0, // +
+    ///     max_storage_textures_in_fragment_stage: 0, // +
     ///     max_uniform_buffers_per_shader_stage: 11, // +
     ///     max_binding_array_elements_per_shader_stage: 0,
     ///     max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
@@ -647,7 +695,11 @@ impl Limits {
         Self {
             max_uniform_buffers_per_shader_stage: 11,
             max_storage_buffers_per_shader_stage: 0,
+            max_storage_buffers_in_vertex_stage: 0,
+            max_storage_buffers_in_fragment_stage: 0,
             max_storage_textures_per_shader_stage: 0,
+            max_storage_textures_in_vertex_stage: 0,
+            max_storage_textures_in_fragment_stage: 0,
             max_dynamic_storage_buffers_per_pipeline_layout: 0,
             max_storage_buffer_binding_size: 0,
             max_vertex_buffer_array_stride: 255,
@@ -695,7 +747,11 @@ impl Limits {
             max_sampled_textures_per_shader_stage: ALLOC_MAX_U32,
             max_samplers_per_shader_stage: ALLOC_MAX_U32,
             max_storage_buffers_per_shader_stage: ALLOC_MAX_U32,
+            max_storage_buffers_in_vertex_stage: ALLOC_MAX_U32,
+            max_storage_buffers_in_fragment_stage: ALLOC_MAX_U32,
             max_storage_textures_per_shader_stage: ALLOC_MAX_U32,
+            max_storage_textures_in_vertex_stage: ALLOC_MAX_U32,
+            max_storage_textures_in_fragment_stage: ALLOC_MAX_U32,
             max_uniform_buffers_per_shader_stage: ALLOC_MAX_U32,
             max_binding_array_elements_per_shader_stage: ALLOC_MAX_U32,
             max_binding_array_sampler_elements_per_shader_stage: ALLOC_MAX_U32,
@@ -963,7 +1019,11 @@ impl Limits {
             max_sampled_textures_per_shader_stage: _,
             max_samplers_per_shader_stage: _,
             max_storage_buffers_per_shader_stage: _,
+            max_storage_buffers_in_vertex_stage: _,
+            max_storage_buffers_in_fragment_stage: _,
             max_storage_textures_per_shader_stage: _,
+            max_storage_textures_in_vertex_stage: _,
+            max_storage_textures_in_fragment_stage: _,
             max_uniform_buffers_per_shader_stage: _,
             max_uniform_buffer_binding_size: _,
             max_storage_buffer_binding_size: _,
@@ -1189,7 +1249,6 @@ bitflags::bitflags! {
         const VIEW_FORMATS = 1 << 19;
 
         /// With this feature not present, there are the following restrictions on `Queue::copy_external_image_to_texture`:
-        /// - The source must not be [`web_sys::OffscreenCanvas`]
         /// - [`CopyExternalImageSourceInfo::origin`] must be zero.
         /// - [`CopyExternalImageDestInfo::color_space`] must be srgb.
         /// - If the source is an [`web_sys::ImageBitmap`]:
@@ -1247,13 +1306,27 @@ bitflags::bitflags! {
 }
 
 impl DownlevelFlags {
-    /// All flags that indicate if the backend is WebGPU compliant
+    /// Returns the set of flags required for an adapter to be considered WebGPU compliant.
+    ///
+    /// The only downlevel flags that are not required on a compliant adapter are:
+    /// - [`Self::ANISOTROPIC_FILTERING`], because the filtering behavior is
+    ///   implementation-defined, so performing no filtering at all is allowed.
+    /// - [`Self::SURFACE_VIEW_FORMATS`], because [`Surface`] does not exactly
+    ///   correspond to a WebGPU canvas, and most users of `wgpu` desiring
+    ///   strict WebGPU compliance implement canvas view formats by means
+    ///   other than [`Surface`].
+    ///
+    #[doc = link_to_wgpu_item!(struct Surface)]
     #[must_use]
     pub const fn compliant() -> Self {
         // We use manual bit twiddling to make this a const fn as `Sub` and `.remove` aren't const
 
         // WebGPU doesn't actually require aniso
-        Self::from_bits_truncate(Self::all().bits() & !Self::ANISOTROPIC_FILTERING.bits())
+        // or surface view formats, which only apply to `wgpu::Surface`
+        Self::from_bits_truncate(
+            Self::all().bits()
+                & !(Self::ANISOTROPIC_FILTERING.bits() | Self::SURFACE_VIEW_FORMATS.bits()),
+        )
     }
 }
 

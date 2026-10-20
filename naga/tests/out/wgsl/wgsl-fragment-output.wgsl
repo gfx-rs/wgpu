@@ -16,7 +16,7 @@ struct FragmentOutputVec2Scalar {
     @location(5) scalaru: u32,
 }
 
-@fragment 
+@fragment
 fn main_vec4vec3_() -> FragmentOutputVec4Vec3_ {
     var output: FragmentOutputVec4Vec3_;
 
@@ -30,7 +30,7 @@ fn main_vec4vec3_() -> FragmentOutputVec4Vec3_ {
     return _e19;
 }
 
-@fragment 
+@fragment
 fn main_vec2scalar() -> FragmentOutputVec2Scalar {
     var output_1: FragmentOutputVec2Scalar;
 
