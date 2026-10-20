@@ -228,6 +228,32 @@ void break_if_uses_continuing(
     return;
 }
 
+void name_reuse(
+) {
+    float a_4 = 0.0;
+    int a_5 = {};
+    float b = {};
+    uint2 loop_bound_9 = uint2(4294967295u);
+    bool loop_init_9 = true;
+    while(true) {
+        if (metal::all(loop_bound_9 == uint2(0u))) { break; }
+        loop_bound_9 -= uint2(loop_bound_9.y == 0u, 1u);
+        if (!loop_init_9) {
+            int _e7 = a_5;
+            if (_e7 == 2) {
+                break;
+            }
+        }
+        loop_init_9 = false;
+        a_5 = 1;
+        int _e4 = a_5;
+        a_5 = as_type<int>(as_type<uint>(_e4) + as_type<uint>(1));
+    }
+    float _e10 = a_4;
+    b = metal::cos(_e10);
+    return;
+}
+
 kernel void main_(
   metal::texture2d<float, metal::access::sample> tex [[user(fake0)]]
 , device metal::float2 const& v0_ [[user(fake0)]]
@@ -241,5 +267,6 @@ kernel void main_(
     restricted_image_load(tex);
     call_result_as_index(v0_);
     break_if_uses_continuing(counter);
+    name_reuse();
     return;
 }

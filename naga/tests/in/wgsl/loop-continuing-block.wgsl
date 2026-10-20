@@ -136,6 +136,19 @@ fn break_if_uses_continuing() {
     }
 }
 
+// Name collision between the loop body and the enclosing scope.
+fn name_reuse() {
+    var a: f32 = 0.0;
+    loop {
+        var a: i32 = 1;
+        a += 1;
+        continuing {
+            break if a == 2;
+        }
+    }
+    var b = cos(a);
+}
+
 @compute @workgroup_size(1)
 fn main() {
     named();
@@ -146,4 +159,5 @@ fn main() {
     restricted_image_load();
     call_result_as_index();
     break_if_uses_continuing();
+    name_reuse();
 }
