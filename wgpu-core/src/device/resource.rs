@@ -2148,45 +2148,29 @@ impl Device {
                 self.instance_flags,
             );
 
-            let mut clear_views = SmallVec::new();
-            for mip_level in 0..desc.mip_level_count {
-                for array_layer in 0..desc.size.depth_or_array_layers {
-                    macro_rules! push_clear_view {
-                        ($format:expr, $aspect:expr) => {
-                            let desc = hal::TextureViewDescriptor {
-                                label: clear_label,
-                                format: $format,
-                                dimension: TextureViewDimension::D2,
-                                usage,
-                                range: wgt::ImageSubresourceRange {
-                                    aspect: $aspect,
-                                    base_mip_level: mip_level,
-                                    mip_level_count: Some(1),
-                                    base_array_layer: array_layer,
-                                    array_layer_count: Some(1),
-                                },
-                                swizzle: wgt::TextureComponentSwizzle::default(),
-                            };
-                            clear_views.push(ManuallyDrop::new(
-                                unsafe {
-                                    self.raw().create_texture_view(raw_texture.as_ref(), &desc)
-                                }
-                                .map_err(|e| self.handle_hal_error(e))?,
-                            ));
-                        };
-                    }
-
-                    if let Some(planes) = desc.format.planes() {
-                        for plane in 0..planes {
-                            let aspect = wgt::TextureAspect::from_plane(plane).unwrap();
-                            let format = desc.format.aspect_specific_format(aspect).unwrap();
-                            push_clear_view!(format, aspect);
-                        }
-                    } else {
-                        push_clear_view!(desc.format, wgt::TextureAspect::All);
-                    }
-                }
-            }
+            let clear_views = resource::ClearViews::new(
+                desc.format,
+                desc.mip_level_count,
+                desc.size.depth_or_array_layers,
+                |mip_level, array_layer, aspect| {
+                    let desc = hal::TextureViewDescriptor {
+                        label: clear_label,
+                        format: desc.format.aspect_specific_format(aspect).unwrap(),
+                        dimension: TextureViewDimension::D2,
+                        usage,
+                        range: wgt::ImageSubresourceRange {
+                            aspect,
+                            base_mip_level: mip_level,
+                            mip_level_count: Some(1),
+                            base_array_layer: array_layer,
+                            array_layer_count: Some(1),
+                        },
+                        swizzle: wgt::TextureComponentSwizzle::default(),
+                    };
+                    unsafe { self.raw().create_texture_view(raw_texture.as_ref(), &desc) }
+                        .map_err(|e| self.handle_hal_error(e))
+                },
+            )?;
             resource::TextureClearMode::RenderPass {
                 clear_views,
                 is_color,
