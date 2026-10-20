@@ -88,6 +88,14 @@ impl SemaphoreList {
 
         let timeline_info = timeline_info.write(vk::TimelineSemaphoreSubmitInfo::default());
 
+        // The PowerVR driver on the Google Pixel 10 crashes if this struct is chained with no
+        // values for one of the lists, although the spec only requires a value per semaphore
+        // for lists that contain a timeline semaphore.
+        if !wait_semaphores.values.is_empty() || !signal_semaphores.values.is_empty() {
+            wait_semaphores.pad_values();
+            signal_semaphores.pad_values();
+        }
+
         let mut uses_timeline = false;
 
         if !wait_semaphores.values.is_empty() {
