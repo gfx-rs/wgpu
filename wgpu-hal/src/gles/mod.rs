@@ -88,8 +88,6 @@ mod device;
 
 #[cfg(all(unix, native))]
 mod dmabuf;
-#[cfg(all(unix, native))]
-pub use dmabuf::{DmabufFormat, DmabufModifier};
 
 ///cbindgen:ignore
 #[cfg(all(not(webgl), any(not(windows), windows_angle)))]
@@ -341,8 +339,6 @@ pub struct Adapter {
 #[derive(Debug)]
 pub struct Device {
     shared: Arc<AdapterShared>,
-    #[cfg(all(unix, native))]
-    features: wgt::Features,
     main_vao: glow::VertexArray,
     #[cfg(all(native, feature = "renderdoc"))]
     render_doc: crate::auxil::renderdoc::RenderDoc,
