@@ -220,7 +220,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Clean up resources properly when `Device::new` fails, to avoid a leak or panic. By @andyleiserson in [#10160](https://github.com/gfx-rs/wgpu/pull/10160).
 - Fix pending buffer mappings incorrectly succeeding when the device is lost before they are processed. By @jinleili in [#10301](https://github.com/gfx-rs/wgpu/pull/10301).
 - Fix initialization tracking for `external_texture` binding points, for both `ExternalTexture`s and `TextureView`s bound to them. By @ErichDonGubler in [#10276](https://github.com/gfx-rs/wgpu/pull/10276) and [#10366](https://github.com/gfx-rs/wgpu/pull/10366).
-- Fix `Surface::configure` and dropping a `Surface` or `Queue` racing with queue operations on other threads, which could crash on Vulkan. By @AdrianEddy in [#XXXXX](https://github.com/gfx-rs/wgpu/pull/XXXXX).
+- Fix `Surface::configure` and dropping a `Surface` or `Queue` racing with queue operations on other threads, which could crash on Vulkan. By @AdrianEddy in [#10675](https://github.com/gfx-rs/wgpu/pull/10675).
 
 #### naga
 
