@@ -7,20 +7,6 @@ float2 __get_col_of_mat3x2_f32(__mat3x2_f32 mat, uint idx) {
     default: { return (float2)0; }
     }
 }
-void __set_col_of_mat3x2_f32(__mat3x2_f32 mat, uint idx, float2 value) {
-    switch(idx) {
-    case 0: { mat._0 = value; break; }
-    case 1: { mat._1 = value; break; }
-    case 2: { mat._2 = value; break; }
-    }
-}
-void __set_el_of_mat3x2_f32(__mat3x2_f32 mat, uint idx, uint vec_idx, float value) {
-    switch(idx) {
-    case 0: { mat._0[vec_idx] = value; break; }
-    case 1: { mat._1[vec_idx] = value; break; }
-    case 2: { mat._2[vec_idx] = value; break; }
-    }
-}
 
 typedef struct { float2 _0; float2 _1; float2 _2; float2 _3; } __mat4x2_f32;
 float2 __get_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx) {
@@ -30,22 +16,6 @@ float2 __get_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx) {
     case 2: { return mat._2; }
     case 3: { return mat._3; }
     default: { return (float2)0; }
-    }
-}
-void __set_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx, float2 value) {
-    switch(idx) {
-    case 0: { mat._0 = value; break; }
-    case 1: { mat._1 = value; break; }
-    case 2: { mat._2 = value; break; }
-    case 3: { mat._3 = value; break; }
-    }
-}
-void __set_el_of_mat4x2_f32(__mat4x2_f32 mat, uint idx, uint vec_idx, float value) {
-    switch(idx) {
-    case 0: { mat._0[vec_idx] = value; break; }
-    case 1: { mat._1[vec_idx] = value; break; }
-    case 2: { mat._2[vec_idx] = value; break; }
-    case 3: { mat._3[vec_idx] = value; break; }
     }
 }
 

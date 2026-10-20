@@ -6,18 +6,6 @@ float2 __get_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx) {
     default: { return (float2)0; }
     }
 }
-void __set_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, float2 value) {
-    switch(idx) {
-    case 0: { mat._0 = value; break; }
-    case 1: { mat._1 = value; break; }
-    }
-}
-void __set_el_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, uint vec_idx, float value) {
-    switch(idx) {
-    case 0: { mat._0[vec_idx] = value; break; }
-    case 1: { mat._1[vec_idx] = value; break; }
-    }
-}
 
 struct StructWithMat {
     float2 m_0; float2 m_1;
@@ -94,25 +82,6 @@ StructWithMat ConstructStructWithMat(float2x2 arg0) {
 
 float2x2 GetMatmOnStructWithMat(StructWithMat obj) {
     return float2x2(obj.m_0, obj.m_1);
-}
-
-void SetMatmOnStructWithMat(StructWithMat obj, float2x2 mat) {
-    obj.m_0 = mat[0];
-    obj.m_1 = mat[1];
-}
-
-void SetMatVecmOnStructWithMat(StructWithMat obj, float2 vec, uint mat_idx) {
-    switch(mat_idx) {
-    case 0: { obj.m_0 = vec; break; }
-    case 1: { obj.m_1 = vec; break; }
-    }
-}
-
-void SetMatScalarmOnStructWithMat(StructWithMat obj, float scalar, uint mat_idx, uint vec_idx) {
-    switch(mat_idx) {
-    case 0: { obj.m_0[vec_idx] = scalar; break; }
-    case 1: { obj.m_1[vec_idx] = scalar; break; }
-    }
 }
 
 void access_sm()
