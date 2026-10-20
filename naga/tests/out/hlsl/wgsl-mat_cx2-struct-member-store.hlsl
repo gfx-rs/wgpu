@@ -15,7 +15,7 @@ struct R {
 };
 
 struct Wide {
-    float2 a_0; float2 a_1; float2 a_2; float2 a_3;
+    float2 d_0; float2 d_1; float2 d_2; float2 d_3;
     float2 b_0; float2 b_1; float2 b_2;
 };
 
@@ -69,8 +69,8 @@ void store_through_pointer(inout R r_1, float x)
     return;
 }
 
-float4x2 GetMataOnWide(Wide obj) {
-    return float4x2(obj.a_0, obj.a_1, obj.a_2, obj.a_3);
+float4x2 GetMatdOnWide(Wide obj) {
+    return float4x2(obj.d_0, obj.d_1, obj.d_2, obj.d_3);
 }
 
 float3x2 GetMatbOnWide(Wide obj) {
@@ -83,10 +83,10 @@ Wide local_stores(int idx)
 
     {
         float4x2 mat_3 = float4x2(float2(1.0, 2.0), float2(3.0, 4.0), float2(5.0, 6.0), float2(7.0, 8.0));
-        t.a_0 = mat_3[0];
-        t.a_1 = mat_3[1];
-        t.a_2 = mat_3[2];
-        t.a_3 = mat_3[3];
+        t.d_0 = mat_3[0];
+        t.d_1 = mat_3[1];
+        t.d_2 = mat_3[2];
+        t.d_3 = mat_3[3];
     }
     {
         float3x2 mat_4 = float3x2(float2(9.0, 10.0), float2(11.0, 12.0), float2(13.0, 14.0));
@@ -95,10 +95,10 @@ Wide local_stores(int idx)
         t.b_2 = mat_4[2];
     }
     switch(idx) {
-    case 0: { t.a_0 = float2(20.0, 21.0); break; }
-    case 1: { t.a_1 = float2(20.0, 21.0); break; }
-    case 2: { t.a_2 = float2(20.0, 21.0); break; }
-    case 3: { t.a_3 = float2(20.0, 21.0); break; }
+    case 0: { t.d_0 = float2(20.0, 21.0); break; }
+    case 1: { t.d_1 = float2(20.0, 21.0); break; }
+    case 2: { t.d_2 = float2(20.0, 21.0); break; }
+    case 3: { t.d_3 = float2(20.0, 21.0); break; }
     }
     switch(idx) {
     case 0: { t.b_0[1] = 30.0; break; }
@@ -130,10 +130,10 @@ Outer nested_stores(int idx_1)
     }
     {
         float4x2 mat_6 = float4x2(float2(1.0, 2.0), float2(3.0, 4.0), float2(5.0, 6.0), float2(7.0, 8.0));
-        n.arr[min(uint(idx_1), 1u)].a_0 = mat_6[0];
-        n.arr[min(uint(idx_1), 1u)].a_1 = mat_6[1];
-        n.arr[min(uint(idx_1), 1u)].a_2 = mat_6[2];
-        n.arr[min(uint(idx_1), 1u)].a_3 = mat_6[3];
+        n.arr[min(uint(idx_1), 1u)].d_0 = mat_6[0];
+        n.arr[min(uint(idx_1), 1u)].d_1 = mat_6[1];
+        n.arr[min(uint(idx_1), 1u)].d_2 = mat_6[2];
+        n.arr[min(uint(idx_1), 1u)].d_3 = mat_6[3];
     }
     switch(idx_1) {
     case 0: { n.arr[1].b_0 = float2(9.0, 10.0); break; }
@@ -184,7 +184,7 @@ void main(uint li : SV_GroupIndex)
     o.Store(0, asuint(GetMatMOnR(_e3)[0].x));
     o.Store(4, asuint(GetMatMinvOnR(_e3)[1].y));
     const Wide _e14 = local_stores(idx_3);
-    o.Store(8, asuint(GetMataOnWide(_e14)[0].x));
+    o.Store(8, asuint(GetMatdOnWide(_e14)[0].x));
     o.Store(12, asuint(GetMatbOnWide(_e14)[0].y));
     const Outer _e25 = nested_stores(idx_3);
     o.Store(16, asuint(GetMatMOnR(_e25.inner)[0].x));
@@ -205,10 +205,10 @@ void main(uint li : SV_GroupIndex)
     o.Store(28, asuint((_e67 + _e72)));
     {
         float4x2 mat_8 = float4x2(float2(1.0, 2.0), float2(3.0, 4.0), float2(5.0, 6.0), float2(7.0, 8.0));
-        w.a_0 = mat_8[0];
-        w.a_1 = mat_8[1];
-        w.a_2 = mat_8[2];
-        w.a_3 = mat_8[3];
+        w.d_0 = mat_8[0];
+        w.d_1 = mat_8[1];
+        w.d_2 = mat_8[2];
+        w.d_3 = mat_8[3];
     }
     switch(idx_3) {
     case 0: { w.b_0[idx_3] = 9.0; break; }
@@ -216,7 +216,7 @@ void main(uint li : SV_GroupIndex)
     case 2: { w.b_2[idx_3] = 9.0; break; }
     }
     GroupMemoryBarrierWithGroupSync();
-    float _e100 = GetMataOnWide(w)[0].x;
+    float _e100 = GetMatdOnWide(w)[0].x;
     float _e105 = GetMatbOnWide(w)[0].x;
     o.Store(32, asuint((_e100 + _e105)));
     return;

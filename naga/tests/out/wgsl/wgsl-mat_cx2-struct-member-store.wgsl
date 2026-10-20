@@ -4,7 +4,7 @@ struct R {
 }
 
 struct Wide {
-    a: mat4x2<f32>,
+    d: mat4x2<f32>,
     b: mat3x2<f32>,
 }
 
@@ -39,9 +39,9 @@ fn store_through_pointer(r_1: ptr<function, R>, x: f32) {
 fn local_stores(idx: i32) -> Wide {
     var t: Wide;
 
-    t.a = mat4x2<f32>(vec2<f32>(1f, 2f), vec2<f32>(3f, 4f), vec2<f32>(5f, 6f), vec2<f32>(7f, 8f));
+    t.d = mat4x2<f32>(vec2<f32>(1f, 2f), vec2<f32>(3f, 4f), vec2<f32>(5f, 6f), vec2<f32>(7f, 8f));
     t.b = mat3x2<f32>(vec2<f32>(9f, 10f), vec2<f32>(11f, 12f), vec2<f32>(13f, 14f));
-    t.a[idx] = vec2<f32>(20f, 21f);
+    t.d[idx] = vec2<f32>(20f, 21f);
     t.b[idx][1] = 30f;
     t.b[idx][idx] = 31f;
     let _e40 = t;
@@ -53,7 +53,7 @@ fn nested_stores(idx_1: i32) -> Outer {
 
     n.inner.M = mat2x2<f32>(vec2<f32>(1f, 2f), vec2<f32>(3f, 4f));
     n.inner.Minv[idx_1] = vec2<f32>(5f, 6f);
-    n.arr[idx_1].a = mat4x2<f32>(vec2<f32>(1f, 2f), vec2<f32>(3f, 4f), vec2<f32>(5f, 6f), vec2<f32>(7f, 8f));
+    n.arr[idx_1].d = mat4x2<f32>(vec2<f32>(1f, 2f), vec2<f32>(3f, 4f), vec2<f32>(5f, 6f), vec2<f32>(7f, 8f));
     n.arr[1].b[idx_1] = vec2<f32>(9f, 10f);
     n.arr[0].b[idx_1][idx_1] = 11f;
     store_through_pointer((&n.inner), 12f);
@@ -77,7 +77,7 @@ fn main(@builtin(local_invocation_index) li: u32) {
     o[0] = _e3.M[0].x;
     o[1] = _e3.Minv[1].y;
     let _e14 = local_stores(idx_3);
-    o[2] = _e14.a[0].x;
+    o[2] = _e14.d[0].x;
     o[3] = _e14.b[0].y;
     let _e25 = nested_stores(idx_3);
     o[4] = _e25.inner.M[0].x;
@@ -89,10 +89,10 @@ fn main(@builtin(local_invocation_index) li: u32) {
     let _e67 = p.M[0][0];
     let _e72 = p.Minv[0][0];
     o[7] = (_e67 + _e72);
-    w.a = mat4x2<f32>(vec2<f32>(1f, 2f), vec2<f32>(3f, 4f), vec2<f32>(5f, 6f), vec2<f32>(7f, 8f));
+    w.d = mat4x2<f32>(vec2<f32>(1f, 2f), vec2<f32>(3f, 4f), vec2<f32>(5f, 6f), vec2<f32>(7f, 8f));
     w.b[idx_3][idx_3] = 9f;
     workgroupBarrier();
-    let _e100 = w.a[0][0];
+    let _e100 = w.d[0][0];
     let _e105 = w.b[0][0];
     o[8] = (_e100 + _e105);
     return;

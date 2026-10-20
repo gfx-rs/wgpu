@@ -62,7 +62,7 @@ enum Index {
 /// A store to a dynamically indexed column (or an element of it) of a
 /// `matCx2` that is held as separate `vec2` fields.
 ///
-/// See [`Writer::write_mat_cx2_column_store`].
+/// See [`super::Writer::write_mat_cx2_column_store`].
 struct MatCx2ColumnStore<'a> {
     /// The struct holding the columns.
     base: Handle<crate::Expression>,

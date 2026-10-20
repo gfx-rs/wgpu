@@ -12,7 +12,7 @@ struct R {
 }
 
 struct Wide {
-    a: mat4x2<f32>,
+    d: mat4x2<f32>,
     b: mat3x2<f32>,
 }
 
@@ -46,10 +46,10 @@ fn store_through_pointer(r: ptr<function, R>, x: f32) {
 fn local_stores(idx: i32) -> Wide {
     var t: Wide;
     // whole matrix
-    t.a = mat4x2<f32>(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
+    t.d = mat4x2<f32>(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
     t.b = mat3x2<f32>(9.0, 10.0, 11.0, 12.0, 13.0, 14.0);
     // column with a dynamic index
-    t.a[idx] = vec2<f32>(20.0, 21.0);
+    t.d[idx] = vec2<f32>(20.0, 21.0);
     // element with a dynamic column index
     t.b[idx][1] = 30.0;
     // element with dynamic column and row indices
@@ -61,7 +61,7 @@ fn nested_stores(idx: i32) -> Outer {
     var n: Outer;
     n.inner.M = mat2x2<f32>(1.0, 2.0, 3.0, 4.0);
     n.inner.Minv[idx] = vec2<f32>(5.0, 6.0);
-    n.arr[idx].a = mat4x2<f32>(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
+    n.arr[idx].d = mat4x2<f32>(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
     n.arr[1].b[idx] = vec2<f32>(9.0, 10.0);
     n.arr[0].b[idx][idx] = 11.0;
     store_through_pointer(&n.inner, 12.0);
@@ -84,7 +84,7 @@ fn main(@builtin(local_invocation_index) li: u32) {
     o[1] = r.Minv[1][1];
 
     let t = local_stores(idx);
-    o[2] = t.a[0][0];
+    o[2] = t.d[0][0];
     o[3] = t.b[0][1];
 
     let n = nested_stores(idx);
@@ -98,8 +98,8 @@ fn main(@builtin(local_invocation_index) li: u32) {
     p.Minv[idx] = vec2<f32>(5.0, 6.0);
     o[7] = p.M[0][0] + p.Minv[0][0];
 
-    w.a = mat4x2<f32>(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
+    w.d = mat4x2<f32>(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
     w.b[idx][idx] = 9.0;
     workgroupBarrier();
-    o[8] = w.a[0][0] + w.b[0][0];
+    o[8] = w.d[0][0] + w.b[0][0];
 }
