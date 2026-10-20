@@ -14,11 +14,16 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters {
         required_features: wgpu::Features::SUBGROUP,
         required_limits: wgpu::Limits::downlevel_defaults(),
-        // Expect metal to fail on tests involving operations in divergent control flow
+        // Older macOS versions fail on tests involving operations in divergent control flow
         // <https://github.com/gfx-rs/wgpu/issues/10019>
         //
         // Newlines are included in the panic message to ensure that _additional_ failures
         // are not matched against.
+        //
+        // The harness can't distinguish macOS versions, so the case is marked flaky: the
+        // listed failures are still tolerated on older systems (CI runs macOS 14), while
+        // systems that pass every test (macOS 27.0 on M4 Max and M5 Pro) are no longer
+        // reported as unexpected passes.
         failures: wgpu_test::FailureCase::mac()
             .into_iter()
             .map(|case| {
@@ -29,6 +34,8 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
                     .panic("thread 0 failed tests: 27,\nthread 1 failed tests: 27, 28,\n")
                     // Prior versions fail 27, 28, and 29
                     .panic("thread 0 failed tests: 27, 29,\nthread 1 failed tests: 27, 28, 29,\n")
+                    // 27.0 passes all tests
+                    .flaky()
             })
             .collect(),
         ..Default::default()
