@@ -2776,25 +2776,8 @@ impl<'a, W: Write> Writer<'a, W> {
                                 write!(self.out, "textureSize(")?;
                                 self.write_expr(image, ctx)?;
                                 if let Some(expr) = level {
-                                    let cast_to_int = matches!(
-                                        *ctx.resolve_type(expr, &self.module.types),
-                                        TypeInner::Scalar(crate::Scalar {
-                                            kind: crate::ScalarKind::Uint,
-                                            ..
-                                        })
-                                    );
-
                                     write!(self.out, ", ")?;
-
-                                    if cast_to_int {
-                                        write!(self.out, "int(")?;
-                                    }
-
-                                    self.write_expr(expr, ctx)?;
-
-                                    if cast_to_int {
-                                        write!(self.out, ")")?;
-                                    }
+                                    self.write_expr_as_int(expr, ctx)?;
                                 } else if !multi {
                                     // All textureSize calls requires an lod argument
                                     // except for multisampled samplers
@@ -3868,6 +3851,36 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    /// Writes `expr`, wrapped in `int(...)` if it is an unsigned scalar.
+    ///
+    /// GLSL image functions only take `int` levels and sample indices, while WGSL also
+    /// allows `u32`.
+    fn write_expr_as_int(
+        &mut self,
+        expr: Handle<crate::Expression>,
+        ctx: &back::FunctionCtx,
+    ) -> BackendResult {
+        let cast_to_int = matches!(
+            *ctx.resolve_type(expr, &self.module.types),
+            TypeInner::Scalar(crate::Scalar {
+                kind: crate::ScalarKind::Uint,
+                ..
+            })
+        );
+
+        if cast_to_int {
+            write!(self.out, "int(")?;
+        }
+
+        self.write_expr(expr, ctx)?;
+
+        if cast_to_int {
+            write!(self.out, ")")?;
+        }
+
+        Ok(())
+    }
+
     /// Helper function to write the local holding the clamped lod
     fn write_clamped_lod(
         &mut self,
@@ -3884,7 +3897,7 @@ impl<'a, W: Write> Writer<'a, W> {
             CLAMPED_LOD_SUFFIX
         )?;
         // Write the lod that will be clamped
-        self.write_expr(level_expr, ctx)?;
+        self.write_expr_as_int(level_expr, ctx)?;
         // Set the min value to 0 and start a call to `textureQueryLevels` to get
         // the maximum value
         write!(self.out, ", 0, textureQueryLevels(")?;
@@ -4224,7 +4237,7 @@ impl<'a, W: Write> Writer<'a, W> {
             if let Some(level_expr) = level {
                 // Separate the image from the lod
                 write!(self.out, ", ")?;
-                self.write_expr(level_expr, ctx)?;
+                self.write_expr_as_int(level_expr, ctx)?;
             }
             // Close the `textureSize` call
             write!(self.out, ")")?;
@@ -4294,7 +4307,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // the number of samples the image has.
             if let Some(sample_expr) = sample {
                 write!(self.out, ", clamp(")?;
-                self.write_expr(sample_expr, ctx)?;
+                self.write_expr_as_int(sample_expr, ctx)?;
                 // Set the min value to 0 and start the call to `textureSamples`
                 write!(self.out, ", 0, textureSamples(")?;
                 self.write_expr(image, ctx)?;
@@ -4303,28 +4316,10 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ") - 1)")?;
             }
         } else if let Some(sample_or_level) = sample.or(level) {
-            // GLSL only support SInt on this field while WGSL support also UInt
-            let cast_to_int = matches!(
-                *ctx.resolve_type(sample_or_level, &self.module.types),
-                TypeInner::Scalar(crate::Scalar {
-                    kind: crate::ScalarKind::Uint,
-                    ..
-                })
-            );
-
             // If no bounds checking is need just add the sample or level argument
             // after the coordinates
             write!(self.out, ", ")?;
-
-            if cast_to_int {
-                write!(self.out, "int(")?;
-            }
-
-            self.write_expr(sample_or_level, ctx)?;
-
-            if cast_to_int {
-                write!(self.out, ")")?;
-            }
+            self.write_expr_as_int(sample_or_level, ctx)?;
         }
 
         // Close the image load function.
