@@ -824,6 +824,7 @@ impl super::Validator {
                             | Ex::As { .. }
                             | Ex::ArrayLength(_)
                             | Ex::RayQueryGetIntersection { .. }
+                            | Ex::RayQueryGetCurrentTMax { .. }
                             | Ex::RayQueryVertexPositions { .. }
                             | Ex::CooperativeLoad { .. }
                             | Ex::CooperativeMultiplyAdd { .. } => {

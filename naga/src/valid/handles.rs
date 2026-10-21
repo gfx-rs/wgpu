@@ -664,7 +664,8 @@ impl super::Validator {
             | crate::Expression::RayQueryVertexPositions {
                 query,
                 committed: _,
-            } => {
+            }
+            | crate::Expression::RayQueryGetCurrentTMax { query } => {
                 handle.check_dep(query)?;
             }
             crate::Expression::CooperativeLoad { ref data, .. } => {

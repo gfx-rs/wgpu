@@ -2212,6 +2212,9 @@ impl BlockContext<'_> {
                 ));
                 id
             }
+            crate::Expression::RayQueryGetCurrentTMax { .. } => {
+                return Err(Error::FeatureNotImplemented("RayQueryGetCurrentTMax"));
+            }
             crate::Expression::RayQueryVertexPositions { query, committed } => {
                 self.writer.require_any(
                     "RayQueryVertexPositions",

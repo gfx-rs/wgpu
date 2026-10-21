@@ -3860,6 +3860,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             // not supported yet
             Expression::RayQueryGetIntersection { .. }
+            | Expression::RayQueryGetCurrentTMax { .. }
             | Expression::RayQueryVertexPositions { .. }
             | Expression::CooperativeLoad { .. }
             | Expression::CooperativeMultiplyAdd { .. } => unreachable!(),
