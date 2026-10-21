@@ -5235,6 +5235,32 @@ fn enumerant_with_template_parameters() {
     );
 }
 
+/// Regression test: arguments to `rayQuery` builtins that are lowered to statements must be
+/// covered by an `Emit` that comes *before* the statement. Previously,
+/// `rayQueryGenerateIntersection` did not flush the pending `Emit` range, so an argument such as
+/// `s.t` (an `AccessIndex` expression) was only emitted after the statement that used it.
+#[test]
+fn ray_query_statement_arguments_are_emitted_first() {
+    check_validation! {
+        r#"
+            enable wgpu_ray_query;
+
+            struct Candidate {
+                t: f32,
+            }
+
+            fn generate(candidate: Candidate) {
+                var rq: ray_query;
+                while rayQueryProceed(&rq) {
+                    rayQueryGenerateIntersection(&rq, candidate.t);
+                }
+            }
+        "#:
+        Ok(_),
+        Capabilities::RAY_QUERY
+    }
+}
+
 #[test]
 fn ray_types_enable_extension() {
     check_extension_validation!(
