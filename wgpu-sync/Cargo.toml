@@ -34,7 +34,6 @@ std = ["dep:parking_lot", "once_cell/std"]
 portable-atomic = ["dep:portable-atomic", "dep:portable-atomic-util"]
 
 [dependencies]
-cfg-if.workspace = true
 lock_api = { workspace = true, default-features = false }
 parking_lot = { workspace = true, optional = true }
 once_cell = { workspace = true, default-features = false, features = ["alloc", "race"] }

@@ -88,7 +88,6 @@ arbitrary = { workspace = true, features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
 bit-set.workspace = true
-cfg-if.workspace = true
 codespan-reporting = { workspace = true }
 hashbrown.workspace = true
 half = { workspace = true, features = ["num-traits"] }

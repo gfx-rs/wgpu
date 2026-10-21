@@ -2421,7 +2421,6 @@ dependencies = [
  "bit-set 0.11.1",
  "bitflags 2.13.2",
  "bytemuck",
- "cfg-if",
  "cfg_aliases",
  "codespan-reporting",
  "diff",
@@ -4789,7 +4788,6 @@ dependencies = [
  "arrayvec",
  "bitflags 2.13.2",
  "bytemuck",
- "cfg-if",
  "cfg_aliases",
  "document-features",
  "hashbrown 0.17.1",
@@ -4997,7 +4995,6 @@ name = "wgpu-examples"
 version = "30.0.0"
 dependencies = [
  "bytemuck",
- "cfg-if",
  "console_error_panic_hook",
  "console_log",
  "encase",
@@ -5033,7 +5030,6 @@ dependencies = [
  "bitflags 2.13.2",
  "block2 0.6.2",
  "bytemuck",
- "cfg-if",
  "cfg_aliases",
  "drm",
  "env_logger",
@@ -5108,7 +5104,6 @@ dependencies = [
 name = "wgpu-sync"
 version = "30.0.0"
 dependencies = [
- "cfg-if",
  "lock_api",
  "once_cell",
  "parking_lot",
@@ -5126,7 +5121,6 @@ dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
  "cargo_metadata",
- "cfg-if",
  "console_log",
  "env_logger",
  "exhaust",
@@ -5187,7 +5181,6 @@ name = "wgpu-xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cfg-if",
  "env_logger",
  "log",
  "pico-args",

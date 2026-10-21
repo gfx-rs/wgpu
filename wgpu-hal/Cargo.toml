@@ -215,7 +215,6 @@ wgpu-types = { workspace = true, default-features = false }
 
 # Dependencies in the lib and empty backend
 bitflags.workspace = true
-cfg-if.workspace = true
 log = { workspace = true }
 raw-window-handle.workspace = true
 thiserror.workspace = true

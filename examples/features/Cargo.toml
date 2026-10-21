@@ -28,7 +28,6 @@ exhaust = ["wgpu/exhaust"]
 
 [dependencies]
 bytemuck.workspace = true
-cfg-if.workspace = true
 encase = { workspace = true }
 flume.workspace = true
 glam = { workspace = true, features = ["bytemuck", "encase-013"] }
