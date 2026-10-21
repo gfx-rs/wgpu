@@ -54,20 +54,23 @@ impl fmt::Display for ShaderError<crate::WithSpan<crate::valid::ValidationError>
     }
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "termcolor")] {
+cfg_select! {
+    feature = "termcolor" => {
         type DiagnosticBufferInner = codespan_reporting::term::termcolor::NoColor<alloc::vec::Vec<u8>>;
-    } else if #[cfg(feature = "stderr")] {
+    }
+    feature = "stderr" => {
         type DiagnosticBufferInner = alloc::vec::Vec<u8>;
-    } else {
+    }
+    _ => {
         type DiagnosticBufferInner = String;
     }
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(all(feature = "stderr", feature = "termcolor"))] {
+cfg_select! {
+    all(feature = "stderr", feature = "termcolor") => {
         pub(crate) use codespan_reporting::term::termcolor::WriteColor as _ErrorWrite;
-    } else if #[cfg(feature = "stderr")] {
+    }
+    feature = "stderr" => {
         pub(crate) use std::io::Write as _ErrorWrite;
     }
 }
@@ -89,10 +92,11 @@ pub(crate) fn emit_to_writer<'files, F: codespan_reporting::files::Files<'files>
     files: &'files F,
     diagnostic: &codespan_reporting::diagnostic::Diagnostic<F::FileId>,
 ) -> Result<(), codespan_reporting::files::Error> {
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "termcolor")] {
+    cfg_select! {
+        feature = "termcolor" => {
             codespan_reporting::term::emit_to_write_style(writer, config, files, diagnostic)
-        } else {
+        }
+        _ => {
             codespan_reporting::term::emit_to_io_write(writer, config, files, diagnostic)
         }
     }
@@ -111,12 +115,14 @@ impl DiagnosticBuffer {
         )
     )]
     pub fn new() -> Self {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "termcolor")] {
+        cfg_select! {
+            feature = "termcolor" => {
                 let inner = codespan_reporting::term::termcolor::NoColor::new(alloc::vec::Vec::new());
-            } else if #[cfg(feature = "stderr")] {
+            }
+            feature = "stderr" => {
                 let inner = alloc::vec::Vec::new();
-            } else {
+            }
+            _ => {
                 let inner = String::new();
             }
         };
@@ -130,12 +136,14 @@ impl DiagnosticBuffer {
         files: &'files F,
         diagnostic: &codespan_reporting::diagnostic::Diagnostic<F::FileId>,
     ) -> Result<(), codespan_reporting::files::Error> {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "termcolor")] {
+        cfg_select! {
+            feature = "termcolor" => {
                 codespan_reporting::term::emit_to_write_style(&mut self.inner, config, files, diagnostic)
-            } else if #[cfg(feature = "stderr")] {
+            }
+            feature = "stderr" => {
                 codespan_reporting::term::emit_to_io_write(&mut self.inner, config, files, diagnostic)
-            } else {
+            }
+            _ => {
                 codespan_reporting::term::emit_to_string(&mut self.inner, config, files, diagnostic)
             }
         }
@@ -144,12 +152,14 @@ impl DiagnosticBuffer {
     pub fn into_string(self) -> String {
         let Self { inner } = self;
 
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "termcolor")] {
+        cfg_select! {
+            feature = "termcolor" => {
                 String::from_utf8(inner.into_inner()).unwrap()
-            } else if #[cfg(feature = "stderr")] {
+            }
+            feature = "stderr" => {
                 String::from_utf8(inner).unwrap()
-            } else {
+            }
+            _ => {
                 inner
             }
         }

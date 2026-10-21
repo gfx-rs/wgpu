@@ -606,10 +606,11 @@ impl InstanceError {
     }
     #[allow(dead_code, reason = "may be unused on some platforms")]
     pub(crate) fn with_source(message: String, source: impl Error + Send + Sync + 'static) -> Self {
-        cfg_if::cfg_if! {
-            if #[cfg(target_has_atomic = "ptr")] {
+        cfg_select! {
+            target_has_atomic = "ptr" => {
                 let source = Arc::new(source);
-            } else {
+            }
+            _ => {
                 // TODO(https://github.com/rust-lang/rust/issues/18598): avoid indirection via Box once arbitrary types support unsized coercion
                 let source: Box<dyn Error + Send + Sync + 'static> = Box::new(source);
                 let source = Arc::from(source);

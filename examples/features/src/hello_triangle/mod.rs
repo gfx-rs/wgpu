@@ -328,11 +328,12 @@ impl ApplicationHandler<TriangleAction> for App {
 }
 
 pub fn main() {
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
+    cfg_select! {
+        target_arch = "wasm32" => {
             std::panic::set_hook(Box::new(console_error_panic_hook::hook));
             console_log::init().expect("could not initialize logger");
-        } else {
+        }
+        _ => {
             env_logger::init();
         }
     }
@@ -342,11 +343,12 @@ pub fn main() {
     #[cfg_attr(target_arch = "wasm32", expect(unused_mut))]
     let mut app = App::new(&event_loop);
 
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
+    cfg_select! {
+        target_arch = "wasm32" => {
             use winit::platform::web::EventLoopExtWebSys;
             event_loop.spawn_app(app);
-        } else {
+        }
+        _ => {
             event_loop.run_app(&mut app).unwrap();
         }
     }

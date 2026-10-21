@@ -1,7 +1,8 @@
-cfg_if::cfg_if! {
-    if #[cfg(feature = "std")] {
+cfg_select! {
+    feature = "std" => {
         type RawRwLockInner = parking_lot::RawRwLock;
-    } else {
+    }
+    _ => {
         type RawRwLockInner = core::cell::Cell<isize>;
 
         /// When a `no_std` locking primitive is under contention, the "correct" way to
@@ -38,10 +39,11 @@ impl RawRwLock {
     /// Constructs a new [`RawRwLock`].
     pub const fn new() -> Self {
         Self({
-            cfg_if::cfg_if! {
-                if #[cfg(feature = "std")] {
+            cfg_select! {
+                feature = "std" => {
                     lock_api::RawRwLock::INIT
-                } else {
+                }
+                _ => {
                     RawRwLockInner::new(BorrowCount::Unlocked as _)
                 }
             }
@@ -80,10 +82,11 @@ unsafe impl lock_api::RawRwLock for RawRwLock {
 
     #[inline]
     fn lock_exclusive(&self) {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 lock_api::RawRwLock::lock_exclusive(&self.0)
-            } else {
+            }
+            _ => {
                 if !self.try_lock_exclusive() {
                     // Since this "lock" is `!Sync`, any failing attempt to lock it
                     // must be from the same thread, which means a deadlock.
@@ -95,10 +98,11 @@ unsafe impl lock_api::RawRwLock for RawRwLock {
 
     #[inline]
     fn try_lock_exclusive(&self) -> bool {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 lock_api::RawRwLock::try_lock_exclusive(&self.0)
-            } else {
+            }
+            _ => {
                 if self.0.get() != BorrowCount::Unlocked as _ {
                     false
                 } else {
@@ -111,11 +115,12 @@ unsafe impl lock_api::RawRwLock for RawRwLock {
 
     #[inline]
     unsafe fn unlock_exclusive(&self) {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 // SAFETY: directly delegating to an accepted implementation
                 unsafe { lock_api::RawRwLock::unlock_exclusive(&self.0) }
-            } else {
+            }
+            _ => {
                 self.0.set(BorrowCount::Unlocked as _);
             }
         }
@@ -123,10 +128,11 @@ unsafe impl lock_api::RawRwLock for RawRwLock {
 
     #[inline]
     fn lock_shared(&self) {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 lock_api::RawRwLock::lock_shared(&self.0)
-            } else {
+            }
+            _ => {
                 if !self.try_lock_shared() {
                     // Since this "lock" is `!Sync`, any failing attempt to lock it
                     // must be from the same thread, which means a deadlock.
@@ -138,10 +144,11 @@ unsafe impl lock_api::RawRwLock for RawRwLock {
 
     #[inline]
     fn try_lock_shared(&self) -> bool {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 lock_api::RawRwLock::try_lock_shared(&self.0)
-            } else {
+            }
+            _ => {
                 if self.0.get() == BorrowCount::LockedExclusive as _ {
                     false
                 } else {
@@ -163,11 +170,12 @@ unsafe impl lock_api::RawRwLock for RawRwLock {
 
     #[inline]
     unsafe fn unlock_shared(&self) {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 // SAFETY: directly delegating to an accepted implementation
                 unsafe { lock_api::RawRwLock::unlock_shared(&self.0) }
-            } else {
+            }
+            _ => {
                 match self.0.get().checked_sub(1) {
                     Some(value) => {
                         // It is a safety condition of `RawRwLock::unlock_shared` that the caller
@@ -185,10 +193,11 @@ unsafe impl lock_api::RawRwLock for RawRwLock {
 
     #[inline]
     fn is_locked(&self) -> bool {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 lock_api::RawRwLock::is_locked(&self.0)
-            } else {
+            }
+            _ => {
                 self.0.get() != BorrowCount::Unlocked as _
             }
         }
@@ -196,10 +205,11 @@ unsafe impl lock_api::RawRwLock for RawRwLock {
 
     #[inline]
     fn is_locked_exclusive(&self) -> bool {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 lock_api::RawRwLock::is_locked_exclusive(&self.0)
-            } else {
+            }
+            _ => {
                 self.0.get() == BorrowCount::LockedExclusive as _
             }
         }
@@ -220,11 +230,12 @@ unsafe impl lock_api::RawRwLock for RawRwLock {
 // of the reader-writer lock to shared with one reader.
 unsafe impl lock_api::RawRwLockDowngrade for RawRwLock {
     unsafe fn downgrade(&self) {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 // SAFETY: directly delegating to an accepted implementation
                 unsafe { lock_api::RawRwLockDowngrade::downgrade(&self.0) }
-            } else {
+            }
+            _ => {
                 self.0.set(BorrowCount::SingleLockedShared as _);
             }
         }

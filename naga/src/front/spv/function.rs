@@ -182,15 +182,16 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                 None => format!("block_ctx.Fun-{function_index}.txt"),
             };
 
-            cfg_if::cfg_if! {
-                if #[cfg(feature = "fs")] {
+            cfg_select! {
+                feature = "fs" => {
                     let prefix: &std::path::Path = prefix.as_ref();
                     let dest = prefix.join(dump_suffix);
                     let dump = format!("{block_ctx:#?}");
                     if let Err(e) = std::fs::write(&dest, dump) {
                         log::error!("Unable to dump the block context into {dest:?}: {e}");
                     }
-                } else {
+                }
+                _ => {
                     log::error!("Unable to dump the block context into {prefix:?}/{dump_suffix}: file system integration was not enabled with the `fs` feature");
                 }
             }

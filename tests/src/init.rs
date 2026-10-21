@@ -159,8 +159,8 @@ pub async fn initialize_adapter(
         surface_guard = Some(SurfaceGuard { canvas });
     }
 
-    cfg_if::cfg_if! {
-        if #[cfg(not(target_arch = "wasm32"))] {
+    cfg_select! {
+        not(target_arch = "wasm32") => {
             let adapter_iter = instance.enumerate_adapters(backends).await;
             let adapter = adapter_iter.into_iter()
                 // If we have a report, we only want to match the adapter with the same info.
@@ -171,7 +171,8 @@ pub async fn initialize_adapter(
                 } else {
                     true
                 });
-        } else {
+        }
+        _ => {
             let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
                 compatible_surface: surface.as_ref(),
                 ..Default::default()

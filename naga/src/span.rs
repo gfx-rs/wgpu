@@ -291,12 +291,13 @@ impl<E> WithSpan<E> {
         let files = files::SimpleFile::new(path, replace_control_chars(source));
         let config = term::Config::default();
 
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "termcolor")] {
+        cfg_select! {
+            feature = "termcolor" => {
                 let writer = term::termcolor::StandardStream::stderr(term::termcolor::ColorChoice::Auto);
                 term::emit_to_write_style(&mut writer.lock(), &config, &files, &self.diagnostic())
                     .expect("cannot write error");
-            } else {
+            }
+            _ => {
                 let writer = std::io::stderr();
                 term::emit_to_io_write(&mut writer.lock(), &config, &files, &self.diagnostic())
                     .expect("cannot write error");

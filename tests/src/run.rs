@@ -109,14 +109,14 @@ pub async fn execute_test(
     }
 
     // Check whether any validation errors were reported during the test run.
-    cfg_if::cfg_if!(
-        if #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))] {
+    cfg_select!(
+        any(not(target_arch = "wasm32"), target_os = "emscripten") => {
             failures.extend(wgpu::hal::VALIDATION_CANARY.get_and_reset().into_iter().map(|msg| FailureResult::validation_error().with_message(msg)));
-        } else if #[cfg(all(target_arch = "wasm32", feature = "webgl"))] {
+        }
+        all(target_arch = "wasm32", feature = "webgl") => {
             if _surface_guard.unwrap().check_for_unreported_errors() {
                 failures.push(FailureResult::validation_error());
             }
-        } else {
         }
     );
 

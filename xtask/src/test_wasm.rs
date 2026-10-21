@@ -27,11 +27,12 @@ pub struct Bin<'a> {
     pub build_args: Vec<&'a str>,
 }
 
-cfg_if::cfg_if! {
-  if #[cfg(target_os = "windows")] {
+cfg_select! {
+  target_os = "windows" => {
     const NPM_COMMAND: &str = "npm.cmd";
     const NPX_COMMAND: &str = "npx.cmd";
-  } else {
+  }
+  _ => {
     const NPM_COMMAND: &str = "npm";
     const NPX_COMMAND: &str = "npx";
   }

@@ -221,12 +221,13 @@ const EXAMPLES: &[ExampleDesc] = &[
 ];
 
 fn get_example_name() -> Option<String> {
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
+    cfg_select! {
+        target_arch = "wasm32" => {
             let query_string = web_sys::window()?.location().search().ok()?;
 
             wgpu_examples::framework::parse_url_query_string(&query_string, "example").map(String::from)
-        } else {
+        }
+        _ => {
             std::env::args().nth(1)
         }
     }

@@ -194,11 +194,12 @@ impl ParseErrors {
     /// Emits a summary of the errors to standard error stream.
     #[cfg(feature = "stderr")]
     pub fn emit_to_stderr_with_path(&self, source: &str, path: &str) {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "termcolor")] {
+        cfg_select! {
+            feature = "termcolor" => {
                 let writer = term::termcolor::StandardStream::stderr(term::termcolor::ColorChoice::Auto);
                 self.emit_to_writer_with_path(&mut writer.lock(), source, path);
-            } else {
+            }
+            _ => {
                 let writer = std::io::stderr();
                 self.emit_to_writer_with_path(&mut writer.lock(), source, path);
             }

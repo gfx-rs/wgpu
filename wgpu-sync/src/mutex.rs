@@ -1,7 +1,8 @@
-cfg_if::cfg_if! {
-    if #[cfg(feature = "std")] {
+cfg_select! {
+    feature = "std" => {
         type RawMutexInner = parking_lot::RawMutex;
-    } else {
+    }
+    _ => {
         type RawMutexInner = core::cell::Cell<bool>;
 
         /// When a `no_std` locking primitive is under contention, the "correct" way to
@@ -31,10 +32,11 @@ impl RawMutex {
     /// Constructs a new [`RawMutex`].
     pub const fn new() -> Self {
         Self({
-            cfg_if::cfg_if! {
-                if #[cfg(feature = "std")] {
+            cfg_select! {
+                feature = "std" => {
                     lock_api::RawMutex::INIT
-                } else {
+                }
+                _ => {
                     RawMutexInner::new(false)
                 }
             }
@@ -74,10 +76,11 @@ unsafe impl lock_api::RawMutex for RawMutex {
 
     #[inline]
     fn lock(&self) {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 lock_api::RawMutex::lock(&self.0)
-            } else {
+            }
+            _ => {
                 if !self.try_lock() {
                     // Since this "mutex" is `!Sync`, any attempt to lock it twice
                     // must be from the same thread, which means a deadlock.
@@ -89,10 +92,11 @@ unsafe impl lock_api::RawMutex for RawMutex {
 
     #[inline]
     fn try_lock(&self) -> bool {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 lock_api::RawMutex::try_lock(&self.0)
-            } else {
+            }
+            _ => {
                 !self.0.replace(true)
             }
         }
@@ -100,11 +104,12 @@ unsafe impl lock_api::RawMutex for RawMutex {
 
     #[inline]
     unsafe fn unlock(&self) {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 // SAFETY: directly delegating to an accepted implementation
                 unsafe { lock_api::RawMutex::unlock(&self.0) }
-            } else {
+            }
+            _ => {
                 self.0.set(false);
             }
         }
@@ -112,10 +117,11 @@ unsafe impl lock_api::RawMutex for RawMutex {
 
     #[inline]
     fn is_locked(&self) -> bool {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 lock_api::RawMutex::is_locked(&self.0)
-            } else {
+            }
+            _ => {
                 self.0.get()
             }
         }

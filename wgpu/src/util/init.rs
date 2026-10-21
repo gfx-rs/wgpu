@@ -11,13 +11,14 @@ pub async fn initialize_adapter_from_env(
     compatible_surface: Option<&Surface<'_>>,
 ) -> Result<Adapter, wgt::RequestAdapterError> {
     let desired_adapter_name: alloc::string::String = {
-        cfg_if::cfg_if! {
-            if #[cfg(std)] {
+        cfg_select! {
+            std => {
                 std::env::var("WGPU_ADAPTER_NAME")
                     .as_deref()
                     .map(str::to_lowercase)
                     .map_err(|_| wgt::RequestAdapterError::EnvNotSet)?
-            } else {
+            }
+            _ => {
                 return Err(wgt::RequestAdapterError::EnvNotSet)
             }
         }

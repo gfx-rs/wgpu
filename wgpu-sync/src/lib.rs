@@ -20,10 +20,11 @@ mod rwlock;
 pub use mutex::RawMutex;
 pub use rwlock::RawRwLock;
 
-cfg_if::cfg_if! {
-    if #[cfg(target_has_atomic = "ptr")] {
+cfg_select! {
+    target_has_atomic = "ptr" => {
         pub use alloc::sync::{Arc, Weak};
-    } else if #[cfg(feature = "portable-atomic")] {
+    }
+    feature = "portable-atomic" => {
         pub use portable_atomic_util::{Arc, Weak};
     }
 }
@@ -36,10 +37,11 @@ pub use parking_lot::{Condvar, Mutex as CondvarMutex};
 
 pub use once_cell::race::{OnceBool, OnceBox, OnceNonZeroUsize, OnceRef};
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "std")] {
+cfg_select! {
+    feature = "std" => {
         pub use once_cell::sync::{Lazy, OnceCell};
-    } else {
+    }
+    _ => {
         pub use once_cell::unsync::{Lazy, OnceCell};
     }
 }

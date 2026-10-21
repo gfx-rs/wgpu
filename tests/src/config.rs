@@ -2,8 +2,8 @@ use std::{future::Future, panic::Location, pin::Pin, sync::Arc};
 
 use crate::{TestParameters, TestingContext};
 
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
+cfg_select! {
+    target_arch = "wasm32" => {
         pub type RunTestAsync = Arc<dyn Fn(TestingContext) -> Pin<Box<dyn Future<Output = ()>>>>;
 
         // We can't use WasmNonSend and WasmNonSync here, as we need these to not require Send/Sync
@@ -12,7 +12,8 @@ cfg_if::cfg_if! {
         impl<T> RunTestSendSync for T {}
         pub trait RunTestSend {}
         impl<T> RunTestSend for T {}
-    } else {
+    }
+    _ => {
         pub type RunTestAsync = Arc<dyn Fn(TestingContext) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 
         pub trait RunTestSend: Send {}

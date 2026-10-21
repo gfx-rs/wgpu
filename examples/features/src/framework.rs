@@ -55,8 +55,8 @@ pub trait Example: 'static + Sized {
 
 // Initialize logging in platform dependent ways.
 fn init_logger() {
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
+    cfg_select! {
+        target_arch = "wasm32" => {
             // As we don't have an environment to pull logging level from, we use the query string.
             let query_string = web_sys::window().unwrap().location().search().unwrap();
             let query_level: Option<log::LevelFilter> = parse_url_query_string(&query_string, "RUST_LOG")
@@ -71,7 +71,8 @@ fn init_logger() {
                 .apply()
                 .unwrap();
             std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-        } else {
+        }
+        _ => {
             // parse_default_env will read the RUST_LOG environment variable and apply it on top
             // of these default filters.
             env_logger::builder()
@@ -588,11 +589,12 @@ fn start<E: Example>(title: &'static str) {
     let mut app = App::<E>::new(title, &event_loop);
 
     log::info!("Entering event loop...");
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
+    cfg_select! {
+        target_arch = "wasm32" => {
             use winit::platform::web::EventLoopExtWebSys;
             event_loop.spawn_app(app);
-        } else {
+        }
+        _ => {
             event_loop.run_app(&mut app).unwrap();
         }
     }

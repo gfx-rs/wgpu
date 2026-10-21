@@ -153,14 +153,15 @@ async fn request_device_error_message() {
         .unwrap_err();
 
     let device_error = device_error.to_string();
-    cfg_if::cfg_if! {
-        if #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))] {
+    cfg_select! {
+        all(target_arch = "wasm32", not(feature = "webgl")) => {
             // On WebGPU, so the error we get will be from the browser WebGPU API.
             // Per the WebGPU specification this should be a `TypeError` when features are not
             // available, <https://gpuweb.github.io/gpuweb/#dom-gpuadapter-requestdevice>,
             // and the stringification it goes through for Rust should put that in the message.
             let expected = "TypeError";
-        } else {
+        }
+        _ => {
             // This message appears whenever wgpu-core is used as the implementation.
             let expected = "Unsupported features were requested:";
         }

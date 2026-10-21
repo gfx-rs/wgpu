@@ -1137,25 +1137,25 @@ impl<A: hal::Api> Example<A> {
     }
 }
 
-cfg_if::cfg_if! {
+cfg_select! {
     // Apple + Metal
-    if #[cfg(all(target_vendor = "apple", feature = "metal"))] {
+    all(target_vendor = "apple", feature = "metal") => {
         type Api = hal::api::Metal;
     }
     // Wasm + Vulkan
-    else if #[cfg(all(not(target_arch = "wasm32"), feature = "vulkan"))] {
+    all(not(target_arch = "wasm32"), feature = "vulkan") => {
         type Api = hal::api::Vulkan;
     }
     // Windows + DX12
-    else if #[cfg(all(windows, feature = "dx12"))] {
+    all(windows, feature = "dx12") => {
         type Api = hal::api::Dx12;
     }
     // Anything + GLES
-    else if #[cfg(feature = "gles")] {
+    feature = "gles" => {
         type Api = hal::api::Gles;
     }
     // Fallback
-    else {
+    _ => {
         type Api = hal::api::Noop;
     }
 }
