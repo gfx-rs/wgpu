@@ -142,7 +142,6 @@ impl super::Device {
                 raw: glow::NativeTexture(name),
                 target: super::Texture::get_info_from_desc(desc),
             },
-            backing: super::TextureBacking::Gl,
             drop_guard: crate::DropGuard::from_option(drop_callback),
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
@@ -169,7 +168,6 @@ impl super::Device {
             inner: super::TextureInner::Renderbuffer {
                 raw: glow::NativeRenderbuffer(name),
             },
-            backing: super::TextureBacking::Gl,
             drop_guard: crate::DropGuard::from_option(drop_callback),
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
@@ -181,8 +179,8 @@ impl super::Device {
 
     /// Imports a single-plane DMA-BUF as a GLES `GL_TEXTURE_2D` without copying.
     /// `None` for `drm_modifier` requests an implicit layout.
-    /// The supplied FD is closed on both success and
-    /// failure; the resulting texture retains the EGL image until it is destroyed.
+    /// The supplied FD is closed on both success and failure. The EGL image is
+    /// destroyed after binding; the GL texture retains the imported storage.
     ///
     /// # Safety
     ///
@@ -410,22 +408,15 @@ impl super::Device {
             return Err(crate::DeviceError::Unexpected);
         }
 
-        /*
-         * Release the AdapterContext lock before constructing the HAL texture.
-         */
+        if unsafe { destroy_image(display.as_ptr(), egl_image) } == 0 {
+            log::error!("eglDestroyImageKHR failed after EGLImage binding");
+            unsafe { gl.delete_texture(raw_texture) };
+            return Err(crate::DeviceError::Unexpected);
+        }
+
         drop(gl);
 
-        /*
-         * Passing None transfers ownership of the GL texture to wgpu-hal.
-         * This is equivalent to the Vulkan implementation using no
-         * drop_callback for its owned VkImage/VkDeviceMemory.
-         */
-        let mut texture = unsafe { self.texture_from_raw(raw_texture.0, desc, None) };
-
-        texture.backing =
-            super::TextureBacking::Dmabuf(DmabufImage::new(display, egl_image, destroy_image));
-
-        Ok(texture)
+        Ok(unsafe { self.texture_from_raw(raw_texture.0, desc, None) })
     }
 
     /// Wrap an existing `WebGlTexture` as a wgpu-hal texture, without copying.
@@ -470,7 +461,6 @@ impl super::Device {
                 raw,
                 target: super::Texture::target_for_view_dimension(view_dimension),
             },
-            backing: super::TextureBacking::Gl,
             // Always a guard, even without a callback: its presence is what
             // marks the handle as externally owned in `destroy_texture`.
             drop_guard: Some(crate::DropGuard::external(drop_callback)),
@@ -1421,7 +1411,6 @@ impl crate::Device for super::Device {
 
         Ok(super::Texture {
             inner,
-            backing: super::TextureBacking::Gl,
             drop_guard: None,
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
@@ -1456,21 +1445,6 @@ impl crate::Device for super::Device {
             #[cfg(webgl)]
             if let super::TextureInner::Texture { raw, .. } = texture.inner {
                 self.shared.context.lock().unregister_external_texture(raw);
-            }
-        }
-
-        /*
-         * The GL texture must be deleted before the EGLImage from which its
-         * storage was created.
-         */
-        match texture.backing {
-            super::TextureBacking::Gl => {}
-
-            #[cfg(all(unix, native))]
-            super::TextureBacking::Dmabuf(dmabuf) => {
-                if !unsafe { dmabuf.destroy() } {
-                    log::error!("eglDestroyImageKHR failed for imported DMA-BUF");
-                }
             }
         }
 
