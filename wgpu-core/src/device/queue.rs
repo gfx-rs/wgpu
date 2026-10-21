@@ -185,6 +185,7 @@ impl Queue {
                     texture.full_range.clone(),
                     wgt::TextureUses::PRESENT,
                 )
+                .filter(|pending| pending.usage.from != pending.usage.to)
                 .collect();
             pending
         };
