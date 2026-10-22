@@ -154,6 +154,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### Metal
 
+- Support `Features::SHADER_EARLY_DEPTH_TEST` on Metal. Naga's MSL backend now emits `[[early_fragment_tests]]` for `@early_depth_test(force)`, `depth(greater)`/`depth(less)` for `@early_depth_test(greater_equal/less_equal)`, and discards the depth output for `@early_depth_test(unchanged)` and `@early_depth_test(force)`. By @DouglasDwyer in [#10625](https://github.com/gfx-rs/wgpu/pull/10625).
 - Fix Naga's Metal backend crashing when a storage texture was used as a function argument. By @ErichDonGubler in [#9867](https://github.com/gfx-rs/wgpu/pull/9867).
 - Fix `max_task_workgroup_count` being misreported on pre-Apple7 devices. By @inner-daemons in [#10065](https://github.com/gfx-rs/wgpu/pull/10065).
 - The value of the `max_binding_array_sampler_elements_per_shader_stage` on Apple7, Apple8, and Mac2 hardware is reduced from 1024 to 996, to match the latest Metal documentation. By @andyleiserson in [#10649](https://github.com/gfx-rs/wgpu/pull/10649).
