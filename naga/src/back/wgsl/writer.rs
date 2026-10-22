@@ -288,6 +288,7 @@ impl<W: Write> Writer<W> {
         #[derive(Default)]
         struct RequiredEnabled {
             f16: bool,
+            bfloat16: bool,
             int16: bool,
             dual_source_blending: bool,
             clip_distances: bool,
@@ -359,6 +360,7 @@ impl<W: Write> Writer<W> {
                 | TypeInner::Vector { scalar, .. }
                 | TypeInner::Matrix { scalar, .. } => {
                     needed.f16 |= scalar == crate::Scalar::F16;
+                    needed.bfloat16 |= scalar == crate::Scalar::BF16;
                     needed.int16 |= scalar == crate::Scalar::I16 || scalar == crate::Scalar::U16;
                 }
                 TypeInner::Struct { ref members, .. } => {
@@ -366,7 +368,8 @@ impl<W: Write> Writer<W> {
                         check_binding(binding, &mut needed);
                     }
                 }
-                TypeInner::CooperativeMatrix { .. } => {
+                TypeInner::CooperativeMatrix { scalar, .. } => {
+                    needed.bfloat16 |= scalar == crate::Scalar::BF16;
                     needed.cooperative_matrix = true;
                 }
                 TypeInner::AccelerationStructure { .. } => {
@@ -437,6 +440,10 @@ impl<W: Write> Writer<W> {
         let mut any_written = false;
         if needed.f16 {
             writeln!(self.out, "enable f16;")?;
+            any_written = true;
+        }
+        if needed.bfloat16 {
+            writeln!(self.out, "enable wgpu_bfloat16;")?;
             any_written = true;
         }
         if needed.int16 {
@@ -1419,6 +1426,7 @@ impl<W: Write> Writer<W> {
 
         match expressions[expr] {
             Expression::Literal(literal) => match literal {
+                crate::Literal::BF16(value) => write!(self.out, "bf16({}f)", value.to_f32())?,
                 crate::Literal::F16(value) => write!(self.out, "{value}h")?,
                 crate::Literal::F32(value) => write!(self.out, "{value}f")?,
                 crate::Literal::U16(value) => write!(self.out, "u16({value})")?,

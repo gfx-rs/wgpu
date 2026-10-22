@@ -301,6 +301,7 @@ impl TryToWgsl for crate::Scalar {
 
         Some(match self {
             Scalar::F16 => "f16",
+            Scalar::BF16 => "bf16",
             Scalar::F32 => "f32",
             Scalar::F64 => "f64",
             Scalar::I16 => "i16",
@@ -321,6 +322,7 @@ impl TryToWgsl for crate::Scalar {
                 crate::ScalarKind::Sint
                 | crate::ScalarKind::Uint
                 | crate::ScalarKind::Float
+                | crate::ScalarKind::BFloat
                 | crate::ScalarKind::Bool => format!("{{non-WGSL scalar {self:?}}}"),
                 crate::ScalarKind::AbstractInt => "{AbstractInt}".to_string(),
                 crate::ScalarKind::AbstractFloat => "{AbstractFloat}".to_string(),

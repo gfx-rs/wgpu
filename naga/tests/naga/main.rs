@@ -1,3 +1,4 @@
+mod bf16;
 mod example_wgsl;
 mod snapshots;
 mod spirv_capabilities;

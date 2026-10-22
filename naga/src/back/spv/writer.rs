@@ -2016,6 +2016,19 @@ impl Writer {
                 }
                 Instruction::type_float(id, bits)
             }
+            Sk::BFloat => {
+                self.capabilities_used
+                    .insert(spirv::Capability::BFloat16TypeKHR);
+                self.capabilities_used
+                    .insert(spirv::Capability::StorageBuffer16BitAccess);
+                self.capabilities_used
+                    .insert(spirv::Capability::UniformAndStorageBuffer16BitAccess);
+                self.use_extension("SPV_KHR_bfloat16");
+                self.use_extension("SPV_KHR_16bit_storage");
+                let mut instruction = Instruction::type_float(id, bits);
+                instruction.add_operand(spirv::FPEncoding::BFloat16KHR as u32);
+                instruction
+            }
             Sk::Bool => Instruction::type_bool(id),
             Sk::AbstractInt | Sk::AbstractFloat => {
                 unreachable!("abstract types should never reach the backend");
@@ -2023,7 +2036,22 @@ impl Writer {
         }
     }
 
-    fn request_type_capabilities(&mut self, inner: &crate::TypeInner) -> Result<(), Error> {
+    pub(super) fn request_type_capabilities(
+        &mut self,
+        inner: &crate::TypeInner,
+    ) -> Result<(), Error> {
+        if inner
+            .scalar()
+            .is_some_and(|s| s.kind == crate::ScalarKind::BFloat)
+        {
+            self.require_any("bfloat16", &[spirv::Capability::BFloat16TypeKHR])?;
+            if matches!(inner, crate::TypeInner::CooperativeMatrix { .. }) {
+                self.require_any(
+                    "bfloat16 cooperative matrix",
+                    &[spirv::Capability::BFloat16CooperativeMatrixKHR],
+                )?;
+            }
+        }
         match *inner {
             crate::TypeInner::Image {
                 dim,
@@ -2678,6 +2706,9 @@ impl Writer {
             crate::Literal::F16(value) => {
                 let low = value.to_bits();
                 Instruction::constant_16bit(type_id, id, low as u32)
+            }
+            crate::Literal::BF16(value) => {
+                Instruction::constant_16bit(type_id, id, value.to_bits() as u32)
             }
             crate::Literal::U16(value) => Instruction::constant_16bit(type_id, id, value as u32),
             crate::Literal::I16(value) => {
@@ -3410,7 +3441,7 @@ impl Writer {
                         crate::TypeInner::Scalar(scalar)
                         | crate::TypeInner::Vector { scalar, .. } => match scalar.kind {
                             Sk::Uint | Sk::Sint | Sk::Bool => true,
-                            Sk::Float => false,
+                            Sk::Float | Sk::BFloat => false,
                             Sk::AbstractInt | Sk::AbstractFloat => {
                                 return Err(Error::Validation(
                                     "Abstract types should not appear in IR presented to backends",
