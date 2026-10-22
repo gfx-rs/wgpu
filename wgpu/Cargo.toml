@@ -177,6 +177,7 @@ web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web"]
 ## This can allow for better error reporting and for improved multithreading
 ## support.
 std = [
+    "concurrent-queue/std",
     "raw-window-handle/std",
     "wgpu-sync/std",
     "wgpu-types/std",
@@ -206,6 +207,7 @@ arrayvec.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
 cfg-if.workspace = true
+concurrent-queue.workspace = true
 document-features.workspace = true
 log.workspace = true
 hashbrown.workspace = true
