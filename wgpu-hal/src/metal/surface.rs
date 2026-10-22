@@ -316,9 +316,7 @@ impl crate::Surface for super::Surface {
                         .extended_display_p3,
                 )
             }
-            wgt::SurfaceColorSpace::PassThrough => {
-                unreachable!("`PassThrough` is never reported in the Metal surface capabilities")
-            }
+            wgt::SurfaceColorSpace::PassThrough => None,
             wgt::SurfaceColorSpace::DisplayP3 => {
                 Some(unsafe { objc2_core_graphics::kCGColorSpaceDisplayP3 })
             }

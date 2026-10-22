@@ -433,7 +433,12 @@ pub enum SurfaceColorSpace {
     /// before configuring another color space to avoid a fatal `surface_exists`
     /// protocol error.
     ///
-    /// * **Supported on**: Vulkan (where the driver exposes it).
+    /// On Metal, this sets [`CAMetalLayer.colorspace`] to `nil`, disabling color
+    /// matching, and disables extended dynamic range content.
+    ///
+    /// [`CAMetalLayer.colorspace`]: https://developer.apple.com/documentation/quartzcore/cametallayer/colorspace
+    ///
+    /// * **Supported on**: Vulkan (where the driver exposes it), Metal.
     PassThrough = 8,
 }
 
