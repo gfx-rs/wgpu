@@ -182,7 +182,6 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - [`immediate_address_space`](https://www.w3.org/TR/WGSL/#language_extension-immediate_address_space) WGSL language extension is implemented. By @beicause in [#9711](https://github.com/gfx-rs/wgpu/pull/9711).
 - `TextureFormat::is_srgb()` has been renamed to `TextureFormat::has_srgb_suffix()` to clarify its function. By @kpreid in [#9758](https://github.com/gfx-rs/wgpu/pull/9758).
 - Remove the never-constructed `CreateBlasError::InvalidAabbStride` variant. `create_blas` takes no stride, so it could never be produced; AABB stride is validated at build time as `BuildAccelerationStructureError::InvalidAabbStride`. By @mstampfli in [#9935](https://github.com/gfx-rs/wgpu/pull/9935).
-
 - Added `DownlevelFlags::LINEAR_INTERPOLATION`, indicating that the adapter supports `@interpolate(linear)`. It is absent on GLES/WebGL2, since GLSL ES has no `noperspective` qualifier. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - `Buffer::unmap` will not raise any validation errors anymore per specification. By @sagudev in [#10242](https://github.com/gfx-rs/wgpu/pull/10242).
 - `wgpu::Error::Validation::description` from `Device::create_shader_module` no longer include the shader source text and detailed compiler messages, per the WebGPU specification. These details remain accessible via `ShaderModule::get_compilation_info`. By @beicause and @sagudev in [#10173](https://github.com/gfx-rs/wgpu/pull/10173).
@@ -190,6 +189,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - `ShaderStages` is now composed of `ShaderStagesWebGPU` and `ShaderStagesWGPU`, similarly to `Features`. In most cases this is not expected to be a breaking change, but changes might be required for converting `ShaderStages` to/from `u32`. By @sagudev in [#10313](https://github.com/gfx-rs/wgpu/pull/10313).
 - `request_adapter` will return error on `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` if the adapter has already been consumed by a previous `request_device`. By @sagudev in [#10444](https://github.com/gfx-rs/wgpu/pull/10444).
 - The variants of `wgpu_core::validation::StageError` related to entry point selection have been reorganized. By @jimblandy in [#10544](https://github.com/gfx-rs/wgpu/pull/10544).
+- `clear_texture` now rejects a request to clear only some aspects of a texture. Previously such a request would clear all aspects of the texture. By @andyleiserson in [#10684](https://github.com/gfx-rs/wgpu/pull/10684).
 
 #### naga
 
