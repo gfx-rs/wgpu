@@ -746,17 +746,16 @@ fn write_function_expressions(
                 }
                 (format!("{fun:?}").into(), 7)
             }
-            E::As {
-                kind,
-                expr,
-                convert,
-            } => {
+            E::As { expr, target } => {
                 edges.insert("", expr);
-                let string = match convert {
-                    Some(width) => format!("Convert<{kind:?},{width}>"),
-                    None => format!("Bitcast<{kind:?}>"),
-                };
-                (string.into(), 3)
+                (
+                    format!("Convert<{:?},{}>", target.kind, target.width).into(),
+                    3,
+                )
+            }
+            E::Bitcast { expr, ty } => {
+                edges.insert("", expr);
+                (format!("Bitcast<{ty:?}>").into(), 3)
             }
             E::CallResult(_function) => ("CallResult".into(), 4),
             E::AtomicResult { .. } => ("AtomicResult".into(), 4),
