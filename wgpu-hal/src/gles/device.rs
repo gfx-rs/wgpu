@@ -251,27 +251,15 @@ impl super::Device {
             crate::DeviceError::Unexpected
         })?;
 
-        let extensions = egl
-            .query_string(Some(display), khronos_egl::EXTENSIONS)
-            .map_err(|error| {
-                log::error!("failed to query EGL display extensions: {error}");
-                crate::DeviceError::Unexpected
-            })?;
-
-        let extensions = extensions.to_string_lossy();
-
-        let has_extension = |required: &str| {
-            extensions
-                .split_ascii_whitespace()
-                .any(|extension| extension == required)
-        };
-
-        if !has_extension(EXT_IMAGE_DMA_BUF_IMPORT) {
+        let caps = self.shared.private_caps;
+        if !caps.contains(PrivateCapabilities::EGL_IMAGE_DMA_BUF_IMPORT) {
             log::error!("{EXT_IMAGE_DMA_BUF_IMPORT} is not supported");
             return Err(crate::DeviceError::Unexpected);
         }
 
-        if drm_modifier.is_some() && !has_extension(EXT_IMAGE_DMA_BUF_IMPORT_MODIFIERS) {
+        if drm_modifier.is_some()
+            && !caps.contains(PrivateCapabilities::EGL_IMAGE_DMA_BUF_IMPORT_MODIFIERS)
+        {
             log::error!(
                 "DMA-BUF has an explicit DRM modifier, but \
              {EXT_IMAGE_DMA_BUF_IMPORT_MODIFIERS} is not supported"
