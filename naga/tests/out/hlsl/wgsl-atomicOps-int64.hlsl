@@ -38,14 +38,14 @@ void cs_main(uint3 id : SV_GroupThreadID, uint local_invocation_index : SV_Group
         workgroup_struct = (Struct)0;
     }
     GroupMemoryBarrierWithGroupSync();
-    { uint64_t dummy = 0; storage_atomic_scalar.InterlockedExchange(0, 1uL, dummy); }
-    { int64_t dummy_1 = 0; storage_atomic_arr.InterlockedExchange(8, 1L, dummy_1); }
-    { uint64_t dummy_2 = 0; storage_struct.InterlockedExchange(0, 1uL, dummy_2); }
-    { int64_t dummy_3 = 0; storage_struct.InterlockedExchange(8+8, 1L, dummy_3); }
-    { uint64_t dummy_4 = 0; InterlockedExchange(workgroup_atomic_scalar, 1uL, dummy_4); }
-    { int64_t dummy_5 = 0; InterlockedExchange(workgroup_atomic_arr[1], 1L, dummy_5); }
-    { uint64_t dummy_6 = 0; InterlockedExchange(workgroup_struct.atomic_scalar, 1uL, dummy_6); }
-    { int64_t dummy_7 = 0; InterlockedExchange(workgroup_struct.atomic_arr[1], 1L, dummy_7); }
+    { uint64_t dummy = 0; storage_atomic_scalar.InterlockedExchange(0, 1ULL, dummy); }
+    { int64_t dummy_1 = 0; storage_atomic_arr.InterlockedExchange(8, 1LL, dummy_1); }
+    { uint64_t dummy_2 = 0; storage_struct.InterlockedExchange(0, 1ULL, dummy_2); }
+    { int64_t dummy_3 = 0; storage_struct.InterlockedExchange(8+8, 1LL, dummy_3); }
+    { uint64_t dummy_4 = 0; InterlockedExchange(workgroup_atomic_scalar, 1ULL, dummy_4); }
+    { int64_t dummy_5 = 0; InterlockedExchange(workgroup_atomic_arr[1], 1LL, dummy_5); }
+    { uint64_t dummy_6 = 0; InterlockedExchange(workgroup_struct.atomic_scalar, 1ULL, dummy_6); }
+    { int64_t dummy_7 = 0; InterlockedExchange(workgroup_struct.atomic_arr[1], 1LL, dummy_7); }
     GroupMemoryBarrierWithGroupSync();
     uint64_t l0_; storage_atomic_scalar.InterlockedOr(0, 0, l0_);
     int64_t l1_; storage_atomic_arr.InterlockedOr(8, 0, l1_);
@@ -56,91 +56,91 @@ void cs_main(uint3 id : SV_GroupThreadID, uint local_invocation_index : SV_Group
     uint64_t l6_; InterlockedOr(workgroup_struct.atomic_scalar, 0, l6_);
     int64_t l7_; InterlockedOr(workgroup_struct.atomic_arr[1], 0, l7_);
     GroupMemoryBarrierWithGroupSync();
-    uint64_t _e51; storage_atomic_scalar.InterlockedAdd64(0, 1uL, _e51);
-    int64_t _e55; storage_atomic_arr.InterlockedAdd64(8, 1L, _e55);
-    uint64_t _e59; storage_struct.InterlockedAdd64(0, 1uL, _e59);
-    int64_t _e64; storage_struct.InterlockedAdd64(8+8, 1L, _e64);
-    uint64_t _e67; InterlockedAdd(workgroup_atomic_scalar, 1uL, _e67);
-    int64_t _e71; InterlockedAdd(workgroup_atomic_arr[1], 1L, _e71);
-    uint64_t _e75; InterlockedAdd(workgroup_struct.atomic_scalar, 1uL, _e75);
-    int64_t _e80; InterlockedAdd(workgroup_struct.atomic_arr[1], 1L, _e80);
+    uint64_t _e51; storage_atomic_scalar.InterlockedAdd64(0, 1ULL, _e51);
+    int64_t _e55; storage_atomic_arr.InterlockedAdd64(8, 1LL, _e55);
+    uint64_t _e59; storage_struct.InterlockedAdd64(0, 1ULL, _e59);
+    int64_t _e64; storage_struct.InterlockedAdd64(8+8, 1LL, _e64);
+    uint64_t _e67; InterlockedAdd(workgroup_atomic_scalar, 1ULL, _e67);
+    int64_t _e71; InterlockedAdd(workgroup_atomic_arr[1], 1LL, _e71);
+    uint64_t _e75; InterlockedAdd(workgroup_struct.atomic_scalar, 1ULL, _e75);
+    int64_t _e80; InterlockedAdd(workgroup_struct.atomic_arr[1], 1LL, _e80);
     GroupMemoryBarrierWithGroupSync();
-    uint64_t _e83; storage_atomic_scalar.InterlockedAdd64(0, -1uL, _e83);
-    int64_t _e87; storage_atomic_arr.InterlockedAdd64(8, -1L, _e87);
-    uint64_t _e91; storage_struct.InterlockedAdd64(0, -1uL, _e91);
-    int64_t _e96; storage_struct.InterlockedAdd64(8+8, -1L, _e96);
-    uint64_t _e99; InterlockedAdd(workgroup_atomic_scalar, -1uL, _e99);
-    int64_t _e103; InterlockedAdd(workgroup_atomic_arr[1], -1L, _e103);
-    uint64_t _e107; InterlockedAdd(workgroup_struct.atomic_scalar, -1uL, _e107);
-    int64_t _e112; InterlockedAdd(workgroup_struct.atomic_arr[1], -1L, _e112);
+    uint64_t _e83; storage_atomic_scalar.InterlockedAdd64(0, -1ULL, _e83);
+    int64_t _e87; storage_atomic_arr.InterlockedAdd64(8, -1LL, _e87);
+    uint64_t _e91; storage_struct.InterlockedAdd64(0, -1ULL, _e91);
+    int64_t _e96; storage_struct.InterlockedAdd64(8+8, -1LL, _e96);
+    uint64_t _e99; InterlockedAdd(workgroup_atomic_scalar, -1ULL, _e99);
+    int64_t _e103; InterlockedAdd(workgroup_atomic_arr[1], -1LL, _e103);
+    uint64_t _e107; InterlockedAdd(workgroup_struct.atomic_scalar, -1ULL, _e107);
+    int64_t _e112; InterlockedAdd(workgroup_struct.atomic_arr[1], -1LL, _e112);
     GroupMemoryBarrierWithGroupSync();
-    storage_atomic_scalar.InterlockedMax64(0, 1uL);
-    storage_atomic_arr.InterlockedMax64(8, 1L);
-    storage_struct.InterlockedMax64(0, 1uL);
-    storage_struct.InterlockedMax64(8+8, 1L);
-    InterlockedMax(workgroup_atomic_scalar, 1uL);
-    InterlockedMax(workgroup_atomic_arr[1], 1L);
-    InterlockedMax(workgroup_struct.atomic_scalar, 1uL);
-    InterlockedMax(workgroup_struct.atomic_arr[1], 1L);
+    storage_atomic_scalar.InterlockedMax64(0, 1ULL);
+    storage_atomic_arr.InterlockedMax64(8, 1LL);
+    storage_struct.InterlockedMax64(0, 1ULL);
+    storage_struct.InterlockedMax64(8+8, 1LL);
+    InterlockedMax(workgroup_atomic_scalar, 1ULL);
+    InterlockedMax(workgroup_atomic_arr[1], 1LL);
+    InterlockedMax(workgroup_struct.atomic_scalar, 1ULL);
+    InterlockedMax(workgroup_struct.atomic_arr[1], 1LL);
     GroupMemoryBarrierWithGroupSync();
-    storage_atomic_scalar.InterlockedMin64(0, 1uL);
-    storage_atomic_arr.InterlockedMin64(8, 1L);
-    storage_struct.InterlockedMin64(0, 1uL);
-    storage_struct.InterlockedMin64(8+8, 1L);
-    InterlockedMin(workgroup_atomic_scalar, 1uL);
-    InterlockedMin(workgroup_atomic_arr[1], 1L);
-    InterlockedMin(workgroup_struct.atomic_scalar, 1uL);
-    InterlockedMin(workgroup_struct.atomic_arr[1], 1L);
+    storage_atomic_scalar.InterlockedMin64(0, 1ULL);
+    storage_atomic_arr.InterlockedMin64(8, 1LL);
+    storage_struct.InterlockedMin64(0, 1ULL);
+    storage_struct.InterlockedMin64(8+8, 1LL);
+    InterlockedMin(workgroup_atomic_scalar, 1ULL);
+    InterlockedMin(workgroup_atomic_arr[1], 1LL);
+    InterlockedMin(workgroup_struct.atomic_scalar, 1ULL);
+    InterlockedMin(workgroup_struct.atomic_arr[1], 1LL);
     GroupMemoryBarrierWithGroupSync();
-    uint64_t _e163; storage_atomic_scalar.InterlockedAnd64(0, 1uL, _e163);
-    int64_t _e167; storage_atomic_arr.InterlockedAnd64(8, 1L, _e167);
-    uint64_t _e171; storage_struct.InterlockedAnd64(0, 1uL, _e171);
-    int64_t _e176; storage_struct.InterlockedAnd64(8+8, 1L, _e176);
-    uint64_t _e179; InterlockedAnd(workgroup_atomic_scalar, 1uL, _e179);
-    int64_t _e183; InterlockedAnd(workgroup_atomic_arr[1], 1L, _e183);
-    uint64_t _e187; InterlockedAnd(workgroup_struct.atomic_scalar, 1uL, _e187);
-    int64_t _e192; InterlockedAnd(workgroup_struct.atomic_arr[1], 1L, _e192);
+    uint64_t _e163; storage_atomic_scalar.InterlockedAnd64(0, 1ULL, _e163);
+    int64_t _e167; storage_atomic_arr.InterlockedAnd64(8, 1LL, _e167);
+    uint64_t _e171; storage_struct.InterlockedAnd64(0, 1ULL, _e171);
+    int64_t _e176; storage_struct.InterlockedAnd64(8+8, 1LL, _e176);
+    uint64_t _e179; InterlockedAnd(workgroup_atomic_scalar, 1ULL, _e179);
+    int64_t _e183; InterlockedAnd(workgroup_atomic_arr[1], 1LL, _e183);
+    uint64_t _e187; InterlockedAnd(workgroup_struct.atomic_scalar, 1ULL, _e187);
+    int64_t _e192; InterlockedAnd(workgroup_struct.atomic_arr[1], 1LL, _e192);
     GroupMemoryBarrierWithGroupSync();
-    uint64_t _e195; storage_atomic_scalar.InterlockedOr64(0, 1uL, _e195);
-    int64_t _e199; storage_atomic_arr.InterlockedOr64(8, 1L, _e199);
-    uint64_t _e203; storage_struct.InterlockedOr64(0, 1uL, _e203);
-    int64_t _e208; storage_struct.InterlockedOr64(8+8, 1L, _e208);
-    uint64_t _e211; InterlockedOr(workgroup_atomic_scalar, 1uL, _e211);
-    int64_t _e215; InterlockedOr(workgroup_atomic_arr[1], 1L, _e215);
-    uint64_t _e219; InterlockedOr(workgroup_struct.atomic_scalar, 1uL, _e219);
-    int64_t _e224; InterlockedOr(workgroup_struct.atomic_arr[1], 1L, _e224);
+    uint64_t _e195; storage_atomic_scalar.InterlockedOr64(0, 1ULL, _e195);
+    int64_t _e199; storage_atomic_arr.InterlockedOr64(8, 1LL, _e199);
+    uint64_t _e203; storage_struct.InterlockedOr64(0, 1ULL, _e203);
+    int64_t _e208; storage_struct.InterlockedOr64(8+8, 1LL, _e208);
+    uint64_t _e211; InterlockedOr(workgroup_atomic_scalar, 1ULL, _e211);
+    int64_t _e215; InterlockedOr(workgroup_atomic_arr[1], 1LL, _e215);
+    uint64_t _e219; InterlockedOr(workgroup_struct.atomic_scalar, 1ULL, _e219);
+    int64_t _e224; InterlockedOr(workgroup_struct.atomic_arr[1], 1LL, _e224);
     GroupMemoryBarrierWithGroupSync();
-    uint64_t _e227; storage_atomic_scalar.InterlockedXor64(0, 1uL, _e227);
-    int64_t _e231; storage_atomic_arr.InterlockedXor64(8, 1L, _e231);
-    uint64_t _e235; storage_struct.InterlockedXor64(0, 1uL, _e235);
-    int64_t _e240; storage_struct.InterlockedXor64(8+8, 1L, _e240);
-    uint64_t _e243; InterlockedXor(workgroup_atomic_scalar, 1uL, _e243);
-    int64_t _e247; InterlockedXor(workgroup_atomic_arr[1], 1L, _e247);
-    uint64_t _e251; InterlockedXor(workgroup_struct.atomic_scalar, 1uL, _e251);
-    int64_t _e256; InterlockedXor(workgroup_struct.atomic_arr[1], 1L, _e256);
-    uint64_t _e259; storage_atomic_scalar.InterlockedExchange64(0, 1uL, _e259);
-    int64_t _e263; storage_atomic_arr.InterlockedExchange64(8, 1L, _e263);
-    uint64_t _e267; storage_struct.InterlockedExchange64(0, 1uL, _e267);
-    int64_t _e272; storage_struct.InterlockedExchange64(8+8, 1L, _e272);
-    uint64_t _e275; InterlockedExchange(workgroup_atomic_scalar, 1uL, _e275);
-    int64_t _e279; InterlockedExchange(workgroup_atomic_arr[1], 1L, _e279);
-    uint64_t _e283; InterlockedExchange(workgroup_struct.atomic_scalar, 1uL, _e283);
-    int64_t _e288; InterlockedExchange(workgroup_struct.atomic_arr[1], 1L, _e288);
-    _atomic_compare_exchange_result_Uint_8_ _e292; storage_atomic_scalar.InterlockedCompareExchange64(0, 1uL, 2uL, _e292.old_value);
-    _e292.exchanged = (_e292.old_value == 1uL);
-    _atomic_compare_exchange_result_Sint_8_ _e297; storage_atomic_arr.InterlockedCompareExchange64(8, 1L, 2L, _e297.old_value);
-    _e297.exchanged = (_e297.old_value == 1L);
-    _atomic_compare_exchange_result_Uint_8_ _e302; storage_struct.InterlockedCompareExchange64(0, 1uL, 2uL, _e302.old_value);
-    _e302.exchanged = (_e302.old_value == 1uL);
-    _atomic_compare_exchange_result_Sint_8_ _e308; storage_struct.InterlockedCompareExchange64(8+8, 1L, 2L, _e308.old_value);
-    _e308.exchanged = (_e308.old_value == 1L);
-    _atomic_compare_exchange_result_Uint_8_ _e312; InterlockedCompareExchange(workgroup_atomic_scalar, 1uL, 2uL, _e312.old_value);
-    _e312.exchanged = (_e312.old_value == 1uL);
-    _atomic_compare_exchange_result_Sint_8_ _e317; InterlockedCompareExchange(workgroup_atomic_arr[1], 1L, 2L, _e317.old_value);
-    _e317.exchanged = (_e317.old_value == 1L);
-    _atomic_compare_exchange_result_Uint_8_ _e322; InterlockedCompareExchange(workgroup_struct.atomic_scalar, 1uL, 2uL, _e322.old_value);
-    _e322.exchanged = (_e322.old_value == 1uL);
-    _atomic_compare_exchange_result_Sint_8_ _e328; InterlockedCompareExchange(workgroup_struct.atomic_arr[1], 1L, 2L, _e328.old_value);
-    _e328.exchanged = (_e328.old_value == 1L);
+    uint64_t _e227; storage_atomic_scalar.InterlockedXor64(0, 1ULL, _e227);
+    int64_t _e231; storage_atomic_arr.InterlockedXor64(8, 1LL, _e231);
+    uint64_t _e235; storage_struct.InterlockedXor64(0, 1ULL, _e235);
+    int64_t _e240; storage_struct.InterlockedXor64(8+8, 1LL, _e240);
+    uint64_t _e243; InterlockedXor(workgroup_atomic_scalar, 1ULL, _e243);
+    int64_t _e247; InterlockedXor(workgroup_atomic_arr[1], 1LL, _e247);
+    uint64_t _e251; InterlockedXor(workgroup_struct.atomic_scalar, 1ULL, _e251);
+    int64_t _e256; InterlockedXor(workgroup_struct.atomic_arr[1], 1LL, _e256);
+    uint64_t _e259; storage_atomic_scalar.InterlockedExchange64(0, 1ULL, _e259);
+    int64_t _e263; storage_atomic_arr.InterlockedExchange64(8, 1LL, _e263);
+    uint64_t _e267; storage_struct.InterlockedExchange64(0, 1ULL, _e267);
+    int64_t _e272; storage_struct.InterlockedExchange64(8+8, 1LL, _e272);
+    uint64_t _e275; InterlockedExchange(workgroup_atomic_scalar, 1ULL, _e275);
+    int64_t _e279; InterlockedExchange(workgroup_atomic_arr[1], 1LL, _e279);
+    uint64_t _e283; InterlockedExchange(workgroup_struct.atomic_scalar, 1ULL, _e283);
+    int64_t _e288; InterlockedExchange(workgroup_struct.atomic_arr[1], 1LL, _e288);
+    _atomic_compare_exchange_result_Uint_8_ _e292; storage_atomic_scalar.InterlockedCompareExchange64(0, 1ULL, 2ULL, _e292.old_value);
+    _e292.exchanged = (_e292.old_value == 1ULL);
+    _atomic_compare_exchange_result_Sint_8_ _e297; storage_atomic_arr.InterlockedCompareExchange64(8, 1LL, 2LL, _e297.old_value);
+    _e297.exchanged = (_e297.old_value == 1LL);
+    _atomic_compare_exchange_result_Uint_8_ _e302; storage_struct.InterlockedCompareExchange64(0, 1ULL, 2ULL, _e302.old_value);
+    _e302.exchanged = (_e302.old_value == 1ULL);
+    _atomic_compare_exchange_result_Sint_8_ _e308; storage_struct.InterlockedCompareExchange64(8+8, 1LL, 2LL, _e308.old_value);
+    _e308.exchanged = (_e308.old_value == 1LL);
+    _atomic_compare_exchange_result_Uint_8_ _e312; InterlockedCompareExchange(workgroup_atomic_scalar, 1ULL, 2ULL, _e312.old_value);
+    _e312.exchanged = (_e312.old_value == 1ULL);
+    _atomic_compare_exchange_result_Sint_8_ _e317; InterlockedCompareExchange(workgroup_atomic_arr[1], 1LL, 2LL, _e317.old_value);
+    _e317.exchanged = (_e317.old_value == 1LL);
+    _atomic_compare_exchange_result_Uint_8_ _e322; InterlockedCompareExchange(workgroup_struct.atomic_scalar, 1ULL, 2ULL, _e322.old_value);
+    _e322.exchanged = (_e322.old_value == 1ULL);
+    _atomic_compare_exchange_result_Sint_8_ _e328; InterlockedCompareExchange(workgroup_struct.atomic_arr[1], 1LL, 2LL, _e328.old_value);
+    _e328.exchanged = (_e328.old_value == 1LL);
     return;
 }

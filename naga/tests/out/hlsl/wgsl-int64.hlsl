@@ -44,9 +44,9 @@ struct StorageCompatible {
     int64_t val_i64_array_2_[2];
 };
 
-static const uint64_t constant_variable = 20uL;
+static const uint64_t constant_variable = 20ULL;
 
-static int64_t private_variable = 1L;
+static int64_t private_variable = 1LL;
 cbuffer input_uniform : register(b0) { UniformCompatible input_uniform; }
 ByteAddressBuffer input_storage : register(t1);
 ByteAddressBuffer input_arrays : register(t2);
@@ -65,14 +65,14 @@ ret_Constructarray2_int64_t_ Constructarray2_int64_t_(int64_t arg0, int64_t arg1
 
 int64_t int64_function(int64_t x)
 {
-    int64_t val = 20L;
+    int64_t val = 20LL;
 
     int64_t phony = private_variable;
     int64_t _e5 = val;
-    val = (_e5 + ((31L - 1002003004005006L) + -9223372036854775807L));
+    val = (_e5 + ((31LL - 1002003004005006LL) + -9223372036854775807LL));
     int64_t _e12 = val;
     int64_t _e13 = val;
-    val = (_e12 + (_e13 + 5L));
+    val = (_e12 + (_e13 + 5LL));
     int64_t _e17 = val;
     uint _e20 = input_uniform.val_u32_;
     int64_t _e21 = val;
@@ -101,7 +101,7 @@ int64_t int64_function(int64_t x)
     uint64_t4 _e74 = input_uniform.val_u64_4_;
     val = (_e71 + _e74.w);
     int64_t _e78 = val;
-    val = (_e78 + (-9223372036854775807L - 1L));
+    val = (_e78 + (-9223372036854775807LL - 1LL));
     int64_t _e85 = input_uniform.val_i64_;
     int64_t _e88 = input_storage.Load<int64_t>(128);
     output.Store(128, (_e85 + _e88));
@@ -159,13 +159,13 @@ ret_Constructarray2_uint64_t_ Constructarray2_uint64_t_(uint64_t arg0, uint64_t 
 
 uint64_t uint64_function(uint64_t x_1)
 {
-    uint64_t val_1 = 20uL;
+    uint64_t val_1 = 20ULL;
 
     uint64_t _e3 = val_1;
-    val_1 = (_e3 + ((31uL + 18446744073709551615uL) - 18446744073709551615uL));
+    val_1 = (_e3 + ((31ULL + 18446744073709551615ULL) - 18446744073709551615ULL));
     uint64_t _e10 = val_1;
     uint64_t _e11 = val_1;
-    val_1 = (_e10 + (_e11 + 5uL));
+    val_1 = (_e10 + (_e11 + 5ULL));
     uint64_t _e15 = val_1;
     uint _e18 = input_uniform.val_u32_;
     uint64_t _e19 = val_1;
@@ -238,8 +238,8 @@ uint64_t uint64_function(uint64_t x_1)
 [numthreads(1, 1, 1)]
 void main()
 {
-    const uint64_t _e3 = uint64_function(67uL);
-    const int64_t _e5 = int64_function(60L);
+    const uint64_t _e3 = uint64_function(67ULL);
+    const int64_t _e5 = int64_function(60LL);
     output.Store(224, (_e3 + _e5));
     return;
 }
