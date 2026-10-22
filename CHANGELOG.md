@@ -200,6 +200,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 #### Metal
 
 - Removed the `size` argument to `wgpu_hal::metal::Device::buffer_from_raw`. The passed size value was previously used only to resolve vertex buffer bindings without an explicit size, possibly incorrectly. Binding sizes are now resolved in `wgpu-core`. By @andyleiserson in [#9848](https://github.com/gfx-rs/wgpu/pull/9848).
+- BREAKING: `PassthroughShaderEntryPoint` has a new `workgroup_memory_sizes` field giving the threadgroup memory, in bytes, at each threadgroup argument index of a Metal passthrough entry point. Previously no threadgroup memory was allocated for passthrough shaders. Pass an empty slice if the shader uses none; other backends ignore it. By @lexoliu in [#10673](https://github.com/gfx-rs/wgpu/pull/10673).
 
 #### Vulkan
 

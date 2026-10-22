@@ -1121,7 +1121,7 @@ pub enum ShaderModuleSource {
 #[derive(Debug)]
 pub struct PassthroughShader {
     pub library: Retained<ProtocolObject<dyn MTLLibrary>>,
-    pub num_workgroups: HashMap<String, (u32, u32, u32)>,
+    pub entry_points: HashMap<String, crate::MetalShaderEntryPoint>,
 }
 
 #[cfg(send_sync)]

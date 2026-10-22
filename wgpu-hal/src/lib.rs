@@ -2599,16 +2599,23 @@ impl fmt::Debug for NagaShader {
     }
 }
 
+/// Metadata required to execute a Metal passthrough entry point.
+#[derive(Debug, Clone)]
+pub struct MetalShaderEntryPoint {
+    pub workgroup_size: (u32, u32, u32),
+    pub workgroup_memory_sizes: Vec<u32>,
+}
+
 /// Shader input.
 pub enum ShaderInput<'a> {
     Naga(NagaShader),
     MetalLib {
         file: &'a [u8],
-        num_workgroups: hashbrown::HashMap<String, (u32, u32, u32)>,
+        entry_points: hashbrown::HashMap<String, MetalShaderEntryPoint>,
     },
     Msl {
         shader: &'a str,
-        num_workgroups: hashbrown::HashMap<String, (u32, u32, u32)>,
+        entry_points: hashbrown::HashMap<String, MetalShaderEntryPoint>,
     },
     SpirV(&'a [u32]),
     Dxil {
