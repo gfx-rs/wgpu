@@ -491,8 +491,8 @@ impl super::Device {
     ) -> Result<super::Texture, crate::DeviceError> {
         if !self
             .shared
-            .features
-            .contains(wgt::Features::VULKAN_EXTERNAL_MEMORY_WIN32)
+            .enabled_extensions
+            .contains(&ash::khr::external_memory_win32::NAME)
         {
             log::error!("Vulkan driver does not support VK_KHR_external_memory_win32");
             return Err(crate::DeviceError::Unexpected);
@@ -549,8 +549,8 @@ impl super::Device {
     ///
     /// # Safety
     ///
-    /// - Requires `VULKAN_EXTERNAL_MEMORY_DMA_BUF` feature (implies VK_EXT_external_memory_dma_buf
-    ///   and VK_EXT_image_drm_format_modifier)
+    /// - Requires the VK_KHR_external_memory_fd, VK_EXT_external_memory_dma_buf, and
+    ///   VK_EXT_image_drm_format_modifier extensions
     /// - The `fd` must be a valid DMA-buf file descriptor matching `desc`
     /// - On success, Vulkan takes ownership of the file descriptor. On failure,
     ///   the file descriptor is closed.
@@ -566,10 +566,9 @@ impl super::Device {
     ) -> Result<super::Texture, crate::DeviceError> {
         use std::os::unix::io::IntoRawFd;
 
-        if !self
-            .shared
-            .features
-            .contains(wgt::Features::VULKAN_EXTERNAL_MEMORY_DMA_BUF)
+        let enabled_extensions = &self.shared.enabled_extensions;
+        if !enabled_extensions.contains(&ext::external_memory_dma_buf::NAME)
+            || !enabled_extensions.contains(&ext::image_drm_format_modifier::NAME)
         {
             log::error!(
                 "Vulkan driver does not support VK_EXT_external_memory_dma_buf \
