@@ -299,19 +299,25 @@ core.registerErrorBuilder(
 core.registerErrorBuilder(
   "DOMExceptionAbortError",
   function DOMExceptionAbortError(msg) {
-    return new domException.DOMException(msg, "AbortError");
+    return new DOMException(msg, "AbortError");
   },
 );
 core.registerErrorBuilder(
   "DOMExceptionInvalidCharacterError",
   function DOMExceptionInvalidCharacterError(msg) {
-    return new domException.DOMException(msg, "InvalidCharacterError");
+    return new DOMException(msg, "InvalidCharacterError");
+  },
+);
+core.registerErrorBuilder(
+  "DOMExceptionInvalidStateError",
+  function DOMExceptionInvalidStateError(msg) {
+    return new DOMException(msg, "InvalidStateError");
   },
 );
 core.registerErrorBuilder(
   "DOMExceptionDataError",
   function DOMExceptionDataError(msg) {
-    return new domException.DOMException(msg, "DataError");
+    return new DOMException(msg, "DataError");
   },
 );
 
