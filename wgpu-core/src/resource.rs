@@ -515,6 +515,9 @@ pub struct Buffer {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) map_state: Mutex<BufferMapState>,
+    /// What [`Buffer::destroy`] took from a buffer that was mapped. It is freed when the buffer
+    /// drops, since the mapped pointer, and the views over it, read the raw buffer until then.
+    pub(crate) destroyed_while_mapped: crate::OnceCellOrLock<DestroyedBuffer>,
     // Bind groups that reference this buffer. May contain duplicates.
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
     pub(crate) timestamp_normalization_bind_group: Snatchable<TimestampNormalizationBindGroup>,
@@ -1074,7 +1077,7 @@ impl Buffer {
     pub fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
-        let temp = {
+        let destroyed = {
             let mut snatch_guard = device.snatchable_lock.write();
 
             let raw = match self.raw.snatch(&mut snatch_guard) {
@@ -1100,15 +1103,21 @@ impl Buffer {
                 mem::take(&mut *guard)
             };
 
-            queue::TempResource::DestroyedBuffer(DestroyedBuffer {
+            DestroyedBuffer {
                 raw: ManuallyDrop::new(raw),
                 device: Arc::clone(&self.device),
                 label: self.label().to_owned(),
                 bind_groups,
                 timestamp_normalization_bind_group,
                 indirect_validation_bind_groups,
-            })
+            }
         };
+
+        if matches!(*self.map_state.lock(), BufferMapState::Active { .. }) {
+            let _ = self.destroyed_while_mapped.set(destroyed);
+            return;
+        }
+        let temp = queue::TempResource::DestroyedBuffer(destroyed);
 
         let Some(queue) = device.get_queue() else {
             return;
