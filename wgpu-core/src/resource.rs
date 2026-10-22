@@ -831,6 +831,11 @@ impl Buffer {
             self.size.saturating_sub(offset)
         };
 
+        let device = &self.device;
+        if let Err(e) = device.check_is_valid() {
+            return Err((callback, e.into()));
+        }
+
         if let Err(e) = self.check_is_valid() {
             return Err((callback, e.into()));
         }
@@ -879,11 +884,6 @@ impl Buffer {
         };
 
         if let Err(e) = self.check_usage(pub_usage) {
-            return Err((callback, e.into()));
-        }
-
-        let device = &self.device;
-        if let Err(e) = device.check_is_valid() {
             return Err((callback, e.into()));
         }
 
