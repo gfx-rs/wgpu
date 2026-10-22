@@ -241,6 +241,9 @@ pub struct Device {
 
     pub(crate) command_allocator: command::CommandAllocator,
 
+    /// Holding this lock for writing also serializes the operations on the
+    /// device's [`hal::Queue`] that must be externally synchronized:
+    /// submission, presentation, waiting for idle, and surface configuration.
     pub(crate) command_indices: RwLock<CommandIndices>,
 
     /// The index of the last successful submission to this device's
