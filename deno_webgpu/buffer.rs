@@ -191,14 +191,9 @@ impl GPUBuffer {
         sender.send(status).unwrap();
       });
 
-      self.wgpu_buffer.map_async(
-        offset,
-        size,
-        wgpu_core::resource::BufferMapOperation {
-          mode,
-          callback: Some(callback),
-        },
-      );
+      self
+        .wgpu_buffer
+        .map_async(mode, offset, size, Some(callback));
     }
 
     let done = Rc::new(RefCell::new(false));
