@@ -97,12 +97,10 @@ impl Test<'_> {
             player
                 .resolve_buffer_id(expect.buffer)
                 .map_async(
+                    wgt::MapMode::Read,
                     expect.offset,
                     Some(expect.data.len() as u64),
-                    wgc::resource::BufferMapOperation {
-                        mode: wgt::MapMode::Read,
-                        callback: Some(Box::new(map_callback)),
-                    },
+                    Some(Box::new(map_callback)),
                 )
                 .unwrap();
         }

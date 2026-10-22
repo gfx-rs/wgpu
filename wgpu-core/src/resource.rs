@@ -348,20 +348,6 @@ pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
 
-pub struct BufferMapOperation {
-    pub mode: MapMode,
-    pub callback: Option<BufferMapCallback>,
-}
-
-impl fmt::Debug for BufferMapOperation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BufferMapOperation")
-            .field("mode", &self.mode)
-            .field("callback", &self.callback.as_ref().map(|_| "?"))
-            .finish()
-    }
-}
-
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
@@ -508,12 +494,23 @@ impl WebGpuError for InvalidResourceError {
 
 pub type BufferAccessResult = Result<(), BufferAccessError>;
 
-#[derive(Debug)]
 pub(crate) struct BufferPendingMapping {
     pub(crate) range: Range<wgt::BufferAddress>,
-    pub(crate) op: BufferMapOperation,
+    pub(crate) callback: Option<BufferMapCallback>,
+    pub(crate) mode: MapMode,
     // hold the parent alive while the mapping is active
     pub(crate) _parent_buffer: Arc<Buffer>,
+}
+
+impl fmt::Debug for BufferPendingMapping {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BufferPendingMapping")
+            .field("range", &self.range)
+            .field("callback", &self.callback.as_ref().map(|_| "?"))
+            .field("mode", &self.mode)
+            .field("_parent_buffer", &self._parent_buffer)
+            .finish()
+    }
 }
 
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
@@ -565,13 +562,13 @@ impl Drop for Buffer {
                 false
             }
             BufferMapState::Waiting(buffer_pending_mapping) => {
-                if buffer_pending_mapping.op.callback.is_some() {
+                if buffer_pending_mapping.callback.is_some() {
                     let result = Err(BufferAccessError::DestroyedResource(
                         DestroyedResourceError(self.error_ident()),
                     ));
                     self.device
                         .deferred_buffer_map_pending_closures
-                        .push((buffer_pending_mapping.op, result));
+                        .push((buffer_pending_mapping.callback, result));
                 }
                 false
             }
@@ -777,21 +774,22 @@ impl Buffer {
     /// `op.callback` is guaranteed to be called, regardless of the outcome.
     pub fn map_async(
         self: &Arc<Self>,
+        mode: MapMode,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
-        op: BufferMapOperation,
+        callback: Option<BufferMapCallback>,
     ) -> Option<SubmissionIndex> {
         profiling::scope!("Buffer::map_async");
         api_log!(
-            "Buffer::map_async {:?} offset {offset:?} size {size:?} op: {op:?}",
+            "Buffer::map_async {:?} mode {mode:?} offset {offset:?} size {size:?}",
             Arc::as_ptr(self)
         );
 
-        self.try_map_async(offset, size, op)
-            .map_err(|(mut operation, err)| {
+        self.try_map_async(mode, offset, size, callback)
+            .map_err(|(mut callback, err)| {
                 self.device
                     .handle_error(err.clone(), Some(&self.label), "Buffer::map_async");
-                if let Some(callback) = operation.callback.take() {
+                if let Some(callback) = callback.take() {
                     callback(Err(err));
                 }
             })
@@ -822,10 +820,11 @@ impl Buffer {
     /// it does not mean that the buffer has already been mapped.
     fn try_map_async(
         self: &Arc<Self>,
+        mode: MapMode,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
-        op: BufferMapOperation,
-    ) -> Result<SubmissionIndex, (BufferMapOperation, BufferAccessError)> {
+        callback: Option<BufferMapCallback>,
+    ) -> Result<SubmissionIndex, (Option<BufferMapCallback>, BufferAccessError)> {
         let range_size = if let Some(size) = size {
             size
         } else {
@@ -833,19 +832,22 @@ impl Buffer {
         };
 
         if let Err(e) = self.check_is_valid() {
-            return Err((op, e.into()));
+            return Err((callback, e.into()));
         }
 
         if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
-            return Err((op, BufferAccessError::UnalignedOffset { offset }));
+            return Err((callback, BufferAccessError::UnalignedOffset { offset }));
         }
         if !range_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
-            return Err((op, BufferAccessError::UnalignedRangeSize { range_size }));
+            return Err((
+                callback,
+                BufferAccessError::UnalignedRangeSize { range_size },
+            ));
         }
 
         if offset > self.size {
             return Err((
-                op,
+                callback,
                 BufferAccessError::MapStartOffsetOverrun {
                     offset,
                     buffer_size: self.size,
@@ -855,7 +857,7 @@ impl Buffer {
         // NOTE: Should never underflow because of our earlier check.
         if range_size > self.size - offset {
             return Err((
-                op,
+                callback,
                 BufferAccessError::MapEndOffsetOverrun {
                     offset,
                     size: range_size,
@@ -868,41 +870,42 @@ impl Buffer {
         if !offset.is_multiple_of(wgt::MAP_ALIGNMENT)
             || !end_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT)
         {
-            return Err((op, BufferAccessError::UnalignedRange));
+            return Err((callback, BufferAccessError::UnalignedRange));
         }
 
-        let (pub_usage, internal_use) = match op.mode {
+        let (pub_usage, internal_use) = match mode {
             MapMode::Read => (wgt::BufferUsages::MAP_READ, wgt::BufferUses::MAP_READ),
             MapMode::Write => (wgt::BufferUsages::MAP_WRITE, wgt::BufferUses::MAP_WRITE),
         };
 
         if let Err(e) = self.check_usage(pub_usage) {
-            return Err((op, e.into()));
+            return Err((callback, e.into()));
         }
 
         let device = &self.device;
         if let Err(e) = device.check_is_valid() {
-            return Err((op, e.into()));
+            return Err((callback, e.into()));
         }
 
         let submit_index = {
             let snatch_guard = device.snatchable_lock.read();
             if let Err(e) = self.check_destroyed(&snatch_guard) {
-                return Err((op, e.into()));
+                return Err((callback, e.into()));
             }
 
             {
                 let map_state = &mut *self.map_state.write();
                 *map_state = match *map_state {
                     BufferMapState::Init { .. } | BufferMapState::Active { .. } => {
-                        return Err((op, BufferAccessError::AlreadyMapped));
+                        return Err((callback, BufferAccessError::AlreadyMapped));
                     }
                     BufferMapState::Waiting(_) => {
-                        return Err((op, BufferAccessError::MapAlreadyPending));
+                        return Err((callback, BufferAccessError::MapAlreadyPending));
                     }
                     BufferMapState::Idle => BufferMapState::Waiting(BufferPendingMapping {
                         range: offset..end_offset,
-                        op,
+                        mode,
+                        callback,
                         _parent_buffer: self.clone(),
                     }),
                 };
@@ -913,10 +916,11 @@ impl Buffer {
                     Err(err) => {
                         let state =
                             mem::replace(&mut *self.map_state.write(), BufferMapState::Idle);
-                        let BufferMapState::Waiting(BufferPendingMapping { op, .. }) = state else {
+                        let BufferMapState::Waiting(BufferPendingMapping { callback, .. }) = state
+                        else {
                             unreachable!();
                         };
-                        return Err((op, err));
+                        return Err((callback, err));
                     }
                     Ok(()) => {
                         // Schedule the buffer map in the  lifetime tracker.
@@ -953,8 +957,8 @@ impl Buffer {
         } else {
             // We don't have a queue, so go ahead and map the buffer.
             // We can safely unwrap below since we just set the `map_state` to `BufferMapState::Waiting`.
-            let (mut operation, status) = self.map(&device.snatchable_lock.read()).unwrap();
-            if let Some(callback) = operation.callback.take() {
+            let (mut callback, status) = self.map(&device.snatchable_lock.read()).unwrap();
+            if let Some(callback) = callback.take() {
                 callback(status);
             }
             Ok(0)
@@ -1087,7 +1091,7 @@ impl Buffer {
         let status = if let Err(error) = self.device.check_is_valid() {
             Err(error.into())
         } else if pending_mapping.range.start != pending_mapping.range.end {
-            let host = pending_mapping.op.mode;
+            let host = pending_mapping.mode;
             let size = pending_mapping.range.end - pending_mapping.range.start;
             match crate::device::map_buffer(
                 self,
@@ -1113,19 +1117,19 @@ impl Buffer {
                     is_coherent: true,
                 },
                 range: pending_mapping.range,
-                host: pending_mapping.op.mode,
+                host: pending_mapping.mode,
             };
             Ok(())
         };
-        Some((pending_mapping.op, status))
+        Some((pending_mapping.callback, status))
     }
 
     // Note: This must not be called while holding a lock.
     pub fn unmap(self: &Arc<Self>) {
         profiling::scope!("unmap", "Buffer");
         api_log!("Buffer::unmap {:?}", Arc::as_ptr(self));
-        if let Some((mut operation, status)) = self.unmap_inner() {
-            if let Some(callback) = operation.callback.take() {
+        if let Some((mut callback, status)) = self.unmap_inner() {
+            if let Some(callback) = callback.take() {
                 callback(status);
             }
         }
@@ -1211,7 +1215,7 @@ impl Buffer {
             }
             BufferMapState::Idle => None,
             BufferMapState::Waiting(pending) => {
-                Some((pending.op, Err(BufferAccessError::MapAborted)))
+                Some((pending.callback, Err(BufferAccessError::MapAborted)))
             }
             BufferMapState::Active {
                 mapping,

@@ -17,7 +17,7 @@ use wgpu_core::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
         ResolvedGeneralRenderPipelineDescriptor,
     },
-    resource::{self, BufferAccessError, BufferMapOperation, BufferMapping, CreateBufferError},
+    resource::{self, BufferAccessError, BufferMapCallback, BufferMapping, CreateBufferError},
     Label, LabelHelpers, SubmissionIndex,
 };
 
@@ -28,7 +28,7 @@ use crate::{
     registry::Registry,
 };
 
-use wgt::{error::WebGpuError, BufferAddress};
+use wgt::{error::WebGpuError, BufferAddress, MapMode};
 
 pub use wgpu_core_remote_types::binding_model::*;
 
@@ -1273,15 +1273,16 @@ impl Global {
     pub fn buffer_map_async(
         &self,
         buffer_id: id::BufferId,
+        mode: MapMode,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-        op: BufferMapOperation,
+        callback: Option<BufferMapCallback>,
     ) -> Option<SubmissionIndex> {
         let hub = self.hub.borrow();
 
         let buffer = hub.buffers.get(buffer_id);
 
-        buffer.map_async(offset, size, op)
+        buffer.map_async(mode, offset, size, callback)
     }
 
     pub fn buffer_get_mapped_range(
