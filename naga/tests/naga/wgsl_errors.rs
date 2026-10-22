@@ -2583,6 +2583,71 @@ fn invalid_blend_src() {
         ),
         Capabilities::DUAL_SOURCE_BLENDING
     }
+
+    // Another member of a @blend_src struct without a binding
+    // (regression test for https://github.com/gfx-rs/wgpu/issues/10656)
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(0) @blend_src(1) output1: vec4<f32>,
+            output2: f32,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(); }
+        ":
+        Err(
+            ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    VaryingError::MemberMissingBinding(2),
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Built-in member of a @blend_src struct that is not a fragment output.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(0) @blend_src(1) output1: vec4<f32>,
+            @builtin(vertex_index) index: u32,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(); }
+        ":
+        Err(
+            ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    VaryingError::InvalidBuiltInStage(naga::BuiltIn::VertexIndex),
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // A valid built-in output alongside @blend_src members.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(0) @blend_src(1) output1: vec4<f32>,
+            @builtin(frag_depth) depth: f32,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(); }
+        ":
+        Ok(_),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
 }
 
 #[test]

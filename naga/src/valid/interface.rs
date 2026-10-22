@@ -894,20 +894,24 @@ impl VaryingContext<'_> {
                         .dual_source_blending
                         .as_mut()
                         .expect("unexpected dual source blending") = true;
-                } else {
-                    for (index, member) in members.iter().enumerate() {
-                        let span_context = self.types.get_span_context(ty);
-                        match member.binding {
-                            None => {
-                                if self.flags.contains(super::ValidationFlags::BINDINGS) {
-                                    return Err(VaryingError::MemberMissingBinding(index as u32)
-                                        .with_span_context(span_context));
-                                }
+                }
+
+                for (index, member) in members.iter().enumerate() {
+                    let span_context = self.types.get_span_context(ty);
+                    match member.binding {
+                        None => {
+                            if self.flags.contains(super::ValidationFlags::BINDINGS) {
+                                return Err(VaryingError::MemberMissingBinding(index as u32)
+                                    .with_span_context(span_context));
                             }
-                            Some(ref binding) => self
-                                .validate_impl(ep, member.ty, binding)
-                                .map_err(|e| e.with_span_context(span_context))?,
                         }
+                        // The `@blend_src` members were validated with the struct type.
+                        Some(crate::Binding::Location {
+                            blend_src: Some(_), ..
+                        }) => {}
+                        Some(ref binding) => self
+                            .validate_impl(ep, member.ty, binding)
+                            .map_err(|e| e.with_span_context(span_context))?,
                     }
                 }
                 Ok(())
