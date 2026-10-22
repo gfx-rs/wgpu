@@ -399,6 +399,14 @@ impl FunctionInfo {
         self.add_ref_impl(expr, GlobalUse::READ)
     }
 
+    /// Record uses of the operands of an optional invocation reordering hint.
+    fn add_reorder_hint_refs(&mut self, hint: Option<crate::ReorderHint>) {
+        if let Some(crate::ReorderHint { hint, bits }) = hint {
+            let _ = self.add_ref(hint);
+            let _ = self.add_ref(bits);
+        }
+    }
+
     /// Record a use of `expr`, and indicate which global variable it
     /// refers to, if any.
     ///
@@ -846,6 +854,13 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(query),
                 requirements: UniformityRequirements::empty(),
             },
+            E::HitObjectQuery {
+                hit_object,
+                query: _,
+            } => Uniformity {
+                non_uniform_result: self.add_ref(hit_object),
+                requirements: UniformityRequirements::empty(),
+            },
             E::CooperativeLoad { ref data, .. } => Uniformity {
                 non_uniform_result: self.add_ref(data.pointer).or(self.add_ref(data.stride)),
                 requirements: UniformityRequirements::COOP_OPS,
@@ -1204,6 +1219,41 @@ impl FunctionInfo {
                             let _ = self.add_ref(acceleration_structure);
                             let _ = self.add_ref(descriptor);
                             let _ = self.add_ref(payload);
+                        }
+                        crate::RayPipelineFunction::ReorderThread { hint, bits } => {
+                            let _ = self.add_ref(hint);
+                            let _ = self.add_ref(bits);
+                        }
+                    }
+                    FunctionUniformity::new()
+                }
+                S::HitObject {
+                    hit_object,
+                    ref fun,
+                } => {
+                    let _ = self.add_ref(hit_object);
+                    match *fun {
+                        crate::HitObjectFunction::TraceRay {
+                            acceleration_structure,
+                            descriptor,
+                            payload,
+                        } => {
+                            let _ = self.add_ref(acceleration_structure);
+                            let _ = self.add_ref(descriptor);
+                            let _ = self.add_ref(payload);
+                        }
+                        crate::HitObjectFunction::RecordMiss { descriptor } => {
+                            let _ = self.add_ref(descriptor);
+                        }
+                        crate::HitObjectFunction::RecordFromQuery { query } => {
+                            let _ = self.add_ref(query);
+                        }
+                        crate::HitObjectFunction::RecordEmpty => {}
+                        crate::HitObjectFunction::ExecuteShader { payload } => {
+                            let _ = self.add_ref(payload);
+                        }
+                        crate::HitObjectFunction::Reorder { hint } => {
+                            self.add_reorder_hint_refs(hint);
                         }
                     }
                     FunctionUniformity::new()

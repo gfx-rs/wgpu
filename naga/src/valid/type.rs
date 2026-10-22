@@ -949,6 +949,16 @@ impl super::Validator {
                     Alignment::ONE,
                 )
             }
+            Ti::HitObject => {
+                self.require_type_capability(Capabilities::RAY_TRACING_INVOCATION_REORDER)?;
+                TypeInfo::new(
+                    TypeFlags::DATA
+                        | TypeFlags::CONSTRUCTIBLE
+                        | TypeFlags::SIZED
+                        | TypeFlags::CREATION_RESOLVED,
+                    Alignment::ONE,
+                )
+            }
             Ti::BindingArray { base, size } => {
                 let type_info_mask = match size {
                     crate::ArraySize::Constant(_) => {

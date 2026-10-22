@@ -30,6 +30,8 @@ pub enum ExpressionError {
     InvalidArrayType(Handle<crate::Expression>),
     #[error("Get intersection of {0:?} can't be done")]
     InvalidRayQueryType(Handle<crate::Expression>),
+    #[error("Hit object {0:?} is not a pointer to a hit object in the function address space")]
+    InvalidHitObjectType(Handle<crate::Expression>),
     #[error("Splatting {0:?} can't be done")]
     InvalidSplatType(Handle<crate::Expression>),
     #[error("Swizzling {0:?} can't be done")]
@@ -525,7 +527,12 @@ impl super::Validator {
                 if !mod_info[ty].contains(TypeFlags::CONSTRUCTIBLE) {
                     return Err(ExpressionError::InvalidZeroValue(ty));
                 }
-                if matches!(module.types[ty].inner, crate::TypeInner::RayQuery { .. }) {
+                // Opaque handle types cannot be constructed, even though their
+                // `CONSTRUCTIBLE` flag lets them be declared as locals.
+                if matches!(
+                    module.types[ty].inner,
+                    crate::TypeInner::RayQuery { .. } | crate::TypeInner::HitObject
+                ) {
                     return Err(ExpressionError::InvalidZeroValue(ty));
                 }
                 ShaderStages::all()
@@ -1376,6 +1383,29 @@ impl super::Validator {
                 ref other => {
                     log::debug!("Intersection result of {other:?}");
                     return Err(ExpressionError::InvalidRayQueryType(query));
+                }
+            },
+            E::HitObjectQuery {
+                hit_object,
+                query: _,
+            } => match resolver[hit_object] {
+                Ti::Pointer {
+                    base,
+                    space: crate::AddressSpace::Function,
+                } => match resolver.types[base].inner {
+                    Ti::HitObject => {
+                        ShaderStages::RAY_GENERATION
+                            | ShaderStages::CLOSEST_HIT
+                            | ShaderStages::MISS
+                    }
+                    ref other => {
+                        log::debug!("Hit object query of a pointer to {other:?}");
+                        return Err(ExpressionError::InvalidHitObjectType(hit_object));
+                    }
+                },
+                ref other => {
+                    log::debug!("Hit object query of {other:?}");
+                    return Err(ExpressionError::InvalidHitObjectType(hit_object));
                 }
             },
             E::RayQueryVertexPositions {
