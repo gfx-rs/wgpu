@@ -165,6 +165,25 @@ impl GPUBuffer {
     #[webidl] size: Option<u64>,
   ) -> Result<(), BufferError> {
     {
+      // If this.mapState is not "unmapped"
+      let maybe_error = match *self.map_state.borrow() {
+        BufferMapState::Unmapped => None,
+        BufferMapState::Pending => {
+          Some(wgpu_core::resource::BufferAccessError::MapAlreadyPending)
+        }
+        BufferMapState::Mapped { .. } => {
+          Some(wgpu_core::resource::BufferAccessError::AlreadyMapped)
+        }
+      };
+      if let Some(error) = maybe_error {
+        // Issue the early-reject steps on the Device timeline of this.[[device]].
+        // Generate a validation error.
+        self
+          .wgpu_device
+          .handle_error_nolabel(error.clone(), "GPUBuffer.mapAsync");
+        // Return a promise rejected with OperationError.
+        return Err(error.into());
+      }
       *self.map_state.borrow_mut() = BufferMapState::Pending;
     }
 
