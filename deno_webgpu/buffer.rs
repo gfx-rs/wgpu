@@ -203,6 +203,14 @@ impl GPUBuffer {
       );
     }
 
+    // Per specification we should have deferred promise resolution here
+    // (all microtasks should resolve before it).
+    // Yield does not guarantee that other tasks are executed before it,
+    // but it works in practice.
+    // Ideally, we would be polling the device as part of executor
+    // and just resolve promise directly in callback.
+    tokio::task::yield_now().await;
+
     let done = Rc::new(RefCell::new(false));
     let done_ = done.clone();
     let device_poll_fut = async move {
