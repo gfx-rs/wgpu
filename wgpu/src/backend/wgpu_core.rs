@@ -1826,7 +1826,7 @@ impl dispatch::BufferInterface for CoreBuffer {
             range.start,
             Some(range.end - range.start),
             Some(Box::new(|status| {
-                let res = status.map_err(|_| crate::BufferAsyncError);
+                let res = status.map(|_| ()).map_err(|_| crate::BufferAsyncError);
                 callback(res);
             })),
         );
