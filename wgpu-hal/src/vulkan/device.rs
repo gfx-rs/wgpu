@@ -2350,6 +2350,13 @@ impl crate::Device for super::Device {
         self.counters.compute_pipelines.sub(1);
     }
 
+    unsafe fn get_compute_pipeline_subgroup_size(
+        &self,
+        _pipeline: &<Self::A as crate::Api>::ComputePipeline,
+    ) -> Option<u32> {
+        None
+    }
+
     unsafe fn create_ray_tracing_pipeline(
         &self,
         desc: &crate::RayTracingPipelineDescriptor<
