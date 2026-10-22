@@ -140,6 +140,31 @@ impl<W: Write> super::Writer<'_, W> {
         writeln!(self.out)?;
         Ok(())
     }
+    /// Writes the helper that returns the largest `t` that a new hit may have.
+    pub(super) fn write_current_t_max_function(&mut self, module: &crate::Module) -> BackendResult {
+        write!(self.out, "float GetCurrentTMax(")?;
+        self.write_value_type(
+            module,
+            &TypeInner::RayQuery {
+                vertex_return: false,
+            },
+        )?;
+        write!(self.out, " rq, ")?;
+        self.write_value_type(module, &TypeInner::Scalar(crate::Scalar::U32))?;
+        writeln!(self.out, " rq_tracker) {{")?;
+        if self.options.ray_query_initialization_tracking {
+            write!(self.out, "    if (!")?;
+            self.write_contains_flags(
+                "rq_tracker",
+                crate::back::RayQueryPoint::INITIALIZED.bits(),
+            )?;
+            writeln!(self.out, ") {{ return 0.0; }}")?;
+        }
+        writeln!(self.out, "    return rq.CommittedRayT();")?;
+        writeln!(self.out, "}}")?;
+        writeln!(self.out)?;
+        Ok(())
+    }
     pub(super) fn write_candidate_intersection_function(
         &mut self,
         module: &crate::Module,
