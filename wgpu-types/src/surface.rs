@@ -416,29 +416,29 @@ pub enum SurfaceColorSpace {
     ///   space.
     ExtendedDisplayP3 = 7,
 
-    /// Application-defined interpretation of the surface's stored color values.
-    /// The application is responsible for matching the window system's expected
-    /// encoding and color space. Rendering to an `*Srgb` texture view still
-    /// applies hardware sRGB encoding.
+    /// Presentation without a predefined color space.
     ///
-    /// This corresponds to Vulkan's `VK_COLOR_SPACE_PASS_THROUGH_EXT`.
+    /// The application must ensure that the surface's stored color values match
+    /// the encoding and color space expected by the window system. Rendering to
+    /// an `*Srgb` texture view still applies hardware sRGB encoding.
+    /// [`Auto`](Self::Auto) never selects this color space.
     ///
-    /// On Wayland, this disables color management by Vulkan's window-system
-    /// integration, allowing the application to describe the surface itself.
-    /// Support for this color space does not guarantee that the compositor
-    /// exposes color management.
+    /// This maps to [`VK_COLOR_SPACE_PASS_THROUGH_EXT`] on Vulkan and a `nil`
+    /// [`CAMetalLayer.colorspace`] on Metal.
     ///
-    /// Configure [`PassThrough`](Self::PassThrough) before creating an
-    /// application-owned `wp_color_management_surface_v1`. Destroy that object
-    /// before configuring another color space to avoid a fatal `surface_exists`
-    /// protocol error.
+    /// On Metal, this disables color matching and extended dynamic range content.
     ///
-    /// On Metal, this sets [`CAMetalLayer.colorspace`] to `nil`, disabling color
-    /// matching, and disables extended dynamic range content.
-    ///
-    /// [`CAMetalLayer.colorspace`]: https://developer.apple.com/documentation/quartzcore/cametallayer/colorspace
+    /// On Vulkan with Wayland, this lets the application manage surface color,
+    /// if supported by the compositor. Configure `PassThrough` before creating
+    /// an application-owned `wp_color_management_surface_v1`, and destroy that
+    /// object before configuring another color space. Otherwise, it can conflict
+    /// with Vulkan's own color-management object and cause a fatal
+    /// `surface_exists` protocol error.
     ///
     /// * **Supported on**: Vulkan (where the driver exposes it), Metal.
+    ///
+    /// [`VK_COLOR_SPACE_PASS_THROUGH_EXT`]: https://registry.khronos.org/vulkan/specs/latest/man/html/VkColorSpaceKHR.html
+    /// [`CAMetalLayer.colorspace`]: https://developer.apple.com/documentation/quartzcore/cametallayer/colorspace
     PassThrough = 8,
 }
 
