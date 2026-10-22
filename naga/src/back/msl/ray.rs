@@ -24,8 +24,20 @@ pub(super) fn metal_intersector_ty() -> String {
 }
 
 pub(super) const INTERSECTION_FUNCTION_NAME: &str = "ray_query_get_intersection";
+/// Name of the helper that returns the largest `t` a new hit may have.
+pub(super) const CURRENT_T_MAX_FUNCTION_NAME: &str = "ray_query_get_current_t_max";
 pub(crate) const RAY_QUERY_TRACKER_VARIABLE_PREFIX: &str = "naga_query_init_tracker_for_";
 pub(crate) const RAY_QUERY_T_MAX_TRACKER_VARIABLE_PREFIX: &str = "naga_query_tmax_tracker_for_";
+
+/// Returns whether `function` reads the current `t` max of a ray query.
+pub(super) fn function_reads_current_t_max(function: &crate::Function) -> bool {
+    function.expressions.iter().any(|(_, expression)| {
+        matches!(
+            *expression,
+            crate::Expression::RayQueryGetCurrentTMax { .. }
+        )
+    })
+}
 
 impl<W: Write> Writer<W> {
     fn write_not_finite(&mut self, expr: &str) -> BackendResult {
@@ -44,6 +56,55 @@ impl<W: Write> Writer<W> {
 
     fn write_contains_flags(&mut self, expr: &str, flags: u32) -> BackendResult {
         write!(self.out, "(({expr} & {flags}) == {flags})")?;
+        Ok(())
+    }
+
+    /// Writes the helper that returns the largest `t` that a new hit may have.
+    pub(super) fn write_rq_get_current_t_max_function(
+        &mut self,
+        options: &super::Options,
+    ) -> BackendResult {
+        if !self
+            .wrapped_functions
+            .insert(WrappedFunction::RayQueryGetCurrentTMax)
+        {
+            return Ok(());
+        }
+
+        let base_level = back::Level(1);
+        write!(
+            self.out,
+            "float {CURRENT_T_MAX_FUNCTION_NAME}({} intersector",
+            metal_intersector_ty()
+        )?;
+        if options.ray_query_initialization_tracking {
+            write!(self.out, ", uint intersector_tracker")?;
+        }
+        writeln!(self.out, ", float t_max) {{")?;
+
+        if options.ray_query_initialization_tracking {
+            write!(self.out, "{base_level}if (!")?;
+            self.write_contains_flags(
+                "intersector_tracker",
+                back::RayQueryPoint::INITIALIZED.bits(),
+            )?;
+            writeln!(self.out, ") {{")?;
+            writeln!(self.out, "{base_level}{INDENT}return 0.0;")?;
+            writeln!(self.out, "{base_level}}}")?;
+        }
+
+        writeln!(
+            self.out,
+            "{base_level}if (intersector.get_committed_intersection_type() != {RT_NAMESPACE}::intersection_type::none) {{"
+        )?;
+        writeln!(
+            self.out,
+            "{base_level}{INDENT}return intersector.get_committed_distance();"
+        )?;
+        writeln!(self.out, "{base_level}}}")?;
+        writeln!(self.out, "{base_level}return t_max;")?;
+        writeln!(self.out, "}}")?;
+        writeln!(self.out)?;
         Ok(())
     }
 
@@ -380,6 +441,11 @@ impl<W: Write> Writer<W> {
                         "{init_level}{tmax_tracker_expr_name} = desc.tmax;"
                     )?;
                     writeln!(self.out, "{inner_level}}}")?;
+                } else if function_reads_current_t_max(context.expression.function) {
+                    writeln!(
+                        self.out,
+                        "{init_level}{tmax_tracker_expr_name} = desc.tmax;"
+                    )?;
                 }
                 writeln!(self.out, "{level}}}")?;
             }
