@@ -45,6 +45,10 @@ Foo ZeroValueFoo() {
     return (Foo)0;
 }
 
+float2 ZeroValuefloat2() {
+    return (float2)0;
+}
+
 static const float3 const1_ = (0.0).xxx;
 static const float2x2 const3_ = float2x2(float2(0.0, 1.0), float2(2.0, 3.0));
 static const float2x2 const4_[1] = Constructarray1_float2x2_(float2x2(float2(0.0, 1.0), float2(2.0, 3.0)));
@@ -57,6 +61,12 @@ static const float2x2 cz5_ = ZeroValuefloat2x2();
 static const Foo cz6_[3] = ZeroValuearray3_Foo_();
 static const Foo cz7_ = ZeroValueFoo();
 static const uint2 cp1_ = (0u).xx;
+static const float4 ccz0_ = float4(ZeroValuefloat2(), 1.0, 1.0);
+static const float4 ccz1_ = float4((1.0).xx, 0.0, 1.0);
+static const float4 ccz2_ = float4(float2(1.0, 0.0), 0.0, 1.0);
+static const float2x2 ccm0_ = float2x2(ZeroValuefloat2(), float2(1.0, 2.0));
+static const float2x2 ccm1_ = float2x2((1.0).xx, ZeroValuefloat2());
+static const float4 ccn0_ = float4(float3(ZeroValuefloat2(), 3.0), 4.0);
 
 Foo ConstructFoo(float4 arg0, int arg1) {
     Foo ret = (Foo)0;
@@ -88,6 +98,12 @@ void main()
     uint2 cit0_ = (0u).xx;
     float2x2 cit1_ = float2x2((0.0).xx, (0.0).xx);
     int cit2_[4] = Constructarray4_int_(int(0), int(1), int(2), int(3));
+    float4 ccz3_ = float4(ZeroValuefloat2(), 1.0, 1.0);
+    float4 ccz4_ = float4((1.0).xx, 0.0, 1.0);
+    float4 ccz5_ = float4(float2(1.0, 0.0), 0.0, 1.0);
+    float2x2 ccm2_ = float2x2(ZeroValuefloat2(), float2(1.0, 2.0));
+    float2x2 ccm3_ = float2x2((1.0).xx, ZeroValuefloat2());
+    float4 ccn1_ = float4(float3(ZeroValuefloat2(), 3.0), 4.0);
     uint2 ic4_ = uint2(0u, 0u);
     float2x3 ic5_ = float2x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0));
     return;

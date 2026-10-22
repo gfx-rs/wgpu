@@ -13,8 +13,10 @@ use super::{
     ResultMember, WrappedFunction, Writer, WriterFlags,
 };
 use crate::{
-    arena::Handle, back::spv::helpers::is_uniform_matcx2_struct_member_access,
-    proc::index::GuardedIndex, Statement,
+    arena::Handle,
+    back::spv::{helpers::is_uniform_matcx2_struct_member_access, writer::ConstExprContext},
+    proc::index::GuardedIndex,
+    Statement,
 };
 
 fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
@@ -803,41 +805,37 @@ impl BlockContext<'_> {
 
         let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty);
         let id = match self.ir_function.expressions[expr_handle] {
-            crate::Expression::Literal(literal) => self.writer.get_constant_scalar(literal),
-            crate::Expression::Constant(handle) => {
-                let init = self.ir_module.constants[handle].init;
-                self.writer.constant_ids[init]
-            }
-            crate::Expression::Override(_) => return Err(Error::Override),
-            crate::Expression::ZeroValue(_) => self.writer.get_constant_null(result_type_id),
-            crate::Expression::Compose { ty, ref components } => {
-                self.temp_list.clear();
-                if self.expression_constness.is_const(expr_handle) {
-                    self.temp_list.extend(
-                        crate::proc::flatten_compose(
-                            ty,
-                            components,
-                            &self.ir_function.expressions,
-                            &self.ir_module.types,
-                        )
-                        .map(|component| self.cached[component]),
-                    );
-                    self.writer
-                        .get_constant_composite(LookupType::Handle(ty), &self.temp_list)
-                } else {
-                    self.temp_list
-                        .extend(components.iter().map(|&component| self.cached[component]));
-
-                    let id = self.gen_id();
-                    block.body.push(Instruction::composite_construct(
-                        result_type_id,
-                        id,
-                        &self.temp_list,
-                    ));
-                    id
+            crate::Expression::Literal(_) |
+            crate::Expression::Constant(_) |
+            crate::Expression::ZeroValue(_) |
+            crate::Expression::Splat { .. } |
+            crate::Expression::Compose { .. } if self.expression_constness.is_const(expr_handle) => {
+                ConstExprContext::Local {
+                    writer: self.writer,
+                    cached: &self.cached,
+                    fun_info: self.fun_info,
+                    module: self.ir_module,
+                    expressions: &self.ir_function.expressions,
                 }
+                .write_constant_expr(expr_handle)?
             }
-            crate::Expression::Splat { size, value } => {
+            crate::Expression::Literal(_) |
+            crate::Expression::Constant(_) |
+            crate::Expression::ZeroValue(_) /* non-const */ => unreachable!(),
+            crate::Expression::Compose { ty: _, ref components } /* non-const */ => {
+                self.temp_list.clear();
+                self.temp_list
+                    .extend(components.iter().map(|&component| self.cached[component]));
+
+                let id = self.gen_id();
+                block.body.push(Instruction::composite_construct(
+                    result_type_id,
+                    id,
+                    &self.temp_list,
+                ));
+                id
+            }
+            crate::Expression::Splat { size, value } /* non-const */ => {
                 let value_id = self.cached[value];
                 let components = &[value_id; 4][..size as usize];
 
@@ -856,6 +854,7 @@ impl BlockContext<'_> {
                     id
                 }
             }
+            crate::Expression::Override(_) => return Err(Error::Override),
             crate::Expression::Access { base, index } => {
                 let base_ty_inner = self.fun_info[base].ty.inner_with(&self.ir_module.types);
                 match *base_ty_inner {

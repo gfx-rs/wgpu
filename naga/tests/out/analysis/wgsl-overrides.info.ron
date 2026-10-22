@@ -3,6 +3,8 @@
         ("DATA | SIZED | COPY | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
         ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
         ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
     ],
     functions: [],
     entry_points: [
@@ -18,6 +20,8 @@
             global_uses: [
                 ("READ"),
                 ("WRITE"),
+                ("READ"),
+                ("READ"),
             ],
             expressions: [
                 (
@@ -163,6 +167,48 @@
                 ),
                 (
                     uniformity: (
+                        non_uniform_result: Some(13),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 3,
+                        space: Private,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(13),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(3),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(15),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(3),
+                    ty: Value(Pointer(
+                        base: 3,
+                        space: Private,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(15),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(3),
+                ),
+                (
+                    uniformity: (
                         non_uniform_result: None,
                         requirements: (""),
                     ),
@@ -239,5 +285,28 @@
             kind: Float,
             width: 4,
         ))),
+        Handle(1),
+        Value(Scalar((
+            kind: Float,
+            width: 4,
+        ))),
+        Handle(4),
+        Value(Scalar((
+            kind: Float,
+            width: 4,
+        ))),
+        Value(Scalar((
+            kind: Float,
+            width: 4,
+        ))),
+        Handle(4),
+        Handle(3),
+        Handle(4),
+        Handle(1),
+        Value(Scalar((
+            kind: Float,
+            width: 4,
+        ))),
+        Handle(3),
     ],
 )
