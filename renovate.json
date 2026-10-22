@@ -10,7 +10,7 @@
   "lockFileMaintenance": {
     "enabled": true,
     "recreateWhen": "always",
-    "rebaseWhen": "behind-base-branch",
+    "rebaseWhen": "conflicted",
     "branchTopic": "Cargo.lock update",
     "commitMessageAction": "Update Cargo.lock",
     "schedule": ["before 4am on monday"],
