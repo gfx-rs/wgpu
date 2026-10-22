@@ -39,15 +39,12 @@ pub enum BufferError {
   #[class(generic)]
   #[error(transparent)]
   Canceled(#[from] oneshot::Canceled),
-  #[class("DOMExceptionOperationError")]
-  #[error(transparent)]
-  Access(wgpu_core::resource::BufferAccessError),
   #[class("DOMExceptionAbortError")]
   #[error("{0}")]
-  Aborted(&'static str),
+  Aborted(String),
   #[class("DOMExceptionOperationError")]
   #[error("{0}")]
-  Operation(&'static str),
+  Operation(String),
   #[class(inherit)]
   #[error(transparent)]
   Other(#[from] JsErrorBox),
@@ -56,10 +53,13 @@ pub enum BufferError {
 impl From<wgpu_core::resource::BufferAccessError> for BufferError {
   fn from(err: wgpu_core::resource::BufferAccessError) -> Self {
     match err {
-      wgpu_core::resource::BufferAccessError::Device(
+      e @ wgpu_core::resource::BufferAccessError::Device(
         wgpu_core::device::DeviceError::Lost,
-      ) => BufferError::Aborted("Device lost"),
-      err => BufferError::Access(err),
+      ) => BufferError::Aborted(e.to_string()),
+      e @ wgpu_core::resource::BufferAccessError::MapAborted => {
+        BufferError::Aborted(e.to_string())
+      }
+      e => BufferError::Operation(e.to_string()),
     }
   }
 }
@@ -168,7 +168,7 @@ impl GPUBuffer {
     let write_mode = (mode & 0x0002) == 0x0002;
     if (read_mode && write_mode) || (!read_mode && !write_mode) {
       return Err(BufferError::Operation(
-        "exactly one of READ or WRITE map mode must be set",
+        "exactly one of READ or WRITE map mode must be set".to_string(),
       ));
     }
 
@@ -253,30 +253,34 @@ impl GPUBuffer {
       views,
     } = &mut *self.map_state.borrow_mut()
     else {
-      return Err(BufferError::Operation("Buffer is not mapped"));
+      return Err(BufferError::Operation("Buffer is not mapped".to_string()));
     };
 
     if !(offset.is_multiple_of(8)) {
-      return Err(BufferError::Operation("Offset must be a multiple of 8"));
+      return Err(BufferError::Operation(
+        "Offset must be a multiple of 8".to_string(),
+      ));
     }
 
     if !(size.is_multiple_of(4)) {
-      return Err(BufferError::Operation("Size must be a multiple of 4"));
+      return Err(BufferError::Operation(
+        "Size must be a multiple of 4".to_string(),
+      ));
     }
 
     if !(offset >= range.start) {
-      return Err(BufferError::Operation("Offset is out of range"));
+      return Err(BufferError::Operation("Offset is out of range".to_string()));
     }
 
     if !(offset + size <= range.end) {
-      return Err(BufferError::Operation("Size is out of range"));
+      return Err(BufferError::Operation("Size is out of range".to_string()));
     }
 
     let range = offset..(offset + size);
 
     if views.iter().any(|view| range_overlap(&view.range, &range)) {
       return Err(BufferError::Operation(
-        "Overlapping mapped ranges are not allowed",
+        "Overlapping mapped ranges are not allowed".to_string(),
       ));
     }
 
