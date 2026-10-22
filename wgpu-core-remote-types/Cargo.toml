@@ -14,6 +14,9 @@ license.workspace = true
 # See the repo README for more information on MSRV policy.
 rust-version = "1.87"
 
+[lints]
+workspace = true
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]

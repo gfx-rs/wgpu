@@ -253,60 +253,64 @@ impl Drop for LockStateGuard {
 /// Return the `Option<HeldLock>` state that must be restored when this lock is
 /// released.
 fn acquire(new_rank: LockRank, location: &'static Location<'static>) -> Option<HeldLock> {
-    LOCK_STATE.with_borrow_mut(|state| match *state {
-        ThreadState::Disabled => None,
-        ThreadState::Initial => {
-            let Ok(dir) = std::env::var("WGPU_CORE_LOCK_OBSERVE_DIR") else {
-                *state = ThreadState::Disabled;
-                return None;
-            };
+    let result = LOCK_STATE.try_with(|refcell| {
+        let state = &mut *refcell.borrow_mut();
+        match *state {
+            ThreadState::Disabled => None,
+            ThreadState::Initial => {
+                let Ok(dir) = std::env::var("WGPU_CORE_LOCK_OBSERVE_DIR") else {
+                    *state = ThreadState::Disabled;
+                    return None;
+                };
 
-            // Create the observation log file.
-            let mut log = ObservationLog::create(dir)
-                .expect("Failed to open lock observation file (does the dir exist?)");
+                // Create the observation log file.
+                let mut log = ObservationLog::create(dir)
+                    .expect("Failed to open lock observation file (does the dir exist?)");
 
-            // Log the full set of lock ranks, so that the analysis can even see
-            // locks that are only acquired in isolation.
-            for rank in LockRankSet::all().iter() {
-                log.write_rank(rank);
+                // Log the full set of lock ranks, so that the analysis can even see
+                // locks that are only acquired in isolation.
+                for rank in LockRankSet::all().iter() {
+                    log.write_rank(rank);
+                }
+
+                // Update our state to reflect that we are logging acquisitions, and
+                // that we have acquired this lock.
+                *state = ThreadState::Enabled {
+                    held_lock: Some(HeldLock {
+                        rank: new_rank,
+                        location,
+                    }),
+                    log,
+                };
+
+                // Since this is the first acquisition on this thread, we know that
+                // there is no prior lock held, and thus nothing to log yet.
+                None
             }
+            ThreadState::Enabled {
+                ref mut held_lock,
+                ref mut log,
+            } => {
+                if let Some(ref held_lock) = held_lock {
+                    log.write_acquisition(held_lock, new_rank, location);
+                }
 
-            // Update our state to reflect that we are logging acquisitions, and
-            // that we have acquired this lock.
-            *state = ThreadState::Enabled {
-                held_lock: Some(HeldLock {
+                held_lock.replace(HeldLock {
                     rank: new_rank,
                     location,
-                }),
-                log,
-            };
-
-            // Since this is the first acquisition on this thread, we know that
-            // there is no prior lock held, and thus nothing to log yet.
-            None
-        }
-        ThreadState::Enabled {
-            ref mut held_lock,
-            ref mut log,
-        } => {
-            if let Some(ref held_lock) = held_lock {
-                log.write_acquisition(held_lock, new_rank, location);
+                })
             }
-
-            held_lock.replace(HeldLock {
-                rank: new_rank,
-                location,
-            })
         }
-    })
+    });
+    result.unwrap_or(None)
 }
 
 /// Record the release of a lock whose saved state was `saved`.
 fn release(saved: Option<HeldLock>) {
-    LOCK_STATE.with_borrow_mut(|state| {
+    let _ = LOCK_STATE.try_with(|refcell| {
         if let ThreadState::Enabled {
             ref mut held_lock, ..
-        } = *state
+        } = *refcell.borrow_mut()
         {
             *held_lock = saved;
         }
