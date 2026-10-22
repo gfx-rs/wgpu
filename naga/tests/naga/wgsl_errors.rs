@@ -6344,3 +6344,57 @@ fn ray_query_let() {
         "Ray query with initialize",
     );
 }
+
+/// Checks that `rayQueryGetCurrentTMax` accepts a ray query pointer and returns an `f32`.
+#[test]
+fn ray_query_current_t_max() {
+    check_success(
+        "
+            enable wgpu_ray_query;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                var rq: ray_query;
+                let t_max: f32 = rayQueryGetCurrentTMax(&rq);
+            }
+        ",
+    );
+}
+
+/// Checks that `rayQueryGetCurrentTMax` rejects arguments that are not pointers to a ray query.
+#[test]
+fn ray_query_current_t_max_invalid_pointer() {
+    for argument in ["&value", "1.0"] {
+        check_error_matches(
+            &format!(
+                "
+                    enable wgpu_ray_query;
+
+                    @compute @workgroup_size(1)
+                    fn main() {{
+                        var value: f32;
+                        let t_max = rayQueryGetCurrentTMax({argument});
+                    }}
+                "
+            ),
+            "ray query operation is done on a pointer to a non-ray-query",
+        );
+    }
+}
+
+/// Checks that `rayQueryGetCurrentTMax` rejects extra arguments.
+#[test]
+fn ray_query_current_t_max_argument_count() {
+    check_error_matches(
+        "
+            enable wgpu_ray_query;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                var rq: ray_query;
+                let t_max = rayQueryGetCurrentTMax(&rq, 1.0);
+            }
+        ",
+        "wrong number of arguments: expected 1, found 2",
+    );
+}

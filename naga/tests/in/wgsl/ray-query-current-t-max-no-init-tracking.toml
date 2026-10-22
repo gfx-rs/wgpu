@@ -1,0 +1,19 @@
+capabilities = "RAY_QUERY"
+targets = "SPIRV | METAL | HLSL"
+
+[msl]
+fake_missing_bindings = true
+lang_version = [2, 4]
+spirv_cross_compatibility = false
+zero_initialize_workgroup_memory = false
+ray_query_initialization_tracking = false
+
+[hlsl]
+shader_model = "V6_5"
+fake_missing_bindings = true
+zero_initialize_workgroup_memory = true
+ray_query_initialization_tracking = false
+
+[spv]
+version = [1, 4]
+ray_query_initialization_tracking = false
