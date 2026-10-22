@@ -21,6 +21,8 @@ mod memory_init;
 mod pass;
 mod query;
 mod ray_tracing;
+mod ray_tracing_pass;
+mod ray_tracing_pass_commands;
 mod render;
 mod render_command;
 mod timestamp_writes;
@@ -55,6 +57,11 @@ pub use self::{
     draw::{DrawError, Rect, RenderCommandError},
     encoder_command::{ArcCommand, ArcReferences, Command, ReferenceType},
     query::{QueryError, QueryUseError, ResolveError, SimplifiedQueryType},
+    ray_tracing_pass::{
+        RayTracingBasePass, RayTracingPass, RayTracingPassDescriptor, RayTracingPassError,
+        RayTracingPassErrorInner, TraceRayError,
+    },
+    ray_tracing_pass_commands::ArcRayTracingCommand,
     render::{
         AttachmentError, AttachmentErrorLocation, ColorAttachmentError, ColorAttachments, LoadOp,
         PassChannel, RenderBasePass, RenderPass, RenderPassColorAttachment,
@@ -80,7 +87,10 @@ pub(crate) use self::{
 pub(crate) use allocator::CommandAllocator;
 
 /// cbindgen:ignore
-pub use self::{compute_command::ComputeCommand, render_command::RenderCommand};
+pub use self::{
+    compute_command::ComputeCommand, ray_tracing_pass_commands::RayTracingCommand,
+    render_command::RenderCommand,
+};
 
 pub use timestamp_writes::PassTimestampWrites;
 
@@ -1114,6 +1124,7 @@ impl CommandEncoder {
                 ArcCommand::RunRenderPass { .. }
                     | ArcCommand::RunComputePass { .. }
                     | ArcCommand::ResolveQuerySet { .. }
+                    | ArcCommand::RunRayTracingPass { .. }
             ) {
                 // Compute passes and render passes can accept either an
                 // open or closed encoder. Resolving query sets needs to
@@ -1203,6 +1214,22 @@ impl CommandEncoder {
                             destination_offset,
                         )?;
                     }
+                    ArcCommand::RunRayTracingPass { pass } => {
+                        api_log!(
+                            "Begin encoding ray tracing pass with '{}' label",
+                            pass.label.as_deref().unwrap_or("")
+                        );
+                        let res = ray_tracing_pass::encode_ray_tracing_pass(&mut state, pass);
+                        match res.as_ref() {
+                            Err(err) => {
+                                api_log!("Finished encoding ray tracing pass ({err:?})")
+                            }
+                            Ok(_) => {
+                                api_log!("Finished encoding ray tracing pass (success)")
+                            }
+                        }
+                        res?;
+                    }
                     _ => unreachable!(),
                 }
             } else {
@@ -1287,7 +1314,8 @@ impl CommandEncoder {
                     }
                     ArcCommand::RunComputePass { .. }
                     | ArcCommand::RunRenderPass { .. }
-                    | ArcCommand::ResolveQuerySet { .. } => {
+                    | ArcCommand::ResolveQuerySet { .. }
+                    | ArcCommand::RunRayTracingPass { .. } => {
                         unreachable!()
                     }
                 }
@@ -1659,6 +1687,8 @@ pub enum CommandEncoderError {
     ComputePass(#[from] ComputePassError),
     #[error(transparent)]
     RenderPass(#[from] RenderPassError),
+    #[error(transparent)]
+    RayTracingPass(#[from] RayTracingPassError),
 }
 
 impl From<InvalidOrDestroyedResourceError> for CommandEncoderError {
@@ -1713,6 +1743,7 @@ impl WebGpuError for CommandEncoderError {
             Self::ResourceUsage(e) => e.webgpu_error_type(),
             Self::ComputePass(e) => e.webgpu_error_type(),
             Self::RenderPass(e) => e.webgpu_error_type(),
+            Self::RayTracingPass(e) => e.webgpu_error_type(),
         }
     }
 }
@@ -2020,6 +2051,8 @@ pub enum PassErrorScope {
     SetPipelineRender,
     #[error("In a set_pipeline command")]
     SetPipelineCompute,
+    #[error("In a set_pipeline command")]
+    SetPipelineRayTracing,
     #[error("In a set_immediates command")]
     SetImmediate,
     #[error("In a set_vertex_buffer command")]
@@ -2061,6 +2094,8 @@ pub enum PassErrorScope {
     PopDebugGroup,
     #[error("In a insert_debug_marker command")]
     InsertDebugMarker,
+    #[error("In a trace rays command")]
+    TraceRays,
 }
 
 /// Variant of `EncoderStateError` that includes the pass scope.
