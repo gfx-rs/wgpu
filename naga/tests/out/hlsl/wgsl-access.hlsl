@@ -6,18 +6,6 @@ float2 __get_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx) {
     default: { return (float2)0; }
     }
 }
-void __set_col_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, float2 value) {
-    switch(idx) {
-    case 0: { mat._0 = value; break; }
-    case 1: { mat._1 = value; break; }
-    }
-}
-void __set_el_of_mat2x2_f32(__mat2x2_f32 mat, uint idx, uint vec_idx, float value) {
-    switch(idx) {
-    case 0: { mat._0[vec_idx] = value; break; }
-    case 1: { mat._1[vec_idx] = value; break; }
-    }
-}
 
 typedef struct { float2 _0; float2 _1; float2 _2; float2 _3; } __mat4x2_f32;
 float2 __get_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx) {
@@ -27,22 +15,6 @@ float2 __get_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx) {
     case 2: { return mat._2; }
     case 3: { return mat._3; }
     default: { return (float2)0; }
-    }
-}
-void __set_col_of_mat4x2_f32(__mat4x2_f32 mat, uint idx, float2 value) {
-    switch(idx) {
-    case 0: { mat._0 = value; break; }
-    case 1: { mat._1 = value; break; }
-    case 2: { mat._2 = value; break; }
-    case 3: { mat._3 = value; break; }
-    }
-}
-void __set_el_of_mat4x2_f32(__mat4x2_f32 mat, uint idx, uint vec_idx, float value) {
-    switch(idx) {
-    case 0: { mat._0[vec_idx] = value; break; }
-    case 1: { mat._1[vec_idx] = value; break; }
-    case 2: { mat._2[vec_idx] = value; break; }
-    case 3: { mat._3[vec_idx] = value; break; }
     }
 }
 
@@ -111,28 +83,6 @@ float3x2 GetMatmOnBaz(Baz obj) {
     return float3x2(obj.m_0, obj.m_1, obj.m_2);
 }
 
-void SetMatmOnBaz(Baz obj, float3x2 mat) {
-    obj.m_0 = mat[0];
-    obj.m_1 = mat[1];
-    obj.m_2 = mat[2];
-}
-
-void SetMatVecmOnBaz(Baz obj, float2 vec, uint mat_idx) {
-    switch(mat_idx) {
-    case 0: { obj.m_0 = vec; break; }
-    case 1: { obj.m_1 = vec; break; }
-    case 2: { obj.m_2 = vec; break; }
-    }
-}
-
-void SetMatScalarmOnBaz(Baz obj, float scalar, uint mat_idx, uint vec_idx) {
-    switch(mat_idx) {
-    case 0: { obj.m_0[vec_idx] = scalar; break; }
-    case 1: { obj.m_1[vec_idx] = scalar; break; }
-    case 2: { obj.m_2[vec_idx] = scalar; break; }
-    }
-}
-
 void test_matrix_within_struct_accesses()
 {
     int idx = int(1);
@@ -154,18 +104,35 @@ void test_matrix_within_struct_accesses()
     float l6_ = GetMatmOnBaz(baz)[_e36][_e38];
     int _e51 = idx;
     idx = asint(asuint(_e51) + asuint(int(1)));
-    SetMatmOnBaz(t, float3x2((6.0).xx, (5.0).xx, (4.0).xx));
+    {
+        float3x2 mat = float3x2((6.0).xx, (5.0).xx, (4.0).xx);
+        t.m_0 = mat[0];
+        t.m_1 = mat[1];
+        t.m_2 = mat[2];
+    }
     t.m_0 = (9.0).xx;
     int _e66 = idx;
-    SetMatVecmOnBaz(t, (90.0).xx, _e66);
+    switch(_e66) {
+    case 0: { t.m_0 = (90.0).xx; break; }
+    case 1: { t.m_1 = (90.0).xx; break; }
+    case 2: { t.m_2 = (90.0).xx; break; }
+    }
     t.m_0[1] = 10.0;
     int _e76 = idx;
     t.m_0[_e76] = 20.0;
     int _e80 = idx;
-    SetMatScalarmOnBaz(t, 30.0, _e80, 1);
+    switch(_e80) {
+    case 0: { t.m_0[1] = 30.0; break; }
+    case 1: { t.m_1[1] = 30.0; break; }
+    case 2: { t.m_2[1] = 30.0; break; }
+    }
     int _e85 = idx;
     int _e87 = idx;
-    SetMatScalarmOnBaz(t, 40.0, _e85, _e87);
+    switch(_e85) {
+    case 0: { t.m_0[_e87] = 40.0; break; }
+    case 1: { t.m_1[_e87] = 40.0; break; }
+    case 2: { t.m_2[_e87] = 40.0; break; }
+    }
     return;
 }
 
@@ -206,15 +173,30 @@ void test_matrix_within_array_within_struct_accesses()
     t_1.am[0] = (__mat4x2_f32)float4x2((8.0).xx, (7.0).xx, (6.0).xx, (5.0).xx);
     t_1.am[0]._0 = (9.0).xx;
     int _e77 = idx_1;
-    __set_col_of_mat4x2_f32(t_1.am[0], _e77, (90.0).xx);
+    switch(_e77) {
+    case 0: { t_1.am[0]._0 = (90.0).xx; break; }
+    case 1: { t_1.am[0]._1 = (90.0).xx; break; }
+    case 2: { t_1.am[0]._2 = (90.0).xx; break; }
+    case 3: { t_1.am[0]._3 = (90.0).xx; break; }
+    }
     t_1.am[0]._0.y = 10.0;
     int _e89 = idx_1;
     t_1.am[0]._0[min(uint(_e89), 1u)] = 20.0;
     int _e94 = idx_1;
-    __set_el_of_mat4x2_f32(t_1.am[0], _e94, 1, 30.0);
+    switch(_e94) {
+    case 0: { t_1.am[0]._0[1] = 30.0; break; }
+    case 1: { t_1.am[0]._1[1] = 30.0; break; }
+    case 2: { t_1.am[0]._2[1] = 30.0; break; }
+    case 3: { t_1.am[0]._3[1] = 30.0; break; }
+    }
     int _e100 = idx_1;
     int _e102 = idx_1;
-    __set_el_of_mat4x2_f32(t_1.am[0], _e100, _e102, 40.0);
+    switch(_e100) {
+    case 0: { t_1.am[0]._0[_e102] = 40.0; break; }
+    case 1: { t_1.am[0]._1[_e102] = 40.0; break; }
+    case 2: { t_1.am[0]._2[_e102] = 40.0; break; }
+    case 3: { t_1.am[0]._3[_e102] = 40.0; break; }
+    }
     return;
 }
 

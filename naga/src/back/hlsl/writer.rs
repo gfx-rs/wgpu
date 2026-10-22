@@ -53,9 +53,26 @@ pub(crate) const RAY_QUERY_TRACKER_VARIABLE_PREFIX: &str = "naga_query_init_trac
 /// Prefix for variables in a naga statement
 pub(crate) const INTERNAL_PREFIX: &str = "naga_";
 
+#[derive(Clone, Copy)]
 enum Index {
     Expression(Handle<crate::Expression>),
     Static(u32),
+}
+
+/// A store to a dynamically indexed column (or an element of it) of a
+/// `matCx2` that is held as separate `vec2` fields.
+///
+/// See [`super::Writer::write_mat_cx2_column_store`].
+struct MatCx2ColumnStore<'a> {
+    /// The struct holding the columns.
+    base: Handle<crate::Expression>,
+    /// What to write after `base` to name a column, before its number:
+    /// `.m_` for a struct member `m`, `._` for a `__matCx2` struct.
+    field_prefix: &'a str,
+    columns: crate::VectorSize,
+    vec_index: Handle<crate::Expression>,
+    scalar: Option<Index>,
+    value: Handle<crate::Expression>,
 }
 
 pub(super) struct EpStructMember {
@@ -2163,6 +2180,49 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
+    /// Writes a store to a dynamically indexed column of a `matCx2` held as
+    /// separate `vec2` fields, or to an element of that column, as a `switch`
+    /// over the column index.
+    ///
+    /// Only the selected column is written, so a store to a `var<workgroup>`
+    /// struct doesn't write back the other columns.
+    ///
+    /// The caller has already written the indentation for the first line.
+    fn write_mat_cx2_column_store(
+        &mut self,
+        module: &Module,
+        func_ctx: &back::FunctionCtx<'_>,
+        level: back::Level,
+        store: MatCx2ColumnStore<'_>,
+    ) -> BackendResult {
+        let MatCx2ColumnStore {
+            base,
+            field_prefix,
+            columns,
+            vec_index,
+            scalar,
+            value,
+        } = store;
+        write!(self.out, "switch(")?;
+        self.write_expr(module, vec_index, func_ctx)?;
+        writeln!(self.out, ") {{")?;
+        for i in 0..columns as u8 {
+            write!(self.out, "{level}case {i}: {{ ")?;
+            self.write_expr(module, base, func_ctx)?;
+            write!(self.out, "{field_prefix}{i}")?;
+            if let Some(scalar_index) = scalar {
+                write!(self.out, "[")?;
+                self.write_index(module, scalar_index, func_ctx)?;
+                write!(self.out, "]")?;
+            }
+            write!(self.out, " = ")?;
+            self.write_expr(module, value, func_ctx)?;
+            writeln!(self.out, "; break; }}")?;
+        }
+        writeln!(self.out, "{level}}}")?;
+        Ok(())
+    }
+
     fn write_index(
         &mut self,
         module: &Module,
@@ -2369,7 +2429,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         },
                         Struct {
                             columns: crate::VectorSize,
-                            width: u8,
                             base: Handle<crate::Expression>,
                         },
                     }
@@ -2412,7 +2471,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     if let Some(MatrixType {
                                         columns,
                                         rows: crate::VectorSize::Bi,
-                                        width,
+                                        ..
                                     }) = get_inner_matrix_of_struct_array_member(
                                         module,
                                         matrix_expr,
@@ -2422,7 +2481,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                         Some((
                                             MatrixAccess::Struct {
                                                 columns,
-                                                width,
                                                 base: matrix_expr,
                                             },
                                             vector,
@@ -2463,81 +2521,86 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 self.write_expr(module, value, func_ctx)?;
                                 writeln!(self.out, ";")?;
                             } else {
-                                let access = WrappedStructMatrixAccess { ty, index };
-                                match (&vector, &scalar) {
-                                    (&Some(_), &Some(_)) => {
-                                        self.write_wrapped_struct_matrix_set_scalar_function_name(
-                                            access,
+                                // Write the store inline, touching only the columns
+                                // (or the element) being stored. Going through a helper
+                                // that takes the struct `inout` would copy the whole
+                                // struct back, which races with other invocations
+                                // storing to the same `var<workgroup>` struct.
+                                let field_name =
+                                    self.names[&NameKey::StructMember(ty, index)].clone();
+                                let columns = match module.types[ty].inner {
+                                    TypeInner::Struct { ref members, .. } => {
+                                        match module.types[members[index as usize].ty].inner {
+                                            TypeInner::Matrix { columns, .. } => columns,
+                                            _ => unreachable!(),
+                                        }
+                                    }
+                                    _ => unreachable!(),
+                                };
+                                match vector {
+                                    Some(Index::Expression(vec_index)) => {
+                                        self.write_mat_cx2_column_store(
+                                            module,
+                                            func_ctx,
+                                            level,
+                                            MatCx2ColumnStore {
+                                                base,
+                                                field_prefix: &format!(".{field_name}_"),
+                                                columns,
+                                                vec_index,
+                                                scalar,
+                                                value,
+                                            },
                                         )?;
                                     }
-                                    (&Some(_), &None) => {
-                                        self.write_wrapped_struct_matrix_set_vec_function_name(
-                                            access,
-                                        )?;
-                                    }
-                                    (&None, _) => {
-                                        self.write_wrapped_struct_matrix_set_function_name(access)?;
+                                    Some(Index::Static(_)) => unreachable!(),
+                                    None => {
+                                        // Evaluate the value once, then store it column by
+                                        // column.
+                                        let member_ty = match module.types[ty].inner {
+                                            TypeInner::Struct { ref members, .. } => {
+                                                members[index as usize].ty
+                                            }
+                                            _ => unreachable!(),
+                                        };
+                                        let tmp = self.namer.call("mat");
+                                        writeln!(self.out, "{{")?;
+                                        let inner = level.next();
+                                        write!(self.out, "{inner}")?;
+                                        self.write_type(module, member_ty)?;
+                                        write!(self.out, " {tmp} = ")?;
+                                        self.write_expr(module, value, func_ctx)?;
+                                        writeln!(self.out, ";")?;
+                                        for i in 0..columns as u8 {
+                                            write!(self.out, "{inner}")?;
+                                            self.write_expr(module, base, func_ctx)?;
+                                            writeln!(self.out, ".{field_name}_{i} = {tmp}[{i}];")?;
+                                        }
+                                        writeln!(self.out, "{level}}}")?;
                                     }
                                 }
-
-                                write!(self.out, "(")?;
-                                self.write_expr(module, base, func_ctx)?;
-                                write!(self.out, ", ")?;
-                                self.write_expr(module, value, func_ctx)?;
-
-                                if let Some(Index::Expression(vec_index)) = vector {
-                                    write!(self.out, ", ")?;
-                                    self.write_expr(module, vec_index, func_ctx)?;
-
-                                    if let Some(scalar_index) = scalar {
-                                        write!(self.out, ", ")?;
-                                        self.write_index(module, scalar_index, func_ctx)?;
-                                    }
-                                }
-                                writeln!(self.out, ");")?;
                             }
                         }
                         Some((
-                            MatrixAccess::Struct {
-                                columns,
-                                width,
-                                base,
-                            },
+                            MatrixAccess::Struct { columns, base },
                             Some(Index::Expression(vec_index)),
                             scalar,
                         )) => {
-                            // We handle `Store`s to __matCx2 column vectors and scalar elements via
-                            // the previously injected functions __set_col_of_matCx2 / __set_el_of_matCx2.
-
-                            if scalar.is_some() {
-                                write!(
-                                    self.out,
-                                    "__set_el_of_mat{}x2_f{}",
-                                    columns as u8,
-                                    width * 8
-                                )?;
-                            } else {
-                                write!(
-                                    self.out,
-                                    "__set_col_of_mat{}x2_f{}",
-                                    columns as u8,
-                                    width * 8
-                                )?;
-                            }
-                            write!(self.out, "(")?;
-                            self.write_expr(module, base, func_ctx)?;
-                            write!(self.out, ", ")?;
-                            self.write_expr(module, vec_index, func_ctx)?;
-
-                            if let Some(scalar_index) = scalar {
-                                write!(self.out, ", ")?;
-                                self.write_index(module, scalar_index, func_ctx)?;
-                            }
-
-                            write!(self.out, ", ")?;
-                            self.write_expr(module, value, func_ctx)?;
-
-                            writeln!(self.out, ");")?;
+                            // Store to a column or element of a `__matCx2` (a matCx2 in an
+                            // array in a struct) inline, touching only that column.
+                            self.write_mat_cx2_column_store(
+                                module,
+                                func_ctx,
+                                level,
+                                MatCx2ColumnStore {
+                                    base,
+                                    field_prefix: "._",
+                                    columns,
+                                    vec_index,
+                                    scalar,
+                                    value,
+                                },
+                            )?;
                         }
                         Some((MatrixAccess::Struct { .. }, Some(Index::Static(_)), _))
                         | Some((MatrixAccess::Struct { .. }, None, _))

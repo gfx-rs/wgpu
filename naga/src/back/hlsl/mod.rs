@@ -94,8 +94,33 @@ float3x2 GetMatmOnBaz(Baz obj) {
 }
 ```
 
-We also emit an analogous `Set` function, as well as functions for
-accessing individual columns by dynamic index.
+Stores to such members are written inline, touching only the columns
+being stored. A store of the whole matrix writes each column:
+
+```ignore
+{
+    float3x2 mat = value;
+    t.m_0 = mat[0];
+    t.m_1 = mat[1];
+    t.m_2 = mat[2];
+}
+```
+
+and a store to a column (or an element) with a dynamic index becomes a
+`switch` over the column index:
+
+```ignore
+switch(idx) {
+case 0: { t.m_0 = value; break; }
+case 1: { t.m_1 = value; break; }
+case 2: { t.m_2 = value; break; }
+}
+```
+
+Copying the struct into a helper function and back would lose the store
+when the helper takes it by value, and with `inout` it would write back
+the other members too, racing with other invocations storing to the same
+`var<workgroup>` struct.
 
 ## Sampler Handling
 
