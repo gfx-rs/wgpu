@@ -824,7 +824,11 @@ pub struct ComputePipeline {
     inner: Arc<PipelineInner>,
 }
 
-impl crate::DynComputePipeline for ComputePipeline {}
+impl crate::ComputePipeline for ComputePipeline {
+    fn get_subgroup_size(&self) -> Option<u32> {
+        None
+    }
+}
 
 #[derive(Debug)]
 pub struct RayTracingPipeline {}

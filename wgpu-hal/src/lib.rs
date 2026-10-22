@@ -684,7 +684,7 @@ pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
     type PipelineLayout: DynPipelineLayout;
     type ShaderModule: DynShaderModule;
     type RenderPipeline: DynRenderPipeline;
-    type ComputePipeline: DynComputePipeline;
+    type ComputePipeline: DynComputePipeline + ComputePipeline;
     type RayTracingPipeline: DynRayTracingPipeline;
     type PipelineCache: DynPipelineCache;
 
@@ -1151,10 +1151,6 @@ pub trait Device: WasmNotSendSync {
         >,
     ) -> Result<<Self::A as Api>::ComputePipeline, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: <Self::A as Api>::ComputePipeline);
-    unsafe fn get_compute_pipeline_subgroup_size(
-        &self,
-        pipeline: &<Self::A as Api>::ComputePipeline,
-    ) -> Option<u32>;
 
     /// Create a ray tracing pipeline according to `desc`.
     ///
@@ -1404,6 +1400,11 @@ pub trait Queue: WasmNotSendSync {
     ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
     unsafe fn wait_for_idle(&self) -> Result<(), DeviceError>;
     unsafe fn get_timestamp_period(&self) -> f32;
+}
+
+pub trait ComputePipeline {
+    /// The subgroup size this pipeline will execute with, if the backend can determine it.
+    fn get_subgroup_size(&self) -> Option<u32>;
 }
 
 /// Encoder and allocation pool for `CommandBuffer`s.

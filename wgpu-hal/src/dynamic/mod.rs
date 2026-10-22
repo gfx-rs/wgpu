@@ -1,5 +1,6 @@
 mod adapter;
 mod command;
+mod compute_pipeline;
 mod device;
 mod instance;
 mod queue;
@@ -7,6 +8,7 @@ mod surface;
 
 pub use adapter::{DynAdapter, DynOpenDevice};
 pub use command::DynCommandEncoder;
+pub use compute_pipeline::DynComputePipeline;
 pub use device::DynDevice;
 pub use instance::{DynExposedAdapter, DynInstance};
 pub use queue::DynQueue;
@@ -100,8 +102,6 @@ pub trait DynBindGroup: DynResource + fmt::Debug {}
 pub trait DynBindGroupLayout: DynResource + fmt::Debug {}
 pub trait DynBuffer: DynResource + fmt::Debug {}
 pub trait DynCommandBuffer: DynResource + fmt::Debug {}
-pub trait DynComputePipeline: DynResource + fmt::Debug {}
-
 pub trait DynFence: DynResource + fmt::Debug {}
 pub trait DynPipelineCache: DynResource + fmt::Debug {}
 pub trait DynPipelineLayout: DynResource + fmt::Debug {}
