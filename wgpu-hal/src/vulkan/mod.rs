@@ -274,7 +274,7 @@ impl Surface {
     ///
     /// - If the surface hasn't been configured.
     /// - If the surface has been configured for a DXGI swapchain.
-    /// - If the device doesn't [support present timing](wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING).
+    /// - If the device doesn't have the [VK_GOOGLE_display_timing] extension enabled.
     ///
     /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
     #[track_caller]
