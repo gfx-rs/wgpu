@@ -7,7 +7,7 @@ pub mod query;
 
 use alloc::{vec, vec::Vec};
 
-use super::{Block, Function, FunctionArgument, Instruction, LookupFunctionType, Writer};
+use super::{Block, Instruction, Writer};
 
 struct ExtractedRayDesc {
     ray_flags_id: spirv::Word,
@@ -416,39 +416,5 @@ impl Writer {
             current_combined = self.write_logical_and(block, current_combined, boolean)
         }
         current_combined
-    }
-
-    // returns the id of the function, the function, and ids for its arguments.
-    fn write_function_signature(
-        &mut self,
-        arg_types: &[spirv::Word],
-        return_ty: spirv::Word,
-    ) -> (spirv::Word, Function, Vec<spirv::Word>) {
-        let func_ty = self.get_function_type(LookupFunctionType {
-            parameter_type_ids: Vec::from(arg_types),
-            return_type_id: return_ty,
-        });
-
-        let mut function = Function::default();
-        let func_id = self.id_gen.next();
-        function.signature = Some(Instruction::function(
-            return_ty,
-            func_id,
-            spirv::FunctionControl::empty(),
-            func_ty,
-        ));
-
-        let mut arg_ids = Vec::with_capacity(arg_types.len());
-
-        for (idx, &arg_ty) in arg_types.iter().enumerate() {
-            let id = self.id_gen.next();
-            let instruction = Instruction::function_parameter(arg_ty, id);
-            function.parameters.push(FunctionArgument {
-                instruction,
-                handle_id: idx as u32,
-            });
-            arg_ids.push(id);
-        }
-        (func_id, function, arg_ids)
     }
 }
