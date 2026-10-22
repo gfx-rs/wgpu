@@ -2212,6 +2212,26 @@ impl BlockContext<'_> {
                 ));
                 id
             }
+            crate::Expression::RayQueryGetCurrentTMax { query } => {
+                let query_id = self.cached[query];
+                let trackers = *self
+                    .ray_query_tracker_expr
+                    .get(&query)
+                    .expect("not a cached ray query");
+                let func_id = self.writer.write_ray_query_get_current_t_max();
+                let id = self.gen_id();
+                block.body.push(Instruction::function_call(
+                    result_type_id,
+                    id,
+                    func_id,
+                    &[
+                        query_id,
+                        trackers.initialized_tracker,
+                        trackers.t_max_tracker,
+                    ],
+                ));
+                id
+            }
             crate::Expression::RayQueryVertexPositions { query, committed } => {
                 self.writer.require_any(
                     "RayQueryVertexPositions",

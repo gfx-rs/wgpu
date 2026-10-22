@@ -3790,6 +3790,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         MustUse::No,
                     )
                 }
+                "rayQueryGetCurrentTMax" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let query = self.ray_query_pointer(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    (
+                        ir::Expression::RayQueryGetCurrentTMax { query },
+                        MustUse::No,
+                    )
+                }
                 "subgroupBallot" => {
                     let mut args = ctx.prepare_args(arguments, 0, function_span);
                     let predicate = if arguments.len() == 1 {

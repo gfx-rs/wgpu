@@ -771,6 +771,10 @@ fn write_function_expressions(
                 let ty = if committed { "Committed" } else { "Candidate" };
                 (format!("rayQueryGet{ty}Intersection").into(), 4)
             }
+            E::RayQueryGetCurrentTMax { query } => {
+                edges.insert("", query);
+                ("rayQueryGetCurrentTMax".into(), 4)
+            }
             E::SubgroupBallotResult => ("SubgroupBallotResult".into(), 4),
             E::SubgroupOperationResult { .. } => ("SubgroupOperationResult".into(), 4),
             E::RayQueryVertexPositions { query, committed } => {
