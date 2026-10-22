@@ -88,8 +88,6 @@ trybuild.workspace = true
 
 # Non-Webassembly
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# Cargo-metadata doesn't compile on wasm due to old cargo-util-schemas dependency.
-cargo_metadata.workspace = true
 env_logger.workspace = true
 ureq.workspace = true
 
@@ -115,6 +113,11 @@ web-sys = { workspace = true, features = [
     "OffscreenCanvas",
     "OffscreenCanvasRenderingContext2d",
 ] }
+
+# Non-Webassembly Dev Dependencies
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+# Cargo-metadata doesn't compile on wasm due to old cargo-util-schemas dependency.
+cargo_metadata.workspace = true
 
 [lints.clippy]
 bool_assert_comparison = "allow"
