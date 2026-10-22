@@ -6,14 +6,22 @@ use wgpu_test::{
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(COPY_OVERFLOW_Z);
+    vec.push(COPY_TEXTURE_TO_TEXTURE_2D);
     vec.push(COPY_TEXTURE_TO_TEXTURE_3D);
 }
 
 #[apply(gpu_test!)]
-static COPY_TEXTURE_TO_TEXTURE_3D: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(copy_texture_to_texture_3d);
+static COPY_TEXTURE_TO_TEXTURE_2D: GpuTestConfiguration = GpuTestConfiguration::new()
+    .run_async(|ctx| copy_texture_to_texture(ctx, wgpu::TextureDimension::D2));
 
-async fn copy_texture_to_texture_3d(ctx: wgpu_test::TestingContext) {
+#[apply(gpu_test!)]
+static COPY_TEXTURE_TO_TEXTURE_3D: GpuTestConfiguration = GpuTestConfiguration::new()
+    .run_async(|ctx| copy_texture_to_texture(ctx, wgpu::TextureDimension::D3));
+
+async fn copy_texture_to_texture(
+    ctx: wgpu_test::TestingContext,
+    dimension: wgpu::TextureDimension,
+) {
     struct Case {
         name: &'static str,
         src_origin: wgpu::Origin3d,
@@ -28,6 +36,16 @@ async fn copy_texture_to_texture_3d(ctx: wgpu_test::TestingContext) {
     };
 
     let cases = [
+        Case {
+            name: "single slice",
+            src_origin: wgpu::Origin3d { x: 0, y: 0, z: 1 },
+            dst_origin: wgpu::Origin3d { x: 0, y: 0, z: 2 },
+            size: wgpu::Extent3d {
+                width: 7,
+                height: 5,
+                depth_or_array_layers: 1,
+            },
+        },
         Case {
             name: "full texture",
             src_origin: wgpu::Origin3d::ZERO,
@@ -58,7 +76,7 @@ async fn copy_texture_to_texture_3d(ctx: wgpu_test::TestingContext) {
 
     let descriptor = wgpu::TextureDescriptor {
         label: None,
-        dimension: wgpu::TextureDimension::D3,
+        dimension,
         size: TEXTURE_SIZE,
         format: wgpu::TextureFormat::R8Uint,
         usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
