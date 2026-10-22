@@ -18,8 +18,6 @@ pub enum ExpressionError {
     InvalidBaseType(Handle<crate::Expression>),
     #[error("Accessing with index {0:?} can't be done")]
     InvalidIndexType(Handle<crate::Expression>),
-    #[error("Accessing {0:?} via a negative index is invalid")]
-    NegativeIndex(Handle<crate::Expression>),
     #[error("Accessing index {1} is out of {0:?} bounds")]
     IndexOutOfBounds(Handle<crate::Expression>, u32),
     #[error("Function argument {0:?} doesn't exist")]
@@ -424,34 +422,8 @@ impl super::Validator {
                     }
                 }
 
-                // If index is const we can do check for non-negative index
-                match module
-                    .to_ctx()
-                    .get_const_val_from(index, &function.expressions)
-                {
-                    Ok(value) => {
-                        let length = if self.overrides_resolved {
-                            base_type.indexable_length_resolved(module)
-                        } else {
-                            base_type.indexable_length_pending(module)
-                        }?;
-                        // If we know both the length and the index, we can do the
-                        // bounds check now.
-                        if let crate::proc::IndexableLength::Known(known_length) = length {
-                            if value >= known_length {
-                                return Err(ExpressionError::IndexOutOfBounds(base, value));
-                            }
-                        }
-                    }
-                    Err(crate::proc::ConstValueError::Negative) => {
-                        return Err(ExpressionError::NegativeIndex(base))
-                    }
-                    Err(crate::proc::ConstValueError::NonConst) => {}
-                    Err(crate::proc::ConstValueError::InvalidType) => {
-                        return Err(ExpressionError::InvalidIndexType(index))
-                    }
-                }
-
+                // A known out-of-bounds index is not an error: it may come from a WGSL
+                // `let`, which is not a const-expression. Back ends apply the policy.
                 ShaderStages::all()
             }
             E::AccessIndex { base, index } => {

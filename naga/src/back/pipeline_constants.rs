@@ -46,6 +46,8 @@ pub enum PipelineConstantError {
     NegativeWorkgroupSize,
     #[error("max vertices or max primitives is negative")]
     NegativeMeshOutputMax,
+    #[error("an override-expression index is negative")]
+    NegativeIndex,
 }
 
 /// Compact `module` and replace all overrides with constants.
@@ -422,7 +424,7 @@ fn process_function(
     override_map: &HandleVec<Override, Handle<Constant>>,
     layouter: &mut crate::proc::Layouter,
     function: &mut Function,
-) -> Result<(), ConstantEvaluatorError> {
+) -> Result<(), PipelineConstantError> {
     // A map from original local expression handles to
     // handles in the new, local expression arena.
     let mut adjusted_local_expressions = HandleVec::with_capacity(function.expressions.len());
@@ -430,6 +432,7 @@ fn process_function(
     let mut local_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
 
     let mut expressions = function.expressions.take();
+    let original_kinds = crate::proc::ExpressionKindTracker::from_arena(&expressions);
 
     // Dummy `emitter` and `block` for the constant evaluator.
     // We can ignore the concept of emitting expressions here since
@@ -441,21 +444,44 @@ fn process_function(
     let mut emitter = Emitter::default();
     let mut block = Block::new();
 
-    let mut evaluator = ConstantEvaluator::for_wgsl_function(
-        module,
-        &mut function.expressions,
-        &mut local_expression_kind_tracker,
-        layouter,
-        &mut emitter,
-        &mut block,
-        false,
-    );
-
     for (old_h, mut expr, span) in expressions.drain() {
         if let Expression::Override(h) = expr {
             expr = Expression::Constant(override_map[h]);
         }
+        let override_index = match expr {
+            Expression::Access { index, .. } => {
+                !original_kinds.is_const(index) && original_kinds.is_const_or_override(index)
+            }
+            _ => false,
+        };
         adjust_expr(&adjusted_local_expressions, &mut expr);
+
+        // An override-expression index is now known, so bounds check it at pipeline
+        // creation, as WGSL requires, by turning it into an `AccessIndex`.
+        if let Expression::Access { base, index } = expr {
+            if override_index {
+                match module
+                    .to_ctx()
+                    .get_const_val_from(index, &function.expressions)
+                {
+                    Ok(index) => expr = Expression::AccessIndex { base, index },
+                    Err(crate::proc::ConstValueError::Negative) => {
+                        return Err(PipelineConstantError::NegativeIndex);
+                    }
+                    Err(_) => {}
+                }
+            }
+        }
+
+        let mut evaluator = ConstantEvaluator::for_wgsl_function(
+            module,
+            &mut function.expressions,
+            &mut local_expression_kind_tracker,
+            layouter,
+            &mut emitter,
+            &mut block,
+            false,
+        );
         let h = evaluator.try_eval_and_append(expr, span)?;
         adjusted_local_expressions.insert(old_h, h);
     }

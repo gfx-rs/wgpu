@@ -4002,7 +4002,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 info.sampler_index_buffer_name, info.binding_array_base_index_name,
                             )?;
                         }
-                        self.write_expr(module, index, func_ctx)?;
+                        match index::known_out_of_bounds_replacement(
+                            base,
+                            index,
+                            module,
+                            func_ctx.expressions,
+                            func_ctx.info,
+                        ) {
+                            Some(replacement) => write!(self.out, "{replacement}")?,
+                            None => self.write_expr(module, index, func_ctx)?,
+                        }
                         if array_sampler_info.is_some() {
                             write!(self.out, "]")?;
                         }
