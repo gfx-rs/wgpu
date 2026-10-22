@@ -164,21 +164,6 @@ impl GPUBuffer {
     #[webidl(default = 0)] offset: u64,
     #[webidl] size: Option<u64>,
   ) -> Result<(), BufferError> {
-    let read_mode = (mode & 0x0001) == 0x0001;
-    let write_mode = (mode & 0x0002) == 0x0002;
-    if (read_mode && write_mode) || (!read_mode && !write_mode) {
-      return Err(BufferError::Operation(
-        "exactly one of READ or WRITE map mode must be set".to_string(),
-      ));
-    }
-
-    let mode = if read_mode {
-      MapMode::Read
-    } else {
-      assert!(write_mode);
-      MapMode::Write
-    };
-
     {
       *self.map_state.borrow_mut() = BufferMapState::Pending;
     }
@@ -191,9 +176,12 @@ impl GPUBuffer {
         sender.send(status).unwrap();
       });
 
-      self
-        .wgpu_buffer
-        .map_async(mode, offset, size, Some(callback));
+      self.wgpu_buffer.map_async(
+        wgpu_core::resource::MapModeFlags::from_bits_retain(mode),
+        offset,
+        size,
+        Some(callback),
+      );
     }
 
     let done = Rc::new(RefCell::new(false));
@@ -222,7 +210,7 @@ impl GPUBuffer {
 
     let mapping = self.wgpu_buffer.get_mapped_range(offset, size)?;
 
-    if mode == MapMode::Read {
+    if mapping.mode() == MapMode::Read {
       let mut data = self.data.borrow_mut();
       let data = data
         .as_mut()
@@ -232,7 +220,7 @@ impl GPUBuffer {
     }
 
     self.map_state.replace(BufferMapState::Mapped {
-      mode,
+      mode: mapping.mode(),
       range: offset..(offset + mapping.len()),
       views: vec![],
     });

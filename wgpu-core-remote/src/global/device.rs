@@ -3,7 +3,7 @@ use core::ops::Deref;
 use wgpu_core_remote_types::{
     encoders::{RenderBundleDescriptor, RenderBundleEncoderDescriptor},
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
-    BufferDescriptor, ExternalTextureDescriptor, PipelineError, PipelineLayoutDescriptor,
+    BufferDescriptor, ExternalTextureDescriptor, MapMode, PipelineError, PipelineLayoutDescriptor,
     QuerySetDescriptor, SamplerDescriptor, ShaderModuleDescriptor, TextureDescriptor,
     TextureViewDescriptor,
 };
@@ -28,7 +28,7 @@ use crate::{
     registry::Registry,
 };
 
-use wgt::{error::WebGpuError, BufferAddress, MapMode};
+use wgt::{error::WebGpuError, BufferAddress};
 
 pub use wgpu_core_remote_types::binding_model::*;
 
@@ -1282,7 +1282,12 @@ impl Global {
 
         let buffer = hub.buffers.get(buffer_id);
 
-        buffer.map_async(mode, offset, size, callback)
+        buffer.map_async(
+            resource::MapModeFlags::from_bits_retain(mode.bits()),
+            offset,
+            size,
+            callback,
+        )
     }
 
     pub fn buffer_get_mapped_range(

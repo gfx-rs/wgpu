@@ -414,6 +414,41 @@ pub enum BufferAccessError {
         size: wgt::BufferAddress,
         buffer_size: wgt::BufferAddress,
     },
+    #[error(transparent)]
+    InvalidMapMode(#[from] BadMapMode),
+}
+
+#[derive(Clone, Debug, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[error("Invalid map mode: {0:?}, exactly one of READ or WRITE map mode must be set")]
+pub struct BadMapMode(MapModeFlags);
+
+bitflags::bitflags! {
+    /// Corresponds to [WebGPU `GPUMapModeFlags`](https://gpuweb.github.io/gpuweb/#dictdef-gpumapmodeflags).
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    pub struct MapModeFlags: u32 {
+        const READ = 0x0001;
+        const WRITE = 0x0002;
+    }
+}
+
+impl From<core::convert::Infallible> for BadMapMode {
+    fn from(_: core::convert::Infallible) -> Self {
+        unreachable!()
+    }
+}
+
+impl TryFrom<MapModeFlags> for MapMode {
+    type Error = BadMapMode;
+
+    fn try_from(mode: MapModeFlags) -> Result<Self, Self::Error> {
+        match mode {
+            m if m == MapModeFlags::READ => Ok(MapMode::Read),
+            m if m == MapModeFlags::WRITE => Ok(MapMode::Write),
+            m => Err(BadMapMode(m)),
+        }
+    }
 }
 
 impl WebGpuError for BufferAccessError {
@@ -436,7 +471,8 @@ impl WebGpuError for BufferAccessError {
             | Self::OutOfBoundsEndOffsetOverrun { .. }
             | Self::MapAborted
             | Self::MapStartOffsetOverrun { .. }
-            | Self::MapEndOffsetOverrun { .. } => ErrorType::Validation,
+            | Self::MapEndOffsetOverrun { .. }
+            | Self::InvalidMapMode(_) => ErrorType::Validation,
         }
     }
 }
@@ -492,7 +528,7 @@ impl WebGpuError for InvalidResourceError {
     }
 }
 
-pub type BufferAccessResult = Result<(), BufferAccessError>;
+pub type BufferAccessResult = Result<MapMode, BufferAccessError>;
 
 pub(crate) struct BufferPendingMapping {
     pub(crate) range: Range<wgt::BufferAddress>,
@@ -772,13 +808,17 @@ impl Buffer {
     /// Schedule buffer mapping.
     ///
     /// `op.callback` is guaranteed to be called, regardless of the outcome.
-    pub fn map_async(
+    pub fn map_async<M>(
         self: &Arc<Self>,
-        mode: MapMode,
+        mode: M,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
         callback: Option<BufferMapCallback>,
-    ) -> Option<SubmissionIndex> {
+    ) -> Option<SubmissionIndex>
+    where
+        M: fmt::Debug + TryInto<MapMode> + Copy,
+        M::Error: Into<BadMapMode>,
+    {
         profiling::scope!("Buffer::map_async");
         api_log!(
             "Buffer::map_async {:?} mode {mode:?} offset {offset:?} size {size:?}",
@@ -818,13 +858,17 @@ impl Buffer {
     ///
     /// A return value of `Ok(0)` means that mapping does not need to wait on the queue, but
     /// it does not mean that the buffer has already been mapped.
-    fn try_map_async(
+    fn try_map_async<M>(
         self: &Arc<Self>,
-        mode: MapMode,
+        mode: M,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
         callback: Option<BufferMapCallback>,
-    ) -> Result<SubmissionIndex, (Option<BufferMapCallback>, BufferAccessError)> {
+    ) -> Result<SubmissionIndex, (Option<BufferMapCallback>, BufferAccessError)>
+    where
+        M: fmt::Debug + TryInto<MapMode> + Copy,
+        M::Error: Into<BadMapMode>,
+    {
         let range_size = if let Some(size) = size {
             size
         } else {
@@ -877,6 +921,11 @@ impl Buffer {
         {
             return Err((callback, BufferAccessError::UnalignedRange));
         }
+
+        let mode = match mode.try_into() {
+            Ok(mode) => mode,
+            Err(e) => return Err((callback, e.into().into())),
+        };
 
         let (pub_usage, internal_use) = match mode {
             MapMode::Read => (wgt::BufferUsages::MAP_READ, wgt::BufferUses::MAP_READ),
@@ -1106,7 +1155,7 @@ impl Buffer {
                         range: pending_mapping.range.clone(),
                         host,
                     };
-                    Ok(())
+                    Ok(host)
                 }
                 Err(e) => Err(e),
             }
@@ -1119,7 +1168,7 @@ impl Buffer {
                 range: pending_mapping.range,
                 host: pending_mapping.mode,
             };
-            Ok(())
+            Ok(pending_mapping.mode)
         };
         Some((pending_mapping.callback, status))
     }
