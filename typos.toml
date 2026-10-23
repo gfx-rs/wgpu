@@ -34,6 +34,7 @@ CLL = "CLL"
 # Usernames
 Healthire = "Healthire"
 REASY = "REASY"
+canva = "canva"
 
 [type.rust.extend-identifiers]
 ANDed = "ANDed"
