@@ -13,7 +13,6 @@ use core::{
     ops::{Deref, Range},
     pin::Pin,
     ptr::NonNull,
-    slice,
 };
 use wgc::resource::{BufferMapping, ParentDevice as _};
 use wgt::error::WebGpuError;
@@ -2980,9 +2979,7 @@ impl dispatch::QueueWriteBufferInterface for CoreQueueWriteBuffer {
 impl dispatch::BufferMappedRangeInterface for CoreBufferMappedRange {
     #[inline]
     unsafe fn read_slice(&self) -> &[u8] {
-        // FIXME: We currently tolerate this
-        // https://github.com/gfx-rs/wgpu/issues/10549
-        unsafe { slice::from_raw_parts(self.0.ptr().as_ptr(), self.0.len() as usize) }
+        self.0.read_slice()
     }
 
     #[inline]

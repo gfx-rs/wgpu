@@ -63,7 +63,7 @@ impl CompilationContext<'_> {
             log::trace!(
                 "Rebind buffer: {:?} -> {}, register={:?}, slot={}",
                 var.name.as_ref(),
-                &name,
+                name,
                 register,
                 slot
             );
