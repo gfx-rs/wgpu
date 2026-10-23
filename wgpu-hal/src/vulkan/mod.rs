@@ -559,6 +559,14 @@ bitflags::bitflags!(
         /// As such, we need to make sure all calls to vkCmdFillBuffer are aligned to 16 bytes
         /// if they cover a range of 4096 bytes or more.
         const FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16 = 0x4;
+        /// Imagination's proprietary driver (observed on the PowerVR GPU of the Google Pixel 10)
+        /// crashes in `vkQueueSubmit` when `VkTimelineSemaphoreSubmitInfo` is chained and one of
+        /// its value lists is empty, although the spec only requires values for lists that
+        /// contain a timeline semaphore.
+        ///
+        /// We pass a value for every wait and signal semaphore in that case. The driver
+        /// ignores values for binary semaphores.
+        const PAD_TIMELINE_SEMAPHORE_VALUES = 0x8;
     }
 );
 
@@ -1622,6 +1630,9 @@ impl crate::Queue for Queue {
             &mut signal_semaphores,
             vk_info,
             &mut vk_timeline_info,
+            self.device
+                .workarounds
+                .contains(Workarounds::PAD_TIMELINE_SEMAPHORE_VALUES),
         );
 
         let submit_chain = self.next_submit_chain.lock().take();
