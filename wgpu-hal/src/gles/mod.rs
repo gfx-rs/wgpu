@@ -87,6 +87,9 @@ mod conv;
 mod device;
 
 #[cfg(all(unix, native))]
+pub use device::ImportTextureError;
+
+#[cfg(all(unix, native))]
 mod dmabuf;
 
 ///cbindgen:ignore

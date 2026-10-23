@@ -18,6 +18,57 @@ use super::{conv, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
 use crate::TlasInstance;
 
+/// An error importing a texture into the GLES backend.
+#[cfg(all(unix, native))]
+#[derive(Debug, thiserror::Error)]
+pub enum ImportTextureError {
+    /// The device reported an error.
+    #[error(transparent)]
+    DeviceError(#[from] crate::DeviceError),
+    /// The descriptor requests an unsupported texture configuration.
+    #[error("DMA-BUF GLES import supports only a single-layer, single-sampled 2D texture with one mip level")]
+    UnsupportedTextureDescriptor,
+    /// The texture width cannot be represented as an EGL integer.
+    #[error("DMA-BUF width does not fit EGLint")]
+    WidthOutOfRange,
+    /// The texture height cannot be represented as an EGL integer.
+    #[error("DMA-BUF height does not fit EGLint")]
+    HeightOutOfRange,
+    /// The plane stride cannot be represented as an EGL integer.
+    #[error("DMA-BUF stride does not fit EGLint")]
+    StrideOutOfRange,
+    /// The plane offset cannot be represented as an EGL integer.
+    #[error("DMA-BUF offset does not fit EGLint")]
+    OffsetOutOfRange,
+    /// The DRM FourCC cannot be represented as an EGL integer.
+    #[error("DRM FourCC does not fit EGLint")]
+    DrmFormatOutOfRange,
+    /// The device was not created from an EGL context.
+    #[error("GLES device was not created from an EGL context")]
+    MissingEglContext,
+    /// The device does not expose an EGL display.
+    #[error("GLES device does not expose an EGLDisplay")]
+    MissingEglDisplay,
+    /// A required EGL extension is unavailable.
+    #[error("EGL extension {0} is not supported")]
+    MissingExtension(&'static str),
+    /// A required GL or EGL function is unavailable.
+    #[error("GL or EGL entry point {0} is unavailable")]
+    MissingEntryPoint(&'static str),
+    /// EGL image creation failed.
+    #[error("eglCreateImageKHR failed: {0:?}")]
+    EglImageCreation(#[source] Option<khronos_egl::Error>),
+    /// EGL image destruction failed.
+    #[error("eglDestroyImageKHR failed: {0:?}")]
+    EglImageDestruction(#[source] Option<khronos_egl::Error>),
+    /// GL texture creation failed.
+    #[error("Failed to create GL texture: {0}")]
+    GlTextureCreation(String),
+    /// GL reported an error while binding the EGL image to the texture.
+    #[error("GL failed while binding the imported EGL image: {0:#x}")]
+    GlError(u32),
+}
+
 type ShaderStage<'a> = (
     naga::ShaderStage,
     &'a crate::ProgrammableStage<'a, super::ShaderModule>,
@@ -182,6 +233,12 @@ impl super::Device {
     /// The supplied FD is closed on both success and failure. The EGL image is
     /// destroyed after binding; the GL texture retains the imported storage.
     ///
+    /// # Errors
+    ///
+    /// Returns [`ImportTextureError`] if the texture configuration is unsupported,
+    /// an import parameter does not fit EGLint, required EGL resources, extensions
+    /// or entry points are unavailable, or a GL or EGL operation fails.
+    ///
     /// # Safety
     ///
     /// - `fd`, `drm_format`, `stride`, `offset` and `drm_modifier` must describe
@@ -199,7 +256,7 @@ impl super::Device {
         drm_modifier: Option<u64>,
         stride: u64,
         offset: u64,
-    ) -> Result<super::Texture, crate::DeviceError> {
+    ) -> Result<super::Texture, ImportTextureError> {
         use super::dmabuf::*;
         use core::ptr;
         use glow::HasContext as _;
@@ -210,88 +267,67 @@ impl super::Device {
             || desc.mip_level_count != 1
             || desc.sample_count != 1
         {
-            log::error!("DMA-BUF GLES import supports only a single-layer, single-sampled 2D texture with one mip level");
-            return Err(crate::DeviceError::Unexpected);
+            return Err(ImportTextureError::UnsupportedTextureDescriptor);
         }
 
-        let width = i32::try_from(desc.size.width).map_err(|error| {
-            log::error!("DMA-BUF width does not fit EGLint: {error}");
-            crate::DeviceError::Unexpected
-        })?;
+        let width =
+            i32::try_from(desc.size.width).map_err(|_| ImportTextureError::WidthOutOfRange)?;
 
-        let height = i32::try_from(desc.size.height).map_err(|error| {
-            log::error!("DMA-BUF height does not fit EGLint: {error}");
-            crate::DeviceError::Unexpected
-        })?;
+        let height =
+            i32::try_from(desc.size.height).map_err(|_| ImportTextureError::HeightOutOfRange)?;
 
-        let stride = i32::try_from(stride).map_err(|error| {
-            log::error!("DMA-BUF stride does not fit EGLint: {error}");
-            crate::DeviceError::Unexpected
-        })?;
+        let stride = i32::try_from(stride).map_err(|_| ImportTextureError::StrideOutOfRange)?;
 
-        let offset = i32::try_from(offset).map_err(|error| {
-            log::error!("DMA-BUF offset does not fit EGLint: {error}");
-            crate::DeviceError::Unexpected
-        })?;
+        let offset = i32::try_from(offset).map_err(|_| ImportTextureError::OffsetOutOfRange)?;
 
-        let drm_format = i32::try_from(drm_format).map_err(|error| {
-            log::error!("DRM FourCC does not fit EGLint: {error}");
-            crate::DeviceError::Unexpected
-        })?;
+        let drm_format =
+            i32::try_from(drm_format).map_err(|_| ImportTextureError::DrmFormatOutOfRange)?;
 
         let context = self.context();
 
-        let egl = context.egl_instance().ok_or_else(|| {
-            log::error!("GLES device was not created from an EGL context");
-            crate::DeviceError::Unexpected
-        })?;
+        let egl = context
+            .egl_instance()
+            .ok_or(ImportTextureError::MissingEglContext)?;
 
-        let display = *context.raw_display().ok_or_else(|| {
-            log::error!("GLES device does not expose an EGLDisplay");
-            crate::DeviceError::Unexpected
-        })?;
+        let display = *context
+            .raw_display()
+            .ok_or(ImportTextureError::MissingEglDisplay)?;
 
         let caps = self.shared.private_caps;
         if !caps.contains(PrivateCapabilities::EGL_IMAGE_DMA_BUF_IMPORT) {
-            log::error!("{EXT_IMAGE_DMA_BUF_IMPORT} is not supported");
-            return Err(crate::DeviceError::Unexpected);
+            return Err(ImportTextureError::MissingExtension(
+                EXT_IMAGE_DMA_BUF_IMPORT,
+            ));
         }
 
         if drm_modifier.is_some()
             && !caps.contains(PrivateCapabilities::EGL_IMAGE_DMA_BUF_IMPORT_MODIFIERS)
         {
-            log::error!(
-                "DMA-BUF has an explicit DRM modifier, but \
-             {EXT_IMAGE_DMA_BUF_IMPORT_MODIFIERS} is not supported"
-            );
-            return Err(crate::DeviceError::Unexpected);
+            return Err(ImportTextureError::MissingExtension(
+                EXT_IMAGE_DMA_BUF_IMPORT_MODIFIERS,
+            ));
         }
 
         let create_image: EglCreateImageKhr = {
-            let address = egl.get_proc_address("eglCreateImageKHR").ok_or_else(|| {
-                log::error!("eglCreateImageKHR is unavailable");
-                crate::DeviceError::Unexpected
-            })?;
+            let address = egl
+                .get_proc_address("eglCreateImageKHR")
+                .ok_or(ImportTextureError::MissingEntryPoint("eglCreateImageKHR"))?;
 
             unsafe { core::mem::transmute(address) }
         };
 
         let destroy_image: EglDestroyImageKhr = {
-            let address = egl.get_proc_address("eglDestroyImageKHR").ok_or_else(|| {
-                log::error!("eglDestroyImageKHR is unavailable");
-                crate::DeviceError::Unexpected
-            })?;
+            let address = egl
+                .get_proc_address("eglDestroyImageKHR")
+                .ok_or(ImportTextureError::MissingEntryPoint("eglDestroyImageKHR"))?;
 
             unsafe { core::mem::transmute(address) }
         };
 
         let image_target_texture: GlEglImageTargetTexture2DOes = {
-            let address = egl
-                .get_proc_address("glEGLImageTargetTexture2DOES")
-                .ok_or_else(|| {
-                    log::error!("glEGLImageTargetTexture2DOES is unavailable");
-                    crate::DeviceError::Unexpected
-                })?;
+            let address = egl.get_proc_address("glEGLImageTargetTexture2DOES").ok_or(
+                ImportTextureError::MissingEntryPoint("glEGLImageTargetTexture2DOES"),
+            )?;
 
             unsafe { core::mem::transmute(address) }
         };
@@ -340,8 +376,7 @@ impl super::Device {
              * EGL never takes ownership of the fd. OwnedFd closes it
              * automatically when this function returns.
              */
-            log::error!("eglCreateImageKHR failed to import DMA-BUF");
-            return Err(crate::DeviceError::Unexpected);
+            return Err(ImportTextureError::EglImageCreation(egl.get_error()));
         }
 
         /*
@@ -356,13 +391,11 @@ impl super::Device {
             Ok(texture) => texture,
 
             Err(error) => {
-                log::error!("failed to create GL texture: {error}");
-
                 if unsafe { destroy_image(display.as_ptr(), egl_image) } == 0 {
                     log::error!("eglDestroyImageKHR failed after GL texture creation failure");
                 }
 
-                return Err(crate::DeviceError::Unexpected);
+                return Err(ImportTextureError::GlTextureCreation(error));
             }
         };
 
@@ -383,8 +416,6 @@ impl super::Device {
         let gl_error = unsafe { gl.get_error() };
 
         if gl_error != glow::NO_ERROR {
-            log::error!("glEGLImageTargetTexture2DOES failed: {gl_error:#x}");
-
             unsafe {
                 gl.delete_texture(raw_texture);
             }
@@ -393,13 +424,13 @@ impl super::Device {
                 log::error!("eglDestroyImageKHR failed after EGLImage binding failure");
             }
 
-            return Err(crate::DeviceError::Unexpected);
+            return Err(ImportTextureError::GlError(gl_error));
         }
 
         if unsafe { destroy_image(display.as_ptr(), egl_image) } == 0 {
-            log::error!("eglDestroyImageKHR failed after EGLImage binding");
+            let error = egl.get_error();
             unsafe { gl.delete_texture(raw_texture) };
-            return Err(crate::DeviceError::Unexpected);
+            return Err(ImportTextureError::EglImageDestruction(error));
         }
 
         drop(gl);
