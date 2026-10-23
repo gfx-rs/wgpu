@@ -2368,6 +2368,12 @@ impl super::Instance {
                 super::Workarounds::FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16,
                 phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
             );
+            workarounds.set(
+                super::Workarounds::PAD_TIMELINE_SEMAPHORE_VALUES,
+                phd_capabilities.driver.as_ref().is_some_and(|driver| {
+                    driver.driver_id == vk::DriverId::IMAGINATION_PROPRIETARY
+                }),
+            );
         };
 
         if let Some(driver) = phd_capabilities.driver {

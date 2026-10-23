@@ -73,12 +73,19 @@ impl SemaphoreList {
     ///   `timeline_info`, set its `pSignalSemaphoreValues` to this
     ///   list's values, and add it to `submit_info`s extension chain.
     ///
+    /// - If `pad_timeline_values` is set and either list contains a timeline
+    ///   semaphore, give every semaphore in both lists a value. See
+    ///   [`Workarounds::PAD_TIMELINE_SEMAPHORE_VALUES`].
+    ///
     /// Return the revised `submit_info` value.
+    ///
+    /// [`Workarounds::PAD_TIMELINE_SEMAPHORE_VALUES`]: super::Workarounds::PAD_TIMELINE_SEMAPHORE_VALUES
     pub fn add_to_submit<'info, 'semaphores: 'info>(
         wait_semaphores: &'semaphores mut Self,
         signal_semaphores: &'semaphores mut Self,
         submit_info: vk::SubmitInfo<'info>,
         timeline_info: &'info mut MaybeUninit<vk::TimelineSemaphoreSubmitInfo<'info>>,
+        pad_timeline_values: bool,
     ) -> vk::SubmitInfo<'info> {
         wait_semaphores.check();
         signal_semaphores.check();
@@ -88,10 +95,9 @@ impl SemaphoreList {
 
         let timeline_info = timeline_info.write(vk::TimelineSemaphoreSubmitInfo::default());
 
-        // The PowerVR driver on the Google Pixel 10 crashes if this struct is chained with no
-        // values for one of the lists, although the spec only requires a value per semaphore
-        // for lists that contain a timeline semaphore.
-        if !wait_semaphores.values.is_empty() || !signal_semaphores.values.is_empty() {
+        if pad_timeline_values
+            && (!wait_semaphores.values.is_empty() || !signal_semaphores.values.is_empty())
+        {
             wait_semaphores.pad_values();
             signal_semaphores.pad_values();
         }
