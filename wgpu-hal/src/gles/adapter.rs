@@ -628,6 +628,17 @@ impl super::Adapter {
                 ),
         );
 
+        // Unaligned sizes are supported on native GL, but in WebGL the BC
+        // family extensions (S3TC, RGTC, BPTC) require mip level 0 to be
+        // block-aligned (INVALID_OPERATION otherwise). The ETC2 and ASTC WebGL
+        // extensions have no such requirement, so the feature can still be
+        // offered on WebGL when BC textures are unavailable.
+        features.set(
+            wgt::Features::TEXTURE_COMPRESSION_UNALIGNED,
+            downlevel_flags.contains(wgt::DownlevelFlags::TEXTURE_COMPRESSION)
+                && (cfg!(native) || !features.contains(wgt::Features::TEXTURE_COMPRESSION_BC)),
+        );
+
         features.set(
             wgt::Features::FLOAT32_FILTERABLE,
             extensions.contains("GL_ARB_color_buffer_float")
