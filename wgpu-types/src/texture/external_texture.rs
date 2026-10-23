@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(doc)]
 use crate::TextureFormat;
 
+pub use nt::ExternalTextureTransferFunction;
+
 /// Format of an `ExternalTexture`. This indicates the number of underlying
 /// planes used by the `ExternalTexture` as well as each plane's format.
 #[repr(C)]
@@ -17,31 +19,6 @@ pub enum ExternalTextureFormat {
     Nv12,
     /// Separate [`TextureFormat::R8Unorm`] Y, Cb, and Cr planes.
     Yu12,
-}
-
-/// Parameters describing a gamma encoding transfer function in the form
-/// tf = { k * linear                   | linear < b
-///      { a * pow(linear, 1/g) - (a-1) | linear >= b
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Zeroable, bytemuck::Pod)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[allow(missing_docs)]
-pub struct ExternalTextureTransferFunction {
-    pub a: f32,
-    pub b: f32,
-    pub g: f32,
-    pub k: f32,
-}
-
-impl Default for ExternalTextureTransferFunction {
-    fn default() -> Self {
-        Self {
-            a: 1.0,
-            b: 1.0,
-            g: 1.0,
-            k: 1.0,
-        }
-    }
 }
 
 /// Describes an [`ExternalTexture`](../wgpu/struct.ExternalTexture.html).

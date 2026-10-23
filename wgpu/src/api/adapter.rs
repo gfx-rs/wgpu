@@ -1,7 +1,10 @@
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::future::Future;
 #[cfg(wgpu_core)]
 use core::ops::Deref;
+use hashbrown::HashSet;
+use wgpu_sync::Mutex;
 
 use crate::*;
 
@@ -61,9 +64,15 @@ impl Adapter {
     ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + WasmNotSend {
         let device = self.inner.request_device(desc);
         async move {
-            device
-                .await
-                .map(|(device, queue)| (Device { inner: device }, Queue { inner: queue }))
+            device.await.map(|(device, queue)| {
+                (
+                    Device {
+                        inner: device,
+                        buffers: Arc::new(Mutex::new(HashSet::new())),
+                    },
+                    Queue { inner: queue },
+                )
+            })
         }
     }
 
@@ -85,6 +94,7 @@ impl Adapter {
         Ok((
             Device {
                 inner: device.into(),
+                buffers: Arc::new(Mutex::new(HashSet::new())),
             },
             Queue {
                 inner: queue.into(),

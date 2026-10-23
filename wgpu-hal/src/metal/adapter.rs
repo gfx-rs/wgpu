@@ -923,7 +923,10 @@ impl super::CapabilitiesQuery {
                 && (device.supportsFamily(MTLGPUFamily::Apple7)
                     || device.supportsFamily(MTLGPUFamily::Mac2))
             {
-                1024
+                // This was 1024 for Apple7, Apple8, and Mac2 in older versions of the document.
+                // In new versions of the document, it is 996 for Apple7 and Apple8, with Mac2
+                // values no longer listed.
+                996
             } else if family_check && device.supportsFamily(MTLGPUFamily::Apple6) {
                 128
             } else {

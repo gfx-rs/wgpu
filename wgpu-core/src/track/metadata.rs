@@ -73,7 +73,7 @@ impl<T: Clone> ResourceMetadata<T> {
     /// existing tables. See `tracker_assert_in_bounds`.
     #[inline(always)]
     pub(super) unsafe fn contains_unchecked(&self, index: usize) -> bool {
-        unsafe { self.owned.get(index).unwrap_unchecked() }
+        unsafe { self.owned.get_unchecked(index) }
     }
 
     /// Insert a resource into the set.
