@@ -642,6 +642,29 @@ impl super::Adapter {
         // We *might* be able to emulate bgra8unorm-storage but currently don't attempt to.
 
         let mut private_caps = super::PrivateCapabilities::empty();
+
+        #[cfg(all(unix, native))]
+        if let Some(egl) = context.egl_instance() {
+            if let Some(display) = context.raw_display() {
+                if let Ok(extensions) = egl.query_string(Some(*display), khronos_egl::EXTENSIONS) {
+                    for extension in extensions.to_string_lossy().split_ascii_whitespace() {
+                        match extension {
+                            super::dmabuf::EXT_IMAGE_DMA_BUF_IMPORT => {
+                                private_caps
+                                    .insert(super::PrivateCapabilities::EGL_IMAGE_DMA_BUF_IMPORT);
+                            }
+                            super::dmabuf::EXT_IMAGE_DMA_BUF_IMPORT_MODIFIERS => {
+                                private_caps.insert(
+                                    super::PrivateCapabilities::EGL_IMAGE_DMA_BUF_IMPORT_MODIFIERS,
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
         private_caps.set(
             super::PrivateCapabilities::BUFFER_ALLOCATION,
             extensions.contains("GL_EXT_buffer_storage")
