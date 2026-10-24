@@ -119,6 +119,39 @@ impl GarbageCollected for GPUBuffer {
   }
 }
 
+impl GPUBuffer {
+  fn unmap_inner(
+    &self,
+    scope: &mut v8::HandleScope,
+  ) -> Result<(), BufferError> {
+    if let BufferMapState::Mapped { mode, range, views } =
+      self.map_state.replace(BufferMapState::Unmapped)
+    {
+      for ab in views {
+        let ab = ab.array_buffer.open(scope);
+        ab.detach(None);
+      }
+
+      if mode == MapMode::Write {
+        if let Ok(mapping) = self
+          .wgpu_buffer
+          .get_mapped_range(range.start, Some(range.end - range.start))
+        {
+          let data = self.data.borrow();
+          let data = data.as_ref().expect("mapAsync succeeded");
+          mapping
+            .write_slice()
+            .copy_from_slice(&data[range.start as usize..range.end as usize]);
+        }
+      }
+    }
+
+    self.wgpu_buffer.unmap();
+
+    Ok(())
+  }
+}
+
 #[op2]
 impl GPUBuffer {
   #[constructor]
@@ -333,37 +366,15 @@ impl GPUBuffer {
   #[nofast]
   #[undefined]
   fn unmap(&self, scope: &mut v8::HandleScope) -> Result<(), BufferError> {
-    if let BufferMapState::Mapped { mode, range, views } =
-      self.map_state.replace(BufferMapState::Unmapped)
-    {
-      for ab in views {
-        let ab = ab.array_buffer.open(scope);
-        ab.detach(None);
-      }
-
-      if mode == MapMode::Write {
-        if let Ok(mapping) = self
-          .wgpu_buffer
-          .get_mapped_range(range.start, Some(range.end - range.start))
-        {
-          let data = self.data.borrow();
-          let data = data.as_ref().expect("mapAsync succeeded");
-          mapping
-            .write_slice()
-            .copy_from_slice(&data[range.start as usize..range.end as usize]);
-        }
-      }
-    }
-
-    self.wgpu_buffer.unmap();
-
-    Ok(())
+    self.unmap_inner(scope)
   }
 
   #[fast]
   #[undefined]
-  fn destroy(&self) {
+  fn destroy(&self, scope: &mut v8::HandleScope) -> Result<(), BufferError> {
+    self.unmap_inner(scope)?;
     self.data.replace(None);
     self.wgpu_buffer.destroy();
+    Ok(())
   }
 }
