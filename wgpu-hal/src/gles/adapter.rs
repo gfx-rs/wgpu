@@ -491,7 +491,8 @@ impl super::Adapter {
             | wgt::Features::DEPTH32FLOAT_STENCIL8
             | wgt::Features::IMMEDIATES
             | wgt::Features::PASSTHROUGH_SHADERS
-            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgt::Features::UNRESTRICTED_BYTES_PER_ROW;
         features.set(
             wgt::Features::TEXTURE_FORMAT_16BIT_NORM,
             supports_16bit_norm,

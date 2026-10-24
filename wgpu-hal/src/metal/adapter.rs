@@ -1261,6 +1261,7 @@ impl super::CapabilitiesQuery {
             | F::SHADER_I16
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::TEXTURE_FORMAT_16BIT_NORM
+            | F::UNRESTRICTED_BYTES_PER_ROW
             | F::VERTEX_WRITABLE_STORAGE;
 
         features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
