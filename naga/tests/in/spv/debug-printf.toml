@@ -1,0 +1,2 @@
+targets = "WGSL | IR"
+capabilities = "DEBUG_PRINTF"
