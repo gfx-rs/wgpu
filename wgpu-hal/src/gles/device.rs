@@ -266,6 +266,7 @@ impl super::Device {
             || desc.size.depth_or_array_layers != 1
             || desc.mip_level_count != 1
             || desc.sample_count != 1
+            || desc.format.is_multi_planar_format()
         {
             return Err(ImportTextureError::UnsupportedTextureDescriptor);
         }
