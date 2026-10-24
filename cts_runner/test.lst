@@ -75,8 +75,10 @@ webgpu:api,validation,buffer,create:usage,*
 webgpu:api,validation,buffer,destroy:*
 webgpu:api,validation,buffer,mapping:mapAsync,earlyRejection:*
 webgpu:api,validation,buffer,mapping:mapAsync,invalidBuffer:*
-webgpu:api,validation,buffer,mapping:mapAsync,state,mapped:*
-webgpu:api,validation,buffer,mapping:mapAsync,state,mappingPending:*
+webgpu:api,validation,buffer,mapping:mapAsync,offsetAndSizeAlignment:*
+webgpu:api,validation,buffer,mapping:mapAsync,offsetAndSizeOOB:*
+webgpu:api,validation,buffer,mapping:mapAsync,sizeUnspecifiedOOB:*
+webgpu:api,validation,buffer,mapping:mapAsync,state,*
 webgpu:api,validation,buffer,mapping:mapAsync,usage:*
 webgpu:api,validation,capability_checks,features,clip_distances:*
 webgpu:api,validation,capability_checks,features,query_types:createQuerySet:*
