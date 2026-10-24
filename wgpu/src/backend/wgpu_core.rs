@@ -1821,16 +1821,15 @@ impl dispatch::BufferInterface for CoreBuffer {
         range: Range<crate::BufferAddress>,
         callback: dispatch::BufferMapCallback,
     ) {
-        let operation = wgc::resource::BufferMapOperation {
+        self.wgpu_buffer.map_async(
             mode,
-            callback: Some(Box::new(|status| {
-                let res = status.map_err(|_| crate::BufferAsyncError);
+            range.start,
+            Some(range.end - range.start),
+            Some(Box::new(|status| {
+                let res = status.map(|_| ()).map_err(|_| crate::BufferAsyncError);
                 callback(res);
             })),
-        };
-
-        self.wgpu_buffer
-            .map_async(range.start, Some(range.end - range.start), operation);
+        );
     }
 
     fn get_mapped_range(
