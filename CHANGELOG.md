@@ -315,6 +315,10 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Added explicit `Send` and `Sync` implementations to key `wgpu` types so that the compiler can do less work checking those bounds. If you previously added a `#![recursion_limit = ...]` attribute to your crate due to overflow errors involving `wgpu` types, you may now be able to remove it. By @kpreid in [#10177](https://github.com/gfx-rs/wgpu/pull/10177).
 - `Queue::write_buffer`, `Queue::write_texture` and buffer unmaps no longer record a separate barrier before each copy. The transitions for a whole batch of queue writes are now coalesced into a single barrier recorded ahead of the batch's copies, so a frame that updates N buffers costs one barrier instead of N. By @JMS55 in [#10319](https://github.com/gfx-rs/wgpu/pull/10319).
 
+#### WebGPU
+
+- Cache adapter and device limits, features, and adapter info on the browser WebGPU backend, so repeated calls no longer re-read those JavaScript objects. By @apetrock in [#10513](https://github.com/gfx-rs/wgpu/pull/10513).
+
 ### Documentation
 
 #### General
