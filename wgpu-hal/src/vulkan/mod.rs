@@ -31,6 +31,7 @@ mod descriptor;
 mod device;
 mod drm;
 mod instance;
+mod memory;
 mod pnext_chain;
 mod sampler;
 mod semaphore_list;
@@ -59,6 +60,9 @@ use naga::FastHashMap;
 use wgt::InternalCounter;
 
 use semaphore_list::SemaphoreList;
+
+pub use memory::MemoryAllocation;
+use memory::{MemoryAllocators, MemoryPool};
 
 use crate::vulkan::semaphore_list::{SemaphoreListMode, SemaphoreType};
 
@@ -270,7 +274,7 @@ impl Surface {
     ///
     /// - If the surface hasn't been configured.
     /// - If the surface has been configured for a DXGI swapchain.
-    /// - If the device doesn't [support present timing](wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING).
+    /// - If the device doesn't have the [VK_GOOGLE_display_timing] extension enabled.
     ///
     /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
     #[track_caller]
@@ -555,14 +559,6 @@ bitflags::bitflags!(
         /// As such, we need to make sure all calls to vkCmdFillBuffer are aligned to 16 bytes
         /// if they cover a range of 4096 bytes or more.
         const FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16 = 0x4;
-        /// Arm's proprietary driver (observed on r54p2, Mali-G715 / Pixel 9 Pro,
-        /// Android 16) ignores negative viewport heights, so it does not do the
-        /// Y-flip that maps WebGPU clip space to Vulkan's.
-        ///
-        /// We flip Y in the vertex shader and use positive-height viewports instead.
-        /// This gives the same framebuffer coordinates, so facing does not change.
-        /// SPIR-V passthrough shaders do not get this flip.
-        const IGNORED_NEGATIVE_VIEWPORT_HEIGHT = 0x8;
     }
 );
 
@@ -661,7 +657,7 @@ impl Drop for DeviceShared {
     reason = "needs work to not be disastrously verbose"
 )]
 pub struct Device {
-    mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
+    mem_allocator: MemoryAllocators,
     desc_allocator: Mutex<descriptor::DescriptorAllocator>,
     valid_ash_memory_types: u32,
     naga_options: naga::back::spv::Options<'static>,
@@ -796,7 +792,7 @@ impl Drop for Queue {
 }
 #[derive(Debug)]
 enum BufferMemoryBacking {
-    Managed(gpu_allocator::vulkan::Allocation),
+    Managed(MemoryAllocation),
     VulkanMemory {
         memory: vk::DeviceMemory,
         offset: u64,
@@ -906,7 +902,7 @@ impl crate::DynBuffer for Buffer {}
 pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
-    allocation: gpu_allocator::vulkan::Allocation,
+    allocation: MemoryAllocation,
     compacted_size_query: Option<vk::QueryPool>,
 }
 
@@ -942,7 +938,7 @@ impl AccelerationStructure {
 #[derive(Debug)]
 pub enum TextureMemory {
     // shared memory in GPU allocator (owned by wgpu-hal)
-    Allocation(gpu_allocator::vulkan::Allocation),
+    Allocation(MemoryAllocation),
 
     // dedicated memory (owned by wgpu-hal)
     Dedicated(vk::DeviceMemory),

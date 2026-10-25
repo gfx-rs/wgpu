@@ -146,7 +146,7 @@ impl TrackerIndex {
 /// wgpu-core internally use some array-like storage for tracking resources.
 /// To that end, there needs to be a uniquely assigned index for each live resource
 /// of a certain type. This index is separate from the resource ID for various reasons:
-/// - There can be multiple resource IDs pointing the the same resource.
+/// - There can be multiple resource IDs pointing to the same resource.
 /// - IDs of dead handles can be recycled while resources are internally held alive (and tracked).
 /// - The plan is to remove IDs in the long run
 ///   ([#5121](https://github.com/gfx-rs/wgpu/issues/5121)).

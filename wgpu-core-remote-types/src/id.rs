@@ -28,7 +28,7 @@ const _: () = {
 #[repr(transparent)]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(into = "SerialId", try_from = "SerialId")]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RawId(NonZeroU64);
 
 impl RawId {
@@ -70,6 +70,7 @@ impl From<RawId> for SerialId {
     }
 }
 
+#[derive(Debug)]
 pub struct ZeroIdError;
 
 impl fmt::Display for ZeroIdError {
@@ -223,22 +224,27 @@ ids! {
     pub type TlasId Tlas;
 }
 
-#[test]
-fn test_id() {
-    struct TestMarker;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    impl Marker for TestMarker {
-        const TYPE: &'static str = "TestMarker";
-    }
+    #[test]
+    fn test_id() {
+        struct TestMarker;
 
-    let indexes = [0, Index::MAX / 2 - 1, Index::MAX / 2 + 1, Index::MAX];
-    let epochs = [1, Epoch::MAX / 2 - 1, Epoch::MAX / 2 + 1, Epoch::MAX];
-    for &i in &indexes {
-        for &e in &epochs {
-            let id = Id::<TestMarker>::zip(i, e);
-            let (index, epoch) = id.unzip();
-            assert_eq!(index, i);
-            assert_eq!(epoch, e);
+        impl Marker for TestMarker {
+            const TYPE: &'static str = "TestMarker";
+        }
+
+        let indexes = [0, Index::MAX / 2 - 1, Index::MAX / 2 + 1, Index::MAX];
+        let epochs = [1, Epoch::MAX / 2 - 1, Epoch::MAX / 2 + 1, Epoch::MAX];
+        for &i in &indexes {
+            for &e in &epochs {
+                let id = Id::<TestMarker>::zip(i, e);
+                let (index, epoch) = id.unzip();
+                assert_eq!(index, i);
+                assert_eq!(epoch, e);
+            }
         }
     }
 }

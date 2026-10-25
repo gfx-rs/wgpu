@@ -341,6 +341,12 @@ webgpu:shader,execution,expression,call,builtin,firstLeadingBit:*
 //FAIL: webgpu:shader,execution,expression,call,builtin,select:*
 // - Fails with `const`/abstract int cases on all platforms because of <https://github.com/gfx-rs/wgpu/issues/4507>.
 // - Fails with `vec3` & `f16` cases on macOS because of <https://github.com/gfx-rs/wgpu/issues/5262>.
+//FAIL: webgpu:shader,execution,expression,call,builtin,sign:abstract_float:*
+// - Fails because of <https://bugzilla.mozilla.org/show_bug.cgi?id=2074422>.
+webgpu:shader,execution,expression,call,builtin,sign:abstract_int:*
+webgpu:shader,execution,expression,call,builtin,sign:f16:*
+webgpu:shader,execution,expression,call,builtin,sign:f32:*
+webgpu:shader,execution,expression,call,builtin,sign:i32:*
 fails-if(dx12) webgpu:shader,execution,expression,call,builtin,textureDimensions:*
 webgpu:shader,execution,expression,call,builtin,textureNumLayers:*
 webgpu:shader,execution,expression,call,builtin,textureNumLevels:*
