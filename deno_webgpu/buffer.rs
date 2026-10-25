@@ -253,6 +253,13 @@ impl GPUBuffer {
       receiver.await?;
     };
 
+    // Now that we have awaited the V8 microtask queue
+    // we need to check the map state of the buffer again
+    // to ensure it is still pending (unmap could interrupt the mapping process).
+    if !matches!(*self.map_state.borrow(), BufferMapState::Pending) {
+      return Err(wgpu_core::resource::BufferAccessError::MapAborted.into());
+    }
+
     let done = Rc::new(RefCell::new(false));
     let done_ = done.clone();
     let device_poll_fut = async move {
