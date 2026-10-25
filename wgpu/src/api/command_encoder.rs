@@ -172,17 +172,21 @@ impl CommandEncoder {
 
     /// Clears texture to zero.
     ///
-    /// Note that unlike with clear_buffer, `COPY_DST` usage is not required.
+    /// Requires [`Features::CLEAR_TEXTURE`].
     ///
-    /// # Implementation notes
+    /// Unlike [`Self::clear_buffer`], `COPY_DST` usage is not required. The
+    /// texture will be cleared either by buffer copies or by a render pass with
+    /// [`LoadOp::Clear`], depending on the texture format and enabled usages.
     ///
-    /// - implemented either via buffer copies and render/depth target clear, path depends on texture usages
-    /// - behaves like texture zero init, but is performed immediately (clearing is *not* delayed via marking it as uninitialized)
+    /// Unlike when `wgpu` internally marks a texture as uninitialized, the
+    /// clear will always occur at the point in the command stream where
+    /// `clear_texture` is called. It will not be deferred until a subsequent
+    /// operation reads data from the texture.
     ///
-    /// # Panics
-    ///
-    /// - `CLEAR_TEXTURE` extension not enabled
-    /// - Range is out of bounds
+    /// Although [`ImageSubresourceRange`] contains an `aspect` member, it must
+    /// either be [`wgt::TextureAspect::All`], or it must select all aspects of
+    /// the texture. Requesting to selectively clear only some aspects is an
+    /// error.
     pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) {
         self.inner.clear_texture(&texture.inner, subresource_range);
     }
