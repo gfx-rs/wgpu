@@ -1215,14 +1215,10 @@ pub fn get_browser_gpu_property(
     Ok(DefinedNonNullJsValue::new(maybe_undefined_gpu))
 }
 
-/// Cached properties of a WebGPU adapter.
-/// In native, the map_wgt_* calls are fine because the cached object is
-/// a native object. In wasm, however, the cached object is a JS object, so
-/// so to avoid an expensive map_wgt_* call on every call we'll cache
-/// these results here.
-
+/// Cached Rust values for WebGPU adapter or device properties.
+/// Avoids repeated JavaScript property reads and conversions on subsequent queries.
 #[derive(Debug, Default)]
-pub struct CachedProperties {
+struct CachedProperties {
     features: OnceCell<crate::Features>,
     limits: OnceCell<crate::Limits>,
     adapter_info: OnceCell<crate::AdapterInfo>,
@@ -1233,7 +1229,7 @@ pub struct WebAdapter {
     pub(crate) inner: webgpu_sys::GpuAdapter,
     /// Unique identifier for this Adapter.
     ident: crate::cmp::Identifier,
-    /// Cached JS objects for the adapter.
+    /// Cached Rust values for the adapter's properties.
     cached_properties: Rc<CachedProperties>,
 }
 
@@ -1247,7 +1243,7 @@ pub struct WebDevice {
     /// The `uncapturederror` listener currently registered on the device, so
     /// that setting a new handler can unregister the previous one.
     uncaptured_error_listener: Rc<RefCell<Option<js_sys::Function>>>,
-    /// Cached JS objects for the device.
+    /// Cached Rust values for the device's properties.
     cached_properties: Rc<CachedProperties>,
 }
 
