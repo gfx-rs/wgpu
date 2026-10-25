@@ -57,6 +57,7 @@ impl<'a> TextureBlitterBuilder<'a> {
             address_mode_v: AddressMode::ClampToEdge,
             address_mode_w: AddressMode::ClampToEdge,
             mag_filter: self.sample_type,
+            // Note: blitting employs `textureSampleLevel` which unconditionally uses mag_filter, so we don't need to set min_filter
             ..Default::default()
         });
 
