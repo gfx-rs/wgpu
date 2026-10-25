@@ -14,6 +14,8 @@ use deno_core::op2;
 use deno_core::v8;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
+use deno_core::OpState;
+use deno_core::V8CrossThreadTaskSpawner;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 use wgpu_core::resource::Labeled as _;
@@ -160,6 +162,7 @@ impl GPUBuffer {
   #[async_method]
   async fn map_async(
     &self,
+    state: Rc<RefCell<OpState>>,
     #[webidl(options(enforce_range = true))] mode: u32,
     #[webidl(default = 0)] offset: u64,
     #[webidl] size: Option<u64>,
@@ -202,6 +205,20 @@ impl GPUBuffer {
         Some(callback),
       );
     }
+
+    // Per specification we should have deferred promise resolution here
+    // (all microtasks should resolve before it).
+    // We do this by spawning a V8 task that will resolve the promise after all
+    // previous microtasks have been processed.
+    {
+      let spawner =
+        { state.borrow().borrow::<V8CrossThreadTaskSpawner>().clone() };
+      let (sender, receiver) = oneshot::channel();
+      spawner.spawn(|_| {
+        let _ = sender.send(());
+      });
+      receiver.await?;
+    };
 
     let done = Rc::new(RefCell::new(false));
     let done_ = done.clone();
