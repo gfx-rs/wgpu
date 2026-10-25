@@ -310,7 +310,8 @@ impl GPUBuffer {
     #[webidl(default = 0)] offset: u64,
     #[webidl] size: Option<u64>,
   ) -> Result<v8::Local<'s, v8::ArrayBuffer>, BufferError> {
-    let size = size.unwrap_or_else(|| self.wgpu_buffer.size() - offset);
+    let size =
+      size.unwrap_or_else(|| self.wgpu_buffer.size().saturating_sub(offset));
     let BufferMapState::Mapped {
       mode: _,
       range,
