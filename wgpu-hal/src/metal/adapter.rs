@@ -21,9 +21,9 @@ use super::{OsFeatures, TimestampQuerySupport};
 
 /// Check if a device's class has a given method in its method table.
 ///
-/// This mirrors the check that `objc2` performs internally (in debug builds)
-/// before sending a message. We use it to skip method calls that would panic
-/// on proxy objects like Apple's `CaptureMTLDevice`, which forwards messages
+/// This mirrors the check that `objc2` performs internally (when `debug_assertions`
+/// is active) before sending a message. We use it to skip method calls that would
+/// panic on proxy objects like Apple's `CaptureMTLDevice`, which forwards messages
 /// at runtime but doesn't declare the methods in its class. See
 /// <https://github.com/gfx-rs/wgpu/issues/10028>.
 #[cfg(debug_assertions)]
