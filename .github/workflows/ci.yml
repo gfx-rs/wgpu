@@ -602,8 +602,8 @@ jobs:
           cargo check --all-targets --all-features
 
   wasm-test:
-    # runtime is normally 2 minutes
-    timeout-minutes: 10
+    # runtime is normally 6-8 minutes
+    timeout-minutes: 20
 
     name: Test WebAssembly
     runs-on: ubuntu-latest
