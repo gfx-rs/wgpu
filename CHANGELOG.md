@@ -238,6 +238,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Reject WGSL loads of structs and arrays that contain atomics, which previously caused a panic in the HLSL backend. By @drakeo338 in [#10458](https://github.com/gfx-rs/wgpu/issues/10458).
 - Panic when a SPIR-V's instruction's word count is greater than `u16::MAX`, instead of emitting a malformed instruction. By @ErichDonGubler in [#10537](https://github.com/gfx-rs/wgpu/pull/10537).
 - Accept a `ViewIndex` input declared as a signed integer in the SPIR-V frontend, as glslang and Slang emit it, by reading it as a `u32`. By @VoxelBoy in [#10568](https://github.com/gfx-rs/wgpu/pull/10568).
+- Fix `@builtin(position).w` in fragment shaders on DX12. The HLSL backend now provides 1/w of the clip-space position, as WGSL specifies and the other backends already do, instead of w. By @abdymazhit in [#10733](https://github.com/gfx-rs/wgpu/pull/10733).
 
 #### Validation
 

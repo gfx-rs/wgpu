@@ -374,7 +374,7 @@ fails-if(metal) webgpu:shader,execution,robust_access_vertex:vertex_buffer_acces
 webgpu:shader,execution,shader_io,fragment_builtins:inputs,front_facing:*
 webgpu:shader,execution,shader_io,fragment_builtins:inputs,interStage,centroid:*
 fails-if(vulkan) webgpu:shader,execution,shader_io,fragment_builtins:inputs,interStage:*
-fails-if(dx12,vulkan) webgpu:shader,execution,shader_io,fragment_builtins:inputs,position:*
+fails-if(vulkan) webgpu:shader,execution,shader_io,fragment_builtins:inputs,position:*
 webgpu:shader,execution,shader_io,fragment_builtins:inputs,sample_index:*
 fails-if(dx12,vulkan) webgpu:shader,execution,shader_io,fragment_builtins:inputs,sample_mask:*
 webgpu:shader,execution,shader_io,fragment_builtins:primitive_index,*

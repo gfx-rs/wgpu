@@ -930,6 +930,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     ep_input.local_invocation_index_name.as_ref().unwrap()
                 )?;
             }
+            // WGSL's fragment `position.w` is 1/w of the clip position, D3D's `SV_Position.w` is w.
+            Some(crate::Binding::BuiltIn(crate::BuiltIn::Position { .. }))
+                if ep.stage == ShaderStage::Fragment =>
+            {
+                write!(
+                    self.out,
+                    "float4({0}.{1}.xyz, 1.0 / {0}.{1}.w)",
+                    ep_input.arg_name, fake_member.name,
+                )?;
+            }
             Some(crate::Binding::Location {
                 interpolation: Some(crate::Interpolation::PerVertex),
                 ..
