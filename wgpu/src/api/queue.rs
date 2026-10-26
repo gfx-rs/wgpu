@@ -277,6 +277,8 @@ impl Queue {
     }
 
     /// Submits a series of finished command buffers for execution.
+    ///
+    /// Returns `Some` if the submission started and can be waited on via a `poll`, or `None` otherwise. On the WebGPU backend, it always returns `None` (even for successful submissions), because the WebGPU backend does not support waiting for a particular submission.
     pub fn submit<I: IntoIterator<Item = CommandBuffer>>(
         &self,
         command_buffers: I,

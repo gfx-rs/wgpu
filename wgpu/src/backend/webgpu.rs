@@ -2876,9 +2876,14 @@ impl dispatch::DeviceInterface for WebDevice {
         // No capturing api in webgpu
     }
 
-    fn poll(&self, _poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError> {
-        // Device is polled automatically
-        Ok(crate::PollStatus::QueueEmpty)
+    fn poll(&self, poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError> {
+        match poll_type {
+            wgt::PollType::Wait { .. } => Err(crate::PollError::CantWait),
+            wgt::PollType::Poll => {
+                // Device is polled automatically
+                Ok(crate::PollStatus::Poll)
+            }
+        }
     }
 
     fn get_internal_counters(&self) -> crate::InternalCounters {
@@ -3032,7 +3037,7 @@ impl dispatch::QueueInterface for WebQueue {
 
         self.inner.submit(&array);
 
-        Some(0)
+        None
     }
 
     fn get_timestamp_period(&self) -> f32 {
