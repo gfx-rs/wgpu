@@ -946,6 +946,23 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.need_bake_expressions.insert(right);
                 }
             }
+
+            if let Expression::Select {
+                condition,
+                accept,
+                reject,
+            } = *expr
+            {
+                // A non-float `select` with a vector condition is written per component
+                // (see `Expression::Select` in `write_expr`), which references every
+                // operand once per component, so bake all of them.
+                let cond_inner = info[condition].ty.inner_with(&self.module.types);
+                if Self::select_needs_per_component(cond_inner, inner) {
+                    self.need_bake_expressions.insert(condition);
+                    self.need_bake_expressions.insert(accept);
+                    self.need_bake_expressions.insert(reject);
+                }
+            }
         }
 
         for statement in func.body.iter() {
@@ -959,6 +976,19 @@ impl<'a, W: Write> Writer<'a, W> {
                 _ => {}
             }
         }
+    }
+
+    /// Returns `true` if a `select` with a condition of type `cond_inner` and a
+    /// result of type `result_inner` must be written component by component.
+    ///
+    /// GLSL's `mix(x, y, bvecN)` overload only exists for floating-point vectors
+    /// in GLSL ES 3.00 and desktop GLSL < 4.50. The integer and boolean overloads
+    /// need GLSL ES 3.10, desktop GLSL 4.50, or `GL_EXT_shader_integer_mix`, so
+    /// for those we emit `TvecN(c.x ? a.x : b.x, ...)` instead, which works on
+    /// every version.
+    fn select_needs_per_component(cond_inner: &TypeInner, result_inner: &TypeInner) -> bool {
+        matches!(*cond_inner, TypeInner::Vector { .. })
+            && result_inner.scalar_kind() != Some(crate::ScalarKind::Float)
     }
 
     /// Helper method used to get a name for a global
@@ -3030,14 +3060,30 @@ impl<'a, W: Write> Writer<'a, W> {
                 reject,
             } => {
                 let cond_ty = ctx.resolve_type(condition, &self.module.types);
-                let vec_select = if let TypeInner::Vector { .. } = *cond_ty {
-                    true
-                } else {
-                    false
-                };
+                let result_ty = ctx.resolve_type(expr, &self.module.types);
 
-                // TODO: Boolean mix on desktop required GL_EXT_shader_integer_mix
-                if vec_select {
+                if Self::select_needs_per_component(cond_ty, result_ty) {
+                    // The operands were baked by `update_expressions_to_bake`, so
+                    // referencing them once per component doesn't re-evaluate them.
+                    let size = match *cond_ty {
+                        TypeInner::Vector { size, .. } => size,
+                        _ => unreachable!(),
+                    };
+                    self.write_value_type(result_ty)?;
+                    write!(self.out, "(")?;
+                    for i in 0..size as usize {
+                        if i != 0 {
+                            write!(self.out, ", ")?;
+                        }
+                        let component = back::COMPONENTS[i];
+                        self.write_expr(condition, ctx)?;
+                        write!(self.out, ".{component} ? ")?;
+                        self.write_expr(accept, ctx)?;
+                        write!(self.out, ".{component} : ")?;
+                        self.write_expr(reject, ctx)?;
+                        write!(self.out, ".{component}")?;
+                    }
+                } else if let TypeInner::Vector { .. } = *cond_ty {
                     // Glsl defines that for mix when the condition is a boolean the first element
                     // is picked if condition is false and the second if condition is true
                     write!(self.out, "mix(")?;
