@@ -4,9 +4,10 @@ use objc2::runtime::{AnyObject, ProtocolObject, Sel};
 use objc2::{available, sel};
 use objc2_foundation::{NSError, NSOperatingSystemVersion, NSProcessInfo, NSString};
 use objc2_metal::{
-    MTLArgumentBuffersTier, MTLCommandQueueDescriptor, MTLCounterSamplingPoint, MTLDevice,
-    MTLFeatureSet, MTLGPUFamily, MTLIndirectAccelerationStructureInstanceDescriptor,
-    MTLLanguageVersion, MTLLogLevel, MTLLogState, MTLLogStateDescriptor, MTLPixelFormat,
+    MTLArgumentBuffersTier, MTLCommandQueueDescriptor, MTLCompileOptions,
+    MTLComputePipelineDescriptor, MTLCounterSamplingPoint, MTLDevice, MTLFeatureSet, MTLGPUFamily,
+    MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLLibrary,
+    MTLLogLevel, MTLLogState, MTLLogStateDescriptor, MTLPipelineOption, MTLPixelFormat,
     MTLReadWriteTextureTier,
 };
 use wgt::{AstcBlock, AstcChannel};
@@ -1846,10 +1847,51 @@ impl super::PrivateTextureFormatCapabilities {
     }
 }
 
+// Some legacy Intel compilers accept the attribute but fail during pipeline creation (#5827).
+fn broken_workgroup_size_attribute(
+    device: &ProtocolObject<dyn MTLDevice>,
+    msl_version: MTLLanguageVersion,
+) -> bool {
+    if msl_version < MTLLanguageVersion::Version2_1
+        || !device.name().to_string().starts_with("Intel")
+        || !available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0)
+    {
+        return false;
+    }
+    let options = MTLCompileOptions::new();
+    options.setLanguageVersion(msl_version);
+    let source = NSString::from_str(
+        "[[max_total_threads_per_threadgroup(1)]] kernel void wgpu_workgroup_size_probe() {}",
+    );
+    let Ok(library) = device.newLibraryWithSource_options_error(&source, Some(&options)) else {
+        return false;
+    };
+    let Some(function) =
+        library.newFunctionWithName(&NSString::from_str("wgpu_workgroup_size_probe"))
+    else {
+        return false;
+    };
+    let descriptor = MTLComputePipelineDescriptor::new();
+    descriptor.setComputeFunction(Some(&function));
+    match device.newComputePipelineStateWithDescriptor_options_reflection_error(
+        &descriptor,
+        MTLPipelineOption::empty(),
+        None,
+    ) {
+        Ok(_) => false,
+        Err(error) => {
+            log::debug!("Intel Metal workgroup-size attribute probe failed: {error:?}");
+            true
+        }
+    }
+}
+
 impl super::PrivateDisabilities {
-    pub fn new(device: &ProtocolObject<dyn MTLDevice>) -> Self {
+    pub fn new(device: &ProtocolObject<dyn MTLDevice>, msl_version: MTLLanguageVersion) -> Self {
         let is_intel = device.name().to_string().starts_with("Intel");
         Self {
+            broken_workgroup_size_attribute: broken_workgroup_size_attribute(device, msl_version),
+            use_runtime_array_pointers: is_intel,
             broken_viewport_near_depth: is_intel
                 && !device.supportsFeatureSet(MTLFeatureSet::macOS_GPUFamily1_v4),
             broken_layered_clear_image: is_intel,

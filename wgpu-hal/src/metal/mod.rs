@@ -375,6 +375,8 @@ struct PrivateTextureFormatCapabilities {
 
 #[derive(Clone, Debug)]
 struct PrivateDisabilities {
+    broken_workgroup_size_attribute: bool,
+    use_runtime_array_pointers: bool,
     /// Near depth is not respected properly on some Intel GPUs.
     broken_viewport_near_depth: bool,
     /// Multi-target clears don't appear to work properly on Intel GPUs.
@@ -420,7 +422,7 @@ impl AdapterShared {
         log::debug!("{private_texture_format_caps:#?}");
 
         Self {
-            disabilities: PrivateDisabilities::new(&device),
+            disabilities: PrivateDisabilities::new(&device, private_caps.msl_version),
             private_caps,
             private_texture_format_caps,
             device,
