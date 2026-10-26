@@ -4,8 +4,8 @@ use objc2::runtime::{AnyObject, ProtocolObject, Sel};
 use objc2::{available, sel};
 use objc2_foundation::{NSError, NSOperatingSystemVersion, NSProcessInfo, NSString};
 use objc2_metal::{
-    MTLArgumentBuffersTier, MTLCommandQueueDescriptor, MTLCounterSamplingPoint, MTLDevice,
-    MTLFeatureSet, MTLGPUFamily, MTLIndirectAccelerationStructureInstanceDescriptor,
+    MTLArgumentBuffersTier, MTLCommandQueueDescriptor, MTLCompileOptions, MTLCounterSamplingPoint,
+    MTLDevice, MTLFeatureSet, MTLGPUFamily, MTLIndirectAccelerationStructureInstanceDescriptor,
     MTLLanguageVersion, MTLLogLevel, MTLLogState, MTLLogStateDescriptor, MTLPixelFormat,
     MTLReadWriteTextureTier,
 };
@@ -663,6 +663,59 @@ const DEPTH_CLIP_MODE: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v1,
 ];
 
+// Legacy drivers on patched macOS installations can ship an older Metal compiler.
+#[allow(deprecated)]
+const MSL_VERSIONS: &[MTLLanguageVersion] = &[
+    MTLLanguageVersion::Version4_0,
+    MTLLanguageVersion::Version3_2,
+    MTLLanguageVersion::Version3_1,
+    MTLLanguageVersion::Version3_0,
+    MTLLanguageVersion::Version2_4,
+    MTLLanguageVersion::Version2_3,
+    MTLLanguageVersion::Version2_2,
+    MTLLanguageVersion::Version2_1,
+    MTLLanguageVersion::Version2_0,
+    MTLLanguageVersion::Version1_2,
+    MTLLanguageVersion::Version1_1,
+    MTLLanguageVersion::Version1_0,
+];
+
+#[allow(deprecated)]
+fn metal_language_version(version: wgt::MetalShadingLanguageVersion) -> MTLLanguageVersion {
+    match version {
+        wgt::MetalShadingLanguageVersion::Version1_0 => MTLLanguageVersion::Version1_0,
+        wgt::MetalShadingLanguageVersion::Version1_1 => MTLLanguageVersion::Version1_1,
+        wgt::MetalShadingLanguageVersion::Version1_2 => MTLLanguageVersion::Version1_2,
+        wgt::MetalShadingLanguageVersion::Version2_0 => MTLLanguageVersion::Version2_0,
+        wgt::MetalShadingLanguageVersion::Version2_1 => MTLLanguageVersion::Version2_1,
+        wgt::MetalShadingLanguageVersion::Version2_2 => MTLLanguageVersion::Version2_2,
+        wgt::MetalShadingLanguageVersion::Version2_3 => MTLLanguageVersion::Version2_3,
+        wgt::MetalShadingLanguageVersion::Version2_4 => MTLLanguageVersion::Version2_4,
+        wgt::MetalShadingLanguageVersion::Version3_0 => MTLLanguageVersion::Version3_0,
+        wgt::MetalShadingLanguageVersion::Version3_1 => MTLLanguageVersion::Version3_1,
+        wgt::MetalShadingLanguageVersion::Version3_2 => MTLLanguageVersion::Version3_2,
+        wgt::MetalShadingLanguageVersion::Version4_0 => MTLLanguageVersion::Version4_0,
+    }
+}
+
+fn select_msl_version(
+    os_version: MTLLanguageVersion,
+    options: &wgt::MetalBackendOptions,
+    mut compile: impl FnMut(MTLLanguageVersion) -> bool,
+) -> Option<MTLLanguageVersion> {
+    if let Some(version) = options.msl_version {
+        let version = metal_language_version(version);
+        return (version <= os_version).then_some(version);
+    }
+    let maximum = options.max_msl_version.map_or(os_version, |version| {
+        metal_language_version(version).min(os_version)
+    });
+    MSL_VERSIONS
+        .iter()
+        .copied()
+        .find(|&version| version <= maximum && compile(version))
+}
+
 impl super::CapabilitiesQuery {
     fn supports_any(raw: &ProtocolObject<dyn MTLDevice>, features_sets: &[MTLFeatureSet]) -> bool {
         features_sets
@@ -673,6 +726,20 @@ impl super::CapabilitiesQuery {
 
     /// Query the capabilities of the device.
     pub fn new(device: &ProtocolObject<dyn MTLDevice>) -> Self {
+        Self::query(device, None).unwrap()
+    }
+
+    pub fn with_options(
+        device: &ProtocolObject<dyn MTLDevice>,
+        options: &wgt::MetalBackendOptions,
+    ) -> Option<Self> {
+        Self::query(device, Some(options))
+    }
+
+    fn query(
+        device: &ProtocolObject<dyn MTLDevice>,
+        options: Option<&wgt::MetalBackendOptions>,
+    ) -> Option<Self> {
         // There are four different OSes we can target: macOS, iOS, tvOS and
         // visionOS. This can be detected using `cfg!(target_os = "ios")`, or
         // more conveniently using the `available!(...)` macro, which also
@@ -783,11 +850,39 @@ impl super::CapabilitiesQuery {
             MTLLanguageVersion::Version1_0
         };
 
-        Self {
+        let msl_version = if let Some(options) = options {
+            let source = NSString::from_str("kernel void wgpu_msl_probe() {}");
+            let selected = select_msl_version(msl_version, options, |version| {
+                let compile_options = MTLCompileOptions::new();
+                compile_options.setLanguageVersion(version);
+                device
+                    .newLibraryWithSource_options_error(&source, Some(&compile_options))
+                    .is_ok()
+            });
+            let Some(selected) = selected else {
+                log::warn!("Skipping Metal adapter {:?}: no usable MSL version for {options:?} (OS maximum {msl_version:?})", device.name());
+                return None;
+            };
+            if options.msl_version.is_none() && selected < msl_version {
+                log::warn!("Metal adapter {:?}: using MSL {selected:?} instead of OS maximum {msl_version:?}", device.name());
+            }
+            selected
+        } else {
+            msl_version
+        };
+
+        let mesh_shaders = mesh_shaders && msl_version >= MTLLanguageVersion::Version3_0;
+
+        Some(Self {
             msl_version,
             // macOS 10.11 doesn't support read-write resources
-            fragment_rw_storage: available!(macos = 10.12, ios = 8.0, tvos = 8.0, visionos = 1.0),
-            read_write_texture_tier: rw_texture_tier,
+            fragment_rw_storage: msl_version >= MTLLanguageVersion::Version1_2
+                && available!(macos = 10.12, ios = 8.0, tvos = 8.0, visionos = 1.0),
+            read_write_texture_tier: if msl_version >= MTLLanguageVersion::Version1_2 {
+                rw_texture_tier
+            } else {
+                MTLReadWriteTextureTier::TierNone
+            },
             msaa_desktop: os_type == super::OsType::Macos,
             msaa_apple3: (family_check && device.supportsFamily(MTLGPUFamily::Apple3))
                 || device.supportsFeatureSet(MTLFeatureSet::iOS_GPUFamily3_v4),
@@ -804,7 +899,7 @@ impl super::CapabilitiesQuery {
             base_vertex_first_instance_drawing: Self::supports_any(
                 device,
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
-            ),
+            ) && msl_version >= MTLLanguageVersion::Version1_2,
             dual_source_blending: Self::supports_any(device, DUAL_SOURCE_BLEND_SUPPORT),
             low_power: os_type != super::OsType::Macos || device.isLowPower(),
             headless: os_type == super::OsType::Macos && device.isHeadless(),
@@ -1239,7 +1334,7 @@ impl super::CapabilitiesQuery {
                 && (metal3
                     || device.supportsFamily(MTLGPUFamily::Mac2)
                     || device.supportsFamily(MTLGPUFamily::Apple2)),
-        }
+        })
     }
 
     pub fn features(&self) -> wgt::Features {
@@ -1265,7 +1360,10 @@ impl super::CapabilitiesQuery {
 
         features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
-        features.set(F::INDIRECT_FIRST_INSTANCE, self.indirect_draw_dispatch);
+        features.set(
+            F::INDIRECT_FIRST_INSTANCE,
+            self.indirect_draw_dispatch && self.msl_version >= MTLLanguageVersion::Version1_2,
+        );
         features.set(
             F::TIMESTAMP_QUERY,
             self.timestamp_query_support
@@ -1293,7 +1391,11 @@ impl super::CapabilitiesQuery {
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
-        features.set(F::PRIMITIVE_INDEX, self.supports_shader_primitive_index);
+        features.set(
+            F::PRIMITIVE_INDEX,
+            self.supports_shader_primitive_index
+                && self.msl_version >= MTLLanguageVersion::Version2_3,
+        );
 
         features.set(
             F::TEXTURE_BINDING_ARRAY
@@ -1359,12 +1461,17 @@ impl super::CapabilitiesQuery {
 
         features.set(
             F::SHADER_BARYCENTRICS,
-            self.shader_barycentrics && self.msl_version >= MTLLanguageVersion::Version2_2,
+            self.shader_barycentrics && self.msl_version >= MTLLanguageVersion::Version2_3,
         );
 
-        features.set(F::SHADER_PER_VERTEX, self.shader_per_vertex);
+        features.set(
+            F::SHADER_PER_VERTEX,
+            self.shader_per_vertex && self.msl_version >= MTLLanguageVersion::Version4_0,
+        );
 
-        if self.supports_simd_scoped_operations {
+        if self.supports_simd_scoped_operations
+            && self.msl_version >= MTLLanguageVersion::Version2_0
+        {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
         }
 
@@ -1383,11 +1490,16 @@ impl super::CapabilitiesQuery {
             self.supports_cooperative_matrix && self.msl_version >= MTLLanguageVersion::Version2_3,
         );
 
-        if self.supported_vertex_amplification_factor > 1 {
+        if self.supported_vertex_amplification_factor > 1
+            && self.msl_version >= MTLLanguageVersion::Version2_2
+        {
             features.insert(F::MULTIVIEW);
         }
 
-        features.set(F::EXPERIMENTAL_RAY_QUERY, self.supports_raytracing);
+        features.set(
+            F::EXPERIMENTAL_RAY_QUERY,
+            self.supports_raytracing && self.msl_version >= MTLLanguageVersion::Version2_4,
+        );
 
         features.set(F::MULTISAMPLE_ARRAY, self.supports_multisample_array);
         features.set(F::DEBUG_PRINTF, self.supports_debug_printf);
@@ -1875,5 +1987,109 @@ impl super::OsType {
         } else {
             Self::Ios
         }
+    }
+}
+
+#[cfg(test)]
+mod msl_tests {
+    use super::{select_msl_version, MTLLanguageVersion as Msl, MSL_VERSIONS};
+    use alloc::vec::Vec;
+    use wgt::{MetalBackendOptions, MetalShadingLanguageVersion as Version};
+
+    #[test]
+    fn probe_descends_from_os_version_and_stops_at_first_success() {
+        let mut attempted = Vec::new();
+        let selected = select_msl_version(
+            Msl::Version3_2,
+            &MetalBackendOptions::default(),
+            |version| {
+                attempted.push(version);
+                version == Msl::Version3_1
+            },
+        );
+        assert_eq!(selected, Some(Msl::Version3_1));
+        assert_eq!(attempted, [Msl::Version3_2, Msl::Version3_1]);
+        assert!(MSL_VERSIONS.windows(2).all(|pair| pair[0] > pair[1]));
+    }
+
+    #[test]
+    fn supported_os_version_needs_only_one_probe() {
+        let mut attempts = 0;
+        assert_eq!(
+            select_msl_version(Msl::Version3_2, &MetalBackendOptions::default(), |_| {
+                attempts += 1;
+                true
+            }),
+            Some(Msl::Version3_2)
+        );
+        assert_eq!(attempts, 1);
+    }
+
+    #[test]
+    fn maximum_bounds_probing_without_exceeding_os_support() {
+        for (maximum, expected) in [
+            (Version::Version2_4, Msl::Version2_4),
+            (Version::Version4_0, Msl::Version3_2),
+        ] {
+            let options = MetalBackendOptions {
+                max_msl_version: Some(maximum),
+                ..Default::default()
+            };
+            assert_eq!(
+                select_msl_version(Msl::Version3_2, &options, |version| {
+                    assert!(version <= expected);
+                    true
+                }),
+                Some(expected)
+            );
+        }
+        let options = MetalBackendOptions {
+            max_msl_version: Some(Version::Version2_4),
+            ..Default::default()
+        };
+        assert_eq!(
+            select_msl_version(Msl::Version3_2, &options, |version| version
+                == Msl::Version2_3),
+            Some(Msl::Version2_3)
+        );
+    }
+
+    #[test]
+    fn exact_version_ignores_cap_and_skips_probing() {
+        let options = MetalBackendOptions {
+            msl_version: Some(Version::Version3_1),
+            max_msl_version: Some(Version::Version2_4),
+        };
+        assert_eq!(
+            select_msl_version(Msl::Version3_2, &options, |_| panic!(
+                "exact mode must not probe"
+            )),
+            Some(Msl::Version3_1)
+        );
+        assert_eq!(
+            select_msl_version(Msl::Version3_0, &options, |_| panic!(
+                "invalid exact mode must not probe"
+            )),
+            None
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn total_probe_failure_does_not_select_an_unverified_version() {
+        let mut attempted = Vec::new();
+        assert_eq!(
+            select_msl_version(
+                Msl::Version4_0,
+                &MetalBackendOptions::default(),
+                |version| {
+                    attempted.push(version);
+                    false
+                }
+            ),
+            None
+        );
+        assert_eq!(attempted, MSL_VERSIONS);
+        assert_eq!(attempted.last(), Some(&Msl::Version1_0));
     }
 }

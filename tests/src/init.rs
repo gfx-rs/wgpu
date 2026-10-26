@@ -99,6 +99,7 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
                 enable: !cfg!(target_arch = "wasm32"),
                 ..Default::default()
             },
+            ..Default::default()
         }
         .with_env(),
         #[cfg(not(all(
