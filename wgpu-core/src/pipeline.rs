@@ -27,9 +27,7 @@ use crate::{
     },
     pipeline_cache,
     resource::{InvalidResourceError, Labeled, ResourceState, TrackingData},
-    resource_log,
-    validation::{self, ShaderMetaData},
-    Label, LabelHelpers as _,
+    resource_log, validation, FastHashSet, Label, LabelHelpers as _,
 };
 
 /// Information about buffer bindings, which
@@ -68,9 +66,26 @@ pub type ShaderModuleDescriptorPassthrough<'a> =
     wgt::CreateShaderModuleDescriptorPassthrough<'a, Label<'a>>;
 
 #[derive(Debug)]
-pub(crate) struct ShaderModuleState {
-    pub(crate) raw: Box<dyn hal::DynShaderModule>,
-    pub(crate) interface: ShaderMetaData,
+pub struct PassthroughInterface {
+    pub entry_point_names: FastHashSet<String>,
+}
+
+// Most shaders will use a standard interface which is very large.
+// Passthrough shaders have a much smaller interface. No reason to
+// box the standard interface though.
+#[expect(clippy::large_enum_variant)]
+#[derive(Debug)]
+pub enum ShaderModuleState {
+    /// A Naga module, from which we generate a `wgpu_hal` shader module
+    /// for each pipeline stage that uses it.
+    NagaModule {
+        shader: hal::NagaShader,
+        runtime_checks: wgt::ShaderRuntimeChecks,
+    },
+    Passthrough {
+        raw: Box<dyn hal::DynShaderModule>,
+        interface: PassthroughInterface,
+    },
 }
 
 #[derive(Debug)]
@@ -99,8 +114,11 @@ impl Drop for ShaderModule {
         else {
             return;
         };
-        unsafe {
-            self.device.raw().destroy_shader_module(state.raw);
+        match state {
+            ShaderModuleState::NagaModule { .. } => {}
+            ShaderModuleState::Passthrough { raw, .. } => unsafe {
+                self.device.raw().destroy_shader_module(raw);
+            },
         }
     }
 }
@@ -157,19 +175,44 @@ impl ShaderModule {
         entry_point: Option<&str>,
     ) -> Result<String, validation::StageError> {
         let state = self.state()?;
-        match state.interface {
-            ShaderMetaData::Interface(ref interface) => {
-                interface.finalize_entry_point_name(stage, entry_point)
+        match state {
+            ShaderModuleState::NagaModule { ref shader, .. } => {
+                finalize_naga_entry_point_name(&shader.module, stage, entry_point)
             }
-            ShaderMetaData::Passthrough(ref interface) => {
+            ShaderModuleState::Passthrough { ref interface, .. } => {
                 finalize_passthrough_entry_point_name(interface, entry_point)
             }
         }
     }
 }
 
+fn finalize_naga_entry_point_name(
+    module: &naga::Module,
+    stage: naga::ShaderStage,
+    entry_point: Option<&str>,
+) -> Result<String, validation::StageError> {
+    let mut candidates = module.entry_points.iter().filter(|ep| ep.stage == stage);
+    if let Some(name) = entry_point {
+        return match candidates.find(|ep| ep.name == name) {
+            Some(ep) => Ok(ep.name.clone()),
+            None => Err(validation::StageError::NoEntryPointWithNameForStage {
+                stage,
+                name: name.to_owned(),
+            }),
+        };
+    }
+
+    let Some(first) = candidates.next() else {
+        return Err(validation::StageError::NoEntryPointForStage(stage));
+    };
+    if candidates.next().is_some() {
+        return Err(validation::StageError::AmbiguousEntryPointForStage(stage));
+    }
+    Ok(first.name.clone())
+}
+
 fn finalize_passthrough_entry_point_name(
-    interface: &validation::PassthroughInterface,
+    interface: &PassthroughInterface,
     entry_point: Option<&str>,
 ) -> Result<String, validation::StageError> {
     if let Some(ep) = entry_point {
@@ -487,8 +530,6 @@ pub type ImplicitBindGroupCount = u8;
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImplicitLayoutError {
-    #[error("Unable to reflect the shader {0:?} interface")]
-    ReflectionError(wgt::ShaderStages),
     #[error(transparent)]
     BindGroup(#[from] CreateBindGroupLayoutError),
     #[error(transparent)]
@@ -500,7 +541,6 @@ pub enum ImplicitLayoutError {
 impl WebGpuError for ImplicitLayoutError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
-            Self::ReflectionError(_) => ErrorType::Validation,
             Self::BindGroup(e) => e.webgpu_error_type(),
             Self::Pipeline(e) => e.webgpu_error_type(),
             Self::Passthrough(_) => ErrorType::Validation,
@@ -1309,8 +1349,8 @@ impl RenderPipeline {
 mod tests {
     use super::*;
 
-    fn passthrough_interface(entry_point_names: &[&str]) -> validation::PassthroughInterface {
-        validation::PassthroughInterface {
+    fn passthrough_interface(entry_point_names: &[&str]) -> PassthroughInterface {
+        PassthroughInterface {
             entry_point_names: entry_point_names
                 .iter()
                 .map(|name| (*name).to_owned())
