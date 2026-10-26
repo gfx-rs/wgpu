@@ -17,12 +17,17 @@ uniform usampler1D _group_0_binding_7_cs;
 layout(r32ui) writeonly uniform uimage1D _group_0_binding_2_cs;
 
 
+ivec2 naga_mod(ivec2 lhs, ivec2 rhs) {
+    ivec2 divisor = ivec2(
+        (rhs.x == 0 || (lhs.x == (-2147483647 - 1) && rhs.x == -1)) ? 1 : rhs.x,
+        (rhs.y == 0 || (lhs.y == (-2147483647 - 1) && rhs.y == -1)) ? 1 : rhs.y);
+    return lhs - divisor * (lhs / divisor);
+}
+
 void main() {
     uvec3 local_id = gl_LocalInvocationID;
     uvec2 dim = uvec2(imageSize(_group_0_binding_1_cs).xy);
-    ivec2 _e5 = ivec2((dim * local_id.xy));
-    ivec2 _e8 = ivec2(10, 20);
-    ivec2 itc = (_e5 - _e8 * (_e5 / _e8));
+    ivec2 itc = naga_mod(ivec2((dim * local_id.xy)), ivec2(10, 20));
     uvec4 value1_ = texelFetch(_group_0_binding_0_cs, itc, int(local_id.z));
     uvec4 value1_2_ = texelFetch(_group_0_binding_0_cs, itc, int(uint(local_id.z)));
     uvec4 value2_ = texelFetch(_group_0_binding_3_cs, itc, int(local_id.z));

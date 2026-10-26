@@ -413,28 +413,16 @@ impl<'a, W: Write> Writer<'a, W> {
         }
         writeln!(self.out)?;
 
+        // Write the helper functions implementing WGSL integer `/` and `%`
+        self.write_int_div_mod_helpers(include_unused)?;
+
         // Write all regular functions
         for (handle, function) in self.module.functions.iter() {
-            // Check that the function doesn't use globals that aren't supported
-            // by the current entry point
-            if !include_unused && !ep_info.dominates_global_use(&self.info[handle]) {
+            if !self.is_function_written(handle, include_unused) {
                 continue;
             }
 
             let fun_info = &self.info[handle];
-
-            // Skip functions that that are not compatible with this entry point's stage.
-            //
-            // When validation is enabled, it rejects modules whose entry points try to call
-            // incompatible functions, so if we got this far, then any functions incompatible
-            // with our selected entry point must not be used.
-            //
-            // When validation is disabled, `fun_info.available_stages` is always just
-            // `ShaderStages::all()`, so this will write all functions in the module, and
-            // the downstream GLSL compiler will catch any problems.
-            if !fun_info.available_stages.contains(ep_info.available_stages) {
-                continue;
-            }
 
             // Write the function
             self.write_function(back::FunctionType::Function(handle), function, fun_info)?;
@@ -453,6 +441,130 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Collect all reflection info and return it to the user
         self.collect_reflection_info()
+    }
+
+    /// Returns whether the regular function `handle` is written for the
+    /// selected entry point.
+    fn is_function_written(&self, handle: Handle<crate::Function>, include_unused: bool) -> bool {
+        let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
+        let fun_info = &self.info[handle];
+
+        // Check that the function doesn't use globals that aren't supported
+        // by the current entry point
+        if !include_unused && !ep_info.dominates_global_use(fun_info) {
+            return false;
+        }
+
+        // Skip functions that that are not compatible with this entry point's stage.
+        //
+        // When validation is enabled, it rejects modules whose entry points try to call
+        // incompatible functions, so if we got this far, then any functions incompatible
+        // with our selected entry point must not be used.
+        //
+        // When validation is disabled, `fun_info.available_stages` is always just
+        // `ShaderStages::all()`, so this will write all functions in the module, and
+        // the downstream GLSL compiler will catch any problems.
+        fun_info.available_stages.contains(ep_info.available_stages)
+    }
+
+    /// Writes the [`DIV_FUNCTION`] and [`MOD_FUNCTION`] overloads needed by the
+    /// functions that will be written.
+    ///
+    /// GLSL leaves integer division and remainder undefined when the divisor is
+    /// zero, and signed division undefined on overflow (`INT_MIN / -1`). WGSL
+    /// instead requires:
+    ///
+    /// * `x / 0 == x` and `x % 0 == 0`
+    /// * `INT_MIN / -1 == INT_MIN` and `INT_MIN % -1 == 0`
+    ///
+    /// GLSL's `%` is additionally undefined when either operand is negative,
+    /// while WGSL's `%` truncates like integer division.
+    ///
+    /// The helpers replace the divisor by `1` in the problematic cases (per
+    /// component for vectors), which yields exactly the WGSL results, and
+    /// compute signed remainders as `lhs - divisor * (lhs / divisor)`, since
+    /// integer division truncates toward zero.
+    fn write_int_div_mod_helpers(&mut self, include_unused: bool) -> BackendResult {
+        let mut needed = crate::FastIndexSet::default();
+        let mut collect = |function: &crate::Function, info: &valid::FunctionInfo| {
+            for (handle, expr) in function.expressions.iter() {
+                if let crate::Expression::Binary { op, .. } = *expr {
+                    let inner = info[handle].ty.inner_with(&self.module.types);
+                    if let Some(key) = int_div_mod_helper(op, inner) {
+                        needed.insert(key);
+                    }
+                }
+            }
+        };
+        for (handle, function) in self.module.functions.iter() {
+            if self.is_function_written(handle, include_unused) {
+                collect(function, &self.info[handle]);
+            }
+        }
+        collect(
+            &self.entry_point.function,
+            self.info.get_entry_point(self.entry_point_idx as usize),
+        );
+
+        for (op, size, scalar) in needed {
+            let ScalarString { prefix, full } = glsl_scalar(scalar)?;
+            let type_name = match size {
+                Some(size) => format!("{prefix}vec{}", size as u8),
+                None => full.to_string(),
+            };
+            let literal = |value: i32| match (scalar.kind, scalar.width) {
+                (crate::ScalarKind::Uint, 4) => format!("{value}u"),
+                (_, 4) => format!("{value}"),
+                _ => format!("{full}({value})"),
+            };
+            let (zero, one) = (literal(0), literal(1));
+
+            // The divisor of a single component, replaced by `1` where WGSL
+            // requires a result that differs from plain GLSL division.
+            let component_divisor = |component: &str| match scalar.kind {
+                crate::ScalarKind::Sint => {
+                    let min = match scalar.width {
+                        // `-2147483648` would overflow before being negated.
+                        4 => "(-2147483647 - 1)".to_string(),
+                        _ => literal(i16::MIN.into()),
+                    };
+                    let minus_one = literal(-1);
+                    format!(
+                        "(rhs{component} == {zero} || (lhs{component} == {min} && rhs{component} == {minus_one})) ? {one} : rhs{component}"
+                    )
+                }
+                _ => format!("rhs{component} == {zero} ? {one} : rhs{component}"),
+            };
+            let divisor = match size {
+                None => component_divisor(""),
+                Some(size) => {
+                    let components = back::COMPONENTS[..size as usize]
+                        .iter()
+                        .map(|c| format!("\n        {}", component_divisor(&format!(".{c}"))))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    format!("{type_name}({components})")
+                }
+            };
+
+            let (function_name, result) = match (op, scalar.kind) {
+                (crate::BinaryOperator::Divide, _) => (DIV_FUNCTION, "lhs / divisor"),
+                // Unsigned `%` is well defined for a non-zero divisor.
+                (_, crate::ScalarKind::Uint) => (MOD_FUNCTION, "lhs % divisor"),
+                // Signed `%` is undefined for negative operands.
+                _ => (MOD_FUNCTION, "lhs - divisor * (lhs / divisor)"),
+            };
+
+            writeln!(
+                self.out,
+                "{type_name} {function_name}({type_name} lhs, {type_name} rhs) {{"
+            )?;
+            writeln!(self.out, "{}{type_name} divisor = {divisor};", back::INDENT)?;
+            writeln!(self.out, "{}return {result};", back::INDENT)?;
+            writeln!(self.out, "}}")?;
+            writeln!(self.out)?;
+        }
+        Ok(())
     }
 
     fn write_array_size(
@@ -928,22 +1040,6 @@ impl<'a, W: Write> Writer<'a, W> {
                         }
                     }
                     _ => {}
-                }
-            }
-
-            if let Expression::Binary {
-                op: crate::BinaryOperator::Modulo,
-                left,
-                right,
-            } = *expr
-            {
-                // Integer `%` is lowered to `left - right * (left / right)` in
-                // write_expr (`BinaryOperation::ModuloInt`), which references each
-                // operand twice, so bake both to avoid re-evaluating them.
-                if let Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint) = inner.scalar_kind()
-                {
-                    self.need_bake_expressions.insert(left);
-                    self.need_bake_expressions.insert(right);
                 }
             }
         }
@@ -2884,6 +2980,38 @@ impl<'a, W: Write> Writer<'a, W> {
                 let left_inner = ctx.resolve_type(left, &self.module.types);
                 let right_inner = ctx.resolve_type(right, &self.module.types);
 
+                // Integer `/` and `%` call the helpers written by
+                // `write_int_div_mod_helpers`, which implement WGSL semantics.
+                let expr_inner = ctx.resolve_type(expr, &self.module.types);
+                if let Some((_, size, _)) = int_div_mod_helper(op, expr_inner) {
+                    let function_name = match op {
+                        Bo::Divide => DIV_FUNCTION,
+                        _ => MOD_FUNCTION,
+                    };
+                    write!(self.out, "{function_name}(")?;
+                    for (i, (operand, operand_inner)) in [(left, left_inner), (right, right_inner)]
+                        .into_iter()
+                        .enumerate()
+                    {
+                        if i != 0 {
+                            write!(self.out, ", ")?;
+                        }
+                        // The helpers take two operands of the result type,
+                        // so splat a scalar operand of a vector operation.
+                        let splat = size.is_some() && matches!(*operand_inner, Ti::Scalar(_));
+                        if splat {
+                            self.write_value_type(expr_inner)?;
+                            write!(self.out, "(")?;
+                        }
+                        self.write_expr(operand, ctx)?;
+                        if splat {
+                            write!(self.out, ")")?;
+                        }
+                    }
+                    write!(self.out, ")")?;
+                    return Ok(());
+                }
+
                 let function = match (left_inner, right_inner) {
                     (&Ti::Vector { scalar, .. }, &Ti::Vector { .. }) => match op {
                         Bo::Less
@@ -2893,9 +3021,6 @@ impl<'a, W: Write> Writer<'a, W> {
                         | Bo::Equal
                         | Bo::NotEqual => BinaryOperation::VectorCompare,
                         Bo::Modulo if scalar.kind == Sk::Float => BinaryOperation::Modulo,
-                        Bo::Modulo if scalar.kind == Sk::Sint || scalar.kind == Sk::Uint => {
-                            BinaryOperation::ModuloInt
-                        }
                         Bo::And if scalar.kind == Sk::Bool => {
                             op = crate::BinaryOperator::LogicalAnd;
                             BinaryOperation::VectorComponentWise
@@ -2911,11 +3036,6 @@ impl<'a, W: Write> Writer<'a, W> {
                             Bo::Modulo => BinaryOperation::Modulo,
                             _ => BinaryOperation::Other,
                         },
-                        (Some(Sk::Sint | Sk::Uint), _) | (_, Some(Sk::Sint | Sk::Uint))
-                            if op == Bo::Modulo =>
-                        {
-                            BinaryOperation::ModuloInt
-                        }
                         (Some(Sk::Bool), Some(Sk::Bool)) => match op {
                             Bo::InclusiveOr => {
                                 op = crate::BinaryOperator::LogicalOr;
@@ -2973,10 +3093,8 @@ impl<'a, W: Write> Writer<'a, W> {
 
                         write!(self.out, ")")?;
                     }
-                    // Signed/unsigned integer `%` with a negative operand is handled by
-                    // `BinaryOperation::ModuloInt` below. Remaining TODO: the degenerate
-                    // div-by-zero / `INT_MIN % -1` cases (this backend also leaves integer
-                    // `/` unguarded), and float `% 0` (see
+                    // Integer `%` is handled by the `MOD_FUNCTION` helper above.
+                    // TODO: handle float `% 0` (see
                     // https://github.com/gpuweb/gpuweb/issues/2798).
                     BinaryOperation::Modulo => {
                         write!(self.out, "(")?;
@@ -2993,23 +3111,6 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, ")")?;
 
                         write!(self.out, ")")?;
-                    }
-                    BinaryOperation::ModuloInt => {
-                        // GLSL's `%` is undefined when either operand is negative.
-                        // Integer division truncates toward zero (which is well
-                        // defined), so reconstruct the remainder as `e1 - e2 * (e1 / e2)`.
-                        // This matches WGSL's truncated `%` for all operands; the
-                        // degenerate `x % 0` / `INT_MIN % -1` cases stay consistent
-                        // with this backend's unguarded integer `/`.
-                        write!(self.out, "(")?;
-                        self.write_expr(left, ctx)?;
-                        write!(self.out, " - ")?;
-                        self.write_expr(right, ctx)?;
-                        write!(self.out, " * (")?;
-                        self.write_expr(left, ctx)?;
-                        write!(self.out, " / ")?;
-                        self.write_expr(right, ctx)?;
-                        write!(self.out, "))")?;
                     }
                     BinaryOperation::Other => {
                         write!(self.out, "(")?;
@@ -4663,5 +4764,33 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             _ => unreachable!(),
         }
+    }
+}
+
+/// Returns the operator, vector size and scalar type of the [`DIV_FUNCTION`] or
+/// [`MOD_FUNCTION`] overload implementing the integer binary operation `op`
+/// with result type `inner`, or `None` if `op` is not an integer `/` or `%`.
+const fn int_div_mod_helper(
+    op: crate::BinaryOperator,
+    inner: &TypeInner,
+) -> Option<(
+    crate::BinaryOperator,
+    Option<crate::VectorSize>,
+    crate::Scalar,
+)> {
+    if !matches!(
+        op,
+        crate::BinaryOperator::Divide | crate::BinaryOperator::Modulo
+    ) {
+        return None;
+    }
+    let (size, scalar) = match *inner {
+        TypeInner::Scalar(scalar) => (None, scalar),
+        TypeInner::Vector { size, scalar } => (Some(size), scalar),
+        _ => return None,
+    };
+    match (scalar.kind, scalar.width) {
+        (crate::ScalarKind::Sint | crate::ScalarKind::Uint, 2 | 4) => Some((op, size, scalar)),
+        _ => None,
     }
 }

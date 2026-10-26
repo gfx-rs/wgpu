@@ -238,6 +238,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Reject WGSL loads of structs and arrays that contain atomics, which previously caused a panic in the HLSL backend. By @drakeo338 in [#10458](https://github.com/gfx-rs/wgpu/issues/10458).
 - Panic when a SPIR-V's instruction's word count is greater than `u16::MAX`, instead of emitting a malformed instruction. By @ErichDonGubler in [#10537](https://github.com/gfx-rs/wgpu/pull/10537).
 - Accept a `ViewIndex` input declared as a signed integer in the SPIR-V frontend, as glslang and Slang emit it, by reading it as a `u32`. By @VoxelBoy in [#10568](https://github.com/gfx-rs/wgpu/pull/10568).
+- Make integer `/` and `%` in the GLSL backend follow WGSL semantics for division by zero (`x / 0 == x`, `x % 0 == 0`) and signed overflow (`i32::MIN / -1 == i32::MIN`, `i32::MIN % -1 == 0`), which GLSL leaves undefined, by emitting `naga_div` and `naga_mod` helper functions like the HLSL, MSL and SPIR-V backends. Fixes [#4385](https://github.com/gfx-rs/wgpu/issues/4385). By @barafael in [#10726](https://github.com/gfx-rs/wgpu/pull/10726).
 
 #### Validation
 

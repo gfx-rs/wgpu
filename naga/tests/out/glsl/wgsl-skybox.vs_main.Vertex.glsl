@@ -15,11 +15,16 @@ layout(std140, binding = 0) uniform Data_block_0Vertex { Data _group_0_binding_0
 
 layout(location = 0) smooth out vec3 _vs2fs_location0;
 
+int naga_div(int lhs, int rhs) {
+    int divisor = (rhs == 0 || (lhs == (-2147483647 - 1) && rhs == -1)) ? 1 : rhs;
+    return lhs / divisor;
+}
+
 void main() {
     uint vertex_index = uint(gl_VertexID);
     int tmp1_ = 0;
     int tmp2_ = 0;
-    tmp1_ = (int(vertex_index) / 2);
+    tmp1_ = naga_div(int(vertex_index), 2);
     tmp2_ = (int(vertex_index) & 1);
     int _e9 = tmp1_;
     int _e15 = tmp2_;
