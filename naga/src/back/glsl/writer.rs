@@ -293,14 +293,15 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        // Write polyfills for integer bit manipulation functions, if needed.
-        if !self.options.version.supports_integer_functions() {
+        // Write helpers for integer bit manipulation functions, if needed.
+        {
             let mut helpers = alloc::collections::BTreeSet::new();
             for (handle, function) in self.module.functions.iter() {
                 bit_polyfills::collect_needed(
                     function,
                     &self.info[handle],
                     &self.module.types,
+                    self.options.version,
                     &mut helpers,
                 );
             }
@@ -308,6 +309,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 &self.entry_point.function,
                 self.info.get_entry_point(self.entry_point_idx as usize),
                 &self.module.types,
+                self.options.version,
                 &mut helpers,
             );
             bit_polyfills::write_helpers(&mut self.out, &helpers)?;
@@ -934,22 +936,21 @@ impl<'a, W: Write> Writer<'a, W> {
                     {
                         self.need_bake_expressions.insert(arg);
                     }
-                    // The polyfills used when integer functions are not supported are
-                    // helper functions, which don't re-use any arguments.
+                    // Helper functions don't re-use any arguments.
                     crate::MathFunction::ExtractBits
-                        if self.options.version.supports_integer_functions() =>
+                        if !bit_polyfills::uses_helper(fun, self.options.version) =>
                     {
                         // Only argument 1 is re-used.
                         self.need_bake_expressions.insert(arg1.unwrap());
                     }
                     crate::MathFunction::InsertBits
-                        if self.options.version.supports_integer_functions() =>
+                        if !bit_polyfills::uses_helper(fun, self.options.version) =>
                     {
                         // Only argument 2 is re-used.
                         self.need_bake_expressions.insert(arg2.unwrap());
                     }
                     crate::MathFunction::CountLeadingZeros
-                        if self.options.version.supports_integer_functions() =>
+                        if !bit_polyfills::uses_helper(fun, self.options.version) =>
                     {
                         if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
                             self.need_bake_expressions.insert(arg);
@@ -3136,18 +3137,17 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 use crate::MathFunction as Mf;
 
-                if !self.options.version.supports_integer_functions() {
-                    let arg_ty = ctx.resolve_type(arg, &self.module.types);
-                    if let Some(helper) = bit_polyfills::Helper::new(fun, arg_ty) {
-                        write!(self.out, "{}(", helper.name())?;
+                let arg_ty = ctx.resolve_type(arg, &self.module.types);
+                if let Some(helper) = bit_polyfills::Helper::new(fun, arg_ty, self.options.version)
+                {
+                    write!(self.out, "{}(", helper.name())?;
+                    self.write_expr(arg, ctx)?;
+                    for arg in [arg1, arg2, arg3].into_iter().flatten() {
+                        write!(self.out, ", ")?;
                         self.write_expr(arg, ctx)?;
-                        for arg in [arg1, arg2, arg3].into_iter().flatten() {
-                            write!(self.out, ", ")?;
-                            self.write_expr(arg, ctx)?;
-                        }
-                        write!(self.out, ")")?;
-                        return Ok(());
                     }
+                    write!(self.out, ")")?;
+                    return Ok(());
                 }
 
                 let fun_name = match fun {
@@ -3395,8 +3395,8 @@ impl<'a, W: Write> Writer<'a, W> {
                         return Ok(());
                     }
                     Mf::CountLeadingZeros => {
-                        // Integer functions are supported, otherwise a polyfill would
-                        // have been used.
+                        // Only reached on desktop GLSL with integer functions, otherwise
+                        // a helper would have been used.
                         match *ctx.resolve_type(arg, &self.module.types) {
                             TypeInner::Vector { size, scalar } => {
                                 let s = common::vector_size_str(size);

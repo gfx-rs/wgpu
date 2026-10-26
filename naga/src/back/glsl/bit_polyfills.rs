@@ -1,5 +1,17 @@
 //! Polyfills for the integer bit manipulation builtins.
 //!
+//! # Native functions on GLSL ES
+//!
+//! GLSL ES declares `bitCount`, `findLSB` and `findMSB` as returning `lowp int`,
+//! and an operation takes the precision of its operands. Drivers may evaluate
+//! low precision operations in fewer than 32 bits (Mesa uses 16 bits), so
+//! e.g. `~bitCount(x)` or `uint(findLSB(0u))` lose their upper bits. On GLSL
+//! ES versions that have these functions, the corresponding WGSL builtins are
+//! therefore also written as calls to helpers, whose bodies store the raw
+//! result in a `highp` local before converting it or doing arithmetic on it.
+//!
+//! # Polyfills
+//!
 //! `bitfieldExtract`, `bitfieldInsert`, `bitfieldReverse`, `bitCount`,
 //! `findLSB` and `findMSB` are only available from GLSL 4.00 and GLSL ES 3.10
 //! (see [`Version::supports_integer_functions`]). On older versions (most
@@ -20,6 +32,7 @@
 use alloc::{collections::BTreeSet, format, string::String};
 use core::fmt::{self, Write};
 
+use super::Version;
 use crate::{valid, Expression, MathFunction as Mf, Scalar, TypeInner};
 
 /// An integer bit manipulation builtin that has a polyfill.
@@ -86,6 +99,8 @@ impl BitFunction {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct Helper {
     fun: BitFunction,
+    /// Whether the helper wraps the native GLSL function instead of polyfilling it.
+    native: bool,
     /// `false` for `uint`, `true` for `int`.
     signed: bool,
     /// Number of components, 1 for scalars.
@@ -93,10 +108,14 @@ pub(super) struct Helper {
 }
 
 impl Helper {
-    /// Returns the helper to call for `fun` applied to an argument of type `arg_ty`,
-    /// or `None` if `fun` has no polyfill for that type.
-    pub(super) fn new(fun: Mf, arg_ty: &TypeInner) -> Option<Self> {
+    /// Returns the helper to call for `fun` applied to an argument of type `arg_ty`
+    /// when targeting `version`, or `None` if `fun` should be written inline.
+    pub(super) fn new(fun: Mf, arg_ty: &TypeInner, version: Version) -> Option<Self> {
+        if !uses_helper(fun, version) {
+            return None;
+        }
         let fun = BitFunction::from_math(fun)?;
+        let native = version.supports_integer_functions();
         let (scalar, components) = match *arg_ty {
             TypeInner::Scalar(scalar) => (scalar, 1),
             TypeInner::Vector { size, scalar } => (scalar, size as u8),
@@ -109,6 +128,7 @@ impl Helper {
         };
         Some(Self {
             fun,
+            native,
             signed,
             components,
         })
@@ -130,10 +150,13 @@ impl Helper {
             ..scalar
         };
         let component_wise = (self.components > 1).then_some(scalar);
-        let reinterpreted =
-            (self.components == 1 && self.signed && self.fun != BitFunction::ExtractBits)
-                .then_some(unsigned_scalar);
-        let other = if self == unsigned_scalar {
+        // Native wrappers don't call other helpers.
+        let reinterpreted = (!self.native
+            && self.components == 1
+            && self.signed
+            && self.fun != BitFunction::ExtractBits)
+            .then_some(unsigned_scalar);
+        let other = if !self.native && self == unsigned_scalar {
             match self.fun {
                 BitFunction::FirstTrailingBit => Some(Self {
                     fun: BitFunction::CountTrailingZeros,
@@ -200,6 +223,11 @@ impl Helper {
                 }
             }
             writeln!(out, ");")?;
+            return writeln!(out, "}}");
+        }
+
+        if self.native {
+            writeln!(out, "{}", self.native_body())?;
             return writeln!(out, "}}");
         }
 
@@ -300,16 +328,95 @@ impl Helper {
     }
 }
 
+impl Helper {
+    /// The body of a scalar helper wrapping the native function.
+    ///
+    /// The raw result is stored in a `highp int` before anything else is done
+    /// with it, see the module documentation.
+    fn native_body(self) -> &'static str {
+        match (self.fun, self.signed) {
+            (BitFunction::CountOneBits, false) => {
+                "    int r = bitCount(e);
+    return uint(r);"
+            }
+            (BitFunction::CountOneBits, true) => {
+                "    int r = bitCount(e);
+    return r;"
+            }
+            // `findLSB` returns -1 for 0.
+            (BitFunction::CountTrailingZeros, false) => {
+                "    int r = findLSB(e);
+    return min(uint(r), 32u);"
+            }
+            (BitFunction::CountTrailingZeros, true) => {
+                "    int r = findLSB(e);
+    return int(min(uint(r), 32u));"
+            }
+            (BitFunction::FirstTrailingBit, false) => {
+                "    int r = findLSB(e);
+    return uint(r);"
+            }
+            (BitFunction::FirstTrailingBit, true) => {
+                "    int r = findLSB(e);
+    return r;"
+            }
+            // `findMSB` returns -1 for 0 (and for -1).
+            (BitFunction::CountLeadingZeros, false) => {
+                "    int r = findMSB(e);
+    return uint(31 - r);"
+            }
+            (BitFunction::CountLeadingZeros, true) => {
+                "    int r = findMSB(e);
+    return e < 0 ? 0 : 31 - r;"
+            }
+            (BitFunction::FirstLeadingBit, false) => {
+                "    int r = findMSB(e);
+    return uint(r);"
+            }
+            // For negative numbers, `findMSB` already returns the most significant 0 bit.
+            (BitFunction::FirstLeadingBit, true) => {
+                "    int r = findMSB(e);
+    return r;"
+            }
+            (BitFunction::ReverseBits | BitFunction::ExtractBits | BitFunction::InsertBits, _) => {
+                unreachable!("{self:?} is never wrapped")
+            }
+        }
+    }
+}
+
+/// Returns whether `fun` is written as a call to a helper function when
+/// targeting `version`, rather than inline.
+pub(super) fn uses_helper(fun: Mf, version: Version) -> bool {
+    if !version.supports_integer_functions() {
+        // Polyfill everything.
+        BitFunction::from_math(fun).is_some()
+    } else if version.is_es() {
+        // Only the functions returning `lowp int`.
+        matches!(
+            fun,
+            Mf::CountOneBits
+                | Mf::CountTrailingZeros
+                | Mf::FirstTrailingBit
+                | Mf::CountLeadingZeros
+                | Mf::FirstLeadingBit
+        )
+    } else {
+        false
+    }
+}
+
 /// Collects the helpers needed by `function`, including their dependencies.
 pub(super) fn collect_needed(
     function: &crate::Function,
     info: &valid::FunctionInfo,
     types: &crate::UniqueArena<crate::Type>,
+    version: Version,
     needed: &mut BTreeSet<Helper>,
 ) {
     for (_, expression) in function.expressions.iter() {
         if let Expression::Math { fun, arg, .. } = *expression {
-            if let Some(helper) = Helper::new(fun, info[arg].ty.inner_with(types)) {
+            if let Some(helper) = Helper::new(fun, info[arg].ty.inner_with(types), version) {
                 helper.insert_with_dependencies(needed);
             }
         }

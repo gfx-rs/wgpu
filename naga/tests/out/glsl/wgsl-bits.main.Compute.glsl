@@ -6,6 +6,72 @@ precision highp int;
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 
+uint naga_count_one_bits(uint e) {
+    int r = bitCount(e);
+    return uint(r);
+}
+
+uvec2 naga_count_one_bits(uvec2 e) {
+    return uvec2(naga_count_one_bits(e.x), naga_count_one_bits(e.y));
+}
+
+uvec3 naga_count_one_bits(uvec3 e) {
+    return uvec3(naga_count_one_bits(e.x), naga_count_one_bits(e.y), naga_count_one_bits(e.z));
+}
+
+uvec4 naga_count_one_bits(uvec4 e) {
+    return uvec4(naga_count_one_bits(e.x), naga_count_one_bits(e.y), naga_count_one_bits(e.z), naga_count_one_bits(e.w));
+}
+
+int naga_count_one_bits(int e) {
+    int r = bitCount(e);
+    return r;
+}
+
+ivec2 naga_count_one_bits(ivec2 e) {
+    return ivec2(naga_count_one_bits(e.x), naga_count_one_bits(e.y));
+}
+
+ivec3 naga_count_one_bits(ivec3 e) {
+    return ivec3(naga_count_one_bits(e.x), naga_count_one_bits(e.y), naga_count_one_bits(e.z));
+}
+
+ivec4 naga_count_one_bits(ivec4 e) {
+    return ivec4(naga_count_one_bits(e.x), naga_count_one_bits(e.y), naga_count_one_bits(e.z), naga_count_one_bits(e.w));
+}
+
+uint naga_first_trailing_bit(uint e) {
+    int r = findLSB(e);
+    return uint(r);
+}
+
+uvec2 naga_first_trailing_bit(uvec2 e) {
+    return uvec2(naga_first_trailing_bit(e.x), naga_first_trailing_bit(e.y));
+}
+
+int naga_first_trailing_bit(int e) {
+    int r = findLSB(e);
+    return r;
+}
+
+uint naga_first_leading_bit(uint e) {
+    int r = findMSB(e);
+    return uint(r);
+}
+
+uvec3 naga_first_leading_bit(uvec3 e) {
+    return uvec3(naga_first_leading_bit(e.x), naga_first_leading_bit(e.y), naga_first_leading_bit(e.z));
+}
+
+int naga_first_leading_bit(int e) {
+    int r = findMSB(e);
+    return r;
+}
+
+ivec3 naga_first_leading_bit(ivec3 e) {
+    return ivec3(naga_first_leading_bit(e.x), naga_first_leading_bit(e.y), naga_first_leading_bit(e.z));
+}
+
 void main() {
     int i = 0;
     ivec2 i2_ = ivec2(0);
@@ -90,33 +156,33 @@ void main() {
     uvec4 _e128 = u4_;
     u4_ = bitfieldExtract(_e128, int(min(5u, 32u)), int(min(10u, 32u - min(5u, 32u))));
     int _e132 = i;
-    i = findLSB(_e132);
+    i = naga_first_trailing_bit(_e132);
     uvec2 _e134 = u2_;
-    u2_ = uvec2(findLSB(_e134));
+    u2_ = naga_first_trailing_bit(_e134);
     ivec3 _e136 = i3_;
-    i3_ = findMSB(_e136);
+    i3_ = naga_first_leading_bit(_e136);
     uvec3 _e138 = u3_;
-    u3_ = uvec3(findMSB(_e138));
+    u3_ = naga_first_leading_bit(_e138);
     int _e140 = i;
-    i = findMSB(_e140);
+    i = naga_first_leading_bit(_e140);
     uint _e142 = u;
-    u = uint(findMSB(_e142));
+    u = naga_first_leading_bit(_e142);
     int _e144 = i;
-    i = bitCount(_e144);
+    i = naga_count_one_bits(_e144);
     ivec2 _e146 = i2_;
-    i2_ = bitCount(_e146);
+    i2_ = naga_count_one_bits(_e146);
     ivec3 _e148 = i3_;
-    i3_ = bitCount(_e148);
+    i3_ = naga_count_one_bits(_e148);
     ivec4 _e150 = i4_;
-    i4_ = bitCount(_e150);
+    i4_ = naga_count_one_bits(_e150);
     uint _e152 = u;
-    u = uint(bitCount(_e152));
+    u = naga_count_one_bits(_e152);
     uvec2 _e154 = u2_;
-    u2_ = uvec2(bitCount(_e154));
+    u2_ = naga_count_one_bits(_e154);
     uvec3 _e156 = u3_;
-    u3_ = uvec3(bitCount(_e156));
+    u3_ = naga_count_one_bits(_e156);
     uvec4 _e158 = u4_;
-    u4_ = uvec4(bitCount(_e158));
+    u4_ = naga_count_one_bits(_e158);
     int _e160 = i;
     i = bitfieldReverse(_e160);
     ivec2 _e162 = i2_;

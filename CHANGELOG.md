@@ -229,6 +229,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### naga
 
+- Fix `countOneBits`, `countTrailingZeros`, `firstTrailingBit`, `countLeadingZeros` and `firstLeadingBit` losing their upper bits on GLSL ES 3.10+. GLSL ES declares `bitCount`, `findLSB` and `findMSB` as returning `lowp int`, so conversions of and arithmetic on their results could be evaluated at low precision: on Mesa radeonsi, `~countOneBits(x)` gave `0xffe8` instead of `0xffffffe8`, and `f32(firstTrailingBit(0u))` gave `65535.0` instead of `4294967296.0`. These builtins now go through helper functions that store the result in a `highp` variable first. By @barafael in [#10730](https://github.com/gfx-rs/wgpu/pull/10730).
 - Reject unsigned integer arguments to WGSL `sign()` during Naga validation instead of allowing them to reach and panic in the SPIR-V backend. By @notferdon in [#10451](https://github.com/gfx-rs/wgpu/pull/10451).
 - Declare `LocalInvocationIndex` only once in SPIR-V mesh shader entry points that don't take `local_invocation_index` as an argument. Previously these shaders were invalid SPIR-V. By @apollo-2006 in [#10497](https://github.com/gfx-rs/wgpu/pull/10497).
 - Fix panics when shader `var<immediate>` size is larger than 256 bytes. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
