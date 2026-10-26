@@ -1847,6 +1847,52 @@ impl super::PrivateTextureFormatCapabilities {
     }
 }
 
+#[derive(Default)]
+struct WorkgroupProbeCache {
+    entries: Mutex<Vec<WorkgroupProbeEntry>>,
+}
+
+struct WorkgroupProbeEntry {
+    registry_id: u64,
+    version: MTLLanguageVersion,
+    result: Arc<Mutex<Option<bool>>>,
+}
+
+impl WorkgroupProbeCache {
+    fn get_or_probe(
+        &self,
+        registry_id: u64,
+        version: MTLLanguageVersion,
+        probe: impl FnOnce() -> Option<bool>,
+    ) -> Option<bool> {
+        if registry_id == 0 {
+            return probe();
+        }
+        let result = {
+            let mut entries = self.entries.lock();
+            if let Some(entry) = entries
+                .iter()
+                .find(|e| e.registry_id == registry_id && e.version == version)
+            {
+                Arc::clone(&entry.result)
+            } else {
+                let result = Arc::new(Mutex::new(None));
+                entries.push(WorkgroupProbeEntry {
+                    registry_id,
+                    version,
+                    result: Arc::clone(&result),
+                });
+                result
+            }
+        };
+        let mut result = result.lock();
+        if result.is_none() {
+            *result = probe();
+        }
+        *result
+    }
+}
+
 // Some legacy Intel compilers accept the attribute but fail during pipeline creation (#5827).
 fn broken_workgroup_size_attribute(
     device: &ProtocolObject<dyn MTLDevice>,
@@ -1858,19 +1904,33 @@ fn broken_workgroup_size_attribute(
     {
         return false;
     }
+    static CACHE: OnceCell<WorkgroupProbeCache> = OnceCell::new();
+    let registry_id = if device_class_responds_to(device, sel!(registryID)) {
+        device.registryID()
+    } else {
+        0
+    };
+    CACHE
+        .get_or_init(WorkgroupProbeCache::default)
+        .get_or_probe(registry_id, msl_version, || {
+            probe_workgroup_size_attribute(device, msl_version)
+        })
+        .unwrap_or(false)
+}
+
+fn probe_workgroup_size_attribute(
+    device: &ProtocolObject<dyn MTLDevice>,
+    msl_version: MTLLanguageVersion,
+) -> Option<bool> {
     let options = MTLCompileOptions::new();
     options.setLanguageVersion(msl_version);
     let source = NSString::from_str(
         "[[max_total_threads_per_threadgroup(1)]] kernel void wgpu_workgroup_size_probe() {}",
     );
     let Ok(library) = device.newLibraryWithSource_options_error(&source, Some(&options)) else {
-        return false;
+        return None;
     };
-    let Some(function) =
-        library.newFunctionWithName(&NSString::from_str("wgpu_workgroup_size_probe"))
-    else {
-        return false;
-    };
+    let function = library.newFunctionWithName(&NSString::from_str("wgpu_workgroup_size_probe"))?;
     let descriptor = MTLComputePipelineDescriptor::new();
     descriptor.setComputeFunction(Some(&function));
     match device.newComputePipelineStateWithDescriptor_options_reflection_error(
@@ -1878,10 +1938,10 @@ fn broken_workgroup_size_attribute(
         MTLPipelineOption::empty(),
         None,
     ) {
-        Ok(_) => false,
+        Ok(_) => Some(false),
         Err(error) => {
             log::debug!("Intel Metal workgroup-size attribute probe failed: {error:?}");
-            true
+            Some(true)
         }
     }
 }
@@ -1917,5 +1977,96 @@ impl super::OsType {
         } else {
             Self::Ios
         }
+    }
+}
+
+#[cfg(test)]
+mod compiler_probe_tests {
+    use super::MTLLanguageVersion as Msl;
+    use alloc::vec::Vec;
+
+    #[test]
+    fn compiler_probe_cache_reuses_completed_results() {
+        for result in [false, true] {
+            let cache = super::WorkgroupProbeCache::default();
+            assert_eq!(
+                cache.get_or_probe(1, Msl::Version3_1, || Some(result)),
+                Some(result)
+            );
+            assert_eq!(
+                cache.get_or_probe(1, Msl::Version3_1, || panic!("repeated probe")),
+                Some(result)
+            );
+        }
+    }
+
+    #[test]
+    fn compiler_probe_cache_separates_devices_and_versions() {
+        let cache = super::WorkgroupProbeCache::default();
+        assert_eq!(
+            cache.get_or_probe(1, Msl::Version3_1, || Some(true)),
+            Some(true)
+        );
+        assert_eq!(
+            cache.get_or_probe(2, Msl::Version3_1, || Some(false)),
+            Some(false)
+        );
+        assert_eq!(
+            cache.get_or_probe(1, Msl::Version3_0, || Some(false)),
+            Some(false)
+        );
+        assert_eq!(
+            cache.get_or_probe(1, Msl::Version3_1, || panic!("repeated probe")),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn compiler_probe_cache_retries_incomplete_and_unidentified_probes() {
+        let cache = super::WorkgroupProbeCache::default();
+        assert_eq!(cache.get_or_probe(1, Msl::Version3_1, || None), None);
+        assert_eq!(
+            cache.get_or_probe(1, Msl::Version3_1, || Some(true)),
+            Some(true)
+        );
+        assert_eq!(
+            cache.get_or_probe(0, Msl::Version3_1, || Some(true)),
+            Some(true)
+        );
+        assert_eq!(
+            cache.get_or_probe(0, Msl::Version3_1, || Some(false)),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn compiler_probe_cache_deduplicates_concurrent_requests() {
+        use alloc::sync::Arc;
+        use core::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Barrier;
+        let cache = Arc::new(super::WorkgroupProbeCache::default());
+        let start = Arc::new(Barrier::new(8));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let threads: Vec<_> = (0..8)
+            .map(|_| {
+                let cache = Arc::clone(&cache);
+                let start = Arc::clone(&start);
+                let calls = Arc::clone(&calls);
+                std::thread::spawn(move || {
+                    start.wait();
+                    assert_eq!(
+                        cache.get_or_probe(1, Msl::Version3_1, || {
+                            calls.fetch_add(1, Ordering::SeqCst);
+                            Some(true)
+                        }),
+                        Some(true)
+                    );
+                })
+            })
+            .collect();
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }
