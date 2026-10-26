@@ -320,6 +320,10 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 - Cache adapter and device limits, features, and adapter info on the browser WebGPU backend, so repeated calls no longer re-read those JavaScript objects. By @apetrock in [#10513](https://github.com/gfx-rs/wgpu/pull/10513).
 
+#### Metal
+
+- A render pipeline switch no longer allocates once per vertex buffer. By @samoylenkodmitry in [#10630](https://github.com/gfx-rs/wgpu/pull/10630).
+
 ### Documentation
 
 #### General
