@@ -30,7 +30,7 @@ impl ComputePipeline {
 
     /// Get the subgroup size of the compute pipeline.
     ///
-    /// Returns `None` on all platforms except for Metal, where it returns the
+    /// Returns `None` if the backend cannot determine it. Currently only Metal reports a value, using
     /// [`threadExecutionWidth`](https://developer.apple.com/documentation/metal/mtlcomputepipelinestate/threadexecutionwidth).
     pub fn get_subgroup_size(&self) -> Option<u32> {
         self.inner.get_subgroup_size()

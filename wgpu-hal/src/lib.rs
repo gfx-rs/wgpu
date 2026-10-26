@@ -1403,7 +1403,7 @@ pub trait Queue: WasmNotSendSync {
 }
 
 pub trait ComputePipeline {
-    /// The subgroup size this pipeline will execute with, if the backend can determine it.
+    /// Returns the subgroup size this pipeline executes with, or `None` if the backend cannot determine it.
     fn get_subgroup_size(&self) -> Option<u32>;
 }
 
