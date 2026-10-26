@@ -143,6 +143,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 #### Naga
 
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
+- Add GLSL polyfills for `countOneBits`, `reverseBits`, `extractBits`, `insertBits`, `countTrailingZeros`, `firstTrailingBit`, `countLeadingZeros` and `firstLeadingBit` for GLSL versions without `bitCount`, `bitfieldReverse`, `bitfieldExtract`, `bitfieldInsert`, `findLSB` and `findMSB` (GLSL ES 3.00, which WebGL2 uses, and desktop GLSL before 4.00). Previously, shaders using these builtins failed to compile on these versions. By @barafael in [#10729](https://github.com/gfx-rs/wgpu/pull/10729).
 
 #### Hal
 

@@ -72,6 +72,8 @@ use crate::{
 use conv::*;
 use features::FeaturesManager;
 
+/// Contains polyfills for integer bit manipulation functions on older GLSL versions.
+mod bit_polyfills;
 /// Contains simple 1:1 conversion functions.
 mod conv;
 /// Contains the features related code and the features querying method

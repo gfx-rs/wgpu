@@ -293,6 +293,26 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
+        // Write polyfills for integer bit manipulation functions, if needed.
+        if !self.options.version.supports_integer_functions() {
+            let mut helpers = alloc::collections::BTreeSet::new();
+            for (handle, function) in self.module.functions.iter() {
+                bit_polyfills::collect_needed(
+                    function,
+                    &self.info[handle],
+                    &self.module.types,
+                    &mut helpers,
+                );
+            }
+            bit_polyfills::collect_needed(
+                &self.entry_point.function,
+                self.info.get_entry_point(self.entry_point_idx as usize),
+                &self.module.types,
+                &mut helpers,
+            );
+            bit_polyfills::write_helpers(&mut self.out, &helpers)?;
+        }
+
         // Write all named constants
         let mut constants = self
             .module
@@ -914,15 +934,23 @@ impl<'a, W: Write> Writer<'a, W> {
                     {
                         self.need_bake_expressions.insert(arg);
                     }
-                    crate::MathFunction::ExtractBits => {
+                    // The polyfills used when integer functions are not supported are
+                    // helper functions, which don't re-use any arguments.
+                    crate::MathFunction::ExtractBits
+                        if self.options.version.supports_integer_functions() =>
+                    {
                         // Only argument 1 is re-used.
                         self.need_bake_expressions.insert(arg1.unwrap());
                     }
-                    crate::MathFunction::InsertBits => {
+                    crate::MathFunction::InsertBits
+                        if self.options.version.supports_integer_functions() =>
+                    {
                         // Only argument 2 is re-used.
                         self.need_bake_expressions.insert(arg2.unwrap());
                     }
-                    crate::MathFunction::CountLeadingZeros => {
+                    crate::MathFunction::CountLeadingZeros
+                        if self.options.version.supports_integer_functions() =>
+                    {
                         if let Some(crate::ScalarKind::Sint) = inner.scalar_kind() {
                             self.need_bake_expressions.insert(arg);
                         }
@@ -3108,6 +3136,20 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 use crate::MathFunction as Mf;
 
+                if !self.options.version.supports_integer_functions() {
+                    let arg_ty = ctx.resolve_type(arg, &self.module.types);
+                    if let Some(helper) = bit_polyfills::Helper::new(fun, arg_ty) {
+                        write!(self.out, "{}(", helper.name())?;
+                        self.write_expr(arg, ctx)?;
+                        for arg in [arg1, arg2, arg3].into_iter().flatten() {
+                            write!(self.out, ", ")?;
+                            self.write_expr(arg, ctx)?;
+                        }
+                        write!(self.out, ")")?;
+                        return Ok(());
+                    }
+                }
+
                 let fun_name = match fun {
                     // comparison
                     Mf::Abs => "abs",
@@ -3353,74 +3395,38 @@ impl<'a, W: Write> Writer<'a, W> {
                         return Ok(());
                     }
                     Mf::CountLeadingZeros => {
-                        if self.options.version.supports_integer_functions() {
-                            match *ctx.resolve_type(arg, &self.module.types) {
-                                TypeInner::Vector { size, scalar } => {
-                                    let s = common::vector_size_str(size);
+                        // Integer functions are supported, otherwise a polyfill would
+                        // have been used.
+                        match *ctx.resolve_type(arg, &self.module.types) {
+                            TypeInner::Vector { size, scalar } => {
+                                let s = common::vector_size_str(size);
 
-                                    if let crate::ScalarKind::Uint = scalar.kind {
-                                        write!(self.out, "uvec{s}(ivec{s}(31) - findMSB(")?;
-                                        self.write_expr(arg, ctx)?;
-                                        write!(self.out, "))")?;
-                                    } else {
-                                        write!(self.out, "mix(ivec{s}(31) - findMSB(")?;
-                                        self.write_expr(arg, ctx)?;
-                                        write!(self.out, "), ivec{s}(0), lessThan(")?;
-                                        self.write_expr(arg, ctx)?;
-                                        write!(self.out, ", ivec{s}(0)))")?;
-                                    }
-                                }
-                                TypeInner::Scalar(scalar) => {
-                                    if let crate::ScalarKind::Uint = scalar.kind {
-                                        write!(self.out, "uint(31 - findMSB(")?;
-                                    } else {
-                                        write!(self.out, "(")?;
-                                        self.write_expr(arg, ctx)?;
-                                        write!(self.out, " < 0 ? 0 : 31 - findMSB(")?;
-                                    }
-
+                                if let crate::ScalarKind::Uint = scalar.kind {
+                                    write!(self.out, "uvec{s}(ivec{s}(31) - findMSB(")?;
                                     self.write_expr(arg, ctx)?;
                                     write!(self.out, "))")?;
+                                } else {
+                                    write!(self.out, "mix(ivec{s}(31) - findMSB(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, "), ivec{s}(0), lessThan(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, ", ivec{s}(0)))")?;
                                 }
-                                _ => unreachable!(),
-                            };
-                        } else {
-                            match *ctx.resolve_type(arg, &self.module.types) {
-                                TypeInner::Vector { size, scalar } => {
-                                    let s = common::vector_size_str(size);
+                            }
+                            TypeInner::Scalar(scalar) => {
+                                if let crate::ScalarKind::Uint = scalar.kind {
+                                    write!(self.out, "uint(31 - findMSB(")?;
+                                } else {
+                                    write!(self.out, "(")?;
+                                    self.write_expr(arg, ctx)?;
+                                    write!(self.out, " < 0 ? 0 : 31 - findMSB(")?;
+                                }
 
-                                    if let crate::ScalarKind::Uint = scalar.kind {
-                                        write!(self.out, "uvec{s}(")?;
-                                        write!(self.out, "vec{s}(31.0) - floor(log2(vec{s}(")?;
-                                        self.write_expr(arg, ctx)?;
-                                        write!(self.out, ") + 0.5)))")?;
-                                    } else {
-                                        write!(self.out, "ivec{s}(")?;
-                                        write!(self.out, "mix(vec{s}(31.0) - floor(log2(vec{s}(")?;
-                                        self.write_expr(arg, ctx)?;
-                                        write!(self.out, ") + 0.5)), ")?;
-                                        write!(self.out, "vec{s}(0.0), lessThan(")?;
-                                        self.write_expr(arg, ctx)?;
-                                        write!(self.out, ", ivec{s}(0u))))")?;
-                                    }
-                                }
-                                TypeInner::Scalar(scalar) => {
-                                    if let crate::ScalarKind::Uint = scalar.kind {
-                                        write!(self.out, "uint(31.0 - floor(log2(float(")?;
-                                        self.write_expr(arg, ctx)?;
-                                        write!(self.out, ") + 0.5)))")?;
-                                    } else {
-                                        write!(self.out, "(")?;
-                                        self.write_expr(arg, ctx)?;
-                                        write!(self.out, " < 0 ? 0 : int(")?;
-                                        write!(self.out, "31.0 - floor(log2(float(")?;
-                                        self.write_expr(arg, ctx)?;
-                                        write!(self.out, ") + 0.5))))")?;
-                                    }
-                                }
-                                _ => unreachable!(),
-                            };
-                        }
+                                self.write_expr(arg, ctx)?;
+                                write!(self.out, "))")?;
+                            }
+                            _ => unreachable!(),
+                        };
 
                         return Ok(());
                     }

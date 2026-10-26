@@ -491,6 +491,14 @@ pub const RESERVED_KEYWORDS: &[&str] = &[
     // Naga utilities:
     super::MODF_FUNCTION,
     super::FREXP_FUNCTION,
+    super::bit_polyfills::COUNT_ONE_BITS_FUNCTION,
+    super::bit_polyfills::REVERSE_BITS_FUNCTION,
+    super::bit_polyfills::EXTRACT_BITS_FUNCTION,
+    super::bit_polyfills::INSERT_BITS_FUNCTION,
+    super::bit_polyfills::COUNT_TRAILING_ZEROS_FUNCTION,
+    super::bit_polyfills::FIRST_TRAILING_BIT_FUNCTION,
+    super::bit_polyfills::COUNT_LEADING_ZEROS_FUNCTION,
+    super::bit_polyfills::FIRST_LEADING_BIT_FUNCTION,
     super::FIRST_INSTANCE_BINDING,
 ];
 
