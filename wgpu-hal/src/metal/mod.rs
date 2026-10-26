@@ -1151,8 +1151,8 @@ struct PipelineStageInfo {
     /// See `device::CompiledShader::sized_bindings` for more details.
     sized_bindings: Vec<(naga::ResourceBinding, u32)>,
 
-    /// Info on all bound vertex buffers.
-    vertex_buffer_mappings: Vec<naga::back::msl::VertexBufferMapping>,
+    /// Info on all bound vertex buffers, shared with the pipeline.
+    vertex_buffer_mappings: Arc<[naga::back::msl::VertexBufferMapping]>,
 
     /// The workgroup size for compute, task or mesh stages
     raw_wg_size: MTLSize,
@@ -1186,7 +1186,7 @@ impl PipelineStageInfo {
         self.immediates = None;
         self.sizes_slot = None;
         self.sized_bindings.clear();
-        self.vertex_buffer_mappings.clear();
+        self.vertex_buffer_mappings = Default::default();
         self.library = None;
         self.work_group_memory_sizes.clear();
         self.raw_wg_size = MTLSize {
@@ -1201,9 +1201,7 @@ impl PipelineStageInfo {
         self.sizes_slot = other.sizes_slot;
         self.sized_bindings.clear();
         self.sized_bindings.extend_from_slice(&other.sized_bindings);
-        self.vertex_buffer_mappings.clear();
-        self.vertex_buffer_mappings
-            .extend_from_slice(&other.vertex_buffer_mappings);
+        self.vertex_buffer_mappings = Arc::clone(&other.vertex_buffer_mappings);
         self.library = Some(other.library.as_ref().unwrap().clone());
         self.raw_wg_size = other.raw_wg_size;
         self.work_group_memory_sizes.clear();
