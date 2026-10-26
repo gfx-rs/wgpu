@@ -1,0 +1,6 @@
+# See also conversion-float-to-int-glsl-webgl.wgsl.
+targets = "GLSL"
+capabilities = "FLOAT64"
+
+[glsl]
+version.Desktop = 400

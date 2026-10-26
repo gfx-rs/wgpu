@@ -227,7 +227,7 @@ void main() {
     int a_2 = _group_0_binding_0_vs.data[(uint(_group_0_binding_0_vs.data.length()) - 2u)].value;
     ivec2 c = _group_0_binding_2_vs;
     float _e35 = read_from_private(foo);
-    c2_ = int[5](a_2, int(b), 3, 4, 5);
+    c2_ = int[5](a_2, int(clamp(b, -2147483648.0, 2147483520.0)), 3, 4, 5);
     c2_[(vi + 1u)] = 42;
     int value_1 = c2_[vi];
     float _e49 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));

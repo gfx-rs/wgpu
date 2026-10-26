@@ -1,5 +1,4 @@
-# GLSL does not support i64 or f16, but we don't handle float to integer
-# conversion specially there anyway.
+# GLSL does not support i64 or f16. See conversion-float-to-int-glsl.wgsl.
 # MSL does not support f64. See conversion-float-to-int-no-f64.wgsl.
 targets = "SPIRV | HLSL | WGSL"
 capabilities = "SHADER_FLOAT16 | FLOAT64 | SHADER_INT64"

@@ -3787,7 +3787,37 @@ impl<'a, W: Write> Writer<'a, W> {
                         }
 
                         write!(self.out, "(")?;
-                        self.write_expr(expr, ctx)?;
+                        match *inner {
+                            // https://www.w3.org/TR/WGSL/#floating-point-conversion:
+                            // float to integer conversions saturate to the range of
+                            // values representable by both types, whereas GLSL leaves
+                            // out-of-range conversions undefined, so clamp first.
+                            TypeInner::Scalar(src_scalar)
+                            | TypeInner::Vector {
+                                scalar: src_scalar, ..
+                            } if src_scalar.kind == crate::ScalarKind::Float
+                                && matches!(
+                                    target_kind,
+                                    crate::ScalarKind::Sint | crate::ScalarKind::Uint
+                                ) =>
+                            {
+                                let (min, max) = proc::min_max_float_representable_by(
+                                    src_scalar,
+                                    crate::Scalar {
+                                        kind: target_kind,
+                                        width,
+                                    },
+                                );
+                                write!(self.out, "clamp(")?;
+                                self.write_expr(expr, ctx)?;
+                                write!(self.out, ", ")?;
+                                self.write_float_bound(min)?;
+                                write!(self.out, ", ")?;
+                                self.write_float_bound(max)?;
+                                write!(self.out, ")")?;
+                            }
+                            _ => self.write_expr(expr, ctx)?,
+                        }
                         write!(self.out, ")")?
                     }
                     None => {
@@ -3865,6 +3895,21 @@ impl<'a, W: Write> Writer<'a, W> {
             | Expression::CooperativeMultiplyAdd { .. } => unreachable!(),
         }
 
+        Ok(())
+    }
+
+    /// Writes one of the bounds returned by
+    /// [`proc::min_max_float_representable_by`].
+    ///
+    /// The bounds are integral, so print every digit (e.g. `2147483520.0`
+    /// rather than the shortest round-tripping `2147483500.0`), which
+    /// is both exact and easier to read.
+    fn write_float_bound(&mut self, bound: crate::Literal) -> BackendResult {
+        match bound {
+            crate::Literal::F32(value) => write!(self.out, "{:.1}", f64::from(value))?,
+            crate::Literal::F64(value) => write!(self.out, "{value:.1}LF")?,
+            _ => unreachable!("unexpected float to int conversion bound {bound:?}"),
+        }
         Ok(())
     }
 
