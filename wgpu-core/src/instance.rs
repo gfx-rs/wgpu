@@ -469,14 +469,14 @@ impl Instance {
         adapters
     }
 
-    pub fn request_adapter(
+    /// Returns a list of adapters that match the given request options and are compatible with the specified backends.
+    ///
+    /// On success at least one compatible adapter will be returned in the resulting vector.
+    pub fn request_adapters(
         self: &Arc<Self>,
         desc: &wgt::RequestAdapterOptions<&Surface>,
         backends: Backends,
-    ) -> Result<Arc<Adapter>, wgt::RequestAdapterError> {
-        profiling::scope!("Instance::request_adapter");
-        api_log!("Instance::request_adapter");
-
+    ) -> Result<Vec<Arc<Adapter>>, wgt::RequestAdapterError> {
         let mut adapters = Vec::new();
         let mut incompatible_surface_backends = Backends::empty();
         let mut no_fallback_backends = Backends::empty();
@@ -598,21 +598,6 @@ impl Instance {
         // Shine some light on its decision in debug log.
         if adapters.is_empty() {
             log::debug!("Request adapter didn't find compatible adapters.");
-        } else {
-            log::debug!(
-                "Found {} compatible adapters. Sorted by preference:",
-                adapters.len()
-            );
-            for adapter in &adapters {
-                log::debug!("* {:?}", adapter.info);
-            }
-        }
-
-        if let Some(adapter) = adapters.into_iter().next() {
-            api_log_debug!("Request adapter result {:?}", adapter.info);
-            let adapter = Adapter::new(adapter, self.clone());
-            Ok(adapter)
-        } else {
             Err(wgt::RequestAdapterError::NotFound {
                 supported_backends: self.supported_backends,
                 requested_backends: self.requested_backends,
@@ -621,7 +606,38 @@ impl Instance {
                 no_adapter_backends,
                 incompatible_surface_backends,
             })
+        } else {
+            log::debug!(
+                "Found {} compatible adapters. Sorted by preference:",
+                adapters.len()
+            );
+            for adapter in &adapters {
+                log::debug!("* {:?}", adapter.info);
+            }
+            Ok(adapters
+                .into_iter()
+                .map(|adapter| Adapter::new(adapter, self.clone()))
+                .collect::<Vec<_>>())
         }
+    }
+
+    pub fn request_adapter(
+        self: &Arc<Self>,
+        desc: &wgt::RequestAdapterOptions<&Surface>,
+        backends: Backends,
+    ) -> Result<Arc<Adapter>, wgt::RequestAdapterError> {
+        profiling::scope!("Instance::request_adapter");
+        api_log!("Instance::request_adapter");
+
+        let adapter = self
+            .request_adapters(desc, backends)?
+            .into_iter()
+            .next()
+            .expect(
+                "request_adapters should always return at least one compatible adapter on success",
+            );
+        api_log_debug!("Request adapter result {:?}", adapter.get_info());
+        Ok(adapter)
     }
 
     /// This is similar to wgpu-hal's `adjust_raw_limits` but tailored to
