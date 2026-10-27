@@ -6,7 +6,7 @@ pub struct BindingInfo {
     pub binding: u32,
     /// If the binding is an unsized binding array, this overrides the size.
     pub binding_array_size: Option<u32>,
-    #[serde(default)]
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub external_texture: bool,
 }
 
