@@ -209,3 +209,5 @@ bitflags::bitflags! {
         const WRITE = 0x0002;
     }
 }
+
+assert_ffi_safe!(MapMode);
