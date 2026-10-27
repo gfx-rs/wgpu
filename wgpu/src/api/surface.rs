@@ -72,6 +72,27 @@ impl Surface<'_> {
         self.inner.display_hdr_info(&adapter.inner)
     }
 
+    /// Whether this surface and adapter support static HDR metadata submission.
+    /// Currently supported only on Vulkan native swapchains. The compositor may
+    /// ignore the metadata even when submission is supported.
+    pub fn supports_hdr_metadata(&self, adapter: &Adapter) -> bool {
+        self.inner.supports_hdr_metadata(&adapter.inner)
+    }
+
+    /// Submit static content metadata to the configured swapchain.
+    ///
+    /// Requires [`Features::SURFACE_HDR_METADATA`] on the device. Call after
+    /// [`Self::configure`] and before acquiring a surface texture. Reapply after
+    /// every configuration; metadata is not retained across swapchain recreation.
+    ///
+    /// Returns `false` without submitting metadata if it is invalid, the backend
+    /// is unsupported, the surface is unconfigured, a texture is acquired, the
+    /// device is lost, or the feature was not enabled. `true` means the metadata
+    /// was submitted, not that the compositor used it.
+    pub fn set_hdr_metadata(&self, metadata: &HdrMetadata) -> bool {
+        metadata.is_valid() && self.inner.set_hdr_metadata(metadata)
+    }
+
     /// Return a default `SurfaceConfiguration` from width and height to use for the [`Surface`] with this adapter.
     ///
     /// The returned configuration requests the surface's preferred format and

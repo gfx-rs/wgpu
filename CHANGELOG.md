@@ -103,6 +103,10 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 ### Added/New Features
 
+#### Vulkan
+
+- Added `HdrMetadata`, `Features::SURFACE_HDR_METADATA`, and surface methods to query support and submit static HDR metadata through `VK_EXT_hdr_metadata`. By @ecke101.
+
 #### General
 
 - Support the `wasm64-unknown-unknown` target for the web backend. Building for wasm64 requires a nightly toolchain with `-Z build-std=std,panic_abort`. By @nickbabcock in [#9836](https://github.com/gfx-rs/wgpu/pull/9836).

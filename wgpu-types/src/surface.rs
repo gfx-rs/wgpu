@@ -338,7 +338,8 @@ pub enum SurfaceColorSpace {
     /// [`TextureFormat::Rgb10a2Unorm`].
     ///
     /// Commonly known as **HDR10** — though that term additionally implies static
-    /// ST 2086 / MaxCLL mastering metadata, which wgpu does not set; this
+    /// ST 2086 / MaxCLL mastering metadata, supplied separately through
+    /// `Surface::set_hdr_metadata` on supported backends; this
     /// configures only the PQ color space.
     ///
     /// * **Supported on**: Vulkan (where the driver exposes it), DX12 (on
@@ -563,12 +564,141 @@ impl Default for SurfaceCapabilities {
     }
 }
 
+/// Static mastering-display (SMPTE ST 2086) and content-light (CTA-861.3) metadata.
+/// Chromaticities are CIE xy coordinates; luminances are in cd/m².
+/// Zero denotes an unknown value. Metadata does not change the surface color space.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct HdrMetadata {
+    /// Red, green and blue mastering-display primaries, respectively.
+    pub primaries: [[f32; 2]; 3],
+    /// Mastering-display white point.
+    pub white_point: [f32; 2],
+    /// Mastering-display minimum luminance.
+    pub min_luminance: f32,
+    /// Mastering-display maximum luminance.
+    pub max_luminance: f32,
+    /// Maximum content light level.
+    pub max_content_light_level: f32,
+    /// Maximum frame-average light level.
+    pub max_frame_average_light_level: f32,
+}
+
+impl HdrMetadata {
+    /// Checks for finite, nonnegative values, chromaticities with `x + y <= 1`,
+    /// and ordered luminance bounds when the corresponding maximum is known.
+    pub fn is_valid(&self) -> bool {
+        self.primaries
+            .iter()
+            .chain(core::iter::once(&self.white_point))
+            .all(|&[x, y]| x.is_finite() && y.is_finite() && x >= 0.0 && y >= 0.0 && x + y <= 1.0)
+            && [
+                self.min_luminance,
+                self.max_luminance,
+                self.max_content_light_level,
+                self.max_frame_average_light_level,
+            ]
+            .iter()
+            .all(|value| value.is_finite() && *value >= 0.0)
+            && (self.max_luminance == 0.0 || self.min_luminance <= self.max_luminance)
+            && (self.max_content_light_level == 0.0
+                || self.max_frame_average_light_level <= self.max_content_light_level)
+    }
+}
+
+#[cfg(test)]
+mod hdr_metadata_tests {
+    use super::HdrMetadata;
+
+    fn metadata() -> HdrMetadata {
+        HdrMetadata {
+            primaries: [[0.708, 0.292], [0.170, 0.797], [0.131, 0.046]],
+            white_point: [0.3127, 0.3290],
+            min_luminance: 0.0,
+            max_luminance: 203.0,
+            max_content_light_level: 203.0,
+            max_frame_average_light_level: 203.0,
+        }
+    }
+
+    #[test]
+    fn accepts_known_and_unknown_values() {
+        assert!(metadata().is_valid());
+        assert!(HdrMetadata::default().is_valid());
+        assert!(HdrMetadata {
+            primaries: [[1.0, 0.0], [0.0, 1.0], [0.0, 0.0]],
+            ..metadata()
+        }
+        .is_valid());
+        assert!(HdrMetadata {
+            max_luminance: 0.0,
+            max_content_light_level: 0.0,
+            ..metadata()
+        }
+        .is_valid());
+        assert!(HdrMetadata {
+            max_luminance: 20_000.0,
+            max_content_light_level: 20_000.0,
+            max_frame_average_light_level: 20_000.0,
+            ..metadata()
+        }
+        .is_valid());
+    }
+
+    #[test]
+    fn rejects_invalid_chromaticities() {
+        for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -0.1, 1.1] {
+            for coordinate in 0..2 {
+                for primary in 0..3 {
+                    let mut value = metadata();
+                    value.primaries[primary][coordinate] = invalid;
+                    assert!(!value.is_valid());
+                }
+                let mut value = metadata();
+                value.white_point[coordinate] = invalid;
+                assert!(!value.is_valid());
+            }
+        }
+        assert!(!HdrMetadata {
+            white_point: [0.6, 0.6],
+            ..metadata()
+        }
+        .is_valid());
+    }
+
+    #[test]
+    fn rejects_invalid_luminances() {
+        for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0] {
+            for field in 0..4 {
+                let mut value = metadata();
+                match field {
+                    0 => value.min_luminance = invalid,
+                    1 => value.max_luminance = invalid,
+                    2 => value.max_content_light_level = invalid,
+                    _ => value.max_frame_average_light_level = invalid,
+                }
+                assert!(!value.is_valid());
+            }
+        }
+        assert!(!HdrMetadata {
+            min_luminance: 204.0,
+            ..metadata()
+        }
+        .is_valid());
+        assert!(!HdrMetadata {
+            max_frame_average_light_level: 204.0,
+            ..metadata()
+        }
+        .is_valid());
+    }
+}
+
 /// HDR and luminance characteristics of the display backing a [`Surface`], as
 /// reported by the platform at query time.
 ///
 /// This describes the display; it does not configure it. Set the output color
-/// space through [`SurfaceConfiguration::color_space`]; wgpu does not write HDR
-/// metadata (`vkSetHdrMetadataEXT` / DXGI `SetHDRMetaData`).
+/// space through [`SurfaceConfiguration::color_space`]. Content metadata is
+/// configured separately with `Surface::set_hdr_metadata` on supported backends.
 ///
 /// Use it for tone mapping, not to decide whether to enable HDR - that is a
 /// capability question for [`SurfaceCapabilities`], and holds even when the panel

@@ -710,6 +710,16 @@ pub trait Instance: Sized + WasmNotSendSync {
 pub trait Surface: WasmNotSendSync {
     type A: Api;
 
+    /// Whether content metadata can be supplied for this surface on `adapter`.
+    fn supports_hdr_metadata(&self, _adapter: &<Self::A as Api>::Adapter) -> bool {
+        false
+    }
+
+    /// Supply validated metadata to the configured swapchain; false if unavailable.
+    fn set_hdr_metadata(&self, _metadata: &wgt::HdrMetadata) -> bool {
+        false
+    }
+
     /// Configure `self` to use `device`.
     ///
     /// # Safety

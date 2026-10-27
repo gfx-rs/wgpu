@@ -107,7 +107,7 @@ pub use wgt::{
     Dx12SwapchainKind, Dx12UseFrameLatencyWaitableObject, DxcShaderModel, DynamicOffset,
     ExperimentalFeatures, Extent3d, ExternalTextureFormat, ExternalTextureTransferFunction, Face,
     Features, FeaturesWGPU, FeaturesWebGPU, FilterMode, ForceShaderModelToken, FrontFace,
-    GlBackendOptions, GlDebugFns, GlFenceBehavior, Gles3MinorVersion, HalCounters,
+    GlBackendOptions, GlDebugFns, GlFenceBehavior, Gles3MinorVersion, HalCounters, HdrMetadata,
     ImageSubresourceRange, IndexFormat, InstanceDescriptor, InstanceFlags, InternalCounters,
     Limits, LoadOpDontCare, MapMode, MemoryBudgetThresholds, MemoryHints, MipmapFilterMode,
     MultisampleState, NoopBackendOptions, Origin2d, Origin3d, PassthroughShaderEntryPoint,

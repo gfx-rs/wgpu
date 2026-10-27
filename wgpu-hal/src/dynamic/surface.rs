@@ -2,7 +2,7 @@ use alloc::boxed::Box;
 use core::time::Duration;
 
 use crate::{
-    DynDevice, DynFence, DynResource, DynSurfaceTexture, Surface, SurfaceConfiguration,
+    DynAdapter, DynDevice, DynFence, DynResource, DynSurfaceTexture, Surface, SurfaceConfiguration,
     SurfaceError,
 };
 
@@ -18,6 +18,8 @@ pub struct DynAcquiredSurfaceTexture {
 }
 
 pub trait DynSurface: DynResource {
+    fn supports_hdr_metadata(&self, adapter: &dyn DynAdapter) -> bool;
+    fn set_hdr_metadata(&self, metadata: &wgt::HdrMetadata) -> bool;
     unsafe fn configure(
         &self,
         device: &dyn DynDevice,
@@ -36,6 +38,14 @@ pub trait DynSurface: DynResource {
 }
 
 impl<S: Surface + DynResource> DynSurface for S {
+    fn supports_hdr_metadata(&self, adapter: &dyn DynAdapter) -> bool {
+        S::supports_hdr_metadata(self, adapter.expect_downcast_ref())
+    }
+
+    fn set_hdr_metadata(&self, metadata: &wgt::HdrMetadata) -> bool {
+        S::set_hdr_metadata(self, metadata)
+    }
+
     unsafe fn configure(
         &self,
         device: &dyn DynDevice,
