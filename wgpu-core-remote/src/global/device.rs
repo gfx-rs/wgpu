@@ -163,14 +163,14 @@ impl Global {
         device_id: DeviceId,
         id_in: id::TextureId,
         desc: &TextureDescriptor,
-    ) -> id::TextureId {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             textures, devices, ..
         } = &mut *hub;
         let device = devices.get(device_id);
         let texture = device.create_texture_error(desc);
-        textures.assign(id_in, texture)
+        textures.assign(id_in, texture);
     }
 
     /// Assign `id_in` an error with the given `label`.
