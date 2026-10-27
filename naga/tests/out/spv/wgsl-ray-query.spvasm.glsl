@@ -261,7 +261,7 @@ void _327(rayQueryEXT _328, uint _329, float _330, float _331)
         }
         else
         {
-            float _353 = rayQueryGetIntersectionTEXT(_328, bool(0u));
+            float _353 = rayQueryGetIntersectionTEXT(_328, bool(1u));
             _334 = _353;
         }
         if (((_330 >= _346) && (_330 <= _334)) && (_344 == 1u))

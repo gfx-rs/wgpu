@@ -467,7 +467,7 @@ OpBranchConditional %348 %350 %351
 OpStore %334 %352
 OpBranch %349
 %351 = OpLabel
-%353 = OpRayQueryGetIntersectionTKHR  %3  %328 %35
+%353 = OpRayQueryGetIntersectionTKHR  %3  %328 %90
 OpStore %334 %353
 OpBranch %349
 %349 = OpLabel

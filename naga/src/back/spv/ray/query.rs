@@ -997,7 +997,7 @@ impl Writer {
                 f32_type_id,
                 latest_t_id,
                 query_id,
-                intersection_id,
+                committed_intersection_id,
             ));
         committed_block
             .body
