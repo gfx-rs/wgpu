@@ -7,47 +7,19 @@ use thiserror::Error;
 use wgt::error::{ErrorType, WebGpuError};
 
 use crate::pipeline::{
-    ImplicitLayoutError, LateSizedBufferGroup, PipelineCache, ProgrammableStageDescriptor,
-    ShaderModule,
+    CreatePipelineError, LateSizedBufferGroup, PipelineCache, ProgrammableStageDescriptor, ShaderModule
 };
 use crate::{
     binding_model::{BindGroupLayout, GetBindGroupLayoutError, PipelineLayout},
-    device::{Device, DeviceError, MissingFeatures},
+    device::Device,
     resource::{InvalidResourceError, Labeled, ResourceState, TrackingData},
     resource_log,
-    validation::{self},
     Label,
 };
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
-pub enum CreateRayTracingPipelineError {
-    #[error(transparent)]
-    Device(#[from] DeviceError),
-    #[error("Unable to derive an implicit layout")]
-    Implicit(#[from] ImplicitLayoutError),
-    #[error(transparent)]
-    MissingFeatures(#[from] MissingFeatures),
-    #[error("Error matching {stage:?} shader requirements against the pipeline")]
-    Stage {
-        stage: wgt::ShaderStages,
-        #[source]
-        error: validation::StageError,
-    },
-    #[error("In the provided shader, the type given for group {group} binding {binding} has a size of {size}. As the device does not support `DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED`, the type must have a size that is a multiple of 16 bytes.")]
-    UnalignedShader { group: u32, binding: u32, size: u64 },
-    #[error("Internal error in {stage:?} shader: {error}")]
-    Internal {
-        stage: wgt::ShaderStages,
-        error: String,
-    },
-    #[error("Pipeline constant error in {stage:?} shader: {error}")]
-    PipelineConstants {
-        stage: wgt::ShaderStages,
-        error: String,
-    },
-    #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+pub enum RayTracingPipelineError {
     #[error("The number of intersection shaders {0} is greater than 2^24")]
     TooManyIntersectionGroups(usize),
     #[error(
@@ -56,20 +28,10 @@ pub enum CreateRayTracingPipelineError {
     TooHighRayRecursionDepth(u32, u32),
 }
 
-impl WebGpuError for CreateRayTracingPipelineError {
+impl WebGpuError for RayTracingPipelineError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
-            Self::Device(e) => e.webgpu_error_type(),
-            Self::InvalidResource(e) => e.webgpu_error_type(),
-            Self::MissingFeatures(e) => e.webgpu_error_type(),
-
-            Self::Internal { .. } => ErrorType::Internal,
-
-            Self::Implicit(_)
-            | Self::Stage { .. }
-            | Self::UnalignedShader { .. }
-            | Self::PipelineConstants { .. }
-            | Self::TooManyIntersectionGroups(..)
+            Self::TooManyIntersectionGroups(..)
             | Self::TooHighRayRecursionDepth(..) => ErrorType::Validation,
         }
     }
@@ -137,7 +99,7 @@ impl ShaderBindingData {
         device: Arc<Device>,
         pipeline: &dyn hal::DynRayTracingPipeline,
         num_intersection_groups: usize,
-    ) -> Result<Arc<Self>, CreateRayTracingPipelineError> {
+    ) -> Result<Arc<Self>, CreatePipelineError> {
         let mut base_data = Vec::new();
 
         let ray_generation_data = unsafe {
@@ -145,7 +107,7 @@ impl ShaderBindingData {
                 .raw()
                 .get_raytracing_pipeline_group_data(pipeline, 0..1)
         }
-        .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
+        .map_err(|e| CreatePipelineError::Device(device.handle_hal_error(e)))?;
 
         base_data.extend_from_slice(&ray_generation_data);
 
@@ -160,7 +122,7 @@ impl ShaderBindingData {
                 .raw()
                 .get_raytracing_pipeline_group_data(pipeline, 1..2)
         }
-        .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
+        .map_err(|e| CreatePipelineError::Device(device.handle_hal_error(e)))?;
 
         base_data.extend_from_slice(&miss_data);
 
@@ -177,7 +139,7 @@ impl ShaderBindingData {
                     2..(2 + num_intersection_groups as u32),
                 )
             }
-            .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
+            .map_err(|e| CreatePipelineError::Device(device.handle_hal_error(e)))?;
 
             base_data.extend_from_slice(&intersection_data);
         }
@@ -192,7 +154,7 @@ impl ShaderBindingData {
                 memory_flags: hal::MemoryFlags::PREFER_COHERENT,
             })
         }
-        .map_err(|e| CreateRayTracingPipelineError::Device(device.handle_hal_error(e)))?;
+        .map_err(|e| CreatePipelineError::Device(device.handle_hal_error(e)))?;
 
         let sbd = Arc::new(Self {
             raw: ManuallyDrop::new(buffer),

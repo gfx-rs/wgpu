@@ -1502,8 +1502,8 @@ impl dispatch::DeviceInterface for CoreDevice {
         let (wgpu_ray_tracing_pipeline, error) =
             self.wgpu_device.create_ray_tracing_pipeline(descriptor);
         if let Some(cause) = error {
-            if let rt_pipe::CreateRayTracingPipelineError::Internal { stage, ref error } = cause {
-                log::error!("Shader translation error for stage {:?}: {}", stage, error);
+            if let pipe::CreatePipelineError::Internal { stage, ref message } = cause {
+                log::error!("Shader translation error for stage {:?}: {}", stage, message);
                 log::error!("Please report it to https://github.com/gfx-rs/wgpu");
             }
             self.wgpu_device
