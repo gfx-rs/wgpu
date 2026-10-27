@@ -12,6 +12,6 @@ struct FragmentInput_fs_main {
 
 float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
 {
-    FragmentIn v_out = { fragmentinput_fs_main.value, fragmentinput_fs_main.value2_, fragmentinput_fs_main.position };
+    FragmentIn v_out = { fragmentinput_fs_main.value, fragmentinput_fs_main.value2_, float4(fragmentinput_fs_main.position.xyz, 1.0 / fragmentinput_fs_main.position.w) };
     return float4(v_out.value, v_out.value, v_out.value2_, v_out.value2_);
 }

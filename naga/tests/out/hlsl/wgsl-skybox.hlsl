@@ -66,7 +66,7 @@ VertexOutput_vs_main vs_main(uint vertex_index : SV_VertexID)
 
 float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
 {
-    VertexOutput in_ = { fragmentinput_fs_main.position_1, fragmentinput_fs_main.uv_1 };
+    VertexOutput in_ = { float4(fragmentinput_fs_main.position_1.xyz, 1.0 / fragmentinput_fs_main.position_1.w), fragmentinput_fs_main.uv_1 };
     float4 _e4 = r_texture.Sample(r_sampler, in_.uv);
     return _e4;
 }
