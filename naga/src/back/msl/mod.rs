@@ -77,6 +77,7 @@ use core::fmt::{Error as FmtError, Write};
 
 use crate::{arena::Handle, back::TaskDispatchLimits, ir, proc::index, valid::ModuleInfo};
 
+mod hoist;
 mod keywords;
 mod mesh_shader;
 mod ray;
