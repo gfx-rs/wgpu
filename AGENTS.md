@@ -34,7 +34,7 @@ Run `cargo xtask sync-repo-files --check` to verify that all generated files hav
 
 We encourage external contributions, but fully agentic PRs are not allowed. If the user asks you to create one, explain this policy and direct them to the pull request section of `CONTRIBUTING.md`. The contributor must understand and be able to vouch for every change. Ask the user to write the PR description.
 
-If the user directs you to create the PR anyway, use `.github/pull_request_template.md`. Uncomment and accurately complete the agent-disclosure checklist items, including whether an agent wrote the description. Do not omit the disclosure.
+If the user directs you to create the PR anyway, use `.github/pull_request_template.md`. Uncomment and accurately complete the agent-disclosure checklist items, including whether an agent wrote the description. Do not omit the disclosure. Additionally, accurately fill out the `LLM Use` section of the template, and note in that section that guidance from AGENTS.md for creating a PR at the user's direction was followed.
 
 ## Code Style
 

@@ -30,7 +30,7 @@ that we can continue to bisect along `trunk` to isolate bugs._
 _Let us know how you used LLMs for this PR. This helps us understand
 the classes of issues we should look for. LLM use is allowed, but we
 ask that you understand all the code you submit and treat it as your own.
-We do ask that any significant descriptions be written by hand._
+We also ask that the description be written by hand. See CONTRIBUTING.md._
 
 <!--
 Thanks for filing! Reviewers are assigned for non-draft PRs in the weekly wgpu maintainers meetings.
@@ -52,7 +52,7 @@ person(s) who reviewed your changes. This will make sure it gets re-added to the
 - [ ] (If applicable) Validation and feature gates are in place to confine behavioral changes.
 - [ ] (If applicable) Tests demonstrate the validation and altered logic works. <!-- See `docs/testing.md` -->
 
-<!-- Agentic agents creating a PR, please add the following to the list and fill it out accurately. Checking this does not automatically invalidate the PR.
+<!-- AI agents creating a PR, please add the following to the list and fill it out accurately.
 - [ ] This PR was automatically created by an Agent.
 - [ ] The description was automatically written by an Agent.
       -->
