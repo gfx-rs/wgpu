@@ -24,8 +24,7 @@ use wgpu_core::device::queue::QueueSubmitError;
 use wgpu_core::device::queue::QueueWriteError;
 use wgpu_core::device::Device;
 use wgpu_core::device::DeviceError;
-use wgpu_core::pipeline::CreateComputePipelineError;
-use wgpu_core::pipeline::CreateRenderPipelineError;
+use wgpu_core::pipeline::CreatePipelineError;
 use wgpu_core::pipeline::CreateShaderModuleError;
 use wgpu_core::present::ConfigureSurfaceError;
 use wgpu_core::resource::BufferAccessError;
@@ -238,20 +237,14 @@ impl From<ComputePassError> for GPUError {
   }
 }
 
-impl From<CreateComputePipelineError> for GPUError {
-  fn from(err: CreateComputePipelineError) -> Self {
+impl From<CreatePipelineError> for GPUError {
+  fn from(err: CreatePipelineError) -> Self {
     GPUError::from_webgpu(err)
   }
 }
 
 impl From<GetBindGroupLayoutError> for GPUError {
   fn from(err: GetBindGroupLayoutError) -> Self {
-    GPUError::from_webgpu(err)
-  }
-}
-
-impl From<CreateRenderPipelineError> for GPUError {
-  fn from(err: CreateRenderPipelineError) -> Self {
     GPUError::from_webgpu(err)
   }
 }
