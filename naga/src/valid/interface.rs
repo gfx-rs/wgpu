@@ -1019,8 +1019,8 @@ impl super::Validator {
         };
         let type_info = &self.types[inner_ty.index()];
 
-        // Hit objects, like the ray queries they resemble, may only appear as
-        // function-scope local variables.
+        // Hit objects may only be local variables, so reject them in every
+        // address space.
         if matches!(gctx.types[inner_ty].inner, crate::TypeInner::HitObject) {
             return Err(GlobalVariableError::InvalidType(var.space));
         }
