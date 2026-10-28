@@ -202,9 +202,12 @@ pub enum BufferMapError {
 
 bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUMapModeFlags`](https://gpuweb.github.io/gpuweb/#dictdef-gpumapmodeflags).
-    #[derive(serde::Serialize, serde::Deserialize)]
+    #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize)]
     pub struct MapMode: u32 {
         const READ = 0x0001;
         const WRITE = 0x0002;
     }
 }
+
+assert_ffi_safe!(MapMode);
