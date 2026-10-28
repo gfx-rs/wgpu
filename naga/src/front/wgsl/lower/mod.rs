@@ -4731,7 +4731,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     /// [WGSL's `bitcast`][spec], and return `expr`, concretized if it was abstract.
     ///
     /// Naga also accepts same-shaped bitcasts between numeric types of the
-    /// same width, such as `i64` and `u64`, or `f16` and `i16`.
+    /// same width, such as `i64` and `u64`, or `f16` and `i16`. It also lets
+    /// `i16` and `u16` take part in the spec's packing bitcasts, such as
+    /// `vec2<f16>` to `u32`.
     ///
     /// [spec]: https://www.w3.org/TR/WGSL/#bitcast-builtin
     fn bitcast_operand(
@@ -4783,15 +4785,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let is_bit_pattern =
             |scalar: Scalar| matches!(scalar.kind, Sk::Sint | Sk::Uint | Sk::Float);
         let is_32_bit = |scalar: Scalar| is_bit_pattern(scalar) && scalar.width == 4;
-        let is_f16 = |scalar: Scalar| scalar == Scalar::F16;
+        let is_16_bit = |scalar: Scalar| is_bit_pattern(scalar) && scalar.width == 2;
 
         let valid = match (from_size, from_scalar, to_size, to_scalar) {
-            (Some(Vs::Bi), half, None, word) | (None, word, Some(Vs::Bi), half) if is_f16(half) => {
+            (Some(Vs::Bi), short, None, word) | (None, word, Some(Vs::Bi), short)
+                if is_16_bit(short) =>
+            {
                 is_32_bit(word)
             }
-            (Some(Vs::Quad), half, Some(Vs::Bi), word)
-            | (Some(Vs::Bi), word, Some(Vs::Quad), half)
-                if is_f16(half) =>
+            (Some(Vs::Quad), short, Some(Vs::Bi), word)
+            | (Some(Vs::Bi), word, Some(Vs::Quad), short)
+                if is_16_bit(short) =>
             {
                 is_32_bit(word)
             }
