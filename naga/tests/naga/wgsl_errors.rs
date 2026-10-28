@@ -265,6 +265,14 @@ fn bitcast_int16() {
         ("vec3<f16>", "vec3<u16>"),
         ("vec4<i16>", "vec4<f16>"),
         ("vec4<u16>", "vec4<f16>"),
+        ("vec2<i16>", "i32"),
+        ("vec2<u16>", "f32"),
+        ("vec4<i16>", "vec2<u32>"),
+        ("vec4<u16>", "vec2<f32>"),
+        ("u32", "vec2<i16>"),
+        ("f32", "vec2<u16>"),
+        ("vec2<i32>", "vec4<u16>"),
+        ("vec2<f32>", "vec4<i16>"),
     ] {
         no_validation_error(
             &bitcast(source, dest),
@@ -279,6 +287,10 @@ fn bitcast_int16() {
         ("vec2<f16>", "i16"),
         ("vec2<i16>", "vec3<f16>"),
         ("vec2<i16>", "vec4<f16>"),
+        ("vec2<u16>", "u16"),
+        ("vec3<u16>", "vec3<u32>"),
+        ("vec4<u16>", "u32"),
+        ("vec2<u32>", "vec3<u16>"),
     ] {
         check_error_matches(&bitcast(source, dest), "cannot cast");
     }

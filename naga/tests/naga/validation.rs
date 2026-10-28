@@ -569,6 +569,11 @@ fn bitcast_operand_and_result_types() {
             vector(VectorSize::Tri, Scalar::I16),
             vector(VectorSize::Tri, Scalar::F16),
         ),
+        (vector(VectorSize::Bi, Scalar::U16), scalar(Scalar::U32)),
+        (
+            vector(VectorSize::Bi, Scalar::I32),
+            vector(VectorSize::Quad, Scalar::U16),
+        ),
         (scalar(Scalar::U32), scalar(Scalar::U32)),
     ] {
         variant(src.clone(), dst.clone())
@@ -589,6 +594,11 @@ fn bitcast_operand_and_result_types() {
         (
             vector(VectorSize::Bi, Scalar::I16),
             vector(VectorSize::Quad, Scalar::F16),
+        ),
+        (vector(VectorSize::Tri, Scalar::U16), scalar(Scalar::U32)),
+        (
+            vector(VectorSize::Bi, Scalar::U16),
+            vector(VectorSize::Bi, Scalar::U32),
         ),
         (
             TypeInner::Matrix {
