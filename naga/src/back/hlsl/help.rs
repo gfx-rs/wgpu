@@ -1902,7 +1902,7 @@ impl<W: Write> super::Writer<'_, W> {
 
             match (wrapped.src, wrapped.dst) {
                 // Pack the bits of two or four halves into one or two words.
-                ((Some(src_size), crate::Scalar::F16), (dst_size, dst)) if dst.width == 4 => {
+                ((Some(src_size), src), (dst_size, dst)) if src.width == 2 && dst.width == 4 => {
                     writeln!(
                         self.out,
                         "{level}uint16_t{} bits = asuint16(value);",
@@ -1926,7 +1926,7 @@ impl<W: Write> super::Writer<'_, W> {
                     }
                 }
                 // Unpack one or two words into two or four halves.
-                ((src_size, src), (Some(dst_size), crate::Scalar::F16)) if src.width == 4 => {
+                ((src_size, src), (Some(dst_size), dst)) if src.width == 4 && dst.width == 2 => {
                     let (bits_ty, words) = match src_size {
                         None => ("uint", &[""][..]),
                         Some(_) => ("uint2", &[".x", ".y"][..]),
@@ -1936,11 +1936,13 @@ impl<W: Write> super::Writer<'_, W> {
                     } else {
                         writeln!(self.out, "{level}{bits_ty} bits = asuint(value);")?;
                     }
-                    write!(
-                        self.out,
-                        "{level}return asfloat16(uint16_t{}(",
-                        dst_size as u8
-                    )?;
+                    let lanes = dst_size as u8;
+                    let wrap = match dst.kind {
+                        Sk::Float => String::from("asfloat16"),
+                        Sk::Sint => format!("int16_t{lanes}"),
+                        _ => String::new(),
+                    };
+                    write!(self.out, "{level}return {wrap}(uint16_t{lanes}(")?;
                     for (i, word) in words.iter().enumerate() {
                         if i != 0 {
                             write!(self.out, ", ")?;
