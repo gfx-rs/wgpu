@@ -244,8 +244,8 @@ impl Writer {
     /// For a hit, the attribute variable is the source of the recorded
     /// attributes when the committed intersection is procedural (an AABB), so
     /// it is zeroed before recording; for triangles the barycentrics come from
-    /// the query. See [`Instruction::hit_object_record_from_query`] for why the
-    /// `Hit Kind` operand is not emitted.
+    /// the query. The `Hit Kind` operand is omitted because `rspirv`, which our
+    /// tests use to disassemble the output, doesn't support it yet.
     fn write_hit_object_record_from_query(&mut self) -> Result<spirv::Word, super::super::Error> {
         if let Some(&word) = self
             .ray_tracing_functions

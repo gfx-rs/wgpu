@@ -993,6 +993,8 @@ impl crate::Module {
             return true;
         }
 
+        // Every other reordering operation takes a hit object, so the type
+        // check above already covers it.
         let functions = self.functions.iter().map(|(_, f)| f);
         let entry_points = self.entry_points.iter().map(|ep| &ep.function);
         functions.chain(entry_points).any(|func| {
