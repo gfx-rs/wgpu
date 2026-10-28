@@ -7,14 +7,14 @@ use thiserror::Error;
 use wgt::error::{ErrorType, WebGpuError};
 
 use crate::pipeline::{
-    CreatePipelineError, LateSizedBufferGroup, PipelineCache, ProgrammableStageDescriptor, ShaderModule
+    CreatePipelineError, LateSizedBufferGroup, PipelineCache, ProgrammableStageDescriptor,
+    ShaderModule,
 };
 use crate::{
     binding_model::{BindGroupLayout, GetBindGroupLayoutError, PipelineLayout},
     device::Device,
     resource::{InvalidResourceError, Labeled, ResourceState, TrackingData},
-    resource_log,
-    Label,
+    resource_log, Label,
 };
 
 #[derive(Clone, Debug, Error)]
@@ -31,8 +31,9 @@ pub enum RayTracingPipelineError {
 impl WebGpuError for RayTracingPipelineError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
-            Self::TooManyIntersectionGroups(..)
-            | Self::TooHighRayRecursionDepth(..) => ErrorType::Validation,
+            Self::TooManyIntersectionGroups(..) | Self::TooHighRayRecursionDepth(..) => {
+                ErrorType::Validation
+            }
         }
     }
 }

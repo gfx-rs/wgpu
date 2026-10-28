@@ -6,6 +6,7 @@ use crate::device::stage_compiler::StageCompiler;
 use crate::device::trace::{Action, IntoTrace};
 use crate::device::{DeviceError, ENTRYPOINT_FAILURE_ERROR};
 use crate::pipeline::CreatePipelineError;
+use crate::ray_tracing_pipeline;
 use crate::resource::{ParentDevice, ResourceState};
 use crate::{
     api_log,
@@ -19,7 +20,6 @@ use crate::{
     snatch::Snatchable,
     LabelHelpers,
 };
-use crate::ray_tracing_pipeline;
 use hal::AccelerationStructureTriangleIndices;
 use wgt::{Features, AABB_GEOMETRY_MIN_STRIDE};
 
@@ -392,10 +392,7 @@ impl Device {
     pub fn create_ray_tracing_pipeline_inner(
         self: &Arc<Self>,
         desc: ray_tracing_pipeline::RayTracingPipelineDescriptor,
-    ) -> Result<
-        Arc<ray_tracing_pipeline::RayTracingPipeline>,
-        CreatePipelineError,
-    > {
+    ) -> Result<Arc<ray_tracing_pipeline::RayTracingPipeline>, CreatePipelineError> {
         use crate::validation;
 
         self.check_is_valid()?;
@@ -414,8 +411,7 @@ impl Device {
             None => None,
         };
 
-        let mut compiler =
-            StageCompiler::new(self, pipeline_layout.clone(), io, None);
+        let mut compiler = StageCompiler::new(self, pipeline_layout.clone(), io, None);
 
         let ray_generation = {
             let stage = validation::ShaderStageForValidation::RayGeneration;
@@ -433,7 +429,8 @@ impl Device {
             return Err(
                 ray_tracing_pipeline::RayTracingPipelineError::TooManyIntersectionGroups(
                     desc.intersections.len(),
-                ).into(),
+                )
+                .into(),
             );
         }
 
@@ -442,7 +439,8 @@ impl Device {
                 ray_tracing_pipeline::RayTracingPipelineError::TooHighRayRecursionDepth(
                     desc.max_recursion_depth,
                     self.limits.max_ray_recursion_depth,
-                ).into(),
+                )
+                .into(),
             );
         }
 
@@ -454,12 +452,12 @@ impl Device {
                 ray_tracing_pipeline::RayTracingIntersectionDescriptor::Triangle {
                     closest_hit,
                     any_hit,
-                } => {                    
+                } => {
                     let closest_hit = {
                         let stage =
                             validation::ShaderStageForValidation::ClosestHit { triangle: true };
-                        
-                        compiler.compile(&closest_hit, stage)?
+
+                        compiler.compile(closest_hit, stage)?
                     };
 
                     let any_hit = match any_hit {
@@ -477,18 +475,14 @@ impl Device {
             }
         }
 
-        for (closest_hit, any_hit) in compiled_intersections.iter()
-        {
+        for (closest_hit, any_hit) in compiled_intersections.iter() {
             intersections.push(hal::RayObjectIntersectionState {
-                        closest_hit: closest_hit.to_hal(),
-                        any_hit: any_hit.as_ref().map(|any| any.to_hal()),
-                    });
+                closest_hit: closest_hit.to_hal(),
+                any_hit: any_hit.as_ref().map(|any| any.to_hal()),
+            });
         }
 
-        let StageCompiler {
-            resources,
-            ..
-        } = compiler;
+        let StageCompiler { resources, .. } = compiler;
 
         let pipeline_layout = match resources.layout {
             validation::BindingLayoutSource::Provided(layout) => layout,
@@ -497,8 +491,10 @@ impl Device {
             }
         };
 
-        let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&resources.minimum_binding_sizes, &pipeline_layout);
+        let late_sized_buffer_groups = Device::make_late_sized_buffer_groups(
+            &resources.minimum_binding_sizes,
+            &pipeline_layout,
+        );
 
         let cache = match desc.cache {
             Some(cache) => {
@@ -521,27 +517,17 @@ impl Device {
             unsafe { self.raw().create_ray_tracing_pipeline(&pipeline_desc) }.map_err(|err| {
                 match err {
                     hal::PipelineError::Device(error) => {
-                        CreatePipelineError::Device(
-                            self.handle_hal_error(error),
-                        )
+                        CreatePipelineError::Device(self.handle_hal_error(error))
                     }
                     hal::PipelineError::Linkage(stage, message) => {
-                        CreatePipelineError::Internal {
-                            stage,
-                            message,
-                        }
+                        CreatePipelineError::Internal { stage, message }
                     }
-                    hal::PipelineError::EntryPoint(stage) => {
-                        CreatePipelineError::Internal {
-                            stage: hal::auxil::map_naga_stage(stage),
-                            message: ENTRYPOINT_FAILURE_ERROR.to_string(),
-                        }
-                    }
+                    hal::PipelineError::EntryPoint(stage) => CreatePipelineError::Internal {
+                        stage: hal::auxil::map_naga_stage(stage),
+                        message: ENTRYPOINT_FAILURE_ERROR.to_string(),
+                    },
                     hal::PipelineError::PipelineConstants(stage, message) => {
-                        CreatePipelineError::PipelineConstants {
-                            stage,
-                            message,
-                        }
+                        CreatePipelineError::PipelineConstants { stage, message }
                     }
                 }
             })?
