@@ -126,18 +126,8 @@ async fn binding_array_tlas(ctx: TestingContext) {
     // Put a single instance into each TLAS. Both reference the same BLAS.
     //
     // NOTE: This indexing API is how TLAS instances are populated in the examples.
-    tlas_a[0] = Some(wgpu::TlasInstance::new(
-        &blas,
-        [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-        0,
-        0xff,
-    ));
-    tlas_b[0] = Some(wgpu::TlasInstance::new(
-        &blas,
-        [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-        0,
-        0xff,
-    ));
+    tlas_a[0] = Some(wgpu::TlasInstance::from_blas_untransformed(&blas));
+    tlas_b[0] = Some(wgpu::TlasInstance::from_blas_untransformed(&blas));
 
     // Build BLAS and TLASes.
     let mut encoder = ctx
