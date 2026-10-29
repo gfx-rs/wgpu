@@ -1026,6 +1026,7 @@ impl crate::DynSampler for Sampler {}
 struct BindingInfo {
     binding: u32,
     binding_array_size: Option<NonZeroU32>,
+    external_texture: bool,
 }
 
 #[derive(Debug)]

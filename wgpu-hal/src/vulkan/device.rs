@@ -1496,7 +1496,40 @@ impl crate::Device for super::Device {
 
             let count = entry.count.map_or(1, |c| c.get());
             match entry.ty {
-                wgt::BindingType::ExternalTexture => unimplemented!(),
+                wgt::BindingType::ExternalTexture => {
+                    assert!(
+                        count == 1 && entry.count.is_none() && flags.is_empty(),
+                        "ExternalTexture binding arrays are not supported"
+                    );
+                    vk_bindings.extend((next_binding..next_binding + 3).map(|binding| {
+                        vk::DescriptorSetLayoutBinding {
+                            binding,
+                            descriptor_type: vk::DescriptorType::SAMPLED_IMAGE,
+                            descriptor_count: 1,
+                            stage_flags: conv::map_shader_stage(entry.visibility),
+                            p_immutable_samplers: ptr::null(),
+                            _marker: Default::default(),
+                        }
+                    }));
+                    vk_bindings.push(vk::DescriptorSetLayoutBinding {
+                        binding: next_binding + 3,
+                        descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                        descriptor_count: 1,
+                        stage_flags: conv::map_shader_stage(entry.visibility),
+                        p_immutable_samplers: ptr::null(),
+                        _marker: Default::default(),
+                    });
+                    binding_flags.extend(core::iter::repeat_n(flags, 4));
+                    binding_map.push((
+                        entry.binding,
+                        super::BindingInfo {
+                            binding: next_binding,
+                            binding_array_size: None,
+                            external_texture: true,
+                        },
+                    ));
+                    next_binding += 4;
+                }
                 _ => {
                     vk_bindings.push(vk::DescriptorSetLayoutBinding {
                         binding: next_binding,
@@ -1512,6 +1545,7 @@ impl crate::Device for super::Device {
                         super::BindingInfo {
                             binding: next_binding,
                             binding_array_size: entry.count,
+                            external_texture: false,
                         },
                     ));
                     next_binding += 1;
@@ -1551,7 +1585,10 @@ impl crate::Device for super::Device {
                 wgt::BindingType::AccelerationStructure { .. } => {
                     desc_count.acceleration_structure += count;
                 }
-                wgt::BindingType::ExternalTexture => unimplemented!(),
+                wgt::BindingType::ExternalTexture => {
+                    desc_count.sampled_image += 3;
+                    desc_count.uniform_buffer += 1;
+                }
             }
         }
 
@@ -1685,6 +1722,7 @@ impl crate::Device for super::Device {
                         descriptor_set: group as u32,
                         binding: binding_info.binding,
                         binding_array_size: binding_info.binding_array_size.map(NonZeroU32::get),
+                        external_texture: binding_info.external_texture,
                     },
                 );
             }
@@ -1772,9 +1810,12 @@ impl crate::Device for super::Device {
         }
 
         let mut writes = Vec::with_capacity(desc.entries.len());
-        let mut buffer_infos = Vec::with_capacity(desc.buffers.len());
+        let mut buffer_infos =
+            Vec::with_capacity(desc.buffers.len() + desc.external_textures.len());
         let mut buffer_infos = ExtendStack::from_vec_capacity(&mut buffer_infos);
-        let mut image_infos = Vec::with_capacity(desc.samplers.len() + desc.textures.len());
+        let mut image_infos = Vec::with_capacity(
+            desc.samplers.len() + desc.textures.len() + 3 * desc.external_textures.len(),
+        );
         let mut image_infos = ExtendStack::from_vec_capacity(&mut image_infos);
         // TODO: This length could be reduced to just the number of top-level acceleration
         // structure bindings, where multiple consecutive TLAS bindings that are set via
@@ -1800,7 +1841,59 @@ impl crate::Device for super::Device {
         });
         let mut next_binding = 0;
         for (layout, entry) in layout_and_entry_iter {
-            let write = vk::WriteDescriptorSet::default().dst_set(set.raw());
+            let dst_set = set.raw();
+
+            fn add_image_descriptor_writes<'a>(
+                mut infos: ExtendStack<'a, vk::DescriptorImageInfo>,
+                writes: &mut Vec<vk::WriteDescriptorSet<'a>>,
+                dst_set: vk::DescriptorSet,
+                next_binding: &mut u32,
+                add_infos: &'a [crate::TextureBinding<super::TextureView>],
+                add_ty: vk::DescriptorType,
+            ) -> ExtendStack<'a, vk::DescriptorImageInfo> {
+                let local_image_infos;
+                (infos, local_image_infos) = infos.extend(add_infos.iter().map(|binding| {
+                    let layout = conv::derive_image_layout(binding.usage, binding.view.format);
+                    vk::DescriptorImageInfo::default()
+                        .image_view(binding.view.raw)
+                        .image_layout(layout)
+                }));
+                writes.push(
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(dst_set)
+                        .dst_binding(*next_binding)
+                        .descriptor_type(add_ty)
+                        .image_info(local_image_infos),
+                );
+                *next_binding += 1;
+                infos
+            }
+
+            fn add_buffer_descriptor_writes<'a>(
+                mut infos: ExtendStack<'a, vk::DescriptorBufferInfo>,
+                writes: &mut Vec<vk::WriteDescriptorSet<'a>>,
+                dst_set: vk::DescriptorSet,
+                next_binding: &mut u32,
+                add_infos: &'a [crate::BufferBinding<super::Buffer, wgt::BufferSize>],
+                add_ty: vk::DescriptorType,
+            ) -> ExtendStack<'a, vk::DescriptorBufferInfo> {
+                let local_buffer_infos;
+                (infos, local_buffer_infos) = infos.extend(add_infos.iter().map(|binding| {
+                    vk::DescriptorBufferInfo::default()
+                        .buffer(binding.buffer.raw)
+                        .offset(binding.offset)
+                        .range(binding.size.get())
+                }));
+                writes.push(
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(dst_set)
+                        .dst_binding(*next_binding)
+                        .descriptor_type(add_ty)
+                        .buffer_info(local_buffer_infos),
+                );
+                *next_binding += 1;
+                infos
+            }
 
             match layout.ty {
                 wgt::BindingType::Sampler(_) => {
@@ -1812,7 +1905,8 @@ impl crate::Device for super::Device {
                             |sampler| vk::DescriptorImageInfo::default().sampler(sampler.raw),
                         ));
                     writes.push(
-                        write
+                        vk::WriteDescriptorSet::default()
+                            .dst_set(dst_set)
                             .dst_binding(next_binding)
                             .descriptor_type(conv::map_binding_type(layout.ty))
                             .image_info(local_image_infos),
@@ -1822,45 +1916,26 @@ impl crate::Device for super::Device {
                 wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
                     let start = entry.resource_index;
                     let end = start + entry.count;
-                    let local_image_infos;
-                    (image_infos, local_image_infos) =
-                        image_infos.extend(desc.textures[start as usize..end as usize].iter().map(
-                            |binding| {
-                                let layout =
-                                    conv::derive_image_layout(binding.usage, binding.view.format);
-                                vk::DescriptorImageInfo::default()
-                                    .image_view(binding.view.raw)
-                                    .image_layout(layout)
-                            },
-                        ));
-                    writes.push(
-                        write
-                            .dst_binding(next_binding)
-                            .descriptor_type(conv::map_binding_type(layout.ty))
-                            .image_info(local_image_infos),
+                    image_infos = add_image_descriptor_writes(
+                        image_infos,
+                        &mut writes,
+                        dst_set,
+                        &mut next_binding,
+                        &desc.textures[start as usize..end as usize],
+                        conv::map_binding_type(layout.ty),
                     );
-                    next_binding += 1;
                 }
                 wgt::BindingType::Buffer { .. } => {
                     let start = entry.resource_index;
                     let end = start + entry.count;
-                    let local_buffer_infos;
-                    (buffer_infos, local_buffer_infos) =
-                        buffer_infos.extend(desc.buffers[start as usize..end as usize].iter().map(
-                            |binding| {
-                                vk::DescriptorBufferInfo::default()
-                                    .buffer(binding.buffer.raw)
-                                    .offset(binding.offset)
-                                    .range(binding.size.get())
-                            },
-                        ));
-                    writes.push(
-                        write
-                            .dst_binding(next_binding)
-                            .descriptor_type(conv::map_binding_type(layout.ty))
-                            .buffer_info(local_buffer_infos),
+                    buffer_infos = add_buffer_descriptor_writes(
+                        buffer_infos,
+                        &mut writes,
+                        dst_set,
+                        &mut next_binding,
+                        &desc.buffers[start as usize..end as usize],
+                        conv::map_binding_type(layout.ty),
                     );
-                    next_binding += 1;
                 }
                 wgt::BindingType::AccelerationStructure { .. } => {
                     let start = entry.resource_index;
@@ -1886,7 +1961,8 @@ impl crate::Device for super::Device {
                     );
 
                     writes.push(
-                        write
+                        vk::WriteDescriptorSet::default()
+                            .dst_set(dst_set)
                             .dst_binding(next_binding)
                             .descriptor_type(conv::map_binding_type(layout.ty))
                             .descriptor_count(entry.count)
@@ -1894,7 +1970,31 @@ impl crate::Device for super::Device {
                     );
                     next_binding += 1;
                 }
-                wgt::BindingType::ExternalTexture => unimplemented!(),
+                wgt::BindingType::ExternalTexture => {
+                    assert!(
+                        entry.count == 1,
+                        "ExternalTexture binding arrays are not supported"
+                    );
+                    let index = entry.resource_index as usize;
+                    for plane in &desc.external_textures[index].planes {
+                        image_infos = add_image_descriptor_writes(
+                            image_infos,
+                            &mut writes,
+                            dst_set,
+                            &mut next_binding,
+                            core::slice::from_ref(plane),
+                            vk::DescriptorType::SAMPLED_IMAGE,
+                        );
+                    }
+                    buffer_infos = add_buffer_descriptor_writes(
+                        buffer_infos,
+                        &mut writes,
+                        dst_set,
+                        &mut next_binding,
+                        core::slice::from_ref(&desc.external_textures[index].params),
+                        vk::DescriptorType::UNIFORM_BUFFER,
+                    )
+                }
             }
         }
 
