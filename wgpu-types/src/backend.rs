@@ -230,6 +230,8 @@ pub struct BackendOptions {
     pub gl: GlBackendOptions,
     /// Options for the DX12 backend, [`Backend::Dx12`].
     pub dx12: Dx12BackendOptions,
+    /// Options for the Metal backend, [`Backend::Metal`].
+    pub metal: MetalBackendOptions,
     /// Options for the noop backend, [`Backend::Noop`].
     pub noop: NoopBackendOptions,
 }
@@ -243,6 +245,7 @@ impl BackendOptions {
         Self {
             gl: GlBackendOptions::from_env_or_default(),
             dx12: Dx12BackendOptions::from_env_or_default(),
+            metal: MetalBackendOptions::from_env_or_default(),
             noop: NoopBackendOptions::from_env_or_default(),
         }
     }
@@ -255,7 +258,118 @@ impl BackendOptions {
         Self {
             gl: self.gl.with_env(),
             dx12: self.dx12.with_env(),
+            metal: self.metal.with_env(),
             noop: self.noop.with_env(),
+        }
+    }
+}
+
+/// Metal Shading Language versions, ordered from oldest to newest.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum MetalShadingLanguageVersion {
+    /// MSL 1.0.
+    Version1_0,
+    /// MSL 1.1.
+    Version1_1,
+    /// MSL 1.2.
+    Version1_2,
+    /// MSL 2.0.
+    Version2_0,
+    /// MSL 2.1.
+    Version2_1,
+    /// MSL 2.2.
+    Version2_2,
+    /// MSL 2.3.
+    Version2_3,
+    /// MSL 2.4.
+    Version2_4,
+    /// MSL 3.0.
+    Version3_0,
+    /// MSL 3.1.
+    Version3_1,
+    /// MSL 3.2.
+    Version3_2,
+    /// MSL 4.0.
+    Version4_0,
+}
+
+impl FromStr for MetalShadingLanguageVersion {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim() {
+            "1.0" => Ok(Self::Version1_0),
+            "1.1" => Ok(Self::Version1_1),
+            "1.2" => Ok(Self::Version1_2),
+            "2.0" => Ok(Self::Version2_0),
+            "2.1" => Ok(Self::Version2_1),
+            "2.2" => Ok(Self::Version2_2),
+            "2.3" => Ok(Self::Version2_3),
+            "2.4" => Ok(Self::Version2_4),
+            "3.0" => Ok(Self::Version3_0),
+            "3.1" => Ok(Self::Version3_1),
+            "3.2" => Ok(Self::Version3_2),
+            "4.0" => Ok(Self::Version4_0),
+            _ => Err("unknown Metal Shading Language version"),
+        }
+    }
+}
+
+/// Configuration for adapters enumerated by the Metal backend.
+///
+/// By default, probe for the newest compiler-supported MSL version up to OS support.
+///
+/// These options do not affect devices imported using the unsafe HAL `device_from_raw` API.
+#[derive(Clone, Debug, Eq, PartialEq, ConstDefault!)]
+pub struct MetalBackendOptions {
+    /// Exact MSL version to use, skipping compiler probing. Takes precedence over
+    /// [`Self::max_msl_version`]. Versions newer than OS support exclude the adapter.
+    /// An unsupported compiler version can still cause shader compilation to fail.
+    pub msl_version: Option<MetalShadingLanguageVersion>,
+    /// Maximum MSL version to probe. By default, probe up to the OS-supported version.
+    /// Adapters for which no candidate compiles are excluded.
+    pub max_msl_version: Option<MetalShadingLanguageVersion>,
+}
+
+impl MetalBackendOptions {
+    /// Choose Metal options using [`Self::with_env`].
+    #[must_use]
+    pub fn from_env_or_default() -> Self {
+        Self::default().with_env()
+    }
+
+    /// Apply `WGPU_METAL_MSL_VERSION` and `WGPU_METAL_MAX_MSL` overrides.
+    ///
+    /// Values are MSL versions such as `3.1`, with optional surrounding whitespace.
+    /// Missing or invalid values preserve the configured option. Invalid values log a warning.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        Self {
+            msl_version: Self::parse_override(
+                "WGPU_METAL_MSL_VERSION",
+                crate::env::var("WGPU_METAL_MSL_VERSION").as_deref(),
+                self.msl_version,
+            ),
+            max_msl_version: Self::parse_override(
+                "WGPU_METAL_MAX_MSL",
+                crate::env::var("WGPU_METAL_MAX_MSL").as_deref(),
+                self.max_msl_version,
+            ),
+        }
+    }
+
+    fn parse_override(
+        name: &str,
+        value: Option<&str>,
+        configured: Option<MetalShadingLanguageVersion>,
+    ) -> Option<MetalShadingLanguageVersion> {
+        match value.map(str::parse) {
+            Some(Ok(version)) => Some(version),
+            Some(Err(_)) => {
+                log::warn!("{name}={value:?} is not a recognized Metal language version");
+                configured
+            }
+            None => configured,
         }
     }
 }
@@ -1035,5 +1149,44 @@ impl GlFenceBehavior {
         } else {
             self
         }
+    }
+}
+
+#[cfg(test)]
+mod metal_tests {
+    use super::{MetalBackendOptions, MetalShadingLanguageVersion as Version};
+    use alloc::format;
+
+    #[test]
+    fn parse_msl_versions() {
+        let values = [
+            "1.0", "1.1", "1.2", "2.0", "2.1", "2.2", "2.3", "2.4", "3.0", "3.1", "3.2", "4.0",
+        ];
+        let mut previous = None;
+        for value in values {
+            let version: Version = value.parse().unwrap();
+            assert_eq!(format!("  {value}\n").parse(), Ok(version));
+            if let Some(previous) = previous {
+                assert!(previous < version);
+            }
+            previous = Some(version);
+        }
+        for value in ["", "3", "3.3", "3.1.0", "metal3.1", "5.0"] {
+            assert!(value.parse::<Version>().is_err());
+        }
+    }
+
+    #[test]
+    fn msl_environment_overrides_preserve_configuration() {
+        let configured = Some(Version::Version3_1);
+        let parse =
+            |value, configured| MetalBackendOptions::parse_override("test", value, configured);
+        assert_eq!(parse(None, configured), configured);
+        assert_eq!(parse(Some("invalid"), configured), configured);
+        assert_eq!(parse(Some(" 2.4 "), configured), Some(Version::Version2_4));
+        assert_eq!(parse(Some("3.2"), None), Some(Version::Version3_2));
+        assert_eq!(parse(Some("invalid"), None), None);
+        assert_eq!(MetalBackendOptions::default().msl_version, None);
+        assert_eq!(MetalBackendOptions::default().max_msl_version, None);
     }
 }

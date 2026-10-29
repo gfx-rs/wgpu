@@ -11,8 +11,9 @@ The tests require that the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)
 is installed on the system and the `bin` folder of the SDK is in your `PATH`.
 Without this some tests may fail to run, or report false negatives.
 
-Additionally you require you run the tests with `cargo-nextest`.
-This is what our xtask calls. You can install it with `cargo install cargo-nextest`.
+The standard test runner, `cargo xtask test`, requires `cargo-nextest`.
+You can install it with `cargo install cargo-nextest`. For individual GPU tests,
+see [Running without nextest](#running-without-nextest).
 
 ## Run All Tests
 
@@ -208,6 +209,27 @@ management for tests that are expected to fail due to driver or wgpu bugs.
 Normal `#[test]`s will not be found in this test crate, as we use a custom harness.
 
 See also the [example tests](#example-tests) for additional GPU tests.
+
+### Running without nextest
+
+To run an individual GPU test with `cargo test`, first generate the `.gpuconfig`
+file that the GPU test harness reads. Run these commands from the repository root:
+
+```sh
+WGPU_INFO_SAVE_GPUCONFIG_REPORT=1 cargo test -p wgpu-info --bin wgpu-info generate_gpuconfig_report -- --nocapture
+cargo test -p wgpu-test --test wgpu-gpu wgpu_gpu::instance::initialize -- --nocapture --test-threads=1
+```
+
+Replace `wgpu_gpu::instance::initialize` with the test name or substring to match.
+Keep `--test-threads=1`: the harness sets process-wide Metal validation environment
+variables. To select a backend, set `WGPU_BACKEND`, for example `WGPU_BACKEND=metal`,
+for both commands. Regenerate `.gpuconfig` after changing GPUs, drivers, or backend
+options.
+
+The initial build can take several minutes. Allow it to finish and keep build
+output visible; piping through `tail` hides progress until the command exits.
+Check that the result reports an executed test, rather than only skipped tests
+or zero matching tests.
 
 ## `wgpu` Trace Tests
 
