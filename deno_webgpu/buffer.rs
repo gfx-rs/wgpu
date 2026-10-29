@@ -14,6 +14,8 @@ use deno_core::op2;
 use deno_core::v8;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
+use deno_core::OpState;
+use deno_core::V8CrossThreadTaskSpawner;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 use wgpu_core::resource::Labeled as _;
@@ -39,15 +41,12 @@ pub enum BufferError {
   #[class(generic)]
   #[error(transparent)]
   Canceled(#[from] oneshot::Canceled),
-  #[class("DOMExceptionOperationError")]
-  #[error(transparent)]
-  Access(wgpu_core::resource::BufferAccessError),
   #[class("DOMExceptionAbortError")]
   #[error("{0}")]
-  Aborted(&'static str),
+  Aborted(String),
   #[class("DOMExceptionOperationError")]
   #[error("{0}")]
-  Operation(&'static str),
+  Operation(String),
   #[class(inherit)]
   #[error(transparent)]
   Other(#[from] JsErrorBox),
@@ -56,10 +55,13 @@ pub enum BufferError {
 impl From<wgpu_core::resource::BufferAccessError> for BufferError {
   fn from(err: wgpu_core::resource::BufferAccessError) -> Self {
     match err {
-      wgpu_core::resource::BufferAccessError::Device(
+      e @ wgpu_core::resource::BufferAccessError::Device(
         wgpu_core::device::DeviceError::Lost,
-      ) => BufferError::Aborted("Device lost"),
-      err => BufferError::Access(err),
+      ) => BufferError::Aborted(e.to_string()),
+      e @ wgpu_core::resource::BufferAccessError::MapAborted => {
+        BufferError::Aborted(e.to_string())
+      }
+      e => BufferError::Operation(e.to_string()),
     }
   }
 }
@@ -119,6 +121,39 @@ impl GarbageCollected for GPUBuffer {
   }
 }
 
+impl GPUBuffer {
+  fn unmap_inner(
+    &self,
+    scope: &mut v8::HandleScope,
+  ) -> Result<(), BufferError> {
+    if let BufferMapState::Mapped { mode, range, views } =
+      self.map_state.replace(BufferMapState::Unmapped)
+    {
+      for ab in views {
+        let ab = ab.array_buffer.open(scope);
+        ab.detach(None);
+      }
+
+      if mode == MapMode::Write {
+        if let Ok(mapping) = self
+          .wgpu_buffer
+          .get_mapped_range(range.start, Some(range.end - range.start))
+        {
+          let data = self.data.borrow();
+          let data = data.as_ref().expect("mapAsync succeeded");
+          mapping
+            .write_slice()
+            .copy_from_slice(&data[range.start as usize..range.end as usize]);
+        }
+      }
+    }
+
+    self.wgpu_buffer.unmap();
+
+    Ok(())
+  }
+}
+
 #[op2]
 impl GPUBuffer {
   #[constructor]
@@ -160,26 +195,31 @@ impl GPUBuffer {
   #[async_method]
   async fn map_async(
     &self,
+    state: Rc<RefCell<OpState>>,
     #[webidl(options(enforce_range = true))] mode: u32,
     #[webidl(default = 0)] offset: u64,
     #[webidl] size: Option<u64>,
   ) -> Result<(), BufferError> {
-    let read_mode = (mode & 0x0001) == 0x0001;
-    let write_mode = (mode & 0x0002) == 0x0002;
-    if (read_mode && write_mode) || (!read_mode && !write_mode) {
-      return Err(BufferError::Operation(
-        "exactly one of READ or WRITE map mode must be set",
-      ));
-    }
-
-    let mode = if read_mode {
-      MapMode::Read
-    } else {
-      assert!(write_mode);
-      MapMode::Write
-    };
-
     {
+      // If this.mapState is not "unmapped"
+      let maybe_error = match *self.map_state.borrow() {
+        BufferMapState::Unmapped => None,
+        BufferMapState::Pending => {
+          Some(wgpu_core::resource::BufferAccessError::MapAlreadyPending)
+        }
+        BufferMapState::Mapped { .. } => {
+          Some(wgpu_core::resource::BufferAccessError::AlreadyMapped)
+        }
+      };
+      if let Some(error) = maybe_error {
+        // Issue the early-reject steps on the Device timeline of this.[[device]].
+        // Generate a validation error.
+        self
+          .wgpu_device
+          .handle_error_nolabel(error.clone(), "GPUBuffer.mapAsync");
+        // Return a promise rejected with OperationError.
+        return Err(error.into());
+      }
       *self.map_state.borrow_mut() = BufferMapState::Pending;
     }
 
@@ -192,13 +232,32 @@ impl GPUBuffer {
       });
 
       self.wgpu_buffer.map_async(
+        wgpu_core::resource::MapModeFlags::from_bits_retain(mode),
         offset,
         size,
-        wgpu_core::resource::BufferMapOperation {
-          mode,
-          callback: Some(callback),
-        },
+        Some(callback),
       );
+    }
+
+    // Per specification we should have deferred promise resolution here
+    // (all microtasks should resolve before it).
+    // We do this by spawning a V8 task that will resolve the promise after all
+    // previous microtasks have been processed.
+    {
+      let spawner =
+        { state.borrow().borrow::<V8CrossThreadTaskSpawner>().clone() };
+      let (sender, receiver) = oneshot::channel();
+      spawner.spawn(|_| {
+        let _ = sender.send(());
+      });
+      receiver.await?;
+    };
+
+    // Now that we have awaited the V8 microtask queue
+    // we need to check the map state of the buffer again
+    // to ensure it is still pending (unmap could interrupt the mapping process).
+    if !matches!(*self.map_state.borrow(), BufferMapState::Pending) {
+      return Err(wgpu_core::resource::BufferAccessError::MapAborted.into());
     }
 
     let done = Rc::new(RefCell::new(false));
@@ -227,7 +286,7 @@ impl GPUBuffer {
 
     let mapping = self.wgpu_buffer.get_mapped_range(offset, size)?;
 
-    if mode == MapMode::Read {
+    if mapping.mode() == MapMode::Read {
       let mut data = self.data.borrow_mut();
       let data = data
         .as_mut()
@@ -237,7 +296,7 @@ impl GPUBuffer {
     }
 
     self.map_state.replace(BufferMapState::Mapped {
-      mode,
+      mode: mapping.mode(),
       range: offset..(offset + mapping.len()),
       views: vec![],
     });
@@ -251,37 +310,42 @@ impl GPUBuffer {
     #[webidl(default = 0)] offset: u64,
     #[webidl] size: Option<u64>,
   ) -> Result<v8::Local<'s, v8::ArrayBuffer>, BufferError> {
-    let size = size.unwrap_or_else(|| self.wgpu_buffer.size() - offset);
+    let size =
+      size.unwrap_or_else(|| self.wgpu_buffer.size().saturating_sub(offset));
     let BufferMapState::Mapped {
       mode: _,
       range,
       views,
     } = &mut *self.map_state.borrow_mut()
     else {
-      return Err(BufferError::Operation("Buffer is not mapped"));
+      return Err(BufferError::Operation("Buffer is not mapped".to_string()));
     };
 
     if !(offset.is_multiple_of(8)) {
-      return Err(BufferError::Operation("Offset must be a multiple of 8"));
+      return Err(BufferError::Operation(
+        "Offset must be a multiple of 8".to_string(),
+      ));
     }
 
     if !(size.is_multiple_of(4)) {
-      return Err(BufferError::Operation("Size must be a multiple of 4"));
+      return Err(BufferError::Operation(
+        "Size must be a multiple of 4".to_string(),
+      ));
     }
 
     if !(offset >= range.start) {
-      return Err(BufferError::Operation("Offset is out of range"));
+      return Err(BufferError::Operation("Offset is out of range".to_string()));
     }
 
     if !(offset + size <= range.end) {
-      return Err(BufferError::Operation("Size is out of range"));
+      return Err(BufferError::Operation("Size is out of range".to_string()));
     }
 
     let range = offset..(offset + size);
 
     if views.iter().any(|view| range_overlap(&view.range, &range)) {
       return Err(BufferError::Operation(
-        "Overlapping mapped ranges are not allowed",
+        "Overlapping mapped ranges are not allowed".to_string(),
       ));
     }
 
@@ -319,37 +383,15 @@ impl GPUBuffer {
   #[nofast]
   #[undefined]
   fn unmap(&self, scope: &mut v8::HandleScope) -> Result<(), BufferError> {
-    if let BufferMapState::Mapped { mode, range, views } =
-      self.map_state.replace(BufferMapState::Unmapped)
-    {
-      for ab in views {
-        let ab = ab.array_buffer.open(scope);
-        ab.detach(None);
-      }
-
-      if mode == MapMode::Write {
-        if let Ok(mapping) = self
-          .wgpu_buffer
-          .get_mapped_range(range.start, Some(range.end - range.start))
-        {
-          let data = self.data.borrow();
-          let data = data.as_ref().expect("mapAsync succeeded");
-          mapping
-            .write_slice()
-            .copy_from_slice(&data[range.start as usize..range.end as usize]);
-        }
-      }
-    }
-
-    self.wgpu_buffer.unmap();
-
-    Ok(())
+    self.unmap_inner(scope)
   }
 
   #[fast]
   #[undefined]
-  fn destroy(&self) {
+  fn destroy(&self, scope: &mut v8::HandleScope) -> Result<(), BufferError> {
+    self.unmap_inner(scope)?;
     self.data.replace(None);
     self.wgpu_buffer.destroy();
+    Ok(())
   }
 }

@@ -961,6 +961,7 @@ fn future_request_adapter(
             Some(adapter) => Ok(WebAdapter {
                 inner: adapter,
                 ident: crate::cmp::Identifier::create(),
+                cached_properties: Rc::new(CachedProperties::default()),
             }
             .into()),
             None => Err(request_adapter_null_error(requested_backends)),
@@ -1000,6 +1001,7 @@ fn future_request_device(
                     ident: crate::cmp::Identifier::create(),
                     error_scope_count: Rc::new(Cell::new(0)),
                     uncaptured_error_listener: Rc::new(RefCell::new(None)),
+                    cached_properties: Rc::new(CachedProperties::default()),
                 }
                 .into(),
                 WebQueue {
@@ -1213,11 +1215,22 @@ pub fn get_browser_gpu_property(
     Ok(DefinedNonNullJsValue::new(maybe_undefined_gpu))
 }
 
+/// Cached Rust values for WebGPU adapter or device properties.
+/// Avoids repeated JavaScript property reads and conversions on subsequent queries.
+#[derive(Debug, Default)]
+struct CachedProperties {
+    features: OnceCell<crate::Features>,
+    limits: OnceCell<crate::Limits>,
+    adapter_info: OnceCell<crate::AdapterInfo>,
+}
+
 #[derive(Debug, Clone)]
 pub struct WebAdapter {
     pub(crate) inner: webgpu_sys::GpuAdapter,
     /// Unique identifier for this Adapter.
     ident: crate::cmp::Identifier,
+    /// Cached Rust values for the adapter's properties.
+    cached_properties: Rc<CachedProperties>,
 }
 
 #[derive(Debug, Clone)]
@@ -1230,6 +1243,8 @@ pub struct WebDevice {
     /// The `uncapturederror` listener currently registered on the device, so
     /// that setting a new handler can unregister the previous one.
     uncaptured_error_listener: Rc<RefCell<Option<js_sys::Function>>>,
+    /// Cached Rust values for the device's properties.
+    cached_properties: Rc<CachedProperties>,
 }
 
 #[derive(Debug, Clone)]
@@ -1831,11 +1846,16 @@ impl dispatch::AdapterInterface for WebAdapter {
         //
         // Note that `ALLOWED_ON_WEB_BACKEND` may include bits in `FeaturesWGPU` for
         // standards-track features that have not yet been migrated to `FeaturesWebGPU`.
-        map_wgt_features(self.inner.features()) & wgt::Features::ALLOWED_ON_WEB_BACKEND
+        *self.cached_properties.features.get_or_init(|| {
+            map_wgt_features(self.inner.features()) & wgt::Features::ALLOWED_ON_WEB_BACKEND
+        })
     }
 
     fn limits(&self) -> crate::Limits {
-        map_wgt_limits(self.inner.limits())
+        self.cached_properties
+            .limits
+            .get_or_init(|| map_wgt_limits(self.inner.limits()))
+            .clone()
     }
 
     fn downlevel_capabilities(&self) -> crate::DownlevelCapabilities {
@@ -1844,7 +1864,10 @@ impl dispatch::AdapterInterface for WebAdapter {
     }
 
     fn get_info(&self) -> crate::AdapterInfo {
-        map_adapter_info(&self.inner.info())
+        self.cached_properties
+            .adapter_info
+            .get_or_init(|| map_adapter_info(&self.inner.info()))
+            .clone()
     }
 
     fn get_texture_format_features(
@@ -1993,15 +2016,24 @@ fn naga_to_source_location(value: crate::naga::SourceLocation) -> wgt::SourceLoc
 
 impl dispatch::DeviceInterface for WebDevice {
     fn features(&self) -> crate::Features {
-        map_wgt_features(self.inner.features())
+        *self
+            .cached_properties
+            .features
+            .get_or_init(|| map_wgt_features(self.inner.features()))
     }
 
     fn limits(&self) -> crate::Limits {
-        map_wgt_limits(self.inner.limits())
+        self.cached_properties
+            .limits
+            .get_or_init(|| map_wgt_limits(self.inner.limits()))
+            .clone()
     }
 
     fn adapter_info(&self) -> crate::AdapterInfo {
-        map_adapter_info(&self.inner.adapter_info())
+        self.cached_properties
+            .adapter_info
+            .get_or_init(|| map_adapter_info(&self.inner.adapter_info()))
+            .clone()
     }
 
     fn create_shader_module(
@@ -2844,9 +2876,14 @@ impl dispatch::DeviceInterface for WebDevice {
         // No capturing api in webgpu
     }
 
-    fn poll(&self, _poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError> {
-        // Device is polled automatically
-        Ok(crate::PollStatus::QueueEmpty)
+    fn poll(&self, poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError> {
+        match poll_type {
+            wgt::PollType::Wait { .. } => Err(crate::PollError::CantWait),
+            wgt::PollType::Poll => {
+                // Device is polled automatically
+                Ok(crate::PollStatus::Poll)
+            }
+        }
     }
 
     fn get_internal_counters(&self) -> crate::InternalCounters {
@@ -2990,7 +3027,7 @@ impl dispatch::QueueInterface for WebQueue {
     fn submit(
         &self,
         command_buffers: &mut dyn Iterator<Item = dispatch::DispatchCommandBuffer>,
-    ) -> u64 {
+    ) -> Option<u64> {
         let temp_command_buffers = command_buffers.collect::<Vec<_>>();
 
         let array = temp_command_buffers
@@ -3000,7 +3037,7 @@ impl dispatch::QueueInterface for WebQueue {
 
         self.inner.submit(&array);
 
-        0
+        None
     }
 
     fn get_timestamp_period(&self) -> f32 {

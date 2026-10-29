@@ -27,6 +27,9 @@ pub use webgpu_impl::*;
 mod webgpu_impl {
     //! Constant values for [`super::FeaturesWebGPU`], separated so they can be picked up by
     //! `cbindgen` in `mozilla-central` (where Firefox is developed).
+    //!
+    //! Bitmask feature encoding is not defined by the WebGPU specification, and the values
+    //! are subject to change.
     #![allow(missing_docs)]
 
     #[doc(hidden)]
@@ -582,6 +585,9 @@ features! {
         #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indexed_indirect_count`"]: "struct.RenderPass.html#method.multi_draw_indexed_indirect_count")]
         #[name("wgpu-multi-draw-indirect-count", "multi-draw-indirect-count")]
         const MULTI_DRAW_INDIRECT_COUNT = 1 << 15;
+
+        // Bit 16 is available.
+
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
         /// of [`SamplerBorderColor::Zero`].
         ///
@@ -673,6 +679,13 @@ features! {
         /// This is a native only feature.
         #[name("wgpu-clear-texture", "clear-texture")]
         const CLEAR_TEXTURE = 1 << 23;
+
+        /// Allows for constructing ray tracing pipelines.
+        #[name("wgpu-ray-tracing-pipelines")]
+        const EXPERIMENTAL_RAY_TRACING_PIPELINES = 1 << 24;
+
+        // Bit 25 is available.
+
         /// Enables multiview render passes and `builtin(view_index)` in vertex/mesh shaders.
         ///
         /// Supported platforms:
@@ -781,7 +794,7 @@ features! {
         #[name("wgpu-shader-i16", "shader-i16")]
         const SHADER_I16 = 1 << 34;
 
-        // Bit 35 is used by VULKAN_EXTERNAL_MEMORY_FD.
+        // Bit 35 is available.
 
         /// Allows shaders to use the `early_depth_test` attribute.
         ///
@@ -889,61 +902,10 @@ features! {
         /// This is a native only feature.
         #[name("wgpu-shader-int64-atomic-all-ops")]
         const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 43;
-        /// Allows using the [VK_GOOGLE_display_timing] Vulkan extension.
-        ///
-        /// This is used for frame pacing to reduce latency, and is generally only available on Android.
-        ///
-        /// This feature does not have a `wgpu`-level API, and so users of wgpu wishing
-        /// to use this functionality must access it using various `as_hal` functions,
-        /// primarily [`Surface::as_hal()`], to then use.
-        ///
-        /// Supported platforms:
-        /// - Vulkan (with [VK_GOOGLE_display_timing])
-        ///
-        /// This is a native only feature.
-        ///
-        /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
-        #[doc = link_to_wgpu_docs!(["`Surface::as_hal()`"]: "struct.Surface.html#method.as_hal")]
-        #[name("wgpu-vulkan-google-display-timing")]
-        const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 44;
 
-        /// Allows using the [VK_KHR_external_memory_win32] Vulkan extension.
-        ///
-        /// Supported platforms:
-        /// - Vulkan (with [VK_KHR_external_memory_win32])
-        ///
-        /// This is a native only feature.
-        ///
-        /// [VK_KHR_external_memory_win32]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_win32.html
-        #[name("wgpu-vulkan-external-memory-win32")]
-        const VULKAN_EXTERNAL_MEMORY_WIN32 = 1 << 45;
+        // Bit 44 is available.
 
-        /// Allows using the [VK_KHR_external_memory_fd] Vulkan extension.
-        ///
-        /// Supported platforms:
-        /// - Vulkan (with [VK_KHR_external_memory_fd])
-        ///
-        /// This is a native only feature.
-        ///
-        /// [VK_KHR_external_memory_fd]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_fd.html
-        #[name("wgpu-vulkan-external-memory-fd")]
-        const VULKAN_EXTERNAL_MEMORY_FD = 1 << 35;
-
-        /// Allows using the [VK_EXT_external_memory_dma_buf] Vulkan extension
-        /// for importing DMA-buf textures on Linux.
-        ///
-        /// Requires [VK_EXT_image_drm_format_modifier] for specifying the
-        /// DRM format modifier and plane layout during import.
-        ///
-        /// Supported platforms:
-        /// - Vulkan (with [VK_EXT_external_memory_dma_buf] and [VK_EXT_image_drm_format_modifier])
-        ///
-        /// This is a native only feature.
-        ///
-        /// [VK_EXT_external_memory_dma_buf]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_external_memory_dma_buf.html
-        /// [VK_EXT_image_drm_format_modifier]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_image_drm_format_modifier.html
-        #[name("wgpu-vulkan-external-memory-dma-buf")]
-        const VULKAN_EXTERNAL_MEMORY_DMA_BUF = 1 << 63;
+        // Bit 45 is available.
 
         /// Enables R64Uint image atomic min and max.
         ///
@@ -1183,11 +1145,9 @@ features! {
         #[name("wgpu-memory-decoration-volatile")]
         const MEMORY_DECORATION_VOLATILE = 1 << 62;
 
-        /// Allows for constructing ray tracing pipelines.
-        #[name("wgpu-ray-tracing-pipelines")]
-        const EXPERIMENTAL_RAY_TRACING_PIPELINES = 1 << 24;
+        // Bit 63 is available.
 
-        // Adding a new feature? All bits in the first u64 are used. Use the second u64 (bits 64+).
+        // Search for "is available" to check for free bits earlier in the list.
     }
 
     /// Features that are not guaranteed to be supported.
