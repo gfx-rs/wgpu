@@ -306,6 +306,9 @@ pub struct Device {
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
     // Optional so that we can late-initialize this after the queue is created.
     pub(crate) timestamp_normalizer: OnceCell<crate::timestamp_normalization::TimestampNormalizer>,
+    // Same as above
+    pub(crate) null_acceleration_structure:
+        OnceCell<crate::null_acceleration_structure::NullAccelerationStructure>,
     /// Uniform buffer containing [`ExternalTextureParams`] with values such
     /// that a [`TextureView`] bound to a [`wgt::BindingType::ExternalTexture`]
     /// binding point will be rendered correctly. Intended to be used as the
@@ -363,6 +366,7 @@ const _: () = {
             usage_scopes,
             indirect_validation,
             timestamp_normalizer,
+            null_acceleration_structure,
             default_external_texture_params_buffer,
             raw,
             adapter,
@@ -396,6 +400,7 @@ const _: () = {
         _check_bound(usage_scopes);
         _check_bound(indirect_validation);
         _check_bound(timestamp_normalizer);
+        _check_bound(null_acceleration_structure);
         _check_bound(default_external_texture_params_buffer);
         _check_bound(raw);
         _check_bound(adapter);
@@ -444,6 +449,10 @@ impl Drop for Device {
         if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
             timestamp_normalizer.dispose(self.raw.as_ref());
         }
+        if let Some(null_acceleration_structure) = self.null_acceleration_structure.take() {
+            // Safety: Queue holds a strong reference to device and ensures all work is done.
+            unsafe { null_acceleration_structure.dispose(self.raw.as_ref()) };
+        }
         unsafe {
             self.raw.destroy_buffer(zero_buffer);
             self.raw.destroy_bind_group_layout(empty_bgl);
@@ -475,6 +484,14 @@ impl Device {
 impl Device {
     pub(crate) fn raw(&self) -> &dyn hal::DynDevice {
         self.raw.as_ref()
+    }
+
+    /// Get the handle for an "null" blas. This handle is slightly special in that it
+    /// cannot be switched to a regular handle when performing an update. Returns 
+    /// `Err(())` if acceleration structures cannot be created.
+    pub(crate) fn null_blas_handle(&self) -> Result<u64, ()> {
+        let null = self.null_acceleration_structure.get().ok_or(())?;
+        Ok(null.handle())
     }
 
     pub fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
@@ -728,6 +745,7 @@ impl Device {
                 deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
                 usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
                 timestamp_normalizer: OnceCell::new(),
+                null_acceleration_structure: OnceCell::new(),
                 indirect_validation,
                 deferred_buffer_map_pending_closures: DeferredBufferMapPendingClosures::new(),
             })
@@ -829,6 +847,19 @@ impl Device {
             .unwrap_or_else(|_| panic!("Called late_init_resources_with_queue twice"));
 
         self.init_default_external_texture_params_buffer()?;
+
+        // TODO: replace with `require_acceleration_structure()` when rt pipelines arrive
+        if let Ok(_) = self.require_features(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
+            let null_acceleration_structure =
+                crate::null_acceleration_structure::NullAccelerationStructure::new(
+                    self,
+                    queue.as_ref(),
+                )?;
+
+            self.null_acceleration_structure
+                .set(null_acceleration_structure)
+                .unwrap_or_else(|_| panic!("Called late_init_resources_with_queue twice"));
+        }
 
         Ok(())
     }

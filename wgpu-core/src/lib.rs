@@ -79,6 +79,7 @@ mod init_tracker;
 pub mod instance;
 pub mod limits;
 mod lock;
+mod null_acceleration_structure;
 pub mod pipeline;
 mod pipeline_cache;
 mod pool;

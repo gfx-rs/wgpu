@@ -15,6 +15,7 @@ use crate::{
     id::markers,
     limits::{self, check_limits, FailedLimit},
     lock::{rank, Mutex, MutexGuard},
+    null_acceleration_structure::NullAccelerationStructureInitError,
     present::{ConfigureSurfaceError, Presentation},
     resource::ResourceType,
     resource_log,
@@ -1360,6 +1361,8 @@ pub enum RequestDeviceError {
     LimitsExceeded(#[from] FailedLimit),
     #[error("Failed to initialize Timestamp Normalizer")]
     TimestampNormalizerInitFailed(#[from] TimestampNormalizerInitError),
+    #[error("Failed to initialize null acceleration structure")]
+    NullAccelerationStructureInitFailed(#[from] NullAccelerationStructureInitError),
     #[error("Unsupported features were requested: {0}")]
     UnsupportedFeature(wgt::Features),
     #[error(

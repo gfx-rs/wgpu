@@ -238,49 +238,79 @@ pub(crate) fn build_acceleration_structures(
         let mut seen_dependencies = FastHashSet::<TrackerIndex>::default();
 
         let mut instance_count = 0;
-        for instance in mem::take(&mut package.instances).into_iter().flatten() {
-            if instance.custom_data >= (1u32 << 24u32) {
-                return Err(BuildAccelerationStructureError::TlasInvalidCustomIndex(
-                    tlas.error_ident(),
-                ));
+
+        let null_handle = state
+            .device
+            .null_blas_handle()
+            .expect("acceleration structures must be allowed as we are building them!");
+
+        let instances = mem::take(&mut package.instances);
+        let mut final_some_instance = 0;
+        for (idx, instance) in instances.iter().enumerate().rev() {
+            if let Some(_) = instance {
+                final_some_instance = idx;
+                break;
             }
-            let blas = instance.blas;
-            let is_new_dependency = seen_dependencies.insert(blas.tracker_index());
+        }
 
-            if is_new_dependency {
-                state.tracker.blas_s.insert_single(blas.clone());
-            }
-
-            state.device.raw().tlas_instance_to_bytes(
-                hal::TlasInstance {
-                    transform: instance.transform,
-                    custom_data: instance.custom_data,
-                    mask: instance.mask,
-                    blas_address: blas.handle,
-                    pipeline_intersection_data_offset: 0,
-                },
-                &mut instance_buffer_staging_source,
-            );
-
-            if tlas
-                .flags
-                .contains(wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
-                && !blas
-                    .flags
-                    .contains(wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
-            {
-                return Err(
-                    BuildAccelerationStructureError::TlasDependentMissingVertexReturn(
-                        tlas.error_ident(),
-                        blas.error_ident(),
-                    ),
-                );
-            }
-
+        // Take all the instances that are some as well as those which are none between them.
+        for instance in instances.into_iter().take(final_some_instance + 1) {
             instance_count += 1;
 
-            if is_new_dependency {
-                dependencies.push(blas);
+            match instance {
+                None => {
+                    state.device.raw().tlas_instance_to_bytes(
+                        hal::TlasInstance {
+                            transform: [0.0; 12],
+                            custom_data: 0,
+                            mask: 0,
+                            blas_address: null_handle,
+                            pipeline_intersection_data_offset: 0,
+                        },
+                        &mut instance_buffer_staging_source,
+                    );
+                }
+                Some(instance) => {
+                    if instance.custom_data >= (1u32 << 24u32) {
+                        return Err(BuildAccelerationStructureError::TlasInvalidCustomIndex(
+                            tlas.error_ident(),
+                        ));
+                    }
+                    let blas = instance.blas;
+                    let is_new_dependency = seen_dependencies.insert(blas.tracker_index());
+
+                    if is_new_dependency {
+                        state.tracker.blas_s.insert_single(blas.clone());
+                    }
+
+                    state.device.raw().tlas_instance_to_bytes(
+                        hal::TlasInstance {
+                            transform: instance.transform,
+                            custom_data: instance.custom_data,
+                            mask: instance.mask,
+                            blas_address: blas.handle,
+                            pipeline_intersection_data_offset: 0,
+                        },
+                        &mut instance_buffer_staging_source,
+                    );
+
+                    if tlas.flags.contains(
+                        wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
+                    ) && !blas.flags.contains(
+                        wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
+                    ) {
+                        return Err(
+                            BuildAccelerationStructureError::TlasDependentMissingVertexReturn(
+                                tlas.error_ident(),
+                                blas.error_ident(),
+                            ),
+                        );
+                    }
+
+                    if is_new_dependency {
+                        dependencies.push(blas);
+                    }
+                }
             }
         }
 
