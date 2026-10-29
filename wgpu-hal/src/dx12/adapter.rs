@@ -61,6 +61,14 @@ impl super::Adapter {
         &self.raw
     }
 
+    /// # Safety
+    ///
+    /// - `raw_device` must be created from this adapter, using the same D3D12 runtime
+    ///   that wgpu uses (for example, the same Agility SDK).
+    /// - `features` and `limits` must be supported by this adapter.
+    ///
+    /// wgpu-hal takes ownership of the `raw_device` and `raw_queue` references and
+    /// releases them when the device is dropped.
     pub unsafe fn device_from_raw(
         &self,
         raw_device: Direct3D12::ID3D12Device,
@@ -100,10 +108,13 @@ impl super::Adapter {
             return Err(crate::DeviceError::Unexpected);
         }
 
-        self.open_with_raw(raw_device, raw_queue, features, limits, memory_hints)
+        unsafe { self.open_with_raw(raw_device, raw_queue, features, limits, memory_hints) }
     }
 
-    fn open_with_raw(
+    /// # Safety
+    ///
+    /// See [`Self::device_from_raw`].
+    unsafe fn open_with_raw(
         &self,
         raw_device: Direct3D12::ID3D12Device,
         raw_queue: Direct3D12::ID3D12CommandQueue,
@@ -1163,7 +1174,7 @@ impl crate::Adapter for super::Adapter {
             .into_device_result("Queue creation")?
         };
 
-        self.open_with_raw(self.device.clone(), queue, features, limits, memory_hints)
+        unsafe { self.open_with_raw(self.device.clone(), queue, features, limits, memory_hints) }
     }
 
     unsafe fn texture_format_capabilities(
