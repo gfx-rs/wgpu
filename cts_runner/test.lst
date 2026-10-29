@@ -75,6 +75,7 @@ webgpu:api,validation,buffer,create:limit,*
 webgpu:api,validation,buffer,create:size,*
 webgpu:api,validation,buffer,create:usage,*
 webgpu:api,validation,buffer,destroy:*
+webgpu:api,validation,buffer,mapping:*
 webgpu:api,validation,capability_checks,features,clip_distances:*
 webgpu:api,validation,capability_checks,features,query_types:createQuerySet:*
 webgpu:api,validation,capability_checks,features,texture_component_swizzle:*
