@@ -54,6 +54,8 @@ trait_alias!(RequestDeviceFuture: Future<Output = Result<(DispatchDevice, Dispat
 trait_alias!(PopErrorScopeFuture: Future<Output = Option<crate::Error>> + WasmNotSend + 'static);
 trait_alias!(ShaderCompilationInfoFuture: Future<Output = crate::CompilationInfo> + WasmNotSend + 'static);
 trait_alias!(EnumerateAdapterFuture: Future<Output = Vec<DispatchAdapter>> + WasmNotSend + 'static);
+trait_alias!(CreateRenderPipelineFuture: Future<Output = Result<DispatchRenderPipeline, crate::Error>> + WasmNotSend + 'static);
+trait_alias!(CreateComputePipelineFuture: Future<Output = Result<DispatchComputePipeline, crate::Error>> + WasmNotSend + 'static);
 
 // We can't use trait aliases here, as you can't convert from a dyn Trait to dyn Supertrait _yet_.
 #[cfg(send_sync)]
@@ -168,6 +170,13 @@ pub trait DeviceInterface: CommonTraits {
         &self,
         desc: &crate::RenderPipelineDescriptor<'_>,
     ) -> DispatchRenderPipeline;
+    /// A failure must be returned as the `Err` of the future, as a [`crate::Error::Validation`]
+    /// or [`crate::Error::Internal`], instead of being reported through the error scopes and
+    /// the uncaptured error handler.
+    fn create_render_pipeline_async(
+        &self,
+        desc: &crate::RenderPipelineDescriptor<'_>,
+    ) -> Pin<Box<dyn CreateRenderPipelineFuture>>;
     fn create_mesh_pipeline(
         &self,
         desc: &crate::MeshPipelineDescriptor<'_>,
@@ -176,6 +185,11 @@ pub trait DeviceInterface: CommonTraits {
         &self,
         desc: &crate::ComputePipelineDescriptor<'_>,
     ) -> DispatchComputePipeline;
+    /// See [`Self::create_render_pipeline_async`] for how failures must be reported.
+    fn create_compute_pipeline_async(
+        &self,
+        desc: &crate::ComputePipelineDescriptor<'_>,
+    ) -> Pin<Box<dyn CreateComputePipelineFuture>>;
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,
