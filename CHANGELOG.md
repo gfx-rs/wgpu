@@ -50,6 +50,10 @@ Bottom level categories:
 - Fix a texture id leak when surface acquire returns no texture. By @jnb in [#10184](https://github.com/gfx-rs/wgpu/pull/10184).
 - Fix a use after free of a mapped buffer when its device is lost or destroyed. By @uael in [#10593](https://github.com/gfx-rs/wgpu/pull/10593).
 
+#### Metal
+
+- Fix oversaturated sRGB surface colors on wide-gamut displays by explicitly setting the layer's sRGB color space. By @jinleili in [#10286](https://github.com/gfx-rs/wgpu/pull/10286), backported in [#10780](https://github.com/gfx-rs/wgpu/pull/10780).
+
 ## v30.0.1 (2026-08-21)
 
 ### Bug Fixes
