@@ -4,6 +4,9 @@ edition = "2021"
 rust-version = "1.87"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 env_logger.workspace = true
 pollster.workspace = true

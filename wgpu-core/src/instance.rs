@@ -904,7 +904,7 @@ impl Surface {
                     Err(WaitIdleError::Device(_)) => {
                         // we can ignore device lost errors here, since we are just cleaning up
                     }
-                    Err(WaitIdleError::Timeout) if cfg!(target_arch = "wasm32") => {
+                    Err(WaitIdleError::Timeout) if cfg!(target_family = "wasm") => {
                         // On wasm, you cannot actually successfully wait for the surface.
                         // However WebGL does not actually require you do this, so ignoring
                         // the failure is totally fine. See https://github.com/gfx-rs/wgpu/issues/7363
@@ -1014,7 +1014,7 @@ impl Surface {
         device.check_is_valid()?;
 
         let user_callbacks;
-        {
+        let result = {
             // we keep presentation locked for the entire duration of the configure call,
             // so that no change can happen in the middle of it.
             let mut presentation = self.presentation.lock();
@@ -1023,33 +1023,30 @@ impl Surface {
 
             let surface_raw = self.raw(device.backend()).unwrap();
             match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
-                Ok(()) => (),
-                Err(error) => {
-                    return Err(match error {
-                        hal::SurfaceError::Outdated
-                        | hal::SurfaceError::Lost
-                        | hal::SurfaceError::Occluded
-                        | hal::SurfaceError::Timeout => E::InvalidSurface,
-                        hal::SurfaceError::Device(error) => {
-                            E::Device(device.handle_hal_error(error))
-                        }
-                        hal::SurfaceError::Other(message) => {
-                            log::error!("surface configuration failed: {message}");
-                            E::InvalidSurface
-                        }
+                Ok(()) => {
+                    *presentation = Some(Presentation {
+                        device: Arc::clone(device),
+                        config: config.clone(),
+                        acquired_texture: None,
                     });
+                    Ok(())
                 }
+                Err(error) => Err(match error {
+                    hal::SurfaceError::Outdated
+                    | hal::SurfaceError::Lost
+                    | hal::SurfaceError::Occluded
+                    | hal::SurfaceError::Timeout => E::InvalidSurface,
+                    hal::SurfaceError::Device(error) => E::Device(device.handle_hal_error(error)),
+                    hal::SurfaceError::Other(message) => {
+                        log::error!("surface configuration failed: {message}");
+                        E::InvalidSurface
+                    }
+                }),
             }
-
-            *presentation = Some(Presentation {
-                device: Arc::clone(device),
-                config: config.clone(),
-                acquired_texture: None,
-            });
-        }
+        };
         user_callbacks.fire();
 
-        Ok(())
+        result
     }
 }
 
@@ -1615,6 +1612,20 @@ mod tests {
             ..Default::default()
         };
         assert!(!adapter_allowed(
+            InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
+            &"",
+            &wgt::Limits::defaults(),
+            &downlevel
+        ));
+    }
+
+    #[test]
+    fn missing_surface_view_formats_allowed_with_strict_compliance() {
+        let downlevel = wgt::DownlevelCapabilities {
+            flags: wgt::DownlevelFlags::all() - wgt::DownlevelFlags::SURFACE_VIEW_FORMATS,
+            ..Default::default()
+        };
+        assert!(adapter_allowed(
             InstanceFlags::STRICT_WEBGPU_COMPLIANCE,
             &"",
             &wgt::Limits::defaults(),

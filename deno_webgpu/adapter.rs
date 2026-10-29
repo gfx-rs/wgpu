@@ -1,5 +1,6 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+use std::cell::RefCell;
 use std::ops::BitOr;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -131,7 +132,7 @@ impl GPUAdapter {
   #[global]
   fn request_device(
     &self,
-    state: &mut OpState,
+    state: Rc<RefCell<OpState>>,
     scope: &mut v8::HandleScope,
     #[webidl] descriptor: GPUDeviceDescriptor,
   ) -> Result<v8::Global<v8::Value>, CreateDeviceError> {
@@ -199,11 +200,14 @@ impl GPUAdapter {
 
     let lost_resolver = v8::PromiseResolver::new(scope).unwrap();
     let lost_promise = lost_resolver.get_promise(scope);
-    let cross_thread_spawner =
-      state.borrow::<V8CrossThreadTaskSpawner>().clone();
-    state
-      .borrow_mut::<LostPromiseResolverHM>()
-      .insert(wgpu_device_id, v8::Global::new(scope, lost_resolver));
+    let lost_resolver = v8::Global::new(scope, lost_resolver);
+    let cross_thread_spawner = {
+      let mut state = state.borrow_mut();
+      state
+        .borrow_mut::<LostPromiseResolverHM>()
+        .insert(wgpu_device_id, lost_resolver);
+      state.borrow::<V8CrossThreadTaskSpawner>().clone()
+    };
     let wake = Arc::new(Mutex::new(move |reason: DeviceLostReason| {
       cross_thread_spawner.spawn(move |scope| {
         let lost_resolver = JsRuntime::op_state_from(scope)
@@ -251,12 +255,18 @@ impl GPUAdapter {
     };
     let device = deno_core::cppgc::make_cppgc_object(scope, device);
     let weak_device = v8::Weak::new(scope, device);
-    let event_target_setup = state.borrow::<crate::EventTargetSetup>();
-    let webidl_brand = v8::Local::new(scope, event_target_setup.brand.clone());
+    let (brand, set_event_target_data) = {
+      let state = state.borrow();
+      let event_target_setup = state.borrow::<crate::EventTargetSetup>();
+      (
+        event_target_setup.brand.clone(),
+        event_target_setup.set_event_target_data.clone(),
+      )
+    };
+    let webidl_brand = v8::Local::new(scope, brand);
     device.set(scope, webidl_brand, webidl_brand);
     let set_event_target_data =
-      v8::Local::new(scope, event_target_setup.set_event_target_data.clone())
-        .cast::<v8::Function>();
+      v8::Local::new(scope, set_event_target_data).cast::<v8::Function>();
     let null = v8::null(scope);
     set_event_target_data.call(scope, null.into(), &[device.into()]);
 
@@ -285,19 +295,30 @@ impl GPUAdapter {
       deno_core::cppgc::try_unwrap_cppgc_object::<GPUDevice>(scope, device)
         .unwrap();
 
-    let cross_thread_spawner =
-      state.borrow::<V8CrossThreadTaskSpawner>().clone();
-    state
-      .borrow_mut::<WeakDeviceHM>()
-      .insert(wgpu_device_id, weak_device);
+    let cross_thread_spawner = {
+      let mut state = state.borrow_mut();
+      state
+        .borrow_mut::<WeakDeviceHM>()
+        .insert(wgpu_device_id, weak_device);
+      state.borrow::<V8CrossThreadTaskSpawner>().clone()
+    };
     let wake = Arc::new(Mutex::new(move |error: wgpu_types::error::Error| {
       cross_thread_spawner.spawn(move |scope| {
-        let state = JsRuntime::op_state_from(&*scope);
-        let state = state.borrow();
-        let weak_device =
-          state.borrow::<WeakDeviceHM>().get(&wgpu_device_id).unwrap();
+        // Do not hold the OpState borrow while calling into V8: a GC
+        // finalizer may need to borrow it mutably.
+        let (weak_device, error_event_class) = {
+          let state = JsRuntime::op_state_from(&*scope);
+          let state = state.borrow();
+          (
+            state
+              .borrow::<WeakDeviceHM>()
+              .get(&wgpu_device_id)
+              .unwrap()
+              .clone(),
+            state.borrow::<crate::ErrorEventClass>().0.clone(),
+          )
+        };
         let err: GPUError = error.into();
-        let weak_device = weak_device.clone();
 
         let Some(device) = weak_device.to_local(scope) else {
           // The device has already gone away, so we don't have
@@ -309,9 +330,6 @@ impl GPUAdapter {
         let func =
           v8::Global::new(scope, val.try_cast::<v8::Function>().unwrap());
         let device = v8::Global::new(scope, device.cast::<v8::Value>());
-        let error_event_class =
-          state.borrow::<crate::ErrorEventClass>().0.clone();
-
         let error = deno_core::error::to_v8_error(scope, &err);
 
         let error_event_class =

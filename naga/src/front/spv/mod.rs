@@ -3045,7 +3045,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         | crate::BuiltIn::SampleIndex
                         | crate::BuiltIn::VertexIndex
                         | crate::BuiltIn::PrimitiveIndex
-                        | crate::BuiltIn::LocalInvocationIndex => {
+                        | crate::BuiltIn::LocalInvocationIndex
+                        | crate::BuiltIn::ViewIndex => {
                             Some(crate::TypeInner::Scalar(crate::Scalar::U32))
                         }
                         crate::BuiltIn::GlobalInvocationId

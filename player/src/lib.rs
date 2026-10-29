@@ -382,7 +382,12 @@ impl Player {
                     queue.write_buffer(buffer, offset, &bin[..size.try_into().unwrap()]);
                 } else {
                     device
-                        .set_buffer_data(&buffer, offset, &bin[..size.try_into().unwrap()])
+                        .set_buffer_data(
+                            &buffer,
+                            offset,
+                            &bin[..size.try_into().unwrap()],
+                            wgt::MapMode::Write,
+                        )
                         .expect("Device::set_buffer_data error");
                 }
             }

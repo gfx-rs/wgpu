@@ -48,6 +48,8 @@ pub struct StagingBelt {
     sender: Exclusive<mpsc::Sender<Chunk>>,
     /// Free chunks are received here to be put on `self.free_chunks`.
     receiver: Exclusive<mpsc::Receiver<Chunk>>,
+    /// Whether the belt has grown since last recall.
+    grew_since_recall: bool,
 }
 
 impl StagingBelt {
@@ -116,6 +118,7 @@ impl StagingBelt {
             free_chunks: Vec::new(),
             sender: Exclusive::new(sender),
             receiver: Exclusive::new(receiver),
+            grew_since_recall: false,
         }
     }
 
@@ -193,7 +196,7 @@ impl StagingBelt {
             "StagingBelt allocation size {size} must be a multiple of `COPY_BUFFER_ALIGNMENT`"
         );
         assert!(
-            alignment.get().is_power_of_two(),
+            alignment.is_power_of_two(),
             "alignment must be a power of two, not {alignment}"
         );
         // At minimum, we must have alignment sufficient to map the buffer.
@@ -215,6 +218,7 @@ impl StagingBelt {
             {
                 self.free_chunks.swap_remove(index)
             } else {
+                self.grew_since_recall = true;
                 Chunk {
                     buffer: self.device.create_buffer(&BufferDescriptor {
                         label: Some("(wgpu internal) StagingBelt staging buffer"),
@@ -223,11 +227,13 @@ impl StagingBelt {
                         mapped_at_creation: true,
                     }),
                     offset: 0,
+                    used_since_recall: false,
                 }
             }
         };
 
         let allocation_offset = chunk.allocate(size, alignment);
+        chunk.used_since_recall = true;
 
         self.active_chunks.push(chunk);
         let chunk = self.active_chunks.last().unwrap();
@@ -313,6 +319,22 @@ impl StagingBelt {
             self.free_chunks.push(chunk);
         }
     }
+
+    /// Discard all free chunks that have not been used since the last
+    /// [`StagingBelt::recall()`] back to the device and unmap their buffers.
+    pub fn discard_free_chunks(&mut self) {
+        self.receive_chunks();
+        self.free_chunks.retain_mut(|chunk| {
+            if !self.grew_since_recall || chunk.used_since_recall {
+                chunk.used_since_recall = false;
+                true
+            } else {
+                chunk.buffer.unmap();
+                false
+            }
+        });
+        self.grew_since_recall = false;
+    }
 }
 
 impl fmt::Debug for StagingBelt {
@@ -326,6 +348,7 @@ impl fmt::Debug for StagingBelt {
             free_chunks,
             sender: _,
             receiver: _,
+            grew_since_recall: _,
         } = self;
         f.debug_struct("StagingBelt")
             .field("device", device)
@@ -341,6 +364,7 @@ impl fmt::Debug for StagingBelt {
 struct Chunk {
     buffer: Buffer,
     offset: BufferAddress,
+    used_since_recall: bool,
 }
 
 impl Chunk {
