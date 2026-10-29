@@ -716,3 +716,67 @@ fn no_overflow_in_texture_selector() {
         ..Default::default()
     });
 }
+
+fn compressed_texture_descriptor(
+    width: u32,
+    height: u32,
+    mip_level_count: u32,
+) -> wgpu::TextureDescriptor<'static> {
+    wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Bc1RgbaUnorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    }
+}
+
+/// Sizes that are not multiples of the BC1 4x4 texel block dimensions.
+const UNALIGNED_SIZES: [(u32, u32); 4] = [(5, 4), (4, 5), (5, 5), (1, 1)];
+
+/// Creating a compressed texture whose size is not a multiple of the texel
+/// block dimensions requires `TEXTURE_COMPRESSION_UNALIGNED`.
+#[test]
+fn unaligned_compressed_texture_size_requires_feature() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor {
+        required_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
+        ..Default::default()
+    });
+
+    valid(&device, || {
+        drop(device.create_texture(&compressed_texture_descriptor(4, 4, 1)))
+    });
+    for (width, height) in UNALIGNED_SIZES {
+        fail(
+            &device,
+            || drop(device.create_texture(&compressed_texture_descriptor(width, height, 1))),
+            Some("is not a multiple of"),
+        );
+    }
+}
+
+#[test]
+fn unaligned_compressed_texture_size_with_feature() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor {
+        required_features: wgpu::Features::TEXTURE_COMPRESSION_BC
+            | wgpu::Features::TEXTURE_COMPRESSION_UNALIGNED,
+        ..Default::default()
+    });
+
+    valid(&device, || {
+        for (width, height) in UNALIGNED_SIZES {
+            drop(device.create_texture(&compressed_texture_descriptor(width, height, 1)));
+        }
+        // Full mip chains: the smaller mips of an unaligned texture also have
+        // partial edge blocks.
+        drop(device.create_texture(&compressed_texture_descriptor(5, 5, 3)));
+        drop(device.create_texture(&compressed_texture_descriptor(7, 3, 3)));
+    });
+}
