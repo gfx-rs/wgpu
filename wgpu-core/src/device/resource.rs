@@ -488,10 +488,10 @@ impl Device {
 
     /// Get the handle for an "null" blas. This handle is slightly special in that it
     /// cannot be switched to a regular handle when performing an update. Returns 
-    /// `Err(())` if acceleration structures cannot be created.
-    pub(crate) fn null_blas_handle(&self) -> Result<u64, ()> {
-        let null = self.null_acceleration_structure.get().ok_or(())?;
-        Ok(null.handle())
+    /// `None` if acceleration structures cannot be created.
+    pub(crate) fn null_blas_handle(&self) -> Option<u64> {
+        let null = self.null_acceleration_structure.get()?;
+        Some(null.handle())
     }
 
     pub fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
