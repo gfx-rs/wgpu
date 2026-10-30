@@ -1,0 +1,81 @@
+; SPIR-V
+; Version: 1.0
+; Generator: rspirv
+; Bound: 48
+OpCapability Shader
+OpCapability Float16
+OpCapability StorageBuffer16BitAccess
+OpCapability UniformAndStorageBuffer16BitAccess
+OpCapability StorageInputOutput16
+OpExtension "SPV_KHR_storage_buffer_storage_class"
+OpExtension "SPV_KHR_16bit_storage"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %18 "main"
+OpExecutionMode %18 LocalSize 1 1 1
+OpDecorate %4 ArrayStride 2
+OpMemberDecorate %7 0 Offset 0
+OpMemberDecorate %7 1 Offset 2
+OpMemberDecorate %9 0 Offset 0
+OpMemberDecorate %9 1 Offset 4
+OpMemberDecorate %11 0 Offset 0
+OpMemberDecorate %11 1 Offset 6
+OpMemberDecorate %13 0 Offset 0
+OpMemberDecorate %13 1 Offset 8
+OpDecorate %14 DescriptorSet 0
+OpDecorate %14 Binding 0
+OpDecorate %15 Block
+OpMemberDecorate %15 0 Offset 0
+%2 = OpTypeVoid
+%3 = OpTypeFloat 16
+%6 = OpTypeInt 32 0
+%5 = OpConstant  %6  4
+%4 = OpTypeArray %3 %5
+%7 = OpTypeStruct %3 %3
+%8 = OpTypeVector %3 2
+%9 = OpTypeStruct %8 %8
+%10 = OpTypeVector %3 3
+%11 = OpTypeStruct %10 %10
+%12 = OpTypeVector %3 4
+%13 = OpTypeStruct %12 %12
+%15 = OpTypeStruct %4
+%16 = OpTypePointer StorageBuffer %15
+%14 = OpVariable  %16  StorageBuffer
+%19 = OpTypeFunction %2
+%20 = OpTypePointer StorageBuffer %4
+%21 = OpConstant  %6  0
+%24 = OpTypePointer StorageBuffer %3
+%34 = OpConstant  %6  1
+%40 = OpConstant  %6  2
+%46 = OpConstant  %6  3
+%18 = OpFunction  %2  None %19
+%17 = OpLabel
+%22 = OpAccessChain  %20  %14 %21
+OpBranch %23
+%23 = OpLabel
+%25 = OpAccessChain  %24  %22 %21
+%26 = OpLoad  %3  %25
+%27 = OpExtInst  %7  %1 ModfStruct %26
+%28 = OpCompositeExtract  %3  %27 0
+%29 = OpAccessChain  %24  %22 %21
+OpStore %29 %28
+%30 = OpCompositeConstruct  %8  %26 %26
+%31 = OpExtInst  %9  %1 ModfStruct %30
+%32 = OpCompositeExtract  %8  %31 1
+%33 = OpCompositeExtract  %3  %32 0
+%35 = OpAccessChain  %24  %22 %34
+OpStore %35 %33
+%36 = OpCompositeConstruct  %10  %26 %26 %26
+%37 = OpExtInst  %11  %1 ModfStruct %36
+%38 = OpCompositeExtract  %10  %37 0
+%39 = OpCompositeExtract  %3  %38 1
+%41 = OpAccessChain  %24  %22 %40
+OpStore %41 %39
+%42 = OpCompositeConstruct  %12  %26 %26 %26 %26
+%43 = OpExtInst  %13  %1 ModfStruct %42
+%44 = OpCompositeExtract  %12  %43 1
+%45 = OpCompositeExtract  %3  %44 2
+%47 = OpAccessChain  %24  %22 %46
+OpStore %47 %45
+OpReturn
+OpFunctionEnd

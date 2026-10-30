@@ -1,0 +1,9 @@
+# No GLSL support for f16
+targets = "SPIRV | METAL | HLSL | WGSL"
+capabilities = "SHADER_FLOAT16"
+
+[spv]
+version = [1, 0]
+
+[hlsl]
+shader_model = "V6_2"
