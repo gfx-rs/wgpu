@@ -633,6 +633,55 @@ impl crate::Scalar {
     }
 }
 
+/// Returns `true` if `binding` is the depth that a fragment shader writes.
+const fn is_frag_depth(binding: Option<&crate::Binding>) -> bool {
+    matches!(
+        binding,
+        Some(crate::Binding::BuiltIn(crate::BuiltIn::FragDepth))
+    )
+}
+
+/// Returns `true` if the depth that a fragment shader writes is the only thing that
+/// `entry_point` returns.
+fn only_writes_frag_depth(module: &crate::ir::Module, entry_point: &crate::ir::EntryPoint) -> bool {
+    entry_point
+        .function
+        .result
+        .as_ref()
+        .is_some_and(|result| match module.types[result.ty].inner {
+            crate::TypeInner::Struct { ref members, .. } if result.binding.is_none() => members
+                .iter()
+                .all(|member| is_frag_depth(member.binding.as_ref())),
+            _ => is_frag_depth(result.binding.as_ref()),
+        })
+}
+
+/// Returns `true` if the depth that `entry_point` writes must be discarded.
+///
+/// MSL has no way to specify that depth is unchanged, and it does not allow functions that
+/// force early fragment tests to output depth. Discarding the depth has the same effect
+/// as either of those, and keeps early depth tests enabled.
+fn discards_frag_depth(entry_point: &crate::ir::EntryPoint) -> bool {
+    entry_point.stage == crate::ShaderStage::Fragment
+        && matches!(
+            entry_point.early_depth_test,
+            Some(
+                crate::EarlyDepthTest::Force
+                    | crate::EarlyDepthTest::Allow {
+                        conservative: crate::ConservativeDepth::Unchanged
+                    }
+            )
+        )
+}
+
+/// Returns `true` if `entry_point` has nothing to return once its depth is discarded.
+fn only_writes_discarded_depth(
+    module: &crate::ir::Module,
+    entry_point: &crate::ir::EntryPoint,
+) -> bool {
+    discards_frag_depth(entry_point) && only_writes_frag_depth(module, entry_point)
+}
+
 const fn separate(need_separator: bool) -> &'static str {
     if need_separator {
         ","
@@ -3666,6 +3715,15 @@ impl<W: Write> Writer<W> {
         result_struct: Option<&str>,
         context: &ExpressionContext,
     ) -> BackendResult {
+        let entry_point = match context.origin {
+            FunctionOrigin::EntryPoint(index) => Some(&context.module.entry_points[index as usize]),
+            FunctionOrigin::Handle(_) => None,
+        };
+        if entry_point.is_some_and(|ep| only_writes_discarded_depth(context.module, ep)) {
+            writeln!(self.out, "{level}return;")?;
+            return Ok(());
+        }
+
         match result_struct {
             Some(struct_name) => {
                 let mut has_point_size = false;
@@ -3688,6 +3746,12 @@ impl<W: Write> Writer<W> {
                                 if !context.pipeline_options.allow_and_force_point_size {
                                     continue;
                                 }
+                            }
+
+                            if entry_point.is_some_and(discards_frag_depth)
+                                && is_frag_depth(member.binding.as_ref())
+                            {
+                                continue;
                             }
 
                             let comma = if is_first { "" } else { "," };
@@ -7530,7 +7594,10 @@ template <typename A>
             let stage_out_name = self.namer.call(&format!("{fun_name}Output"));
             let result_member_name = self.namer.call("member");
             let result_type_name = match fun.result {
-                Some(ref result) if ep.stage != crate::ShaderStage::Task => {
+                Some(ref result)
+                    if ep.stage != crate::ShaderStage::Task
+                        && !only_writes_discarded_depth(module, ep) =>
+                {
                     let mut result_members = Vec::new();
                     if let crate::TypeInner::Struct { ref members, .. } =
                         module.types[result.ty].inner
@@ -7571,6 +7638,10 @@ template <typename A>
                             }
                         }
 
+                        if discards_frag_depth(ep) && is_frag_depth(Some(binding)) {
+                            continue;
+                        }
+
                         let array_len = match module.types[ty].inner {
                             crate::TypeInner::Array {
                                 size: crate::ArraySize::Constant(size),
@@ -7578,7 +7649,16 @@ template <typename A>
                             } => Some(size),
                             _ => None,
                         };
-                        let resolved = options.resolve_local_binding(binding, out_mode)?;
+                        let resolved = match (
+                            options.resolve_local_binding(binding, out_mode)?,
+                            ep.early_depth_test,
+                        ) {
+                            (
+                                super::ResolvedBinding::BuiltIn(crate::BuiltIn::FragDepth),
+                                Some(crate::EarlyDepthTest::Allow { conservative }),
+                            ) => super::ResolvedBinding::ConservativeDepth(conservative),
+                            (resolved, _) => resolved,
+                        };
                         write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
                         resolved.try_fmt(&mut self.out)?;
                         if let Some(array_len) = array_len {
@@ -7663,6 +7743,17 @@ template <typename A>
                     self.out,
                     "[[max_total_threads_per_threadgroup({total_threads})]] "
                 )?;
+            }
+
+            if ep.stage == crate::ShaderStage::Fragment
+                && ep.early_depth_test == Some(crate::EarlyDepthTest::Force)
+            {
+                if options.lang_version < (1, 2) {
+                    return Err(Error::UnsupportedAttribute(
+                        "early_fragment_tests".to_string(),
+                    ));
+                }
+                write!(self.out, "[[early_fragment_tests]] ")?;
             }
 
             // Write the entry point function's name, and begin its argument list.
