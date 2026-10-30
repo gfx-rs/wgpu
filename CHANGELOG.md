@@ -139,6 +139,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 - Added `Utf16SourceLocation` which is analogue to `SourceLocation` but using UTF-16 code units. Added `Utf16SourceLocation::to_utf8` and `SourceLocation::to_utf16` to convert between them. By @sagudev in [#10294](https://github.com/gfx-rs/wgpu/pull/10294).
 - Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
+- Added `Features::UNRESTRICTED_BYTES_PER_ROW`: `bytes_per_row` in `copy_buffer_to_texture` and `copy_texture_to_buffer` need only be a multiple of the texel block copy size, not of 256. Supported on Vulkan, Metal, GL, and DX12 with `UnrestrictedBufferTextureCopyPitchSupported`. By @michael-dm in [#10619](https://github.com/gfx-rs/wgpu/pull/10619).
 
 #### Naga
 
@@ -154,6 +155,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### Metal
 
+- Support `Features::SHADER_EARLY_DEPTH_TEST` on Metal. Naga's MSL backend now emits `[[early_fragment_tests]]` for `@early_depth_test(force)`, `depth(greater)`/`depth(less)` for `@early_depth_test(greater_equal/less_equal)`, and discards the depth output for `@early_depth_test(unchanged)` and `@early_depth_test(force)`. By @DouglasDwyer in [#10625](https://github.com/gfx-rs/wgpu/pull/10625).
 - Fix Naga's Metal backend crashing when a storage texture was used as a function argument. By @ErichDonGubler in [#9867](https://github.com/gfx-rs/wgpu/pull/9867).
 - Fix `max_task_workgroup_count` being misreported on pre-Apple7 devices. By @inner-daemons in [#10065](https://github.com/gfx-rs/wgpu/pull/10065).
 - The value of the `max_binding_array_sampler_elements_per_shader_stage` on Apple7, Apple8, and Mac2 hardware is reduced from 1024 to 996, to match the latest Metal documentation. By @andyleiserson in [#10649](https://github.com/gfx-rs/wgpu/pull/10649).
@@ -241,6 +243,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Panic when a SPIR-V's instruction's word count is greater than `u16::MAX`, instead of emitting a malformed instruction. By @ErichDonGubler in [#10537](https://github.com/gfx-rs/wgpu/pull/10537).
 - Accept a `ViewIndex` input declared as a signed integer in the SPIR-V frontend, as glslang and Slang emit it, by reading it as a `u32`. By @VoxelBoy in [#10568](https://github.com/gfx-rs/wgpu/pull/10568).
 - Fix the MSL backend generating wrong code for a loop's `continuing` block when it refers to a value computed by the loop body, such as `loop { let cmp = a < 8; ... continuing { break if cmp; } }`. The value was re-evaluated in place, reading whatever the body had left behind, and for values produced by statements (such as a function call result) the backend panicked instead. By @teoxoy in [#10459](https://github.com/gfx-rs/wgpu/pull/10459).
+- Fix invalid GLSL for `textureLoad` with a `u32` level or sample index under the `Restrict` and `ReadZeroSkipWrite` bounds check policies. By @ilyas-mallah in [#XXXXX](https://github.com/gfx-rs/wgpu/pull/XXXXX).
 
 #### Validation
 

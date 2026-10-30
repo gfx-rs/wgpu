@@ -807,6 +807,8 @@ features! {
         ///
         ///      - `layout(early_fragment_tests) in;` (GLSL)
         ///
+        ///      - `[[early_fragment_tests]]` (MSL 1.2+)
+        ///
         ///   2. Provide a conservative depth specifier that allows an additional early
         ///      depth test under certain conditions:
         ///
@@ -814,10 +816,13 @@ features! {
         ///
         ///      - `layout(depth_<greater/less/unchanged>) out float gl_FragDepth;` (GLSL)
         ///
+        ///      - `[[depth(greater/less)]]` (MSL, any version)
+        ///
         /// See [`EarlyDepthTest`] for more details.
         ///
         /// Supported platforms:
         /// - Vulkan
+        /// - Metal (with MSL 1.2+)
         /// - GLES 3.1+
         ///
         /// This is a native only feature.
@@ -1145,7 +1150,22 @@ features! {
         #[name("wgpu-memory-decoration-volatile")]
         const MEMORY_DECORATION_VOLATILE = 1 << 62;
 
-        // Bit 63 is available.
+        /// Allows [`TexelCopyBufferLayout::bytes_per_row`] in `copy_buffer_to_texture` and
+        /// `copy_texture_to_buffer` to be any multiple of the texel block copy size, instead of a
+        /// multiple of [`COPY_BYTES_PER_ROW_ALIGNMENT`] (256).
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - Metal
+        /// - GLES
+        /// - DX12 (with `UnrestrictedBufferTextureCopyPitchSupported`)
+        ///
+        /// This is a native only feature.
+        ///
+        /// [`TexelCopyBufferLayout::bytes_per_row`]: crate::TexelCopyBufferLayout::bytes_per_row
+        /// [`COPY_BYTES_PER_ROW_ALIGNMENT`]: crate::COPY_BYTES_PER_ROW_ALIGNMENT
+        #[name("wgpu-unrestricted-bytes-per-row")]
+        const UNRESTRICTED_BYTES_PER_ROW = 1 << 63;
 
         // Search for "is available" to check for free bits earlier in the list.
     }
