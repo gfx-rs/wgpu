@@ -504,6 +504,7 @@ struct SwapChain {
     present_mode: wgt::PresentMode,
     format: wgt::TextureFormat,
     size: wgt::Extent3d,
+    allocation_size: u64,
 }
 
 enum SurfaceTarget {
@@ -1598,10 +1599,17 @@ impl crate::Surface for Surface {
 
         let mut resources = Vec::with_capacity(swap_chain_buffer as usize);
         for i in 0..swap_chain_buffer {
-            let resource = unsafe { swap_chain.GetBuffer(i) }
+            let resource: Direct3D12::ID3D12Resource = unsafe { swap_chain.GetBuffer(i) }
                 .into_device_result("Failed to get swapchain buffer")?;
             resources.push(resource);
         }
+
+        let allocation_size = unsafe {
+            device
+                .raw
+                .GetResourceAllocationInfo(0, core::slice::from_ref(&resources[0].GetDesc()))
+                .SizeInBytes
+        };
 
         let mut swapchain = self.swap_chain.write();
         *swapchain = Some(SwapChain {
@@ -1612,6 +1620,7 @@ impl crate::Surface for Surface {
             present_mode: config.present_mode,
             format: config.format,
             size: config.extent,
+            allocation_size,
         });
 
         Ok(())
@@ -1662,7 +1671,7 @@ impl crate::Surface for Surface {
             sample_count: 1,
             allocation: suballocation::Allocation::none(
                 suballocation::AllocationType::Texture,
-                sc.format.theoretical_memory_footprint(sc.size),
+                sc.allocation_size,
             ),
             plane_slice_override: None,
             _drop_guard: None,

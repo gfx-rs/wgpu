@@ -476,9 +476,12 @@ impl super::Device {
     ///
     /// - `resource` must be a texture whose dimensions, format, mip level
     ///   count and sample count are the ones described here.
+    /// - `resource` must have been created from this device.
     /// - If `drop_callback` is [`Some`], the callback must be safe to run from
     ///   whichever thread drops the texture.
+    #[expect(clippy::too_many_arguments)]
     pub unsafe fn texture_from_raw(
+        &self,
         resource: Direct3D12::ID3D12Resource,
         format: wgt::TextureFormat,
         dimension: wgt::TextureDimension,
@@ -487,6 +490,12 @@ impl super::Device {
         sample_count: u32,
         drop_callback: Option<crate::DropCallback>,
     ) -> super::Texture {
+        let allocation_size = unsafe {
+            self.raw
+                .GetResourceAllocationInfo(0, core::slice::from_ref(&resource.GetDesc()))
+                .SizeInBytes
+        };
+
         super::Texture {
             resource,
             format,
@@ -496,7 +505,7 @@ impl super::Device {
             sample_count,
             allocation: suballocation::Allocation::none(
                 suballocation::AllocationType::Texture,
-                format.theoretical_memory_footprint(size),
+                allocation_size,
             ),
             plane_slice_override: None,
             _drop_guard: crate::DropGuard::from_option(drop_callback),
