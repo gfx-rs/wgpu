@@ -1,8 +1,8 @@
 /*!
 Lowering of [`Immediate`] globals.
 
-WGSL lays out immediates like `storage` buffers (GLSL's `std430`), but HLSL can only read
-root constants through a `cbuffer`, which packs values like `std140`: every nested struct
+WGSL lays out immediates like `storage` buffers, but HLSL can only read root constants
+through a `cbuffer`, which packs values differently: every nested struct, array and matrix
 starts on a new 16-byte register. Padding cannot fix this, since it only moves members later.
 
 Instead, we declare a flat array of `uint4` registers, and assemble the typed value in a
