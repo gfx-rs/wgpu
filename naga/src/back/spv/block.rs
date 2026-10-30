@@ -801,6 +801,12 @@ impl BlockContext<'_> {
             return Ok(());
         }
 
+        let result_type = self.fun_info[expr_handle]
+            .ty
+            .inner_with(&self.ir_module.types);
+        if matches!(result_type, crate::TypeInner::CooperativeMatrix { .. }) {
+            self.writer.request_type_capabilities(result_type)?;
+        }
         let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty);
         let id = match self.ir_function.expressions[expr_handle] {
             crate::Expression::Literal(literal) => self.writer.get_constant_scalar(literal),
@@ -2409,7 +2415,7 @@ impl BlockContext<'_> {
                 let op = match src_scalar.kind {
                     Sk::Sint | Sk::Uint => spirv::Op::INotEqual,
                     Sk::Float => spirv::Op::FUnordNotEqual,
-                    Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => unreachable!(),
+                    Sk::Bool | Sk::BFloat | Sk::AbstractInt | Sk::AbstractFloat => unreachable!(),
                 };
                 let zero_scalar_id = self.writer.get_constant_scalar_with(0, src_scalar)?;
                 let zero_id = match src_size {
@@ -2511,6 +2517,9 @@ impl BlockContext<'_> {
                     _ => unreachable!(),
                 };
                 Cast::Unary(op, clamp_id)
+            }
+            (Sk::BFloat, Sk::Float, Some(_)) | (Sk::Float, Sk::BFloat, Some(_)) => {
+                Cast::Unary(spirv::Op::FConvert, expr_id)
             }
             (Sk::Float, Sk::Float, Some(dst_width)) if src_scalar.width != dst_width => {
                 Cast::Unary(spirv::Op::FConvert, expr_id)

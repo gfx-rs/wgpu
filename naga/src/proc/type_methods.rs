@@ -15,6 +15,7 @@ impl crate::ScalarKind {
             crate::ScalarKind::Sint
             | crate::ScalarKind::Uint
             | crate::ScalarKind::Float
+            | crate::ScalarKind::BFloat
             | crate::ScalarKind::AbstractInt
             | crate::ScalarKind::AbstractFloat => true,
             crate::ScalarKind::Bool => false,
@@ -41,6 +42,10 @@ impl crate::Scalar {
     };
     pub const F16: Self = Self {
         kind: crate::ScalarKind::Float,
+        width: 2,
+    };
+    pub const BF16: Self = Self {
+        kind: crate::ScalarKind::BFloat,
         width: 2,
     };
     pub const F32: Self = Self {
@@ -78,7 +83,8 @@ impl crate::Scalar {
             crate::ScalarKind::Sint
             | crate::ScalarKind::Uint
             | crate::ScalarKind::Float
-            | crate::ScalarKind::Bool => false,
+            | crate::ScalarKind::Bool
+            | crate::ScalarKind::BFloat => false,
         }
     }
 
@@ -617,6 +623,7 @@ impl crate::TypeInner {
         match (expr_scalar.kind, goal_scalar.kind) {
             (Sk::AbstractFloat, Sk::Float) => {}
             (Sk::AbstractInt, Sk::Sint | Sk::Uint | Sk::AbstractFloat | Sk::Float) => {}
+            (Sk::AbstractInt | Sk::AbstractFloat, Sk::BFloat) => {}
             _ => return None,
         }
 

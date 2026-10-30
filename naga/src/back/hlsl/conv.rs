@@ -11,7 +11,7 @@ impl crate::ScalarKind {
             Self::Float => "asfloat",
             Self::Sint => "asint",
             Self::Uint => "asuint",
-            Self::Bool | Self::AbstractInt | Self::AbstractFloat => unreachable!(),
+            Self::Bool | Self::BFloat | Self::AbstractInt | Self::AbstractFloat => unreachable!(),
         }
     }
 }
@@ -22,6 +22,7 @@ impl crate::Scalar {
     /// <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-scalar>
     pub(super) const fn to_hlsl_str(self) -> Result<&'static str, Error> {
         match self.kind {
+            crate::ScalarKind::BFloat => Err(Error::UnsupportedScalar(self)),
             crate::ScalarKind::Sint => match self.width {
                 2 => Ok("int16_t"),
                 4 => Ok("int"),

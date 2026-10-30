@@ -212,7 +212,10 @@ pub const fn type_power(scalar: Scalar) -> Option<u32> {
         ScalarKind::Uint => 1,
         ScalarKind::Float if scalar.width == 4 => 2,
         ScalarKind::Float => 3,
-        ScalarKind::Bool | ScalarKind::AbstractInt | ScalarKind::AbstractFloat => return None,
+        ScalarKind::Bool
+        | ScalarKind::BFloat
+        | ScalarKind::AbstractInt
+        | ScalarKind::AbstractFloat => return None,
     })
 }
 

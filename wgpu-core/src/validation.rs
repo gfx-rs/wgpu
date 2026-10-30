@@ -914,6 +914,7 @@ impl Resource {
                             naga::ScalarKind::Uint => wgt::TextureSampleType::Uint,
                             naga::ScalarKind::AbstractInt
                             | naga::ScalarKind::AbstractFloat
+                            | naga::ScalarKind::BFloat
                             | naga::ScalarKind::Bool => unreachable!(),
                         },
                         view_dimension,

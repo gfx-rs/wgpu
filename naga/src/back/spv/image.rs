@@ -323,6 +323,9 @@ impl BlockContext<'_> {
             _ => unreachable!("we only allow i32 and u32"),
         };
         let cast = match (component_scalar.kind, array_index_scalar.kind) {
+            (crate::ScalarKind::BFloat, _) | (_, crate::ScalarKind::BFloat) => {
+                unreachable!("BF16 is not a sampled image or array index type")
+            }
             (crate::ScalarKind::Sint, crate::ScalarKind::Sint)
             | (crate::ScalarKind::Uint, crate::ScalarKind::Uint) => None,
             (crate::ScalarKind::Sint, crate::ScalarKind::Uint)

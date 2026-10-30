@@ -39,6 +39,33 @@ pub const INDENT: &str = "    ";
 /// Expressions that need baking.
 pub type NeedBakeExpressions = crate::FastHashSet<crate::Handle<crate::Expression>>;
 
+/// Returns `true` if `module` produces any `bf16` value.
+///
+/// A value converted to `bf16` and straight back leaves no `bf16` type in the
+/// arena, so the expressions are checked too.
+#[cfg(any(glsl_out, hlsl_out, msl_out))]
+fn uses_bfloat16(module: &crate::Module) -> bool {
+    module
+        .types
+        .iter()
+        .any(|(_, ty)| ty.inner.scalar_kind() == Some(crate::ScalarKind::BFloat))
+        || module
+            .functions
+            .iter()
+            .map(|(_, function)| function)
+            .chain(module.entry_points.iter().map(|ep| &ep.function))
+            .flat_map(|function| function.expressions.iter())
+            .any(|(_, expression)| {
+                matches!(
+                    *expression,
+                    crate::Expression::As {
+                        kind: crate::ScalarKind::BFloat,
+                        ..
+                    } | crate::Expression::Literal(crate::Literal::BF16(_))
+                )
+            })
+}
+
 /// A type for displaying expression handles as baking identifiers.
 ///
 /// Given an [`Expression`] [`Handle`] `h`, `Baked(h)` implements

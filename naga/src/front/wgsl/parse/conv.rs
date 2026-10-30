@@ -466,6 +466,7 @@ pub fn map_predeclared_type(
         "i16" => Ti::Scalar(Sc::I16).into(),
         "u16" => Ti::Scalar(Sc::U16).into(),
         "f16" => Ti::Scalar(Sc::F16).into(),
+        "bf16" => Ti::Scalar(Sc::BF16).into(),
         "i64" => Ti::Scalar(Sc::I64).into(),
         "u64" => Ti::Scalar(Sc::U64).into(),
         "f64" => Ti::Scalar(Sc::F64).into(),
@@ -573,6 +574,9 @@ pub fn map_predeclared_type(
     // Check for the enable extension required to use this type, if any.
     // Slice should be at least len one otherwise extension_needed should be None.
     let extensions_needed: Option<&[_]> = match ty {
+        PredeclaredType::TypeInner(ref ty) if ty.scalar() == Some(Sc::BF16) => {
+            Some(&[ImplementedEnableExtension::WgpuBfloat16])
+        }
         PredeclaredType::TypeInner(ref ty) if ty.scalar() == Some(Sc::F16) => {
             Some(&[ImplementedEnableExtension::F16])
         }

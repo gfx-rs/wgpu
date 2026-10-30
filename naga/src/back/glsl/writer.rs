@@ -62,6 +62,9 @@ impl<'a, W: Write> Writer<'a, W> {
         pipeline_options: &'a PipelineOptions,
         policies: proc::BoundsCheckPolicies,
     ) -> Result<Self, Error> {
+        if back::uses_bfloat16(module) {
+            return Err(Error::UnsupportedScalar(crate::Scalar::BF16));
+        }
         // Check if the requested version is supported
         if !options.version.is_supported() {
             log::error!("Version {}", options.version);
@@ -2345,6 +2348,9 @@ impl<'a, W: Write> Writer<'a, W> {
         match expressions[expr] {
             Expression::Literal(literal) => {
                 match literal {
+                    crate::Literal::BF16(_) => {
+                        return Err(Error::UnsupportedScalar(crate::Scalar::BF16))
+                    }
                     // Floats are written using `Debug` instead of `Display` because it always appends the
                     // decimal part even it's zero which is needed for a valid glsl float constant
                     crate::Literal::F64(value) => write!(self.out, "{value:?}LF")?,
@@ -3807,6 +3813,9 @@ impl<'a, W: Write> Writer<'a, W> {
                         let source_kind = inner.scalar_kind().unwrap();
 
                         match (source_kind, target_kind, target_vector_type) {
+                            (Sk::BFloat, _, _) | (_, Sk::BFloat, _) => {
+                                return Err(Error::UnsupportedScalar(crate::Scalar::BF16));
+                            }
                             // No conversion needed
                             (Sk::Sint, Sk::Sint, _)
                             | (Sk::Uint, Sk::Uint, _)
@@ -4453,6 +4462,7 @@ impl<'a, W: Write> Writer<'a, W> {
     /// Helper function that write string with zero initialization for scalar
     fn write_zero_init_scalar(&mut self, kind: crate::ScalarKind) -> BackendResult {
         match kind {
+            crate::ScalarKind::BFloat => return Err(Error::UnsupportedScalar(crate::Scalar::BF16)),
             crate::ScalarKind::Bool => write!(self.out, "false")?,
             crate::ScalarKind::Uint => write!(self.out, "0u")?,
             crate::ScalarKind::Float => write!(self.out, "0.0")?,
