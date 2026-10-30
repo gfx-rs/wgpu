@@ -32,6 +32,10 @@ impl NullAccelerationStructure {
         device: &Arc<Device>,
         queue: &Queue,
     ) -> Result<Self, NullAccelerationStructureInitError> {
+        if device.alignments.null_acceleration_structure_allowed {
+            return Ok(Self { acceleration_structure: None });
+        }
+
         unsafe {
             let entries = hal::AccelerationStructureEntries::Triangles(alloc::vec![]);
 

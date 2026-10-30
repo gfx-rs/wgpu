@@ -1898,6 +1898,7 @@ impl PhysicalDeviceProperties {
                 .map_or(0, |ray_tracing_pipeline| {
                     ray_tracing_pipeline.shader_group_base_alignment
                 }),
+            null_acceleration_structure_allowed: true,
         }
     }
 }

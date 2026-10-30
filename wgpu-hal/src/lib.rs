@@ -2189,6 +2189,9 @@ pub struct Alignments {
     ///
     /// The offset within `PipelineGroupData` must be a multiple of this
     pub ray_tracing_pipeline_data_offset_alignment: u32,
+
+    /// Whether the special acceleration structure handle of `0` is allowed.
+    pub null_acceleration_structure_allowed: bool,
 }
 
 #[derive(Clone, Debug)]
