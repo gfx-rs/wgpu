@@ -1,2 +1,5 @@
 capabilities = "EARLY_DEPTH_TEST"
-targets = "SPIRV | GLSL"
+targets = "SPIRV | GLSL | METAL"
+
+[msl]
+lang_version = [1, 2]

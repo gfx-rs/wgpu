@@ -807,6 +807,8 @@ features! {
         ///
         ///      - `layout(early_fragment_tests) in;` (GLSL)
         ///
+        ///      - `[[early_fragment_tests]]` (MSL 1.2+)
+        ///
         ///   2. Provide a conservative depth specifier that allows an additional early
         ///      depth test under certain conditions:
         ///
@@ -814,10 +816,13 @@ features! {
         ///
         ///      - `layout(depth_<greater/less/unchanged>) out float gl_FragDepth;` (GLSL)
         ///
+        ///      - `[[depth(greater/less)]]` (MSL, any version)
+        ///
         /// See [`EarlyDepthTest`] for more details.
         ///
         /// Supported platforms:
         /// - Vulkan
+        /// - Metal (with MSL 1.2+)
         /// - GLES 3.1+
         ///
         /// This is a native only feature.
