@@ -117,8 +117,8 @@ pub enum TransferError {
     UnalignedCopyOriginX,
     #[error("Copy origin's y component is not a multiple of block height")]
     UnalignedCopyOriginY,
-    #[error("Bytes per row does not respect `COPY_BYTES_PER_ROW_ALIGNMENT`")]
-    UnalignedBytesPerRow,
+    #[error("Bytes per row ({bytes_per_row}) is not a multiple of {alignment}")]
+    UnalignedBytesPerRow { bytes_per_row: u32, alignment: u32 },
     #[error("Number of bytes per row needs to be specified since more than one row is copied")]
     UnspecifiedBytesPerRow,
     #[error("Number of rows per image needs to be specified since more than one image is copied")]
@@ -202,7 +202,7 @@ impl WebGpuError for TransferError {
             | Self::UnalignedCopyHeight
             | Self::UnalignedCopyOriginX
             | Self::UnalignedCopyOriginY
-            | Self::UnalignedBytesPerRow
+            | Self::UnalignedBytesPerRow { .. }
             | Self::UnspecifiedBytesPerRow
             | Self::UnspecifiedRowsPerImage
             | Self::InvalidBytesPerRow
@@ -428,7 +428,8 @@ pub(crate) fn validate_texture_copy_dst_format(
 ///
 /// And implements the following check from WebGPU's [validating GPUTexelCopyBufferInfo][vtcbi]
 /// algorithm:
-///  * If `aligned` is true, `bytesPerRow` must be a multiple of 256.
+///  * If `aligned` is true, `bytesPerRow` must be a multiple of 256, or only of the texel
+///    block copy size with [`wgt::Features::UNRESTRICTED_BYTES_PER_ROW`].
 ///
 /// Note that the `bytesPerRow` alignment check is enforced whenever
 /// `bytesPerRow` is specified, even if the transfer is not multiple rows and
@@ -451,6 +452,7 @@ pub(crate) fn validate_texture_buffer_copy<T>(
     desc: &wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
     layout: &wgt::TexelCopyBufferLayout,
     aligned: bool,
+    features: wgt::Features,
 ) -> Result<(), TransferError> {
     if desc.sample_count != 1 {
         return Err(TransferError::InvalidSampleCount {
@@ -462,16 +464,15 @@ pub(crate) fn validate_texture_buffer_copy<T>(
         return Err(TransferError::CopyAspectNotOne);
     }
 
-    let offset_alignment = if desc.format.is_depth_stencil_format() {
-        4
-    } else {
-        // The case where `block_copy_size` returns `None` is currently
-        // unreachable both for the reason in the expect message, and also
-        // because the currently-defined non-copyable formats are depth/stencil
-        // formats so would take the `if` branch.
+    let block_copy_size = || {
         desc.format
             .block_copy_size(Some(texture_copy_view.aspect))
             .expect("non-copyable formats should have been rejected previously")
+    };
+    let offset_alignment = if desc.format.is_depth_stencil_format() {
+        4
+    } else {
+        block_copy_size()
     };
 
     if aligned && !layout.offset.is_multiple_of(u64::from(offset_alignment)) {
@@ -479,8 +480,16 @@ pub(crate) fn validate_texture_buffer_copy<T>(
     }
 
     if let Some(bytes_per_row) = layout.bytes_per_row {
-        if aligned && bytes_per_row % wgt::COPY_BYTES_PER_ROW_ALIGNMENT != 0 {
-            return Err(TransferError::UnalignedBytesPerRow);
+        let alignment = if features.contains(wgt::Features::UNRESTRICTED_BYTES_PER_ROW) {
+            block_copy_size()
+        } else {
+            wgt::COPY_BYTES_PER_ROW_ALIGNMENT
+        };
+        if aligned && !bytes_per_row.is_multiple_of(alignment) {
+            return Err(TransferError::UnalignedBytesPerRow {
+                bytes_per_row,
+                alignment,
+            });
         }
     }
 
@@ -1246,6 +1255,7 @@ pub(super) fn copy_buffer_to_texture(
         &dst_texture.desc,
         &source.layout,
         true, // alignment required for buffer offset
+        state.device.features,
     )?;
 
     let (required_buffer_bytes_in_copy, bytes_per_array_layer, is_contiguous) =
@@ -1363,6 +1373,7 @@ pub(super) fn copy_texture_to_buffer(
         &src_texture.desc,
         &destination.layout,
         true, // alignment required for buffer offset
+        state.device.features,
     )?;
 
     let (required_buffer_bytes_in_copy, bytes_per_array_layer, is_contiguous) =
