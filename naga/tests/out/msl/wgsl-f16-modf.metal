@@ -24,27 +24,27 @@ struct _modf_result_vec4_f16_ {
     metal::half4 whole;
 };
 
-_modf_result_f16_ naga_modf(float arg) {
-    float other;
-    float fract = metal::modf(arg, other);
+_modf_result_f16_ naga_modf(half arg) {
+    half other;
+    half fract = metal::modf(arg, other);
     return _modf_result_f16_{ fract, other };
 }
 
-_modf_result_vec2_f16_ naga_modf(metal::float2 arg) {
-    metal::float2 other;
-    metal::float2 fract = metal::modf(arg, other);
+_modf_result_vec2_f16_ naga_modf(metal::half2 arg) {
+    metal::half2 other;
+    metal::half2 fract = metal::modf(arg, other);
     return _modf_result_vec2_f16_{ fract, other };
 }
 
-_modf_result_vec3_f16_ naga_modf(metal::float3 arg) {
-    metal::float3 other;
-    metal::float3 fract = metal::modf(arg, other);
+_modf_result_vec3_f16_ naga_modf(metal::half3 arg) {
+    metal::half3 other;
+    metal::half3 fract = metal::modf(arg, other);
     return _modf_result_vec3_f16_{ fract, other };
 }
 
-_modf_result_vec4_f16_ naga_modf(metal::float4 arg) {
-    metal::float4 other;
-    metal::float4 fract = metal::modf(arg, other);
+_modf_result_vec4_f16_ naga_modf(metal::half4 arg) {
+    metal::half4 other;
+    metal::half4 fract = metal::modf(arg, other);
     return _modf_result_vec4_f16_{ fract, other };
 }
 
