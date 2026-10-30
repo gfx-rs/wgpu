@@ -80,7 +80,7 @@ impl<W: Write> super::Writer<'_, W> {
             .inner
             .size(module.to_ctx())
             .div_ceil(4);
-        let register_count = word_count.div_ceil(WORDS_PER_REGISTER).max(1);
+        let register_count = word_count.div_ceil(WORDS_PER_REGISTER);
 
         let name = self.names[&NameKey::GlobalVariable(handle)].clone();
         let block_name = self.namer.call(&format!("{name}_block"));
