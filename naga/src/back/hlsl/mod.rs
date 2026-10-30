@@ -99,11 +99,11 @@ accessing individual columns by dynamic index.
 
 ## Layout of values in `immediate` buffers
 
-WGSL gives `immediate` variables the same layout as `storage` buffers, which is GLSL's
-`std430`: every member is placed at the next multiple of its own alignment. Immediates are
+WGSL gives `immediate` variables the same layout as `storage` buffers, which requires
+that every member is placed at the next multiple of its own alignment. Immediates are
 root constants, which HLSL can only read through a `cbuffer`, and HLSL's `cbuffer` packing
-follows GLSL's `std140` instead: for example, every nested struct starts on a new 16-byte
-register. A struct member that WGSL places at offset 4 would be read from offset 16.
+places nested structs, arrays and matrices at 16-byte boundaries.
+A struct member that WGSL places at offset 4 would be read from offset 16.
 
 To avoid the mismatch, immediates are declared as a raw array of `uint4` registers,
 and the typed value is assembled from those words at the start of each entry point.
