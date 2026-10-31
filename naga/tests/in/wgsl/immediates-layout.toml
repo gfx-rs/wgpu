@@ -1,0 +1,8 @@
+capabilities = "IMMEDIATES"
+targets = "HLSL"
+
+[hlsl]
+fake_missing_bindings = true
+immediates_target = { register = 0, space = 0 }
+restrict_indexing = true
+zero_initialize_workgroup_memory = true
