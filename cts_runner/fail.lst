@@ -66,9 +66,6 @@ webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:* // metal par
 webgpu:shader,validation,decl,let:* // texture/sampler let
 webgpu:shader,validation,decl,override:* // 93%, unrestricted_pointer_parameters not implemented, https://github.com/gfx-rs/wgpu/issues/5158
 webgpu:shader,validation,decl,var:* // 99%, https://github.com/gfx-rs/wgpu/issues/8925 (trailing comma), atomics in read-only storage, shader stage restrictions
-webgpu:shader,validation,expression,access,array:* // 97%, runtime indexing with compile-time-known values, https://github.com/gfx-rs/wgpu/issues/4390
-webgpu:shader,validation,expression,access,matrix:* // 93%, runtime OOB matrix access with literal indices incorrectly rejected
-webgpu:shader,validation,expression,access,vector:* // 52%, https://github.com/gfx-rs/wgpu/issues/4390, and missing swizzle validation
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:* // 92%, https://github.com/gfx-rs/wgpu/issues/8440
 webgpu:shader,validation,expression,call,builtin,atomics:* // 86%, atomics in vertex shaders, invalid address spaces/access modes
 webgpu:shader,validation,expression,call,builtin,bitcast:* // 57%, bitcast const-eval unimplemented; size validation missing; f16 vector validation incorrect

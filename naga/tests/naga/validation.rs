@@ -1579,6 +1579,70 @@ fn unused() {
     .unwrap();
 }
 
+/// An override-expression index is checked when the override is supplied, but
+/// an index bound by `let` is not a const-expression and is checked at runtime.
+#[test]
+fn override_index_bounds() {
+    use hashbrown::HashMap;
+    use naga::back::pipeline_constants::{process_overrides, PipelineConstantError};
+
+    let source = "
+override x: i32;
+@group(0) @binding(0) var<storage> fixed: array<u32, 3>;
+@group(0) @binding(1) var<storage> runtime: array<u32>;
+
+@compute @workgroup_size(1)
+fn fixed_index() {
+    let a = fixed[x];
+}
+
+@compute @workgroup_size(1)
+fn runtime_index() {
+    let a = runtime[x];
+}
+
+@compute @workgroup_size(1)
+fn let_index() {
+    let i = 9;
+    let a = fixed[i] + u32(x);
+}
+";
+    let (module, info) = parse_validate(source);
+    let process = |entry_point: &str, value: f64| {
+        let overrides = HashMap::from([(String::from("x"), value)]);
+        let entry_point = Some((ir::ShaderStage::Compute, entry_point));
+        process_overrides(&module, &info, entry_point, &overrides).map(|_| ())
+    };
+
+    process("fixed_index", 2.0).unwrap();
+    let err = process("fixed_index", 3.0).unwrap_err();
+    let PipelineConstantError::ValidationError(err) = err else {
+        panic!("expected a validation error, got {err:?}");
+    };
+    assert!(matches!(
+        err.into_inner(),
+        valid::ValidationError::EntryPoint {
+            source: valid::EntryPointError::Function(valid::FunctionError::Expression {
+                source: valid::ExpressionError::IndexOutOfBounds(_, 3),
+                ..
+            }),
+            ..
+        }
+    ));
+    assert!(matches!(
+        process("fixed_index", -1.0),
+        Err(PipelineConstantError::NegativeIndex)
+    ));
+
+    process("runtime_index", 1000.0).unwrap();
+    assert!(matches!(
+        process("runtime_index", -1.0),
+        Err(PipelineConstantError::NegativeIndex)
+    ));
+
+    process("let_index", 0.0).unwrap();
+}
+
 #[test]
 fn override_in_workgroup_size() {
     override_test(

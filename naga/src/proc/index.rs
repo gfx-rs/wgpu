@@ -339,6 +339,34 @@ pub fn access_needs_check(
     Some(length)
 }
 
+/// If `index` is a constant out of bounds for `base`, return a valid index to use instead.
+///
+/// Validation accepts this (a WGSL `let` is not a const-expression), but many target
+/// languages reject a constant index out of range, or any negative one. Every policy
+/// permits the last element, or the first if the length is only known at runtime, as
+/// long as a [`ReadZeroSkipWrite`] check still guards the access.
+///
+/// [`ReadZeroSkipWrite`]: BoundsCheckPolicy::ReadZeroSkipWrite
+pub fn known_out_of_bounds_replacement(
+    base: Handle<crate::Expression>,
+    index: Handle<crate::Expression>,
+    module: &crate::Module,
+    expressions: &crate::Arena<crate::Expression>,
+    info: &valid::FunctionInfo,
+) -> Option<u32> {
+    let base_inner = info[base].ty.inner_with(&module.types);
+    let length = base_inner.indexable_length_resolved(module).ok()?;
+    let value = module
+        .to_ctx()
+        .get_const_val_from::<u32, _>(index, expressions);
+    match (value, length) {
+        (Ok(value), IndexableLength::Known(length)) if value >= length => Some(length - 1),
+        (Err(super::ConstValueError::Negative), IndexableLength::Known(length)) => Some(length - 1),
+        (Err(super::ConstValueError::Negative), IndexableLength::Dynamic) => Some(0),
+        _ => None,
+    }
+}
+
 /// Items returned by the [`bounds_check_iter`] iterator.
 #[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
 pub(crate) struct BoundsCheck {

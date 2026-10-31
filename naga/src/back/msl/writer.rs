@@ -3633,7 +3633,20 @@ impl<W: Write> Writer<W> {
             }
             write!(self.out, ")")?;
         } else {
-            self.put_index(index, context, true)?;
+            let replacement = match index {
+                index::GuardedIndex::Expression(expr) => index::known_out_of_bounds_replacement(
+                    base,
+                    expr,
+                    context.module,
+                    &context.function.expressions,
+                    context.info,
+                ),
+                index::GuardedIndex::Known(_) => None,
+            };
+            match replacement {
+                Some(replacement) => write!(self.out, "{replacement}")?,
+                None => self.put_index(index, context, true)?,
+            }
         }
 
         write!(self.out, "]")?;
