@@ -33,7 +33,7 @@ fn basic_usage() {
 @compute
 fn all_of_struct() {
     var rq: ray_query;
-    rayQueryInitialize(&rq, acc_struct, RayDesc(0u, 0xFFu, 0.0, 0.0, vec3f(0.0, 0.0, 1.0), vec3f(0.0, 0.0, 1.0)));
+    rayQueryInitialize(&rq, acc_struct, RayDesc(0u, 0xFFu, 0.0, 10.0, vec3f(0.0), vec3f(0.0, 0.0, 1.0)));
     rayQueryProceed(&rq);
     let intersection = rayQueryGetCommittedIntersection(&rq);
     // this prevents optimisation as we use the fields
