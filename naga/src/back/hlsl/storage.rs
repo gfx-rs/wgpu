@@ -94,6 +94,10 @@ pub(super) enum SubAccess {
         value: Handle<crate::Expression>,
         stride: u32,
     },
+
+    /// The computed byte offset overflows a 32-bit buffer address, so the
+    /// access is out of bounds.
+    OutOfBounds,
 }
 
 pub(super) enum StoreValue {
@@ -124,6 +128,14 @@ impl<W: fmt::Write> super::Writer<'_, W> {
         chain: &[SubAccess],
         func_ctx: &FunctionCtx,
     ) -> BackendResult {
+        if chain
+            .iter()
+            .any(|access| matches!(access, SubAccess::OutOfBounds))
+        {
+            write!(self.out, "{}", u32::MAX)?;
+            return Ok(());
+        }
+
         if chain.is_empty() {
             write!(self.out, "0")?;
         }
@@ -142,6 +154,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     self.write_expr(module, value, func_ctx)?;
                     write!(self.out, "*{stride}")?;
                 }
+                SubAccess::OutOfBounds => unreachable!("handled above"),
             }
         }
         Ok(())
@@ -632,7 +645,13 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     SubAccess::Index { value, stride }
                 }
                 (Parent::Array { stride }, AccessIndex::Constant(index)) => {
-                    SubAccess::Offset(stride * index)
+                    match stride.checked_mul(index) {
+                        Some(offset) => SubAccess::Offset(offset),
+                        // The offset cannot be addressed by a 32-bit buffer
+                        // address; treat the access as out of bounds instead
+                        // of letting the address wrap.
+                        None => SubAccess::OutOfBounds,
+                    }
                 }
                 (Parent::Struct(members), AccessIndex::Constant(index)) => {
                     SubAccess::Offset(members[index as usize].offset)
