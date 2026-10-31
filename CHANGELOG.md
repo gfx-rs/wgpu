@@ -201,6 +201,15 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 
+#### DX12
+
+- `wgpu_hal::dx12::Device::texture_from_raw` now takes `&self`, so that the device can be asked for the real size of the imported resource. The resource must have been created from that device. By @navkagleb in [#10790](https://github.com/gfx-rs/wgpu/pull/10790).
+
+```diff
+-wgpu_hal::dx12::Device::texture_from_raw(resource, format, dimension, size, mip_level_count, sample_count, drop_callback)
++device.texture_from_raw(resource, format, dimension, size, mip_level_count, sample_count, drop_callback)
+```
+
 #### Metal
 
 - Removed the `size` argument to `wgpu_hal::metal::Device::buffer_from_raw`. The passed size value was previously used only to resolve vertex buffer bindings without an explicit size, possibly incorrectly. Binding sizes are now resolved in `wgpu-core`. By @andyleiserson in [#9848](https://github.com/gfx-rs/wgpu/pull/9848).
@@ -275,6 +284,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 - Make sure padding bytes are 0 in the destination buffer after a `copy_texture_to_buffer` when `UnrestrictedBufferTextureCopyPitchSupported` is not available. By @teoxoy in [#10005](https://github.com/gfx-rs/wgpu/pull/10005).
 - Sanitize shader labels before passing them to DXC as the source name. Fixes compilation when label contains a `:`. By @lucasmerlin in [#10134](https://github.com/gfx-rs/wgpu/pull/10134).
+- Fix `HalCounters::texture_memory` ignoring mip levels (and alignment) for committed textures, which are used when suballocation is unsupported. The size reported by the driver is now used instead of a theoretical estimate. Fixes [#10113](https://github.com/gfx-rs/wgpu/issues/10113). By @navkagleb in [#10790](https://github.com/gfx-rs/wgpu/pull/10790).
 
 #### Vulkan
 
