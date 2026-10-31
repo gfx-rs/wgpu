@@ -146,6 +146,10 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
 - Support WGSL `bitcast` between `vec2<f16>` and 32-bit scalars, between `vec4<f16>` and `vec2` of 32-bit scalars, between `f16` and `i16`/`u16` (with `wgpu_int16`), and the corresponding SPIR-V `OpBitcast`s. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
 
+#### naga
+
+- Support SPIR-V's `OpGroupNonUniformBallotFindLSB`/`OpGroupNonUniformBallotFindMSB` and GLSL's `subgroupBallotFindLSB`/`subgroupBallotFindMSB` via a new `Statement::SubgroupBallotFindBit` IR node: native `OpGroupNonUniformBallotFindLSB`/`MSB` and `subgroupBallotFindLSB`/`MSB` on SPIR-V and GLSL output, formula-based polyfills on HLSL, MSL, and WGSL. By @nazar-pc in [#9966](https://github.com/gfx-rs/wgpu/pull/9966)
+
 #### Hal
 
 - Add `BufferBinding::buffer`, a public read accessor for the bound buffer, which was previously inaccessible to out-of-tree `wgpu_hal::Api` implementations. By @danlehmann in [#9820](https://github.com/gfx-rs/wgpu/pull/9820).
