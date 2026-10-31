@@ -3487,6 +3487,9 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
                     if let Some(cv) = clear_value {
                         mapped_color_attachment.set_clear_value_gpu_color_dict(&cv);
                     }
+                    if let Some(slice) = ca.depth_slice {
+                        mapped_color_attachment.set_depth_slice(slice);
+                    }
                     if let Some(rt) = ca.resolve_target {
                         let resolve_target_view = &rt.inner.as_webgpu().inner;
                         mapped_color_attachment
