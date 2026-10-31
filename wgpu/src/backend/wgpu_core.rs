@@ -84,6 +84,36 @@ impl ContextWgpuCore {
     pub(crate) fn as_core(&self) -> Arc<wgc::instance::Instance> {
         self.0.clone()
     }
+
+    /// # Safety
+    ///
+    /// - Any safety requirements of the options in `backend_options` must be upheld.
+    pub(crate) unsafe fn request_adapter_ext(
+        &self,
+        options: &crate::api::RequestAdapterOptions<'_, '_>,
+        backend_options: Option<wgt::BackendAdapterOptionsMap>,
+    ) -> Pin<Box<dyn dispatch::RequestAdapterFuture>> {
+        let adapter = unsafe {
+            self.0.request_adapter_ext(
+                &wgt::RequestAdapterOptions {
+                    power_preference: options.power_preference,
+                    force_fallback_adapter: options.force_fallback_adapter,
+                    compatible_surface: options
+                        .compatible_surface
+                        .map(|surface| &*surface.inner.as_core().wgpu_surface),
+                    apply_limit_buckets: false,
+                },
+                wgt::Backends::all(),
+                backend_options,
+            )
+        };
+        let adapter = adapter.map(|wgpu_adapter| {
+            let core = CoreAdapter { wgpu_adapter };
+            let generic: dispatch::DispatchAdapter = core.into();
+            generic
+        });
+        Box::pin(ready(adapter))
+    }
 }
 
 fn map_buffer_copy_view(
@@ -812,23 +842,8 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
         &self,
         options: &crate::api::RequestAdapterOptions<'_, '_>,
     ) -> Pin<Box<dyn dispatch::RequestAdapterFuture>> {
-        let adapter = self.0.request_adapter(
-            &wgt::RequestAdapterOptions {
-                power_preference: options.power_preference,
-                force_fallback_adapter: options.force_fallback_adapter,
-                compatible_surface: options
-                    .compatible_surface
-                    .map(|surface| &*surface.inner.as_core().wgpu_surface),
-                apply_limit_buckets: false,
-            },
-            wgt::Backends::all(),
-        );
-        let adapter = adapter.map(|wgpu_adapter| {
-            let core = CoreAdapter { wgpu_adapter };
-            let generic: dispatch::DispatchAdapter = core.into();
-            generic
-        });
-        Box::pin(ready(adapter))
+        // SAFETY: Passing `None` for `backend_options` is safe.
+        unsafe { self.request_adapter_ext(options, None) }
     }
 
     fn poll_all_devices(&self, force_wait: bool) -> bool {

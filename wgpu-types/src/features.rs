@@ -176,7 +176,7 @@ macro_rules! features_web {
     };
 }
 
-/// Defines the feature bitflags, using [`bitflags_array`](crate::bitflags_array) for storage.
+/// Defines the feature bitflags, using [`bitflags_array!`](crate::bitflags_array!) for storage.
 ///
 /// On top of what `bitflags_array!` accepts, each flag carries feature-specific attributes,
 /// written after its doc comments. These are consumed here rather than passed on to

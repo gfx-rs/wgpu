@@ -164,6 +164,15 @@ impl crate::Api for Api {
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
     type RayTracingPipeline = RayTracingPipeline;
+
+    type AdapterOptions = GlAdapterOptions;
+}
+
+crate::adapter_options! {
+    /// Options for enumerating GL adapters.
+    #[backend(wgt::Backend::Gl)]
+    #[derive(Clone, Debug)]
+    pub struct GlAdapterOptions;
 }
 
 crate::impl_dyn_resource!(
