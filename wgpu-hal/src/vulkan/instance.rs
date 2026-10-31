@@ -1217,6 +1217,27 @@ impl crate::Instance for super::Instance {
 impl crate::Surface for super::Surface {
     type A = super::Api;
 
+    fn supports_hdr_metadata(&self, adapter: &super::Adapter) -> bool {
+        self.inner.as_any().is::<super::swapchain::NativeSurface>()
+            && adapter
+                .phd_capabilities
+                .supports_extension(ext::hdr_metadata::NAME)
+    }
+
+    fn set_hdr_metadata(&self, metadata: &wgt::HdrMetadata) -> bool {
+        if !metadata.is_valid() {
+            return false;
+        }
+        let swapchain = self.swapchain.write();
+        let Some(native) = swapchain.as_ref().and_then(|s| {
+            s.as_any()
+                .downcast_ref::<super::swapchain::NativeSwapchain>()
+        }) else {
+            return false;
+        };
+        native.set_hdr_metadata(metadata)
+    }
+
     unsafe fn configure(
         &self,
         device: &super::Device,

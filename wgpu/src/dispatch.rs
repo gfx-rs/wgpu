@@ -633,6 +633,14 @@ pub trait CommandBufferInterface: CommonTraits {}
 pub trait RenderBundleInterface: CommonTraits {}
 
 pub trait SurfaceInterface: CommonTraits {
+    fn supports_hdr_metadata(&self, _adapter: &DispatchAdapter) -> bool {
+        false
+    }
+
+    fn set_hdr_metadata(&self, _metadata: &crate::HdrMetadata) -> bool {
+        false
+    }
+
     fn get_capabilities(&self, adapter: &DispatchAdapter) -> crate::SurfaceCapabilities;
 
     /// The backing display's current HDR / luminance characteristics.

@@ -2866,6 +2866,15 @@ impl ErrorSink {
 }
 
 impl dispatch::SurfaceInterface for CoreSurface {
+    fn supports_hdr_metadata(&self, adapter: &dispatch::DispatchAdapter) -> bool {
+        self.wgpu_surface
+            .supports_hdr_metadata(&adapter.as_core().wgpu_adapter)
+    }
+
+    fn set_hdr_metadata(&self, metadata: &wgt::HdrMetadata) -> bool {
+        self.wgpu_surface.set_hdr_metadata(metadata)
+    }
+
     fn get_capabilities(&self, adapter: &dispatch::DispatchAdapter) -> wgt::SurfaceCapabilities {
         let adapter = adapter.as_core();
 

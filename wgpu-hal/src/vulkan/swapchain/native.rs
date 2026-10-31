@@ -3,7 +3,7 @@
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::any::Any;
 
-use ash::{google, khr, vk};
+use ash::{ext, google, khr, vk};
 use wgpu_sync::{Mutex, MutexGuard};
 
 use crate::vulkan::{
@@ -689,6 +689,31 @@ impl Swapchain for NativeSwapchain {
 }
 
 impl NativeSwapchain {
+    pub(crate) fn set_hdr_metadata(&self, metadata: &wgt::HdrMetadata) -> bool {
+        if !self
+            .device
+            .enabled_extensions
+            .contains(&ext::hdr_metadata::NAME)
+        {
+            return false;
+        }
+        let xy = |[x, y]: [f32; 2]| vk::XYColorEXT { x, y };
+        let data = vk::HdrMetadataEXT::default()
+            .display_primary_red(xy(metadata.primaries[0]))
+            .display_primary_green(xy(metadata.primaries[1]))
+            .display_primary_blue(xy(metadata.primaries[2]))
+            .white_point(xy(metadata.white_point))
+            .min_luminance(metadata.min_luminance)
+            .max_luminance(metadata.max_luminance)
+            .max_content_light_level(metadata.max_content_light_level)
+            .max_frame_average_light_level(metadata.max_frame_average_light_level);
+        let extension = ext::hdr_metadata::Device::new(&self.device.instance.raw, &self.device.raw);
+        // SAFETY: The extension is enabled, the swapchain belongs to this live device,
+        // and the caller holds the surface swapchain write lock.
+        unsafe { extension.set_hdr_metadata(&[self.raw], &[data]) };
+        true
+    }
+
     pub(crate) fn as_raw(&self) -> vk::SwapchainKHR {
         self.raw
     }

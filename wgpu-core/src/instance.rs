@@ -793,6 +793,32 @@ impl crate::storage::StorageItem for Surface {
 }
 
 impl Surface {
+    pub fn supports_hdr_metadata(&self, adapter: &Adapter) -> bool {
+        self.raw(adapter.raw.backend())
+            .is_some_and(|surface| surface.supports_hdr_metadata(adapter.raw.adapter.as_ref()))
+    }
+
+    pub fn set_hdr_metadata(&self, metadata: &wgt::HdrMetadata) -> bool {
+        if !metadata.is_valid() {
+            return false;
+        }
+        let presentation = self.presentation.lock();
+        let Some(presentation) = presentation.as_ref() else {
+            return false;
+        };
+        if presentation.acquired_texture.is_some()
+            || !presentation.device.is_valid()
+            || !presentation
+                .device
+                .features()
+                .contains(wgt::Features::SURFACE_HDR_METADATA)
+        {
+            return false;
+        }
+        self.raw(presentation.device.backend())
+            .is_some_and(|surface| surface.set_hdr_metadata(metadata))
+    }
+
     pub fn get_capabilities(
         &self,
         adapter: &Adapter,
@@ -1529,6 +1555,19 @@ fn normalize_max_resource_per_shader_stage_limits(limits: &mut wgt::Limits) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unconfigured_surface_rejects_hdr_metadata() {
+        let surface = Surface {
+            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
+            surface_per_backend: HashMap::new(),
+        };
+        assert!(!surface.set_hdr_metadata(&wgt::HdrMetadata::default()));
+        assert!(!surface.set_hdr_metadata(&wgt::HdrMetadata {
+            max_luminance: f32::NAN,
+            ..Default::default()
+        }));
+    }
 
     fn compliant_downlevel() -> wgt::DownlevelCapabilities {
         wgt::DownlevelCapabilities {

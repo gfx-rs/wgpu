@@ -1115,6 +1115,11 @@ impl PhysicalDeviceFeatures {
                 || caps.supports_extension(khr::shader_non_semantic_info::NAME),
         );
 
+        features.set(
+            F::SURFACE_HDR_METADATA,
+            caps.supports_extension(ext::hdr_metadata::NAME),
+        );
+
         (features, dl_flags)
     }
 }
@@ -1236,6 +1241,10 @@ impl PhysicalDeviceProperties {
 
         // Require `VK_KHR_swapchain`
         extensions.push(khr::swapchain::NAME);
+
+        if requested_features.contains(wgt::Features::SURFACE_HDR_METADATA) {
+            extensions.push(ext::hdr_metadata::NAME);
+        }
 
         if self.device_api_version < vk::API_VERSION_1_1 {
             // Require `VK_KHR_maintenance1`
@@ -3642,4 +3651,20 @@ fn query_cooperative_matrix_properties(
         result.len()
     );
     result
+}
+
+#[cfg(test)]
+mod hdr_metadata_tests {
+    use super::*;
+
+    #[test]
+    fn metadata_extension_is_opt_in() {
+        let caps = PhysicalDeviceProperties::default();
+        assert!(!caps
+            .get_required_extensions(wgt::Features::empty())
+            .contains(&ext::hdr_metadata::NAME));
+        assert!(caps
+            .get_required_extensions(wgt::Features::SURFACE_HDR_METADATA)
+            .contains(&ext::hdr_metadata::NAME));
+    }
 }
