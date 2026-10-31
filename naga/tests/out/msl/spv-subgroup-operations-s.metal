@@ -12,8 +12,8 @@ void function(
     uint _e5 = global_2;
     uint _e6 = global_3;
     metal::threadgroup_barrier(metal::mem_flags::mem_none);
-    metal::uint4 _e9 = metal::uint4((uint64_t)metal::simd_ballot((_e6 & 1u) == 1u), 0, 0, 0);
-    metal::uint4 _e10 = metal::uint4((uint64_t)metal::simd_ballot(true), 0, 0, 0);
+    metal::uint4 _e9 = metal::uint4(as_type<metal::uint2>((uint64_t)metal::simd_ballot((_e6 & 1u) == 1u)), 0, 0);
+    metal::uint4 _e10 = metal::uint4(as_type<metal::uint2>((uint64_t)metal::simd_ballot(true)), 0, 0);
     bool _e12 = metal::simd_all(_e6 != 0u);
     bool _e14 = metal::simd_any(_e6 == 0u);
     uint _e15 = metal::simd_sum(_e6);
