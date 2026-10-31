@@ -230,6 +230,13 @@ fn sparse_instances_index_correct(ctx: TestingContext) {
             cache: None,
         });
 
+    let out_buf = ctx.device.create_buffer(&BufferDescriptor {
+        label: Some("shader output buffer"),
+        size: STRUCT_SIZE,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+
     // create the blas and tlas
     let tri_sizes = wgpu::BlasTriangleGeometrySizeDescriptor {
         vertex_format: wgpu::VertexFormat::Float32x3,
@@ -251,6 +258,13 @@ fn sparse_instances_index_correct(ctx: TestingContext) {
         sizes.clone(),
     );
 
+    // Create a buffer with a triangle that the shader will hit.
+    let vertex_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: Some("Blas vertex buf"),
+        contents: bytemuck::cast_slice(&[[1.0f32, 0.0, 1.0], [-1.0, -1.0, 1.0], [-1.0, 1.0, 1.0]]),
+        usage: BufferUsages::BLAS_INPUT,
+    });
+
     let mut tlas = ctx.device.create_tlas(&wgpu::CreateTlasDescriptor {
         label: None,
         max_instances: 2,
@@ -266,12 +280,6 @@ fn sparse_instances_index_correct(ctx: TestingContext) {
         0xFF,
     ));
 
-    let buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
-        label: Some("Blas vertex buf"),
-        contents: bytemuck::cast_slice(&[[1.0f32, 0.0, 1.0], [-1.0, -1.0, 1.0], [-1.0, 1.0, 1.0]]),
-        usage: BufferUsages::BLAS_INPUT,
-    });
-
     let mut encoder = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
@@ -283,26 +291,17 @@ fn sparse_instances_index_correct(ctx: TestingContext) {
             blas: &blas,
             geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
                 size: &tri_sizes,
-                vertex_buffer: &buffer,
+                vertex_buffer: &vertex_buffer,
                 first_vertex: 0,
-                vertex_stride: 12,
+                vertex_stride: size_of::<[f32; 3]>() as _,
                 index_buffer: None,
                 first_index: None,
                 transform_buffer: None,
                 transform_buffer_offset: None,
             }]),
         }],
-        [],
+        [&tlas],
     );
-
-    encoder.build_acceleration_structures([], [&tlas]);
-
-    let out_buf = ctx.device.create_buffer(&BufferDescriptor {
-        label: Some("shader output buffer"),
-        size: STRUCT_SIZE,
-        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    });
 
     let bind = ctx.device.create_bind_group(&BindGroupDescriptor {
         label: None,
@@ -318,6 +317,9 @@ fn sparse_instances_index_correct(ctx: TestingContext) {
             },
         ],
     });
+
+
+    // Run the shader to get back the instance index
 
     {
         let mut pass = encoder.begin_compute_pass(&Default::default());
@@ -357,5 +359,6 @@ fn sparse_instances_index_correct(ctx: TestingContext) {
 
     read_back.unmap();
 
+    // instance index should be one as that is the input index.
     assert_eq!(res, 1)
 }
