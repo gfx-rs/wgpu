@@ -129,6 +129,10 @@ pub struct HalCounters {
     pub texture_memory: InternalCounter,
     /// Amount of allocated gpu memory attributed to acceleration structures, in bytes.
     pub acceleration_structure_memory: InternalCounter,
+    /// Amount of gpu memory held in indirect command buffers that the backend
+    /// creates to run multi-draws on the GPU, in bytes. Only the Metal backend
+    /// creates them.
+    pub indirect_command_buffer_memory: InternalCounter,
     /// Number of gpu memory allocations.
     pub memory_allocations: InternalCounter,
 }
