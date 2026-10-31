@@ -1906,6 +1906,19 @@ pub enum Expression {
         committed: bool,
     },
 
+    /// Get the largest `t` that a new hit of `query` may have.
+    ///
+    /// This is the `t` of the committed hit, or the `t_max` given to
+    /// [`Initialize`] if there is none. It is an [`f32`] scalar.
+    ///
+    /// [`Initialize`]: RayQueryFunction::Initialize
+    RayQueryGetCurrentTMax {
+        /// The ray query to read, a pointer to a [`RayQuery`].
+        ///
+        /// [`RayQuery`]: TypeInner::RayQuery
+        query: Handle<Expression>,
+    },
+
     /// Result of a [`SubgroupBallot`] statement.
     ///
     /// [`SubgroupBallot`]: Statement::SubgroupBallot

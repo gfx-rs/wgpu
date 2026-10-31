@@ -31,7 +31,7 @@ pub struct ShaderRuntimeChecks {
     pub force_loop_bounding: bool,
     /// If false, the caller **MUST** ensure that in all passed shaders every function operating
     /// on a ray query must obey these rules (functions using wgsl naming)
-    /// - `rayQueryInitialize` must have called before `rayQueryProceed`
+    /// - `rayQueryInitialize` must have called before `rayQueryProceed` or `rayQueryGetCurrentTMax`
     /// - `rayQueryProceed` must have been called, returned true and have hit an AABB before
     ///   `rayQueryGenerateIntersection` is called
     /// - `rayQueryProceed` must have been called, returned true and have hit a triangle before

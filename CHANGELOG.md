@@ -143,6 +143,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### Naga
 
+- Add the `rayQueryGetCurrentTMax` WGSL function, which returns the `t` of the committed hit of a ray query, or its `t_max` if there is none, while the query is still in progress. It is supported by the SPIR-V, HLSL and Metal backends. By @DouglasDwyer in [#10697](https://github.com/gfx-rs/wgpu/pull/10697).
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
 
 #### Hal

@@ -539,6 +539,8 @@ pub(super) enum WrappedFunction {
     RayQueryGetIntersection {
         committed: bool,
     },
+    /// Helper that returns the largest `t` that a new hit may have.
+    RayQueryGetCurrentTMax,
 }
 
 #[expect(missing_debug_implementations, reason = "would be way too verbose?")]
@@ -1247,9 +1249,8 @@ impl<W: Write> Writer<W> {
             };
             writeln!(self.out, ";")?;
 
-            // If this variable is a ray query, put in an initialization tracker.
-            if context.ray_query_initialization_tracking {
-                if let crate::TypeInner::RayQuery { .. } = context.module.types[ty].inner {
+            if let crate::TypeInner::RayQuery { .. } = context.module.types[ty].inner {
+                if context.ray_query_initialization_tracking {
                     writeln!(
                         self.out,
                         "{}uint {}{} = 0u;",
@@ -1257,7 +1258,11 @@ impl<W: Write> Writer<W> {
                         super::ray::RAY_QUERY_TRACKER_VARIABLE_PREFIX,
                         self.names[&name_key]
                     )?;
+                }
 
+                if context.ray_query_initialization_tracking
+                    || super::ray::function_reads_current_t_max(context.function)
+                {
                     writeln!(
                         self.out,
                         "{}float {}{} = 0.0;",
@@ -3142,6 +3147,34 @@ impl<W: Write> Writer<W> {
             crate::Expression::RayQueryVertexPositions { .. } => {
                 unimplemented!()
             }
+            crate::Expression::RayQueryGetCurrentTMax { query } => {
+                if context.lang_version < (2, 4) {
+                    return Err(Error::UnsupportedRayTracing);
+                }
+
+                let crate::Expression::LocalVariable(query_var) =
+                    context.function.expressions[query]
+                else {
+                    unreachable!()
+                };
+
+                let query_name = self.names[&NameKey::local(context.origin, query_var)].clone();
+
+                write!(self.out, "{}(", super::ray::CURRENT_T_MAX_FUNCTION_NAME)?;
+                self.put_expression(query, context, true)?;
+                if context.ray_query_initialization_tracking {
+                    write!(
+                        self.out,
+                        ", {}{query_name}",
+                        super::ray::RAY_QUERY_TRACKER_VARIABLE_PREFIX
+                    )?;
+                }
+                write!(
+                    self.out,
+                    ", {}{query_name})",
+                    super::ray::RAY_QUERY_T_MAX_TRACKER_VARIABLE_PREFIX
+                )?;
+            }
             crate::Expression::RayQueryGetIntersection { query, committed } => {
                 if context.lang_version < (2, 4) {
                     return Err(Error::UnsupportedRayTracing);
@@ -4749,6 +4782,7 @@ impl<W: Write> Writer<W> {
             &[
                 CLAMPED_LOD_LOAD_PREFIX,
                 super::ray::INTERSECTION_FUNCTION_NAME,
+                super::ray::CURRENT_T_MAX_FUNCTION_NAME,
                 super::ray::RAY_QUERY_TRACKER_VARIABLE_PREFIX,
                 super::ray::RAY_QUERY_T_MAX_TRACKER_VARIABLE_PREFIX,
             ],
@@ -7041,6 +7075,9 @@ template <typename A>
                 }
                 crate::Expression::RayQueryGetIntersection { committed, .. } => {
                     self.write_rq_get_intersection_function(module, committed, options)?;
+                }
+                crate::Expression::RayQueryGetCurrentTMax { .. } => {
+                    self.write_rq_get_current_t_max_function(options)?;
                 }
                 _ => {}
             }

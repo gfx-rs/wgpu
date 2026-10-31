@@ -164,6 +164,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             wrapped: super::Wrapped::default(),
             written_committed_intersection: false,
             written_candidate_intersection: false,
+            written_current_t_max: false,
             continue_ctx: back::continue_forward::ContinueCtx::default(),
             temp_access_chain: Vec::new(),
             need_bake_expressions: Default::default(),
@@ -186,6 +187,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.wrapped.clear();
         self.written_committed_intersection = false;
         self.written_candidate_intersection = false;
+        self.written_current_t_max = false;
         self.continue_ctx.clear();
         self.need_bake_expressions.clear();
         self.function_task_payload_var.clear();
@@ -4652,6 +4654,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.write_expr(module, query, func_ctx)?;
                     write!(self.out, ", {tracker_expr_name})")?;
                 }
+            }
+            Expression::RayQueryGetCurrentTMax { query } => {
+                let Expression::LocalVariable(query_var) = func_ctx.expressions[query] else {
+                    unreachable!()
+                };
+
+                let tracker_expr_name = format!(
+                    "{RAY_QUERY_TRACKER_VARIABLE_PREFIX}{}",
+                    self.names[&func_ctx.name_key(query_var)]
+                );
+
+                write!(self.out, "GetCurrentTMax(")?;
+                self.write_expr(module, query, func_ctx)?;
+                write!(self.out, ", {tracker_expr_name})")?;
             }
             // Not supported yet
             Expression::RayQueryVertexPositions { .. }

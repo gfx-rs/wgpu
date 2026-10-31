@@ -1970,6 +1970,7 @@ impl<W: Write> Writer<W> {
             }
             // Not supported yet
             Expression::RayQueryGetIntersection { .. }
+            | Expression::RayQueryGetCurrentTMax { .. }
             | Expression::RayQueryVertexPositions { .. } => unreachable!(),
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_)

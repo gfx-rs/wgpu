@@ -667,7 +667,8 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
         Expression::RayQueryGetIntersection {
             ref mut query,
             committed: _,
-        } => {
+        }
+        | Expression::RayQueryGetCurrentTMax { ref mut query } => {
             adjust(query);
         }
         Expression::Literal(_)

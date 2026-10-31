@@ -1078,6 +1078,162 @@ impl Writer {
         func_id
     }
 
+    /// Writes the helper that returns the largest `t` that a new hit may have.
+    pub(in super::super) fn write_ray_query_get_current_t_max(&mut self) -> spirv::Word {
+        if let Some(&word) = self
+            .ray_query_functions
+            .get(&LookupRayQueryFunction::GetCurrentTMax)
+        {
+            return word;
+        }
+
+        let ray_query_type_id = self.get_ray_query_pointer_id();
+        let u32_ty = self.get_u32_type_id();
+        let u32_ptr_ty = self.get_pointer_type_id(u32_ty, spirv::StorageClass::Function);
+        let f32_type_id = self.get_f32_type_id();
+        let f32_ptr_type_id = self.get_pointer_type_id(f32_type_id, spirv::StorageClass::Function);
+        let bool_type_id = self.get_bool_type_id();
+
+        let (func_id, mut function, arg_ids) = self.write_function_signature(
+            &[ray_query_type_id, u32_ptr_ty, f32_ptr_type_id],
+            f32_type_id,
+        );
+
+        let query_id = arg_ids[0];
+        let init_tracker_id = arg_ids[1];
+        let t_max_tracker_id = arg_ids[2];
+
+        let block_id = self.id_gen.next();
+        let mut block = Block::new(block_id);
+
+        let result_id = self.id_gen.next();
+        let zero_id = self.get_constant_scalar(crate::Literal::F32(0.0));
+        block.body.push(Instruction::variable(
+            f32_ptr_type_id,
+            result_id,
+            spirv::StorageClass::Function,
+            Some(zero_id),
+        ));
+
+        let valid_id = self.id_gen.next();
+        let mut valid_block = Block::new(valid_id);
+
+        let final_label_id = self.id_gen.next();
+        let mut final_block = Block::new(final_label_id);
+
+        let entry_branch = if self.ray_query_initialization_tracking {
+            let tracker_id = self.id_gen.next();
+            block
+                .body
+                .push(Instruction::load(u32_ty, tracker_id, init_tracker_id, None));
+            let initialized_id = write_ray_flags_contains_flags(
+                self,
+                &mut block,
+                tracker_id,
+                RayQueryPoint::INITIALIZED.bits(),
+            );
+            block.body.push(Instruction::selection_merge(
+                final_label_id,
+                spirv::SelectionControl::NONE,
+            ));
+            Instruction::branch_conditional(initialized_id, valid_id, final_label_id)
+        } else {
+            Instruction::branch(valid_id)
+        };
+        function.consume(block, entry_branch);
+
+        let committed_intersection_id = self.get_constant_scalar(crate::Literal::U32(
+            spirv::RayQueryIntersection::RayQueryCommittedIntersectionKHR as _,
+        ));
+        let committed_type_id = self.id_gen.next();
+        valid_block
+            .body
+            .push(Instruction::ray_query_get_intersection(
+                spirv::Op::RayQueryGetIntersectionTypeKHR,
+                u32_ty,
+                committed_type_id,
+                query_id,
+                committed_intersection_id,
+            ));
+
+        let none_constant_id = self.get_constant_scalar(crate::Literal::U32(
+            spirv::RayQueryCommittedIntersectionType::RayQueryCommittedIntersectionNoneKHR as _,
+        ));
+        let no_committed_id = self.id_gen.next();
+        valid_block.body.push(Instruction::binary(
+            spirv::Op::IEqual,
+            bool_type_id,
+            no_committed_id,
+            committed_type_id,
+            none_constant_id,
+        ));
+
+        let merge_label_id = self.id_gen.next();
+        let merge_block = Block::new(merge_label_id);
+
+        let no_committed_label_id = self.id_gen.next();
+        let mut no_committed_block = Block::new(no_committed_label_id);
+
+        let committed_label_id = self.id_gen.next();
+        let mut committed_block = Block::new(committed_label_id);
+
+        valid_block.body.push(Instruction::selection_merge(
+            merge_label_id,
+            spirv::SelectionControl::NONE,
+        ));
+        function.consume(
+            valid_block,
+            Instruction::branch_conditional(
+                no_committed_id,
+                no_committed_label_id,
+                committed_label_id,
+            ),
+        );
+
+        let t_max_id = self.id_gen.next();
+        no_committed_block.body.push(Instruction::load(
+            f32_type_id,
+            t_max_id,
+            t_max_tracker_id,
+            None,
+        ));
+        no_committed_block
+            .body
+            .push(Instruction::store(result_id, t_max_id, None));
+        function.consume(no_committed_block, Instruction::branch(merge_label_id));
+
+        let committed_t_id = self.id_gen.next();
+        committed_block
+            .body
+            .push(Instruction::ray_query_get_intersection(
+                spirv::Op::RayQueryGetIntersectionTKHR,
+                f32_type_id,
+                committed_t_id,
+                query_id,
+                committed_intersection_id,
+            ));
+        committed_block
+            .body
+            .push(Instruction::store(result_id, committed_t_id, None));
+        function.consume(committed_block, Instruction::branch(merge_label_id));
+
+        function.consume(merge_block, Instruction::branch(final_label_id));
+
+        let loaded_result_id = self.id_gen.next();
+        final_block.body.push(Instruction::load(
+            f32_type_id,
+            loaded_result_id,
+            result_id,
+            None,
+        ));
+        function.consume(final_block, Instruction::return_value(loaded_result_id));
+
+        function.to_words(&mut self.logical_layout.function_definitions);
+        self.ray_query_functions
+            .insert(LookupRayQueryFunction::GetCurrentTMax, func_id);
+        func_id
+    }
+
     fn write_ray_query_confirm_intersection(&mut self) -> spirv::Word {
         if let Some(&word) = self
             .ray_query_functions
