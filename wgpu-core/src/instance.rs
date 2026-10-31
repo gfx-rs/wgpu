@@ -880,11 +880,17 @@ impl Surface {
             .map(|surface| surface.as_ref())
     }
 
-    fn unconfigure_inner<'a>(
+    /// Takes the current configuration, destroys its acquired texture and waits
+    /// for all work on its device to finish.
+    ///
+    /// Returns the device the surface was configured for. The raw surface is
+    /// still configured, so the caller must unconfigure it next.
+    fn take_presentation<'a>(
         &self,
         presentation: &mut MutexGuard<'a, Option<Presentation>>,
-    ) -> UserClosures {
+    ) -> (Option<Arc<Device>>, UserClosures) {
         let mut result = UserClosures::default();
+        let mut device = None;
         if let Some(mut present) = presentation.take() {
             if let Some(texture) = present.acquired_texture.take() {
                 texture.destroy();
@@ -918,14 +924,33 @@ impl Surface {
                 }
             }
             result.extend(user_callbacks);
-
-            for (&backend, surface) in &self.surface_per_backend {
-                if backend == present.device.backend() {
-                    unsafe { surface.unconfigure(present.device.raw()) };
-                }
-            }
+            device = Some(present.device);
         }
-        result
+        (device, result)
+    }
+
+    /// Unconfigures the raw surface from `device`.
+    ///
+    /// # Safety
+    ///
+    /// `device` must have been returned by [`Self::take_presentation`], and the
+    /// surface must not have been configured since.
+    unsafe fn unconfigure_raw(&self, device: &Device) {
+        if let Some(surface) = self.raw(device.backend()) {
+            let _command_indices = device.command_indices.write();
+            unsafe { surface.unconfigure(device.raw()) };
+        }
+    }
+
+    fn unconfigure_inner<'a>(
+        &self,
+        presentation: &mut MutexGuard<'a, Option<Presentation>>,
+    ) -> UserClosures {
+        let (device, user_callbacks) = self.take_presentation(presentation);
+        if let Some(device) = device {
+            unsafe { self.unconfigure_raw(&device) };
+        }
+        user_callbacks
     }
 
     pub fn unconfigure(self: &Arc<Self>) {
@@ -1019,10 +1044,28 @@ impl Surface {
             // so that no change can happen in the middle of it.
             let mut presentation = self.presentation.lock();
 
-            user_callbacks = self.unconfigure_inner(&mut presentation);
+            let previous_device;
+            (previous_device, user_callbacks) = self.take_presentation(&mut presentation);
 
             let surface_raw = self.raw(device.backend()).unwrap();
-            match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
+            // `command_indices` serializes these calls with other queue
+            // operations. For the same device, hold it across both calls.
+            let result = {
+                let same_device = match previous_device {
+                    Some(previous_device) if Arc::ptr_eq(&previous_device, device) => true,
+                    Some(previous_device) => {
+                        unsafe { self.unconfigure_raw(&previous_device) };
+                        false
+                    }
+                    None => false,
+                };
+                let _command_indices = device.command_indices.write();
+                if same_device {
+                    unsafe { surface_raw.unconfigure(device.raw()) };
+                }
+                unsafe { surface_raw.configure(device.raw(), &hal_config) }
+            };
+            match result {
                 Ok(()) => {
                     *presentation = Some(Presentation {
                         device: Arc::clone(device),
