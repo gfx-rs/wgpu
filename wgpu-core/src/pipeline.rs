@@ -693,6 +693,12 @@ impl ComputePipeline {
         };
         bgl
     }
+
+    pub fn get_subgroup_size(self: &Arc<Self>) -> Option<u32> {
+        self.raw()
+            .ok()
+            .and_then(hal::DynComputePipeline::get_subgroup_size)
+    }
 }
 
 #[derive(Clone, Debug, Error)]

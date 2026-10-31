@@ -684,7 +684,7 @@ pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
     type PipelineLayout: DynPipelineLayout;
     type ShaderModule: DynShaderModule;
     type RenderPipeline: DynRenderPipeline;
-    type ComputePipeline: DynComputePipeline;
+    type ComputePipeline: DynComputePipeline + ComputePipeline;
     type RayTracingPipeline: DynRayTracingPipeline;
     type PipelineCache: DynPipelineCache;
 
@@ -1400,6 +1400,11 @@ pub trait Queue: WasmNotSendSync {
     ///   [`wait_for_idle`][Queue::wait_for_idle]) on the same queue.
     unsafe fn wait_for_idle(&self) -> Result<(), DeviceError>;
     unsafe fn get_timestamp_period(&self) -> f32;
+}
+
+pub trait ComputePipeline {
+    /// Returns the subgroup size this pipeline executes with, or `None` if the backend cannot determine it.
+    fn get_subgroup_size(&self) -> Option<u32>;
 }
 
 /// Encoder and allocation pool for `CommandBuffer`s.
