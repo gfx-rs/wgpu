@@ -707,6 +707,7 @@ enum WrappedType {
     UnaryOp(help::WrappedUnaryOp),
     BinaryOp(help::WrappedBinaryOp),
     Cast(help::WrappedCast),
+    Bitcast(help::WrappedBitcast),
 }
 
 #[derive(Default)]
