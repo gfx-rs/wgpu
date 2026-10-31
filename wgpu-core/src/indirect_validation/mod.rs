@@ -1,6 +1,6 @@
 use crate::{
     device::DeviceError,
-    pipeline::{CreateComputePipelineError, CreateShaderModuleError},
+    pipeline::{CreatePipelineError, CreateShaderModuleError},
 };
 use alloc::boxed::Box;
 use scopeguard::{guard, ScopeGuard};
@@ -21,7 +21,7 @@ enum CreateIndirectValidationPipelineError {
     #[error(transparent)]
     ShaderModule(#[from] CreateShaderModuleError),
     #[error(transparent)]
-    ComputePipeline(#[from] CreateComputePipelineError),
+    ComputePipeline(#[from] CreatePipelineError),
 }
 
 pub(crate) struct IndirectValidation {

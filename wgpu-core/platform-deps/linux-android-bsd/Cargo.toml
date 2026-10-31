@@ -15,6 +15,9 @@ readme = "README.md"
 # whole, if their code permits. See `../README.md` for details.
 rust-version = "1.87"
 
+[lints]
+workspace = true
+
 [features]
 gles = ["wgpu-hal/gles"]
 vulkan = ["wgpu-hal/vulkan"]

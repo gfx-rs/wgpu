@@ -776,82 +776,16 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 16] = [
-    (
-        wgt::Features::BGRA8UNORM_STORAGE,
-        webgpu_sys::GpuFeatureName::Bgra8unormStorage,
-    ),
-    (
-        wgt::Features::CLIP_DISTANCES,
-        webgpu_sys::GpuFeatureName::ClipDistances,
-    ),
-    (
-        wgt::Features::DEPTH32FLOAT_STENCIL8,
-        webgpu_sys::GpuFeatureName::Depth32floatStencil8,
-    ),
-    (
-        wgt::Features::DEPTH_CLIP_CONTROL,
-        webgpu_sys::GpuFeatureName::DepthClipControl,
-    ),
-    (
-        wgt::Features::DUAL_SOURCE_BLENDING,
-        webgpu_sys::GpuFeatureName::DualSourceBlending,
-    ),
-    (
-        wgt::Features::FLOAT32_BLENDABLE,
-        webgpu_sys::GpuFeatureName::Float32Blendable,
-    ),
-    (
-        wgt::Features::FLOAT32_FILTERABLE,
-        webgpu_sys::GpuFeatureName::Float32Filterable,
-    ),
-    (
-        wgt::Features::INDIRECT_FIRST_INSTANCE,
-        webgpu_sys::GpuFeatureName::IndirectFirstInstance,
-    ),
-    (
-        wgt::Features::RG11B10UFLOAT_RENDERABLE,
-        webgpu_sys::GpuFeatureName::Rg11b10ufloatRenderable,
-    ),
-    (
-        wgt::Features::SHADER_F16,
-        webgpu_sys::GpuFeatureName::ShaderF16,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_ASTC,
-        webgpu_sys::GpuFeatureName::TextureCompressionAstc,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
-        webgpu_sys::GpuFeatureName::TextureCompressionAstcSliced3d,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_BC,
-        webgpu_sys::GpuFeatureName::TextureCompressionBc,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
-        webgpu_sys::GpuFeatureName::TextureCompressionBcSliced3d,
-    ),
-    (
-        wgt::Features::TEXTURE_COMPRESSION_ETC2,
-        webgpu_sys::GpuFeatureName::TextureCompressionEtc2,
-    ),
-    (
-        wgt::Features::TIMESTAMP_QUERY,
-        webgpu_sys::GpuFeatureName::TimestampQuery,
-    ),
-];
-
 fn map_wgt_features(supported_features: webgpu_sys::GpuSupportedFeatures) -> wgt::Features {
-    let mut features = wgt::Features::empty();
-    for (wgpu_feat, web_feat) in FEATURES_MAPPING {
-        match wasm_bindgen::JsValue::from(web_feat).as_string() {
-            Some(value) if supported_features.has(&value) => features |= wgpu_feat,
-            _ => {}
-        }
+    let mut wgpu_features = wgt::Features::default();
+    for feature in supported_features.values().into_iter() {
+        let feature = feature.expect("`GpuSupportedFeatures` elements should be valid");
+        let feature = feature
+            .as_string()
+            .expect("`GpuSupportedFeatures` should be string set");
+        wgpu_features |= feature.parse::<wgt::Features>().unwrap_or_default();
     }
-    features
+    wgpu_features
 }
 
 fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
@@ -1027,6 +961,7 @@ fn future_request_adapter(
             Some(adapter) => Ok(WebAdapter {
                 inner: adapter,
                 ident: crate::cmp::Identifier::create(),
+                cached_properties: Rc::new(CachedProperties::default()),
             }
             .into()),
             None => Err(request_adapter_null_error(requested_backends)),
@@ -1066,6 +1001,7 @@ fn future_request_device(
                     ident: crate::cmp::Identifier::create(),
                     error_scope_count: Rc::new(Cell::new(0)),
                     uncaptured_error_listener: Rc::new(RefCell::new(None)),
+                    cached_properties: Rc::new(CachedProperties::default()),
                 }
                 .into(),
                 WebQueue {
@@ -1279,11 +1215,22 @@ pub fn get_browser_gpu_property(
     Ok(DefinedNonNullJsValue::new(maybe_undefined_gpu))
 }
 
+/// Cached Rust values for WebGPU adapter or device properties.
+/// Avoids repeated JavaScript property reads and conversions on subsequent queries.
+#[derive(Debug, Default)]
+struct CachedProperties {
+    features: OnceCell<crate::Features>,
+    limits: OnceCell<crate::Limits>,
+    adapter_info: OnceCell<crate::AdapterInfo>,
+}
+
 #[derive(Debug, Clone)]
 pub struct WebAdapter {
     pub(crate) inner: webgpu_sys::GpuAdapter,
     /// Unique identifier for this Adapter.
     ident: crate::cmp::Identifier,
+    /// Cached Rust values for the adapter's properties.
+    cached_properties: Rc<CachedProperties>,
 }
 
 #[derive(Debug, Clone)]
@@ -1296,6 +1243,8 @@ pub struct WebDevice {
     /// The `uncapturederror` listener currently registered on the device, so
     /// that setting a new handler can unregister the previous one.
     uncaptured_error_listener: Rc<RefCell<Option<js_sys::Function>>>,
+    /// Cached Rust values for the device's properties.
+    cached_properties: Rc<CachedProperties>,
 }
 
 #[derive(Debug, Clone)]
@@ -1830,21 +1779,35 @@ impl dispatch::AdapterInterface for WebAdapter {
         let required_limits = map_js_sys_limits(&desc.required_limits);
         mapped_desc.set_required_limits(&required_limits);
 
-        let required_features = FEATURES_MAPPING
+        // Note that `ALLOWED_ON_WEB_BACKEND` may include bits in `FeaturesWGPU` for
+        // standards-track features that have not yet been migrated to `FeaturesWebGPU`.
+        let blocked_features = wgt::Features::ALLOWED_ON_WEB_BACKEND.complement();
+        let required_features = match desc
+            .required_features
             .iter()
-            .copied()
-            .flat_map(|(flag, value)| {
-                if desc.required_features.contains(flag) {
-                    Some(
-                        wasm_bindgen::JsValue::from(value)
-                            .dyn_into::<js_sys::JsString>()
-                            .unwrap(),
-                    )
+            .map(|feat| {
+                let name = feat.as_str().unwrap();
+                if feat.intersects(blocked_features) {
+                    Err(crate::RequestDeviceError {
+                        inner: crate::RequestDeviceErrorKind::WebGpu(format!(
+                            "Requested unsupported feature `{name}`. \
+                            This feature is unsupported by the WebGPU backend, even \
+                            if the underlying implementation supports it."
+                        )),
+                    })
                 } else {
-                    None
+                    // Any other name is handed to the implementation, which rejects the
+                    // features it does not support.
+                    Ok(js_sys::JsString::from(name))
                 }
             })
-            .collect::<Vec<js_sys::JsString>>();
+            .collect::<Result<Vec<js_sys::JsString>, _>>()
+        {
+            Ok(features) => features,
+            Err(err) => {
+                return Box::pin(core::future::ready(Err(err)));
+            }
+        };
         mapped_desc.set_required_features(&required_features);
 
         if let Some(label) = desc.label {
@@ -1871,11 +1834,28 @@ impl dispatch::AdapterInterface for WebAdapter {
     }
 
     fn features(&self) -> crate::Features {
-        map_wgt_features(self.inner.features())
+        // We generally want to expose WebGPU features offered by the underlying
+        // implementation if we know about them, and not if we don't (because in that case
+        // we don't know if changes are needed in the WebGPU backend to correctly pass them
+        // through). Cleared bits in the `ALLOWED_ON_WEB_BACKEND` mask specify individual
+        // features that should never be exposed by the WebGPU backend regardless of
+        // underlying support. This may be appropriate in cases where missing logic in the
+        // WebGPU backend means the feature will not work via `wgpu` even though it is
+        // supported by the underlying backend, or where there is concern about interactions
+        // or confusion with `wgpu` native features having subtly different API or behavior.
+        //
+        // Note that `ALLOWED_ON_WEB_BACKEND` may include bits in `FeaturesWGPU` for
+        // standards-track features that have not yet been migrated to `FeaturesWebGPU`.
+        *self.cached_properties.features.get_or_init(|| {
+            map_wgt_features(self.inner.features()) & wgt::Features::ALLOWED_ON_WEB_BACKEND
+        })
     }
 
     fn limits(&self) -> crate::Limits {
-        map_wgt_limits(self.inner.limits())
+        self.cached_properties
+            .limits
+            .get_or_init(|| map_wgt_limits(self.inner.limits()))
+            .clone()
     }
 
     fn downlevel_capabilities(&self) -> crate::DownlevelCapabilities {
@@ -1884,7 +1864,10 @@ impl dispatch::AdapterInterface for WebAdapter {
     }
 
     fn get_info(&self) -> crate::AdapterInfo {
-        map_adapter_info(&self.inner.info())
+        self.cached_properties
+            .adapter_info
+            .get_or_init(|| map_adapter_info(&self.inner.info()))
+            .clone()
     }
 
     fn get_texture_format_features(
@@ -2033,15 +2016,24 @@ fn naga_to_source_location(value: crate::naga::SourceLocation) -> wgt::SourceLoc
 
 impl dispatch::DeviceInterface for WebDevice {
     fn features(&self) -> crate::Features {
-        map_wgt_features(self.inner.features())
+        *self
+            .cached_properties
+            .features
+            .get_or_init(|| map_wgt_features(self.inner.features()))
     }
 
     fn limits(&self) -> crate::Limits {
-        map_wgt_limits(self.inner.limits())
+        self.cached_properties
+            .limits
+            .get_or_init(|| map_wgt_limits(self.inner.limits()))
+            .clone()
     }
 
     fn adapter_info(&self) -> crate::AdapterInfo {
-        map_adapter_info(&self.inner.adapter_info())
+        self.cached_properties
+            .adapter_info
+            .get_or_init(|| map_adapter_info(&self.inner.adapter_info()))
+            .clone()
     }
 
     fn create_shader_module(
@@ -2884,9 +2876,14 @@ impl dispatch::DeviceInterface for WebDevice {
         // No capturing api in webgpu
     }
 
-    fn poll(&self, _poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError> {
-        // Device is polled automatically
-        Ok(crate::PollStatus::QueueEmpty)
+    fn poll(&self, poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError> {
+        match poll_type {
+            wgt::PollType::Wait { .. } => Err(crate::PollError::CantWait),
+            wgt::PollType::Poll => {
+                // Device is polled automatically
+                Ok(crate::PollStatus::Poll)
+            }
+        }
     }
 
     fn get_internal_counters(&self) -> crate::InternalCounters {
@@ -3030,7 +3027,7 @@ impl dispatch::QueueInterface for WebQueue {
     fn submit(
         &self,
         command_buffers: &mut dyn Iterator<Item = dispatch::DispatchCommandBuffer>,
-    ) -> u64 {
+    ) -> Option<u64> {
         let temp_command_buffers = command_buffers.collect::<Vec<_>>();
 
         let array = temp_command_buffers
@@ -3040,7 +3037,7 @@ impl dispatch::QueueInterface for WebQueue {
 
         self.inner.submit(&array);
 
-        0
+        None
     }
 
     fn get_timestamp_period(&self) -> f32 {
@@ -4643,10 +4640,6 @@ impl WebBufferMappedRange {
     }
 }
 impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
-    fn len(&self) -> usize {
-        self.get_temporary_mapping().len()
-    }
-
     #[inline]
     unsafe fn read_slice(&self) -> &[u8] {
         self.get_temporary_mapping()
