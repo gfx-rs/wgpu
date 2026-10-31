@@ -730,47 +730,24 @@ impl<'a> ResolveContext<'a> {
 
                 rule.conclusion.into_resolution(self.special_types)?
             }
-            crate::Expression::As {
-                expr,
-                kind,
-                convert,
-            } => match *past(expr)?.inner_with(types) {
-                Ti::Scalar(crate::Scalar { width, .. }) => {
-                    TypeResolution::Value(Ti::Scalar(crate::Scalar {
-                        kind,
-                        width: convert.unwrap_or(width),
-                    }))
-                }
-                Ti::Vector {
+            crate::Expression::As { expr, target } => match *past(expr)?.inner_with(types) {
+                Ti::Scalar(_) => TypeResolution::Value(Ti::Scalar(target)),
+                Ti::Vector { size, .. } => TypeResolution::Value(Ti::Vector {
                     size,
-                    scalar: crate::Scalar { kind: _, width },
-                } => TypeResolution::Value(Ti::Vector {
-                    size,
-                    scalar: crate::Scalar {
-                        kind,
-                        width: convert.unwrap_or(width),
-                    },
+                    scalar: target,
                 }),
-                Ti::Matrix {
+                Ti::Matrix { columns, rows, .. } => TypeResolution::Value(Ti::Matrix {
                     columns,
                     rows,
-                    mut scalar,
-                } => {
-                    if let Some(width) = convert {
-                        scalar.width = width;
-                    }
-                    TypeResolution::Value(Ti::Matrix {
-                        columns,
-                        rows,
-                        scalar,
-                    })
-                }
+                    scalar: target,
+                }),
                 ref other => {
                     return Err(ResolveError::IncompatibleOperands(format!(
-                        "{other:?} as {kind:?}"
+                        "{other:?} as {target:?}"
                     )))
                 }
             },
+            crate::Expression::Bitcast { ty, .. } => TypeResolution::Handle(ty),
             crate::Expression::CallResult(function) => {
                 let result = self.functions[function]
                     .result

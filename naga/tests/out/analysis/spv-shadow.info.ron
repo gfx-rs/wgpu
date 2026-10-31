@@ -272,10 +272,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar((
-                        kind: Sint,
-                        width: 4,
-                    ))),
+                    ty: Handle(6),
                 ),
                 (
                     uniformity: (

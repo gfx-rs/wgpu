@@ -1,0 +1,24 @@
+(
+    vertex:[
+    ],
+    fragment:[
+        (
+            entry_point:"color_and_depth",
+            target_profile:"ps_5_1",
+        ),
+        (
+            entry_point:"only_depth",
+            target_profile:"ps_5_1",
+        ),
+        (
+            entry_point:"unrestricted",
+            target_profile:"ps_5_1",
+        ),
+    ],
+    compute:[
+    ],
+    task:[
+    ],
+    mesh:[
+    ],
+)

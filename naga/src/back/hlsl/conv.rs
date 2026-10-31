@@ -14,6 +14,15 @@ impl crate::ScalarKind {
             Self::Bool | Self::AbstractInt | Self::AbstractFloat => unreachable!(),
         }
     }
+
+    pub(super) fn to_hlsl_cast_16bit(self) -> &'static str {
+        match self {
+            Self::Float => "asfloat16",
+            Self::Sint => "asint16",
+            Self::Uint => "asuint16",
+            Self::Bool | Self::AbstractInt | Self::AbstractFloat => unreachable!(),
+        }
+    }
 }
 
 impl crate::Scalar {
