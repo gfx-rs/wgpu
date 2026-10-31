@@ -7,6 +7,7 @@ use std::fmt::Display;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use deno_core::futures::channel::oneshot;
@@ -109,6 +110,10 @@ pub struct GPUBuffer {
   pub map_state: RefCell<BufferMapState>,
   /// None if buffer is not mappable or OOM while creating the buffer
   pub data: RefCell<Option<Vec<u8>>>,
+
+  // Weak reference to the JS object so we can attach a finalizer.
+  // See `GPUDevice::create_buffer`.
+  pub weak: OnceLock<v8::Weak<v8::Object>>,
 }
 
 impl WebIdlInterfaceConverter for GPUBuffer {

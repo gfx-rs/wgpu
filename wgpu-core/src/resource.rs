@@ -677,7 +677,7 @@ impl Buffer {
         }
     }
 
-    pub(crate) fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
+    pub fn check_is_valid(&self) -> Result<(), InvalidResourceError> {
         self.state().map(|_| ())
     }
 
