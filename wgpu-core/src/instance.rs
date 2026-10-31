@@ -921,6 +921,9 @@ impl Surface {
 
             for (&backend, surface) in &self.surface_per_backend {
                 if backend == present.device.backend() {
+                    // `hal::Surface::unconfigure` must not run concurrently with queue
+                    // submits or presents (on Vulkan it calls `vkDeviceWaitIdle`).
+                    let _command_indices = present.device.command_indices.write();
                     unsafe { surface.unconfigure(present.device.raw()) };
                 }
             }
@@ -1022,7 +1025,13 @@ impl Surface {
             user_callbacks = self.unconfigure_inner(&mut presentation);
 
             let surface_raw = self.raw(device.backend()).unwrap();
-            match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
+            let configure_result = {
+                // `hal::Surface::configure` must not run concurrently with queue
+                // submits or presents (on Vulkan it may call `vkDeviceWaitIdle`).
+                let _command_indices = device.command_indices.write();
+                unsafe { surface_raw.configure(device.raw(), &hal_config) }
+            };
+            match configure_result {
                 Ok(()) => {
                     *presentation = Some(Presentation {
                         device: Arc::clone(device),

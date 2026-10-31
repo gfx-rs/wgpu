@@ -718,6 +718,7 @@ pub trait Surface: WasmNotSendSync {
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - The surface `self` must not currently be configured to use any other [`Device`].
+    /// - No [`Queue`] of `device` may be used by another thread during this call.
     unsafe fn configure(
         &self,
         device: &<Self::A as Api>::Device,
@@ -732,6 +733,7 @@ pub trait Surface: WasmNotSendSync {
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - The surface `self` must have been configured on `device`.
+    /// - No [`Queue`] of `device` may be used by another thread during this call.
     unsafe fn unconfigure(&self, device: &<Self::A as Api>::Device);
 
     /// Return the next texture to be presented by `self`, for the caller to draw on.

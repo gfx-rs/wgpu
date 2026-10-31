@@ -124,6 +124,7 @@ define_lock_ranks! {
     // We do not expect all of these to be exercised in CI.
     rank SURFACE_PRESENTATION "Surface::presentation" followed by {
         DEVICE_SNATCHABLE_LOCK,
+        DEVICE_COMMAND_INDICES,
         QUEUE_PENDING_WRITES,
         DEVICE_TRACKERS,
         QUEUE_LIFE_TRACKER,
