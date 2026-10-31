@@ -4498,16 +4498,18 @@ impl<W: Write> Writer<W> {
                 crate::Statement::SubgroupBallot { result, predicate } => {
                     write!(self.out, "{level}")?;
                     self.write_result_assignment(result, &context.expression)?;
+                    // `simd_ballot` holds one bit per lane, and SIMD groups can be 64 lanes wide
+                    // (AMD GPUs). Lanes 32..63 go in the second component, as WGSL expects.
                     write!(
                         self.out,
-                        "{NAMESPACE}::uint4((uint64_t){NAMESPACE}::simd_ballot("
+                        "{NAMESPACE}::uint4(as_type<{NAMESPACE}::uint2>((uint64_t){NAMESPACE}::simd_ballot("
                     )?;
                     if let Some(predicate) = predicate {
                         self.put_expression(predicate, &context.expression, true)?;
                     } else {
                         write!(self.out, "true")?;
                     }
-                    writeln!(self.out, "), 0, 0, 0);")?;
+                    writeln!(self.out, ")), 0, 0);")?;
                 }
                 crate::Statement::SubgroupCollectiveOperation {
                     op,

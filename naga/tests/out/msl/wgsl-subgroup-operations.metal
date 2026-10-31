@@ -18,8 +18,8 @@ struct main_Input {
 , uint subgroup_invocation_id [[thread_index_in_simdgroup]]
 ) {
     const Structure sizes = { num_subgroups, subgroup_size };
-    metal::uint4 _e7 = metal::uint4((uint64_t)metal::simd_ballot((subgroup_invocation_id & 1u) == 1u), 0, 0, 0);
-    metal::uint4 _e8 = metal::uint4((uint64_t)metal::simd_ballot(true), 0, 0, 0);
+    metal::uint4 _e7 = metal::uint4(as_type<metal::uint2>((uint64_t)metal::simd_ballot((subgroup_invocation_id & 1u) == 1u)), 0, 0);
+    metal::uint4 _e8 = metal::uint4(as_type<metal::uint2>((uint64_t)metal::simd_ballot(true)), 0, 0);
     bool _e11 = metal::simd_all(subgroup_invocation_id != 0u);
     bool _e14 = metal::simd_any(subgroup_invocation_id == 0u);
     uint _e15 = metal::simd_sum(subgroup_invocation_id);
