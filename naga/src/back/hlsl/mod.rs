@@ -654,6 +654,9 @@ pub struct PipelineOptions {
     /// If `None`, all entry points will be written. If `Some` and the entry
     /// point is not found, an error will be thrown while writing.
     pub entry_point: Option<(ir::ShaderStage, String)>,
+
+    /// Whether the pipeline renders to multisampled attachments.
+    pub multisampled: bool,
 }
 
 #[derive(Error, Debug)]
@@ -753,6 +756,8 @@ pub struct Writer<'a, W> {
     pipeline_options: &'a PipelineOptions,
     /// Information about entry point arguments and result types.
     entry_point_io: crate::FastHashMap<usize, writer::EntryPointInterface>,
+    /// The early depth test of the fragment entry point whose interface is being written.
+    early_depth_test: Option<crate::EarlyDepthTest>,
     /// Set of expressions that have associated temporary variables
     named_expressions: crate::NamedExpressions,
     wrapped: Wrapped,
@@ -798,7 +803,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         // No CULL_DISTANCE
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
         | Caps::MULTIVIEW
-        // No EARLY_DEPTH_TEST
+        | Caps::EARLY_DEPTH_TEST
         | Caps::MULTISAMPLED_SHADING
         | Caps::RAY_QUERY
         | Caps::DUAL_SOURCE_BLENDING

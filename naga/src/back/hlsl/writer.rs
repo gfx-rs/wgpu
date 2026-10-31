@@ -160,6 +160,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             options,
             pipeline_options,
             entry_point_io: crate::FastHashMap::default(),
+            early_depth_test: None,
             named_expressions: crate::NamedExpressions::default(),
             wrapped: super::Wrapped::default(),
             written_committed_intersection: false,
@@ -373,6 +374,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             writeln!(self.out)?;
         }
 
+        let ep_range = get_entry_points(module, self.pipeline_options.entry_point.as_ref())
+            .map_err(|(stage, name)| Error::EntryPointNotFound(stage, name))?;
+
         // Save all entry point output types
         let ep_results = module
             .entry_points
@@ -402,13 +406,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                 });
 
-                self.write_struct(
-                    module,
-                    handle,
-                    members,
-                    span,
-                    ep_result.map(|r| (r.0, Io::Output)),
-                )?;
+                let early_depth_test = shared_early_depth_test(module, ep_range.clone(), handle);
+                self.with_early_depth_test(early_depth_test, |this| {
+                    this.write_struct(
+                        module,
+                        handle,
+                        members,
+                        span,
+                        ep_result.map(|r| (r.0, Io::Output)),
+                    )
+                })?;
                 writeln!(self.out)?;
             }
         }
@@ -441,9 +448,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             // Add extra newline for readability
             writeln!(self.out)?;
         }
-
-        let ep_range = get_entry_points(module, self.pipeline_options.entry_point.as_ref())
-            .map_err(|(stage, name)| Error::EntryPointNotFound(stage, name))?;
 
         // Write all entry points wrapped structs
         for index in ep_range.clone() {
@@ -552,6 +556,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     num_threads[0], num_threads[1], num_threads[2]
                 )?;
             }
+            if ep.stage == ShaderStage::Fragment
+                && ep.early_depth_test == Some(crate::EarlyDepthTest::Force)
+            {
+                writeln!(attribute_string, "[earlydepthstencil]")?;
+            }
             if let Some(ref info) = ep.mesh_info {
                 let topology_str = match info.topology {
                     crate::MeshOutputTopology::Points => unreachable!(),
@@ -578,8 +587,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
     fn write_modifier(&mut self, binding: &crate::Binding) -> BackendResult {
         match *binding {
-            crate::Binding::BuiltIn(crate::BuiltIn::Position { invariant: true }) => {
-                write!(self.out, "precise ")?;
+            crate::Binding::BuiltIn(crate::BuiltIn::Position { invariant }) => {
+                if invariant {
+                    write!(self.out, "precise ")?;
+                }
+                if self.conservative_depth().is_some() {
+                    // This is only valid for shaders that are not multisampled, which
+                    // `conservative_depth` ensures.
+                    write!(self.out, "noperspective centroid ")?;
+                }
             }
             crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { perspective: false }) => {
                 write!(self.out, "noperspective ")?;
@@ -607,6 +623,37 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
+    /// Gets the conservative depth that the fragment shader being written promises, if it is used.
+    ///
+    /// Fragment shaders expect the position input to be at the center of the pixel. DXC only
+    /// accepts `SV_DepthGreaterEqual` and `SV_DepthLessEqual` when the `SV_Position` input is
+    /// declared `noperspective centroid`. That is the pixel center when there is one sample per
+    /// pixel, but under MSAA it can differ, which would change the position that the shader sees.
+    /// Conservative depth is therefore only used for pipelines that are not multisampled.
+    /// Multisampled pipelines use an unrestricted depth output and leave the position input alone.
+    const fn conservative_depth(&self) -> Option<crate::ConservativeDepth> {
+        match self.early_depth_test {
+            Some(crate::EarlyDepthTest::Allow {
+                conservative:
+                    conservative @ (crate::ConservativeDepth::GreaterEqual
+                    | crate::ConservativeDepth::LessEqual),
+            }) if !self.pipeline_options.multisampled => Some(conservative),
+            _ => None,
+        }
+    }
+
+    /// Runs `write` with [`Self::early_depth_test`] set to `early_depth_test`.
+    fn with_early_depth_test<T>(
+        &mut self,
+        early_depth_test: Option<crate::EarlyDepthTest>,
+        write: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        self.early_depth_test = early_depth_test;
+        let result = write(self);
+        self.early_depth_test = None;
+        result
+    }
+
     //TODO: we could force fragment outputs to always go through `entry_point_io.output` path
     // if they are struct, so that the `stage` argument here could be omitted.
     pub(super) fn write_semantic(
@@ -625,6 +672,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     ));
                 }
                 if let Some(builtin_str) = builtin.to_hlsl_str()? {
+                    let builtin_str = match (builtin, self.conservative_depth()) {
+                        (
+                            crate::BuiltIn::FragDepth,
+                            Some(crate::ConservativeDepth::GreaterEqual),
+                        ) => "SV_DepthGreaterEqual",
+                        (crate::BuiltIn::FragDepth, Some(crate::ConservativeDepth::LessEqual)) => {
+                            "SV_DepthLessEqual"
+                        }
+                        _ => builtin_str,
+                    };
                     write!(self.out, " : {builtin_str}")?;
                 }
                 false
@@ -785,11 +842,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     fn write_ep_output_struct(
         &mut self,
         module: &Module,
+        entry_point: &crate::EntryPoint,
         result: &crate::FunctionResult,
-        stage: ShaderStage,
         entry_point_name: &str,
         frag_ep: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<EntryPointBinding, Error> {
+        let stage = entry_point.stage;
         let struct_name = format!("{stage:?}Output_{entry_point_name}");
 
         let empty = [];
@@ -843,6 +901,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
 
+            if discards_frag_depth(entry_point) && is_frag_depth(member.binding.as_ref()) {
+                continue;
+            }
+
             let member_name = self.namer.call_or(&member.name, "member");
             fake_members.push(EpStructMember {
                 name: member_name,
@@ -875,13 +937,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         .iter()
                         .any(|arg| is_subgroup_builtin_binding(&arg.binding)))
             {
-                Some(self.write_ep_input_struct(module, func, stage, ep_name)?)
+                Some(self.with_early_depth_test(ep.early_depth_test, |this| {
+                    this.write_ep_input_struct(module, func, stage, ep_name)
+                })?)
             } else {
                 None
             },
             output: match func.result {
-                Some(ref fr) if fr.binding.is_none() && stage == ShaderStage::Vertex => {
-                    Some(self.write_ep_output_struct(module, fr, stage, ep_name, frag_ep)?)
+                Some(ref fr)
+                    if fr.binding.is_none()
+                        && (stage == ShaderStage::Vertex
+                            || (discards_frag_depth(ep)
+                                && !only_writes_discarded_depth(module, ep))) =>
+                {
+                    Some(self.write_ep_output_struct(module, ep, fr, ep_name, frag_ep)?)
                 }
                 _ => None,
             },
@@ -1647,7 +1716,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             write!(self.out, "{header}")?;
         }
 
-        if let Some(ref result) = func.result {
+        let result = func
+            .result
+            .as_ref()
+            .filter(|_| !ep.is_some_and(|ep| only_writes_discarded_depth(module, ep)));
+
+        if let Some(result) = result {
             // Write typedef if return type is an array
             let array_return_type = match module.types[result.ty].inner {
                 TypeInner::Array { base, size, .. } => {
@@ -1805,9 +1879,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         // Write semantic if it present
         if let back::FunctionType::EntryPoint(index) = func_ctx.ty {
-            let stage = module.entry_points[index as usize].stage;
-            if let Some(crate::FunctionResult { ref binding, .. }) = func.result {
-                self.write_semantic(binding, Some((stage, Io::Output)))?;
+            let entry_point = &module.entry_points[index as usize];
+            if let Some(result) = result {
+                self.with_early_depth_test(entry_point.early_depth_test, |this| {
+                    this.write_semantic(&result.binding, Some((entry_point.stage, Io::Output)))
+                })?;
             }
         }
 
@@ -2263,6 +2339,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             // TODO: copy-paste from glsl-out
             Statement::Kill => writeln!(self.out, "{level}discard;")?,
             Statement::Return { value: None } => {
+                writeln!(self.out, "{level}return;")?;
+            }
+            Statement::Return { value: Some(_) } if returns_nothing(module, func_ctx) => {
                 writeln!(self.out, "{level}return;")?;
             }
             Statement::Return { value: Some(expr) } => {
@@ -4962,6 +5041,74 @@ pub(super) fn get_inner_matrix_data(
         }),
         TypeInner::Array { base, .. } => get_inner_matrix_data(module, base),
         _ => None,
+    }
+}
+
+/// Returns `true` if `binding` is the depth that a fragment shader writes.
+const fn is_frag_depth(binding: Option<&crate::Binding>) -> bool {
+    matches!(
+        binding,
+        Some(crate::Binding::BuiltIn(crate::BuiltIn::FragDepth))
+    )
+}
+
+/// Returns `true` if the depth that `entry_point` writes must be discarded.
+///
+/// HLSL has no way to specify that depth is unchanged. Discarding the depth has the same effect,
+/// and keeps early depth tests enabled.
+fn discards_frag_depth(entry_point: &crate::EntryPoint) -> bool {
+    entry_point.stage == ShaderStage::Fragment
+        && entry_point.early_depth_test
+            == Some(crate::EarlyDepthTest::Allow {
+                conservative: crate::ConservativeDepth::Unchanged,
+            })
+}
+
+/// Returns `true` if `entry_point` has nothing to return once its depth is discarded.
+fn only_writes_discarded_depth(module: &Module, entry_point: &crate::EntryPoint) -> bool {
+    discards_frag_depth(entry_point)
+        && entry_point.function.result.as_ref().is_some_and(|result| {
+            match module.types[result.ty].inner {
+                TypeInner::Struct { ref members, .. } if result.binding.is_none() => members
+                    .iter()
+                    .all(|member| is_frag_depth(member.binding.as_ref())),
+                _ => is_frag_depth(result.binding.as_ref()),
+            }
+        })
+}
+
+/// Returns `true` if the function described by `func_ctx` is an entry point that returns nothing,
+/// because the only thing it would return is a depth that is discarded.
+fn returns_nothing(module: &Module, func_ctx: &back::FunctionCtx<'_>) -> bool {
+    match func_ctx.ty {
+        back::FunctionType::EntryPoint(index) => {
+            only_writes_discarded_depth(module, &module.entry_points[index as usize])
+        }
+        back::FunctionType::Function(_) => false,
+    }
+}
+
+/// Gets the early depth test of the fragment entry points in `entry_points` that return `ty`.
+///
+/// Returns `None` if there are no such entry points or if they disagree. The semantic of a
+/// depth output is part of the definition of the struct that contains it, so a struct that is
+/// shared by entry points with different settings cannot use a conservative semantic.
+fn shared_early_depth_test(
+    module: &Module,
+    entry_points: core::ops::Range<usize>,
+    ty: Handle<crate::Type>,
+) -> Option<crate::EarlyDepthTest> {
+    let mut users = entry_points
+        .map(|index| &module.entry_points[index])
+        .filter(|ep| {
+            ep.stage == ShaderStage::Fragment
+                && ep.function.result.as_ref().is_some_and(|r| r.ty == ty)
+        });
+    let first = users.next()?.early_depth_test;
+    if users.all(|ep| ep.early_depth_test == first) {
+        first
+    } else {
+        None
     }
 }
 
