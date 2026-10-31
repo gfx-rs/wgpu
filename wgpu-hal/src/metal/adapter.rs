@@ -219,11 +219,12 @@ impl crate::Adapter for super::Adapter {
             Tfc::empty()
         };
 
-        let image_64_atomic_if = if pc.int64_atomics {
-            Tfc::STORAGE_ATOMIC
-        } else {
-            Tfc::empty()
-        };
+        let image_64_atomic_if =
+            if pc.int64_atomics_min_max && msl_version >= MTLLanguageVersion::Version3_1 {
+                Tfc::STORAGE_ATOMIC
+            } else {
+                Tfc::empty()
+            };
 
         // Metal defined pixel format capabilities
         let all_caps = Tfc::SAMPLED_LINEAR
@@ -1142,7 +1143,6 @@ impl super::CapabilitiesQuery {
                 && (device.supportsFamily(MTLGPUFamily::Apple9)
                     || (device.supportsFamily(MTLGPUFamily::Apple8)
                         && device.supportsFamily(MTLGPUFamily::Mac2))),
-            int64_atomics: family_check && device.supportsFamily(MTLGPUFamily::Apple9),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             float_atomics: family_check
                 && (metal3
@@ -1340,7 +1340,7 @@ impl super::CapabilitiesQuery {
         );
         features.set(
             F::TEXTURE_INT64_ATOMIC,
-            self.int64_atomics && self.msl_version >= MTLLanguageVersion::Version3_1,
+            self.int64_atomics_min_max && self.msl_version >= MTLLanguageVersion::Version3_1,
         );
         features.set(
             F::TEXTURE_ATOMIC,
@@ -1646,7 +1646,7 @@ impl super::CapabilitiesQuery {
         super::PrivateTextureFormatCapabilities {
             read_write_texture_tier: self.read_write_texture_tier,
             sample_count_mask: self.sample_count_mask,
-            int64_atomics: self.int64_atomics,
+            int64_atomics_min_max: self.int64_atomics_min_max,
             msaa_desktop: self.msaa_desktop,
             msaa_apple3: self.msaa_apple3,
             msaa_apple7: self.msaa_apple7,

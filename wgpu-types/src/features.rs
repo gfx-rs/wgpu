@@ -923,7 +923,7 @@ features! {
         /// Supported platforms:
         /// - Vulkan (with VK_EXT_shader_image_atomic_int64)
         /// - DX12 (with SM 6.6+)
-        /// - Metal (with MSL 3.1+)
+        /// - Metal (with MSL 3.1+; Apple8 on macOS or Apple9+)
         ///
         /// This is a native only feature.
         #[name("wgpu-texture-int64-atomic")]
