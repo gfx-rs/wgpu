@@ -809,6 +809,8 @@ features! {
         ///
         ///      - `[[early_fragment_tests]]` (MSL 1.2+)
         ///
+        ///      - `[earlydepthstencil]` (HLSL)
+        ///
         ///   2. Provide a conservative depth specifier that allows an additional early
         ///      depth test under certain conditions:
         ///
@@ -818,11 +820,15 @@ features! {
         ///
         ///      - `[[depth(greater/less)]]` (MSL, any version)
         ///
+        ///      - `SV_Depth<GreaterEqual/LessEqual>` (HLSL), for pipelines that are not
+        ///        multisampled. Multisampled pipelines use an unrestricted `SV_Depth` instead.
+        ///
         /// See [`EarlyDepthTest`] for more details.
         ///
         /// Supported platforms:
         /// - Vulkan
         /// - Metal (with MSL 1.2+)
+        /// - DX12
         /// - GLES 3.1+
         ///
         /// This is a native only feature.

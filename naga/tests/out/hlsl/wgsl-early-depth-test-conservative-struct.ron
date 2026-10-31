@@ -1,0 +1,28 @@
+(
+    vertex:[
+    ],
+    fragment:[
+        (
+            entry_point:"agree_first",
+            target_profile:"ps_5_1",
+        ),
+        (
+            entry_point:"agree_second",
+            target_profile:"ps_5_1",
+        ),
+        (
+            entry_point:"disagree_conservative",
+            target_profile:"ps_5_1",
+        ),
+        (
+            entry_point:"disagree_unrestricted",
+            target_profile:"ps_5_1",
+        ),
+    ],
+    compute:[
+    ],
+    task:[
+    ],
+    mesh:[
+    ],
+)
