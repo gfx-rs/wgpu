@@ -2410,6 +2410,18 @@ impl Texture {
         &self.desc
     }
 
+    /// Marks the texture's entire contents as uninitialized, indicating that
+    /// it must be fully initialized (zeroed) before being used.
+    ///
+    /// This is useful when you want zeroize texture,
+    /// but want to defer the actual action to when it's actually needed,
+    /// which allows to eliding the zeroing if the texture is never actually read.
+    pub fn mark_uninitialized(&self) {
+        let mut initialization_status = self.initialization_status.write();
+        *initialization_status =
+            TextureInitTracker::new(self.desc.mip_level_count, self.desc.array_layer_count());
+    }
+
     /// Marks the texture's entire contents as already initialized,
     /// skipping wgpu-core's lazy zero-initialization of it.
     ///
