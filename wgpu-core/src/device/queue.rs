@@ -20,9 +20,9 @@ use crate::device::trace::{Action, IntoTrace};
 use crate::{
     api_log,
     command::{
-        extract_texture_selector, validate_linear_texture_data, validate_texture_buffer_copy,
+        validate_linear_texture_data, validate_texture_buffer_copy,
         validate_texture_copy_dst_format, validate_texture_copy_range, ClearError,
-        CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
+        CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopyRange, CopySide,
         TransferError,
     },
     device::{DeviceError, QueueDescriptor, WaitIdleError},
@@ -1121,10 +1121,12 @@ impl Queue {
 
         // Note: Doing the copy range validation early is important because ensures that the
         // dimensions are not going to cause overflow in other parts of the validation.
-        let (hal_copy_size, array_layer_count) =
-            validate_texture_copy_range(&destination, &dst.desc, CopySide::Destination, size)?;
-
-        let (selector, dst_base) = extract_texture_selector(&destination, size, &dst)?;
+        let CopyRange {
+            hal_copy_extent,
+            hal_base: dst_base,
+            array_layer_count,
+            selector,
+        } = validate_texture_copy_range(&destination, &dst.desc, CopySide::Destination, size)?;
 
         validate_texture_copy_dst_format(dst.desc.format, destination.aspect)?;
 
@@ -1298,7 +1300,7 @@ impl Queue {
                         rows_per_image: Some(rows_per_image),
                     },
                     texture_base,
-                    size: hal_copy_size,
+                    size: hal_copy_extent,
                 }
             })
             .collect::<Vec<_>>();
@@ -1410,6 +1412,7 @@ impl Queue {
                 texture_size: src_width,
                 dimension: crate::resource::TextureErrorDimension::X,
                 side: CopySide::Source,
+                plane: None,
             }
             .into());
         }
@@ -1420,6 +1423,7 @@ impl Queue {
                 texture_size: src_height,
                 dimension: crate::resource::TextureErrorDimension::Y,
                 side: CopySide::Source,
+                plane: None,
             }
             .into());
         }
@@ -1430,16 +1434,22 @@ impl Queue {
                 texture_size: 1,
                 dimension: crate::resource::TextureErrorDimension::Z,
                 side: CopySide::Source,
+                plane: None,
             }
             .into());
         }
 
         // Note: Doing the copy range validation early is important because ensures that the
         // dimensions are not going to cause overflow in other parts of the validation.
-        let (hal_copy_size, _) =
-            validate_texture_copy_range(&destination, &dst.desc, CopySide::Destination, &size)?;
+        let CopyRange {
+            hal_copy_extent,
+            hal_base: dst_base,
+            array_layer_count: _,
+            selector,
+        } = validate_texture_copy_range(&destination, &dst.desc, CopySide::Destination, &size)?;
 
-        let (selector, dst_base) = extract_texture_selector(&destination, &size, &dst)?;
+        // Ensured by is_valid_external_image_copy_dst_texture_format.
+        assert!(dst_base.aspect == hal::FormatAspects::COLOR);
 
         let snatch_guard = self.device.snatchable_lock.read();
 
@@ -1514,7 +1524,7 @@ impl Queue {
                 aspect: hal::FormatAspects::COLOR,
             },
             dst_base,
-            size: hal_copy_size,
+            size: hal_copy_extent,
         };
 
         let mut trackers = self.device.trackers.lock();

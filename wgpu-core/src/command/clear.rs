@@ -540,73 +540,62 @@ fn clear_texture_via_render_passes(
 ) -> Result<(), ClearError> {
     assert_eq!(dst_texture.desc.dimension, wgt::TextureDimension::D2);
 
-    let extent_base = wgt::Extent3d {
-        width: dst_texture.desc.size.width,
-        height: dst_texture.desc.size.height,
-        depth_or_array_layers: 1, // Only one layer is cleared at a time.
-    };
-
     let clear_mode = dst_texture.clear_mode.read();
 
     for mip_level in range.mip_range {
-        let extent = extent_base.mip_level_size(mip_level, dst_texture.desc.dimension);
         for depth_or_layer in range.layer_range.clone() {
-            let color_attachments_tmp;
-            let (color_attachments, depth_stencil_attachment) = if is_color {
-                color_attachments_tmp = [Some(hal::ColorAttachment {
-                    target: hal::Attachment {
-                        view: Texture::get_clear_view(
-                            &clear_mode,
-                            &dst_texture.desc,
-                            mip_level,
-                            depth_or_layer,
-                        ),
-                        usage: wgt::TextureUses::COLOR_TARGET,
-                    },
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
-                    clear_value: wgt::Color::TRANSPARENT,
-                })];
-                (&color_attachments_tmp[..], None)
-            } else {
-                (
-                    &[][..],
-                    Some(hal::DepthStencilAttachment {
+            for (aspect, view) in clear_mode.render_pass_views(mip_level, depth_or_layer) {
+                let extent = dst_texture
+                    .desc
+                    .compute_render_extent(mip_level, aspect.to_plane());
+                let color_attachments_tmp;
+                let (color_attachments, depth_stencil_attachment) = if is_color {
+                    color_attachments_tmp = [Some(hal::ColorAttachment {
                         target: hal::Attachment {
-                            view: Texture::get_clear_view(
-                                &clear_mode,
-                                &dst_texture.desc,
-                                mip_level,
-                                depth_or_layer,
-                            ),
-                            usage: wgt::TextureUses::DEPTH_WRITE | wgt::TextureUses::STENCIL_WRITE,
+                            view,
+                            usage: wgt::TextureUses::COLOR_TARGET,
                         },
-                        depth_ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
-                        stencil_ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
-                        clear_value: (0.0, 0),
-                        depth_read_only: false,
-                        stencil_read_only: false,
-                    }),
-                )
-            };
-            unsafe {
-                encoder
-                    .begin_render_pass(&hal::RenderPassDescriptor {
-                        label: hal_label(
-                            Some("(wgpu internal) clear_texture clear pass"),
-                            instance_flags,
-                        ),
-                        extent,
-                        sample_count: dst_texture.desc.sample_count,
-                        color_attachments,
-                        depth_stencil_attachment,
-                        multiview_mask: None,
-                        timestamp_writes: None,
-                        occlusion_query_set: None,
-                    })
-                    .map_err(|e| dst_texture.device.handle_hal_error(e))?;
-                encoder.end_render_pass();
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
+                        clear_value: wgt::Color::TRANSPARENT,
+                    })];
+                    (&color_attachments_tmp[..], None)
+                } else {
+                    (
+                        &[][..],
+                        Some(hal::DepthStencilAttachment {
+                            target: hal::Attachment {
+                                view,
+                                usage: wgt::TextureUses::DEPTH_WRITE
+                                    | wgt::TextureUses::STENCIL_WRITE,
+                            },
+                            depth_ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
+                            stencil_ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
+                            clear_value: (0.0, 0),
+                            depth_read_only: false,
+                            stencil_read_only: false,
+                        }),
+                    )
+                };
+                unsafe {
+                    encoder
+                        .begin_render_pass(&hal::RenderPassDescriptor {
+                            label: hal_label(
+                                Some("(wgpu internal) clear_texture clear pass"),
+                                instance_flags,
+                            ),
+                            extent,
+                            sample_count: dst_texture.desc.sample_count,
+                            color_attachments,
+                            depth_stencil_attachment,
+                            multiview_mask: None,
+                            timestamp_writes: None,
+                            occlusion_query_set: None,
+                        })
+                        .map_err(|e| dst_texture.device.handle_hal_error(e))?;
+                    encoder.end_render_pass();
+                }
             }
         }
     }
