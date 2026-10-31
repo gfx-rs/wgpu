@@ -19,6 +19,10 @@ fn main() {
     packed_dot_product();
     test_local_const();
     abstract_access(1);
+    swizzle_of_compose_zero_value();
+    index_of_compose_zero_value();
+    index_of_nested_compose_zero_value();
+    access_of_compose_zero_value();
 }
 
 // Swizzle the value of nested Compose expressions.
@@ -34,6 +38,34 @@ fn index_of_compose() {
 // Index the value of Compose expressions nested three deep
 fn compose_three_deep() {
     var out = vec4(vec3(vec2(6, 7), 8), 9)[0]; // should assign 6
+}
+
+// Swizzle a Compose expression that concatenates a ZeroValue vector.
+// `vec2<i32>()` is a `ZeroValue`, not a `Compose`, so it must be flattened
+// into two scalars for the swizzle to index the correct components.
+fn swizzle_of_compose_zero_value() {
+    var out = vec4(vec2<i32>(), 3, 4).yz; // should assign vec2(0, 3)
+}
+
+// Index a Compose expression that concatenates a ZeroValue vector.
+fn index_of_compose_zero_value() {
+    var out = vec4(vec2<i32>(), 3, 4)[1]; // should assign 0
+}
+
+struct FooStruct {
+    first: vec3<i32>,
+    second: i32,
+}
+
+// Index a Compose expression that concatenates a ZeroValue vector, nested
+// within another Compose expression.
+fn index_of_nested_compose_zero_value() {
+    var out = FooStruct(vec3(vec2(0), 1), 2)[0][1]; // should assign 0
+}
+
+// Access a member of a struct Compose expression whose value is a ZeroValue.
+fn access_of_compose_zero_value() {
+    var out = FooStruct(vec3<i32>(), 3).first; // should assign vec3(0, 0, 0)
 }
 
 // While WGSL allows local variables to be declared anywhere in the function,
