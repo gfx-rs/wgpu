@@ -381,7 +381,8 @@ impl super::Device {
                 })
             }
             ShaderModuleSource::Passthrough(ref shader) => {
-                let size = shader.num_workgroups[stage.entry_point];
+                let entry = &shader.entry_points[stage.entry_point];
+                let size = entry.workgroup_size;
                 Ok(CompiledShader {
                     library: shader.library.clone(),
                     function: shader
@@ -393,7 +394,7 @@ impl super::Device {
                         height: size.1 as usize,
                         depth: size.2 as usize,
                     },
-                    wg_memory_sizes: vec![],
+                    wg_memory_sizes: entry.workgroup_memory_sizes.clone(),
                     sized_bindings: vec![],
                     immutable_buffer_mask: 0,
                 })
@@ -1371,10 +1372,7 @@ impl crate::Device for super::Device {
                 source: ShaderModuleSource::Naga(naga),
                 runtime_checks: desc.runtime_checks,
             }),
-            crate::ShaderInput::MetalLib {
-                file,
-                num_workgroups,
-            } => {
+            crate::ShaderInput::MetalLib { file, entry_points } => {
                 // SAFETY: this creates a reference to `file` that is dropped before `file` is dropped.
                 let library = super::library_from_metallib::new_library_from_metallib_bytes(
                     &self.shared.device,
@@ -1384,7 +1382,7 @@ impl crate::Device for super::Device {
                 Ok(super::ShaderModule {
                     source: ShaderModuleSource::Passthrough(PassthroughShader {
                         library,
-                        num_workgroups,
+                        entry_points,
                     }),
                     // This goes unused for passthrough shaders
                     runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
@@ -1392,7 +1390,7 @@ impl crate::Device for super::Device {
             }
             crate::ShaderInput::Msl {
                 shader: source,
-                num_workgroups,
+                entry_points,
             } => {
                 let options = MTLCompileOptions::new();
                 options.setLanguageVersion(self.shared.private_caps.msl_version);
@@ -1405,7 +1403,7 @@ impl crate::Device for super::Device {
                 Ok(super::ShaderModule {
                     source: ShaderModuleSource::Passthrough(PassthroughShader {
                         library,
-                        num_workgroups,
+                        entry_points,
                     }),
                     runtime_checks: desc.runtime_checks,
                 })
@@ -1903,7 +1901,8 @@ impl crate::Device for super::Device {
 
             let module = desc.stage.module;
             let cs = if let ShaderModuleSource::Passthrough(passthrough_desc) = &module.source {
-                let size = passthrough_desc.num_workgroups[desc.stage.entry_point];
+                let entry = &passthrough_desc.entry_points[desc.stage.entry_point];
+                let size = entry.workgroup_size;
                 CompiledShader {
                     library: passthrough_desc.library.clone(),
                     function: passthrough_desc
@@ -1915,7 +1914,7 @@ impl crate::Device for super::Device {
                         height: size.1 as usize,
                         depth: size.2 as usize,
                     },
-                    wg_memory_sizes: vec![],
+                    wg_memory_sizes: entry.workgroup_memory_sizes.clone(),
                     sized_bindings: vec![],
                     immutable_buffer_mask: 0,
                 }
