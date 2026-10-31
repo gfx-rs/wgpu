@@ -177,7 +177,7 @@ obj = "0.10"
 once_cell = { version = "1.21", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
 ordered-float = { version = ">=3, <6.0", default-features = false }
-parking_lot = "0.12.3"
+parking_lot = "0.13.0"
 paste = "1.0.15"
 petgraph = { version = "0.8", default-features = false }
 pico-args = { version = "0.5", features = [
