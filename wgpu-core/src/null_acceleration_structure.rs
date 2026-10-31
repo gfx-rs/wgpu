@@ -33,7 +33,9 @@ impl NullAccelerationStructure {
         queue: &Queue,
     ) -> Result<Self, NullAccelerationStructureInitError> {
         if device.alignments.null_acceleration_structure_allowed {
-            return Ok(Self { acceleration_structure: None });
+            return Ok(Self {
+                acceleration_structure: None,
+            });
         }
 
         unsafe {
@@ -43,7 +45,7 @@ impl NullAccelerationStructure {
                 &GetAccelerationStructureBuildSizesDescriptor {
                     entries: &entries,
                     flags: wgt::AccelerationStructureFlags::empty(),
-                }
+                },
             );
 
             let acceleration_structure = device
