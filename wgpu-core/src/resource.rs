@@ -1682,12 +1682,103 @@ impl TextureInner {
     }
 }
 
+/// Views for clearing a 2D texture with render passes.
+///
+/// Color and depth/stencil textures have a single clear view with [`wgt::TextureAspect::All`].
+/// This is true even for combined depth/stencil formats, which clear both aspects
+/// simultaneously using a single view. The number of views is (mip level count) * (array
+/// layer count).
+///
+/// Multi-planar textures have a clear view per plane. The number of views is (mip level
+/// count) * (array layer count) * (plane count).
+///
+/// Encapsulating the indexing logic for clear views in [`ClearViews::views`] reduces the
+/// chance of doing so incorrectly and failing to properly clear a texture.
+///
+/// The contained views must be manually destroyed by calling [`ClearViews::destroy`].
+#[derive(Debug)]
+pub struct ClearViews {
+    views: SmallVec<[Box<dyn hal::DynTextureView>; 1]>,
+    mip_level_count: u32,
+    array_layer_count: u32,
+    aspects: &'static [wgt::TextureAspect],
+}
+
+impl ClearViews {
+    /// Creates [`ClearViews`] by calling the provided `create_view` closure with `(mip_level,
+    /// array_layer, aspect)` for each clear view of the texture.
+    pub(crate) fn new<E>(
+        format: wgt::TextureFormat,
+        mip_level_count: u32,
+        array_layer_count: u32,
+        mut create_view: impl FnMut(
+            u32,
+            u32,
+            wgt::TextureAspect,
+        ) -> Result<Box<dyn hal::DynTextureView>, E>,
+    ) -> Result<Self, E> {
+        const PLANES: [wgt::TextureAspect; 3] = [
+            wgt::TextureAspect::Plane0,
+            wgt::TextureAspect::Plane1,
+            wgt::TextureAspect::Plane2,
+        ];
+        let aspects = match format.planes() {
+            Some(planes) => &PLANES[..planes as usize],
+            None => &[wgt::TextureAspect::All],
+        };
+
+        let mut views = SmallVec::new();
+        for mip_level in 0..mip_level_count {
+            for array_layer in 0..array_layer_count {
+                for &aspect in aspects {
+                    views.push(create_view(mip_level, array_layer, aspect)?);
+                }
+            }
+        }
+        Ok(Self {
+            views,
+            mip_level_count,
+            array_layer_count,
+            aspects,
+        })
+    }
+
+    /// Returns an iterator over the clear view(s) for the given mip level and array layer.
+    ///
+    /// The iterator yields tuples `(wgt::TextureAspect, &dyn hal::DynTextureView)` of
+    /// clear views and their associated [`wgt::TextureAspect`]s.
+    fn views(
+        &self,
+        mip_level: u32,
+        array_layer: u32,
+    ) -> impl Iterator<Item = (wgt::TextureAspect, &dyn hal::DynTextureView)> {
+        assert!(mip_level < self.mip_level_count && array_layer < self.array_layer_count);
+        let start =
+            (mip_level * self.array_layer_count + array_layer) as usize * self.aspects.len();
+        self.aspects.iter().copied().zip(
+            self.views[start..start + self.aspects.len()]
+                .iter()
+                .map(|view| view.as_ref()),
+        )
+    }
+
+    /// Destroys the texture views.
+    ///
+    /// # Safety
+    ///
+    /// The views must not be in use by the device.
+    unsafe fn destroy(&mut self, device: &dyn hal::DynDevice) {
+        for view in self.views.drain(..) {
+            unsafe { device.destroy_texture_view(view) };
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum TextureClearMode {
     BufferCopy,
-    // View for clear via RenderPass for every subsurface (mip/layer/slice)
     RenderPass {
-        clear_views: SmallVec<[ManuallyDrop<Box<dyn hal::DynTextureView>>; 1]>,
+        clear_views: ClearViews,
         is_color: bool,
     },
     Surface {
@@ -1696,6 +1787,36 @@ pub enum TextureClearMode {
     // Texture can't be cleared, attempting to do so will cause panic.
     // (either because it is impossible for the type of texture or it is being destroyed)
     None,
+}
+
+impl TextureClearMode {
+    /// Returns the views for clearing the given mip level and array layer with render
+    /// passes, as a [`SmallVec`] of tuples `(wgt::TextureAspect, &dyn hal::DynTextureView)`
+    /// of clear views and their associated [`wgt::TextureAspect`]s.
+    ///
+    /// # Panics
+    ///
+    /// If `self` does not use render passes.
+    pub(crate) fn render_pass_views(
+        &self,
+        mip_level: u32,
+        array_layer: u32,
+    ) -> SmallVec<[(wgt::TextureAspect, &dyn hal::DynTextureView); 2]> {
+        match *self {
+            TextureClearMode::BufferCopy => {
+                panic!("Given texture is cleared with buffer copies, not render passes")
+            }
+            TextureClearMode::None => {
+                panic!("Given texture can't be cleared")
+            }
+            TextureClearMode::Surface { ref clear_view } => {
+                SmallVec::from_iter([(wgt::TextureAspect::All, clear_view.as_ref())])
+            }
+            TextureClearMode::RenderPass {
+                ref clear_views, ..
+            } => clear_views.views(mip_level, array_layer).collect(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -1829,13 +1950,8 @@ impl Drop for Texture {
                 ref mut clear_views,
                 ..
             } => {
-                clear_views.iter_mut().for_each(|clear_view| {
-                    // SAFETY: We are in the Drop impl and we don't use clear_view anymore after this point.
-                    let raw = unsafe { ManuallyDrop::take(clear_view) };
-                    unsafe {
-                        self.device.raw().destroy_texture_view(raw);
-                    }
-                });
+                // SAFETY: We are in the Drop impl and will not use the clear views after this point.
+                unsafe { clear_views.destroy(self.device.raw()) };
             }
             _ => {}
         };
@@ -1897,35 +2013,6 @@ impl Texture {
             .inner
             .get(guard)
             .ok_or_else(|| DestroyedResourceError(self.error_ident()).into())
-    }
-
-    pub(crate) fn get_clear_view<'a>(
-        clear_mode: &'a TextureClearMode,
-        desc: &'a wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
-        mip_level: u32,
-        depth_or_layer: u32,
-    ) -> &'a dyn hal::DynTextureView {
-        match *clear_mode {
-            TextureClearMode::BufferCopy => {
-                panic!("Given texture is cleared with buffer copies, not render passes")
-            }
-            TextureClearMode::None => {
-                panic!("Given texture can't be cleared")
-            }
-            TextureClearMode::Surface { ref clear_view, .. } => clear_view.as_ref(),
-            TextureClearMode::RenderPass {
-                ref clear_views, ..
-            } => {
-                let index = if desc.dimension == wgt::TextureDimension::D3 {
-                    (0..mip_level).fold(0, |acc, mip| {
-                        acc + (desc.size.depth_or_array_layers >> mip).max(1)
-                    })
-                } else {
-                    mip_level * desc.size.depth_or_array_layers
-                } + depth_or_layer;
-                clear_views[index as usize].as_ref()
-            }
-        }
     }
 
     pub fn destroy(self: &Arc<Self>) {
@@ -2453,11 +2540,10 @@ impl Drop for DestroyedTexture {
         drop(deferred);
 
         match mem::replace(&mut self.clear_mode, TextureClearMode::None) {
-            TextureClearMode::RenderPass { clear_views, .. } => {
-                for clear_view in clear_views {
-                    let raw = ManuallyDrop::into_inner(clear_view);
-                    unsafe { self.device.raw().destroy_texture_view(raw) };
-                }
+            TextureClearMode::RenderPass {
+                mut clear_views, ..
+            } => {
+                unsafe { clear_views.destroy(self.device.raw()) };
             }
             TextureClearMode::Surface { clear_view } => {
                 let raw = ManuallyDrop::into_inner(clear_view);
