@@ -1246,6 +1246,8 @@ impl crate::Surface for Surface {
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
+        #[cfg(all(unix, not(feature = "wayland-dlopen")))]
+        use wayland_sys::egl::{wl_egl_window_create, wl_egl_window_resize};
 
         let (surface, wl_window) = match unsafe { self.unconfigure_impl(device) } {
             Some((sc, wl_window)) => {
@@ -1452,8 +1454,12 @@ impl crate::Surface for Surface {
                 .instance
                 .destroy_surface(self.egl.display, surface)
                 .unwrap();
+
+            #[cfg(unix)]
             if let Some(_window) = wl_window {
-                #[cfg(unix)]
+                #[cfg(not(feature = "wayland-dlopen"))]
+                use wayland_sys::egl::wl_egl_window_destroy;
+
                 wayland_sys::ffi_dispatch!(
                     wayland_sys::egl::wayland_egl_handle(),
                     wl_egl_window_destroy,
