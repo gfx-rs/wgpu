@@ -1,4 +1,4 @@
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{ffi, mem::ManuallyDrop, ptr, time::Duration};
 
 use glow::HasContext;
@@ -1014,6 +1014,7 @@ impl crate::Instance for Instance {
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&Surface>,
+        _options: Option<&super::GlAdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<super::Api>> {
         let inner = self.inner.lock();
         inner.egl.make_current();
@@ -1244,6 +1245,7 @@ impl crate::Surface for Surface {
         &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
+        _raw_config: Option<Box<dyn crate::RawSurfaceConfiguration>>,
     ) -> Result<(), crate::SurfaceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
 

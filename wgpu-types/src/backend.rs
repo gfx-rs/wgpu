@@ -1,6 +1,9 @@
 //! [`Backend`], [`Backends`], and backend-specific options.
 
-use alloc::string::{String, ToString};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+};
 use core::{hash::Hash, str::FromStr};
 
 use macro_rules_attribute::derive;
@@ -69,8 +72,15 @@ pub enum Backend {
 }
 
 impl Backend {
+    /// The number of defined [`Backend`]s.
+    ///
+    /// Note that although [`Backend`] can represent the full set of backends,
+    /// each actual backend can be excluded at compile time, or lack support on
+    /// the current platform.
+    pub const COUNT: usize = Backends::all().bits().count_ones() as usize;
+
     /// Array of all [`Backend`] values, corresponding to [`Backends::all()`].
-    pub const ALL: [Backend; Backends::all().bits().count_ones() as usize] = [
+    pub const ALL: [Backend; Self::COUNT] = [
         Self::Noop,
         Self::Vulkan,
         Self::Metal,
@@ -219,6 +229,296 @@ impl Backends {
 
         backends
     }
+}
+
+#[doc(hidden)]
+pub mod __backend_map_private {
+    /// Quasi-seal of [`super::DynBackendMapValue`] and [`super::BackendMapValue`],
+    /// which should only be implemented by [`crate::backend_map_type!`]. This
+    /// can't be a true seal (which would make the module private), because
+    /// `wgpu`'s own implementations are outside of `wgpu-types`.
+    pub trait Sealed<M: ?Sized> {}
+}
+
+/// dyn-compatible trait implemented by the value types stored in a [`BackendMap`].
+///
+/// This is the type of the trait objects stored in the map.
+///
+/// This trait is sealed. It is implemented by the [`crate::backend_map_type!`] macro.
+pub trait DynBackendMapValue<M: ?Sized>:
+    __backend_map_private::Sealed<M> + core::any::Any + core::fmt::Debug
+{
+}
+
+/// Non-dyn-compatible trait implemented by the value types stored in a [`BackendMap`].
+///
+/// This trait is required on the type parameter on the methods for getting and setting
+/// values in the map. It defines the `BACKEND` associated constant, which allows
+/// specifying just the backend-specific value type, rather redundantly specifying both
+/// both the type and index, when accessing the map. However, the associated constant is not
+/// dyn-compatible, so a separate trait must be used for trait objects.
+///
+/// This trait is sealed. It is implemented by the [`crate::backend_map_type!`] macro.
+pub trait BackendMapValue<M: ?Sized>: DynBackendMapValue<M> {
+    /// The backend associated with this value type.
+    const BACKEND: Backend;
+}
+
+/// Map of per-backend values.
+///
+/// Backend map types are used to pass per-backend backend-defined data through higher-level
+/// APIs. This is used for contexts like `request_adapter` where a specific backend has
+/// not yet been selected. Dynamic typing is used to avoid conditional compilation or
+/// dependencies on specific hals.
+///
+/// The map is keyed by [`Backend`]s. The value type is determined by `M`, which is
+/// typically `dyn SomeTrait`, where `SomeTrait` is implemented by the value type for each
+/// backend.
+///
+/// The map assumes that each backend has a distinct value type, thus it is possible to
+/// uniquely index the map by specifying only a value type, without also specifying a
+/// [`Backend`].
+pub struct BackendMap<M: ?Sized> {
+    data: [Option<Box<dyn DynBackendMapValue<M>>>; Backend::COUNT],
+}
+
+impl<M: ?Sized> Default for BackendMap<M> {
+    fn default() -> Self {
+        Self {
+            data: core::array::from_fn(|_| None),
+        }
+    }
+}
+
+impl<M: ?Sized> BackendMap<M> {
+    /// Get the map value associated with a particular backend.
+    pub fn get<T: BackendMapValue<M>>(&self) -> Option<&T> {
+        self.data[T::BACKEND as usize].as_ref().map(|value| {
+            let value: &dyn core::any::Any = value.as_ref();
+            value.downcast_ref::<T>().unwrap()
+        })
+    }
+
+    /// Remove and return the map value associated with a particular backend.
+    pub fn remove<T: BackendMapValue<M>>(&mut self) -> Option<Box<T>> {
+        self.data[T::BACKEND as usize].take().map(|value| {
+            let value: Box<dyn core::any::Any> = value;
+            value.downcast::<T>().unwrap()
+        })
+    }
+
+    /// Set the map value associated with a particular backend, discarding any previous value.
+    pub fn set<T: BackendMapValue<M>>(mut self, value: T) -> Self {
+        self.data[T::BACKEND as usize] = Some(Box::new(value));
+        self
+    }
+}
+
+impl<M: ?Sized> core::fmt::Debug for BackendMap<M> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("BackendMap")
+            .field("data", &self.data)
+            .finish()
+    }
+}
+
+/// Returns whether `module_path` is the root module of a crate.
+///
+/// Used by the backend type macros, which expand to another macro definition,
+/// and use `crate::` to refer to the definition site of that inner macro.
+/// (`$crate` would refer to the definition site of the backend type macro,
+/// not the inner macro.)
+///
+/// The `crate_in_macro_def` lint flags these uses of `crate`, but as explained
+/// above, this is done intentionally because `$crate` would not work here.
+#[doc(hidden)]
+pub const fn is_crate_root(module_path: &str) -> bool {
+    let bytes = module_path.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b':' {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// Helper for defining value types for [`BackendMap`].
+///
+/// This macro defines some auxiliary items for a [`BackendMap`] value type. Its notable
+/// output is the definition of an inner macro that is invoked for each value type.
+/// The inner macro in turn implements the [`BackendMapValue`] and [`DynBackendMapValue`]
+/// traits for the value types.
+///
+/// Internally, [`crate::backend_map_type!`] also defines a helper trait and struct that are
+/// used to check that at most one value type is defined for each backend. The helper struct
+/// is defined as `CheckStruct<const B: usize>`. Each time the inner macro is invoked, it
+/// generates `impl CheckTrait for CheckStruct<{Backend as usize}>`. Having two such
+/// definitions for a single backend in the same build will cause a conflicting trait
+/// implementation error.
+///
+/// Usage:
+///
+/// ```ignore
+/// // In a crate root (typically `wgpu-hal`):
+/// backend_map_type!(
+///     adapter_options,                    // $macro: name of generated macro
+///                                         //         `value_trait_in_snake_case`
+///     dyn wgt::BackendAdapterOptions,     // $value_ty: trait object type for `M` in `BackendMap<M>`
+///                                         //            `dyn ValueTraitInCamelCase`
+///     AdapterOptionsType,                 // $check_trait: name of generated check trait
+///                                         //               `ValueTraitType`
+///     AdapterOptionsTypeAssignment,       // $check_struct: name of generated check struct
+///                                         //                `ValueTraitTypeAssignment`
+/// );
+///
+/// // Anywhere in the crate
+/// crate::adapter_options! {
+///     /// Options for enumerating Metal adapters.
+///     #[backend(wgt::Backend::Metal)]
+///     #[derive(Clone, Debug)]
+///     pub struct MetalAdapterOptions;
+/// }
+/// ```
+///
+/// In the inner macro, doc comments must precede `#[backend(..)]`, and any other
+/// attributes must follow it.
+#[macro_export]
+#[rustfmt::skip]
+#[allow(clippy::crate_in_macro_def)] // see comment on `is_crate_root`
+macro_rules! backend_map_type {
+    (
+        $macro:ident,
+        $map_ty:ty,
+        $check_trait:ident,
+        $check_struct:ident,
+    ) => {
+        $crate::backend_map_type!(@impl ($) $macro, $map_ty, $check_trait, $check_struct);
+    };
+    // `$d` is a literal `$`, used to write metavariables and repetitions in the inner macro.
+    (@impl ($d:tt) $macro:ident, $map_ty:ty, $check_trait:ident, $check_struct:ident) => {
+        const _: () = assert!(
+            $crate::is_crate_root(module_path!()),
+            "backend_map_type! must be invoked at the crate root",
+        );
+
+        #[allow(unused)]
+        #[doc(hidden)]
+        pub trait $check_trait { }
+
+        #[allow(unused)]
+        #[doc(hidden)]
+        pub struct $check_struct<const B: usize>;
+
+        macro_rules! $macro {
+            (
+                $d(#[doc = $d doc:expr])*
+                #[backend($d backend:expr)]
+                $d(#[$d attr:meta])*
+                $d vis:vis struct $d inner_name:ident $d defn:tt
+            ) => {
+                $d(#[doc = $d doc])*
+                $d(#[$d attr])*
+                $d vis struct $d inner_name $d defn
+
+                impl $crate::__backend_map_private::Sealed<$map_ty> for $d inner_name { }
+
+                impl $crate::BackendMapValue<$map_ty> for $d inner_name {
+                    const BACKEND: $crate::Backend = $d backend;
+                }
+
+                impl $crate::DynBackendMapValue<$map_ty> for $d inner_name { }
+
+                impl crate::$check_trait for crate::$check_struct<{ $d backend as usize }> { }
+            };
+        }
+        pub(crate) use $macro;
+    };
+}
+
+/// Helper for defining backend-specific data types.
+///
+/// This is a simpler version of [`backend_map_type!`] used to define backend-specific data
+/// types that are passed through higher-level APIs in a context where the applicable
+/// backend is known.
+///
+/// Like [`backend_map_type!`], it defines and implements helper traits to check for
+/// conflicting per-backend types.
+///
+/// Usage:
+///
+/// ```ignore
+/// // In a crate root (typically `wgpu-hal`):
+/// backend_type!(
+///     device_options,                     // $macro: name of generated macro
+///                                         //         `value_trait_in_snake_case`
+///     wgt::BackendDeviceOptions,          // $trait: trait for this object type (without `dyn`)
+///                                         //         `qualified::if:needed::ValueTraitInCamelCase`
+///     DeviceOptionsType,                  // $check_trait: name of generated check trait
+///                                         //               `ValueTraitType`
+///     DeviceOptionsTypeAssignment,        // $check_struct: name of generated check struct
+///                                         //                `ValueTraitTypeAssignment`
+/// );
+/// ```
+///
+/// ```ignore
+/// // Anywhere in the crate
+/// crate::device_options! {
+///     /// Options for enumerating Metal devices.
+///     #[backend(wgt::Backend::Metal)]
+///     #[derive(Clone, Debug)]
+///     pub struct MetalDeviceOptions;
+/// }
+/// ```
+///
+/// In the inner macro, doc comments must precede `#[backend(..)]`, and any other
+/// attributes must follow it.
+#[macro_export]
+#[rustfmt::skip]
+#[allow(clippy::crate_in_macro_def)] // see comment on `is_crate_root`
+macro_rules! backend_type {
+    (
+        $macro:ident,
+        $trait:path,
+        $check_trait:ident,
+        $check_struct:ident,
+    ) => {
+        $crate::backend_type!(@impl ($) $macro, $trait, $check_trait, $check_struct);
+    };
+    // `$d` is a literal `$`, used to write metavariables and repetitions in the inner macro.
+    (@impl ($d:tt) $macro:ident, $trait:path, $check_trait:ident, $check_struct:ident) => {
+        const _: () = assert!(
+            $crate::is_crate_root(module_path!()),
+            "backend_type! must be invoked at the crate root",
+        );
+
+        #[allow(unused)]
+        #[doc(hidden)]
+        pub trait $check_trait { }
+
+        #[allow(unused)]
+        #[doc(hidden)]
+        pub struct $check_struct<const B: usize>;
+
+        macro_rules! $macro {
+            (
+                $d(#[doc = $d doc:expr])*
+                #[backend($d backend:expr)]
+                $d(#[$d attr:meta])*
+                $d vis:vis struct $d inner_name:ident $d defn:tt
+            ) => {
+                $d(#[doc = $d doc])*
+                $d(#[$d attr])*
+                $d vis struct $d inner_name $d defn
+
+                impl $trait for $d inner_name { }
+
+                impl crate::$check_trait for crate::$check_struct<{ $d backend as usize }> { }
+            };
+        }
+        pub(crate) use $macro;
+    };
 }
 
 /// Options that are passed to a given backend.

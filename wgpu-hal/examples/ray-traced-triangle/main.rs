@@ -268,7 +268,7 @@ impl<A: hal::Api> Example<A> {
         };
 
         let (adapter, features) = unsafe {
-            let mut adapters = instance.enumerate_adapters(Some(&surface));
+            let mut adapters = instance.enumerate_adapters(Some(&surface), None);
             if adapters.is_empty() {
                 panic!("No adapters found");
             }
@@ -286,6 +286,7 @@ impl<A: hal::Api> Example<A> {
                     features,
                     &wgpu_types::Limits::default(),
                     &wgpu_types::MemoryHints::Performance,
+                    None,
                 )
                 .unwrap()
         };
@@ -318,7 +319,7 @@ impl<A: hal::Api> Example<A> {
             view_formats: vec![surface_format],
         };
         unsafe {
-            surface.configure(&device, &surface_config).unwrap();
+            surface.configure(&device, &surface_config, None).unwrap();
         };
 
         #[allow(dead_code)]
