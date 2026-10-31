@@ -49,7 +49,7 @@ OpDecorate %105 Location 0
 %17 = OpVariable  %18  UniformConstant
 %20 = OpTypePointer UniformConstant %13
 %19 = OpVariable  %20  UniformConstant
-%22 = OpTypeFunction %10 %10 %10
+%24 = OpTypeFunction %10 %10 %10
 %26 = OpTypeBool
 %27 = OpConstant  %10  0
 %29 = OpConstant  %10  -2147483648
@@ -81,17 +81,17 @@ OpDecorate %105 Location 0
 %102 = OpVariable  %103  Input
 %105 = OpVariable  %43  Output
 %111 = OpTypeSampledImage %12
-%21 = OpFunction  %10  None %22
+%21 = OpFunction  %10  None %24
+%22 = OpFunctionParameter  %10
 %23 = OpFunctionParameter  %10
-%24 = OpFunctionParameter  %10
 %25 = OpLabel
-%28 = OpIEqual  %26  %24 %27
-%31 = OpIEqual  %26  %23 %29
-%32 = OpIEqual  %26  %24 %30
+%28 = OpIEqual  %26  %23 %27
+%31 = OpIEqual  %26  %22 %29
+%32 = OpIEqual  %26  %23 %30
 %33 = OpLogicalAnd  %26  %31 %32
 %34 = OpLogicalOr  %26  %28 %33
-%36 = OpSelect  %10  %34 %35 %24
-%37 = OpSDiv  %10  %23 %36
+%36 = OpSelect  %10  %34 %35 %23
+%37 = OpSDiv  %10  %22 %36
 OpReturnValue %37
 OpFunctionEnd
 %46 = OpFunction  %2  None %47

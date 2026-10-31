@@ -274,17 +274,24 @@ OpName %34 "u_am"
 OpName %37 "s_sasm"
 OpName %40 "u_sasm"
 OpName %43 "mat2x2<f32>_from_std140"
+OpName %44 "value"
 OpName %50 "mat2x2<f32>_get_column"
+OpName %51 "matrix"
+OpName %52 "column_index"
 OpName %63 "access_m"
 OpName %72 "idx"
 OpName %137 "StructWithMat_from_std140"
+OpName %138 "value"
 OpName %146 "access_sm"
 OpName %152 "idx"
 OpName %230 "array<mat2x2<f32>, 4>_from_std140"
+OpName %231 "value"
 OpName %244 "access_am"
 OpName %250 "idx"
 OpName %402 "StructWithArrayOfStructOfMat_from_std140"
+OpName %403 "value"
 OpName %407 "array<StructWithMat, 4>_from_std140"
+OpName %408 "value"
 OpName %423 "access_sasm"
 OpName %429 "idx"
 OpName %615 "main"
@@ -377,7 +384,7 @@ OpMemberDecorate %41 0 Offset 0
 %41 = OpTypeStruct %18
 %42 = OpTypePointer Uniform %41
 %40 = OpVariable  %42  Uniform
-%44 = OpTypeFunction %4 %14
+%45 = OpTypeFunction %4 %14
 %53 = OpTypeFunction %5 %4 %11
 %64 = OpTypeFunction %2
 %65 = OpTypePointer StorageBuffer %4
@@ -390,28 +397,28 @@ OpMemberDecorate %41 0 Offset 0
 %84 = OpTypePointer StorageBuffer %6
 %99 = OpTypePointer Uniform %5
 %107 = OpTypePointer Uniform %6
-%138 = OpTypeFunction %8 %15
+%139 = OpTypeFunction %8 %15
 %147 = OpTypePointer StorageBuffer %8
 %149 = OpTypePointer Uniform %15
 %151 = OpTypePointer Uniform %8
 %178 = OpConstant  %11  1
-%231 = OpTypeFunction %9 %16
+%232 = OpTypeFunction %9 %16
 %245 = OpTypePointer StorageBuffer %9
 %247 = OpTypePointer Uniform %16
 %249 = OpTypePointer Uniform %9
-%403 = OpTypeFunction %13 %18
-%408 = OpTypeFunction %12 %17
+%404 = OpTypeFunction %13 %18
+%409 = OpTypeFunction %12 %17
 %424 = OpTypePointer StorageBuffer %13
 %426 = OpTypePointer Uniform %18
 %428 = OpTypePointer Uniform %13
 %434 = OpTypePointer StorageBuffer %12
 %484 = OpTypePointer Uniform %12
 %485 = OpTypePointer Uniform %17
-%43 = OpFunction  %4  None %44
-%45 = OpFunctionParameter  %14
+%43 = OpFunction  %4  None %45
+%44 = OpFunctionParameter  %14
 %46 = OpLabel
-%47 = OpCompositeExtract  %5  %45 0
-%48 = OpCompositeExtract  %5  %45 1
+%47 = OpCompositeExtract  %5  %44 0
+%48 = OpCompositeExtract  %5  %44 1
 %49 = OpCompositeConstruct  %4  %47 %48
 OpReturnValue %49
 OpFunctionEnd
@@ -543,11 +550,11 @@ OpLine %3 55 5
 OpStore %136 %125
 OpReturn
 OpFunctionEnd
-%137 = OpFunction  %8  None %138
-%139 = OpFunctionParameter  %15
+%137 = OpFunction  %8  None %139
+%138 = OpFunctionParameter  %15
 %140 = OpLabel
-%142 = OpCompositeExtract  %5  %139 0
-%143 = OpCompositeExtract  %5  %139 1
+%142 = OpCompositeExtract  %5  %138 0
+%143 = OpCompositeExtract  %5  %138 1
 %141 = OpCompositeConstruct  %4  %142 %143
 %144 = OpCompositeConstruct  %8  %141
 OpReturnValue %144
@@ -693,16 +700,16 @@ OpLine %3 100 5
 OpStore %229 %217
 OpReturn
 OpFunctionEnd
-%230 = OpFunction  %9  None %231
-%232 = OpFunctionParameter  %16
+%230 = OpFunction  %9  None %232
+%231 = OpFunctionParameter  %16
 %233 = OpLabel
-%234 = OpCompositeExtract  %14  %232 0
+%234 = OpCompositeExtract  %14  %231 0
 %235 = OpFunctionCall  %4  %43 %234
-%236 = OpCompositeExtract  %14  %232 1
+%236 = OpCompositeExtract  %14  %231 1
 %237 = OpFunctionCall  %4  %43 %236
-%238 = OpCompositeExtract  %14  %232 2
+%238 = OpCompositeExtract  %14  %231 2
 %239 = OpFunctionCall  %4  %43 %238
-%240 = OpCompositeExtract  %14  %232 3
+%240 = OpCompositeExtract  %14  %231 3
 %241 = OpFunctionCall  %4  %43 %240
 %242 = OpCompositeConstruct  %9  %235 %237 %239 %241
 OpReturnValue %242
@@ -973,24 +980,24 @@ OpLine %3 162 5
 OpStore %401 %370
 OpReturn
 OpFunctionEnd
-%407 = OpFunction  %12  None %408
-%409 = OpFunctionParameter  %17
+%407 = OpFunction  %12  None %409
+%408 = OpFunctionParameter  %17
 %410 = OpLabel
-%411 = OpCompositeExtract  %15  %409 0
+%411 = OpCompositeExtract  %15  %408 0
 %412 = OpFunctionCall  %8  %137 %411
-%413 = OpCompositeExtract  %15  %409 1
+%413 = OpCompositeExtract  %15  %408 1
 %414 = OpFunctionCall  %8  %137 %413
-%415 = OpCompositeExtract  %15  %409 2
+%415 = OpCompositeExtract  %15  %408 2
 %416 = OpFunctionCall  %8  %137 %415
-%417 = OpCompositeExtract  %15  %409 3
+%417 = OpCompositeExtract  %15  %408 3
 %418 = OpFunctionCall  %8  %137 %417
 %419 = OpCompositeConstruct  %12  %412 %414 %416 %418
 OpReturnValue %419
 OpFunctionEnd
-%402 = OpFunction  %13  None %403
-%404 = OpFunctionParameter  %18
+%402 = OpFunction  %13  None %404
+%403 = OpFunctionParameter  %18
 %405 = OpLabel
-%420 = OpCompositeExtract  %17  %404 0
+%420 = OpCompositeExtract  %17  %403 0
 %406 = OpFunctionCall  %12  %407 %420
 %421 = OpCompositeConstruct  %13  %406
 OpReturnValue %421
