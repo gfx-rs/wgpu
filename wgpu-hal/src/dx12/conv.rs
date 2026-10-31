@@ -6,6 +6,7 @@ pub fn map_buffer_usage_to_resource_flags(
     let mut flags = Direct3D12::D3D12_RESOURCE_FLAG_NONE;
     if usage.contains(wgt::BufferUses::STORAGE_READ_WRITE)
         || usage.contains(wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY)
+        || usage.contains(wgt::BufferUses::ACCELERATION_STRUCTURE_SCRATCH)
     {
         flags |= Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }

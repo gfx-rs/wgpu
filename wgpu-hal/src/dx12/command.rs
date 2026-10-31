@@ -614,6 +614,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 self.temp.barriers.push(raw);
             } else if barrier.usage.from == wgt::BufferUses::STORAGE_READ_WRITE
                 || barrier.usage.from == wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY
+                || barrier.usage.from == wgt::BufferUses::ACCELERATION_STRUCTURE_SCRATCH
             {
                 let raw = Direct3D12::D3D12_RESOURCE_BARRIER {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
