@@ -30,6 +30,7 @@ use crate::{
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
+    ray_tracing_pipeline,
     resource::{
         Blas, BlasCompactState, BlasDescriptor, BlasState, Buffer, BufferAccessError,
         BufferMapState, DestroyedBuffer, DestroyedQuerySet, DestroyedResourceError,
@@ -351,6 +352,9 @@ pub(crate) struct EncoderInFlight {
     pub(crate) pending_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
     /// These are the BLASes that have been tracked by `PendingWrites`.
     pub(crate) pending_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
+    /// These are the shader binding data buffers that have been tracked by `PendingWrites`.
+    /// Only need to keep these live while the writes wait.
+    _pending_shader_binding_data: Vec<Arc<ray_tracing_pipeline::ShaderBindingData>>,
 }
 
 /// A private command encoder for writes made directly on the device
@@ -393,6 +397,9 @@ pub(crate) struct PendingWrites {
     dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     dst_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
     copied_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
+    /// Buffers of shader binding data that have been written to when creating their
+    /// ray tracing pipelines.
+    written_shader_binding_data: Vec<Arc<ray_tracing_pipeline::ShaderBindingData>>,
     instance_flags: wgt::InstanceFlags,
 
     /// Staging buffers that are the source of a copy recorded in
@@ -444,6 +451,7 @@ impl PendingWrites {
             instance_flags,
             hoisted_staging_buffers: Vec::new(),
             hoisted_buffer_barriers: Vec::new(),
+            written_shader_binding_data: Vec::new(),
         }
     }
 
@@ -460,6 +468,10 @@ impl PendingWrites {
     pub fn insert_blas(&mut self, blas: &Arc<Blas>) {
         self.copied_blas_s
             .insert(blas.tracker_index(), blas.clone());
+    }
+
+    pub fn use_shader_binding_data(&mut self, sbd: &Arc<ray_tracing_pipeline::ShaderBindingData>) {
+        self.written_shader_binding_data.push(sbd.clone())
     }
 
     pub fn contains_buffer(&self, buffer: &Arc<Buffer>) -> bool {
@@ -604,6 +616,7 @@ impl PendingWrites {
             let pending_buffers = mem::take(&mut self.dst_buffers);
             let pending_textures = mem::take(&mut self.dst_textures);
             let pending_blas_s = mem::take(&mut self.copied_blas_s);
+            let pending_shader_binding_data = mem::take(&mut self.written_shader_binding_data);
 
             let cmd_buf = unsafe { self.command_encoder.end_encoding() }
                 .map_err(|e| device.handle_hal_error(e))?;
@@ -630,6 +643,7 @@ impl PendingWrites {
                 pending_buffers,
                 pending_textures,
                 pending_blas_s,
+                _pending_shader_binding_data: pending_shader_binding_data,
             };
 
             let staging_buffers = self.record_hoisted_barriers(&mut encoder, snatch_guard)?;
@@ -642,6 +656,7 @@ impl PendingWrites {
             self.dst_buffers.clear();
             self.dst_textures.clear();
             self.copied_blas_s.clear();
+            self.written_shader_binding_data.clear();
             Ok(None)
         }
     }
@@ -1830,6 +1845,7 @@ impl Queue {
                         pending_buffers: FastHashMap::default(),
                         pending_textures: FastHashMap::default(),
                         pending_blas_s: FastHashMap::default(),
+                        _pending_shader_binding_data: Vec::new(),
                     });
                 }
             }
@@ -2148,8 +2164,7 @@ impl Queue {
 
         self.device.check_is_valid()?;
 
-        self.device
-            .require_features(wgpu_types::Features::EXPERIMENTAL_RAY_QUERY)?;
+        self.device.require_acceleration_structures()?;
 
         blas.check_is_valid()?;
         self.same_device_as(blas.as_ref())?;
