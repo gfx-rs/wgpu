@@ -10,8 +10,19 @@ RWByteAddressBuffer output : register(u0);
 [numthreads(1, 1, 1)]
 void main(uint local_invocation_index : SV_GroupIndex)
 {
+    [loop]
+    for (uint zero_flat_index = local_invocation_index; zero_flat_index < 512u; zero_flat_index += 1u) {
+        uint zero_index = (zero_flat_index / 1u) % 512u;
+        w_mem.arr[zero_index] = (uint)0;
+    }
     if (local_invocation_index == 0) {
-        w_mem = (WStruct)0;
+        w_mem.atom = (int)0;
+    }
+    [loop]
+    for (uint zero_flat_index_1 = local_invocation_index; zero_flat_index_1 < 64u; zero_flat_index_1 += 1u) {
+        uint zero_index_1 = (zero_flat_index_1 / 8u) % 8u;
+        uint zero_index_2 = (zero_flat_index_1 / 1u) % 8u;
+        w_mem.atom_arr[zero_index_1][zero_index_2] = (int)0;
     }
     GroupMemoryBarrierWithGroupSync();
     uint _e3[512] = w_mem.arr;

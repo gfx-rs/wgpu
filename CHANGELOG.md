@@ -339,6 +339,10 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 - A render pipeline switch no longer allocates once per vertex buffer. By @samoylenkodmitry in [#10630](https://github.com/gfx-rs/wgpu/pull/10630).
 
+#### naga
+
+- Reduce HLSL compute shader compilation time for large workgroup arrays by initializing their elements with loops distributed across workgroup invocations. By @DonutShinobu in [#10314](https://github.com/gfx-rs/wgpu/pull/10314).
+
 ### Documentation
 
 #### General
