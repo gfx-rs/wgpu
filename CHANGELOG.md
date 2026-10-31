@@ -337,6 +337,10 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 - A render pipeline switch no longer allocates once per vertex buffer. By @samoylenkodmitry in [#10630](https://github.com/gfx-rs/wgpu/pull/10630).
 
+#### Metal
+
+- Render and compute passes that need no preparatory GPU work now share the encoder's current `MTLCommandBuffer` instead of each getting one of its own, which cost about 2.3 MiB of driver memory per pass until the submission completed and limited an encoder to 4096 passes. Passes that load a texture discarded earlier in the same encoder, use indirect draws with indirect validation enabled, or execute render bundles still get their own. By @matthargett in [#10506](https://github.com/gfx-rs/wgpu/pull/10506).
+
 ### Documentation
 
 #### General
