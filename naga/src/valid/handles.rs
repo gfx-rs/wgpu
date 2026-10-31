@@ -404,7 +404,8 @@ impl super::Validator {
             | crate::TypeInner::Image { .. }
             | crate::TypeInner::Sampler { .. }
             | crate::TypeInner::AccelerationStructure { .. }
-            | crate::TypeInner::RayQuery { .. } => None,
+            | crate::TypeInner::RayQuery { .. }
+            | crate::TypeInner::HitObject => None,
             crate::TypeInner::Pointer { base, space: _ } => {
                 handle.check_dep(base)?;
                 None
@@ -674,6 +675,12 @@ impl super::Validator {
             } => {
                 handle.check_dep(query)?;
             }
+            crate::Expression::HitObjectQuery {
+                hit_object,
+                query: _,
+            } => {
+                handle.check_dep(hit_object)?;
+            }
             crate::Expression::CooperativeLoad { ref data, .. } => {
                 handle.check_dep(data.pointer)?.check_dep(data.stride)?;
             }
@@ -697,6 +704,14 @@ impl super::Validator {
             }
             Ok(())
         };
+        let validate_reorder_hint =
+            |hint: Option<crate::ReorderHint>| -> Result<(), InvalidHandleError> {
+                if let Some(crate::ReorderHint { hint, bits }) = hint {
+                    validate_expr(hint)?;
+                    validate_expr(bits)?;
+                }
+                Ok(())
+            };
 
         block.iter().try_for_each(|stmt| match *stmt {
             crate::Statement::Emit(ref expr_range) => {
@@ -886,7 +901,40 @@ impl super::Validator {
                     validate_expr(payload)?;
                     Ok(())
                 }
+                crate::RayPipelineFunction::ReorderThread { hint, bits } => {
+                    validate_expr(hint)?;
+                    validate_expr(bits)?;
+                    Ok(())
+                }
             },
+            crate::Statement::HitObject { hit_object, fun } => {
+                validate_expr(hit_object)?;
+                match fun {
+                    crate::HitObjectFunction::TraceRay {
+                        acceleration_structure,
+                        descriptor,
+                        payload,
+                    } => {
+                        validate_expr(acceleration_structure)?;
+                        validate_expr(descriptor)?;
+                        validate_expr(payload)?;
+                    }
+                    crate::HitObjectFunction::RecordMiss { descriptor } => {
+                        validate_expr(descriptor)?;
+                    }
+                    crate::HitObjectFunction::RecordFromQuery { query } => {
+                        validate_expr(query)?;
+                    }
+                    crate::HitObjectFunction::RecordEmpty => {}
+                    crate::HitObjectFunction::ExecuteShader { payload } => {
+                        validate_expr(payload)?;
+                    }
+                    crate::HitObjectFunction::Reorder { hint } => {
+                        validate_reorder_hint(hint)?;
+                    }
+                }
+                Ok(())
+            }
             crate::Statement::DebugPrintf {
                 format: _,
                 ref arguments,

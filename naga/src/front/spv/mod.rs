@@ -1619,6 +1619,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | S::Atomic { .. }
                 | S::ImageAtomic { .. }
                 | S::RayQuery { .. }
+                | S::HitObject { .. }
                 | S::SubgroupBallot { .. }
                 | S::SubgroupCollectiveOperation { .. }
                 | S::SubgroupGather { .. }
