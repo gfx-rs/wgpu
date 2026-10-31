@@ -183,6 +183,7 @@ fn create_tv_and_bg(
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = texture.create_view(&Default::default());
     let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {

@@ -37,6 +37,7 @@ fn create_depth(
         format: wgpu::TextureFormat::Depth32Float,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let depth_view = depth_texture.create_view(&Default::default());
     let state = wgpu::DepthStencilState {

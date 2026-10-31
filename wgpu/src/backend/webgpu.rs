@@ -3242,6 +3242,10 @@ impl dispatch::TextureInterface for WebTexture {
     fn usage(&self) -> wgt::TextureUsages {
         self.desc.usage
     }
+
+    fn texture_binding_view_dimension(&self) -> Option<crate::TextureViewDimension> {
+        None
+    }
 }
 impl Drop for WebTexture {
     fn drop(&mut self) {
