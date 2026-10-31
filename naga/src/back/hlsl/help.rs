@@ -26,7 +26,7 @@ int dim_1d = NagaDimensions1D(image_1d);
 ```
 */
 
-use alloc::format;
+use alloc::{format, string::String};
 use core::fmt::Write;
 
 use super::{
@@ -117,6 +117,39 @@ pub(super) struct WrappedCast {
     pub(super) vector_size: Option<crate::VectorSize>,
     pub(super) src_scalar: crate::Scalar,
     pub(super) dst_scalar: crate::Scalar,
+}
+
+/// A function that bitcasts between scalar or vector types of different shapes,
+/// such as `half2` and `uint`.
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) struct WrappedBitcast {
+    pub(super) src: (Option<crate::VectorSize>, crate::Scalar),
+    pub(super) dst: (Option<crate::VectorSize>, crate::Scalar),
+}
+
+impl WrappedBitcast {
+    /// Return the wrapped bitcast needed to implement a bitcast from `src_ty` to `dst_ty`,
+    /// or `None` if the bitcast can be written inline.
+    pub(super) fn new(src_ty: &crate::TypeInner, dst_ty: &crate::TypeInner) -> Option<Self> {
+        let src = src_ty.vector_size_and_scalar()?;
+        let dst = dst_ty.vector_size_and_scalar()?;
+        (src.0 != dst.0 || src.1.width != dst.1.width).then_some(Self { src, dst })
+    }
+
+    pub(super) fn function_name(&self) -> Result<String, super::Error> {
+        let type_name = |(size, scalar): (Option<crate::VectorSize>, crate::Scalar)| {
+            Ok::<_, super::Error>(format!(
+                "{}{}",
+                scalar.to_hlsl_str()?,
+                size.map(crate::common::vector_size_str).unwrap_or("")
+            ))
+        };
+        Ok(format!(
+            "naga_bitcast_{}_to_{}",
+            type_name(self.src)?,
+            type_name(self.dst)?
+        ))
+    }
 }
 
 /// HLSL backend requires its own `ImageQuery` enum.
@@ -1788,8 +1821,7 @@ impl<W: Write> super::Writer<'_, W> {
         for (_, expression) in func_ctx.expressions.iter() {
             if let crate::Expression::As {
                 expr,
-                kind,
-                convert: Some(width),
+                target: dst_scalar,
             } = *expression
             {
                 // Avoid undefined behaviour when casting from a float to integer
@@ -1806,7 +1838,6 @@ impl<W: Write> super::Writer<'_, W> {
                 let Some((vector_size, src_scalar)) = src_ty.vector_size_and_scalar() else {
                     continue;
                 };
-                let dst_scalar = crate::Scalar { kind, width };
                 if src_scalar.kind != ScalarKind::Float
                     || (dst_scalar.kind != ScalarKind::Sint && dst_scalar.kind != ScalarKind::Uint)
                 {
@@ -1871,6 +1902,99 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
+    /// Write the functions for `Bitcast` expressions that change the number of
+    /// components, which HLSL has no intrinsics for.
+    fn write_wrapped_bitcast_functions(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &FunctionCtx,
+    ) -> BackendResult {
+        use crate::ScalarKind as Sk;
+
+        for (_, expression) in func_ctx.expressions.iter() {
+            let crate::Expression::Bitcast { expr, ty } = *expression else {
+                continue;
+            };
+            let src_ty = func_ctx.resolve_type(expr, &module.types);
+            let dst_ty = &module.types[ty].inner;
+            let Some(wrapped) = WrappedBitcast::new(src_ty, dst_ty) else {
+                continue;
+            };
+            if !self.wrapped.insert(WrappedType::Bitcast(wrapped)) {
+                continue;
+            }
+
+            let fun_name = wrapped.function_name()?;
+            self.write_value_type(module, dst_ty)?;
+            write!(self.out, " {fun_name}(")?;
+            self.write_value_type(module, src_ty)?;
+            writeln!(self.out, " value) {{")?;
+            let level = crate::back::Level(1);
+
+            match (wrapped.src, wrapped.dst) {
+                // Pack the bits of two or four halves into one or two words.
+                ((Some(src_size), crate::Scalar::F16), (dst_size, dst)) if dst.width == 4 => {
+                    writeln!(
+                        self.out,
+                        "{level}uint16_t{} bits = asuint16(value);",
+                        src_size as u8
+                    )?;
+                    let word =
+                        |lo: &str, hi: &str| format!("(uint(bits.{lo}) | (uint(bits.{hi}) << 16))");
+                    let packed = if dst_size.is_none() {
+                        word("x", "y")
+                    } else {
+                        format!("uint2({}, {})", word("x", "y"), word("z", "w"))
+                    };
+                    if dst.kind == Sk::Uint {
+                        writeln!(self.out, "{level}return {packed};")?;
+                    } else {
+                        writeln!(
+                            self.out,
+                            "{level}return {}({packed});",
+                            dst.kind.to_hlsl_cast()
+                        )?;
+                    }
+                }
+                // Unpack one or two words into two or four halves.
+                ((src_size, src), (Some(dst_size), crate::Scalar::F16)) if src.width == 4 => {
+                    let (bits_ty, words) = match src_size {
+                        None => ("uint", &[""][..]),
+                        Some(_) => ("uint2", &[".x", ".y"][..]),
+                    };
+                    if src.kind == Sk::Uint {
+                        writeln!(self.out, "{level}{bits_ty} bits = value;")?;
+                    } else {
+                        writeln!(self.out, "{level}{bits_ty} bits = asuint(value);")?;
+                    }
+                    write!(
+                        self.out,
+                        "{level}return asfloat16(uint16_t{}(",
+                        dst_size as u8
+                    )?;
+                    for (i, word) in words.iter().enumerate() {
+                        if i != 0 {
+                            write!(self.out, ", ")?;
+                        }
+                        write!(
+                            self.out,
+                            "uint16_t(bits{word} & 0xFFFFu), uint16_t(bits{word} >> 16)"
+                        )?;
+                    }
+                    writeln!(self.out, "));")?;
+                }
+                _ => {
+                    return Err(super::Error::Unimplemented(format!(
+                        "bitcast from {src_ty:?} to {dst_ty:?}"
+                    )))
+                }
+            }
+            writeln!(self.out, "}}")?;
+            writeln!(self.out)?;
+        }
+        Ok(())
+    }
+
     /// Helper function that writes various wrapped functions
     pub(super) fn write_wrapped_functions(
         &mut self,
@@ -1883,6 +2007,7 @@ impl<W: Write> super::Writer<'_, W> {
         self.write_wrapped_expression_functions(module, func_ctx.expressions, Some(func_ctx))?;
         self.write_wrapped_zero_value_functions(module, func_ctx.expressions)?;
         self.write_wrapped_cast_functions(module, func_ctx)?;
+        self.write_wrapped_bitcast_functions(module, func_ctx)?;
 
         for (handle, _) in func_ctx.expressions.iter() {
             match func_ctx.expressions[handle] {

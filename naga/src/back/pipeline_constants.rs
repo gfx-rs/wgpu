@@ -656,8 +656,13 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
         }
         Expression::As {
             ref mut expr,
-            kind: _,
-            convert: _,
+            target: _,
+        } => {
+            adjust(expr);
+        }
+        Expression::Bitcast {
+            ref mut expr,
+            ty: _,
         } => {
             adjust(expr);
         }
