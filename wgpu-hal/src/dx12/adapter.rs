@@ -61,6 +61,100 @@ impl super::Adapter {
         &self.raw
     }
 
+    /// # Safety
+    ///
+    /// - `raw_device` must be created from this adapter, using the same D3D12 runtime
+    ///   that wgpu uses (for example, the same Agility SDK).
+    /// - `features` and `limits` must be supported by this adapter.
+    ///
+    /// wgpu-hal takes ownership of the `raw_device` and `raw_queue` references and
+    /// releases them when the device is dropped.
+    pub unsafe fn device_from_raw(
+        &self,
+        raw_device: Direct3D12::ID3D12Device,
+        raw_queue: Direct3D12::ID3D12CommandQueue,
+        features: wgt::Features,
+        limits: &wgt::Limits,
+        memory_hints: &wgt::MemoryHints,
+    ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
+        let adapter_luid = unsafe { self.raw.GetDesc2() }
+            .into_device_result("Adapter description")?
+            .AdapterLuid;
+        let device_luid = unsafe { raw_device.GetAdapterLuid() };
+        if device_luid != adapter_luid {
+            log::error!(
+               "device_from_raw: device adapter LUID {device_luid:?} does not match adapter LUID {adapter_luid:?}"
+           );
+            return Err(crate::DeviceError::Unexpected);
+        }
+
+        let queue_type = unsafe { raw_queue.GetDesc() }.Type;
+        if queue_type != Direct3D12::D3D12_COMMAND_LIST_TYPE_DIRECT {
+            log::error!("device_from_raw: queue type {queue_type:?} is not a direct queue");
+            return Err(crate::DeviceError::Unexpected);
+        }
+
+        let mut queue_device: Option<Direct3D12::ID3D12Device> = None;
+        unsafe { raw_queue.GetDevice(&mut queue_device) }
+            .into_device_result("Queue device query")?;
+        let as_unknown =
+            |device: &Direct3D12::ID3D12Device| device.cast::<windows::core::IUnknown>().ok();
+        let same_device = queue_device
+            .as_ref()
+            .and_then(as_unknown)
+            .is_some_and(|queue_device| Some(queue_device) == as_unknown(&raw_device));
+        if !same_device {
+            log::error!("device_from_raw: queue was not created on the given device");
+            return Err(crate::DeviceError::Unexpected);
+        }
+
+        unsafe { self.open_with_raw(raw_device, raw_queue, features, limits, memory_hints) }
+    }
+
+    /// # Safety
+    ///
+    /// See [`Self::device_from_raw`].
+    unsafe fn open_with_raw(
+        &self,
+        raw_device: Direct3D12::ID3D12Device,
+        raw_queue: Direct3D12::ID3D12CommandQueue,
+        features: wgt::Features,
+        limits: &wgt::Limits,
+        memory_hints: &wgt::MemoryHints,
+    ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
+        let device = super::Device::new(
+            self.raw.clone(),
+            raw_device,
+            raw_queue.clone(),
+            features,
+            limits,
+            memory_hints,
+            self.private_caps,
+            &self.library,
+            &self.dcomp_lib,
+            self.memory_budget_thresholds,
+            self.compiler_container.clone(),
+            self.options.clone(),
+        )?;
+        let idle_fence: Direct3D12::ID3D12Fence =
+            unsafe { device.raw.CreateFence(0, Direct3D12::D3D12_FENCE_FLAG_NONE) }
+                .into_device_result("Queue idle fence creation")?;
+        let idle_event = super::Event::create(false, false)?;
+
+        Ok(crate::OpenDevice {
+            device,
+            queue: super::Queue {
+                raw: raw_queue,
+                temp_lists: Mutex::new(Vec::new()),
+                idle_fence,
+                idle_event,
+                idle_fence_value: AtomicU64::new(0),
+                pending_waits: Mutex::new(Vec::new()),
+                pending_signals: Mutex::new(Vec::new()),
+            },
+        })
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn expose(
         adapter: DxgiAdapter,
@@ -1085,39 +1179,7 @@ impl crate::Adapter for super::Adapter {
             .into_device_result("Queue creation")?
         };
 
-        let device = super::Device::new(
-            self.raw.clone(),
-            self.device.clone(),
-            queue.clone(),
-            features,
-            limits,
-            memory_hints,
-            self.private_caps,
-            &self.library,
-            &self.dcomp_lib,
-            self.memory_budget_thresholds,
-            self.compiler_container.clone(),
-            self.options.clone(),
-        )?;
-        let idle_fence: Direct3D12::ID3D12Fence = unsafe {
-            self.device
-                .CreateFence(0, Direct3D12::D3D12_FENCE_FLAG_NONE)
-        }
-        .into_device_result("Queue idle fence creation")?;
-        let idle_event = super::Event::create(false, false)?;
-
-        Ok(crate::OpenDevice {
-            device,
-            queue: super::Queue {
-                raw: queue,
-                temp_lists: Mutex::new(Vec::new()),
-                idle_fence,
-                idle_event,
-                idle_fence_value: AtomicU64::new(0),
-                pending_waits: Mutex::new(Vec::new()),
-                pending_signals: Mutex::new(Vec::new()),
-            },
-        })
+        unsafe { self.open_with_raw(self.device.clone(), queue, features, limits, memory_hints) }
     }
 
     unsafe fn texture_format_capabilities(
