@@ -403,6 +403,7 @@ pub(super) struct TypedGlobalVariable<'a> {
     pub handle: Handle<crate::GlobalVariable>,
     pub usage: valid::GlobalUse,
     pub reference: bool,
+    pub use_runtime_array_pointers: bool,
 }
 
 struct TypedGlobalVariableParts {
@@ -434,8 +435,23 @@ impl TypedGlobalVariable<'_> {
                 _ => crate::StorageAccess::default(),
             },
         };
+        let pointer_base = if self.reference
+            && self.use_runtime_array_pointers
+            && matches!(var.space, crate::AddressSpace::Storage { .. })
+        {
+            match self.module.types[var.ty].inner {
+                crate::TypeInner::Array {
+                    base,
+                    size: crate::ArraySize::Dynamic,
+                    ..
+                } => Some(base),
+                _ => None,
+            }
+        } else {
+            None
+        };
         let ty_name = TypeContext {
-            handle: var.ty,
+            handle: pointer_base.unwrap_or(var.ty),
             gctx: self.module.to_ctx(),
             names: self.names,
             access: storage_access,
@@ -468,7 +484,12 @@ impl TypedGlobalVariable<'_> {
                     } else {
                         ""
                     };
-                    (coherent, space, access, "&")
+                    (
+                        coherent,
+                        space,
+                        access,
+                        if pointer_base.is_some() { "*" } else { "&" },
+                    )
                 }
                 _ => ("", "", "", ""),
             }
@@ -7246,6 +7267,7 @@ template <typename A>
                     handle,
                     usage: fun_info[handle],
                     reference: true,
+                    use_runtime_array_pointers: options.use_runtime_array_pointers,
                 };
                 let separator =
                     separate(index + 1 != pass_through_globals.len() || needs_buffer_sizes);
@@ -7729,7 +7751,10 @@ template <typename A>
             };
 
             // https://web.archive.org/web/20181029003926/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
-            if ep.stage == crate::ShaderStage::Compute && options.lang_version >= (2, 1) {
+            if ep.stage == crate::ShaderStage::Compute
+                && options.lang_version >= (2, 1)
+                && options.emit_workgroup_size_attribute
+            {
                 let total_threads =
                     ep.workgroup_size[0] * ep.workgroup_size[1] * ep.workgroup_size[2];
                 write!(
@@ -8046,6 +8071,7 @@ template <typename A>
                             handle,
                             usage,
                             reference: true,
+                            use_runtime_array_pointers: options.use_runtime_array_pointers,
                         };
                         let parts = tyvar.to_parts()?;
                         let mut binding = String::new();
@@ -8344,6 +8370,7 @@ template <typename A>
                         usage,
 
                         reference: false,
+                        use_runtime_array_pointers: options.use_runtime_array_pointers,
                     };
                     write!(self.out, "{}", back::INDENT)?;
                     tyvar.try_fmt(&mut self.out)?;

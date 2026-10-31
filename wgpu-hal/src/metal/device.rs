@@ -207,6 +207,11 @@ impl super::Device {
                         // Newer version, fall back to 3.2
                         _ => (4, 0),
                     },
+                    emit_workgroup_size_attribute: !self
+                        .shared
+                        .disabilities
+                        .broken_workgroup_size_attribute,
+                    use_runtime_array_pointers: self.shared.disabilities.use_runtime_array_pointers,
                     inline_samplers: Default::default(),
                     spirv_cross_compatibility: false,
                     fake_missing_bindings: false,
@@ -1930,6 +1935,13 @@ impl crate::Device for super::Device {
             };
 
             descriptor.setComputeFunction(Some(&cs.function));
+            let workgroup_size = cs.wg_size.width * cs.wg_size.height * cs.wg_size.depth;
+            let use_workgroup_size_descriptor =
+                self.shared.disabilities.broken_workgroup_size_attribute
+                    && !matches!(module.source, ShaderModuleSource::Passthrough(_));
+            if use_workgroup_size_descriptor {
+                descriptor.setMaxTotalThreadsPerThreadgroup(workgroup_size);
+            }
 
             // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
             if available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0) {
@@ -1966,6 +1978,14 @@ impl crate::Device for super::Device {
                         format!("new_compute_pipeline_state: {e:?}"),
                     )
                 })?;
+
+            if use_workgroup_size_descriptor && raw.maxTotalThreadsPerThreadgroup() < workgroup_size
+            {
+                return Err(crate::PipelineError::Linkage(
+                    wgt::ShaderStages::COMPUTE,
+                    format!("Metal pipeline supports {} threads per workgroup, but the shader requires {workgroup_size}", raw.maxTotalThreadsPerThreadgroup()),
+                ));
+            }
 
             self.counters.compute_pipelines.add(1);
 
