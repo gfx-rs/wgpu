@@ -140,6 +140,8 @@ pub enum ExpressionError {
     InvalidSampleClampCoordinateToEdge(alloc::string::String),
     #[error("Unable to cast")]
     InvalidCastArgument,
+    #[error("Unable to bitcast the argument to {0:?}")]
+    InvalidBitcast(Handle<crate::Type>),
     #[error("Invalid argument count for {0:?}")]
     WrongArgumentCount(crate::MathFunction),
     #[error("Argument [{1}] to {0:?} as expression {2:?} has an invalid type.")]
@@ -1306,24 +1308,35 @@ impl super::Validator {
 
                 ShaderStages::all()
             }
-            E::As {
-                expr,
-                kind,
-                convert,
-            } => {
-                let mut base_scalar = match resolver[expr] {
-                    crate::TypeInner::Scalar(scalar) | crate::TypeInner::Vector { scalar, .. } => {
-                        scalar
-                    }
-                    crate::TypeInner::Matrix { scalar, .. } => scalar,
+            E::As { expr, target } => {
+                match resolver[expr] {
+                    Ti::Scalar(_) | Ti::Vector { .. } => {}
+                    Ti::Matrix { .. } if target.kind == Sk::Float => {}
                     _ => return Err(ExpressionError::InvalidCastArgument),
-                };
-                base_scalar.kind = kind;
-                if let Some(width) = convert {
-                    base_scalar.width = width;
                 }
-                if self.check_width(base_scalar).is_err() {
+                if self.check_width(target).is_err() {
                     return Err(ExpressionError::InvalidCastArgument);
+                }
+                ShaderStages::all()
+            }
+            E::Bitcast { expr, ty } => {
+                let is_bit_pattern = |scalar: Sc| {
+                    matches!(scalar.kind, Sk::Sint | Sk::Uint | Sk::Float)
+                        && self.check_width(scalar).is_ok()
+                };
+                let byte_size = |inner: &Ti| match *inner {
+                    Ti::Scalar(scalar) if is_bit_pattern(scalar) => Some(scalar.width as u32),
+                    Ti::Vector { size, scalar } if is_bit_pattern(scalar) => {
+                        Some(size as u32 * scalar.width as u32)
+                    }
+                    _ => None,
+                };
+                match (
+                    byte_size(&resolver[expr]),
+                    byte_size(&module.types[ty].inner),
+                ) {
+                    (Some(source), Some(target)) if source == target => {}
+                    _ => return Err(ExpressionError::InvalidBitcast(ty)),
                 }
                 ShaderStages::all()
             }

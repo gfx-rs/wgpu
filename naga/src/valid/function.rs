@@ -832,6 +832,7 @@ impl super::Validator {
                             | Ex::Relational { .. }
                             | Ex::Math { .. }
                             | Ex::As { .. }
+                            | Ex::Bitcast { .. }
                             | Ex::ArrayLength(_)
                             | Ex::RayQueryGetIntersection { .. }
                             | Ex::RayQueryVertexPositions { .. }

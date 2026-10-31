@@ -193,8 +193,7 @@ impl<'source> Lowerer<'source, '_> {
             ) => {
                 expr = crate::Expression::As {
                     expr: component,
-                    kind: scalar.kind,
-                    convert: Some(scalar.width),
+                    target: scalar,
                 };
             }
 
@@ -215,8 +214,7 @@ impl<'source> Lowerer<'source, '_> {
             ) if dst_size == src_size => {
                 expr = crate::Expression::As {
                     expr: component,
-                    kind: dst_scalar.kind,
-                    convert: Some(dst_scalar.width),
+                    target: dst_scalar,
                 };
             }
 
@@ -258,8 +256,7 @@ impl<'source> Lowerer<'source, '_> {
             ) if dst_columns == src_columns && dst_rows == src_rows => {
                 expr = crate::Expression::As {
                     expr: component,
-                    kind: dst_scalar.kind,
-                    convert: Some(dst_scalar.width),
+                    target: dst_scalar,
                 };
             }
 

@@ -832,7 +832,7 @@ impl ExpressionKindTracker {
                     arg3.map(|arg| self.type_of(arg))
                         .unwrap_or(ExpressionKind::Const),
                 ),
-            Expression::As { expr, .. } => self.type_of(expr),
+            Expression::As { expr, .. } | Expression::Bitcast { expr, .. } => self.type_of(expr),
             Expression::Select {
                 condition,
                 accept,
@@ -1313,20 +1313,13 @@ impl<'a> ConstantEvaluator<'a> {
 
                 self.math(arg, arg1, arg2, arg3, fun, span)
             }
-            Expression::As {
-                convert,
-                expr,
-                kind,
-            } => {
+            Expression::As { expr, target } => {
                 let expr = self.check_and_get(expr)?;
-
-                match convert {
-                    Some(width) => self.cast(expr, crate::Scalar { kind, width }, span),
-                    None => Err(ConstantEvaluatorError::NotImplemented(
-                        "bitcast built-in function".into(),
-                    )),
-                }
+                self.cast(expr, target, span)
             }
+            Expression::Bitcast { .. } => Err(ConstantEvaluatorError::NotImplemented(
+                "bitcast built-in function".into(),
+            )),
             Expression::Select {
                 reject,
                 accept,
@@ -4482,8 +4475,8 @@ mod tests {
     use alloc::{vec, vec::Vec};
 
     use crate::{
-        Arena, BinaryOperator, Constant, Expression, FastHashMap, Handle, Literal, ScalarKind,
-        Type, TypeInner, UnaryOperator, UniqueArena, VectorSize,
+        Arena, BinaryOperator, Constant, Expression, FastHashMap, Handle, Literal, Type, TypeInner,
+        UnaryOperator, UniqueArena, VectorSize,
     };
 
     use super::{Behavior, ConstantEvaluator, ExpressionKindTracker, WgslRestrictions};
@@ -4909,8 +4902,7 @@ mod tests {
 
         let root = Expression::As {
             expr,
-            kind: ScalarKind::Bool,
-            convert: Some(crate::BOOL_WIDTH),
+            target: crate::Scalar::BOOL,
         };
 
         let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);

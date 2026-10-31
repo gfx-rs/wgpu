@@ -3212,30 +3212,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let ty = template_params.ty(self, ctx)?;
 
                     let mut args = ctx.prepare_args(arguments, 1, function_span);
-                    let expr = self.expression(args.next()?, ctx)?;
+                    let expr = self.expression_for_abstract(args.next()?, ctx)?;
                     args.finish()?;
+                    ctx.grow_types(expr)?;
 
-                    let element_scalar = match ctx.module.types[ty].inner {
-                        ir::TypeInner::Scalar(scalar) => scalar,
-                        ir::TypeInner::Vector { scalar, .. } => scalar,
-                        _ => {
-                            let ty_resolution = resolve!(ctx, expr);
-                            return Err(Box::new(Error::BadTypeCast {
-                                from_type: ctx.type_resolution_to_string(ty_resolution),
-                                span: function_span,
-                                to_type: ctx.type_to_string(ty),
-                            }));
-                        }
-                    };
-
-                    (
-                        ir::Expression::As {
-                            expr,
-                            kind: element_scalar.kind,
-                            convert: None,
-                        },
-                        MustUse::Yes,
-                    )
+                    let expr = self.bitcast_operand(function_span, ty, expr, ctx)?;
+                    (ir::Expression::Bitcast { expr, ty }, MustUse::Yes)
                 }
                 "coopLoad" | "coopLoadT" => {
                     let row_major = function_name.ends_with("T");
@@ -4794,6 +4776,89 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             span,
         );
         Ok(result)
+    }
+
+    /// Check that `bitcast<ty>(expr)` is one of the overloads of
+    /// [WGSL's `bitcast`][spec], and return `expr`, concretized if it was abstract.
+    ///
+    /// Naga also accepts same-shaped bitcasts between numeric types of the
+    /// same width, such as `i64` and `u64`, or `f16` and `i16`.
+    ///
+    /// [spec]: https://www.w3.org/TR/WGSL/#bitcast-builtin
+    fn bitcast_operand(
+        &mut self,
+        span: Span,
+        ty: Handle<ir::Type>,
+        mut expr: Handle<ir::Expression>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, Handle<ir::Expression>> {
+        use ir::{Scalar, ScalarKind as Sk, TypeInner as Ti, VectorSize as Vs};
+
+        let bad_cast = |ctx: &ExpressionContext<'source, '_, '_>, expr| {
+            Box::new(Error::BadTypeCast {
+                from_type: ctx.type_resolution_to_string(&ctx.typifier()[expr]),
+                span,
+                to_type: ctx.type_to_string(ty),
+            })
+        };
+
+        let (to_size, to_scalar) = match ctx.module.types[ty].inner {
+            Ti::Scalar(scalar) => (None, scalar),
+            Ti::Vector { size, scalar } => (Some(size), scalar),
+            _ => return Err(bad_cast(ctx, expr)),
+        };
+
+        let (from_size, mut from_scalar) = match *resolve_inner!(ctx, expr) {
+            Ti::Scalar(scalar) => (None, scalar),
+            Ti::Vector { size, scalar } => (Some(size), scalar),
+            _ => return Err(bad_cast(ctx, expr)),
+        };
+
+        // Pick the overload with the best conversion rank for an abstract operand.
+        if from_scalar.is_abstract() {
+            let same_shape = from_size == to_size;
+            let concrete = match from_scalar.kind {
+                Sk::AbstractInt if same_shape && matches!(to_scalar.kind, Sk::Sint | Sk::Uint) => {
+                    to_scalar
+                }
+                Sk::AbstractInt if same_shape && to_scalar == Scalar::F16 => to_scalar,
+                Sk::AbstractInt => Scalar::I32,
+                _ if same_shape && to_scalar.kind == Sk::Float => to_scalar,
+                _ => Scalar::F32,
+            };
+            expr = ctx.try_automatic_conversion_for_leaf_scalar(expr, concrete, span)?;
+            ctx.grow_types(expr)?;
+            from_scalar = concrete;
+        }
+
+        let is_bit_pattern =
+            |scalar: Scalar| matches!(scalar.kind, Sk::Sint | Sk::Uint | Sk::Float);
+        let is_32_bit = |scalar: Scalar| is_bit_pattern(scalar) && scalar.width == 4;
+        let is_f16 = |scalar: Scalar| scalar == Scalar::F16;
+
+        let valid = match (from_size, from_scalar, to_size, to_scalar) {
+            (Some(Vs::Bi), half, None, word) | (None, word, Some(Vs::Bi), half) if is_f16(half) => {
+                is_32_bit(word)
+            }
+            (Some(Vs::Quad), half, Some(Vs::Bi), word)
+            | (Some(Vs::Bi), word, Some(Vs::Quad), half)
+                if is_f16(half) =>
+            {
+                is_32_bit(word)
+            }
+            _ => {
+                from_size == to_size
+                    && from_scalar.width == to_scalar.width
+                    && is_bit_pattern(from_scalar)
+                    && is_bit_pattern(to_scalar)
+            }
+        };
+
+        if valid {
+            Ok(expr)
+        } else {
+            Err(bad_cast(ctx, expr))
+        }
     }
 
     fn subgroup_gather_helper(

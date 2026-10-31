@@ -483,6 +483,10 @@ impl super::Validator {
                 handle.check_dep_iter(components.iter().copied())?;
                 Some(ty)
             }
+            crate::Expression::Bitcast { expr, ty } => {
+                handle.check_dep(expr)?;
+                Some(ty)
+            }
             _ => None,
         };
         Ok(max_type)
@@ -639,9 +643,12 @@ impl super::Validator {
             }
             crate::Expression::As {
                 expr: input,
-                kind: _,
-                convert: _,
+                target: _,
             } => {
+                handle.check_dep(input)?;
+            }
+            crate::Expression::Bitcast { expr: input, ty } => {
+                validate_type(ty)?;
                 handle.check_dep(input)?;
             }
             crate::Expression::CallResult(function) => {

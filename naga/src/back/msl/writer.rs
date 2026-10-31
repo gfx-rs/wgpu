@@ -3048,60 +3048,40 @@ impl<W: Write> Writer<W> {
                     }
                 }
             }
-            crate::Expression::As {
-                expr,
-                kind,
-                convert,
-            } => match *context.resolve_type(expr) {
+            crate::Expression::As { expr, target } => match *context.resolve_type(expr) {
                 crate::TypeInner::Scalar(src) | crate::TypeInner::Vector { scalar: src, .. } => {
                     if src.kind == crate::ScalarKind::Float
-                        && (kind == crate::ScalarKind::Sint || kind == crate::ScalarKind::Uint)
-                        && convert.is_some()
+                        && (target.kind == crate::ScalarKind::Sint
+                            || target.kind == crate::ScalarKind::Uint)
                     {
                         // Use helper functions for float to int casts in order to avoid
                         // undefined behaviour when value is out of range for the target
                         // type.
-                        let fun_name = match (kind, convert) {
-                            (crate::ScalarKind::Sint, Some(4)) => F2I32_FUNCTION,
-                            (crate::ScalarKind::Uint, Some(4)) => F2U32_FUNCTION,
-                            (crate::ScalarKind::Sint, Some(8)) => F2I64_FUNCTION,
-                            (crate::ScalarKind::Uint, Some(8)) => F2U64_FUNCTION,
+                        let fun_name = match (target.kind, target.width) {
+                            (crate::ScalarKind::Sint, 4) => F2I32_FUNCTION,
+                            (crate::ScalarKind::Uint, 4) => F2U32_FUNCTION,
+                            (crate::ScalarKind::Sint, 8) => F2I64_FUNCTION,
+                            (crate::ScalarKind::Uint, 8) => F2U64_FUNCTION,
                             _ => unreachable!(),
                         };
                         write!(self.out, "{fun_name}(")?;
                         self.put_expression(expr, context, true)?;
                         write!(self.out, ")")?;
                     } else {
-                        let target_scalar = crate::Scalar {
-                            kind,
-                            width: convert.unwrap_or(src.width),
-                        };
-                        let op = match convert {
-                            Some(_) => "static_cast",
-                            None => "as_type",
-                        };
-                        write!(self.out, "{op}<")?;
+                        write!(self.out, "static_cast<")?;
                         match *context.resolve_type(expr) {
                             crate::TypeInner::Vector { size, .. } => {
-                                put_numeric_type(&mut self.out, target_scalar, &[size])?
+                                put_numeric_type(&mut self.out, target, &[size])?
                             }
-                            _ => put_numeric_type(&mut self.out, target_scalar, &[])?,
+                            _ => put_numeric_type(&mut self.out, target, &[])?,
                         };
                         write!(self.out, ">(")?;
                         self.put_expression(expr, context, true)?;
                         write!(self.out, ")")?;
                     }
                 }
-                crate::TypeInner::Matrix {
-                    columns,
-                    rows,
-                    scalar,
-                } => {
-                    let target_scalar = crate::Scalar {
-                        kind,
-                        width: convert.unwrap_or(scalar.width),
-                    };
-                    put_numeric_type(&mut self.out, target_scalar, &[rows, columns])?;
+                crate::TypeInner::Matrix { columns, rows, .. } => {
+                    put_numeric_type(&mut self.out, target, &[rows, columns])?;
                     write!(self.out, "(")?;
                     self.put_expression(expr, context, true)?;
                     write!(self.out, ")")?;
@@ -3112,6 +3092,25 @@ impl<W: Write> Writer<W> {
                     )))
                 }
             },
+            crate::Expression::Bitcast { expr, ty } => {
+                write!(self.out, "as_type<")?;
+                match context.module.types[ty].inner {
+                    crate::TypeInner::Scalar(scalar) => {
+                        put_numeric_type(&mut self.out, scalar, &[])?
+                    }
+                    crate::TypeInner::Vector { size, scalar } => {
+                        put_numeric_type(&mut self.out, scalar, &[size])?
+                    }
+                    ref other => {
+                        return Err(Error::GenericValidation(format!(
+                            "Unsupported type for Bitcast: {other:?}"
+                        )))
+                    }
+                }
+                write!(self.out, ">(")?;
+                self.put_expression(expr, context, true)?;
+                write!(self.out, ")")?;
+            }
             // These have no inline form, so they are only ever read through
             // the temporary the statement that produced them stored them in,
             // which one of the two tables above names. The one place that is
@@ -6459,8 +6458,7 @@ template <typename A>
         module: &crate::Module,
         func_ctx: &back::FunctionCtx,
         expr: Handle<crate::Expression>,
-        kind: crate::ScalarKind,
-        convert: Option<crate::Bytes>,
+        dst_scalar: crate::Scalar,
     ) -> BackendResult {
         // Avoid undefined behaviour when casting from a float to integer
         // when the value is out of range for the target type. Additionally
@@ -6473,13 +6471,9 @@ template <typename A>
         //   truncate(X) and also exactly representable in the original
         //   floating point type.
         let src_ty = func_ctx.resolve_type(expr, &module.types);
-        let Some(width) = convert else {
-            return Ok(());
-        };
         let Some((vector_size, src_scalar)) = src_ty.vector_size_and_scalar() else {
             return Ok(());
         };
-        let dst_scalar = crate::Scalar { kind, width };
         if src_scalar.kind != crate::ScalarKind::Float
             || (dst_scalar.kind != crate::ScalarKind::Sint
                 && dst_scalar.kind != crate::ScalarKind::Uint)
@@ -6976,12 +6970,8 @@ template <typename A>
                 } => {
                     self.write_wrapped_math_function(module, func_ctx, fun, arg, arg1, arg2, arg3)?;
                 }
-                crate::Expression::As {
-                    expr,
-                    kind,
-                    convert,
-                } => {
-                    self.write_wrapped_cast(module, func_ctx, expr, kind, convert)?;
+                crate::Expression::As { expr, target } => {
+                    self.write_wrapped_cast(module, func_ctx, expr, target)?;
                 }
                 crate::Expression::ImageLoad {
                     image,

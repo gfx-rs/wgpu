@@ -1076,9 +1076,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let left = self.get_expr_handle(p1_id, p1_lexp, ctx, emitter, block, body_idx);
 
         let result_lookup_ty = self.lookup_type.lookup(result_type_id)?;
-        let kind = ctx.module.types[result_lookup_ty.handle]
+        let target = ctx.module.types[result_lookup_ty.handle]
             .inner
-            .scalar_kind()
+            .scalar()
             .unwrap();
 
         let expr = crate::Expression::Unary {
@@ -1086,14 +1086,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             expr: if p1_lexp.type_id == result_type_id {
                 left
             } else {
-                ctx.expressions.append(
-                    crate::Expression::As {
-                        expr: left,
-                        kind,
-                        convert: None,
-                    },
-                    span,
-                )
+                ctx.expressions
+                    .append(crate::Expression::As { expr: left, target }, span)
             },
         };
 
@@ -1142,9 +1136,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             SignAnchor::Operand => p1_lexp.type_id,
         };
         let expected_lookup_ty = self.lookup_type.lookup(expected_type_id)?;
-        let kind = ctx.module.types[expected_lookup_ty.handle]
+        let target = ctx.module.types[expected_lookup_ty.handle]
             .inner
-            .scalar_kind()
+            .scalar()
             .unwrap();
 
         let expr = crate::Expression::Binary {
@@ -1152,14 +1146,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             left: if p1_lexp.type_id == expected_type_id {
                 left
             } else {
-                ctx.expressions.append(
-                    crate::Expression::As {
-                        expr: left,
-                        kind,
-                        convert: None,
-                    },
-                    span,
-                )
+                ctx.expressions
+                    .append(crate::Expression::As { expr: left, target }, span)
             },
             right: if p2_lexp.type_id == expected_type_id {
                 right
@@ -1167,8 +1155,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 ctx.expressions.append(
                     crate::Expression::As {
                         expr: right,
-                        kind,
-                        convert: None,
+                        target,
                     },
                     span,
                 )
@@ -1210,40 +1197,35 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let p1_lexp = self.lookup_expression.lookup(p1_id)?;
         let left = self.get_expr_handle(p1_id, p1_lexp, ctx, emitter, block, body_idx);
         let p1_lookup_ty = self.lookup_type.lookup(p1_lexp.type_id)?;
-        let p1_kind = ctx.module.types[p1_lookup_ty.handle]
+        let p1_scalar = ctx.module.types[p1_lookup_ty.handle]
             .inner
-            .scalar_kind()
+            .scalar()
             .unwrap();
         let p2_lexp = self.lookup_expression.lookup(p2_id)?;
         let right = self.get_expr_handle(p2_id, p2_lexp, ctx, emitter, block, body_idx);
         let p2_lookup_ty = self.lookup_type.lookup(p2_lexp.type_id)?;
-        let p2_kind = ctx.module.types[p2_lookup_ty.handle]
+        let p2_scalar = ctx.module.types[p2_lookup_ty.handle]
             .inner
-            .scalar_kind()
+            .scalar()
             .unwrap();
 
         let expr = crate::Expression::Binary {
             op,
-            left: if p1_kind == kind {
+            left: if p1_scalar.kind == kind {
                 left
             } else {
-                ctx.expressions.append(
-                    crate::Expression::As {
-                        expr: left,
-                        kind,
-                        convert: None,
-                    },
-                    span,
-                )
+                let target = crate::Scalar { kind, ..p1_scalar };
+                ctx.expressions
+                    .append(crate::Expression::As { expr: left, target }, span)
             },
-            right: if p2_kind == kind {
+            right: if p2_scalar.kind == kind {
                 right
             } else {
+                let target = crate::Scalar { kind, ..p2_scalar };
                 ctx.expressions.append(
                     crate::Expression::As {
                         expr: right,
-                        kind,
-                        convert: None,
+                        target,
                     },
                     span,
                 )
@@ -1283,11 +1265,18 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let p2_lexp = self.lookup_expression.lookup(p2_id)?;
         let p2_handle = self.get_expr_handle(p2_id, p2_lexp, ctx, emitter, block, body_idx);
         // convert the shift to Uint
+        let p2_lookup_ty = self.lookup_type.lookup(p2_lexp.type_id)?;
+        let p2_scalar = ctx.module.types[p2_lookup_ty.handle]
+            .inner
+            .scalar()
+            .unwrap();
         let right = ctx.expressions.append(
             crate::Expression::As {
                 expr: p2_handle,
-                kind: crate::ScalarKind::Uint,
-                convert: None,
+                target: crate::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    ..p2_scalar
+                },
             },
             span,
         );

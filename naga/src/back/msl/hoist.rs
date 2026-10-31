@@ -256,6 +256,7 @@ pub(super) const fn is_statement_result(expression: &crate::Expression) -> bool 
         | Ex::Relational { .. }
         | Ex::Math { .. }
         | Ex::As { .. }
+        | Ex::Bitcast { .. }
         | Ex::ArrayLength(_)
         | Ex::RayQueryVertexPositions { .. }
         | Ex::RayQueryGetIntersection { .. }

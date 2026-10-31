@@ -176,6 +176,7 @@ variants, whose operands (if any) are also constant expressions:
 - [`Relational`]
 - [`Math`]
 - [`As`]
+- [`Bitcast`]
 
 A constant expression can be evaluated at module translation time.
 
@@ -228,6 +229,7 @@ An override expression can be evaluated at pipeline creation time.
 [`Relational`]: Expression::Relational
 [`Math`]: Expression::Math
 [`As`]: Expression::As
+[`Bitcast`]: Expression::Bitcast
 
 [constant expression]: #constant-expressions
 */
@@ -1859,15 +1861,29 @@ pub enum Expression {
         arg2: Option<Handle<Expression>>,
         arg3: Option<Handle<Expression>>,
     },
-    /// Cast a simple type to another kind.
+    /// Convert the components of a scalar, vector or matrix to another scalar type.
+    ///
+    /// The result has the same shape as `expr`, with its scalar type replaced
+    /// by `target`. To reinterpret bits instead, see [`Bitcast`].
+    ///
+    /// [`Bitcast`]: Expression::Bitcast
     As {
+        /// Source expression, which can only be a scalar, a vector or a matrix.
+        expr: Handle<Expression>,
+        /// Scalar type of the result's components.
+        target: Scalar,
+    },
+    /// Reinterpret the bits of a scalar or vector as another scalar or vector type.
+    ///
+    /// `ty` and the type of `expr` must both be numeric scalars or vectors with
+    /// the same size in bytes. Components are laid out as in memory, so a
+    /// `vec2<f16>` can be bitcast to a `u32`, whose low bits are the first
+    /// component.
+    Bitcast {
         /// Source expression, which can only be a scalar or a vector.
         expr: Handle<Expression>,
-        /// Target scalar kind.
-        kind: ScalarKind,
-        /// If provided, converts to the specified byte width.
-        /// Otherwise, bitcast.
-        convert: Option<Bytes>,
+        /// Type of the result.
+        ty: Handle<Type>,
     },
     /// Result of calling another function.
     CallResult(Handle<Function>),

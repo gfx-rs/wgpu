@@ -145,6 +145,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
 - Add the `wgpu_ray_tracing_invocation_reorder` WGSL enable-extension and the matching `Capabilities::RAY_TRACING_INVOCATION_REORDER`, exposing hit objects and shader invocation reordering. It provides the `hit_object` type, which records the result of a ray traversal without running any hit or miss shader, various `hitObject*` built-in functions, and `reorderThread`, which reorders invocations of a `@ray_generation` shader to improve coherence. Currently only supported with the SPIR-V backend. By @JMS55 in [#10311](https://github.com/gfx-rs/wgpu/pull/10311).
+- Support WGSL `bitcast` between `vec2<f16>` and 32-bit scalars, between `vec4<f16>` and `vec2` of 32-bit scalars, between `f16` and `i16`/`u16` (with `wgpu_int16`), and the corresponding SPIR-V `OpBitcast`s. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
 
 #### Hal
 
@@ -153,6 +154,10 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Add `wgpu_hal::vulkan::Surface::set_next_present_chain`, which attaches a caller-provided `pNext` chain to the `VkPresentInfoKHR` of the surface's next presentation. With `Adapter::open_with_callback` to enable the device extension, this supports presentation extensions wgpu has no dedicated support for, such as [VK_NV_present_metering](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_present_metering.html) for metering the display timing of frame-generation frames. By @stuartparmenter in [#9847](https://github.com/gfx-rs/wgpu/pull/9847).
 - Add `wgpu_hal::vulkan::AccelerationStructure::raw_handle`, which returns the underlying `VkAccelerationStructureKHR`. Use it with `Adapter::open_with_callback` to record acceleration structure commands from extensions wgpu doesn't support, such as [VK_NV_cluster_acceleration_structure](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_cluster_acceleration_structure.html). Mark the result with `CommandEncoder::mark_acceleration_structures_built`. By @stuartparmenter in [#10187](https://github.com/gfx-rs/wgpu/pull/10187).
 - Add `wgpu_hal::vulkan::Surface::set_next_swapchain_create_chain` and `wgpu_hal::vulkan::Queue::set_next_submit_chain`. The first attaches a caller-provided `pNext` chain to the `VkSwapchainCreateInfoKHR` of the surface's next configuration. The second attaches one to the `VkSubmitInfo` of the queue's next submission. Together with `set_next_present_chain` and the existing raw-handle accessors, this makes [VK_NV_low_latency2](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_low_latency2.html) usable on a wgpu swapchain. That extension is the Vulkan interface for NVIDIA Reflex. By @stuartparmenter in [#10095](https://github.com/gfx-rs/wgpu/pull/10095).
+
+#### DX12
+
+- Support `Features::SHADER_EARLY_DEPTH_TEST` on DX12. Naga's HLSL backend now emits `[earlydepthstencil]` for `@early_depth_test(force)`, `SV_DepthGreaterEqual`/`SV_DepthLessEqual` for `@early_depth_test(greater_equal/less_equal)` on pipelines that are not multisampled, and discards the depth output for `@early_depth_test(unchanged)`. Callers of Naga's HLSL backend can set the new `naga::back::hlsl::PipelineOptions::multisampled`. By @DouglasDwyer in [#10624](https://github.com/gfx-rs/wgpu/pull/10624).
 
 #### Metal
 
@@ -201,6 +206,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - `naga::valid::ValidationError` is now always returned boxed, to avoid `clippy::large_result_err` warning. By @beicause in [#9612](https://github.com/gfx-rs/wgpu/pull/9612)
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
+- Bit reinterpretation is now represented in the Naga IR by the new `naga::ir::Expression::Bitcast`, which names its result type. `naga::ir::Expression::As` now only converts, and its `kind` and `convert` fields are replaced by `target: Scalar`. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
 
 #### Metal
 
@@ -245,6 +251,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Accept a `ViewIndex` input declared as a signed integer in the SPIR-V frontend, as glslang and Slang emit it, by reading it as a `u32`. By @VoxelBoy in [#10568](https://github.com/gfx-rs/wgpu/pull/10568).
 - Fix the MSL backend generating wrong code for a loop's `continuing` block when it refers to a value computed by the loop body, such as `loop { let cmp = a < 8; ... continuing { break if cmp; } }`. The value was re-evaluated in place, reading whatever the body had left behind, and for values produced by statements (such as a function call result) the backend panicked instead. By @teoxoy in [#10459](https://github.com/gfx-rs/wgpu/pull/10459).
 - Fix invalid GLSL for `textureLoad` with a `u32` level or sample index under the `Restrict` and `ReadZeroSkipWrite` bounds check policies. By @ilyas-mallah in [#XXXXX](https://github.com/gfx-rs/wgpu/pull/XXXXX).
+- Fix `var<immediate>` members being read from the wrong offsets on DX12 when a nested struct is not 16-byte aligned. By @DouglasDwyer in [#10581](https://github.com/gfx-rs/wgpu/pull/10581).
 
 #### Validation
 
@@ -306,6 +313,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### GLES
 
+- Enable `TEXTURE_CUBE_MAP_SEAMLESS` on desktop OpenGL so cube maps sample seamlessly across face edges, matching OpenGL ES 3.0+, WebGL 2, Vulkan, Metal, and Direct3D 12. By @kuntal-devrat in [#10628](https://github.com/gfx-rs/wgpu/pull/10628).
 - Fix black EGL surfaces on some platforms by selecting the default framebuffer's color buffer before presentation. By @valadaptive in [#10268](https://github.com/gfx-rs/wgpu/pull/10268).
 - Avoid duplicate `EGL_SURFACE_TYPE` attributes when selecting an EGL framebuffer configuration, which caused Mesa to return no matching configurations. By @BlueJayLouche and @scroix in [#10048](https://github.com/gfx-rs/wgpu/pull/10048).
 - `@interpolate(linear)` is now rejected by `Device::create_shader_module` on adapters that lack `DownlevelFlags::LINEAR_INTERPOLATION` (GLES/WebGL2), with a shader label and a source span. Previously such a shader validated fine and then failed at pipeline creation with `The selected version doesn't support Features(NOPERSPECTIVE_QUALIFIER)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
