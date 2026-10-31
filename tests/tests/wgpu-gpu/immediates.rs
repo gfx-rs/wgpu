@@ -8,7 +8,7 @@ use wgpu_test::{
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
-    vec.extend([PARTIAL_UPDATE, RENDER_PASS_TEST]);
+    vec.extend([PARTIAL_UPDATE, RENDER_PASS_TEST, NESTED_STRUCT]);
 }
 
 /// We want to test that partial updates to immediates work as expected.
@@ -372,4 +372,122 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
     drop(mapped_data);
     cpu_buffer.unmap();
     assert_eq!(&result, &data);
+}
+
+/// Immediates have the same layout as storage buffers, so a struct-typed member is not
+/// aligned to 16 bytes: `inner` below lives at offset 4, directly after `x`.
+///
+/// Backends that read immediates through a constant buffer have to take this into account,
+/// since for example HLSL starts every nested struct on a new 16-byte register.
+#[apply(gpu_test!)]
+static NESTED_STRUCT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::IMMEDIATES)
+            .limits(Limits {
+                max_immediate_size: 16,
+                ..Default::default()
+            }),
+    )
+    .run_async(nested_struct_test);
+
+const NESTED_STRUCT_SHADER: &str = r#"
+    struct Inner { a: u32, b: u32 }
+    struct Data { x: u32, inner: Inner, y: u32 }
+
+    var<immediate> data: Data;
+
+    @group(0) @binding(0)
+    var<storage, read_write> output: array<u32, 4>;
+
+    @compute @workgroup_size(1)
+    fn main() {
+        output[0] = data.x;
+        output[1] = data.inner.a;
+        output[2] = data.inner.b;
+        output[3] = data.y;
+    }
+"#;
+
+async fn nested_struct_test(ctx: TestingContext) {
+    let module = ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: None,
+        source: ShaderSource::Wgsl(NESTED_STRUCT_SHADER.into()),
+    });
+
+    let bgl = ctx
+        .device
+        .create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: NonZeroU64::new(16),
+                },
+                count: None,
+            }],
+        });
+
+    let layout = ctx
+        .device
+        .create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(&bgl)],
+            immediate_size: 16,
+        });
+
+    let pipeline = ctx
+        .device
+        .create_compute_pipeline(&ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&layout),
+            module: &module,
+            entry_point: Some("main"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
+    let output = ctx.device.create_buffer(&BufferDescriptor {
+        label: None,
+        size: 16,
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+    let readback = ctx.device.create_buffer(&BufferDescriptor {
+        label: None,
+        size: 16,
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+        label: None,
+        layout: &bgl,
+        entries: &[BindGroupEntry {
+            binding: 0,
+            resource: output.as_entire_binding(),
+        }],
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+    {
+        let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
+        cpass.set_pipeline(&pipeline);
+        cpass.set_bind_group(0, &bind_group, &[]);
+        // `Data { x: 0, inner: Inner { a: 1, b: 2 }, y: 3 }`
+        cpass.set_immediates(0, bytemuck::bytes_of(&[0_u32, 1, 2, 3]));
+        cpass.dispatch_workgroups(1, 1, 1);
+    }
+    encoder.copy_buffer_to_buffer(&output, 0, &readback, 0, 16);
+    ctx.queue.submit([encoder.finish()]);
+
+    readback.slice(..).map_async(MapMode::Read, |_| ());
+    ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
+
+    let data = readback.slice(..).get_mapped_range().unwrap();
+    assert_eq!(bytemuck::cast_slice::<u8, u32>(&data), [0, 1, 2, 3]);
 }
