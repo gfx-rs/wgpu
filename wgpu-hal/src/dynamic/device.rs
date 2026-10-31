@@ -18,61 +18,81 @@ use super::{
 };
 
 pub trait DynDevice: DynResource {
+    /// Dynamic version of [Device::create_buffer]
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,
     ) -> Result<(Box<dyn DynBuffer>, wgt::BufferAddress), DeviceError>;
 
+    /// Dynamic version of [Device::destroy_buffer]
     unsafe fn destroy_buffer(&self, buffer: Box<dyn DynBuffer>);
+    /// Dynamic version of [Device::add_raw_buffer]
     unsafe fn add_raw_buffer(&self, buffer: &dyn DynBuffer);
 
+    /// Dynamic version of [Device::map_buffer]
     unsafe fn map_buffer(
         &self,
         buffer: &dyn DynBuffer,
         range: MemoryRange,
     ) -> Result<BufferMapping, DeviceError>;
 
+    /// Dynamic version of [Device::unmap_buffer]
     unsafe fn unmap_buffer(&self, buffer: &dyn DynBuffer);
 
+    /// Dynamic version of [Device::flush_mapped_ranges]
     unsafe fn flush_mapped_ranges(&self, buffer: &dyn DynBuffer, ranges: &[MemoryRange]);
+    /// Dynamic version of [Device::invalidate_mapped_ranges]
     unsafe fn invalidate_mapped_ranges(&self, buffer: &dyn DynBuffer, ranges: &[MemoryRange]);
 
+    /// Dynamic version of [Device::create_texture]
     unsafe fn create_texture(
         &self,
         desc: &TextureDescriptor,
     ) -> Result<Box<dyn DynTexture>, DeviceError>;
+    /// Dynamic version of [Device::destroy_texture]
     unsafe fn destroy_texture(&self, texture: Box<dyn DynTexture>);
+    /// Dynamic version of [Device::add_raw_texture]
     unsafe fn add_raw_texture(&self, texture: &dyn DynTexture);
 
+    /// Dynamic version of [Device::create_texture_view]
     unsafe fn create_texture_view(
         &self,
         texture: &dyn DynTexture,
         desc: &TextureViewDescriptor,
     ) -> Result<Box<dyn DynTextureView>, DeviceError>;
+    /// Dynamic version of [Device::destroy_texture_view]
     unsafe fn destroy_texture_view(&self, view: Box<dyn DynTextureView>);
+    /// Dynamic version of [Device::create_sampler]
     unsafe fn create_sampler(
         &self,
         desc: &SamplerDescriptor,
     ) -> Result<Box<dyn DynSampler>, DeviceError>;
+    /// Dynamic version of [Device::destroy_sampler]
     unsafe fn destroy_sampler(&self, sampler: Box<dyn DynSampler>);
 
+    /// Dynamic version of [Device::create_command_encoder]
     unsafe fn create_command_encoder(
         &self,
         desc: &CommandEncoderDescriptor<dyn DynQueue>,
     ) -> Result<Box<dyn DynCommandEncoder>, DeviceError>;
 
+    /// Dynamic version of [Device::create_bind_group_layout]
     unsafe fn create_bind_group_layout(
         &self,
         desc: &BindGroupLayoutDescriptor,
     ) -> Result<Box<dyn DynBindGroupLayout>, DeviceError>;
+    /// Dynamic version of [Device::destroy_bind_group_layout]
     unsafe fn destroy_bind_group_layout(&self, bg_layout: Box<dyn DynBindGroupLayout>);
 
+    /// Dynamic version of [Device::create_pipeline_layout]
     unsafe fn create_pipeline_layout(
         &self,
         desc: &PipelineLayoutDescriptor<dyn DynBindGroupLayout>,
     ) -> Result<Box<dyn DynPipelineLayout>, DeviceError>;
+    /// Dynamic version of [Device::destroy_pipeline_layout]
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Box<dyn DynPipelineLayout>);
 
+    /// Dynamic version of [Device::create_bind_group]
     unsafe fn create_bind_group(
         &self,
         desc: &BindGroupDescriptor<
@@ -83,15 +103,19 @@ pub trait DynDevice: DynResource {
             dyn DynAccelerationStructure,
         >,
     ) -> Result<Box<dyn DynBindGroup>, DeviceError>;
+    /// Dynamic version of [Device::destroy_bind_group]
     unsafe fn destroy_bind_group(&self, group: Box<dyn DynBindGroup>);
 
+    /// Dynamic version of [Device::create_shader_module]
     unsafe fn create_shader_module(
         &self,
         desc: &ShaderModuleDescriptor,
         shader: ShaderInput,
     ) -> Result<Box<dyn DynShaderModule>, ShaderError>;
+    /// Dynamic version of [Device::destroy_shader_module]
     unsafe fn destroy_shader_module(&self, module: Box<dyn DynShaderModule>);
 
+    /// Dynamic version of [Device::create_render_pipeline]
     unsafe fn create_render_pipeline(
         &self,
         desc: &RenderPipelineDescriptor<
@@ -100,8 +124,10 @@ pub trait DynDevice: DynResource {
             dyn DynPipelineCache,
         >,
     ) -> Result<Box<dyn DynRenderPipeline>, PipelineError>;
+    /// Dynamic version of [Device::destroy_render_pipeline]
     unsafe fn destroy_render_pipeline(&self, pipeline: Box<dyn DynRenderPipeline>);
 
+    /// Dynamic version of [Device::create_compute_pipeline]
     unsafe fn create_compute_pipeline(
         &self,
         desc: &ComputePipelineDescriptor<
@@ -110,8 +136,10 @@ pub trait DynDevice: DynResource {
             dyn DynPipelineCache,
         >,
     ) -> Result<Box<dyn DynComputePipeline>, PipelineError>;
+    /// Dynamic version of [Device::destroy_compute_pipeline]
     unsafe fn destroy_compute_pipeline(&self, pipeline: Box<dyn DynComputePipeline>);
 
+    /// Dynamic version of [Device::create_ray_tracing_pipeline]
     unsafe fn create_ray_tracing_pipeline(
         &self,
         desc: &RayTracingPipelineDescriptor<
@@ -120,32 +148,43 @@ pub trait DynDevice: DynResource {
             dyn DynPipelineCache,
         >,
     ) -> Result<Box<dyn DynRayTracingPipeline>, PipelineError>;
+    /// Dynamic version of [Device::destroy_ray_tracing_pipeline]
     unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: Box<dyn DynRayTracingPipeline>);
+    /// Dynamic version of [Device::get_raytracing_pipeline_group_data]
     unsafe fn get_raytracing_pipeline_group_data(
         &self,
         pipeline: &dyn DynRayTracingPipeline,
         groups: core::ops::Range<u32>,
     ) -> Result<Vec<u8>, DeviceError>;
 
+    /// Dynamic version of [Device::create_pipeline_cache]
     unsafe fn create_pipeline_cache(
         &self,
         desc: &PipelineCacheDescriptor<'_>,
     ) -> Result<Box<dyn DynPipelineCache>, PipelineCacheError>;
+    /// Dynamic version of [Device::pipeline_cache_validation_key]
     fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
         None
     }
+    /// Dynamic version of [Device::destroy_pipeline_cache]
     unsafe fn destroy_pipeline_cache(&self, cache: Box<dyn DynPipelineCache>);
 
+    /// Dynamic version of [Device::create_query_set]
     unsafe fn create_query_set(
         &self,
         desc: &wgt::QuerySetDescriptor<Label>,
     ) -> Result<Box<dyn DynQuerySet>, DeviceError>;
+    /// Dynamic version of [Device::destroy_query_set]
     unsafe fn destroy_query_set(&self, set: Box<dyn DynQuerySet>);
 
+    /// Dynamic version of [Device::create_fence]
     unsafe fn create_fence(&self) -> Result<Box<dyn DynFence>, DeviceError>;
+    /// Dynamic version of [Device::destroy_fence]
     unsafe fn destroy_fence(&self, fence: Box<dyn DynFence>);
+    /// Dynamic version of [Device::get_fence_value]
     unsafe fn get_fence_value(&self, fence: &dyn DynFence) -> Result<FenceValue, DeviceError>;
 
+    /// Dynamic version of [Device::wait]
     unsafe fn wait(
         &self,
         fence: &dyn DynFence,
@@ -153,32 +192,43 @@ pub trait DynDevice: DynResource {
         timeout: Option<core::time::Duration>,
     ) -> Result<bool, DeviceError>;
 
+    /// Dynamic version of [Device::start_graphics_debugger_capture]
     unsafe fn start_graphics_debugger_capture(&self) -> bool;
+    /// Dynamic version of [Device::stop_graphics_debugger_capture]
     unsafe fn stop_graphics_debugger_capture(&self);
 
+    /// Dynamic version of [Device::pipeline_cache_get_data]
     unsafe fn pipeline_cache_get_data(&self, cache: &dyn DynPipelineCache) -> Option<Vec<u8>>;
 
+    /// Dynamic version of [Device::create_acceleration_structure]
     unsafe fn create_acceleration_structure(
         &self,
         desc: &AccelerationStructureDescriptor,
     ) -> Result<Box<dyn DynAccelerationStructure>, DeviceError>;
+    /// Dynamic version of [Device::get_acceleration_structure_build_sizes]
     unsafe fn get_acceleration_structure_build_sizes(
         &self,
         desc: &GetAccelerationStructureBuildSizesDescriptor<dyn DynBuffer>,
     ) -> AccelerationStructureBuildSizes;
+    /// Dynamic version of [Device::get_acceleration_structure_device_address]
     unsafe fn get_acceleration_structure_device_address(
         &self,
         acceleration_structure: &dyn DynAccelerationStructure,
     ) -> wgt::BufferAddress;
+    /// Dynamic version of [Device::destroy_acceleration_structure]
     unsafe fn destroy_acceleration_structure(
         &self,
         acceleration_structure: Box<dyn DynAccelerationStructure>,
     );
+    /// Dynamic version of [Device::tlas_instance_to_bytes]
     fn tlas_instance_to_bytes(&self, instance: TlasInstance, to_extend: &mut Vec<u8>);
 
+    /// Dynamic version of [Device::get_internal_counters]
     fn get_internal_counters(&self) -> wgt::HalCounters;
+    /// Dynamic version of [Device::generate_allocator_report]
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport>;
 
+    /// Dynamic version of [Device::check_if_oom]
     fn check_if_oom(&self) -> Result<(), DeviceError>;
 }
 
