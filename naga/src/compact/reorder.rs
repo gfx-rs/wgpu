@@ -220,6 +220,11 @@ impl Builder<'_> {
         let start = self.order.len() as u32;
         for handle in range.clone() {
             if self.used.contains(handle) {
+                // Placing it earlier would leave it outside the new range.
+                assert!(
+                    !self.map.used(handle) || expressions[handle].needs_pre_emit(),
+                    "expression {handle:?} is covered by another `Emit` or used before it is emitted"
+                );
                 self.place_with_operands(handle);
             }
         }
@@ -613,6 +618,62 @@ mod tests {
         };
         assert_eq!(emit_range(&accept[0]), 1..2);
         assert_eq!(emit_range(&reject[0]), 1..2);
+    }
+
+    /// Partially overlapping ranges in sibling blocks cannot both stay
+    /// contiguous after reordering.
+    #[test]
+    #[should_panic(expected = "is covered by another `Emit`")]
+    fn overlapping_emit_ranges_in_two_blocks() {
+        let mut module = Module::default();
+        let f32 = scalar_type(&mut module, Scalar::F32);
+        let mut f = Function::default();
+        let v = local(&mut f, f32);
+
+        // e0
+        let condition = add(&mut f, Expression::Literal(Literal::Bool(true)));
+        // e1, refers forward to e4
+        let a = add(
+            &mut f,
+            Expression::Binary {
+                op: BinaryOperator::Add,
+                left: h(4),
+                right: h(4),
+            },
+        );
+        // e2, refers forward to e4
+        let b = add(
+            &mut f,
+            Expression::Binary {
+                op: BinaryOperator::Multiply,
+                left: h(4),
+                right: h(4),
+            },
+        );
+        // e3
+        let pointer = add(&mut f, Expression::LocalVariable(v));
+        // e4
+        add(&mut f, Expression::Literal(Literal::F32(1.0)));
+
+        let mut accept = crate::Block::new();
+        accept.push(emit(1, 3), Span::default());
+        accept.push(Statement::Store { pointer, value: a }, Span::default());
+        let mut reject = crate::Block::new();
+        reject.push(emit(2, 3), Span::default());
+        reject.push(Statement::Store { pointer, value: b }, Span::default());
+        f.body.push(
+            Statement::If {
+                condition,
+                accept,
+                reject,
+            },
+            Span::default(),
+        );
+        f.body
+            .push(Statement::Return { value: None }, Span::default());
+        module.entry_points.push(entry_point(f));
+
+        compact(&mut module, KeepUnused::No);
     }
 
     /// Forward references in a function that is only kept because of
