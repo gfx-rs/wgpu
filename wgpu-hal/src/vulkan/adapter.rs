@@ -699,7 +699,6 @@ impl PhysicalDeviceFeatures {
             | Df::MSL2_1
             | Df::NONBLOCKING_QUERY_RESOLVE
             | Df::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
-            | Df::SHADER_F16_IN_F32
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
             | Df::UNRESTRICTED_INDEX_BUFFER
             | Df::VERTEX_STORAGE
@@ -2428,15 +2427,6 @@ impl super::Instance {
             &phd_capabilities,
             queue_family_properties,
         );
-
-        if phd_capabilities.is_driver(vk::DriverId::MESA_LLVMPIPE) {
-            // The `F16_IN_F32` instructions do not normally require native `F16` support, but on
-            // llvmpipe, they do.
-            downlevel_flags.set(
-                wgt::DownlevelFlags::SHADER_F16_IN_F32,
-                available_features.contains(wgt::Features::SHADER_F16),
-            );
-        }
 
         downlevel_flags.set(
             wgt::DownlevelFlags::TEXTURE_COMPRESSION,
