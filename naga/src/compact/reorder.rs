@@ -205,27 +205,40 @@ impl Builder<'_> {
         // else the range's expressions depend on that has not been placed yet
         // (pre-emitted expressions like literals and local variables, or the
         // results of statements like `Call`) must be placed before the range.
+        // Pre-emitted expressions inside the range are moved out of it too,
+        // since emitting them is invalid.
         let expressions = self.expressions;
-        let in_range = |handle: Handle<Expression>| old.contains(&(handle.index() as u32));
+        let emitted_here = |handle: Handle<Expression>| {
+            old.contains(&(handle.index() as u32)) && !expressions[handle].needs_pre_emit()
+        };
         for handle in range.clone() {
-            if self.used.contains(handle) {
-                for_each_operand(&expressions[handle], |operand| {
-                    if !self.map.used(operand) && !in_range(operand) {
-                        self.place_with_operands(operand);
-                    }
-                });
+            if !self.used.contains(handle) {
+                continue;
             }
+            if !emitted_here(handle) {
+                self.place_with_operands(handle);
+                continue;
+            }
+            for_each_operand(&expressions[handle], |operand| {
+                if !self.map.used(operand) && !emitted_here(operand) {
+                    self.place_with_operands(operand);
+                }
+            });
         }
 
         let start = self.order.len() as u32;
         for handle in range.clone() {
-            if self.used.contains(handle) {
-                // Placing it earlier would leave it outside the new range.
-                assert!(
-                    !self.map.used(handle) || expressions[handle].needs_pre_emit(),
-                    "expression {handle:?} is covered by another `Emit` or used before it is emitted"
-                );
-                self.place_with_operands(handle);
+            if !self.used.contains(handle) || !emitted_here(handle) {
+                continue;
+            }
+            match self.map.try_adjust(handle) {
+                // Placed already by an earlier expression in this range that
+                // refers to it.
+                Some(new) => assert!(
+                    new.index() >= start as usize,
+                    "expression {handle:?} is emitted by two overlapping `Emit` ranges"
+                ),
+                None => self.place_with_operands(handle),
             }
         }
         let end = self.order.len() as u32;
@@ -620,10 +633,208 @@ mod tests {
         assert_eq!(emit_range(&reject[0]), 1..2);
     }
 
+    /// An expression that refers to a later expression in the same `Emit`
+    /// range.
+    #[test]
+    fn forward_reference_within_emit_range() {
+        let mut module = Module::default();
+        let f32 = scalar_type(&mut module, Scalar::F32);
+        let mut f = Function::default();
+        let v = local(&mut f, f32);
+
+        // e0
+        let pointer = add(&mut f, Expression::LocalVariable(v));
+        // e1, refers forward to e2
+        let negated = add(
+            &mut f,
+            Expression::Unary {
+                op: crate::UnaryOperator::Negate,
+                expr: h(2),
+            },
+        );
+        // e2
+        add(&mut f, Expression::Load { pointer });
+
+        f.body.push(emit(1, 3), Span::default());
+        f.body.push(
+            Statement::Store {
+                pointer,
+                value: negated,
+            },
+            Span::default(),
+        );
+        f.body
+            .push(Statement::Return { value: None }, Span::default());
+        module.entry_points.push(entry_point(f));
+
+        compact(&mut module, KeepUnused::No);
+
+        validate(&module).expect("compacted module should be valid");
+        let f = &module.entry_points[0].function;
+        assert_eq!(
+            expressions(f),
+            [
+                Expression::LocalVariable(v),
+                Expression::Load { pointer: h(0) },
+                Expression::Unary {
+                    op: crate::UnaryOperator::Negate,
+                    expr: h(1),
+                },
+            ]
+        );
+        assert_eq!(emit_range(&f.body[0]), 1..3);
+    }
+
+    /// A pre-emitted expression covered by the same `Emit` range as its user
+    /// is moved out of the range.
+    #[test]
+    fn pre_emitted_expression_moved_out_of_emit_range() {
+        let mut module = Module::default();
+        let f32 = scalar_type(&mut module, Scalar::F32);
+        let mut f = Function::default();
+        let v = local(&mut f, f32);
+
+        // e0, refers forward to e1
+        let sum = add(
+            &mut f,
+            Expression::Binary {
+                op: BinaryOperator::Add,
+                left: h(1),
+                right: h(1),
+            },
+        );
+        // e1
+        add(&mut f, Expression::Literal(Literal::F32(1.0)));
+        // e2
+        let pointer = add(&mut f, Expression::LocalVariable(v));
+
+        f.body.push(emit(0, 2), Span::default());
+        f.body.push(
+            Statement::Store {
+                pointer,
+                value: sum,
+            },
+            Span::default(),
+        );
+        f.body
+            .push(Statement::Return { value: None }, Span::default());
+        module.entry_points.push(entry_point(f));
+
+        compact(&mut module, KeepUnused::No);
+
+        validate(&module).expect("compacted module should be valid");
+        let f = &module.entry_points[0].function;
+        assert_eq!(
+            expressions(f),
+            [
+                Expression::Literal(Literal::F32(1.0)),
+                Expression::Binary {
+                    op: BinaryOperator::Add,
+                    left: h(0),
+                    right: h(0),
+                },
+                Expression::LocalVariable(v),
+            ]
+        );
+        assert_eq!(emit_range(&f.body[0]), 1..2);
+    }
+
+    /// A loop's `continuing` block and `break_if` can use expressions emitted
+    /// in its body, so the body must be placed first.
+    #[test]
+    fn loop_continuing_uses_body_expression() {
+        let mut module = Module::default();
+        let f32 = scalar_type(&mut module, Scalar::F32);
+        let mut f = Function::default();
+        let v = local(&mut f, f32);
+
+        // e0
+        let one = add(&mut f, Expression::Literal(Literal::F32(1.0)));
+        // e1, refers forward to e3
+        let sum = add(
+            &mut f,
+            Expression::Binary {
+                op: BinaryOperator::Add,
+                left: h(3),
+                right: one,
+            },
+        );
+        // e2
+        let done = add(
+            &mut f,
+            Expression::Binary {
+                op: BinaryOperator::Greater,
+                left: sum,
+                right: one,
+            },
+        );
+        // e3, refers forward to e4
+        add(&mut f, Expression::Load { pointer: h(4) });
+        // e4
+        let pointer = add(&mut f, Expression::LocalVariable(v));
+
+        let mut body = crate::Block::new();
+        body.push(emit(3, 4), Span::default());
+        let mut continuing = crate::Block::new();
+        continuing.push(emit(1, 3), Span::default());
+        continuing.push(
+            Statement::Store {
+                pointer,
+                value: sum,
+            },
+            Span::default(),
+        );
+        f.body.push(
+            Statement::Loop {
+                body,
+                continuing,
+                break_if: Some(done),
+            },
+            Span::default(),
+        );
+        f.body
+            .push(Statement::Return { value: None }, Span::default());
+        module.entry_points.push(entry_point(f));
+
+        compact(&mut module, KeepUnused::No);
+
+        validate(&module).expect("compacted module should be valid");
+        let f = &module.entry_points[0].function;
+        assert_eq!(
+            expressions(f),
+            [
+                Expression::LocalVariable(v),
+                Expression::Load { pointer: h(0) },
+                Expression::Literal(Literal::F32(1.0)),
+                Expression::Binary {
+                    op: BinaryOperator::Add,
+                    left: h(1),
+                    right: h(2),
+                },
+                Expression::Binary {
+                    op: BinaryOperator::Greater,
+                    left: h(3),
+                    right: h(2),
+                },
+            ]
+        );
+        let Statement::Loop {
+            ref body,
+            ref continuing,
+            break_if,
+        } = f.body[0]
+        else {
+            panic!("expected `Loop`, found {:?}", f.body[0]);
+        };
+        assert_eq!(emit_range(&body[0]), 1..2);
+        assert_eq!(emit_range(&continuing[0]), 3..5);
+        assert_eq!(break_if, Some(h(4)));
+    }
+
     /// Partially overlapping ranges in sibling blocks cannot both stay
     /// contiguous after reordering.
     #[test]
-    #[should_panic(expected = "is covered by another `Emit`")]
+    #[should_panic(expected = "is emitted by two overlapping `Emit` ranges")]
     fn overlapping_emit_ranges_in_two_blocks() {
         let mut module = Module::default();
         let f32 = scalar_type(&mut module, Scalar::F32);
