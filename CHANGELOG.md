@@ -255,6 +255,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 
 #### naga
 
+- The GLSL backend now uses `GL_OVR_multiview2` for `@builtin(view_index)` on all targets. Previously, non-WebGL targets used `GL_EXT_multiview`, which is a Vulkan GLSL extension. By @inner-daemons in [#XXXXX](https://github.com/gfx-rs/wgpu/pull/XXXXX).
 - `naga::valid::ValidationError` is now always returned boxed, to avoid `clippy::large_result_err` warning. By @beicause in [#9612](https://github.com/gfx-rs/wgpu/pull/9612)
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
