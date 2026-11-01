@@ -265,7 +265,7 @@ pub struct ResolvedRenderPassDescriptor<'a> {
     pub timestamp_writes: Option<PassTimestampWrites<Arc<QuerySet>>>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<Arc<QuerySet>>,
-    /// The multiview array layers that will be used
+    /// The multiview mask of the render pass, or `None` if it does not use multiview.
     pub multiview_mask: Option<NonZeroU32>,
 }
 
@@ -282,7 +282,7 @@ struct ArcRenderPassDescriptor<'a> {
     pub timestamp_writes: Option<PassTimestampWrites>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<Arc<QuerySet>>,
-    /// The multiview array layers that will be used
+    /// The multiview mask of the render pass, or `None` if it does not use multiview.
     pub multiview_mask: Option<NonZeroU32>,
 }
 

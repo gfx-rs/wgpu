@@ -86,7 +86,7 @@ impl Example {
                 color_formats: &[Some(config.view_formats[0])],
                 depth_stencil: None,
                 sample_count,
-                multiview: None,
+                multiview_mask: None,
             });
         encoder.set_pipeline(&pipeline);
         encoder.set_vertex_buffer(0, vertex_buffer.slice(..));
