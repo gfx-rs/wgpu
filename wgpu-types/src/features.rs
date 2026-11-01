@@ -1032,9 +1032,7 @@ features! {
         /// Supported platforms:
         /// - Vulkan (with [VK_EXT_mesh_shader](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_mesh_shader.html)'s `multiviewMeshShader` feature)
         /// - DX12 (with view instancing and SM 6.1+)
-        ///
-        /// Potential Platforms:
-        /// - Metal
+        /// - Metal (with vertex amplification)
         ///
         /// This is a native only feature.
         #[name("wgpu-mesh-shader-multiview")]
