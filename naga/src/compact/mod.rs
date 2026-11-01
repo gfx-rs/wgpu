@@ -77,7 +77,8 @@ impl From<KeepUnused> for bool {
 ///
 /// # Panics
 ///
-/// If `module` would not pass validation, this may panic.
+/// If `module` would not pass validation for any reason other than forward
+/// references in function expression arenas, this may panic.
 ///
 /// [`Function::expressions`]: crate::Function::expressions
 /// [`Emit`]: crate::Statement::Emit
