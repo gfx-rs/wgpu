@@ -1682,13 +1682,14 @@ impl RenderPassInfo {
         let detected_multiview =
             detected_multiview.expect("Multiview was not detected, no attachments");
         if let Some(mask) = multiview_mask {
+            device.require_features(wgt::Features::MULTIVIEW)?;
             // 0x01 will have msb 0
             let mask_msb = 31 - mask.leading_zeros();
             let detected_mv = detected_multiview.map(NonZeroU32::get).unwrap_or(1);
             if mask_msb >= detected_mv {
                 return Err(RenderPassErrorInner::MultiViewMismatch);
             }
-            if mask.get() != (1 << detected_mv) - 1 {
+            if detected_mv > 32 || mask.get() != u32::MAX >> (32 - detected_mv) {
                 device.require_features(wgt::Features::SELECTIVE_MULTIVIEW)?;
             }
         }

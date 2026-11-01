@@ -336,6 +336,7 @@ By @alextechcc in [#8014](https://github.com/gfx-rs/wgpu/pull/8014).
 - Mesh shader draws in a multiview render pass now require the highest view in the multiview mask to be less than `Limits::max_mesh_multiview_view_count`. Previously one view past the limit was accepted. By @apollo-2006 in [#10496](https://github.com/gfx-rs/wgpu/pull/10496).
 - `wgpu_core` now validates pipeline stage interfaces after pipeline constant values have been applied, per spec. For example, workgroup sizes set by overrides are now checked against device limits. By @jimblandy in [#10430](https://github.com/gfx-rs/wgpu/pull/10430).
 - Validate `Limits::max_compute_workgroup_storage_size`. By @ErichDonGubler in [#9732](https://github.com/gfx-rs/wgpu/pull/9732).
+- Render passes with a `multiview_mask` now require `Features::MULTIVIEW`, even when the attachments have a single layer. Fixed a panic in debug builds when a multiview mask has all 32 bits set. By @inner-daemons in [#XXXXX](https://github.com/gfx-rs/wgpu/pull/XXXXX).
 
 #### Naga
 
