@@ -332,8 +332,10 @@ pub struct Limits {
     /// The maximum number of layers that can be output from a mesh shader. Higher is "better".
     /// See [#8509](https://github.com/gfx-rs/wgpu/issues/8509).
     pub max_mesh_output_layers: u32,
-    /// The maximum number of views that can be used by a mesh shader in multiview rendering.
-    /// Higher is "better".
+    /// The maximum number of views that can be used by a mesh shader in multiview rendering. The
+    /// highest bit set in the multiview mask of a mesh draw must be less than this. Requesting more
+    /// than 0 during device creation only makes sense if
+    /// [`Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW`] is enabled. Higher is "better".
     pub max_mesh_multiview_view_count: u32,
 
     /// The maximum number of primitive (ex: triangles, aabbs) a BLAS is allowed to have. Requesting
@@ -356,7 +358,10 @@ pub struct Limits {
     /// structures that can be bound in a single shader stage.
     pub max_buffers_and_acceleration_structures_per_shader_stage: u32,
 
-    /// The maximum number of views that can be used in multiview rendering
+    /// The maximum number of views that can be used in multiview rendering. This is the maximum
+    /// number of array layers the attachments of a multiview render pass can have, so every bit set
+    /// in a multiview mask must be below it. Requesting more than 0 during device creation only
+    /// makes sense if [`Features::MULTIVIEW`] is enabled. Higher is "better".
     pub max_multiview_view_count: u32,
 
     /// The maximum total number (`x*y*z`) of rays able to be dispatched by a trace rays call in a ray

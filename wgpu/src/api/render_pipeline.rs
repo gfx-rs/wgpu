@@ -258,6 +258,9 @@ pub struct RenderPipelineDescriptor<'a> {
     /// For example, if you wish to render to the first 2 layers, you would use 3=0b11. If you
     /// wanted to render to only the 2nd layer, you would use 2=0b10. If you aren't using
     /// multiview this should be `None`.
+    ///
+    /// Requires [`Features::MULTIVIEW`]. Masks that are not of the form `0b1…1` also require
+    /// [`Features::SELECTIVE_MULTIVIEW`].
     pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<&'a PipelineCache>,
