@@ -1,6 +1,13 @@
 /*!
 # Multiview
 
+`wgpu` supports multiview rendering when [`Features::MULTIVIEW`] is enabled. Multiview lets a single draw call
+render to several layers of an array texture, with shaders reading `@builtin(view_index)` to tell the views apart.
+Rendering to layers other than the first n requires [`Features::SELECTIVE_MULTIVIEW`], and multiview in mesh
+pipelines requires [`Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW`].
+
+***This is not a core part of WebGPU, but is a wgpu-specific extension.***
+
 ## Feature overview
 
 Multiview lets each draw call draw the same contents to multiple layers of a single texture. Your pipeline
@@ -8,6 +15,26 @@ must declare a multiview mask, which is a bitmask of which slices of an array te
 
 In practice, normally you want to perform separate object culling for each view, unless the contents of
 the views are going to be very similar. For this reason, outside of VR, multiview sees limited use.
+
+## wgpu API
+
+wgpu's API includes 3 new features, the latter two of which are explained more below.
+* [`Features::MULTIVIEW`]
+* [`Features::SELECTIVE_MULTIVIEW`]
+* [`Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW`]
+
+It also includes the additional limits
+* [`Limits::max_multiview_view_count`]
+* [`Limits::max_mesh_multiview_view_count`]
+
+These are fairly self explanatory.
+
+Render & mesh pipeline descriptors, renderpass descriptors and render bundle descriptors include new `multiview_mask` fields.
+These are used to determine which layers of an array texture are rendered to. They must match between a renderpass
+and all of its used render pipelines.
+
+WGSL also has a new `@builtin(view_index)` `u32` built-in. It doesn't currently have an enable extension. It
+is the index of the layer in the array texture as a whole, not just the index within the layers in the bitmask.
 
 ## Use cases
 
@@ -76,4 +103,4 @@ Some other drivers, including llvmpipe, simply haven't added support for multivi
 
  */
 
-use crate::Features;
+use crate::{Features, Limits};
