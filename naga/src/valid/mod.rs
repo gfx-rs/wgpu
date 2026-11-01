@@ -185,9 +185,6 @@ bitflags::bitflags! {
         const SHADER_FLOAT16 = 1 << 26;
         /// Support for [`ImageClass::External`]
         const TEXTURE_EXTERNAL = 1 << 27;
-        /// Support for `quantizeToF16`, `pack2x16float`, and `unpack2x16float`, which store
-        /// `f16`-precision values in `f32`s.
-        const SHADER_FLOAT16_IN_FLOAT32 = 1 << 28;
         /// Support for fragment shader barycentric coordinates.
         const SHADER_BARYCENTRICS = 1 << 29;
         /// Support for task shaders, mesh shaders, and per-primitive fragment inputs
