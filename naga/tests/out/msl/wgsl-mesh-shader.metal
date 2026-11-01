@@ -74,8 +74,8 @@ metal::uint3 _ts_main(
   metal::mesh_grid_properties nagaMeshGrid
 , uint __local_invocation_index [[thread_index_in_threadgroup]]
 , object_data TaskPayload& taskPayload [[payload]]
-, threadgroup float& workgroupData
 ) {
+    threadgroup float workgroupData;
     uint3 nagaGridSize = _ts_main(__local_invocation_index, taskPayload, workgroupData);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     metal::threadgroup_barrier(metal::mem_flags::mem_object_data);

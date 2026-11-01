@@ -38,8 +38,8 @@ constant int o = 2;
 
 kernel void f(
   uint __local_invocation_index [[thread_index_in_threadgroup]]
-, threadgroup metal::atomic_uint& a
 ) {
+    threadgroup metal::atomic_uint a;
     if (__local_invocation_index == 0u) {
         metal::atomic_store_explicit(&a, 0, metal::memory_order_relaxed);
     }

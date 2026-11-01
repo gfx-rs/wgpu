@@ -75,8 +75,8 @@ struct computeInput {
 , uint local_index [[thread_index_in_threadgroup]]
 , metal::uint3 wg_id [[threadgroup_position_in_grid]]
 , metal::uint3 num_wgs [[threadgroups_per_grid]]
-, threadgroup type_4& output
 ) {
+    threadgroup type_4 output;
     if (local_index == 0u) {
         output = {};
     }

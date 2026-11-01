@@ -217,22 +217,20 @@ impl<W: core::fmt::Write> super::Writer<W> {
         writeln!(self.out, ") {{")?;
 
         // Function body
-        if ep.stage == crate::ShaderStage::Mesh {
-            for (handle, var) in module.global_variables.iter() {
-                if var.space != crate::AddressSpace::WorkGroup || fun_info[handle].is_empty() {
-                    continue;
-                }
-                let tyvar = TypedGlobalVariable {
-                    module,
-                    names: &self.names,
-                    handle,
-                    usage: crate::valid::GlobalUse::WRITE | crate::valid::GlobalUse::READ,
-                    reference: false,
-                };
-                write!(self.out, "{}", back::INDENT)?;
-                tyvar.try_fmt(&mut self.out)?;
-                writeln!(self.out, ";")?;
+        for (handle, var) in module.global_variables.iter() {
+            if var.space != crate::AddressSpace::WorkGroup || fun_info[handle].is_empty() {
+                continue;
             }
+            let tyvar = TypedGlobalVariable {
+                module,
+                names: &self.names,
+                handle,
+                usage: crate::valid::GlobalUse::WRITE | crate::valid::GlobalUse::READ,
+                reference: false,
+            };
+            write!(self.out, "{}", back::INDENT)?;
+            tyvar.try_fmt(&mut self.out)?;
+            writeln!(self.out, ";")?;
         }
         write!(self.out, "{indent}")?;
         let result_name = if ep.stage == crate::ShaderStage::Task {
@@ -252,17 +250,16 @@ impl<W: core::fmt::Write> super::Writer<W> {
                 is_first = false;
                 write!(self.out, "{}", arg.name)?;
             }
-            if ep.stage == crate::ShaderStage::Mesh {
-                for (handle, var) in module.global_variables.iter() {
-                    if var.space != crate::AddressSpace::WorkGroup || fun_info[handle].is_empty() {
-                        continue;
-                    }
-                    if !is_first {
-                        write!(self.out, ", ")?;
-                    }
-                    let name = &self.names[&NameKey::GlobalVariable(handle)];
-                    write!(self.out, "{name}")?;
+            for (handle, var) in module.global_variables.iter() {
+                if var.space != crate::AddressSpace::WorkGroup || fun_info[handle].is_empty() {
+                    continue;
                 }
+                if !is_first {
+                    write!(self.out, ", ")?;
+                }
+                is_first = false;
+                let name = &self.names[&NameKey::GlobalVariable(handle)];
+                write!(self.out, "{name}")?;
             }
         }
         writeln!(self.out, ");")?;

@@ -108,8 +108,8 @@ void wgpu_4435_(
 
 kernel void main_(
   uint __local_invocation_index [[thread_index_in_threadgroup]]
-, threadgroup type_3& a
 ) {
+    threadgroup type_3 a;
     if (__local_invocation_index == 0u) {
         a = {};
     }
