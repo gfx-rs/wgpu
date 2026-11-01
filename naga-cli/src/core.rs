@@ -831,7 +831,10 @@ fn write_output(
             )?;
 
             let mut buffer = String::new();
-            let pipeline_options = Default::default();
+            let pipeline_options = hlsl::PipelineOptions {
+                multisampled: params.hlsl_multisampled,
+                ..Default::default()
+            };
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl, &pipeline_options);
             let reflection = writer.write(&module, &info, None)?;
             // Drop the writer borrow on `buffer` before we consume it.
