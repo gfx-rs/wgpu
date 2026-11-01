@@ -721,7 +721,7 @@ features! {
         /// - Vulkan (1.1+ or with VK_KHR_multiview)
         /// - Metal (with vertex amplification)
         /// - DX12 (with view instancing and SM 6.1+)
-        /// - WebGL (with OVR_multiview2)
+        /// - GLES / WebGL (with OVR_multiview2)
         ///
         /// This is a native only feature.
         #[name("wgpu-multiview", "multiview")]
