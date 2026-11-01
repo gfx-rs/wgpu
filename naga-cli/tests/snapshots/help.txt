@@ -105,6 +105,9 @@ Options:
       --shader-model <SHADER_MODEL>
           HLSL shader model, e.g. `50`, `51`, `60`..`67`
 
+      --hlsl-multisampled
+          HLSL: the pipeline renders to multisampled attachments (disables conservative depth)
+
       --spirv-version <SPIRV_VERSION>
           SPIR-V version, e.g. `1.0`, `1.4`
 

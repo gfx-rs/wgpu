@@ -505,6 +505,32 @@ fn config_json_matches_equivalent_flag() {
 }
 
 #[test]
+fn hlsl_multisampled_disables_conservative_depth() {
+    let src = write_tmp(
+        "naga_cli_hlsl_multisampled",
+        "s.wgsl",
+        "@fragment @early_depth_test(greater_equal) \
+         fn main(@builtin(position) pos: vec4<f32>) -> @builtin(frag_depth) f32 { return pos.z; }",
+    );
+    let hlsl = |name: &str, args: &[&str]| {
+        let out = src.with_file_name(name);
+        let r = naga().arg(&src).arg(&out).args(args).output().unwrap();
+        assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+        std::fs::read_to_string(out).unwrap()
+    };
+
+    assert!(hlsl("default.hlsl", &[]).contains("SV_DepthGreaterEqual"));
+    let flag = hlsl("flag.hlsl", &["--hlsl-multisampled"]);
+    assert!(!flag.contains("SV_DepthGreaterEqual"));
+    assert!(flag.contains("SV_Depth"));
+    let cfg = hlsl(
+        "cfg.hlsl",
+        &["--config-json", r#"{"hlsl_multisampled":true}"#],
+    );
+    assert_eq!(flag, cfg);
+}
+
+#[test]
 fn config_conflicts_with_option_flag() {
     let out = naga()
         .arg("in.wgsl")

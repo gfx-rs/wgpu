@@ -117,6 +117,10 @@ pub struct Args {
     #[arg(long, value_parser = parse_shader_model, group = "options")]
     pub shader_model: Option<naga::back::hlsl::ShaderModel>,
 
+    /// HLSL: the pipeline renders to multisampled attachments (disables conservative depth).
+    #[arg(long, group = "options")]
+    pub hlsl_multisampled: bool,
+
     /// SPIR-V version, e.g. `1.0`, `1.4`.
     #[arg(long, value_parser = parse_spirv_version, group = "options")]
     pub spirv_version: Option<(u8, u8)>,

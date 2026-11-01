@@ -135,6 +135,14 @@
       ],
       "default": null
     },
+    "hlsl_multisampled": {
+      "description": "HLSL: the pipeline renders to multisampled attachments (disables conservative depth).",
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null
+    },
     "input_kind": {
       "description": "Input format (overrides extension detection; required to read stdin `-`).",
       "anyOf": [
@@ -445,6 +453,10 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "external_texture": {
+          "type": "boolean",
+          "default": false
         }
       },
       "required": [

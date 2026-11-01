@@ -17,6 +17,7 @@ pub struct Parameters<'a> {
     pub msl: naga::back::msl::Options,
     pub glsl: naga::back::glsl::Options,
     pub hlsl: naga::back::hlsl::Options,
+    pub hlsl_multisampled: bool,
     pub input_kind: Option<InputKind>,
     pub output_kind: Option<crate::cli::OutputKind>,
     pub shader_stage: Option<ShaderStageArg>,
@@ -82,6 +83,7 @@ pub fn build_parameters(args: &Args) -> anyhow::Result<Parameters<'static>> {
     if let Some(ref model) = args.shader_model {
         params.hlsl.shader_model = *model;
     }
+    params.hlsl_multisampled = args.hlsl_multisampled;
     if let Some(version) = args.metal_version {
         params.msl.lang_version = version;
     }

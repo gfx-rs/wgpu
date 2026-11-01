@@ -47,6 +47,9 @@ pub struct Config {
     /// Options for the HLSL backend.
     pub hlsl: Option<naga::back::hlsl::Options>,
 
+    /// HLSL: the pipeline renders to multisampled attachments (disables conservative depth).
+    pub hlsl_multisampled: Option<bool>,
+
     /// Options for the dot backend.
     pub dot: Option<naga::back::dot::Options>,
 
@@ -173,6 +176,9 @@ pub fn apply_config(config: Config, params: &mut crate::params::Parameters<'stat
     // HLSL backend options.
     if let Some(hlsl) = config.hlsl {
         params.hlsl = hlsl;
+    }
+    if let Some(multisampled) = config.hlsl_multisampled {
+        params.hlsl_multisampled = multisampled;
     }
 
     // Dot backend options.

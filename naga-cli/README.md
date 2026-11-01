@@ -106,6 +106,9 @@ naga shader.wgsl out.spv --index-bounds-check-policy restrict
 # Target a specific HLSL shader model.
 naga shader.wgsl out.hlsl --shader-model 60
 
+# HLSL for a pipeline with multisampled attachments.
+naga shader.wgsl out.hlsl --hlsl-multisampled
+
 # Target a specific Metal version.
 naga shader.wgsl out.metal --metal-version 2.0
 ```
