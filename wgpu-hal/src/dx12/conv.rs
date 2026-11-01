@@ -1,13 +1,16 @@
 use windows::Win32::Graphics::{Direct3D, Direct3D12, Dxgi};
 
+pub fn buffer_usage_needs_uav(usage: wgt::BufferUses) -> bool {
+    usage.contains(wgt::BufferUses::STORAGE_READ_WRITE)
+        || usage.contains(wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY)
+        || usage.contains(wgt::BufferUses::ACCELERATION_STRUCTURE_SCRATCH)
+}
+
 pub fn map_buffer_usage_to_resource_flags(
     usage: wgt::BufferUses,
 ) -> Direct3D12::D3D12_RESOURCE_FLAGS {
     let mut flags = Direct3D12::D3D12_RESOURCE_FLAG_NONE;
-    if usage.contains(wgt::BufferUses::STORAGE_READ_WRITE)
-        || usage.contains(wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY)
-        || usage.contains(wgt::BufferUses::ACCELERATION_STRUCTURE_SCRATCH)
-    {
+    if buffer_usage_needs_uav(usage) {
         flags |= Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
     flags
@@ -169,7 +172,7 @@ pub fn map_buffer_usage_to_state(usage: wgt::BufferUses) -> Direct3D12::D3D12_RE
     if usage.intersects(Bu::VERTEX | Bu::UNIFORM) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
     }
-    if usage.intersects(Bu::STORAGE_READ_WRITE) {
+    if buffer_usage_needs_uav(usage) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     } else if usage.intersects(Bu::STORAGE_READ_ONLY) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
