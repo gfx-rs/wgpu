@@ -724,6 +724,10 @@ features! {
         /// - GLES / WebGL (with OVR_multiview2)
         ///
         /// This is a native only feature.
+        ///
+        /// See the [multiview documentation][multiview] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["multiview"]: "documentation/extensions/multiview/index.html")]
         #[name("wgpu-multiview", "multiview")]
         const MULTIVIEW = 1 << 26;
         /// Enables using 64-bit types for vertex attributes.
@@ -1035,6 +1039,10 @@ features! {
         /// - Metal (with vertex amplification)
         ///
         /// This is a native only feature.
+        ///
+        /// See the [multiview documentation][multiview] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["multiview"]: "documentation/extensions/multiview/index.html")]
         #[name("wgpu-mesh-shader-multiview")]
         const EXPERIMENTAL_MESH_SHADER_MULTIVIEW = 1 << 50;
 
@@ -1090,6 +1098,10 @@ features! {
         /// While metal supports this in theory, the behavior of `view_index` differs from vulkan and dx12 so the feature isn't exposed.
         ///
         /// This is a native only feature.
+        ///
+        /// See the [multiview documentation][multiview] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["multiview"]: "documentation/extensions/multiview/index.html#selective-multiview")]
         #[name("wgpu-selective-multiview")]
         const SELECTIVE_MULTIVIEW = 1 << 54;
 

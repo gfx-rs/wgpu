@@ -678,7 +678,8 @@ pub struct RenderPassDescriptor<'a> {
     /// attachments must have the same number of array layers, which must not exceed
     /// [`Limits::max_multiview_view_count`], and attachments with more than one layer must be
     /// [`TextureViewDimension::D2Array`] views. The mask must match the `multiview_mask` of every
-    /// pipeline and render bundle used in the pass.
+    /// pipeline and render bundle used in the pass. See the
+    /// [multiview documentation](crate::documentation::extensions::multiview).
     ///
     /// Note that setting bits higher than the number of texture layers is a validation error.
     ///

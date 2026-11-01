@@ -260,7 +260,8 @@ pub struct RenderPipelineDescriptor<'a> {
     /// multiview this should be `None`.
     ///
     /// Requires [`Features::MULTIVIEW`]. Masks that are not of the form `0b1…1` also require
-    /// [`Features::SELECTIVE_MULTIVIEW`].
+    /// [`Features::SELECTIVE_MULTIVIEW`]. See the
+    /// [multiview documentation](crate::documentation::extensions::multiview).
     pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<&'a PipelineCache>,
@@ -360,7 +361,8 @@ pub struct MeshPipelineDescriptor<'a> {
     /// Requires [`Features::MULTIVIEW`]. Masks that are not of the form `0b1…1` also require
     /// [`Features::SELECTIVE_MULTIVIEW`]. Drawing with this pipeline in a multiview render pass
     /// requires [`Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW`], and the highest bit set in the
-    /// mask must be less than [`Limits::max_mesh_multiview_view_count`].
+    /// mask must be less than [`Limits::max_mesh_multiview_view_count`]. See the
+    /// [multiview documentation](crate::documentation::extensions::multiview).
     pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<&'a PipelineCache>,
