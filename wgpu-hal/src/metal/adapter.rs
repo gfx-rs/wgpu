@@ -1478,7 +1478,10 @@ impl super::CapabilitiesQuery {
 
         features.set(
             F::CORE_FEATURES_AND_LIMITS,
-            capabilities.downlevel.is_webgpu_compliant(),
+            crate::auxil::supports_core_features_and_limits(
+                &capabilities.limits,
+                &capabilities.downlevel,
+            ),
         );
 
         features

@@ -963,7 +963,7 @@ impl super::Adapter {
 
         features.set(
             wgt::Features::CORE_FEATURES_AND_LIMITS,
-            downlevel.is_webgpu_compliant(),
+            crate::auxil::supports_core_features_and_limits(&limits, &downlevel),
         );
 
         Some(crate::ExposedAdapter {
