@@ -2,6 +2,41 @@ use macro_rules_attribute::derive;
 
 use crate::{link_to_wgpu_docs, link_to_wgpu_item, ConstDefault};
 
+/// Container for platform-specific extensions.
+///
+/// Functions like `Option<T>`, but constructing a non-default (non-empty)
+/// `Extensions` is unsafe.
+///
+/// Implements `Deref` to `Option<T>`, so it is important that `T` does
+/// not allow setting unsafe extensions via interior mutability.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct Extensions<T>(Option<T>);
+
+impl<T> Default for Extensions<T> {
+    fn default() -> Self {
+        Self(None)
+    }
+}
+
+impl<T> Extensions<T> {
+    /// Constructs a new `Extensions` with the provided value.
+    ///
+    /// # Safety
+    ///
+    /// Any safety requirements of the contained extensions must be upheld.
+    pub unsafe fn new(value: T) -> Self {
+        Self(Some(value))
+    }
+}
+
+impl<T> core::ops::Deref for Extensions<T> {
+    type Target = Option<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// Token of the user agreeing to access experimental features.
 #[derive(Debug, ConstDefault!, Copy, Clone, Eq, PartialEq)]
 pub struct ExperimentalFeatures {

@@ -432,6 +432,7 @@ impl Instance {
                 apply_limit_buckets,
             },
             backends,
+            wgt::Extensions::default(),
         )
         .unwrap_or_default()
     }
@@ -444,17 +445,11 @@ impl Instance {
     /// The available options structs depend on the enabled backends, and
     /// can be found by looking for implementors of the parameterized trait
     /// [`BackendMapValue<dyn BackendAdapterOptions>`][`wgt::BackendMapValue`].
-    ///
-    /// # Safety
-    ///
-    /// - If `backend_options` is `Some`, any safety requirements applicable
-    ///   to the options it contains must be upheld. Passing `None`, or an
-    ///   empty map, for `backend_options` is safe.
-    pub unsafe fn request_adapters(
+    pub fn request_adapters(
         self: &Arc<Self>,
         desc: &wgt::RequestAdapterOptions<&Surface>,
         backends: Backends,
-        backend_options: Option<BackendAdapterOptionsMap>,
+        backend_options: wgt::Extensions<BackendAdapterOptionsMap>,
     ) -> Result<Vec<Arc<Adapter>>, wgt::RequestAdapterError> {
         profiling::scope!("Instance::request_adapter");
         api_log!("Instance::request_adapter");
@@ -615,7 +610,7 @@ impl Instance {
         api_log!("Instance::request_adapter");
 
         let adapter = self
-            .request_adapters(desc, backends)?
+            .request_adapters(desc, backends, wgt::Extensions::default())?
             .into_iter()
             .next()
             .expect(
