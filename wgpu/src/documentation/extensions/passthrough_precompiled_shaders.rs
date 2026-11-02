@@ -44,7 +44,9 @@ self-contained binary, with a much faster startup time, especially after the fir
 
 ## wgpu API
 
-**TODO: REWORK WGPU API TO SUPPORT MORE REFLECTION INFO**
+**TODO: REWORK WGPU API TO SUPPORT MORE REFLECTION INFO AND MORE COMPLEX INPUT**
+
+**TODO: MACRO FOR PRECOMPILING**
 
 ## Generating reflection information from SPIR-V shaders
 
@@ -130,10 +132,8 @@ The size of the immediate data block used by each entry point. This is checked a
 - **Built-ins** that affect pipeline validation:
   - `frag_depth` requires a depth attachment.
   - `primitive_index` must be produced by the previous stage when it is a mesh shader.
-  - `view_index` relates to the pipeline's multiview mask.
-  - `clip_distances` and its array size.
   - `draw_index` cannot be used by a mesh shader in a pipeline that has a task shader.
-  - `barycentric` and per-vertex fragment inputs require a triangle topology.
+  - Other builtins count against fragment shaders' max inputs, barycentrics counts against it 3 times
 
 ### Mesh and task shaders
 
