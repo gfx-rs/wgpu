@@ -66,25 +66,15 @@ impl ShaderRuntimeChecks {
     }
 
     /// Creates a new configuration where none of the checks are performed.
-    ///
-    /// # Safety
-    ///
-    /// See the documentation for the `set_*` methods for the safety requirements
-    /// of each sub-configuration.
     #[must_use]
     pub const fn unchecked() -> Self {
-        unsafe { Self::all(false) }
+        Self::all(false)
     }
 
     /// Creates a new configuration where all checks are enabled or disabled. To safely
     /// create a configuration with all checks enabled, use [`ShaderRuntimeChecks::checked`].
-    ///
-    /// # Safety
-    ///
-    /// See the documentation for the `set_*` methods for the safety requirements
-    /// of each sub-configuration.
     #[must_use]
-    pub const unsafe fn all(all_checks: bool) -> Self {
+    pub const fn all(all_checks: bool) -> Self {
         Self {
             bounds_checks: all_checks,
             force_loop_bounding: all_checks,
