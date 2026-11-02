@@ -90,6 +90,13 @@ impl NullAccelerationStructure {
                 },
             ]);
 
+            command_encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
+                usage: hal::StateTransition {
+                    from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                    to: hal::AccelerationStructureUses::BUILD_INPUT,
+                },
+            });
+
             pending.consume_temp(queue::TempResource::ScratchBuffer(scratch));
 
             let handle = device
