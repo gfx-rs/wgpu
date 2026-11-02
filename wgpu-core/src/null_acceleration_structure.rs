@@ -3,7 +3,6 @@ use core::num::NonZeroU64;
 use wgpu_sync::Arc;
 
 use hal::{AccelerationStructureDescriptor, GetAccelerationStructureBuildSizesDescriptor};
-use wgt::math::AlignTo;
 
 use crate::{
     device::{
@@ -64,12 +63,7 @@ impl NullAccelerationStructure {
             let scratch = ScratchBuffer::new(
                 device,
                 NonZeroU64::new(
-                    sizes.build_scratch_size.max(1).align_to(
-                        device
-                            .alignments
-                            .ray_tracing_scratch_buffer_alignment
-                            .into(),
-                    ),
+                    sizes.build_scratch_size,
                 )
                 .expect(".max(1) to ensure it is non-zero"),
             )
