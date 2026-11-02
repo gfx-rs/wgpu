@@ -1144,7 +1144,8 @@ impl super::Adapter {
                     .unwrap(),
                     ray_tracing_scratch_buffer_alignment:
                         Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
-                    null_acceleration_structure_allowed: true,
+                    // warp fails on this when a blas build and a tlas build are sharing a scratch buffer.
+                    null_acceleration_structure_allowed: !is_warp,
                     // Not yet implemented
                     ray_tracing_pipeline_group_data_size: 0,
                     ray_tracing_pipeline_group_data_alignment: 0,
