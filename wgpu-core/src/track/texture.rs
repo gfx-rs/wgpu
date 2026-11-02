@@ -20,7 +20,7 @@
 
 use super::{range::RangedStates, PendingTransition, PendingTransitionList};
 use crate::{
-    resource::{RawResourceAccess, Texture, TextureInner, TextureView, Trackable},
+    resource::{RawResourceAccess, Texture, TextureView, Trackable},
     snatch::SnatchGuard,
     track::{
         skip_barrier, ResourceMetadata, ResourceMetadataProvider, ResourceUsageCompatibilityError,
@@ -513,14 +513,14 @@ impl TextureTracker {
     pub fn drain_transitions<'a>(
         &'a mut self,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> (PendingTransitionList, Vec<Option<&'a TextureInner>>) {
+    ) -> (PendingTransitionList, Vec<Option<&'a dyn hal::DynTexture>>) {
         let mut textures = Vec::new();
         let transitions = self
             .temp
             .drain(..)
             .inspect(|pending| {
                 let tex = unsafe { self.metadata.get_resource_unchecked(pending.id as _) };
-                textures.push(tex.try_inner(snatch_guard).ok());
+                textures.push(tex.raw(snatch_guard));
             })
             .collect();
         (transitions, textures)

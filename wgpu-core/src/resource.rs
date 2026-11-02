@@ -1,7 +1,9 @@
 use alloc::{
     borrow::{Cow, ToOwned as _},
     boxed::Box,
+    format,
     string::String,
+    string::ToString,
     sync::Arc,
     vec::Vec,
 };
@@ -35,7 +37,7 @@ use crate::{
     lock::{rank, Mutex, MutexGuard, RwLock},
     ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
     resource_log,
-    snatch::{SnatchGuard, Snatchable},
+    snatch::{SnatchGuard, Snatchable, SnatchableInner},
     timestamp_normalization::TimestampNormalizationBindGroup,
     track::{SharedTrackerIndexAllocator, TrackerIndex},
     weak_vec::WeakVec,
@@ -1671,15 +1673,10 @@ pub(crate) enum TextureInner {
     Surface {
         raw: Box<dyn hal::DynSurfaceTexture>,
     },
-}
-
-impl TextureInner {
-    pub(crate) fn raw(&self) -> &dyn hal::DynTexture {
-        match self {
-            Self::Native { raw } => raw.as_ref(),
-            Self::Surface { raw, .. } => raw.as_ref().borrow(),
-        }
-    }
+    /// A child texture that is derived from a parent texture, sharing its underlying resources.
+    Child {
+        parent: Arc<Texture>,
+    },
 }
 
 #[derive(Debug)]
@@ -1710,13 +1707,13 @@ pub struct Texture {
     pub(crate) desc: wgt::TextureDescriptor<String, Vec<wgt::TextureFormat>>,
     pub(crate) _hal_usage: wgt::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
-    pub(crate) initialization_status: RwLock<TextureInitTracker>,
+    pub(crate) initialization_status: Arc<RwLock<TextureInitTracker>>,
     pub(crate) full_range: TextureSelector,
-    pub(crate) tracking_data: TrackingData,
-    pub(crate) clear_mode: RwLock<TextureClearMode>,
-    pub(crate) views: Mutex<WeakVec<TextureView>>,
+    pub(crate) tracking_data: Arc<TrackingData>,
+    pub(crate) clear_mode: Arc<RwLock<TextureClearMode>>,
+    pub(crate) views: Arc<Mutex<WeakVec<TextureView>>>,
     // Bind groups that reference this texture. May contain duplicates.
-    pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
+    pub(crate) bind_groups: Arc<Mutex<WeakVec<BindGroup>>>,
 }
 
 impl Texture {
@@ -1737,22 +1734,22 @@ impl Texture {
             desc: desc.map_label(|label| label.to_string()),
             _hal_usage: hal_usage,
             format_features,
-            initialization_status: RwLock::new(
+            initialization_status: Arc::new(RwLock::new(
                 rank::TEXTURE_INITIALIZATION_STATUS,
                 if init {
                     TextureInitTracker::new(desc.mip_level_count, desc.array_layer_count())
                 } else {
                     TextureInitTracker::new(desc.mip_level_count, 0)
                 },
-            ),
+            )),
             full_range: TextureSelector {
                 mips: 0..desc.mip_level_count,
                 layers: 0..desc.array_layer_count(),
             },
-            tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
-            clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
-            views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
-            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
+            tracking_data: Arc::new(TrackingData::new(device.tracker_indices.textures.clone())),
+            clear_mode: Arc::new(RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode)),
+            views: Arc::new(Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new())),
+            bind_groups: Arc::new(Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new())),
         }
     }
 
@@ -1766,18 +1763,21 @@ impl Texture {
                 allowed_usages: wgt::TextureUsages::empty(),
                 flags: wgt::TextureFormatFeatureFlags::empty(),
             },
-            initialization_status: RwLock::new(
+            initialization_status: Arc::new(RwLock::new(
                 rank::TEXTURE_INITIALIZATION_STATUS,
                 TextureInitTracker::new(0, 0),
-            ),
+            )),
             full_range: TextureSelector {
                 mips: 0..desc.mip_level_count,
                 layers: 0..desc.array_layer_count(),
             },
-            tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
-            clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, TextureClearMode::None),
-            views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
-            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
+            tracking_data: Arc::new(TrackingData::new(device.tracker_indices.textures.clone())),
+            clear_mode: Arc::new(RwLock::new(
+                rank::TEXTURE_CLEAR_MODE,
+                TextureClearMode::None,
+            )),
+            views: Arc::new(Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new())),
+            bind_groups: Arc::new(Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new())),
         })
     }
 
@@ -1859,7 +1859,12 @@ impl RawResourceAccess for Texture {
         self.state
             .as_ref()
             .valid()
-            .and_then(|t| t.inner.get(guard).map(|t| t.raw()))
+            .and_then(|t| t.inner.get(guard))
+            .and_then(|t| match t {
+                TextureInner::Native { raw } => Some(raw.as_ref()),
+                TextureInner::Surface { raw, .. } => Some(raw.as_ref().borrow()),
+                TextureInner::Child { parent } => parent.raw(guard),
+            })
     }
 }
 
@@ -1881,8 +1886,12 @@ impl Texture {
         state
             .inner
             .get(guard)
-            .map(|_| ())
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+            .and_then(|t| match t {
+                TextureInner::Native { .. } => Ok(()),
+                TextureInner::Surface { .. } => Ok(()),
+                TextureInner::Child { parent } => parent.check_destroyed(guard),
+            })
     }
 
     pub(crate) fn check_valid(&self) -> Result<(), InvalidResourceError> {
@@ -1897,6 +1906,39 @@ impl Texture {
             .inner
             .get(guard)
             .ok_or_else(|| DestroyedResourceError(self.error_ident()).into())
+    }
+
+    /// Attempts to retrieve the inner `TextureInner` of this texture.
+    ///
+    /// This method will traverse through any nested child textures to find the ultimate inner texture.
+    /// Returns an error if the texture is either invalid or has been destroyed.
+    pub(crate) fn try_inner_nested<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&'a TextureInner, InvalidOrDestroyedResourceError> {
+        self.state()?
+            .inner
+            .get(guard)
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()).into())
+            .and_then(|t| match t {
+                TextureInner::Child { parent } => parent.try_inner_nested(guard),
+                t => Ok(t),
+            })
+    }
+
+    pub(crate) fn try_raw_with_invalid<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&'a dyn hal::DynTexture, InvalidOrDestroyedResourceError> {
+        self.state()?
+            .inner
+            .get(guard)
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()).into())
+            .and_then(|t| match t {
+                TextureInner::Native { raw } => Ok(raw.as_ref()),
+                TextureInner::Surface { raw, .. } => Ok(raw.as_ref().borrow()),
+                TextureInner::Child { parent } => parent.try_raw_with_invalid(guard),
+            })
     }
 
     pub(crate) fn get_clear_view<'a>(
@@ -1951,6 +1993,9 @@ impl Texture {
                 Some(TextureInner::Surface { .. }) => {
                     return;
                 }
+                Some(TextureInner::Child { .. }) => {
+                    return;
+                }
                 None => {
                     // Per spec, it is valid to call `destroy` multiple times.
                     return;
@@ -1996,6 +2041,106 @@ impl Texture {
         }
     }
 
+    /// Child textures share the same underlying GPU resource as their parent texture,
+    /// but they have independent validity and destruction lifecycle inherited from parent
+    /// (i.e., destroying a child texture does not destroy the parent texture,
+    /// but destroying parent texture will also destroy all of its child textures).
+    ///
+    /// The child texture must be requested with similar descriptor parameters as the parent texture,
+    /// except for the usage, which must be a subset of the parent's usage.
+    pub fn create_child_texture(
+        self: &Arc<Self>,
+        desc: &TextureDescriptor,
+    ) -> Result<Arc<Texture>, CreateChildTextureError> {
+        {
+            let TextureDescriptor {
+                label: _,
+                size,
+                mip_level_count,
+                sample_count,
+                dimension,
+                format,
+                usage,
+                view_formats,
+            } = desc;
+            if *size != self.desc.size {
+                return Err(CreateChildTextureError::TextureDescriptorMustBeEqual {
+                    field: "Size",
+                    parent_value: format!("{:?}", self.desc.size),
+                    child_value: format!("{:?}", size),
+                });
+            }
+            if *mip_level_count != self.desc.mip_level_count {
+                return Err(CreateChildTextureError::TextureDescriptorMustBeEqual {
+                    field: "Mip Level Count",
+                    parent_value: self.desc.mip_level_count.to_string(),
+                    child_value: mip_level_count.to_string(),
+                });
+            }
+            if *sample_count != self.desc.sample_count {
+                return Err(CreateChildTextureError::TextureDescriptorMustBeEqual {
+                    field: "Sample Count",
+                    parent_value: self.desc.sample_count.to_string(),
+                    child_value: sample_count.to_string(),
+                });
+            }
+            if *dimension != self.desc.dimension {
+                return Err(CreateChildTextureError::TextureDescriptorMustBeEqual {
+                    field: "Dimension",
+                    parent_value: format!("{:?}", self.desc.dimension),
+                    child_value: format!("{:?}", dimension),
+                });
+            }
+            if *format != self.desc.format {
+                return Err(CreateChildTextureError::TextureDescriptorMustBeEqual {
+                    field: "Format",
+                    parent_value: format!("{:?}", self.desc.format),
+                    child_value: format!("{:?}", format),
+                });
+            }
+            if !self.desc.usage.contains(*usage) {
+                return Err(CreateChildTextureError::TextureDescriptorMustBeSubset {
+                    field: "Usage",
+                    parent_value: format!("{:?}", self.desc.usage),
+                    child_value: format!("{:?}", usage),
+                });
+            }
+            for view_format in view_formats {
+                if !self.desc.view_formats.contains(view_format) {
+                    return Err(CreateChildTextureError::TextureDescriptorMustBeSubset {
+                        field: "View Formats",
+                        parent_value: format!("{:?}", self.format_features),
+                        child_value: format!("{:?}", view_format),
+                    });
+                }
+            }
+        }
+        Ok(Arc::new(Texture {
+            state: match self.state {
+                ResourceState::Valid(_) => ResourceState::Valid(TextureState {
+                    inner: SnatchableInner::new(TextureInner::Child {
+                        parent: Arc::clone(self),
+                    }),
+                }),
+                ResourceState::Invalid => ResourceState::Invalid,
+            },
+            device: Arc::clone(&self.device),
+            desc: desc.map_label(|l| l.to_string()),
+            _hal_usage: crate::conv::map_texture_usage(
+                desc.usage,
+                desc.format.into(),
+                self.format_features.flags,
+            ),
+            format_features: self.format_features,
+            initialization_status: Arc::clone(&self.initialization_status),
+            full_range: self.full_range.clone(),
+            tracking_data: Arc::clone(&self.tracking_data),
+            clear_mode: Arc::clone(&self.clear_mode),
+            views: Arc::clone(&self.views),
+            bind_groups: Arc::clone(&self.bind_groups),
+        }))
+    }
+
     fn create_view_inner(
         self: &Arc<Self>,
         desc: &TextureViewDescriptor,
@@ -2010,7 +2155,7 @@ impl Texture {
 
         let snatch_guard = device.snatchable_lock.read();
 
-        let texture_raw = self.try_inner(&snatch_guard)?.raw();
+        let texture_raw = self.try_raw_with_invalid(&snatch_guard)?;
 
         // resolve TextureViewDescriptor defaults
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureviewdescriptor-defaults
@@ -2819,6 +2964,23 @@ impl TextureView {
     pub fn texture(&self) -> &Arc<Texture> {
         &self.parent
     }
+}
+
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum CreateChildTextureError {
+    #[error("Texture descriptor {field} must be a subset of the parent texture descriptor. Parent value: `{parent_value}`, child value: `{child_value}`")]
+    TextureDescriptorMustBeSubset {
+        field: &'static str,
+        parent_value: String,
+        child_value: String,
+    },
+    #[error("Texture descriptor {field} must be equal to the parent texture descriptor. Parent value: `{parent_value}`, child value: `{child_value}`")]
+    TextureDescriptorMustBeEqual {
+        field: &'static str,
+        parent_value: String,
+        child_value: String,
+    },
 }
 
 #[derive(Clone, Debug, Error)]

@@ -1242,7 +1242,7 @@ pub(super) fn copy_buffer_to_texture(
         .check_usage(BufferUsages::COPY_SRC)
         .map_err(TransferError::MissingBufferUsage)?;
 
-    let dst_raw = dst_texture.try_inner(state.snatch_guard)?.raw();
+    let dst_raw = dst_texture.try_raw_with_invalid(state.snatch_guard)?;
     dst_texture
         .check_usage(TextureUsages::COPY_DST)
         .map_err(TransferError::MissingTextureUsage)?;
@@ -1352,7 +1352,7 @@ pub(super) fn copy_texture_to_buffer(
 
     let (src_range, src_base) = extract_texture_selector(source, copy_size, src_texture)?;
 
-    let src_raw = src_texture.try_inner(state.snatch_guard)?.raw();
+    let src_raw = src_texture.try_raw_with_invalid(state.snatch_guard)?;
     src_texture
         .check_usage(TextureUsages::COPY_SRC)
         .map_err(TransferError::MissingTextureUsage)?;
@@ -1575,11 +1575,11 @@ pub(super) fn copy_texture_to_texture(
         .into());
     }
 
-    let src_raw = src_texture.try_inner(state.snatch_guard)?.raw();
+    let src_raw = src_texture.try_raw_with_invalid(state.snatch_guard)?;
     src_texture
         .check_usage(TextureUsages::COPY_SRC)
         .map_err(TransferError::MissingTextureUsage)?;
-    let dst_raw = dst_texture.try_inner(state.snatch_guard)?.raw();
+    let dst_raw = dst_texture.try_raw_with_invalid(state.snatch_guard)?;
     dst_texture
         .check_usage(TextureUsages::COPY_DST)
         .map_err(TransferError::MissingTextureUsage)?;
