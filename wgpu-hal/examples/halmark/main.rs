@@ -119,7 +119,7 @@ impl<A: hal::Api> Example<A> {
         };
 
         let (adapter, capabilities) = unsafe {
-            let mut adapters = instance.enumerate_adapters(Some(&surface));
+            let mut adapters = instance.enumerate_adapters(Some(&surface), None);
             if adapters.is_empty() {
                 return Err("no adapters found".into());
             }
@@ -137,6 +137,7 @@ impl<A: hal::Api> Example<A> {
                     wgpu_types::Features::empty(),
                     &wgpu_types::Limits::default(),
                     &wgpu_types::MemoryHints::default(),
+                    None,
                 )
                 .unwrap()
         };
@@ -160,7 +161,7 @@ impl<A: hal::Api> Example<A> {
             view_formats: vec![],
         };
         unsafe {
-            surface.configure(&device, &surface_config).unwrap();
+            surface.configure(&device, &surface_config, None).unwrap();
         };
 
         let naga_shader = {

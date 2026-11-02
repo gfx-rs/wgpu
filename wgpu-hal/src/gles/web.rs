@@ -123,6 +123,7 @@ impl crate::Instance for Instance {
     unsafe fn enumerate_adapters(
         &self,
         surface_hint: Option<&Surface>,
+        _options: Option<&super::GlAdapterOptions>,
     ) -> Vec<crate::ExposedAdapter<super::Api>> {
         if let Some(surface_hint) = surface_hint {
             let gl = glow::Context::from_webgl2_context(surface_hint.webgl2_context.clone());

@@ -3,6 +3,7 @@ use core::{
     fmt,
     sync::atomic::{AtomicBool, Ordering},
 };
+use hal::RawSurfaceConfiguration;
 
 use hashbrown::HashMap;
 use thiserror::Error;
@@ -23,7 +24,10 @@ use crate::{
     DOWNLEVEL_WARNING_MESSAGE,
 };
 
-use wgt::{Backend, Backends, InstanceFlags, PowerPreference};
+use wgt::{
+    Backend, BackendAdapterOptionsMap, BackendDeviceOptions, Backends, InstanceFlags,
+    PowerPreference,
+};
 
 #[derive(Debug)]
 pub(crate) struct InstanceDevices(Mutex<WeakVec<Device>>);
@@ -434,7 +438,7 @@ impl Instance {
             // macro emits no code, so unused code linting changes depending on the backend.
             profiling::scope!("enumerating", &*alloc::format!("{_backend:?}"));
 
-            let hal_adapters = unsafe { instance.enumerate_adapters(None) };
+            let hal_adapters = unsafe { instance.enumerate_adapters(None, None) };
 
             adapters.extend(
                 hal_adapters
@@ -474,6 +478,28 @@ impl Instance {
         desc: &wgt::RequestAdapterOptions<&Surface>,
         backends: Backends,
     ) -> Result<Arc<Adapter>, wgt::RequestAdapterError> {
+        // SAFETY: Passing `None` for `backend_options` is safe.
+        unsafe { self.request_adapter_ext(desc, backends, None) }
+    }
+
+    /// Request an adapter, passing backend-specific configuration options.
+    ///
+    /// `backend_options` may contain options for any number of backends.
+    /// The available options structs depend on the enabled backends, and
+    /// can be found by looking for implementors of the parameterized trait
+    /// [`BackendMapValue<dyn BackendAdapterOptions>`][`wgt::BackendMapValue`].
+    ///
+    /// # Safety
+    ///
+    /// - If `backend_options` is `Some`, any safety requirements applicable
+    ///   to the options it contains must be upheld. Passing `None`, or an
+    ///   empty map, for `backend_options` is safe.
+    pub unsafe fn request_adapter_ext(
+        self: &Arc<Self>,
+        desc: &wgt::RequestAdapterOptions<&Surface>,
+        backends: Backends,
+        backend_options: Option<&BackendAdapterOptionsMap>,
+    ) -> Result<Arc<Adapter>, wgt::RequestAdapterError> {
         profiling::scope!("Instance::request_adapter");
         api_log!("Instance::request_adapter");
 
@@ -492,7 +518,7 @@ impl Instance {
                 .and_then(|surface| surface.raw(backend));
 
             let mut backend_adapters =
-                unsafe { instance.enumerate_adapters(compatible_hal_surface) };
+                unsafe { instance.enumerate_adapters(compatible_hal_surface, backend_options) };
             if backend_adapters.is_empty() {
                 log::debug!("enabled backend `{backend:?}` has no adapters");
                 no_adapter_backends |= Backends::from(backend);
@@ -943,6 +969,28 @@ impl Surface {
         device: &Arc<Device>,
         config: &wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
     ) -> Result<(), ConfigureSurfaceError> {
+        unsafe {
+            // SAFETY: Passing `None` for `raw_config` is safe.
+            self.configure_ext(device, config, None)
+        }
+    }
+
+    /// Configure the surface, passing platform-specific configuration.
+    ///
+    /// # Safety
+    ///
+    /// - If `raw_config` is `Some`, it must satisfy any safety requirements
+    ///   applicable to its type. Passing `None` for `raw_config` is safe.
+    ///
+    /// # Panics
+    ///
+    /// - If `raw_config` does not have the correct type for this adapter.
+    pub unsafe fn configure_ext(
+        self: &Arc<Self>,
+        device: &Arc<Device>,
+        config: &wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
+        raw_config: Option<Box<dyn RawSurfaceConfiguration>>,
+    ) -> Result<(), ConfigureSurfaceError> {
         use ConfigureSurfaceError as E;
         profiling::scope!("Surface::configure");
 
@@ -1022,7 +1070,7 @@ impl Surface {
             user_callbacks = self.unconfigure_inner(&mut presentation);
 
             let surface_raw = self.raw(device.backend()).unwrap();
-            match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
+            match unsafe { surface_raw.configure(device.raw(), &hal_config, raw_config) } {
                 Ok(()) => {
                     *presentation = Some(Presentation {
                         device: Arc::clone(device),
@@ -1326,6 +1374,34 @@ impl Adapter {
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
+        // SAFETY: Passing no backend-specific options imposes no additional
+        // safety requirements over the safe `request_device`.
+        unsafe { self.request_device_ext(desc, None) }
+    }
+
+    /// Request a device, passing backend-specific options.
+    ///
+    /// This behaves like [`Adapter::request_device`], but additionally accepts
+    /// a backend-specific options value which informs device creation (e.g. a
+    /// [`hal::vulkan::VulkanDeviceOptions`], which can install a callback that
+    /// customizes the Vulkan device creation parameters). The device is still
+    /// created through the normal, validated wgpu-core path.
+    ///
+    /// [`hal::vulkan::VulkanDeviceOptions`]: hal/vulkan/struct.VulkanDeviceOptions.html
+    ///
+    /// # Safety
+    ///
+    /// - If `options` is `Some`, it must satisfy any safety requirements
+    ///   applicable to its type. Passing `None` for `options` is safe.
+    ///
+    /// # Panics
+    ///
+    /// - If `options` is not of this adapter's backend's options type.
+    pub unsafe fn request_device_ext(
+        self: &Arc<Self>,
+        desc: &DeviceDescriptor,
+        options: Option<Box<dyn BackendDeviceOptions>>,
+    ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         profiling::scope!("Adapter::request_device");
         api_log!("Adapter::request_device");
 
@@ -1337,6 +1413,7 @@ impl Adapter {
                 desc.required_features,
                 &desc.required_limits,
                 &desc.memory_hints,
+                options,
             )
         }
         .map_err(DeviceError::from_hal)?;

@@ -2893,6 +2893,27 @@ impl dispatch::SurfaceInterface for CoreSurface {
         }
     }
 
+    unsafe fn configure_ext(
+        &self,
+        device: &dispatch::DispatchDevice,
+        config: &crate::SurfaceConfiguration,
+        raw_config: Option<Box<dyn wgpu_hal::RawSurfaceConfiguration>>,
+    ) {
+        let device = device.as_core();
+
+        let error = unsafe {
+            self.wgpu_surface
+                .configure_ext(&device.wgpu_device, config, raw_config)
+        };
+        if let Err(e) = error {
+            device
+                .wgpu_device
+                .handle_error_nolabel(e, "Surface::configure");
+        } else {
+            *self.configured_device.lock() = Some(device.wgpu_device.clone());
+        }
+    }
+
     fn get_current_texture(
         &self,
         _desc: Option<crate::TextureDescriptor<'static>>,

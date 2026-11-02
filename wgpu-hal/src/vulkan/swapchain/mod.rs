@@ -1,7 +1,10 @@
 use alloc::boxed::Box;
 use core::{any::Any, fmt::Debug, time::Duration};
 
-use crate::vulkan::{semaphore_list::SemaphoreType, DeviceShared};
+use crate::{
+    vulkan::{semaphore_list::SemaphoreType, DeviceShared},
+    RawSurfaceConfiguration,
+};
 
 pub(super) use native::*;
 
@@ -37,6 +40,7 @@ pub(super) trait Surface: Send + Sync + 'static {
         &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
+        raw_config: Option<Box<dyn RawSurfaceConfiguration>>,
         provided_old_swapchain: Option<Box<dyn Swapchain>>,
     ) -> Result<Box<dyn Swapchain>, crate::SurfaceError>;
 

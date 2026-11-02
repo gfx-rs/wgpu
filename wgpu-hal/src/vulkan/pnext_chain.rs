@@ -4,7 +4,8 @@ use ash::vk;
 
 /// A caller-provided `pNext` chain, stashed by one of the `set_next_*_chain`
 /// setters until the Vulkan call that consumes it.
-pub(crate) struct PnextChain(*mut vk::BaseOutStructure<'static>);
+#[derive(Debug)]
+pub struct PnextChain(*mut vk::BaseOutStructure<'static>);
 
 // SAFETY: The pointer is only dereferenced at the Vulkan call that consumes the
 // chain. Each setter's contract keeps the chain valid and unaliased until then.
@@ -13,7 +14,11 @@ unsafe impl Sync for PnextChain {}
 
 impl PnextChain {
     /// Wraps the raw chain pointer that a `set_next_*_chain` setter received.
-    pub(crate) fn new(chain: *mut c_void) -> Self {
+    /// TODO: update docs
+    ///
+    /// This method is safe, but methods that actually operate on a
+    /// [`PnextChain`] are probably not.
+    pub fn new(chain: *mut c_void) -> Self {
         Self(chain.cast())
     }
 

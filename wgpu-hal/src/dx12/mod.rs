@@ -92,6 +92,8 @@ mod suballocation;
 mod types;
 mod view;
 
+pub use instance::Dx12AdapterOptions;
+
 use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
 use core::{ffi, fmt, mem, ops::Deref};
 
@@ -376,6 +378,8 @@ impl crate::Api for Api {
     type PipelineCache = PipelineCache;
 
     type AccelerationStructure = AccelerationStructure;
+
+    type AdapterOptions = Dx12AdapterOptions;
 }
 
 crate::impl_dyn_resource!(
@@ -610,6 +614,11 @@ pub struct Adapter {
 
 unsafe impl Send for Adapter {}
 unsafe impl Sync for Adapter {}
+
+#[derive(Clone, Debug)]
+pub struct Dx12DeviceOptions;
+
+impl wgt::BackendDeviceOptions for Dx12DeviceOptions {}
 
 impl Adapter {
     pub fn as_raw(&self) -> &Dxgi::IDXGIAdapter3 {

@@ -38,6 +38,7 @@ mod semaphore_list;
 mod swapchain;
 
 pub use adapter::PhysicalDeviceFeatures;
+pub use instance::VulkanAdapterOptions;
 pub(crate) use pnext_chain::PnextChain;
 
 use alloc::{boxed::Box, ffi::CString, sync::Arc, vec::Vec};
@@ -100,6 +101,8 @@ impl crate::Api for Api {
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
     type RayTracingPipeline = RayTracingPipeline;
+
+    type AdapterOptions = VulkanAdapterOptions;
 }
 
 crate::impl_dyn_resource!(
@@ -327,6 +330,8 @@ impl Surface {
         unsafe { swapchain.set_next_present_chain(chain) };
     }
 
+    // TODO: relocate any portion of this comment that is still relevant.
+    //
     /// Set a `pNext` chain of extension structs to attach to the
     /// [`vk::SwapchainCreateInfoKHR`] used by the next configuration of this surface.
     ///
@@ -355,15 +360,22 @@ impl Surface {
     ///
     /// [VK_NV_low_latency2]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_low_latency2.html
     #[track_caller]
-    pub unsafe fn set_next_swapchain_create_chain(&self, chain: *mut c_void) {
-        let surface = self
-            .inner
-            .as_any()
-            .downcast_ref::<swapchain::NativeSurface>()
-            .expect("Surface should be a native Vulkan surface");
-        unsafe { surface.set_next_swapchain_create_chain(chain) };
+    pub unsafe fn set_next_swapchain_create_chain(&self, _chain: *mut c_void) {
+        unimplemented!()
     }
 }
+
+#[derive(Debug)]
+pub struct VulkanSurfaceConfiguration {
+    /// A caller-provided `pNext` chain to attach to the [`vk::SwapchainCreateInfoKHR`]
+    /// of the swapchain created for this surface.
+    pub swapchain_create_chain: Option<PnextChain>,
+    /// Caller-provided flags to include in [`vk::SwapchainCreateFlagsKHR`] when
+    /// creating the swapchain.
+    pub swapchain_create_flags: vk::SwapchainCreateFlagsKHR,
+}
+
+impl crate::RawSurfaceConfiguration for VulkanSurfaceConfiguration {}
 
 #[derive(Debug)]
 pub struct SurfaceTexture {
@@ -1873,10 +1885,7 @@ struct RawTlasInstance {
 
 /// Arguments to the [`CreateDeviceCallback`].
 #[derive(Debug)]
-pub struct CreateDeviceCallbackArgs<'arg, 'pnext, 'this>
-where
-    'this: 'pnext,
-{
+pub struct CreateDeviceCallbackArgs<'arg, 'pnext> {
     /// The extensions to enable for the device. You must not remove anything from this list,
     /// but you may add to it.
     pub extensions: &'arg mut Vec<&'static CStr>,
@@ -1891,10 +1900,6 @@ where
     /// do not turn features off. Additionally, do not add things to the list of extensions,
     /// or to the feature set, as all changes to that member will be overwritten.
     pub create_info: &'arg mut vk::DeviceCreateInfo<'pnext>,
-    /// We need to have `'this` in the struct, so we can declare that all lifetimes coming from
-    /// captures in the closure will live longer (and hence satisfy) `'pnext`. However, we
-    /// don't actually directly use `'this`
-    _phantom: PhantomData<&'this ()>,
 }
 
 /// Callback to allow changing the vulkan device creation parameters.
@@ -1904,15 +1909,32 @@ where
 ///   as the create info value will be overwritten.
 /// - Callback must not remove features.
 /// - Callback must not change anything to what the instance does not support.
-pub type CreateDeviceCallback<'this> =
-    dyn for<'arg, 'pnext> FnOnce(CreateDeviceCallbackArgs<'arg, 'pnext, 'this>) + 'this;
+pub type CreateDeviceCallback =
+    dyn for<'arg, 'pnext> FnOnce(CreateDeviceCallbackArgs<'arg, 'pnext>) + 'static;
+
+/// Vulkan-specific options for [`Adapter::open`](crate::Adapter::open).
+///
+/// Pass this (boxed as `Box<dyn wgt::BackendDeviceOptions>`) in the `options`
+/// argument of [`crate::Adapter::open`], or, from `wgpu-core`, via
+/// `request_device_ext`. It is the type-erased equivalent of the inherent
+/// [`Adapter::open_with_callback`] method; because it is passed as an
+/// [`Any`](core::any::Any), the callback must be `'static`.
+#[derive(Default)]
+#[expect(missing_debug_implementations, reason = "contains a callback")]
+pub struct VulkanDeviceOptions {
+    /// Callback allowing the Vulkan device creation parameters to be customized.
+    ///
+    /// # Safety
+    ///
+    /// See [`CreateDeviceCallback`].
+    pub create_device_callback: Option<Box<CreateDeviceCallback>>,
+}
+
+impl wgt::BackendDeviceOptions for VulkanDeviceOptions {}
 
 /// Arguments to the [`CreateInstanceCallback`].
 #[expect(missing_debug_implementations, reason = "TODO?")]
-pub struct CreateInstanceCallbackArgs<'arg, 'pnext, 'this>
-where
-    'this: 'pnext,
-{
+pub struct CreateInstanceCallbackArgs<'arg, 'pnext> {
     /// The extensions to enable for the instance. You must not remove anything from this list,
     /// but you may add to it.
     pub extensions: &'arg mut Vec<&'static CStr>,
@@ -1922,10 +1944,6 @@ where
     pub create_info: &'arg mut vk::InstanceCreateInfo<'pnext>,
     /// Vulkan entry point.
     pub entry: &'arg ash::Entry,
-    /// We need to have `'this` in the struct, so we can declare that all lifetimes coming from
-    /// captures in the closure will live longer (and hence satisfy) `'pnext`. However, we
-    /// don't actually directly use `'this`
-    _phantom: PhantomData<&'this ()>,
 }
 
 /// Callback to allow changing the vulkan instance creation parameters.
@@ -1936,4 +1954,4 @@ where
 /// - Callback must not remove features.
 /// - Callback must not change anything to what the instance does not support.
 pub type CreateInstanceCallback<'this> =
-    dyn for<'arg, 'pnext> FnOnce(CreateInstanceCallbackArgs<'arg, 'pnext, 'this>) + 'this;
+    dyn for<'arg, 'pnext> FnOnce(CreateInstanceCallbackArgs<'arg, 'pnext>) + 'static;

@@ -164,6 +164,15 @@ impl crate::Api for Api {
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
     type RayTracingPipeline = RayTracingPipeline;
+
+    type AdapterOptions = GlAdapterOptions;
+}
+
+crate::adapter_options! {
+    /// Options for enumerating GL adapters.
+    #[backend(wgt::Backend::Gl)]
+    #[derive(Clone, Debug)]
+    pub struct GlAdapterOptions;
 }
 
 crate::impl_dyn_resource!(
@@ -331,6 +340,11 @@ impl fmt::Debug for AdapterShared {
 pub struct Adapter {
     shared: Arc<AdapterShared>,
 }
+
+#[derive(Clone, Debug)]
+pub struct GlDeviceOptions;
+
+impl wgt::BackendDeviceOptions for GlDeviceOptions {}
 
 #[derive(Debug)]
 pub struct Device {
