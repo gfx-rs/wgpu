@@ -57,15 +57,16 @@ async fn check_dx12_adapter_luid_filter(ctx: &wgpu_test::TestingContext) {
 
     let luid = adapter_luid(&ctx.adapter);
     let selected = unsafe {
-        ctx.instance.request_adapter_ext(
+        ctx.instance.request_adapters(
             &wgpu::RequestAdapterOptions::default(),
-            options_for_luid(luid),
+            wgpu::Extensions::new(options_for_luid(luid)),
         )
     }
     .await
     .expect("adapter should be selected by its LUID");
-    assert_eq!(adapter_luid(&selected), luid);
-    assert_eq!(selected.get_info(), ctx.adapter_info);
+    assert_eq!(selected.len(), 1);
+    assert_eq!(adapter_luid(&selected[0]), luid);
+    assert_eq!(selected[0].get_info(), ctx.adapter_info);
 
     let known_luids = ctx
         .instance
@@ -79,9 +80,9 @@ async fn check_dx12_adapter_luid_filter(ctx: &wgpu_test::TestingContext) {
         unknown_luid.LowPart = unknown_luid.LowPart.wrapping_add(1);
     }
     let result = unsafe {
-        ctx.instance.request_adapter_ext(
+        ctx.instance.request_adapters(
             &wgpu::RequestAdapterOptions::default(),
-            options_for_luid(unknown_luid),
+            wgpu::Extensions::new(options_for_luid(unknown_luid)),
         )
     }
     .await;
