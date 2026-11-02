@@ -424,49 +424,16 @@ impl Instance {
         profiling::scope!("Instance::enumerate_adapters");
         api_log!("Instance::enumerate_adapters");
 
-        let mut adapters = Vec::new();
-        for (_backend, instance) in self
-            .instance_per_backend
-            .iter()
-            .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
-        {
-            // NOTE: We might be using `profiling` without any features. The empty backend of this
-            // macro emits no code, so unused code linting changes depending on the backend.
-            profiling::scope!("enumerating", &*alloc::format!("{_backend:?}"));
-
-            let hal_adapters = unsafe { instance.enumerate_adapters(None) };
-
-            adapters.extend(
-                hal_adapters
-                    .into_iter()
-                    .map(|mut raw| {
-                        self.adjust_limits_for_indirect_validation(&mut raw.capabilities.limits);
-                        raw
-                    })
-                    .map(|mut raw| {
-                        filter_features_and_limits(
-                            self.flags,
-                            &mut raw.features,
-                            &mut raw.capabilities.limits,
-                        );
-                        raw
-                    })
-                    .filter(|raw| self.adapter_allowed(raw))
-                    .filter_map(|raw| {
-                        if apply_limit_buckets {
-                            limits::apply_limit_buckets(raw)
-                        } else {
-                            Some(raw)
-                        }
-                    })
-                    .map(|raw| {
-                        let adapter = Adapter::new(raw, self.clone());
-                        api_log_debug!("Adapter {:?}", adapter.raw.info);
-                        adapter
-                    }),
-            );
-        }
-        adapters
+        self.request_adapters(
+            &wgt::RequestAdapterOptions {
+                power_preference: PowerPreference::None,
+                force_fallback_adapter: false,
+                compatible_surface: None,
+                apply_limit_buckets,
+            },
+            backends,
+        )
+        .unwrap_or_default()
     }
 
     /// Returns a list of adapters that match the given request options and are compatible with the specified backends.
@@ -487,6 +454,8 @@ impl Instance {
             .iter()
             .filter(|&&(backend, _)| backends.contains(Backends::from(backend)))
         {
+            profiling::scope!("enumerating", &*alloc::format!("{backend:?}"));
+
             let compatible_hal_surface = desc
                 .compatible_surface
                 .and_then(|surface| surface.raw(backend));
