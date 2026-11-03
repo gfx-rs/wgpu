@@ -13,7 +13,6 @@ use core::{
     ops::{Deref, Range},
     pin::Pin,
     ptr::NonNull,
-    slice,
 };
 use wgc::resource::{BufferMapping, ParentDevice as _};
 use wgt::error::WebGpuError;
@@ -1749,7 +1748,7 @@ impl dispatch::QueueInterface for CoreQueue {
     fn submit(
         &self,
         command_buffers: &mut dyn Iterator<Item = dispatch::DispatchCommandBuffer>,
-    ) -> u64 {
+    ) -> Option<u64> {
         let temp_command_buffers = command_buffers.collect::<SmallVec<[_; 4]>>();
         let command_buffers = temp_command_buffers
             .iter()
@@ -1822,16 +1821,15 @@ impl dispatch::BufferInterface for CoreBuffer {
         range: Range<crate::BufferAddress>,
         callback: dispatch::BufferMapCallback,
     ) {
-        let operation = wgc::resource::BufferMapOperation {
+        self.wgpu_buffer.map_async(
             mode,
-            callback: Some(Box::new(|status| {
-                let res = status.map_err(|_| crate::BufferAsyncError);
+            range.start,
+            Some(range.end - range.start),
+            Some(Box::new(|status| {
+                let res = status.map(|_| ()).map_err(|_| crate::BufferAsyncError);
                 callback(res);
             })),
-        };
-
-        self.wgpu_buffer
-            .map_async(range.start, Some(range.end - range.start), operation);
+        );
     }
 
     fn get_mapped_range(
@@ -2980,9 +2978,7 @@ impl dispatch::QueueWriteBufferInterface for CoreQueueWriteBuffer {
 impl dispatch::BufferMappedRangeInterface for CoreBufferMappedRange {
     #[inline]
     unsafe fn read_slice(&self) -> &[u8] {
-        // FIXME: We currently tolerate this
-        // https://github.com/gfx-rs/wgpu/issues/10549
-        unsafe { slice::from_raw_parts(self.0.ptr().as_ptr(), self.0.len() as usize) }
+        self.0.read_slice()
     }
 
     #[inline]

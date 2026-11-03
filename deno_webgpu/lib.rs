@@ -182,8 +182,6 @@ impl GPU {
     state: Rc<RefCell<OpState>>,
     #[webidl] options: adapter::GPURequestAdapterOptions,
   ) -> Option<adapter::GPUAdapter> {
-    let mut state = state.borrow_mut();
-
     let dx12_compiler = std::env::var(DX12_COMPILER_ENV_VAR)
       .ok()
       .and_then(|s| s.parse().ok());
@@ -191,40 +189,43 @@ impl GPU {
       |_| wgpu_types::Backends::all(),
       |s| wgpu_types::Backends::from_comma_list(&s),
     );
-    let instance = if let Some(instance) = state.try_borrow::<Instance>() {
-      instance
-    } else {
-      let mut flags = wgpu_types::InstanceFlags::from_build_config();
-      let strict_compliance = std::env::var(STRICT_COMPLIANCE_ENV_VAR)
-        .is_ok_and(|value| {
-          !matches!(value.to_ascii_lowercase().as_str(), "false" | "no" | "0")
-        });
-      if strict_compliance {
-        flags |= wgpu_types::InstanceFlags::STRICT_WEBGPU_COMPLIANCE;
-      }
-      state.put(wgpu_core::instance::Instance::new(
-        "webgpu",
-        wgpu_types::InstanceDescriptor {
-          backends,
-          flags,
-          memory_budget_thresholds: wgpu_types::MemoryBudgetThresholds {
-            for_resource_creation: Some(97),
-            for_device_loss: Some(99),
-          },
-          backend_options: wgpu_types::BackendOptions {
-            dx12: wgpu_types::Dx12BackendOptions {
-              shader_compiler: dx12_compiler
-                .unwrap_or(wgpu_types::Dx12Compiler::Fxc),
-              ..Default::default()
+    let instance = {
+      let mut state = state.borrow_mut();
+      if let Some(instance) = state.try_borrow::<Instance>() {
+        instance.clone()
+      } else {
+        let mut flags = wgpu_types::InstanceFlags::from_build_config();
+        let strict_compliance = std::env::var(STRICT_COMPLIANCE_ENV_VAR)
+          .is_ok_and(|value| {
+            !matches!(value.to_ascii_lowercase().as_str(), "false" | "no" | "0")
+          });
+        if strict_compliance {
+          flags |= wgpu_types::InstanceFlags::STRICT_WEBGPU_COMPLIANCE;
+        }
+        state.put(wgpu_core::instance::Instance::new(
+          "webgpu",
+          wgpu_types::InstanceDescriptor {
+            backends,
+            flags,
+            memory_budget_thresholds: wgpu_types::MemoryBudgetThresholds {
+              for_resource_creation: Some(97),
+              for_device_loss: Some(99),
             },
-            gl: wgpu_types::GlBackendOptions::default(),
-            noop: wgpu_types::NoopBackendOptions::default(),
+            backend_options: wgpu_types::BackendOptions {
+              dx12: wgpu_types::Dx12BackendOptions {
+                shader_compiler: dx12_compiler
+                  .unwrap_or(wgpu_types::Dx12Compiler::Fxc),
+                ..Default::default()
+              },
+              gl: wgpu_types::GlBackendOptions::default(),
+              noop: wgpu_types::NoopBackendOptions::default(),
+            },
+            display: None,
           },
-          display: None,
-        },
-        None,
-      ));
-      state.borrow::<Instance>()
+          None,
+        ));
+        state.borrow::<Instance>().clone()
+      }
     };
 
     // Check that the feature level string is valid.
