@@ -254,6 +254,10 @@ pub(crate) fn build_acceleration_structures(
         }
 
         // Take all the instances that are some as well as those which are none between them.
+        // Note: this can take one too many instances if no `Some` instances are present and there
+        // is one `None` instance. Conversion of a single `None` instance is completely invisible
+        // and the small upload cost is not worth the added complexity of checking if there are
+        // absolutely no instances
         for instance in instances.into_iter().take(final_some_instance + 1) {
             instance_count += 1;
 
