@@ -253,6 +253,14 @@ pub(crate) fn build_acceleration_structures(
             }
         }
 
+        if instances.len() > tlas.max_instance_count as usize {
+            return Err(BuildAccelerationStructureError::TlasInstanceCountExceeded(
+                tlas.error_ident(),
+                instances.len(),
+                tlas.max_instance_count as usize,
+            ));
+        }
+
         // Take all the instances that are some as well as those which are none between them.
         // Note: this can take one too many instances if no `Some` instances are present and there
         // is one `None` instance. Conversion of a single `None` instance is completely invisible
@@ -322,14 +330,6 @@ pub(crate) fn build_acceleration_structures(
             tlas: tlas.clone(),
             dependencies,
         });
-
-        if instance_count > tlas.max_instance_count {
-            return Err(BuildAccelerationStructureError::TlasInstanceCountExceeded(
-                tlas.error_ident(),
-                instance_count,
-                tlas.max_instance_count,
-            ));
-        }
 
         tlas_storage.push(TlasStore {
             internal: UnsafeTlasStore {

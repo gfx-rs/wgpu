@@ -184,7 +184,7 @@ pub enum BuildAccelerationStructureError {
     #[error(
         "Tlas {0:?} has {1} active instances but only {2} are allowed as specified by the descriptor at creation"
     )]
-    TlasInstanceCountExceeded(ResourceErrorIdent, u32, u32),
+    TlasInstanceCountExceeded(ResourceErrorIdent, usize, usize),
 
     #[error("Blas {0:?} has flag USE_TRANSFORM but the transform buffer is missing")]
     TransformMissing(ResourceErrorIdent),
