@@ -62,7 +62,7 @@ impl ShaderRuntimeChecks {
     /// Creates a new configuration where the shader is fully checked.
     #[must_use]
     pub const fn checked() -> Self {
-        unsafe { Self::all(true) }
+        Self::all(true)
     }
 
     /// Creates a new configuration where none of the checks are performed.
