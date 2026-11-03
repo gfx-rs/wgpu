@@ -2054,11 +2054,12 @@ impl BlockContext<'_> {
             | crate::Expression::RayQueryProceedResult
             | crate::Expression::SubgroupBallotResult
             | crate::Expression::SubgroupOperationResult { .. } => self.cached[expr_handle],
-            crate::Expression::As {
-                expr,
-                kind,
-                convert,
-            } => self.write_as_expression(expr, convert, kind, block, result_type_id)?,
+            crate::Expression::As { expr, target } => {
+                self.write_as_expression(expr, target, block, result_type_id)?
+            }
+            crate::Expression::Bitcast { expr, ty } => {
+                self.write_bitcast_expression(expr, ty, block, result_type_id)
+            }
             crate::Expression::ImageLoad {
                 image,
                 coordinate,
@@ -2288,18 +2289,49 @@ impl BlockContext<'_> {
         Ok(())
     }
 
+    /// Helper which generates [`Bitcast`] expressions.
+    ///
+    /// [`Bitcast`]: crate::Expression::Bitcast
+    fn write_bitcast_expression(
+        &mut self,
+        expr: Handle<crate::Expression>,
+        ty: Handle<crate::Type>,
+        block: &mut Block,
+        result_type_id: u32,
+    ) -> Word {
+        let expr_id = self.cached[expr];
+
+        // Filter out identity casts. Some Adreno drivers are
+        // confused by no-op OpBitCast instructions.
+        let source_inner = self.fun_info[expr].ty.inner_with(&self.ir_module.types);
+        if *source_inner == self.ir_module.types[ty].inner {
+            return expr_id;
+        }
+
+        let id = self.gen_id();
+        block.body.push(Instruction::unary(
+            spirv::Op::Bitcast,
+            result_type_id,
+            id,
+            expr_id,
+        ));
+        id
+    }
+
     /// Helper which focuses on generating the `As` expressions and the various conversions
     /// that need to happen because of that.
     fn write_as_expression(
         &mut self,
         expr: Handle<crate::Expression>,
-        convert: Option<u8>,
-        kind: crate::ScalarKind,
-
+        target: crate::Scalar,
         block: &mut Block,
         result_type_id: u32,
     ) -> Result<u32, Error> {
         use crate::ScalarKind as Sk;
+        let crate::Scalar {
+            kind,
+            width: dst_width,
+        } = target;
         let expr_id = self.cached[expr];
         let ty = self.fun_info[expr].ty.inner_with(&self.ir_module.types);
 
@@ -2313,12 +2345,7 @@ impl BlockContext<'_> {
             scalar,
         } = *ty
         {
-            let Some(convert) = convert else {
-                // No conversion needs to be done, passes through.
-                return Ok(expr_id);
-            };
-
-            if convert == scalar.width {
+            if dst_width == scalar.width {
                 // No conversion needs to be done, passes through.
                 return Ok(expr_id);
             }
@@ -2341,7 +2368,7 @@ impl BlockContext<'_> {
                     size: rows,
                     scalar: crate::Scalar {
                         kind,
-                        width: convert,
+                        width: dst_width,
                     },
                 })));
 
@@ -2393,19 +2420,15 @@ impl BlockContext<'_> {
             Binary(spirv::Op, Word, Word),
             Ternary(spirv::Op, Word, Word, Word),
         }
-        let cast = match (src_scalar.kind, kind, convert) {
+        let cast = match (src_scalar.kind, kind, dst_width) {
             // Filter out identity casts. Some Adreno drivers are
             // confused by no-op OpBitCast instructions.
-            (src_kind, kind, convert)
-                if src_kind == kind
-                    && convert.filter(|&width| width != src_scalar.width).is_none() =>
-            {
+            (src_kind, kind, dst_width) if src_kind == kind && dst_width == src_scalar.width => {
                 Cast::Identity(expr_id)
             }
             (Sk::Bool, Sk::Bool, _) => Cast::Unary(spirv::Op::CopyObject, expr_id),
-            (_, _, None) => Cast::Unary(spirv::Op::Bitcast, expr_id),
             // casting to a bool - generate `OpXxxNotEqual`
-            (_, Sk::Bool, Some(_)) => {
+            (_, Sk::Bool, _) => {
                 let op = match src_scalar.kind {
                     Sk::Sint | Sk::Uint => spirv::Op::INotEqual,
                     Sk::Float => spirv::Op::FUnordNotEqual,
@@ -2431,7 +2454,7 @@ impl BlockContext<'_> {
                 Cast::Binary(op, expr_id, zero_id)
             }
             // casting from a bool - generate `OpSelect`
-            (Sk::Bool, _, Some(dst_width)) => {
+            (Sk::Bool, _, dst_width) => {
                 let dst_scalar = crate::Scalar {
                     kind,
                     width: dst_width,
@@ -2472,7 +2495,7 @@ impl BlockContext<'_> {
             // * Otherwise, the result is the value in T closest to
             //   truncate(X) and also exactly representable in the original
             //   floating point type.
-            (Sk::Float, Sk::Sint | Sk::Uint, Some(width)) => {
+            (Sk::Float, Sk::Sint | Sk::Uint, width) => {
                 let dst_scalar = crate::Scalar { kind, width };
                 let (min, max) =
                     crate::proc::min_max_float_representable_by(src_scalar, dst_scalar);
@@ -2512,24 +2535,25 @@ impl BlockContext<'_> {
                 };
                 Cast::Unary(op, clamp_id)
             }
-            (Sk::Float, Sk::Float, Some(dst_width)) if src_scalar.width != dst_width => {
+            (Sk::Float, Sk::Float, dst_width) if src_scalar.width != dst_width => {
                 Cast::Unary(spirv::Op::FConvert, expr_id)
             }
-            (Sk::Sint, Sk::Float, Some(_)) => Cast::Unary(spirv::Op::ConvertSToF, expr_id),
-            (Sk::Sint, Sk::Sint, Some(dst_width)) if src_scalar.width != dst_width => {
+            (Sk::Sint, Sk::Float, _) => Cast::Unary(spirv::Op::ConvertSToF, expr_id),
+            (Sk::Sint, Sk::Sint, dst_width) if src_scalar.width != dst_width => {
                 Cast::Unary(spirv::Op::SConvert, expr_id)
             }
-            (Sk::Uint, Sk::Float, Some(_)) => Cast::Unary(spirv::Op::ConvertUToF, expr_id),
-            (Sk::Uint, Sk::Uint, Some(dst_width)) if src_scalar.width != dst_width => {
+            (Sk::Uint, Sk::Float, _) => Cast::Unary(spirv::Op::ConvertUToF, expr_id),
+            (Sk::Uint, Sk::Uint, dst_width) if src_scalar.width != dst_width => {
                 Cast::Unary(spirv::Op::UConvert, expr_id)
             }
-            (Sk::Uint, Sk::Sint, Some(dst_width)) if src_scalar.width != dst_width => {
+            (Sk::Uint, Sk::Sint, dst_width) if src_scalar.width != dst_width => {
                 Cast::Unary(spirv::Op::SConvert, expr_id)
             }
-            (Sk::Sint, Sk::Uint, Some(dst_width)) if src_scalar.width != dst_width => {
+            (Sk::Sint, Sk::Uint, dst_width) if src_scalar.width != dst_width => {
                 Cast::Unary(spirv::Op::UConvert, expr_id)
             }
-            // We assume it's either an identity cast, or int-uint.
+            // Converting between signed and unsigned integers of the same
+            // width preserves the bits.
             _ => Cast::Unary(spirv::Op::Bitcast, expr_id),
         };
         Ok(match cast {

@@ -3,18 +3,18 @@ struct type_2 {
     member_1: u32,
 }
 
-struct type_3 {
+struct type_4 {
     member: u32,
 }
 
-struct type_5 {
+struct type_6 {
     member: atomic<u32>,
 }
 
 @group(0) @binding(0)
-var<storage, read_write> global: type_5;
+var<storage, read_write> global: type_6;
 @group(0) @binding(1)
-var<storage> global_1: type_3;
+var<storage> global_1: type_4;
 
 fn function_() {
     var phi_28_: type_2;
