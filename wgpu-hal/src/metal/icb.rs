@@ -296,8 +296,6 @@ pub(super) enum DeferredMultiDraw {
         request: IcbGenerationRequest,
         count_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
         count_offset: wgt::BufferAddress,
-        /// Private buffer receiving the `MTLIndirectCommandBufferExecutionRange`.
-        range_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
     },
     /// Clamp/zero indirect args into a private buffer that a fixed-length
     /// per-draw loop consumes: the count-draw fallback for pipelines that
@@ -344,10 +342,11 @@ impl IcbDrawKind {
 pub(super) struct IcbAllocation {
     icb: Retained<ProtocolObject<dyn MTLIndirectCommandBuffer>>,
     argument_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+    execution_range: Option<Retained<ProtocolObject<dyn MTLBuffer>>>,
     kind_tag: u8,
     /// Command capacity the ICB was created with.
     capacity: u32,
-    /// Memory the ICB and its argument buffer occupy.
+    /// Memory the ICB and its auxiliary buffers occupy.
     bytes: u64,
     counters: Arc<wgt::HalCounters>,
 }
@@ -370,11 +369,32 @@ impl IcbAllocation {
         Self {
             icb,
             argument_buffer,
+            execution_range: None,
             kind_tag,
             capacity,
             bytes,
             counters: Arc::clone(counters),
         }
+    }
+
+    fn execution_range(
+        &mut self,
+        shared: &super::AdapterShared,
+    ) -> Option<&ProtocolObject<dyn MTLBuffer>> {
+        if self.execution_range.is_none() {
+            let buffer = shared.device.newBufferWithLength_options(
+                size_of::<MTLIndirectCommandBufferExecutionRange>(),
+                MTLResourceOptions::StorageModePrivate,
+            )?;
+            buffer.setLabel(shared.hal_label("wgpu ICB execution range").as_deref());
+            let bytes = buffer.allocatedSize() as u64;
+            self.bytes += bytes;
+            self.counters
+                .indirect_command_buffer_memory
+                .add(bytes as isize);
+            self.execution_range = Some(buffer);
+        }
+        self.execution_range.as_deref()
     }
 }
 
@@ -419,8 +439,7 @@ struct PooledIcb {
 pub(super) struct IcbExecutionResources {
     context: Arc<IcbContext>,
     allocation: Option<IcbAllocation>,
-    /// Other buffers the executed commands read: an execution range, or
-    /// clamped arguments. Freed with the command buffer, never pooled.
+    /// Clamped arguments, freed with the command buffer rather than pooled.
     _extra: Vec<Retained<ProtocolObject<dyn MTLBuffer>>>,
 }
 
@@ -902,8 +921,8 @@ impl super::CommandEncoder {
     /// Like [`Self::defer_multi_draw_via_icb`], but the ICB holds `max_count`
     /// commands and is executed through an execution-range buffer that a
     /// deferred kernel fills with `min(count, max_count)`, keeping the draw
-    /// count entirely on the GPU. Commands past the real count are generated
-    /// but never executed, so no reset is needed. No draw-count threshold
+    /// count entirely on the GPU. Commands past the real count are neither
+    /// generated nor executed, so no reset is needed. No draw-count threshold
     /// applies: there is no cheaper correct lowering for count draws.
     pub(super) unsafe fn defer_count_multi_draw_via_icb(
         &mut self,
@@ -914,18 +933,15 @@ impl super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) -> bool {
-        let Some((request, icb_pipeline_state)) =
+        let Some((mut request, icb_pipeline_state)) =
             (unsafe { self.prepare_icb_request(kind, buffer, offset, max_count) })
         else {
             return false;
         };
-        let Some(range_buffer) = self.shared.device.newBufferWithLength_options(
-            size_of::<MTLIndirectCommandBufferExecutionRange>(),
-            MTLResourceOptions::StorageModePrivate,
-        ) else {
+        if request.allocation.execution_range(&self.shared).is_none() {
             return false;
-        };
-        range_buffer.setLabel(self.shared.hal_label("wgpu ICB execution range").as_deref());
+        }
+        let range_buffer = request.allocation.execution_range.as_ref().unwrap();
 
         let pipeline = self.state.render_pipeline.as_ref().unwrap();
         let encoder = self.state.render.as_ref().unwrap();
@@ -933,13 +949,13 @@ impl super::CommandEncoder {
         Self::use_icb_resources(encoder, &request);
         #[expect(deprecated)]
         encoder.useResource_usage(
-            ProtocolObject::from_ref(&*range_buffer),
+            ProtocolObject::from_ref(&**range_buffer),
             MTLResourceUsage::Read,
         );
         unsafe {
             encoder.executeCommandsInBuffer_indirectBuffer_indirectBufferOffset(
                 &request.allocation.icb,
-                &range_buffer,
+                range_buffer,
                 0,
             );
         }
@@ -949,7 +965,6 @@ impl super::CommandEncoder {
             request,
             count_buffer: count_buffer.raw.clone(),
             count_offset,
-            range_buffer,
         });
         true
     }
@@ -1046,6 +1061,34 @@ impl super::CommandEncoder {
         for draw in &self.deferred_multi_draws {
             match draw {
                 DeferredMultiDraw::Icb(request) | DeferredMultiDraw::IcbCount { request, .. } => {
+                    if let DeferredMultiDraw::IcbCount {
+                        count_buffer,
+                        count_offset,
+                        ..
+                    } = draw
+                    {
+                        let range_buffer = request.allocation.execution_range.as_ref().unwrap();
+                        compute.setComputePipelineState(&pipelines.execution_range.pipeline);
+                        unsafe {
+                            compute.setBuffer_offset_atIndex(
+                                Some(count_buffer),
+                                *count_offset as usize,
+                                0,
+                            );
+                            compute.setBuffer_offset_atIndex(Some(range_buffer), 0, 1);
+                            compute.setBytes_length_atIndex(
+                                NonNull::from(&request.draw_count).cast(),
+                                size_of::<u32>(),
+                                2,
+                            );
+                        }
+                        let single = MTLSize {
+                            width: 1,
+                            height: 1,
+                            depth: 1,
+                        };
+                        compute.dispatchThreadgroups_threadsPerThreadgroup(single, single);
+                    }
                     let pipeline = match request.kind {
                         IcbDrawKind::Draw => &pipelines.draw,
                         IcbDrawKind::DrawIndexed { raw_index_type, .. } => {
@@ -1070,18 +1113,14 @@ impl super::CommandEncoder {
                             request.args_offset as usize,
                             1,
                         );
-                        match request.kind {
+                        let count_index = match request.kind {
                             IcbDrawKind::Draw => {
                                 compute.setBytes_length_atIndex(
                                     NonNull::from(&request.primitive_type_value).cast(),
                                     size_of::<u32>(),
                                     2,
                                 );
-                                compute.setBytes_length_atIndex(
-                                    NonNull::from(&request.draw_count).cast(),
-                                    size_of::<u32>(),
-                                    3,
-                                );
+                                3
                             }
                             IcbDrawKind::DrawIndexed {
                                 ref index_buffer,
@@ -1098,11 +1137,7 @@ impl super::CommandEncoder {
                                     size_of::<u32>(),
                                     3,
                                 );
-                                compute.setBytes_length_atIndex(
-                                    NonNull::from(&request.draw_count).cast(),
-                                    size_of::<u32>(),
-                                    4,
-                                );
+                                4
                             }
                             IcbDrawKind::DrawMeshTasks {
                                 ref threadgroup_sizes,
@@ -1113,12 +1148,25 @@ impl super::CommandEncoder {
                                     size_of::<[u32; 6]>(),
                                     2,
                                 );
-                                compute.setBytes_length_atIndex(
-                                    NonNull::from(&request.draw_count).cast(),
-                                    size_of::<u32>(),
-                                    3,
-                                );
+                                3
                             }
+                        };
+                        if matches!(draw, DeferredMultiDraw::IcbCount { .. }) {
+                            // The serial encoder makes the clamped length visible to generation.
+                            compute.setBuffer_offset_atIndex(
+                                request.allocation.execution_range.as_deref(),
+                                core::mem::offset_of!(
+                                    MTLIndirectCommandBufferExecutionRange,
+                                    length
+                                ),
+                                count_index,
+                            );
+                        } else {
+                            compute.setBytes_length_atIndex(
+                                NonNull::from(&request.draw_count).cast(),
+                                size_of::<u32>(),
+                                count_index,
+                            );
                         }
                         compute.useResource_usage(
                             ProtocolObject::from_ref(&*request.allocation.icb),
@@ -1131,37 +1179,6 @@ impl super::CommandEncoder {
                         threadgroups,
                         threads_per_threadgroup,
                     );
-
-                    if let DeferredMultiDraw::IcbCount {
-                        count_buffer,
-                        count_offset,
-                        range_buffer,
-                        ..
-                    } = draw
-                    {
-                        // Clamp the GPU-resident count into the execution
-                        // range this ICB executes with.
-                        compute.setComputePipelineState(&pipelines.execution_range.pipeline);
-                        unsafe {
-                            compute.setBuffer_offset_atIndex(
-                                Some(count_buffer),
-                                *count_offset as usize,
-                                0,
-                            );
-                            compute.setBuffer_offset_atIndex(Some(range_buffer), 0, 1);
-                            compute.setBytes_length_atIndex(
-                                NonNull::from(&request.draw_count).cast(),
-                                size_of::<u32>(),
-                                2,
-                            );
-                        }
-                        let single = MTLSize {
-                            width: 1,
-                            height: 1,
-                            depth: 1,
-                        };
-                        compute.dispatchThreadgroups_threadsPerThreadgroup(single, single);
-                    }
                 }
                 DeferredMultiDraw::ClampedArgs {
                     dst_buffer,
@@ -1243,20 +1260,13 @@ impl super::CommandEncoder {
         // for the next pass.
         self.deferred_multi_draw_resources
             .extend(self.deferred_multi_draws.drain(..).map(|draw| match draw {
-                DeferredMultiDraw::Icb(request) => IcbExecutionResources {
-                    context: context.clone(),
-                    allocation: Some(request.allocation),
-                    _extra: Vec::new(),
-                },
-                DeferredMultiDraw::IcbCount {
-                    request,
-                    range_buffer,
-                    ..
-                } => IcbExecutionResources {
-                    context: context.clone(),
-                    allocation: Some(request.allocation),
-                    _extra: alloc::vec![range_buffer],
-                },
+                DeferredMultiDraw::Icb(request) | DeferredMultiDraw::IcbCount { request, .. } => {
+                    IcbExecutionResources {
+                        context: context.clone(),
+                        allocation: Some(request.allocation),
+                        _extra: Vec::new(),
+                    }
+                }
                 DeferredMultiDraw::ClampedArgs { dst_buffer, .. } => IcbExecutionResources {
                     context: context.clone(),
                     allocation: None,

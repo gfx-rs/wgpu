@@ -36,6 +36,9 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
         MULTI_DRAW_INDEXED_INDIRECT_GPU_GENERATED_ARGS,
         MULTI_DRAW_INDIRECT_COUNT_READBACK,
         MULTI_DRAW_INDEXED_INDIRECT_COUNT_READBACK,
+        MULTI_DRAW_INDIRECT_COUNT_REUSE,
+        MULTI_DRAW_INDEXED_INDIRECT_COUNT_REUSE_U16,
+        MULTI_DRAW_INDEXED_INDIRECT_COUNT_REUSE_U32,
         MULTI_DRAW_INDIRECT_COUNT_SAMPLED_TEXTURE,
         MULTI_DRAW_INDIRECT_OVER_ICB_WORKGROUP,
         MULTI_DRAW_INDIRECT_OVER_ICB_MEMORY_LIMIT,
@@ -1772,6 +1775,121 @@ async fn run_multi_draw_indirect_count_readback(ctx: TestingContext, indexed: bo
     }
 
     assert_all_white(&ctx, encoder, &out_texture).await;
+}
+
+#[apply(gpu_test!)]
+static MULTI_DRAW_INDIRECT_COUNT_REUSE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT))
+    .run_async(|ctx| run_multi_draw_indirect_count_reuse(ctx, None));
+
+#[apply(gpu_test!)]
+static MULTI_DRAW_INDEXED_INDIRECT_COUNT_REUSE_U16: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().features(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT))
+        .run_async(|ctx| run_multi_draw_indirect_count_reuse(ctx, Some(wgpu::IndexFormat::Uint16)));
+
+#[apply(gpu_test!)]
+static MULTI_DRAW_INDEXED_INDIRECT_COUNT_REUSE_U32: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().features(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT))
+        .run_async(|ctx| run_multi_draw_indirect_count_reuse(ctx, Some(wgpu::IndexFormat::Uint32)));
+
+async fn run_multi_draw_indirect_count_reuse(
+    ctx: TestingContext,
+    index_format: Option<wgpu::IndexFormat>,
+) {
+    let (pipeline, vertices, mut indices) =
+        create_indirect_render_pipeline(&ctx, index_format.is_some());
+    if index_format == Some(wgpu::IndexFormat::Uint16) {
+        indices = Some(ctx.device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&[0u16, 1, 2, 0, 3, 1]),
+            usage: wgpu::BufferUsages::INDEX,
+        }));
+    }
+    const MAX_COUNT: u32 = ICB_MULTI_DRAW_TEST_COUNT as u32 + 1;
+    let stride = if index_format.is_some() { 5 } else { 4 };
+    let mut args = vec![0u32; stride * MAX_COUNT as usize];
+    let last = stride * (MAX_COUNT as usize - 1);
+    args[last] = 6;
+    args[last + 1] = 1;
+    let indirect = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(&args),
+        usage: wgpu::BufferUsages::INDIRECT,
+    });
+    let counts = [
+        MAX_COUNT,
+        0,
+        1,
+        MAX_COUNT - 1,
+        MAX_COUNT,
+        u32::MAX,
+        0,
+        MAX_COUNT,
+    ];
+    let source = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(&counts),
+        usage: wgpu::BufferUsages::COPY_SRC,
+    });
+    let count = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 8,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::INDIRECT,
+        mapped_at_creation: false,
+    });
+    let (texture, view) = create_rgba8_render_target(&ctx, 64, 64);
+    let mut retained_bytes = None;
+    for (i, &draw_count) in counts.iter().enumerate() {
+        let max_count = if i == counts.len() - 1 { 0 } else { MAX_COUNT };
+        let mut encoder = ctx.device.create_command_encoder(&Default::default());
+        encoder.copy_buffer_to_buffer(&source, (i * 4) as u64, &count, 4, 4);
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+            pass.set_pipeline(&pipeline);
+            pass.set_vertex_buffer(0, vertices.slice(..));
+            if let Some(format) = index_format {
+                pass.set_index_buffer(indices.as_ref().unwrap().slice(..), format);
+                pass.multi_draw_indexed_indirect_count(&indirect, 0, &count, 4, max_count);
+            } else {
+                pass.multi_draw_indirect_count(&indirect, 0, &count, 4, max_count);
+            }
+        }
+        let readback = ReadbackBuffers::new(&ctx.device, &texture);
+        readback.copy_from(&ctx.device, &mut encoder, &texture);
+        ctx.queue.submit([encoder.finish()]);
+        let pixel = if draw_count.min(max_count) == MAX_COUNT {
+            [255u8; 4]
+        } else {
+            [0, 0, 0, 255]
+        };
+        readback
+            .assert_buffer_contents(&ctx, &pixel.repeat(64 * 64))
+            .await;
+        let bytes = ctx
+            .device
+            .get_internal_counters()
+            .hal
+            .indirect_command_buffer_memory
+            .read();
+        assert_eq!(
+            *retained_bytes.get_or_insert(bytes),
+            bytes,
+            "count draws must reuse their ICB and range buffer"
+        );
+    }
 }
 
 /// Like `run_multi_draw_indirect_count_readback`, but the fragment shader
