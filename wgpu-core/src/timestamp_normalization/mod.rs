@@ -29,14 +29,14 @@
 
 use core::num::NonZeroU64;
 
-use alloc::{boxed::Box, string::String, string::ToString, sync::Arc};
+use alloc::{boxed::Box, string::String, sync::Arc};
 
 use hashbrown::HashMap;
 
 use crate::{
     device::{Device, DeviceError},
     hal_label,
-    pipeline::{CreateComputePipelineError, CreateShaderModuleError},
+    pipeline::{CreatePipelineError, CreateShaderModuleError},
     resource::Buffer,
     snatch::SnatchGuard,
     track::BufferTracker,
@@ -65,7 +65,7 @@ pub enum TimestampNormalizerInitError {
     #[error("Failed to create pipeline layout")]
     PipelineLayout(#[source] DeviceError),
     #[error("Failed to create compute pipeline")]
-    ComputePipeline(#[from] CreateComputePipelineError),
+    ComputePipeline(#[from] CreatePipelineError),
 }
 
 /// Normalizes GPU timestamps to have a consistent 1GHz period.
@@ -226,20 +226,7 @@ impl TimestampNormalizer {
             let pipeline = device
                 .raw()
                 .create_compute_pipeline(&pipeline_desc)
-                .map_err(|err| match err {
-                    hal::PipelineError::Device(error) => {
-                        CreateComputePipelineError::Device(device.handle_hal_error(error))
-                    }
-                    hal::PipelineError::Linkage(_stages, msg) => {
-                        CreateComputePipelineError::Internal(msg)
-                    }
-                    hal::PipelineError::EntryPoint(_stage) => CreateComputePipelineError::Internal(
-                        crate::device::ENTRYPOINT_FAILURE_ERROR.to_string(),
-                    ),
-                    hal::PipelineError::PipelineConstants(_, error) => {
-                        CreateComputePipelineError::PipelineConstants(error)
-                    }
-                })?;
+                .map_err(|error| device.handle_hal_pipeline_error(error))?;
 
             Ok(Self {
                 state: Some(InternalState {

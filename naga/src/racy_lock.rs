@@ -6,6 +6,11 @@ use once_cell::race::OnceBox;
 use std::sync::LazyLock;
 
 #[cfg(std)]
+// Suppress cargo::unused_dependencies lint (since we can’t express “depend on once_cell
+// only if not(std)”).
+use once_cell as _;
+
+#[cfg(std)]
 type Inner<T> = LazyLock<T, fn() -> T>;
 #[cfg(no_std)]
 type Inner<T> = OnceBox<T>;

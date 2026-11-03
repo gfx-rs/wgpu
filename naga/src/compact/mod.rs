@@ -1,5 +1,5 @@
-mod expressions;
-mod functions;
+pub(crate) mod expressions;
+pub(crate) mod functions;
 mod handle_set_map;
 mod statements;
 mod types;
@@ -399,7 +399,7 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     }
 }
 
-struct ModuleTracer<'module> {
+pub(crate) struct ModuleTracer<'module> {
     module: &'module crate::Module,
 
     /// The subset of functions in `functions_used` that have not yet been
@@ -415,7 +415,7 @@ struct ModuleTracer<'module> {
 }
 
 impl<'module> ModuleTracer<'module> {
-    fn new(module: &'module crate::Module) -> Self {
+    pub(crate) fn new(module: &'module crate::Module) -> Self {
         Self {
             module,
             functions_pending: HandleSet::for_arena(&module.functions),
@@ -938,8 +938,7 @@ fn array_length_override_mutual() {
     let init = module.global_expressions.append(
         Ex::As {
             expr: sum,
-            kind: crate::ScalarKind::Uint,
-            convert: None,
+            target: crate::Scalar::U32,
         },
         nowhere,
     );
@@ -1273,8 +1272,7 @@ fn unnamed_override_type() {
     let named_init = module.global_expressions.append(
         crate::Expression::As {
             expr: unnamed_override_expr,
-            kind: crate::ScalarKind::Sint,
-            convert: None,
+            target: crate::Scalar::I32,
         },
         nowhere,
     );
