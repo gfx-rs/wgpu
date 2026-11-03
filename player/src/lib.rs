@@ -24,6 +24,53 @@ use wgc::{
     id::PointerId,
 };
 
+/// Parse the actions of a `trace.ron` file.
+///
+/// Traces are written with one action per line. If the last line can't be
+/// parsed, it is assumed to have been cut short (for example, because the
+/// traced program crashed while writing it), and is skipped with a warning.
+///
+/// Traces in the older format, a single RON list of actions, are also
+/// accepted, including ones that are missing the closing `]`.
+pub fn parse_trace(content: &str) -> Vec<trace::Action<'_, PointerReferences>> {
+    if content.trim_start().starts_with('[') {
+        return parse_list_trace(content);
+    }
+
+    let lines: Vec<(usize, &str)> = content
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .collect();
+    let mut actions = Vec::with_capacity(lines.len());
+    for (index, &(line_number, line)) in lines.iter().enumerate() {
+        match ron::de::from_str(line) {
+            Ok(action) => actions.push(action),
+            Err(e) if index + 1 == lines.len() => {
+                log::warn!(
+                    "Skipping the incomplete last action of the trace (line {}): {e}",
+                    line_number + 1
+                );
+            }
+            Err(e) => panic!("Failed to parse line {} of the trace: {e}", line_number + 1),
+        }
+    }
+    actions
+}
+
+/// Parse a trace in the older format, a single RON list of actions.
+fn parse_list_trace(content: &str) -> Vec<trace::Action<'_, PointerReferences>> {
+    match ron::de::from_str(content) {
+        Ok(actions) => actions,
+        Err(e) => {
+            // The closing `]` was only written when the trace was dropped, so it
+            // is missing if the traced program didn't exit cleanly.
+            let closed = format!("{content}]");
+            ron::de::from_str(&closed).unwrap_or_else(|_| panic!("Failed to parse the trace: {e}"))
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Player {
     pipeline_layouts: HashMap<
