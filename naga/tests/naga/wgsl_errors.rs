@@ -200,6 +200,128 @@ fn bad_type_cast() {
 }
 
 #[test]
+fn bitcast_overloads() {
+    let bitcast = |source: &str, dest: &str| {
+        format!("enable f16; fn f(x: {source}) -> {dest} {{ return bitcast<{dest}>(x); }}")
+    };
+
+    for (source, dest) in [
+        ("i32", "u32"),
+        ("u32", "f32"),
+        ("vec3<f32>", "vec3<i32>"),
+        ("f16", "f16"),
+        ("vec2<f16>", "vec2<f16>"),
+        ("vec2<f16>", "i32"),
+        ("vec2<f16>", "u32"),
+        ("vec2<f16>", "f32"),
+        ("vec4<f16>", "vec2<i32>"),
+        ("vec4<f16>", "vec2<u32>"),
+        ("vec4<f16>", "vec2<f32>"),
+        ("vec2<i32>", "vec4<f16>"),
+        ("vec2<u32>", "vec4<f16>"),
+        ("vec2<f32>", "vec4<f16>"),
+        ("i32", "vec2<f16>"),
+        ("u32", "vec2<f16>"),
+        ("f32", "vec2<f16>"),
+    ] {
+        check_success(&bitcast(source, dest));
+    }
+
+    for (source, dest) in [
+        ("bool", "u32"),
+        ("u32", "bool"),
+        ("f16", "u32"),
+        ("u32", "f16"),
+        ("vec3<f16>", "vec3<u32>"),
+        ("vec2<f16>", "vec2<u32>"),
+        ("vec2<f16>", "vec4<f16>"),
+        ("vec4<f16>", "u32"),
+        ("vec2<u32>", "vec3<u32>"),
+        ("vec3<u32>", "vec4<f16>"),
+        ("f32", "vec2<f32>"),
+        ("array<u32, 2>", "u32"),
+        ("u32", "array<u32, 1>"),
+    ] {
+        check_error_matches(&bitcast(source, dest), "cannot cast");
+    }
+}
+
+#[test]
+fn bitcast_int16() {
+    let bitcast = |source: &str, dest: &str| {
+        format!(
+            "enable f16; enable wgpu_int16; \
+             fn f(x: {source}) -> {dest} {{ return bitcast<{dest}>(x); }}"
+        )
+    };
+
+    for (source, dest) in [
+        ("f16", "i16"),
+        ("f16", "u16"),
+        ("i16", "f16"),
+        ("u16", "f16"),
+        ("i16", "u16"),
+        ("vec2<f16>", "vec2<i16>"),
+        ("vec3<f16>", "vec3<u16>"),
+        ("vec4<i16>", "vec4<f16>"),
+        ("vec4<u16>", "vec4<f16>"),
+    ] {
+        no_validation_error(
+            &bitcast(source, dest),
+            Capabilities::SHADER_FLOAT16 | Capabilities::SHADER_INT16,
+        );
+    }
+
+    for (source, dest) in [
+        ("f16", "i32"),
+        ("i16", "f32"),
+        ("i16", "bool"),
+        ("vec2<f16>", "i16"),
+        ("vec2<i16>", "vec3<f16>"),
+        ("vec2<i16>", "vec4<f16>"),
+    ] {
+        check_error_matches(&bitcast(source, dest), "cannot cast");
+    }
+}
+
+#[test]
+fn bitcast_abstract_operand() {
+    for (value, dest) in [
+        ("4294967295", "u32"),
+        ("4294967295", "vec2<u32>"),
+        ("1", "i32"),
+        ("1", "f32"),
+        ("1.0", "f32"),
+        ("1.0", "i32"),
+        ("1.0", "u32"),
+    ] {
+        let dest_value = if dest.starts_with("vec") {
+            format!("{dest}({value})")
+        } else {
+            value.to_string()
+        };
+        check_success(&format!(
+            "fn f() -> {dest} {{ return bitcast<{dest}>({dest_value}); }}"
+        ));
+    }
+
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(1); }");
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(1.0); }");
+    check_success("enable f16; fn f() -> f16 { return bitcast<f16>(1.0); }");
+    check_success("enable f16; fn f() -> f16 { return bitcast<f16>(1); }");
+    check_success("fn f() -> vec2<u32> { return bitcast<vec2<u32>>(vec2(4294967295, 1)); }");
+    check_success("fn f() -> vec2<f32> { return bitcast<vec2<f32>>(vec2(1, 2)); }");
+    check_success("fn f() -> vec2<i32> { return bitcast<vec2<i32>>(vec2(1.0, 2.0)); }");
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(vec2(1, 2)); }");
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(vec2(1.0, 2.0)); }");
+    check_success("enable f16; fn f() -> vec4<f16> { return bitcast<vec4<f16>>(vec2(1, 2)); }");
+    check_error_matches(
+        "fn f() -> u32 { return bitcast<u32>(4294967296); }",
+        "cannot",
+    );
+}
+
+#[test]
 fn cross_vec2() {
     check(
         r#"
