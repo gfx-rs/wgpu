@@ -686,15 +686,21 @@ features! {
 
         // Bit 25 is available.
 
-        /// Enables multiview render passes and `builtin(view_index)` in vertex/mesh shaders.
+        /// Enables multiview render passes and `@builtin(view_index)` in vertex, fragment, task and
+        /// mesh shaders. Multiview lets a single draw call render to several layers of an array
+        /// texture, selected by the multiview mask of the render pass and pipeline.
         ///
         /// Supported platforms:
-        /// - Vulkan
-        /// - Metal
-        /// - DX12
-        /// - OpenGL (web only)
+        /// - Vulkan (1.1+ or with VK_KHR_multiview)
+        /// - Metal (with vertex amplification)
+        /// - DX12 (with view instancing and SM 6.1+)
+        /// - GLES / WebGL (with OVR_multiview2)
         ///
         /// This is a native only feature.
+        ///
+        /// See the [multiview documentation][multiview] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["multiview"]: "documentation/extensions/multiview/index.html")]
         #[name("wgpu-multiview", "multiview")]
         const MULTIVIEW = 1 << 26;
         /// Enables using 64-bit types for vertex attributes.
@@ -990,16 +996,24 @@ features! {
         #[name("wgpu-ray-hit-vertex-return")]
         const EXPERIMENTAL_RAY_HIT_VERTEX_RETURN = 1 << 49;
 
-        /// Enables multiview in mesh shader pipelines
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in them and are expected to be subject to breaking changes.
+        ///
+        /// Enables multiview in mesh shader pipelines. Making use of this feature also requires
+        /// enabling [`Features::EXPERIMENTAL_MESH_SHADER`] and [`Features::MULTIVIEW`]. The highest
+        /// bit set in the multiview mask of a mesh draw must be less than
+        /// [`Limits::max_mesh_multiview_view_count`](crate::Limits::max_mesh_multiview_view_count).
         ///
         /// Supported platforms:
-        /// - Vulkan (with [VK_EXT_mesh_shader](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_mesh_shader.html))
-        ///
-        /// Potential Platforms:
-        /// - DX12
-        /// - Metal
+        /// - Vulkan (with [VK_EXT_mesh_shader](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_mesh_shader.html)'s `multiviewMeshShader` feature)
+        /// - DX12 (with view instancing and SM 6.1+)
+        /// - Metal (with vertex amplification)
         ///
         /// This is a native only feature.
+        ///
+        /// See the [multiview documentation][multiview] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["multiview"]: "documentation/extensions/multiview/index.html")]
         #[name("wgpu-mesh-shader-multiview")]
         const EXPERIMENTAL_MESH_SHADER_MULTIVIEW = 1 << 50;
 
@@ -1043,15 +1057,22 @@ features! {
         #[name("wgpu-shader-barycentrics")]
         const SHADER_BARYCENTRICS = 1 << 53;
 
-        /// Enables using multiview where not all texture array layers are rendered to in a single render pass/render pipeline. Making
-        /// use of this feature also requires enabling `Features::MULTIVIEW`.
+        /// Allows multiview masks that are not of the form `0b1…1`, i.e. masks that skip layers or do
+        /// not start at layer 0. Render pass masks that do not cover every layer of the attachments
+        /// also require this feature. Making use of this feature also requires enabling
+        /// [`Features::MULTIVIEW`].
         ///
-        /// Supported platforms
+        /// Supported platforms:
         /// - Vulkan
-        /// - DX12
-        ///
+        /// - DX12 (with view instancing and SM 6.1+)
         ///
         /// While metal supports this in theory, the behavior of `view_index` differs from vulkan and dx12 so the feature isn't exposed.
+        ///
+        /// This is a native only feature.
+        ///
+        /// See the [multiview documentation][multiview] for more information.
+        ///
+        #[doc = link_to_wgpu_docs!(["multiview"]: "documentation/extensions/multiview/index.html#selective-multiview")]
         #[name("wgpu-selective-multiview")]
         const SELECTIVE_MULTIVIEW = 1 << 54;
 

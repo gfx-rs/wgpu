@@ -5223,7 +5223,7 @@ impl Device {
         // Multiview is only supported if the feature is enabled
         if let Some(mv_mask) = desc.multiview_mask {
             self.require_features(wgt::Features::MULTIVIEW)?;
-            if !(mv_mask.get() + 1).is_power_of_two() {
+            if mv_mask.get().count_ones() != mv_mask.get().trailing_ones() {
                 self.require_features(wgt::Features::SELECTIVE_MULTIVIEW)?;
             }
         }

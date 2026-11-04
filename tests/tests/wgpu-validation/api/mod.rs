@@ -11,6 +11,7 @@ mod external_texture;
 mod immediates;
 mod instance;
 mod mesh_shader;
+mod multiview;
 mod overrides;
 mod ray_tracing_pipeline;
 mod render_bundle;

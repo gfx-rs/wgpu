@@ -80,13 +80,7 @@ pub(in crate::back::glsl) const fn glsl_built_in(
                 "gl_FragCoord"
             }
         }
-        Bi::ViewIndex => {
-            if options.targeting_webgl {
-                "gl_ViewID_OVR"
-            } else {
-                "uint(gl_ViewIndex)"
-            }
-        }
+        Bi::ViewIndex => "gl_ViewID_OVR",
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",
         Bi::BaseVertex => "uint(gl_BaseVertex)",

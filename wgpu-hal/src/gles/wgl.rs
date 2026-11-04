@@ -41,6 +41,7 @@ const CONTEXT_LOCK_TIMEOUT_SECS: u64 = 1;
 /// guarantee exclusive access when shared with multiple threads.
 pub struct AdapterContext {
     inner: Arc<Mutex<Inner>>,
+    framebuffer_texture_multiview_ovr: Option<super::FramebufferTextureMultiviewOvr>,
 }
 
 #[cfg(send_sync)]
@@ -56,6 +57,12 @@ impl AdapterContext {
             Some(ref wgl) => wgl.context.0,
             None => ptr::null_mut(),
         }
+    }
+
+    pub(super) fn framebuffer_texture_multiview_ovr(
+        &self,
+    ) -> Option<super::FramebufferTextureMultiviewOvr> {
+        self.framebuffer_texture_multiview_ovr
     }
 
     /// Obtain a lock to the WGL context and get handle to the [`glow::Context`] that can be used to
@@ -182,6 +189,7 @@ pub struct Instance {
     srgb_capable: bool,
     options: wgt::GlBackendOptions,
     inner: Arc<Mutex<Inner>>,
+    framebuffer_texture_multiview_ovr: Option<super::FramebufferTextureMultiviewOvr>,
 }
 
 #[cfg(send_sync)]
@@ -521,6 +529,10 @@ impl crate::Instance for Instance {
         let mut gl = unsafe {
             glow::Context::from_loader_function(|name| load_gl_func(name, Some(opengl_module)))
         };
+        let framebuffer_texture_multiview_ovr =
+            super::load_framebuffer_texture_multiview_ovr(|name| {
+                load_gl_func(name, Some(opengl_module))
+            });
 
         let extra = Wgl::load_with(|name| load_gl_func(name, None));
         let extensions = get_extensions(&extra, dc);
@@ -562,6 +574,7 @@ impl crate::Instance for Instance {
             })),
             options: desc.backend_options.gl.clone(),
             srgb_capable,
+            framebuffer_texture_multiview_ovr,
         })
     }
 
@@ -595,6 +608,7 @@ impl crate::Instance for Instance {
             super::Adapter::expose(
                 AdapterContext {
                     inner: self.inner.clone(),
+                    framebuffer_texture_multiview_ovr: self.framebuffer_texture_multiview_ovr,
                 },
                 self.options.clone(),
             )
@@ -615,9 +629,11 @@ impl super::Adapter {
     /// - The underlying OpenGL ES context must be current when dropping this adapter and when
     ///   dropping any objects returned from this adapter.
     pub unsafe fn new_external(
-        fun: impl FnMut(&str) -> *const c_void,
+        mut fun: impl FnMut(&str) -> *const c_void,
         options: wgt::GlBackendOptions,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
+        let framebuffer_texture_multiview_ovr =
+            super::load_framebuffer_texture_multiview_ovr(&mut fun);
         let context = unsafe { glow::Context::from_loader_function(fun) };
         unsafe {
             Self::expose(
@@ -627,6 +643,7 @@ impl super::Adapter {
                         device: create_instance_device().ok()?,
                         context: None,
                     })),
+                    framebuffer_texture_multiview_ovr,
                 },
                 options,
             )

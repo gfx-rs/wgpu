@@ -35,7 +35,7 @@ pub(crate) fn new_render_bundle_encoder_descriptor(
             }
         }),
         sample_count: context.sample_count,
-        multiview: context.multiview_mask,
+        multiview_mask: context.multiview_mask,
     }
 }
 
@@ -1158,7 +1158,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
                 color_formats: Cow::Owned(desc.color_formats.into_owned()),
                 depth_stencil: desc.depth_stencil,
                 sample_count: desc.sample_count,
-                multiview: desc.multiview,
+                multiview_mask: desc.multiview_mask,
             },
             base,
         },

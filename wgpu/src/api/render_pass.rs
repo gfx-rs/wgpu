@@ -670,8 +670,15 @@ pub struct RenderPassDescriptor<'a> {
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<&'a QuerySet>,
     /// The mask of multiview image layers to use for this render pass. For example, if you wish
-    /// to render to the first 2 layers, you would use 3=0b11. If you wanted ro render to only the
+    /// to render to the first 2 layers, you would use 3=0b11. If you wanted to render to only the
     /// 2nd layer, you would use 2=0b10. If you aren't using multiview this should be `None`.
+    ///
+    /// Requires [`Features::MULTIVIEW`]. Masks that are not of the form `0b1…1` also require
+    /// [`Features::SELECTIVE_MULTIVIEW`]. All attachments must have the same number of array
+    /// layers, which must not exceed [`Limits::max_multiview_view_count`], and attachments with
+    /// more than one layer must be [`TextureViewDimension::D2Array`] views. The mask must match the
+    /// `multiview_mask` of every pipeline and render bundle used in the pass. See the
+    /// [multiview documentation](crate::documentation::extensions::multiview).
     ///
     /// Note that setting bits higher than the number of texture layers is a validation error.
     ///

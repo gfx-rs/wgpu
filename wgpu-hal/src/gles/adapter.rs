@@ -511,10 +511,12 @@ impl super::Adapter {
             downlevel_flags.contains(wgt::DownlevelFlags::VERTEX_STORAGE)
                 && vertex_shader_storage_textures != 0,
         );
-        features.set(
-            wgt::Features::MULTIVIEW,
-            extensions.contains("OVR_multiview2") || extensions.contains("GL_OVR_multiview2"),
-        );
+        #[cfg(webgl)]
+        let supports_multiview = extensions.contains("OVR_multiview2");
+        #[cfg(not(webgl))]
+        let supports_multiview = extensions.contains("GL_OVR_multiview2")
+            && context.framebuffer_texture_multiview_ovr().is_some();
+        features.set(wgt::Features::MULTIVIEW, supports_multiview);
         features.set(
             wgt::Features::DUAL_SOURCE_BLENDING,
             extensions.contains("GL_EXT_blend_func_extended")
@@ -741,6 +743,14 @@ impl super::Adapter {
                 | wgt::Features::MEMORY_DECORATION_VOLATILE;
         }
 
+        let max_multiview_view_count = if features.contains(wgt::Features::MULTIVIEW) {
+            // `GL_MAX_VIEWS_OVR`, which glow does not define.
+            const MAX_VIEWS_OVR: u32 = 0x9631;
+            (unsafe { gl.get_parameter_i32(MAX_VIEWS_OVR) } as u32).min(32)
+        } else {
+            0
+        };
+
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
         let max_texture_3d_size = unsafe { gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;
 
@@ -917,7 +927,7 @@ impl super::Adapter {
             max_acceleration_structures_per_shader_stage: 0,
             max_buffers_and_acceleration_structures_per_shader_stage: u32::MAX,
 
-            max_multiview_view_count: 0,
+            max_multiview_view_count,
 
             max_ray_dispatch_count: 0,
             max_ray_recursion_depth: 0,

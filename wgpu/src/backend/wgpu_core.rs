@@ -1369,7 +1369,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     targets: Borrowed(frag.targets),
                 }
             }),
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
             cache: desc
                 .cache
                 .map(|cache| cache.inner.as_core().wgpu_pipeline_cache.clone()),
@@ -1557,7 +1557,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             color_formats: Borrowed(desc.color_formats),
             depth_stencil: desc.depth_stencil,
             sample_count: desc.sample_count,
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
         };
         let encoder = self.wgpu_device.create_render_bundle_encoder(&descriptor);
 

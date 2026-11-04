@@ -381,7 +381,7 @@ async fn vertex_index_common(ctx: TestingContext) {
                         color_formats: &[Some(wgpu::TextureFormat::Rgba8Unorm)],
                         depth_stencil: None,
                         sample_count: 1,
-                        multiview: None,
+                        multiview_mask: None,
                     },
                 )),
             };

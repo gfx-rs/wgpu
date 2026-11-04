@@ -1559,7 +1559,13 @@ impl super::CapabilitiesQuery {
             max_mesh_output_vertices: 256,
             max_mesh_output_primitives: 256,
             max_mesh_output_layers: self.max_texture_layers as u32,
-            max_mesh_multiview_view_count: 0,
+            max_mesh_multiview_view_count: if self.mesh_shaders
+                && self.supported_vertex_amplification_factor > 1
+            {
+                self.supported_vertex_amplification_factor
+            } else {
+                0
+            },
             // unimplemented
             max_ray_dispatch_count: 0,
             max_ray_recursion_depth: 0,

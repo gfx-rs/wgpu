@@ -141,7 +141,7 @@ fn fragment(FRAGMENT_PRIMITIVE_INDEX) -> @location(0) vec4<f32> {
                 write_mask: ColorWrites::all(),
             })],
         }),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
 }

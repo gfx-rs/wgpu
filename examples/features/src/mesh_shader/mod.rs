@@ -39,7 +39,7 @@ impl crate::framework::Example for Example {
             },
             depth_stencil: None,
             multisample: Default::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
         Self { pipeline }

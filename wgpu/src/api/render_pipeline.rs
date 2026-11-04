@@ -257,6 +257,10 @@ pub struct RenderPipelineDescriptor<'a> {
     /// For example, if you wish to render to the first 2 layers, you would use 3=0b11. If you
     /// wanted to render to only the 2nd layer, you would use 2=0b10. If you aren't using
     /// multiview this should be `None`.
+    ///
+    /// Requires [`Features::MULTIVIEW`]. Masks that are not of the form `0b1…1` also require
+    /// [`Features::SELECTIVE_MULTIVIEW`]. See the
+    /// [multiview documentation](crate::documentation::extensions::multiview).
     pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<&'a PipelineCache>,
@@ -346,9 +350,19 @@ pub struct MeshPipelineDescriptor<'a> {
     pub multisample: MultisampleState,
     /// The compiled fragment stage, its entry point, and the color targets.
     pub fragment: Option<FragmentState<'a>>,
-    /// If the pipeline will be used with a multiview render pass, this indicates how many array
-    /// layers the attachments will have.
-    pub multiview: Option<NonZeroU32>,
+    /// If the pipeline will be used with a multiview render pass, this indicates what multiview
+    /// mask the render pass will be used with. The masks must match exactly.
+    ///
+    /// For example, if you wish to render to the first 2 layers, you would use 3=0b11. If you
+    /// wanted to render to only the 2nd layer, you would use 2=0b10. If you aren't using
+    /// multiview this should be `None`.
+    ///
+    /// Requires [`Features::MULTIVIEW`]. Masks that are not of the form `0b1…1` also require
+    /// [`Features::SELECTIVE_MULTIVIEW`]. Drawing with this pipeline in a multiview render pass
+    /// requires [`Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW`], and the highest bit set in the
+    /// mask must be less than [`Limits::max_mesh_multiview_view_count`]. See the
+    /// [multiview documentation](crate::documentation::extensions::multiview).
+    pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<&'a PipelineCache>,
 }

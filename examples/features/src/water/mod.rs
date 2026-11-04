@@ -625,7 +625,7 @@ impl crate::framework::Example for Example {
                         stencil_read_only: true,
                     }),
                     sample_count: 1,
-                    multiview: None,
+                    multiview_mask: None,
                 });
             encoder.set_pipeline(&terrain_pipeline);
             encoder.set_bind_group(0, &terrain_flipped_bind_group, &[]);

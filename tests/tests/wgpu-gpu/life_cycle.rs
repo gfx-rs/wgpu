@@ -317,7 +317,7 @@ fn record_encoder_with_resource(
                             color_formats: &[Some(wgpu::TextureFormat::Rgba8Unorm)],
                             depth_stencil: None,
                             sample_count: 1,
-                            multiview: None,
+                            multiview_mask: None,
                         });
                 rbe.set_pipeline(&pipeline);
                 rbe.set_bind_group(0, &bind_group, &[]);
@@ -1031,7 +1031,7 @@ fn test_replaced_bind_group(ctx: &TestingContext, usage: UsageKind) {
                             color_formats: &[Some(wgpu::TextureFormat::Rgba8Unorm)],
                             depth_stencil: None,
                             sample_count: 1,
-                            multiview: None,
+                            multiview_mask: None,
                         });
                 rbe.set_pipeline(&pipeline);
                 rbe.set_bind_group(0, &bind_group_a, &[]);

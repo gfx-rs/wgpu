@@ -120,7 +120,7 @@ fn mesh_draw_in_multiview_pass(
             bias: DepthBiasState::default(),
         }),
         multisample: MultisampleState::default(),
-        multiview: multiview_mask,
+        multiview_mask,
         cache: None,
     });
 

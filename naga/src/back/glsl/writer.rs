@@ -201,7 +201,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        if self.entry_point.stage == ShaderStage::Vertex && self.options.version.is_webgl() {
+        if self.entry_point.stage == ShaderStage::Vertex {
             if let Some(multiview) = self.multiview.as_ref() {
                 writeln!(self.out, "layout(num_views = {multiview}) in;")?;
                 writeln!(self.out)?;

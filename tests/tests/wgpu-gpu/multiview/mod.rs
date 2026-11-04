@@ -11,6 +11,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(DRAW_MULTIVIEW);
     vec.push(DRAW_MULTIVIEW_NONCONTIGUOUS);
     vec.push(DRAW_MULTIVIEW_MULTISAMPLE);
+    vec.push(DRAW_MULTIVIEW_MESH);
+    vec.push(DRAW_MULTIVIEW_MESH_NONCONTIGUOUS);
 }
 
 #[apply(gpu_test!)]
@@ -23,7 +25,7 @@ static DRAW_MULTIVIEW_SINGLE: GpuTestConfiguration = GpuTestConfiguration::new()
                 ..Limits::defaults()
             }),
     )
-    .run_async(|ctx| run_test(ctx, 0b1, 1));
+    .run_async(|ctx| run_test(ctx, 0b1, 1, false));
 
 #[apply(gpu_test!)]
 static DRAW_MULTIVIEW: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -35,7 +37,7 @@ static DRAW_MULTIVIEW: GpuTestConfiguration = GpuTestConfiguration::new()
                 ..Limits::defaults()
             }),
     )
-    .run_async(|ctx| run_test(ctx, 0b11, 1));
+    .run_async(|ctx| run_test(ctx, 0b11, 1, false));
 
 #[apply(gpu_test!)]
 static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -63,7 +65,7 @@ static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration
         },
         ..Default::default()
     })
-    .run_async(|ctx| run_test(ctx, 0b1001, 1));
+    .run_async(|ctx| run_test(ctx, 0b1001, 1, false));
 
 #[apply(gpu_test!)]
 static DRAW_MULTIVIEW_MULTISAMPLE: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -75,12 +77,51 @@ static DRAW_MULTIVIEW_MULTISAMPLE: GpuTestConfiguration = GpuTestConfiguration::
                 ..Limits::defaults()
             }),
     )
-    .run_async(|ctx| run_test(ctx, 0b11, 4));
+    .run_async(|ctx| run_test(ctx, 0b11, 4, false));
 
-async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32) {
+#[apply(gpu_test!)]
+static DRAW_MULTIVIEW_MESH: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(
+                Features::MULTIVIEW
+                    | Features::EXPERIMENTAL_MESH_SHADER
+                    | Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
+            )
+            .limits(Limits {
+                max_multiview_view_count: 2,
+                max_mesh_multiview_view_count: 2,
+                ..Limits::defaults().using_recommended_minimum_mesh_shader_values()
+            }),
+    )
+    .run_async(|ctx| run_test(ctx, 0b11, 1, true));
+
+#[apply(gpu_test!)]
+static DRAW_MULTIVIEW_MESH_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(
+                Features::MULTIVIEW
+                    | Features::SELECTIVE_MULTIVIEW
+                    | Features::EXPERIMENTAL_MESH_SHADER
+                    | Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
+            )
+            .limits(Limits {
+                max_multiview_view_count: 4,
+                max_mesh_multiview_view_count: 4,
+                ..Limits::defaults().using_recommended_minimum_mesh_shader_values()
+            }),
+    )
+    .run_async(|ctx| run_test(ctx, 0b1001, 1, true));
+
+async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32, mesh: bool) {
     let num_layers = 32 - layer_mask.leading_zeros();
 
-    let shader_src = include_str!("shader.wgsl");
+    let shader_src = if mesh {
+        include_str!("mesh.wgsl")
+    } else {
+        include_str!("shader.wgsl")
+    };
 
     let shader = ctx
         .device
@@ -89,37 +130,59 @@ async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32) {
             source: wgpu::ShaderSource::Wgsl(shader_src.into()),
         });
 
-    let pipeline_desc = wgpu::RenderPipelineDescriptor {
-        label: None,
-        vertex: wgpu::VertexState {
-            buffers: &[],
-            module: &shader,
-            entry_point: Some("vs_main"),
-            compilation_options: Default::default(),
-        },
-        primitive: wgpu::PrimitiveState::default(),
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some("fs_main"),
-            compilation_options: Default::default(),
-            targets: &[Some(wgpu::ColorTargetState {
-                format: wgpu::TextureFormat::R8Unorm,
-                blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-        }),
-        multiview_mask: NonZero::new(layer_mask),
-        multisample: wgpu::MultisampleState {
-            count: sample_count,
-            ..Default::default()
-        },
-        layout: None,
-        depth_stencil: None,
-        cache: None,
+    let fragment = wgpu::FragmentState {
+        module: &shader,
+        entry_point: Some("fs_main"),
+        compilation_options: Default::default(),
+        targets: &[Some(wgpu::ColorTargetState {
+            format: wgpu::TextureFormat::R8Unorm,
+            blend: None,
+            write_mask: wgpu::ColorWrites::ALL,
+        })],
+    };
+    let multisample = wgpu::MultisampleState {
+        count: sample_count,
+        ..Default::default()
+    };
+    let pipeline = if mesh {
+        ctx.device
+            .create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
+                label: None,
+                layout: None,
+                task: None,
+                mesh: wgpu::MeshState {
+                    module: &shader,
+                    entry_point: Some("ms_main"),
+                    compilation_options: Default::default(),
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample,
+                fragment: Some(fragment),
+                multiview_mask: NonZero::new(layer_mask),
+                cache: None,
+            })
+    } else {
+        ctx.device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: None,
+                vertex: wgpu::VertexState {
+                    buffers: &[],
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    compilation_options: Default::default(),
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                fragment: Some(fragment),
+                multiview_mask: NonZero::new(layer_mask),
+                multisample,
+                layout: None,
+                depth_stencil: None,
+                cache: None,
+            })
     };
 
     const TEXTURE_SIZE: u32 = 256;
-    let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
 
     let texture_desc = wgpu::TextureDescriptor {
         label: None,
@@ -192,7 +255,11 @@ async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32) {
             multiview_mask: NonZero::new(layer_mask),
         });
         rpass.set_pipeline(&pipeline);
-        rpass.draw(0..6, 0..1);
+        if mesh {
+            rpass.draw_mesh_tasks(1, 1, 1);
+        } else {
+            rpass.draw(0..6, 0..1);
+        }
     }
     encoder.copy_texture_to_buffer(
         wgpu::TexelCopyTextureInfo {

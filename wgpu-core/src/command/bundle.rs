@@ -151,9 +151,11 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     ///
     /// This must match the pipelines and the renderpasses it is used in.
     pub sample_count: u32,
-    /// If this render bundle will rendering to multiple array layers in the
-    /// attachments at the same time.
-    pub multiview: Option<NonZeroU32>,
+    /// The multiview mask of the render passes this render bundle will be
+    /// executed in, or `None` if it will not be used with multiview.
+    ///
+    /// This must match the pipelines and the renderpasses it is used in.
+    pub multiview_mask: Option<NonZeroU32>,
 }
 
 #[derive(Debug)]
@@ -271,7 +273,7 @@ impl RenderBundleEncoder {
                     depth_stencil: desc.depth_stencil.map(|ds| ds.format),
                 },
                 sample_count: desc.sample_count,
-                multiview_mask: desc.multiview,
+                multiview_mask: desc.multiview_mask,
             },
 
             is_depth_read_only,

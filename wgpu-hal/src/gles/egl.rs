@@ -205,6 +205,7 @@ impl EglContext {
 pub struct AdapterContext {
     glow: Mutex<ManuallyDrop<glow::Context>>,
     egl: Option<EglContext>,
+    framebuffer_texture_multiview_ovr: Option<super::FramebufferTextureMultiviewOvr>,
 }
 
 unsafe impl Sync for AdapterContext {}
@@ -241,6 +242,12 @@ impl AdapterContext {
             Some(ref egl) => egl.raw.as_ptr(),
             None => ptr::null_mut(),
         }
+    }
+
+    pub(super) fn framebuffer_texture_multiview_ovr(
+        &self,
+    ) -> Option<super::FramebufferTextureMultiviewOvr> {
+        self.framebuffer_texture_multiview_ovr
     }
 }
 
@@ -1050,6 +1057,14 @@ impl crate::Instance for Instance {
         // GLOW context, which could also happen if a panic occurs after we uncurrent the context
         // below but before AdapterContext is constructed.
         let gl = ManuallyDrop::new(gl);
+        let framebuffer_texture_multiview_ovr =
+            super::load_framebuffer_texture_multiview_ovr(|name| {
+                inner
+                    .egl
+                    .instance
+                    .get_proc_address(name)
+                    .map_or(ptr::null(), |p| p as *const _)
+            });
         inner.egl.unmake_current();
 
         unsafe {
@@ -1058,6 +1073,7 @@ impl crate::Instance for Instance {
                     glow: Mutex::new(gl),
                     // ERROR: Copying owned reference handles here, be careful to not drop them!
                     egl: Some(inner.egl.clone()),
+                    framebuffer_texture_multiview_ovr,
                 },
                 self.options.clone(),
             )
@@ -1078,15 +1094,18 @@ impl super::Adapter {
     /// - The underlying OpenGL ES context must be current when dropping this adapter and when
     ///   dropping any objects returned from this adapter.
     pub unsafe fn new_external(
-        fun: impl FnMut(&str) -> *const ffi::c_void,
+        mut fun: impl FnMut(&str) -> *const ffi::c_void,
         options: wgt::GlBackendOptions,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
+        let framebuffer_texture_multiview_ovr =
+            super::load_framebuffer_texture_multiview_ovr(&mut fun);
         let context = unsafe { glow::Context::from_loader_function(fun) };
         unsafe {
             Self::expose(
                 AdapterContext {
                     glow: Mutex::new(ManuallyDrop::new(context)),
                     egl: None,
+                    framebuffer_texture_multiview_ovr,
                 },
                 options,
             )

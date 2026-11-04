@@ -821,7 +821,7 @@ impl Global {
             color_formats: Cow::Borrowed(&desc.color_formats),
             depth_stencil: desc.depth_stencil,
             sample_count: desc.sample_count,
-            multiview: None,
+            multiview_mask: None,
         };
 
         let render_bundle_encoder = device.create_render_bundle_encoder(&desc);

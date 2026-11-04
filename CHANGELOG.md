@@ -200,9 +200,11 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - `clear_texture` now rejects a request to clear only some aspects of a texture. Previously such a request would clear all aspects of the texture. By @andyleiserson in [#10684](https://github.com/gfx-rs/wgpu/pull/10684).
 - `Queue::submit` now returns `Option<SubmissionIndex>`, and returns `None` if the submission failed. A `None` result means the submission never reached the driver, so fences/events/semaphores attached to HAL queues will never be signalled. By @teoxoy in [#10218](https://github.com/gfx-rs/wgpu/pull/10218).
 - `Device::poll` now always returns `PollError::CantWait` if called with `PollType::Wait` on the WebGPU backend. By @teoxoy in [#10218](https://github.com/gfx-rs/wgpu/pull/10218).
+- `MeshPipelineDescriptor::multiview` and `RenderBundleEncoderDescriptor::multiview` have been renamed to `multiview_mask`, matching `RenderPipelineDescriptor` and `RenderPassDescriptor`. They were already treated as masks, but were documented as layer counts. By @inner-daemons in [#10804](https://github.com/gfx-rs/wgpu/pull/10804).
 
 #### naga
 
+- The GLSL backend now uses `GL_OVR_multiview2` for `@builtin(view_index)` on all targets. Previously, non-WebGL targets used `GL_EXT_multiview`, which is a Vulkan GLSL extension. By @inner-daemons in [#10804](https://github.com/gfx-rs/wgpu/pull/10804).
 - `naga::valid::ValidationError` is now always returned boxed, to avoid `clippy::large_result_err` warning. By @beicause in [#9612](https://github.com/gfx-rs/wgpu/pull/9612)
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
@@ -265,6 +267,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Disallow array types in `var<immediate>`. By @beicause in [#10081](https://github.com/gfx-rs/wgpu/pull/10081).
 - Mesh shader draws in a multiview render pass now require the highest view in the multiview mask to be less than `Limits::max_mesh_multiview_view_count`. Previously one view past the limit was accepted. By @apollo-2006 in [#10496](https://github.com/gfx-rs/wgpu/pull/10496).
 - `wgpu_core` now validates pipeline stage interfaces after pipeline constant values have been applied, per spec. For example, workgroup sizes set by overrides are now checked against device limits. By @jimblandy in [#10430](https://github.com/gfx-rs/wgpu/pull/10430).
+- Render passes with a `multiview_mask` now require `Features::MULTIVIEW`, even when the attachments have a single layer. Fixed a panic in debug builds when a multiview mask has all 32 bits set. By @inner-daemons in [#10804](https://github.com/gfx-rs/wgpu/pull/10804).
 
 #### Naga
 
@@ -310,10 +313,12 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Fix a crash when creating a declared alternate sRGB view of a render-attachment-only surface with Metal API Validation enabled. By @jinleili in [#10280](https://github.com/gfx-rs/wgpu/pull/10280).
 - Fix oversaturated sRGB surface colors on wide-gamut displays by explicitly setting the layer's sRGB color space. By @jinleili in [#10286](https://github.com/gfx-rs/wgpu/pull/10286).
 - To avoid rendering failures in new windows (see [#9430](https://github.com/gfx-rs/wgpu/issues/9430)), do not return `SurfaceStatus::Occluded` from `Surface::get_current_texture` when it is called for a window that hasn't been visible yet. By @tronical in [#10302](https://github.com/gfx-rs/wgpu/pull/10302).
+- Fix `Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW` being unusable because `Limits::max_mesh_multiview_view_count` was reported as 0. By @inner-daemons in [#10804](https://github.com/gfx-rs/wgpu/pull/10804).
 
 #### GLES
 
 - Enable `TEXTURE_CUBE_MAP_SEAMLESS` on desktop OpenGL so cube maps sample seamlessly across face edges, matching OpenGL ES 3.0+, WebGL 2, Vulkan, Metal, and Direct3D 12. By @kuntal-devrat in [#10628](https://github.com/gfx-rs/wgpu/pull/10628).
+- Fix multiview by reporting `Limits::max_multiview_view_count` from `GL_MAX_VIEWS_OVR` instead of 0, and implement multiview render passes on native OpenGL and OpenGL ES with `GL_OVR_multiview2`. By @inner-daemons in [#10804](https://github.com/gfx-rs/wgpu/pull/10804).
 - Fix black EGL surfaces on some platforms by selecting the default framebuffer's color buffer before presentation. By @valadaptive in [#10268](https://github.com/gfx-rs/wgpu/pull/10268).
 - Avoid duplicate `EGL_SURFACE_TYPE` attributes when selecting an EGL framebuffer configuration, which caused Mesa to return no matching configurations. By @BlueJayLouche and @scroix in [#10048](https://github.com/gfx-rs/wgpu/pull/10048).
 - `@interpolate(linear)` is now rejected by `Device::create_shader_module` on adapters that lack `DownlevelFlags::LINEAR_INTERPOLATION` (GLES/WebGL2), with a shader label and a source span. Previously such a shader validated fine and then failed at pipeline creation with `The selected version doesn't support Features(NOPERSPECTIVE_QUALIFIER)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).

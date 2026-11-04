@@ -135,6 +135,28 @@ const MAX_IMMEDIATES: usize = 64;
 // We have to account for each immediate data may need to be set for every shader.
 const MAX_IMMEDIATES_COMMANDS: usize = MAX_IMMEDIATES * crate::MAX_CONCURRENT_SHADER_STAGES;
 
+/// `glFramebufferTextureMultiviewOVR`, which glow only provides on WebGL.
+#[cfg(not(webgl))]
+type FramebufferTextureMultiviewOvr = unsafe extern "system" fn(
+    target: u32,
+    attachment: u32,
+    texture: u32,
+    level: i32,
+    base_view_index: i32,
+    num_views: i32,
+);
+
+#[cfg(not(webgl))]
+fn load_framebuffer_texture_multiview_ovr(
+    mut loader: impl FnMut(&str) -> *const core::ffi::c_void,
+) -> Option<FramebufferTextureMultiviewOvr> {
+    let ptr = loader("glFramebufferTextureMultiviewOVR");
+    // SAFETY: A non-null pointer returned for this name has this signature.
+    (!ptr.is_null()).then(|| unsafe {
+        core::mem::transmute::<*const core::ffi::c_void, FramebufferTextureMultiviewOvr>(ptr)
+    })
+}
+
 impl crate::Api for Api {
     const VARIANT: wgt::Backend = wgt::Backend::Gl;
 

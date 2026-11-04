@@ -97,7 +97,7 @@ fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
         },
         depth_stencil: Some(depth_state),
         multisample: Default::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
     if info.draw {
@@ -179,7 +179,7 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
         },
         depth_stencil: Some(depth_state),
         multisample: Default::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
     let buffer = match draw_type {

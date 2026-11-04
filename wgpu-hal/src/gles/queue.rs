@@ -139,6 +139,24 @@ impl super::Queue {
                             num_layers as i32,
                         )
                     };
+                    #[cfg(not(webgl))]
+                    {
+                        let framebuffer_texture_multiview_ovr = self
+                            .shared
+                            .context
+                            .framebuffer_texture_multiview_ovr()
+                            .expect("multiview requires glFramebufferTextureMultiviewOVR");
+                        unsafe {
+                            framebuffer_texture_multiview_ovr(
+                                fbo_target,
+                                attachment,
+                                raw.0.get(),
+                                view.mip_levels.start as i32,
+                                view.array_layers.start as i32,
+                                num_layers as i32,
+                            )
+                        };
+                    }
                 } else if is_layered_target(target) {
                     let layer = if target == glow::TEXTURE_3D {
                         depth_slice.unwrap() as i32

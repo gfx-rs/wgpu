@@ -900,8 +900,8 @@ pub struct RenderPipelineDescriptor<
     pub multisample: wgt::MultisampleState,
     /// The fragment processing state for this pipeline.
     pub fragment: Option<FragmentState<'a, SM>>,
-    /// If the pipeline will be used with a multiview render pass, this indicates how many array
-    /// layers the attachments will have.
+    /// The multiview mask of the render passes this pipeline will be used in, or `None` if it
+    /// will not be used with multiview.
     pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PLC>,
@@ -933,9 +933,9 @@ pub struct MeshPipelineDescriptor<
     pub multisample: wgt::MultisampleState,
     /// The fragment processing state for this pipeline.
     pub fragment: Option<FragmentState<'a, SM>>,
-    /// If the pipeline will be used with a multiview render pass, this indicates how many array
-    /// layers the attachments will have.
-    pub multiview: Option<NonZeroU32>,
+    /// The multiview mask of the render passes this pipeline will be used in, or `None` if it
+    /// will not be used with multiview.
+    pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PLC>,
 }
@@ -972,8 +972,8 @@ pub struct GeneralRenderPipelineDescriptor<
     pub multisample: wgt::MultisampleState,
     /// The fragment processing state for this pipeline.
     pub fragment: Option<FragmentState<'a, SM>>,
-    /// If the pipeline will be used with a multiview render pass, this indicates how many array
-    /// layers the attachments will have.
+    /// The multiview mask of the render passes this pipeline will be used in, or `None` if it
+    /// will not be used with multiview.
     pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PLC>,
@@ -1007,7 +1007,7 @@ impl<'a, PLL, SM, PLC> From<MeshPipelineDescriptor<'a, PLL, SM, PLC>>
             depth_stencil: value.depth_stencil,
             multisample: value.multisample,
             fragment: value.fragment,
-            multiview_mask: value.multiview,
+            multiview_mask: value.multiview_mask,
             cache: value.cache,
         }
     }
