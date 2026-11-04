@@ -347,6 +347,13 @@ impl<W: core::fmt::Write> super::Writer<W> {
                     "{indent}{indent}{} {out_vert};",
                     mesh_out.out_vertex_ty_name,
                 )?;
+                let crate::TypeInner::Struct {
+                    members: ref vertex_members,
+                    ..
+                } = module.types[info.vertex_output_type].inner
+                else {
+                    unreachable!();
+                };
                 for (member_idx, new_name) in mesh_out.out_vertex_member_names.iter().enumerate() {
                     let in_value = format!(
                         "{in_array}.{WRAPPED_ARRAY_FIELD}[{vert_index}].{}",
@@ -354,7 +361,21 @@ impl<W: core::fmt::Write> super::Writer<W> {
                             [&NameKey::StructMember(info.vertex_output_type, member_idx as u32)]
                     );
                     let out_value = format!("{out_vert}.{}", new_name.as_ref().unwrap());
-                    writeln!(self.out, "{indent}{indent}{out_value} = {in_value};")?;
+                    // Output arrays such as `[[clip_distance]]` are raw arrays, not wrapped structs.
+                    if let crate::TypeInner::Array {
+                        size: crate::ArraySize::Constant(size),
+                        ..
+                    } = module.types[vertex_members[member_idx].ty].inner
+                    {
+                        for j in 0..size.get() {
+                            writeln!(
+                                self.out,
+                                "{indent}{indent}{out_value}[{j}] = {in_value}.{WRAPPED_ARRAY_FIELD}[{j}];"
+                            )?;
+                        }
+                    } else {
+                        writeln!(self.out, "{indent}{indent}{out_value} = {in_value};")?;
+                    }
                 }
                 writeln!(
                     self.out,

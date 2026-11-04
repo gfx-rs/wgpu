@@ -1,0 +1,9 @@
+capabilities = "MESH_SHADER | CLIP_DISTANCES"
+targets = "WGSL | SPIRV | METAL"
+
+[spv]
+version = [1, 4]
+capabilities = ["MeshShadingEXT", "ClipDistance"]
+
+[msl]
+lang_version = [3, 0]
