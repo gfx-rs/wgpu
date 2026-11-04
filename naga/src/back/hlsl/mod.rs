@@ -97,6 +97,18 @@ float3x2 GetMatmOnBaz(Baz obj) {
 We also emit an analogous `Set` function, as well as functions for
 accessing individual columns by dynamic index.
 
+## Layout of values in `immediate` buffers
+
+WGSL gives `immediate` variables the same layout as `storage` buffers, which requires
+that every member is placed at the next multiple of its own alignment. Immediates are
+root constants, which HLSL can only read through a `cbuffer`, and HLSL's `cbuffer` packing
+places nested structs, arrays and matrices at 16-byte boundaries.
+A struct member that WGSL places at offset 4 would be read from offset 16.
+
+To avoid the mismatch, immediates are declared as a raw array of `uint4` registers,
+and the typed value is assembled from those words at the start of each entry point.
+See the `immediates` module for details.
+
 ## Sampler Handling
 
 Due to limitations in how sampler heaps work in D3D12, we need to access samplers
@@ -145,6 +157,7 @@ it works for our purposes.
 
 mod conv;
 mod help;
+mod immediates;
 mod keywords;
 mod mesh_shader;
 mod ray;
@@ -654,6 +667,9 @@ pub struct PipelineOptions {
     /// If `None`, all entry points will be written. If `Some` and the entry
     /// point is not found, an error will be thrown while writing.
     pub entry_point: Option<(ir::ShaderStage, String)>,
+
+    /// Whether the pipeline renders to multisampled attachments.
+    pub multisampled: bool,
 }
 
 #[derive(Error, Debug)]
@@ -691,6 +707,7 @@ enum WrappedType {
     UnaryOp(help::WrappedUnaryOp),
     BinaryOp(help::WrappedBinaryOp),
     Cast(help::WrappedCast),
+    Bitcast(help::WrappedBitcast),
 }
 
 #[derive(Default)]
@@ -753,6 +770,8 @@ pub struct Writer<'a, W> {
     pipeline_options: &'a PipelineOptions,
     /// Information about entry point arguments and result types.
     entry_point_io: crate::FastHashMap<usize, writer::EntryPointInterface>,
+    /// The early depth test of the fragment entry point whose interface is being written.
+    early_depth_test: Option<crate::EarlyDepthTest>,
     /// Set of expressions that have associated temporary variables
     named_expressions: crate::NamedExpressions,
     wrapped: Wrapped,
@@ -782,6 +801,13 @@ pub struct Writer<'a, W> {
 
     function_task_payload_var:
         crate::FastHashMap<Handle<crate::Function>, Handle<crate::GlobalVariable>>,
+
+    /// The name of the raw `uint4` array that backs each [`Immediate`] global.
+    ///
+    /// See the [`immediates`] module for background.
+    ///
+    /// [`Immediate`]: crate::AddressSpace::Immediate
+    immediate_raw_names: crate::FastHashMap<Handle<crate::GlobalVariable>, String>,
 }
 
 pub fn supported_capabilities() -> crate::valid::Capabilities {
@@ -798,7 +824,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         // No CULL_DISTANCE
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
         | Caps::MULTIVIEW
-        // No EARLY_DEPTH_TEST
+        | Caps::EARLY_DEPTH_TEST
         | Caps::MULTISAMPLED_SHADING
         | Caps::RAY_QUERY
         | Caps::DUAL_SOURCE_BLENDING

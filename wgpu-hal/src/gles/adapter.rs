@@ -491,7 +491,8 @@ impl super::Adapter {
             | wgt::Features::DEPTH32FLOAT_STENCIL8
             | wgt::Features::IMMEDIATES
             | wgt::Features::PASSTHROUGH_SHADERS
-            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgt::Features::UNRESTRICTED_BYTES_PER_ROW;
         features.set(
             wgt::Features::TEXTURE_FORMAT_16BIT_NORM,
             supports_16bit_norm,
@@ -1099,6 +1100,11 @@ impl crate::Adapter for super::Adapter {
         let main_vao =
             unsafe { gl.create_vertex_array() }.map_err(|_| crate::DeviceError::OutOfMemory)?;
         unsafe { gl.bind_vertex_array(Some(main_vao)) };
+
+        // Desktop GL defaults to non-seamless cube sampling; ES 3.0+ and other backends are seamless by spec.
+        if !self.shared.es {
+            unsafe { gl.enable(glow::TEXTURE_CUBE_MAP_SEAMLESS) };
+        }
 
         let zero_buffer =
             unsafe { gl.create_buffer() }.map_err(|_| crate::DeviceError::OutOfMemory)?;

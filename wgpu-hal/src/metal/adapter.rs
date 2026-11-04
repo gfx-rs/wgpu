@@ -1261,6 +1261,7 @@ impl super::CapabilitiesQuery {
             | F::SHADER_I16
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::TEXTURE_FORMAT_16BIT_NORM
+            | F::UNRESTRICTED_BYTES_PER_ROW
             | F::VERTEX_WRITABLE_STORAGE;
 
         features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
@@ -1284,6 +1285,10 @@ impl super::CapabilitiesQuery {
         features.set(
             F::DUAL_SOURCE_BLENDING,
             self.msl_version >= MTLLanguageVersion::Version1_2 && self.dual_source_blending,
+        );
+        features.set(
+            F::SHADER_EARLY_DEPTH_TEST,
+            MTLLanguageVersion::Version1_2 <= self.msl_version,
         );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
