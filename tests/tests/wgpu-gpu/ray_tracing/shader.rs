@@ -318,7 +318,6 @@ fn sparse_instances_index_correct(ctx: TestingContext) {
         ],
     });
 
-
     // Run the shader to get back the instance index
 
     {

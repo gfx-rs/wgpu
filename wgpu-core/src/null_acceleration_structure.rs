@@ -62,10 +62,8 @@ impl NullAccelerationStructure {
 
             let scratch = ScratchBuffer::new(
                 device,
-                NonZeroU64::new(
-                    sizes.build_scratch_size,
-                )
-                .expect(".max(1) to ensure it is non-zero"),
+                NonZeroU64::new(sizes.build_scratch_size)
+                    .expect(".max(1) to ensure it is non-zero"),
             )
             .map_err(NullAccelerationStructureInitError::ScratchBuffer)?;
 
@@ -84,12 +82,14 @@ impl NullAccelerationStructure {
                 },
             ]);
 
-            command_encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
-                usage: hal::StateTransition {
-                    from: hal::AccelerationStructureUses::BUILD_OUTPUT,
-                    to: hal::AccelerationStructureUses::BUILD_INPUT,
+            command_encoder.place_acceleration_structure_barrier(
+                hal::AccelerationStructureBarrier {
+                    usage: hal::StateTransition {
+                        from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                        to: hal::AccelerationStructureUses::BUILD_INPUT,
+                    },
                 },
-            });
+            );
 
             pending.consume_temp(queue::TempResource::ScratchBuffer(scratch));
 
