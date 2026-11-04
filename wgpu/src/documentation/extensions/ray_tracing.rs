@@ -234,6 +234,14 @@ rayQueryGetCandidateIntersection(rq: ptr<function, ray_query>) -> RayIntersectio
 // Overload.
 rayQueryGetCandidateIntersection(rq: ptr<function, ray_query<vertex_return>>) -> RayIntersection
 
+// - Returns the largest `t` that a new hit may have: the `t` of the latest committed hit, or the last
+//   `ray_desc.tmax` if there are no committed hits.
+// - Unlike `rayQueryGetCommittedIntersection`, this may be called before `rayQueryProceed` has returned false.
+// - If `rq` was not previously initialized, the call is discarded and `0.0` is returned.
+rayQueryGetCurrentTMax(rq: ptr<function, ray_query>) -> f32
+// Overload.
+rayQueryGetCurrentTMax(rq: ptr<function, ray_query<vertex_return>>) -> f32
+
 // - Returns the vertices of the hit triangle considered `Committed`.
 // - If `rq` was not previously initialized, the call is discarded.
 // - If the previous proceed returned true or there were no previous proceed calls since the last initialize, a

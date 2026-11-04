@@ -777,6 +777,8 @@ pub struct Writer<'a, W> {
     wrapped: Wrapped,
     written_committed_intersection: bool,
     written_candidate_intersection: bool,
+    /// Whether the `GetCurrentTMax` helper has been written.
+    written_current_t_max: bool,
     continue_ctx: back::continue_forward::ContinueCtx,
 
     /// A reference to some part of a global variable, lowered to a series of

@@ -589,8 +589,14 @@ enum LookupRayQueryFunction {
     Proceed,
     GenerateIntersection,
     ConfirmIntersection,
-    GetVertexPositions { committed: bool },
-    GetIntersection { committed: bool },
+    GetVertexPositions {
+        committed: bool,
+    },
+    GetIntersection {
+        committed: bool,
+    },
+    /// Helper that returns the largest `t` that a new hit may have.
+    GetCurrentTMax,
     Terminate,
 }
 

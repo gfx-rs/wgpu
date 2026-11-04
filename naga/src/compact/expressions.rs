@@ -250,7 +250,8 @@ impl ExpressionTracer<'_> {
             Ex::RayQueryGetIntersection {
                 query,
                 committed: _,
-            } => {
+            }
+            | Ex::RayQueryGetCurrentTMax { query } => {
                 self.expressions_used.insert(query);
             }
             Ex::CooperativeLoad { ref data, .. } => {
@@ -429,7 +430,8 @@ impl ModuleMap {
             Ex::RayQueryGetIntersection {
                 ref mut query,
                 committed: _,
-            } => adjust(query),
+            }
+            | Ex::RayQueryGetCurrentTMax { ref mut query } => adjust(query),
             Ex::RayQueryVertexPositions {
                 ref mut query,
                 committed: _,

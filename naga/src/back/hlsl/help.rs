@@ -1406,6 +1406,10 @@ impl<W: Write> super::Writer<'_, W> {
                         self.written_candidate_intersection = true;
                     }
                 }
+                crate::Expression::RayQueryGetCurrentTMax { .. } if !self.written_current_t_max => {
+                    self.write_current_t_max_function(module)?;
+                    self.written_current_t_max = true;
+                }
                 _ => {}
             }
         }

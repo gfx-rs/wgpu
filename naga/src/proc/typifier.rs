@@ -768,6 +768,9 @@ impl<'a> ResolveContext<'a> {
                     .ok_or(ResolveError::MissingSpecialType)?;
                 TypeResolution::Handle(result)
             }
+            crate::Expression::RayQueryGetCurrentTMax { .. } => {
+                TypeResolution::Value(Ti::Scalar(crate::Scalar::F32))
+            }
             crate::Expression::RayQueryVertexPositions { .. } => {
                 let result = self
                     .special_types
