@@ -2565,6 +2565,15 @@ impl super::Instance {
             workarounds,
         };
 
+        let available_features = if crate::auxil::supports_core_features_and_limits(
+            &capabilities.limits,
+            &capabilities.downlevel,
+        ) {
+            available_features | wgt::Features::CORE_FEATURES_AND_LIMITS
+        } else {
+            available_features
+        };
+
         Some(crate::ExposedAdapter {
             adapter,
             info,
