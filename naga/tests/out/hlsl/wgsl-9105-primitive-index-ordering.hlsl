@@ -7,7 +7,7 @@ struct FragmentInput_func {
 float4 func(FragmentInput_func fragmentinput_func) : SV_Target0
 {
     float input_location = fragmentinput_func.input_location_1;
-    float4 arbitrary_position = fragmentinput_func.arbitrary_position_1;
+    float4 arbitrary_position = float4(fragmentinput_func.arbitrary_position_1.xyz, 1.0 / fragmentinput_func.arbitrary_position_1.w);
     uint index = fragmentinput_func.index_1;
     return float4(arbitrary_position.xy, input_location, float(index));
 }
