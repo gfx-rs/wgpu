@@ -1,6 +1,6 @@
 #[cfg(wgpu_core)]
 use alloc::sync::Arc;
-use alloc::{vec, vec::Vec};
+use alloc::vec::Vec;
 use core::future::Future;
 
 use crate::{dispatch::InstanceInterface, util::Mutex, *};
@@ -189,7 +189,7 @@ impl Instance {
     /// Note that while this function is safe, extensions in general may be unsafe.
     /// Passing non-empty `Extensions` requires calling [`wgt::Extensions::new`], which
     /// is unsafe.
-    #[cfg(wgpu_core)]
+    #[cfg_attr(not(wgpu_core), expect(unused, clippy::unnecessary_literal_unwrap))]
     pub fn request_adapters(
         &self,
         options: &RequestAdapterOptions<'_, '_>,
@@ -199,10 +199,16 @@ impl Instance {
             Multiple(core::pin::Pin<alloc::boxed::Box<dyn dispatch::RequestAdaptersFuture>>),
             Single(core::pin::Pin<alloc::boxed::Box<dyn dispatch::RequestAdapterFuture>>),
         }
-        let future = match self.inner.as_core_opt() {
-            Some(core) => Fut::Multiple(core.request_adapters(options, backend_options)),
-            None => Fut::Single(self.inner.request_adapter(options)),
-        };
+        // Conditional compilation makes this awkward but it's effectively:
+        // `match as_core_opt() { Some(core) => Fut::Multiple(...), None => Fut::Single(...) }`
+        #[cfg(not(wgpu_core))]
+        let future = None;
+        #[cfg(wgpu_core)]
+        let future = self
+            .inner
+            .as_core_opt()
+            .map(|core| Fut::Multiple(core.request_adapters(options, backend_options)));
+        let future = future.unwrap_or_else(|| Fut::Single(self.inner.request_adapter(options)));
         async move {
             // Values from `backend_options` are passed by reference to hal, but to avoid
             // needing to make it `Send`/`Sync` for a future in our caller, we take it by value.
@@ -213,7 +219,9 @@ impl Instance {
                         .map(|adapter| Adapter { inner: adapter })
                         .collect()
                 }),
-                Fut::Single(f) => f.await.map(|adapter| vec![Adapter { inner: adapter }]),
+                Fut::Single(f) => f
+                    .await
+                    .map(|adapter| alloc::vec![Adapter { inner: adapter }]),
             }
         }
     }
