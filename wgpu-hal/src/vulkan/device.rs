@@ -716,9 +716,9 @@ impl super::Device {
             return Err(ImportTextureError::UnusedFileDescriptor(fd_index));
         }
 
-         let enabled_extensions = &self.shared.enabled_extensions;
-         if !enabled_extensions.contains(&ext::external_memory_dma_buf::NAME)
-             || !enabled_extensions.contains(&ext::image_drm_format_modifier::NAME)
+        let enabled_extensions = &self.shared.enabled_extensions;
+        if !enabled_extensions.contains(&ext::external_memory_dma_buf::NAME)
+            || !enabled_extensions.contains(&ext::image_drm_format_modifier::NAME)
         {
             return Err(ImportTextureError::MissingExtension(
                 ash::khr::external_memory_fd::NAME,
