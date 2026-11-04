@@ -630,6 +630,55 @@ impl crate::Scalar {
     }
 }
 
+/// Returns `true` if `binding` is the depth that a fragment shader writes.
+const fn is_frag_depth(binding: Option<&crate::Binding>) -> bool {
+    matches!(
+        binding,
+        Some(crate::Binding::BuiltIn(crate::BuiltIn::FragDepth))
+    )
+}
+
+/// Returns `true` if the depth that a fragment shader writes is the only thing that
+/// `entry_point` returns.
+fn only_writes_frag_depth(module: &crate::ir::Module, entry_point: &crate::ir::EntryPoint) -> bool {
+    entry_point
+        .function
+        .result
+        .as_ref()
+        .is_some_and(|result| match module.types[result.ty].inner {
+            crate::TypeInner::Struct { ref members, .. } if result.binding.is_none() => members
+                .iter()
+                .all(|member| is_frag_depth(member.binding.as_ref())),
+            _ => is_frag_depth(result.binding.as_ref()),
+        })
+}
+
+/// Returns `true` if the depth that `entry_point` writes must be discarded.
+///
+/// MSL has no way to specify that depth is unchanged, and it does not allow functions that
+/// force early fragment tests to output depth. Discarding the depth has the same effect
+/// as either of those, and keeps early depth tests enabled.
+fn discards_frag_depth(entry_point: &crate::ir::EntryPoint) -> bool {
+    entry_point.stage == crate::ShaderStage::Fragment
+        && matches!(
+            entry_point.early_depth_test,
+            Some(
+                crate::EarlyDepthTest::Force
+                    | crate::EarlyDepthTest::Allow {
+                        conservative: crate::ConservativeDepth::Unchanged
+                    }
+            )
+        )
+}
+
+/// Returns `true` if `entry_point` has nothing to return once its depth is discarded.
+fn only_writes_discarded_depth(
+    module: &crate::ir::Module,
+    entry_point: &crate::ir::EntryPoint,
+) -> bool {
+    discards_frag_depth(entry_point) && only_writes_frag_depth(module, entry_point)
+}
+
 const fn separate(need_separator: bool) -> &'static str {
     if need_separator {
         ","
@@ -2995,60 +3044,40 @@ impl<W: Write> Writer<W> {
                     }
                 }
             }
-            crate::Expression::As {
-                expr,
-                kind,
-                convert,
-            } => match *context.resolve_type(expr) {
+            crate::Expression::As { expr, target } => match *context.resolve_type(expr) {
                 crate::TypeInner::Scalar(src) | crate::TypeInner::Vector { scalar: src, .. } => {
                     if src.kind == crate::ScalarKind::Float
-                        && (kind == crate::ScalarKind::Sint || kind == crate::ScalarKind::Uint)
-                        && convert.is_some()
+                        && (target.kind == crate::ScalarKind::Sint
+                            || target.kind == crate::ScalarKind::Uint)
                     {
                         // Use helper functions for float to int casts in order to avoid
                         // undefined behaviour when value is out of range for the target
                         // type.
-                        let fun_name = match (kind, convert) {
-                            (crate::ScalarKind::Sint, Some(4)) => F2I32_FUNCTION,
-                            (crate::ScalarKind::Uint, Some(4)) => F2U32_FUNCTION,
-                            (crate::ScalarKind::Sint, Some(8)) => F2I64_FUNCTION,
-                            (crate::ScalarKind::Uint, Some(8)) => F2U64_FUNCTION,
+                        let fun_name = match (target.kind, target.width) {
+                            (crate::ScalarKind::Sint, 4) => F2I32_FUNCTION,
+                            (crate::ScalarKind::Uint, 4) => F2U32_FUNCTION,
+                            (crate::ScalarKind::Sint, 8) => F2I64_FUNCTION,
+                            (crate::ScalarKind::Uint, 8) => F2U64_FUNCTION,
                             _ => unreachable!(),
                         };
                         write!(self.out, "{fun_name}(")?;
                         self.put_expression(expr, context, true)?;
                         write!(self.out, ")")?;
                     } else {
-                        let target_scalar = crate::Scalar {
-                            kind,
-                            width: convert.unwrap_or(src.width),
-                        };
-                        let op = match convert {
-                            Some(_) => "static_cast",
-                            None => "as_type",
-                        };
-                        write!(self.out, "{op}<")?;
+                        write!(self.out, "static_cast<")?;
                         match *context.resolve_type(expr) {
                             crate::TypeInner::Vector { size, .. } => {
-                                put_numeric_type(&mut self.out, target_scalar, &[size])?
+                                put_numeric_type(&mut self.out, target, &[size])?
                             }
-                            _ => put_numeric_type(&mut self.out, target_scalar, &[])?,
+                            _ => put_numeric_type(&mut self.out, target, &[])?,
                         };
                         write!(self.out, ">(")?;
                         self.put_expression(expr, context, true)?;
                         write!(self.out, ")")?;
                     }
                 }
-                crate::TypeInner::Matrix {
-                    columns,
-                    rows,
-                    scalar,
-                } => {
-                    let target_scalar = crate::Scalar {
-                        kind,
-                        width: convert.unwrap_or(scalar.width),
-                    };
-                    put_numeric_type(&mut self.out, target_scalar, &[rows, columns])?;
+                crate::TypeInner::Matrix { columns, rows, .. } => {
+                    put_numeric_type(&mut self.out, target, &[rows, columns])?;
                     write!(self.out, "(")?;
                     self.put_expression(expr, context, true)?;
                     write!(self.out, ")")?;
@@ -3059,6 +3088,25 @@ impl<W: Write> Writer<W> {
                     )))
                 }
             },
+            crate::Expression::Bitcast { expr, ty } => {
+                write!(self.out, "as_type<")?;
+                match context.module.types[ty].inner {
+                    crate::TypeInner::Scalar(scalar) => {
+                        put_numeric_type(&mut self.out, scalar, &[])?
+                    }
+                    crate::TypeInner::Vector { size, scalar } => {
+                        put_numeric_type(&mut self.out, scalar, &[size])?
+                    }
+                    ref other => {
+                        return Err(Error::GenericValidation(format!(
+                            "Unsupported type for Bitcast: {other:?}"
+                        )))
+                    }
+                }
+                write!(self.out, ">(")?;
+                self.put_expression(expr, context, true)?;
+                write!(self.out, ")")?;
+            }
             // These have no inline form, so they are only ever read through
             // the temporary the statement that produced them stored them in,
             // which one of the two tables above names. The one place that is
@@ -3661,6 +3709,15 @@ impl<W: Write> Writer<W> {
         result_struct: Option<&str>,
         context: &ExpressionContext,
     ) -> BackendResult {
+        let entry_point = match context.origin {
+            FunctionOrigin::EntryPoint(index) => Some(&context.module.entry_points[index as usize]),
+            FunctionOrigin::Handle(_) => None,
+        };
+        if entry_point.is_some_and(|ep| only_writes_discarded_depth(context.module, ep)) {
+            writeln!(self.out, "{level}return;")?;
+            return Ok(());
+        }
+
         match result_struct {
             Some(struct_name) => {
                 let mut has_point_size = false;
@@ -3683,6 +3740,12 @@ impl<W: Write> Writer<W> {
                                 if !context.pipeline_options.allow_and_force_point_size {
                                     continue;
                                 }
+                            }
+
+                            if entry_point.is_some_and(discards_frag_depth)
+                                && is_frag_depth(member.binding.as_ref())
+                            {
+                                continue;
                             }
 
                             let comma = if is_first { "" } else { "," };
@@ -6388,8 +6451,7 @@ template <typename A>
         module: &crate::Module,
         func_ctx: &back::FunctionCtx,
         expr: Handle<crate::Expression>,
-        kind: crate::ScalarKind,
-        convert: Option<crate::Bytes>,
+        dst_scalar: crate::Scalar,
     ) -> BackendResult {
         // Avoid undefined behaviour when casting from a float to integer
         // when the value is out of range for the target type. Additionally
@@ -6402,13 +6464,9 @@ template <typename A>
         //   truncate(X) and also exactly representable in the original
         //   floating point type.
         let src_ty = func_ctx.resolve_type(expr, &module.types);
-        let Some(width) = convert else {
-            return Ok(());
-        };
         let Some((vector_size, src_scalar)) = src_ty.vector_size_and_scalar() else {
             return Ok(());
         };
-        let dst_scalar = crate::Scalar { kind, width };
         if src_scalar.kind != crate::ScalarKind::Float
             || (dst_scalar.kind != crate::ScalarKind::Sint
                 && dst_scalar.kind != crate::ScalarKind::Uint)
@@ -6905,12 +6963,8 @@ template <typename A>
                 } => {
                     self.write_wrapped_math_function(module, func_ctx, fun, arg, arg1, arg2, arg3)?;
                 }
-                crate::Expression::As {
-                    expr,
-                    kind,
-                    convert,
-                } => {
-                    self.write_wrapped_cast(module, func_ctx, expr, kind, convert)?;
+                crate::Expression::As { expr, target } => {
+                    self.write_wrapped_cast(module, func_ctx, expr, target)?;
                 }
                 crate::Expression::ImageLoad {
                     image,
@@ -7523,7 +7577,10 @@ template <typename A>
             let stage_out_name = self.namer.call(&format!("{fun_name}Output"));
             let result_member_name = self.namer.call("member");
             let result_type_name = match fun.result {
-                Some(ref result) if ep.stage != crate::ShaderStage::Task => {
+                Some(ref result)
+                    if ep.stage != crate::ShaderStage::Task
+                        && !only_writes_discarded_depth(module, ep) =>
+                {
                     let mut result_members = Vec::new();
                     if let crate::TypeInner::Struct { ref members, .. } =
                         module.types[result.ty].inner
@@ -7564,6 +7621,10 @@ template <typename A>
                             }
                         }
 
+                        if discards_frag_depth(ep) && is_frag_depth(Some(binding)) {
+                            continue;
+                        }
+
                         let array_len = match module.types[ty].inner {
                             crate::TypeInner::Array {
                                 size: crate::ArraySize::Constant(size),
@@ -7571,7 +7632,16 @@ template <typename A>
                             } => Some(size),
                             _ => None,
                         };
-                        let resolved = options.resolve_local_binding(binding, out_mode)?;
+                        let resolved = match (
+                            options.resolve_local_binding(binding, out_mode)?,
+                            ep.early_depth_test,
+                        ) {
+                            (
+                                super::ResolvedBinding::BuiltIn(crate::BuiltIn::FragDepth),
+                                Some(crate::EarlyDepthTest::Allow { conservative }),
+                            ) => super::ResolvedBinding::ConservativeDepth(conservative),
+                            (resolved, _) => resolved,
+                        };
                         write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
                         resolved.try_fmt(&mut self.out)?;
                         if let Some(array_len) = array_len {
@@ -7656,6 +7726,17 @@ template <typename A>
                     self.out,
                     "[[max_total_threads_per_threadgroup({total_threads})]] "
                 )?;
+            }
+
+            if ep.stage == crate::ShaderStage::Fragment
+                && ep.early_depth_test == Some(crate::EarlyDepthTest::Force)
+            {
+                if options.lang_version < (1, 2) {
+                    return Err(Error::UnsupportedAttribute(
+                        "early_fragment_tests".to_string(),
+                    ));
+                }
+                write!(self.out, "[[early_fragment_tests]] ")?;
             }
 
             // Write the entry point function's name, and begin its argument list.

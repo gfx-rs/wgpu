@@ -938,8 +938,7 @@ fn array_length_override_mutual() {
     let init = module.global_expressions.append(
         Ex::As {
             expr: sum,
-            kind: crate::ScalarKind::Uint,
-            convert: None,
+            target: crate::Scalar::U32,
         },
         nowhere,
     );
@@ -1273,8 +1272,7 @@ fn unnamed_override_type() {
     let named_init = module.global_expressions.append(
         crate::Expression::As {
             expr: unnamed_override_expr,
-            kind: crate::ScalarKind::Sint,
-            convert: None,
+            target: crate::Scalar::I32,
         },
         nowhere,
     );

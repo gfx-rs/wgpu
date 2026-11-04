@@ -1080,9 +1080,11 @@ impl super::Validator {
                         }
                         _ => {}
                     },
+                    crate::TypeInner::RayQuery { .. } => {
+                        return Err(GlobalVariableError::InvalidBinding);
+                    }
                     crate::TypeInner::Sampler { .. }
-                    | crate::TypeInner::AccelerationStructure { .. }
-                    | crate::TypeInner::RayQuery { .. } => {}
+                    | crate::TypeInner::AccelerationStructure { .. } => {}
                     _ => {
                         return Err(GlobalVariableError::InvalidType(var.space));
                     }

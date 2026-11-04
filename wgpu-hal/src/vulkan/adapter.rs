@@ -684,8 +684,8 @@ impl PhysicalDeviceFeatures {
             | F::SHADER_EARLY_DEPTH_TEST
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::TEXTURE_ATOMIC
-            | F::TEXTURE_COMPRESSION_UNALIGNED;
-
+            | F::TEXTURE_COMPRESSION_UNALIGNED
+            | F::UNRESTRICTED_BYTES_PER_ROW;
         let mut dl_flags = Df::empty()
             | Df::BASE_VERTEX
             | Df::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED

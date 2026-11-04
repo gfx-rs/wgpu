@@ -119,6 +119,15 @@ web-sys = { workspace = true, features = [
 # Cargo-metadata doesn't compile on wasm due to old cargo-util-schemas dependency.
 cargo_metadata.workspace = true
 
+[target.'cfg(windows)'.dev-dependencies]
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D12",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+] }
+
 [lints.clippy]
 bool_assert_comparison = "allow"
 disallowed_types = "allow"

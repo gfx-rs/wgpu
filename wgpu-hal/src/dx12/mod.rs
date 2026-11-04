@@ -579,6 +579,14 @@ impl PrivateCapabilities {
             D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT.into()
         }
     }
+
+    fn texture_data_pitch_alignment(&self) -> u32 {
+        if self.unrestricted_buffer_texture_copy_pitch_supported {
+            1
+        } else {
+            Direct3D12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT
+        }
+    }
 }
 
 #[derive(Default, Debug, Copy, Clone)]
