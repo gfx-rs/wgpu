@@ -4,6 +4,6 @@ struct FragmentInput_main {
 
 void main(FragmentInput_main fragmentinput_main)
 {
-    float4 pos = fragmentinput_main.pos_1;
+    float4 pos = float4(fragmentinput_main.pos_1.xyz, 1.0 / fragmentinput_main.pos_1.w);
     return;
 }
