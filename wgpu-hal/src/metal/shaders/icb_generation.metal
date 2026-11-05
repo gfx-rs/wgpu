@@ -38,7 +38,6 @@ struct WgpuIcbExecutionRange {
     uint location;
     uint length;
 };
-
 // Must match the `ICB_PRIMITIVE_*` constants in
 // `wgpu-hal/src/metal/command.rs`.
 enum WgpuIcbPrimitiveType : uint {

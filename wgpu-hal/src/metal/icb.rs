@@ -321,7 +321,6 @@ impl DeferredMultiDraw {
         }
     }
 }
-
 impl IcbDrawKind {
     /// Which ICB descriptor (command type and bind counts) a draw kind needs;
     /// ICBs are only ever reused for the same tag.
@@ -549,7 +548,6 @@ impl IcbContext {
     pub(super) fn executes_render_icbs(&self) -> bool {
         self.executes_render_icbs
     }
-
     /// Takes the smallest pooled ICB of `kind_tag` that holds `draw_count`
     /// commands, leaving the larger ones for larger draws.
     fn take_pooled(&self, kind_tag: u8, draw_count: u32) -> Option<IcbAllocation> {
@@ -891,7 +889,6 @@ impl super::CommandEncoder {
         else {
             return false;
         };
-
         // Record execution into the render pass now; the ICB contents become
         // defined when the deferred generation runs, in a command buffer the
         // queue executes before this one.

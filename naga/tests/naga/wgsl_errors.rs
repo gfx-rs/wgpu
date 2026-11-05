@@ -6466,3 +6466,23 @@ fn ray_query_let() {
         "Ray query with initialize",
     );
 }
+
+#[test]
+fn ray_query_as_binding() {
+    // ray queries cannot be in bindings
+    check_validation! {
+        r#"
+            enable wgpu_ray_query;
+
+            @group(0) @binding(0)
+            var rq: ray_query;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                _=rq;
+            }
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {  source: naga::valid::GlobalVariableError::InvalidBinding, ..}),
+        Capabilities::RAY_QUERY
+    }
+}

@@ -256,6 +256,8 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Fix the MSL backend generating wrong code for a loop's `continuing` block when it refers to a value computed by the loop body, such as `loop { let cmp = a < 8; ... continuing { break if cmp; } }`. The value was re-evaluated in place, reading whatever the body had left behind, and for values produced by statements (such as a function call result) the backend panicked instead. By @teoxoy in [#10459](https://github.com/gfx-rs/wgpu/pull/10459).
 - Fix invalid GLSL for `textureLoad` with a `u32` level or sample index under the `Restrict` and `ReadZeroSkipWrite` bounds check policies. By @ilyas-mallah in [#XXXXX](https://github.com/gfx-rs/wgpu/pull/XXXXX).
 - Fix `var<immediate>` members being read from the wrong offsets on DX12 when a nested struct is not 16-byte aligned. By @DouglasDwyer in [#10581](https://github.com/gfx-rs/wgpu/pull/10581).
+- Disallow usage of `ray_query` as a binding. By @szymros in [#10832](https://github.com/gfx-rs/wgpu/pull/10832)
+- Fix `@builtin(position).w` in fragment shaders on DX12. The HLSL backend now provides 1/w of the clip-space position, as WGSL specifies and the other backends already do, instead of w. By @abdymazhit in [#10733](https://github.com/gfx-rs/wgpu/pull/10733).
 
 #### Validation
 
@@ -269,6 +271,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Disallow array types in `var<immediate>`. By @beicause in [#10081](https://github.com/gfx-rs/wgpu/pull/10081).
 - Mesh shader draws in a multiview render pass now require the highest view in the multiview mask to be less than `Limits::max_mesh_multiview_view_count`. Previously one view past the limit was accepted. By @apollo-2006 in [#10496](https://github.com/gfx-rs/wgpu/pull/10496).
 - `wgpu_core` now validates pipeline stage interfaces after pipeline constant values have been applied, per spec. For example, workgroup sizes set by overrides are now checked against device limits. By @jimblandy in [#10430](https://github.com/gfx-rs/wgpu/pull/10430).
+- Validate `Limits::max_compute_workgroup_storage_size`. By @ErichDonGubler in [#9732](https://github.com/gfx-rs/wgpu/pull/9732).
 
 #### Naga
 
@@ -330,6 +333,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Recognize `GPUInternalError` when converting a WebGPU error, mapping it to `Error::Internal` instead of panicking with "Unexpected error". By @evilpies in [#9919](https://github.com/gfx-rs/wgpu/pull/9919).
 - Fix `pop_error_scope` panics when it returns `null`. By @beicause in [#10039](https://github.com/gfx-rs/wgpu/pull/10039).
 - Fix `Device::on_uncaptured_error` never firing in browsers that do not implement `GPUDevice.onuncapturederror`, such as Safari, by listening for the `uncapturederror` event instead of assigning to that attribute. By @zemse in [#10270](https://github.com/gfx-rs/wgpu/pull/10270).
+- Pass `RenderPassColorAttachment::depth_slice` to the browser, so a render pass into a 3D texture no longer fails validation with "depthSlice is required for a 3D attachment". By @jheising in [#10693](https://github.com/gfx-rs/wgpu/pull/10693).
 
 ### Performance
 

@@ -2055,7 +2055,6 @@ static MULTI_DRAW_INDIRECT_COUNT_SAMPLED_TEXTURE: GpuTestConfiguration =
                 .limits(wgpu::Limits::downlevel_defaults()),
         )
         .run_async(run_multi_draw_indirect_count_sampled_texture);
-
 async fn run_gpu_generated_multi_draw_test(ctx: TestingContext, indexed: bool) {
     let draw_count = ICB_MULTI_DRAW_TEST_COUNT as u32;
     let indirect_stride = if indexed {
