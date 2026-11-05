@@ -5171,6 +5171,7 @@ dependencies = [
  "wgpu-sync",
  "wgpu-types",
  "windows",
+ "winit",
 ]
 
 [[package]]
