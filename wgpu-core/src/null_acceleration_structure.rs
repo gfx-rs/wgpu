@@ -18,10 +18,10 @@ pub struct NullAccelerationStructure {
     /// A built bottom level acceleration structure. May be either triangles or AABBs.
     ///
     /// None means the null acceleration structure is fine (handle `0`).
-    acceleration_structure: Option<EmptyAcclerationStructure>,
+    acceleration_structure: Option<EmptyAccelerationStructure>,
 }
 
-struct EmptyAcclerationStructure {
+struct EmptyAccelerationStructure {
     acceleration_structure: Box<dyn hal::DynAccelerationStructure>,
     handle: u64,
 }
@@ -98,7 +98,7 @@ impl NullAccelerationStructure {
                 .get_acceleration_structure_device_address(acceleration_structure.as_ref());
 
             Ok(Self {
-                acceleration_structure: Some(EmptyAcclerationStructure {
+                acceleration_structure: Some(EmptyAccelerationStructure {
                     acceleration_structure,
                     handle,
                 }),
@@ -109,7 +109,7 @@ impl NullAccelerationStructure {
     /// # Safety
     /// No command buffer may be using the acceleration structure.
     pub unsafe fn dispose(self, device: &dyn hal::DynDevice) {
-        let Some(EmptyAcclerationStructure {
+        let Some(EmptyAccelerationStructure {
             acceleration_structure,
             ..
         }) = self.acceleration_structure
