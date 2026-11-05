@@ -2531,6 +2531,7 @@ impl super::Instance {
                 .map(|maintenance_5| maintenance_5.depth_stencil_swizzle_one_support == vk::TRUE)
                 .unwrap_or(false),
             ray_tracing_pipeline_group_data_size: alignments.ray_tracing_pipeline_group_data_size,
+            shader_binding_table_alignment: alignments.ray_tracing_pipeline_data_offset_alignment,
             store_op_none: phd_capabilities.device_api_version >= vk::API_VERSION_1_3
                 || (phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                     && phd_capabilities.supports_extension(khr::dynamic_rendering::NAME))
