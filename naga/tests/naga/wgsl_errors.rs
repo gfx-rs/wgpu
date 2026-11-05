@@ -6070,21 +6070,31 @@ fn main() {{
 
 #[test]
 fn debug_printf_rejects_wrong_specifier_type() {
-    for (specifier, value) in [("%f", "1u"), ("%g", "1u"), ("%d", "2.4f"), ("%lu", "1u")] {
+    for (format, value, expected_actual) in [
+        ("%f", "1u", "u32"),
+        ("%.2g", "1u", "u32"),
+        ("%d", "2.4f", "f32"),
+        ("%lu", "1u", "u32"),
+        ("%x", "vec2u(1)", "vec2<u32>"),
+    ] {
         check_one_validation!(
             &format!(
                 "enable wgpu_debug_printf;
 @compute @workgroup_size(1)
 fn main() {{
-    debugPrintf(\"{specifier}\", {value});
+    debugPrintf(\"{format}\", {value});
 }}"
             ),
             Err(naga::valid::ValidationError::EntryPoint {
                 source: naga::valid::EntryPointError::Function(
-                    naga::valid::FunctionError::InvalidDebugPrintfArgument(_, _)
+                    naga::valid::FunctionError::InvalidDebugPrintfArgument {
+                        specifier,
+                        actual,
+                        ..
+                    }
                 ),
                 ..
-            }),
+            }) if specifier == &format[1..] && actual == expected_actual,
             Capabilities::DEBUG_PRINTF
         );
     }
