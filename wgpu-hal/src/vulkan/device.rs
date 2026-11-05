@@ -1056,6 +1056,15 @@ impl crate::Device for super::Device {
                 .max(self.shared.private_caps.scratch_buffer_alignment as u64);
         }
 
+        if desc
+            .usage
+            .contains(wgt::BufferUses::RAY_TRACING_PIPELINE_SHADER_DATA)
+        {
+            requirements.alignment = requirements
+                .alignment
+                .max(self.shared.private_caps.shader_binding_table_alignment as u64);
+        }
+
         let allocation = self
             .mem_allocator
             .allocate(

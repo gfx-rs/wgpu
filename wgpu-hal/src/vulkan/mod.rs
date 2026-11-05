@@ -520,6 +520,10 @@ struct PrivateCapabilities {
     /// require an unnecessary parameter.
     ray_tracing_pipeline_group_data_size: u32,
 
+    /// `shaderGroupBaseAlignment`. Shader binding table regions must start at a device
+    /// address that is a multiple of this, so shader binding table buffers use it as their alignment.
+    shader_binding_table_alignment: u32,
+
     /// Whether `VK_ATTACHMENT_STORE_OP_NONE` is supported. This includes:
     /// - `VK_ATTACHMENT_STORE_OP_NONE` provided by `VK_VERSION_1_3`.
     /// - `VK_ATTACHMENT_STORE_OP_NONE_KHR` provided by `VK_KHR_dynamic_rendering`, or `VK_KHR_load_store_op_none` (promoted to Vulkan 1.4).
