@@ -28,7 +28,7 @@ runs:
       run: | # zizmor: ignore[github-env]
         set -e
 
-        curl -L --retry 5 https://github.com/gfx-rs/ci-build/releases/download/$CI_BINARY_BUILD/mesa-$MESA_VERSION-linux-x86_64.tar.xz -o mesa.tar.xz
+        curl --fail --show-error -L --retry 8 --retry-max-time 300 --connect-timeout 30 --max-time 120 https://github.com/gfx-rs/ci-build/releases/download/$CI_BINARY_BUILD/mesa-$MESA_VERSION-linux-x86_64.tar.xz -o mesa.tar.xz
         mkdir mesa
         tar xpf mesa.tar.xz -C mesa
 
@@ -65,7 +65,7 @@ runs:
       run: | # zizmor: ignore[github-env]
         set -e
 
-        curl.exe -L --retry 5 https://github.com/pal1000/mesa-dist-win/releases/download/$MESA_VERSION/mesa3d-$MESA_VERSION-release-msvc.7z -o mesa.7z
+        curl.exe --fail --show-error -L --retry 8 --retry-max-time 300 --connect-timeout 30 --max-time 120 https://github.com/pal1000/mesa-dist-win/releases/download/$MESA_VERSION/mesa3d-$MESA_VERSION-release-msvc.7z -o mesa.7z
         7z.exe e mesa.7z -omesa x64/{opengl32.dll,libgallium_wgl.dll,libglapi.dll,vulkan_lvp.dll,lvp_icd.x86_64.json}
 
         cp -v mesa/* ${INPUTS_TARGET_DIR}/

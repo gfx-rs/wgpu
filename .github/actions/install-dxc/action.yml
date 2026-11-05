@@ -14,7 +14,7 @@ runs:
         export DXC_RELEASE="v1.9.2602.24"
         export DXC_FILENAME="dxc_2026_05_27.zip"
 
-        curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
+        curl.exe --fail --show-error -L --retry 8 --retry-max-time 300 --connect-timeout 30 --max-time 120 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
         7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll}
 
         # We need to use cygpath to convert PWD to a windows path as we're using bash.
