@@ -65,7 +65,7 @@ pub struct RayTracingPipelineDescriptor<
     pub miss: ProgrammableStageDescriptor<'a, SM>,
     /// All the descriptors for intersection functions
     pub intersections: Vec<RayTracingIntersectionDescriptor<'a, SM>>,
-    /// The maximum amount entry points are allowed to recurse
+    /// The maximum number of nested `traceRay` calls. The ray generation stage is at depth 0.
     pub max_recursion_depth: u32,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PLC>,

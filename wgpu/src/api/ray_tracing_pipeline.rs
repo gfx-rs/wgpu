@@ -106,7 +106,9 @@ pub struct RayTracingPipelineDescriptor<'a> {
     pub miss: RayTracingStage<'a>,
     /// The list of intersection descriptors
     pub intersections: &'a [RayTracingIntersectionDescriptor<'a>],
-    /// The maximum depth of entry points able to be recursed into, discounting the ray generation stage.
+    /// The maximum number of nested `traceRay` calls. The ray generation stage is at depth 0,
+    /// so it can call `traceRay` only if this is at least 1. Calling `traceRay` at a depth
+    /// equal to or greater than this value is undefined behavior.
     pub max_recursion_depth: u32,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<&'a PipelineCache>,
