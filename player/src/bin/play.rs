@@ -7,6 +7,7 @@ fn main() {
 
     use player::Player;
     use wgc::device::trace;
+    #[cfg(feature = "winit")]
     use wgpu_core::command::PointerReferences;
 
     use std::{

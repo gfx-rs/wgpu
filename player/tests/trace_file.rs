@@ -30,14 +30,10 @@ fn incomplete_last_action_is_skipped() {
 }
 
 #[test]
-fn list_format() {
-    let content = format!("[\n{CREATE_BUFFER},\n{SUBMIT},\n]");
-    assert_create_then_submit(&player::parse_trace(&content));
-}
-
-#[test]
-fn list_format_without_closing_bracket() {
-    let content = format!("[\n{CREATE_BUFFER},\n{SUBMIT},\n");
+fn comments_are_ignored() {
+    let content = format!(
+        "// Annotation\n{CREATE_BUFFER} // Trailing\n\n  // Indented\n{SUBMIT}\n// End of trace\n"
+    );
     assert_create_then_submit(&player::parse_trace(&content));
 }
 
@@ -51,12 +47,16 @@ fn disk_trace_round_trip() {
     for action in player::parse_trace(&source) {
         trace.add(action);
     }
-    // Read the file while the trace is still alive, as if the program had
-    // crashed: no closing `]` is needed.
-    let written = std::fs::read_to_string(dir.join(FILE_NAME)).unwrap();
+    // Read the file while the trace is still alive, as if the program had crashed.
+    let interrupted = std::fs::read_to_string(dir.join(FILE_NAME)).unwrap();
     drop(trace);
+    let closed = std::fs::read_to_string(dir.join(FILE_NAME)).unwrap();
     std::fs::remove_dir_all(&dir).unwrap();
 
-    assert_eq!(written.lines().count(), 2);
-    assert_create_then_submit(&player::parse_trace(&written));
+    assert_eq!(interrupted.lines().count(), 2);
+    assert_create_then_submit(&player::parse_trace(&interrupted));
+
+    assert_eq!(closed.lines().count(), 3);
+    assert_eq!(closed.lines().last(), Some("// End of trace"));
+    assert_create_then_submit(&player::parse_trace(&closed));
 }

@@ -53,7 +53,8 @@ pub trait Trace: Any + Send + Sync {
 ///
 /// Each action is written to [`FILE_NAME`] on its own line, so a trace that
 /// is cut short (for example, because the traced program crashed) can still be
-/// replayed up to its last complete action.
+/// replayed up to its last complete action. A comment is written as the last line
+/// when the trace is dropped, to show that the file was closed cleanly.
 #[derive(Debug)]
 pub struct DiskTrace {
     path: std::path::PathBuf,
@@ -106,6 +107,12 @@ impl Trace for DiskTrace {
                 log::warn!("RON serialization failure: {e:?}");
             }
         }
+    }
+}
+
+impl Drop for DiskTrace {
+    fn drop(&mut self) {
+        let _ = writeln!(self.file, "// End of trace");
     }
 }
 

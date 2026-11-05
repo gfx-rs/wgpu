@@ -138,7 +138,9 @@ cargo run --features winit -- <trace_folder_path>
 
 The trace is written with one action per line, so if the program crashed or
 was interrupted in the midst of recording, the player still replays the trace
-up to the last action that was completely written.
+up to the last action that was completely written. A finished trace ends with
+an `// End of trace` comment. Lines starting with `//` are ignored by the player,
+so you can use them to annotate a trace.
 
 ### Running in Gecko
 
