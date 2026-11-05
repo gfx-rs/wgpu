@@ -8,18 +8,30 @@ inputs:
   # Corresponds to https://github.com/gfx-rs/ci-build/releases
   ci-binary-build:
     default: "build29"
+  linux-sha256:
+    default: "63915836cf582bdbf13cf41c75ac335f7ec9c8b4886fe32e76b748ff8c6393c6"
+  windows-sha256:
+    default: "6dd431f4620cea73970b13e3ffa94f721f2a3924306b8a4283c97648cdb6eb9c"
   target-dir:
     description: "The directory into which to install the Mesa libraries."
     default: "target/llvm-cov-target/debug"
 runs:
   using: "composite"
   steps:
+    - id: download
+      if: runner.os == 'Linux' || runner.os == 'Windows'
+      uses: $/.github/actions/download-release
+      with:
+        repository: ${{ runner.os == 'Linux' && 'gfx-rs/ci-build' || 'pal1000/mesa-dist-win' }}
+        tag: ${{ runner.os == 'Linux' && inputs.ci-binary-build || inputs.version }}
+        filename: ${{ runner.os == 'Linux' && format('mesa-{0}-linux-x86_64.tar.xz', inputs.version) || format('mesa3d-{0}-release-msvc.7z', inputs.version) }}
+        sha256: ${{ runner.os == 'Linux' && inputs.linux-sha256 || inputs.windows-sha256 }}
+
     - name: (Linux) Install Mesa
       if: runner.os == 'Linux'
       shell: bash
       env:
-        MESA_VERSION: ${{ inputs.version }}
-        CI_BINARY_BUILD: ${{ inputs.ci-binary-build }}
+        MESA_ARCHIVE: ${{ steps.download.outputs.path }}
       # NOTE: We ignore `github-env` because we trust:
       #
       # - The `cygpath` tool
@@ -28,9 +40,8 @@ runs:
       run: | # zizmor: ignore[github-env]
         set -e
 
-        curl --fail --show-error -L --retry 8 --retry-max-time 300 --connect-timeout 30 --max-time 120 https://github.com/gfx-rs/ci-build/releases/download/$CI_BINARY_BUILD/mesa-$MESA_VERSION-linux-x86_64.tar.xz -o mesa.tar.xz
         mkdir mesa
-        tar xpf mesa.tar.xz -C mesa
+        tar xpf "$MESA_ARCHIVE" -C mesa
 
         # The ICD provided by the mesa build is hardcoded to the build environment.
         #
@@ -54,7 +65,7 @@ runs:
       if: runner.os == 'Windows'
       shell: bash
       env:
-        MESA_VERSION: ${{ inputs.version }}
+        MESA_ARCHIVE: ${{ steps.download.outputs.path }}
         CI_BINARY_BUILD: ${{ inputs.ci-binary-build }}
         INPUTS_TARGET_DIR: ${{ inputs.target-dir }}
       # NOTE: We ignore `github-env` because we trust:
@@ -65,8 +76,7 @@ runs:
       run: | # zizmor: ignore[github-env]
         set -e
 
-        curl.exe --fail --show-error -L --retry 8 --retry-max-time 300 --connect-timeout 30 --max-time 120 https://github.com/pal1000/mesa-dist-win/releases/download/$MESA_VERSION/mesa3d-$MESA_VERSION-release-msvc.7z -o mesa.7z
-        7z.exe e mesa.7z -omesa x64/{opengl32.dll,libgallium_wgl.dll,libglapi.dll,vulkan_lvp.dll,lvp_icd.x86_64.json}
+        7z.exe e "$MESA_ARCHIVE" -omesa x64/{opengl32.dll,libgallium_wgl.dll,libglapi.dll,vulkan_lvp.dll,lvp_icd.x86_64.json}
 
         cp -v mesa/* ${INPUTS_TARGET_DIR}/
         cp -v mesa/* ${INPUTS_TARGET_DIR}/deps

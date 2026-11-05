@@ -1,9 +1,26 @@
 name: "Install DXC"
 description: "Install DXC"
+inputs:
+  release:
+    default: "v1.9.2602.24"
+  filename:
+    default: "dxc_2026_05_27.zip"
+  sha256:
+    default: "cf658aacf070d3045e31b8f1f8a696c2945f37c1095019481ef7c513368db3b4"
 runs:
   using: "composite"
   steps:
+    - id: download
+      uses: $/.github/actions/download-release
+      with:
+        repository: microsoft/DirectXShaderCompiler
+        tag: ${{ inputs.release }}
+        filename: ${{ inputs.filename }}
+        sha256: ${{ inputs.sha256 }}
+
     - shell: bash
+      env:
+        DXC_ARCHIVE: ${{ steps.download.outputs.path }}
       # NOTE: We ignore the `github-env` lint because we trust:
       #
       # - The `cygpath` tool
@@ -11,11 +28,7 @@ runs:
       run: | # zizmor: ignore[github-env]
         set -e
 
-        export DXC_RELEASE="v1.9.2602.24"
-        export DXC_FILENAME="dxc_2026_05_27.zip"
-
-        curl.exe --fail --show-error -L --retry 8 --retry-max-time 300 --connect-timeout 30 --max-time 120 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
-        7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll}
+        7z.exe e "$DXC_ARCHIVE" -odxc bin/x64/{dxc.exe,dxcompiler.dll}
 
         # We need to use cygpath to convert PWD to a windows path as we're using bash.
         echo "WGPU_DX12_COMPILER=$(cygpath --windows "$PWD/dxc/dxcompiler.dll")" >> "$GITHUB_ENV"
