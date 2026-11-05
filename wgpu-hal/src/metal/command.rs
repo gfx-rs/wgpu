@@ -625,18 +625,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::TextureCopy>,
     {
-        let reinterpret_dst = if src.format != dst.format && !src.format.is_multi_planar_format() {
-            let raw_format = self
-                .shared
-                .private_texture_format_caps
-                .map_format(src.format);
-            Some(autoreleasepool(|_| {
-                dst.raw.newTextureViewWithPixelFormat(raw_format).unwrap()
-            }))
-        } else {
-            None
-        };
-
+        let mut reinterpreted_dst = None;
         let encoder = self.enter_blit();
         for copy in regions {
             let src_origin = conv::map_origin(&copy.src_base.origin);
@@ -645,9 +634,32 @@ impl crate::CommandEncoder for super::CommandEncoder {
             let extent = conv::map_copy_extent(&copy.size);
 
             let src_raw = src.raw_plane(copy.src_base.aspect);
-            let dst_raw = match reinterpret_dst.as_ref() {
-                Some(dst) => dst,
-                None => dst.raw_plane(copy.dst_base.aspect),
+            let dst_raw = dst.raw_plane(copy.dst_base.aspect);
+            // The [`copyFromTexture` docs][1] say that the source and destination must have
+            // "the same pixel format", and `MTLPixelFormat` includes sRGB-ness, although it's
+            // not clear whether the requirement is actually intended to extend to sRGB-ness,
+            // or whether this view creation is necessary under some other reasoning to achieve
+            // WebGPU behavior.
+            //
+            // The view includes all layers and mips, so once created, we can use it for additional
+            // regions.
+            //
+            // [1]: https://developer.apple.com/documentation/metal/mtlblitcommandencoder/copy%28from:to:%29
+            let dst_raw = if src_raw.pixelFormat() != dst_raw.pixelFormat() {
+                assert_eq!(copy.dst_base.aspect, crate::FormatAspects::COLOR);
+                assert_eq!(
+                    src.format.remove_srgb_suffix(),
+                    dst.format.remove_srgb_suffix()
+                );
+                reinterpreted_dst.get_or_insert_with(|| {
+                    autoreleasepool(|_| {
+                        dst_raw
+                            .newTextureViewWithPixelFormat(src_raw.pixelFormat())
+                            .unwrap()
+                    })
+                })
+            } else {
+                dst_raw
             };
             unsafe {
                 encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin(
