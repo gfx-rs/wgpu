@@ -1,5 +1,4 @@
 #version 460
-#extension GL_ARB_conservative_depth : require
 layout(depth_less) out float gl_FragDepth;
 
 void main()
