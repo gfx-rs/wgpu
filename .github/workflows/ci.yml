@@ -81,41 +81,41 @@ jobs:
         include:
           # Windows
           - name: Windows x86_64
-            os: windows-2022
+            os: windows-2025
             target: x86_64-pc-windows-msvc
             tier: 1
             kind: native
 
           # Windows
           - name: Windows aarch64
-            os: windows-2022
+            os: windows-2025
             target: aarch64-pc-windows-msvc
             tier: 2
             kind: native
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-14
+            os: macos-26
             target: x86_64-apple-darwin
             tier: 1
             kind: native
 
           - name: MacOS aarch64
-            os: macos-14
+            os: macos-26
             target: aarch64-apple-darwin
             tier: 1
             kind: native
 
           # IOS
           - name: IOS aarch64
-            os: macos-14
+            os: macos-26
             target: aarch64-apple-ios
             tier: 2
             kind: native
 
           # VisionOS
           - name: VisionOS aarch64
-            os: macos-14
+            os: macos-26
             target: aarch64-apple-visionos
             kind: wgpu-only
             tier: 3
@@ -402,12 +402,12 @@ jobs:
         include:
           # Windows
           - name: Windows x86_64
-            os: windows-2022
+            os: windows-2025
             target: x86_64-pc-windows-msvc
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-14
+            os: macos-26
             target: x86_64-apple-darwin
 
           # Linux
@@ -485,12 +485,12 @@ jobs:
         include:
           # Windows
           - name: Windows x86_64
-            os: windows-2022
+            os: windows-2025
             target: x86_64-pc-windows-msvc
 
           # MacOS
           - name: MacOS x86_64
-            os: macos-14
+            os: macos-26
             target: x86_64-apple-darwin
 
           # Linux
@@ -606,7 +606,7 @@ jobs:
     timeout-minutes: 20
 
     name: Test WebAssembly
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     permissions: {}
 
@@ -653,7 +653,7 @@ jobs:
         include:
           # Mac
           - name: Mac aarch64
-            os: macos-14
+            os: macos-26
 
           # Linux
           - name: Linux x86_64
@@ -675,7 +675,7 @@ jobs:
       # Record the host details and counters from the start of the job.
       # https://github.com/gfx-rs/wgpu/issues/9248
       - name: (Windows) Start host metrics sampler
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         uses: $/.github/actions/sample-host-metrics
         with:
           output-dir: host-metrics
@@ -713,29 +713,29 @@ jobs:
             . -> target
 
       - name: (Windows) Install DXC
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         uses: $/.github/actions/install-dxc
 
       - name: (Windows) Install WARP
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         uses: $/.github/actions/install-warp
         with:
           target-dir: "target/llvm-cov-target/debug"
 
       - name: (Windows) Install Agility SDK
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         uses: $/.github/actions/install-agility-sdk
 
       - name: (Windows) Install Mesa
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         uses: $/.github/actions/install-mesa
 
       - name: (Windows) Install Vulkan SDK
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         uses: $/.github/actions/install-vulkan-sdk
 
       - name: (Mac) Install Vulkan SDK
-        if: matrix.os == 'macos-14'
+        if: matrix.os == 'macos-26'
         uses: $/.github/actions/install-vulkan-sdk
 
       - name: (Linux) Install Vulkan SDK
@@ -757,7 +757,7 @@ jobs:
       # While armed, the sampler judges whether the host is one of the stalling
       # ones, and on the first attempt kills the build or tests if it is.
       - name: (Windows) Arm host watchdog
-        if: matrix.os == 'windows-2022'
+        if: matrix.os == 'windows-2025'
         shell: pwsh
         run: New-Item -ItemType File -Force -Path host-metrics/watchdog-armed | Out-Null
 
@@ -770,13 +770,13 @@ jobs:
           cargo --locked xtask test --llvm-cov
 
       - name: (Windows) Disarm host watchdog
-        if: always() && matrix.os == 'windows-2022'
+        if: always() && matrix.os == 'windows-2025'
         shell: pwsh
         run: Remove-Item -Force -ErrorAction SilentlyContinue -Path host-metrics/watchdog-armed
 
       - name: (Windows) Check host
         id: check-host
-        if: always() && matrix.os == 'windows-2022'
+        if: always() && matrix.os == 'windows-2025'
         shell: pwsh
         env:
           TESTS_OUTCOME: ${{ steps.tests.outcome }}
@@ -848,7 +848,7 @@ jobs:
       matrix:
         include:
           - name: Windows x86_64
-            os: windows-2022
+            os: windows-2025
             attempt: 1
 
     # Not substituting the platform to be consistent with the retry jobs.
@@ -872,7 +872,7 @@ jobs:
       matrix:
         include:
           - name: Windows x86_64
-            os: windows-2022
+            os: windows-2025
             attempt: 2
 
     # Avoid substituting the platform because skipped jobs don't apply substitutions.
@@ -892,7 +892,7 @@ jobs:
     timeout-minutes: 2
 
     name: Test Windows x86_64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     permissions: {}
 
@@ -918,7 +918,7 @@ jobs:
     timeout-minutes: 10
 
     name: Doctest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     permissions: {}
 
@@ -953,7 +953,7 @@ jobs:
     timeout-minutes: 10
 
     name: Miri (limited scope)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     permissions: {}
 
@@ -993,7 +993,7 @@ jobs:
     timeout-minutes: 2
 
     name: Format & Typos
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions: {}
     steps:
       - name: Checkout repo
@@ -1044,7 +1044,7 @@ jobs:
     timeout-minutes: 10
 
     name: Clippy cts_runner
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions: {}
     steps:
       - name: Checkout repo
@@ -1087,7 +1087,7 @@ jobs:
     timeout-minutes: 5
 
     name: "cargo-deny advisories"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions: {}
     steps:
       - name: Checkout repo
@@ -1108,7 +1108,7 @@ jobs:
     timeout-minutes: 5
 
     name: "cargo-deny"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions: {}
     steps:
       - name: Checkout repo
@@ -1126,7 +1126,7 @@ jobs:
 
   zizmor:
     name: "Zizmor"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       # `zizmor-action` uploads its findings to GitHub code scanning as SARIF.
       security-events: write
