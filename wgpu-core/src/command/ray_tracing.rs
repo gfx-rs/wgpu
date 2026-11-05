@@ -275,7 +275,7 @@ pub(crate) fn build_acceleration_structures(
                         hal::TlasInstance {
                             transform: [0.0; 12],
                             custom_data: 0,
-                            mask: 0,
+                            mask: 0xff,
                             blas_address: null_handle,
                             pipeline_intersection_data_offset: 0,
                         },
