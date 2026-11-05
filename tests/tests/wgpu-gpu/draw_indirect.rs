@@ -254,6 +254,7 @@ async fn run_test_inner(
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -2266,6 +2267,7 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
 

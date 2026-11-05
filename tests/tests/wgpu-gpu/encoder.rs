@@ -63,6 +63,7 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
             format: wgpu::TextureFormat::R8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let target_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -125,6 +126,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     };
     let texture_dst = ctx.device.create_texture(&texture_desc);
     let texture_src = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -150,6 +152,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
         format: wgpu::TextureFormat::Bgra8UnormSrgb,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[wgpu::TextureFormat::Bgra8UnormSrgb],
+        texture_binding_view_dimension: None,
     };
     let target_tex = ctx.device.create_texture(&target_desc);
     let color_attachment_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default());
