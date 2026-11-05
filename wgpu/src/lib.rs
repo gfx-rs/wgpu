@@ -39,8 +39,6 @@
 #![doc = crate::macros::doc_image!("render_coordinates.webp")]
 #![doc = crate::macros::doc_image!("texture_coordinates.webp")]
 #![no_std]
-// `-Znext-solver` requires deeper recursion limits (at least for now) to prove Send/Sync
-#![recursion_limit = "256"]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]
 #![warn(
@@ -111,7 +109,7 @@ pub use wgt::{
     Features, FeaturesWGPU, FeaturesWebGPU, FilterMode, ForceShaderModelToken, FrontFace,
     GlBackendOptions, GlDebugFns, GlFenceBehavior, Gles3MinorVersion, HalCounters,
     ImageSubresourceRange, IndexFormat, InstanceDescriptor, InstanceFlags, InternalCounters,
-    Limits, LoadOpDontCare, MemoryBudgetThresholds, MemoryHints, MipmapFilterMode,
+    Limits, LoadOpDontCare, MapMode, MemoryBudgetThresholds, MemoryHints, MipmapFilterMode,
     MultisampleState, NoopBackendOptions, Origin2d, Origin3d, PassthroughShaderEntryPoint,
     PipelineStatisticsTypes, PollError, PollStatus, PolygonMode, PowerPreference,
     PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,

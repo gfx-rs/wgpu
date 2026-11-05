@@ -923,7 +923,10 @@ impl super::CapabilitiesQuery {
                 && (device.supportsFamily(MTLGPUFamily::Apple7)
                     || device.supportsFamily(MTLGPUFamily::Mac2))
             {
-                1024
+                // This was 1024 for Apple7, Apple8, and Mac2 in older versions of the document.
+                // In new versions of the document, it is 996 for Apple7 and Apple8, with Mac2
+                // values no longer listed.
+                996
             } else if family_check && device.supportsFamily(MTLGPUFamily::Apple6) {
                 128
             } else {
@@ -1243,22 +1246,23 @@ impl super::CapabilitiesQuery {
         use wgt::Features as F;
 
         let mut features = F::empty()
-            | F::MAPPABLE_PRIMARY_BUFFERS
-            | F::VERTEX_WRITABLE_STORAGE
-            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::IMMEDIATES
-            | F::POLYGON_MODE_LINE
+            | F::ADDRESS_MODE_CLAMP_TO_ZERO
+            | F::BGRA8UNORM_STORAGE
             | F::CLEAR_TEXTURE
-            | F::TEXTURE_FORMAT_16BIT_NORM
+            | F::CLIP_DISTANCES
+            | F::DEPTH32FLOAT_STENCIL8
+            | F::EXTERNAL_TEXTURE
+            | F::FLOAT32_BLENDABLE
+            | F::IMMEDIATES
+            | F::MAPPABLE_PRIMARY_BUFFERS
+            | F::PASSTHROUGH_SHADERS
+            | F::POLYGON_MODE_LINE
             | F::SHADER_F16
             | F::SHADER_I16
-            | F::DEPTH32FLOAT_STENCIL8
-            | F::BGRA8UNORM_STORAGE
-            | F::PASSTHROUGH_SHADERS
-            | F::FLOAT32_BLENDABLE
-            | F::CLIP_DISTANCES
-            | F::ADDRESS_MODE_CLAMP_TO_ZERO
-            | F::EXTERNAL_TEXTURE;
+            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | F::TEXTURE_FORMAT_16BIT_NORM
+            | F::UNRESTRICTED_BYTES_PER_ROW
+            | F::VERTEX_WRITABLE_STORAGE;
 
         features.set(F::TEXTURE_COMPONENT_SWIZZLE, self.texture_component_swizzle);
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
@@ -1281,6 +1285,10 @@ impl super::CapabilitiesQuery {
         features.set(
             F::DUAL_SOURCE_BLENDING,
             self.msl_version >= MTLLanguageVersion::Version1_2 && self.dual_source_blending,
+        );
+        features.set(
+            F::SHADER_EARLY_DEPTH_TEST,
+            MTLLanguageVersion::Version1_2 <= self.msl_version,
         );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);

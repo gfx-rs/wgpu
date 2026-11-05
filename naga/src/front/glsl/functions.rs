@@ -139,9 +139,8 @@ impl Frontend {
 
                 ctx.add_expression(
                     Expression::As {
-                        kind: scalar.kind,
+                        target: scalar,
                         expr,
-                        convert: Some(scalar.width),
                     },
                     meta,
                 )?
@@ -153,9 +152,8 @@ impl Frontend {
 
                 ctx.add_expression(
                     Expression::As {
-                        kind: scalar.kind,
+                        target: scalar,
                         expr: value,
-                        convert: Some(scalar.width),
                     },
                     meta,
                 )?
@@ -1364,8 +1362,10 @@ impl Frontend {
         ctx.module.entry_points.push(EntryPoint {
             name: "main".to_string(),
             stage: self.meta.stage,
-            early_depth_test: Some(crate::EarlyDepthTest::Force)
-                .filter(|_| self.meta.early_fragment_tests),
+            early_depth_test: self
+                .meta
+                .early_fragment_tests
+                .then_some(crate::EarlyDepthTest::Force),
             workgroup_size: self.meta.workgroup_size,
             workgroup_size_overrides: None,
             function: Function {

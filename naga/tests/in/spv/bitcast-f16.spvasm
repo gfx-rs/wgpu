@@ -1,0 +1,78 @@
+; SPIR-V
+; Version: 1.0
+               OpCapability Shader
+               OpCapability Float16
+               OpCapability StorageBuffer16BitAccess
+               OpExtension "SPV_KHR_16bit_storage"
+               OpExtension "SPV_KHR_storage_buffer_storage_class"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %B "B"
+               OpMemberName %B 0 "a"
+               OpMemberName %B 1 "h2"
+               OpMemberName %B 2 "h4"
+               OpMemberName %B 3 "u2"
+               OpMemberName %B 4 "i"
+               OpMemberName %B 5 "f"
+               OpName %buf "buf"
+               OpMemberDecorate %B 0 Offset 0
+               OpMemberDecorate %B 1 Offset 4
+               OpMemberDecorate %B 2 Offset 8
+               OpMemberDecorate %B 3 Offset 16
+               OpMemberDecorate %B 4 Offset 24
+               OpMemberDecorate %B 5 Offset 28
+               OpDecorate %B Block
+               OpDecorate %buf DescriptorSet 0
+               OpDecorate %buf Binding 0
+       %void = OpTypeVoid
+         %fn = OpTypeFunction %void
+       %uint = OpTypeInt 32 0
+        %int = OpTypeInt 32 1
+      %float = OpTypeFloat 32
+       %half = OpTypeFloat 16
+       %v2h = OpTypeVector %half 2
+       %v4h = OpTypeVector %half 4
+      %v2u = OpTypeVector %uint 2
+          %B = OpTypeStruct %uint %v2h %v4h %v2u %int %float
+        %pB = OpTypePointer StorageBuffer %B
+       %buf = OpVariable %pB StorageBuffer
+        %c0 = OpConstant %int 0
+        %c1 = OpConstant %int 1
+        %c2 = OpConstant %int 2
+        %c3 = OpConstant %int 3
+        %c4 = OpConstant %int 4
+        %c5 = OpConstant %int 5
+      %p_u = OpTypePointer StorageBuffer %uint
+     %p_v2h = OpTypePointer StorageBuffer %v2h
+     %p_v4h = OpTypePointer StorageBuffer %v4h
+     %p_v2u = OpTypePointer StorageBuffer %v2u
+      %p_i = OpTypePointer StorageBuffer %int
+      %p_f = OpTypePointer StorageBuffer %float
+       %main = OpFunction %void None %fn
+      %entry = OpLabel
+       %a_ptr = OpAccessChain %p_u %buf %c0
+       %h2_ptr = OpAccessChain %p_v2h %buf %c1
+       %h4_ptr = OpAccessChain %p_v4h %buf %c2
+       %u2_ptr = OpAccessChain %p_v2u %buf %c3
+       %i_ptr = OpAccessChain %p_i %buf %c4
+       %f_ptr = OpAccessChain %p_f %buf %c5
+         %a = OpLoad %uint %a_ptr
+         %h2 = OpLoad %v2h %h2_ptr
+         %h4 = OpLoad %v4h %h4_ptr
+         %r1 = OpBitcast %v2h %a
+               OpStore %h2_ptr %r1
+         %r2 = OpBitcast %uint %h2
+               OpStore %a_ptr %r2
+         %r3 = OpBitcast %v2u %h4
+               OpStore %u2_ptr %r3
+         %r4 = OpBitcast %int %a
+               OpStore %i_ptr %r4
+         %r5 = OpBitcast %float %a
+               OpStore %f_ptr %r5
+         %u2 = OpLoad %v2u %u2_ptr
+         %r6 = OpBitcast %v4h %u2
+               OpStore %h4_ptr %r6
+               OpReturn
+               OpFunctionEnd

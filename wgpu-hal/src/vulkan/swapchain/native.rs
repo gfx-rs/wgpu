@@ -3,7 +3,7 @@
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::any::Any;
 
-use ash::{khr, vk};
+use ash::{google, khr, vk};
 use wgpu_sync::{Mutex, MutexGuard};
 
 use crate::vulkan::{
@@ -384,8 +384,7 @@ pub(crate) struct NativeSwapchain {
     ///
     /// # Safety
     ///
-    /// This must only be set if [`wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING`] is enabled, and
-    /// so the VK_GOOGLE_display_timing extension is present.
+    /// This must only be set if the VK_GOOGLE_display_timing extension is enabled.
     next_present_time: Option<vk::PresentTimeGOOGLE>,
 
     /// A caller-provided `pNext` chain to attach to the [`vk::PresentInfoKHR`] of the next
@@ -639,9 +638,9 @@ impl Swapchain for NativeSwapchain {
         let mut vk_info = if let Some(present_time) = self.next_present_time.take() {
             debug_assert!(
                 self.device
-                    .features
-                    .contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING),
-                "`next_present_time` should only be set if `VULKAN_GOOGLE_DISPLAY_TIMING` is enabled"
+                    .enabled_extensions
+                    .contains(&google::display_timing::NAME),
+                "`next_present_time` should only be set if VK_GOOGLE_display_timing is enabled"
             );
             present_times = [present_time];
             display_timing = vk::PresentTimesInfoGOOGLE::default().times(&present_times);
@@ -695,17 +694,15 @@ impl NativeSwapchain {
     }
 
     pub fn set_next_present_time(&mut self, present_timing: vk::PresentTimeGOOGLE) {
-        let features = wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING;
-        if self.device.features.contains(features) {
+        if self
+            .device
+            .enabled_extensions
+            .contains(&google::display_timing::NAME)
+        {
             self.next_present_time = Some(present_timing);
         } else {
-            // Ideally we'd use something like `device.required_features` here, but that's in `wgpu-core`, which we are a dependency of
             panic!(
-                concat!(
-                    "Tried to set display timing properties ",
-                    "without the corresponding feature ({:?}) enabled."
-                ),
-                features
+                "Tried to set display timing properties without the VK_GOOGLE_display_timing extension enabled."
             );
         }
     }

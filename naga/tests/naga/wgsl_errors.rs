@@ -200,6 +200,128 @@ fn bad_type_cast() {
 }
 
 #[test]
+fn bitcast_overloads() {
+    let bitcast = |source: &str, dest: &str| {
+        format!("enable f16; fn f(x: {source}) -> {dest} {{ return bitcast<{dest}>(x); }}")
+    };
+
+    for (source, dest) in [
+        ("i32", "u32"),
+        ("u32", "f32"),
+        ("vec3<f32>", "vec3<i32>"),
+        ("f16", "f16"),
+        ("vec2<f16>", "vec2<f16>"),
+        ("vec2<f16>", "i32"),
+        ("vec2<f16>", "u32"),
+        ("vec2<f16>", "f32"),
+        ("vec4<f16>", "vec2<i32>"),
+        ("vec4<f16>", "vec2<u32>"),
+        ("vec4<f16>", "vec2<f32>"),
+        ("vec2<i32>", "vec4<f16>"),
+        ("vec2<u32>", "vec4<f16>"),
+        ("vec2<f32>", "vec4<f16>"),
+        ("i32", "vec2<f16>"),
+        ("u32", "vec2<f16>"),
+        ("f32", "vec2<f16>"),
+    ] {
+        check_success(&bitcast(source, dest));
+    }
+
+    for (source, dest) in [
+        ("bool", "u32"),
+        ("u32", "bool"),
+        ("f16", "u32"),
+        ("u32", "f16"),
+        ("vec3<f16>", "vec3<u32>"),
+        ("vec2<f16>", "vec2<u32>"),
+        ("vec2<f16>", "vec4<f16>"),
+        ("vec4<f16>", "u32"),
+        ("vec2<u32>", "vec3<u32>"),
+        ("vec3<u32>", "vec4<f16>"),
+        ("f32", "vec2<f32>"),
+        ("array<u32, 2>", "u32"),
+        ("u32", "array<u32, 1>"),
+    ] {
+        check_error_matches(&bitcast(source, dest), "cannot cast");
+    }
+}
+
+#[test]
+fn bitcast_int16() {
+    let bitcast = |source: &str, dest: &str| {
+        format!(
+            "enable f16; enable wgpu_int16; \
+             fn f(x: {source}) -> {dest} {{ return bitcast<{dest}>(x); }}"
+        )
+    };
+
+    for (source, dest) in [
+        ("f16", "i16"),
+        ("f16", "u16"),
+        ("i16", "f16"),
+        ("u16", "f16"),
+        ("i16", "u16"),
+        ("vec2<f16>", "vec2<i16>"),
+        ("vec3<f16>", "vec3<u16>"),
+        ("vec4<i16>", "vec4<f16>"),
+        ("vec4<u16>", "vec4<f16>"),
+    ] {
+        no_validation_error(
+            &bitcast(source, dest),
+            Capabilities::SHADER_FLOAT16 | Capabilities::SHADER_INT16,
+        );
+    }
+
+    for (source, dest) in [
+        ("f16", "i32"),
+        ("i16", "f32"),
+        ("i16", "bool"),
+        ("vec2<f16>", "i16"),
+        ("vec2<i16>", "vec3<f16>"),
+        ("vec2<i16>", "vec4<f16>"),
+    ] {
+        check_error_matches(&bitcast(source, dest), "cannot cast");
+    }
+}
+
+#[test]
+fn bitcast_abstract_operand() {
+    for (value, dest) in [
+        ("4294967295", "u32"),
+        ("4294967295", "vec2<u32>"),
+        ("1", "i32"),
+        ("1", "f32"),
+        ("1.0", "f32"),
+        ("1.0", "i32"),
+        ("1.0", "u32"),
+    ] {
+        let dest_value = if dest.starts_with("vec") {
+            format!("{dest}({value})")
+        } else {
+            value.to_string()
+        };
+        check_success(&format!(
+            "fn f() -> {dest} {{ return bitcast<{dest}>({dest_value}); }}"
+        ));
+    }
+
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(1); }");
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(1.0); }");
+    check_success("enable f16; fn f() -> f16 { return bitcast<f16>(1.0); }");
+    check_success("enable f16; fn f() -> f16 { return bitcast<f16>(1); }");
+    check_success("fn f() -> vec2<u32> { return bitcast<vec2<u32>>(vec2(4294967295, 1)); }");
+    check_success("fn f() -> vec2<f32> { return bitcast<vec2<f32>>(vec2(1, 2)); }");
+    check_success("fn f() -> vec2<i32> { return bitcast<vec2<i32>>(vec2(1.0, 2.0)); }");
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(vec2(1, 2)); }");
+    check_success("enable f16; fn f() -> vec2<f16> { return bitcast<vec2<f16>>(vec2(1.0, 2.0)); }");
+    check_success("enable f16; fn f() -> vec4<f16> { return bitcast<vec4<f16>>(vec2(1, 2)); }");
+    check_error_matches(
+        "fn f() -> u32 { return bitcast<u32>(4294967296); }",
+        "cannot",
+    );
+}
+
+#[test]
 fn cross_vec2() {
     check(
         r#"
@@ -219,6 +341,61 @@ error: wrong type passed as argument #1 to `cross`
   = note: allowed type: vec3<f32>
   = note: allowed type: vec3<f16>
   = note: allowed type: vec3<f64>
+
+",
+    );
+}
+
+#[test]
+fn sign_unsigned() {
+    check(
+        r#"
+            @compute @workgroup_size(1)
+            fn main() {
+                var input = vec4<u32>(1u);
+                let value = sign(input);
+            }
+        "#,
+        "\
+error: wrong type passed as argument #1 to `sign`
+  ┌─ wgsl:5:29
+  │
+5 │                 let value = sign(input);
+  │                             ^^^^
+  │
+  = note: `sign` accepts the following types for argument #1:
+  = note: allowed type: {AbstractInt}
+  = note: allowed type: {AbstractFloat}
+  = note: allowed type: i32
+  = note: allowed type: i16
+  = note: allowed type: i64
+  = note: allowed type: f32
+  = note: allowed type: f16
+  = note: allowed type: f64
+  = note: allowed type: vec2<{AbstractInt}>
+  = note: allowed type: vec2<{AbstractFloat}>
+  = note: allowed type: vec2<i32>
+  = note: allowed type: vec2<i16>
+  = note: allowed type: vec2<i64>
+  = note: allowed type: vec2<f32>
+  = note: allowed type: vec2<f16>
+  = note: allowed type: vec2<f64>
+  = note: allowed type: vec3<{AbstractInt}>
+  = note: allowed type: vec3<{AbstractFloat}>
+  = note: allowed type: vec3<i32>
+  = note: allowed type: vec3<i16>
+  = note: allowed type: vec3<i64>
+  = note: allowed type: vec3<f32>
+  = note: allowed type: vec3<f16>
+  = note: allowed type: vec3<f64>
+  = note: allowed type: vec4<{AbstractInt}>
+  = note: allowed type: vec4<{AbstractFloat}>
+  = note: allowed type: vec4<i32>
+  = note: allowed type: vec4<i16>
+  = note: allowed type: vec4<i64>
+  = note: allowed type: vec4<f32>
+  = note: allowed type: vec4<f16>
+  = note: allowed type: vec4<f64>
 
 ",
     );
@@ -2034,7 +2211,7 @@ fn invalid_functions() {
         if function_name == "return_pointer"
     }
 
-    check_validation! {
+    check_error_matches(
         "
         struct Atom {
             a: atomic<u32>
@@ -2045,14 +2222,72 @@ fn invalid_functions() {
         fn return_atomic() -> Atom {
            return atom;
         }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            name: function_name,
-            source: naga::valid::FunctionError::NonConstructibleReturnType,
-            ..
-        })
-        if function_name == "return_atomic"
-    }
+        ",
+        "direct access to atomic variable is not allowed",
+    );
+}
+
+/// Regression test for <https://github.com/gfx-rs/wgpu/issues/10046>.
+///
+/// Loading a value whose type contains an atomic, even nested inside a
+/// struct or array, must be rejected by the front end. It used to reach the
+/// backends, where the HLSL writer panicked.
+#[test]
+fn load_type_containing_atomic() {
+    check(
+        "
+        struct Inner { a: atomic<u32> }
+        struct Outer { inner: Inner }
+        @group(0) @binding(0) var<storage, read_write> s: Outer;
+        fn f() {
+            let x = s;
+        }
+        ",
+        r#"error: direct access to atomic variable is not allowed
+  ┌─ wgsl:6:21
+  │
+6 │             let x = s;
+  │                     ^ atomic variables cannot be accessed directly; use atomic built-in functions
+
+"#,
+    );
+
+    check_error_matches(
+        "
+        struct S { a: atomic<u32> }
+        @group(0) @binding(0) var<storage, read_write> s: S;
+        fn f() {
+            _ = s;
+        }
+        ",
+        "direct access to atomic variable is not allowed",
+    );
+
+    check_error_matches(
+        "
+        struct S { a: array<atomic<u32>, 2> }
+        @group(0) @binding(0) var<storage, read_write> s: S;
+        fn f() {
+            let x = s.a;
+        }
+        ",
+        "direct access to atomic variable is not allowed",
+    );
+
+    // Accessing the atomic through the built-in functions is still fine.
+    check_success(
+        "
+        struct Inner { a: atomic<u32> }
+        struct Outer { inner: Inner, arr: array<atomic<u32>, 2> }
+        @group(0) @binding(0) var<storage, read_write> s: Outer;
+        fn f() -> u32 {
+            atomicStore(&s.inner.a, 1u);
+            atomicAdd(&s.arr[1], 1u);
+            let p = &s.inner;
+            return atomicLoad(&(*p).a);
+        }
+        ",
+    );
 }
 
 #[test]
@@ -6288,4 +6523,24 @@ fn ray_query_let() {
         ",
         "Ray query with initialize",
     );
+}
+
+#[test]
+fn ray_query_as_binding() {
+    // ray queries cannot be in bindings
+    check_validation! {
+        r#"
+            enable wgpu_ray_query;
+
+            @group(0) @binding(0)
+            var rq: ray_query;
+
+            @compute @workgroup_size(1)
+            fn main() {
+                _=rq;
+            }
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {  source: naga::valid::GlobalVariableError::InvalidBinding, ..}),
+        Capabilities::RAY_QUERY
+    }
 }

@@ -264,10 +264,8 @@ impl super::Device {
                 .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {e:?}")))?;
 
                 log::debug!(
-                    "Naga generated shader for entry point '{}' and stage {:?}\n{}",
-                    stage.entry_point,
-                    naga_stage,
-                    &source
+                    "Naga generated shader for entry point '{ep}' and stage {naga_stage:?}\n{source}",
+                    ep = stage.entry_point,
                 );
 
                 let options = MTLCompileOptions::new();
@@ -1397,6 +1395,7 @@ impl crate::Device for super::Device {
                 num_workgroups,
             } => {
                 let options = MTLCompileOptions::new();
+                options.setLanguageVersion(self.shared.private_caps.msl_version);
                 // Obtain the device from shared
                 let device = &self.shared.device;
                 let library = device
@@ -1568,7 +1567,7 @@ impl crate::Device for super::Device {
                             immediates: desc.layout.immediates_infos.vs,
                             sizes_slot: desc.layout.per_stage_map.vs.sizes_buffer,
                             sized_bindings: vs.sized_bindings,
-                            vertex_buffer_mappings,
+                            vertex_buffer_mappings: vertex_buffer_mappings.into(),
                             library: Some(vs.library),
                             raw_wg_size: MTLSize {
                                 width: 0,
@@ -1662,7 +1661,7 @@ impl crate::Device for super::Device {
                             immediates: desc.layout.immediates_infos.ts,
                             sizes_slot: desc.layout.per_stage_map.ts.sizes_buffer,
                             sized_bindings: ts.sized_bindings,
-                            vertex_buffer_mappings: vec![],
+                            vertex_buffer_mappings: Default::default(),
                             library: Some(ts.library),
                             raw_wg_size: ts.wg_size,
                             work_group_memory_sizes: ts.wg_memory_sizes,
@@ -1691,7 +1690,7 @@ impl crate::Device for super::Device {
                             immediates: desc.layout.immediates_infos.ms,
                             sizes_slot: desc.layout.per_stage_map.ms.sizes_buffer,
                             sized_bindings: ms.sized_bindings,
-                            vertex_buffer_mappings: vec![],
+                            vertex_buffer_mappings: Default::default(),
                             library: Some(ms.library),
                             raw_wg_size: ms.wg_size,
                             work_group_memory_sizes: ms.wg_memory_sizes,
@@ -1734,7 +1733,7 @@ impl crate::Device for super::Device {
                         immediates: desc.layout.immediates_infos.fs,
                         sizes_slot: desc.layout.per_stage_map.fs.sizes_buffer,
                         sized_bindings: fs.sized_bindings,
-                        vertex_buffer_mappings: vec![],
+                        vertex_buffer_mappings: Default::default(),
                         library: Some(fs.library),
                         raw_wg_size: MTLSize {
                             width: 0,
@@ -1942,7 +1941,7 @@ impl crate::Device for super::Device {
                 immediates: desc.layout.immediates_infos.cs,
                 sizes_slot: desc.layout.per_stage_map.cs.sizes_buffer,
                 sized_bindings: cs.sized_bindings,
-                vertex_buffer_mappings: vec![],
+                vertex_buffer_mappings: Default::default(),
                 raw_wg_size: cs.wg_size,
                 work_group_memory_sizes: cs.wg_memory_sizes,
             };

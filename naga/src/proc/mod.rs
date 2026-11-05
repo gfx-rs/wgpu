@@ -973,14 +973,10 @@ impl crate::Module {
                 }
             }
         }
-        if self
-            .global_variables
+
+        self.global_variables
             .iter()
             .any(|gv| gv.1.space == crate::AddressSpace::TaskPayload)
-        {
-            return true;
-        }
-        false
     }
 
     /// Returns `true` if any function or entry point in the module uses

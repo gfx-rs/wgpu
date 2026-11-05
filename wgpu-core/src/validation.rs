@@ -7,7 +7,7 @@ use alloc::{
 use core::fmt;
 
 use arrayvec::ArrayVec;
-use hashbrown::{hash_map::Entry, HashSet};
+use hashbrown::hash_map::Entry;
 use shader_io_deductions::{display_deductions_as_optional_list, MaxVertexShaderOutputDeduction};
 use thiserror::Error;
 use wgt::{
@@ -401,29 +401,6 @@ pub struct Interface {
     entry_points: FastHashMap<EntryPointKey, EntryPoint>,
 }
 
-#[derive(Debug)]
-pub struct PassthroughInterface {
-    pub entry_point_names: HashSet<String>,
-}
-
-// Most shaders will use a standard interface which is very large.
-// Passthrough shaders have a much smaller interface. No reason to
-// box the standard interface though.
-#[expect(clippy::large_enum_variant)]
-#[derive(Debug)]
-pub enum ShaderMetaData {
-    Interface(Interface),
-    Passthrough(PassthroughInterface),
-}
-impl ShaderMetaData {
-    pub fn interface(&self) -> Option<&Interface> {
-        match self {
-            Self::Interface(i) => Some(i),
-            Self::Passthrough(_) => None,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum BindingError {
@@ -515,10 +492,29 @@ impl WebGpuError for InputError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum StageError {
+    #[error("Unable to find entry point {0:?}")]
+    NoEntryPointWithName(String),
+    #[error("Unable to find entry point `{name}` for stage `{stage:?}`")]
+    NoEntryPointWithNameForStage {
+        name: String,
+        stage: naga::ShaderStage,
+    },
+    #[error(
+        "Unable to select an entry point: no entry points found in the provided shader module"
+    )]
+    NoEntryPoints,
+    #[error("No entry point found for stage `{0:?}`")]
+    NoEntryPointForStage(naga::ShaderStage),
+    #[error(
+        "Unable to select an entry point: \
+        multiple entry points were found in the provided shader module, \
+        but no entry point was specified"
+    )]
+    AmbiguousEntryPoint,
+    #[error("More than one entry point present in module for stage `{0:?}`, entry point name must be provided")]
+    AmbiguousEntryPointForStage(naga::ShaderStage),
     #[error(transparent)]
     InvalidWorkgroupSize(#[from] InvalidWorkgroupSizeError),
-    #[error("Unable to find entry point '{0}'")]
-    MissingEntryPoint(String),
     #[error("Shader global {0:?} is not available in the pipeline layout")]
     Binding(naga::ResourceBinding, #[source] BindingError),
     #[error("Unable to filter the texture ({texture:?}) by the sampler ({sampler:?})")]
@@ -535,16 +531,6 @@ pub enum StageError {
         #[source]
         error: InputError,
     },
-    #[error(
-        "Unable to select an entry point: no entry point was found in the provided shader module"
-    )]
-    NoEntryPointFound,
-    #[error(
-        "Unable to select an entry point: \
-        multiple entry points were found in the provided shader module, \
-        but no entry point was specified"
-    )]
-    MultipleEntryPointsFound,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(
@@ -648,10 +634,13 @@ impl WebGpuError for StageError {
                 var: _,
                 error,
             } => error.webgpu_error_type(),
-            Self::InvalidWorkgroupSize { .. }
-            | Self::MissingEntryPoint(..)
-            | Self::NoEntryPointFound
-            | Self::MultipleEntryPointsFound
+            Self::NoEntryPointWithName { .. }
+            | Self::NoEntryPointWithNameForStage { .. }
+            | Self::NoEntryPoints
+            | Self::NoEntryPointForStage(_)
+            | Self::AmbiguousEntryPoint
+            | Self::AmbiguousEntryPointForStage(_)
+            | Self::InvalidWorkgroupSize { .. }
             | Self::VertexOutputLocationTooLarge { .. }
             | Self::TooManyUserDefinedVertexOutputs { .. }
             | Self::FragmentInputLocationTooLarge { .. }
@@ -1175,6 +1164,23 @@ impl BindingLayoutSource {
     }
 }
 
+/// Resource usage accumulated across all of a pipeline's stages.
+pub struct PipelineResources {
+    pub layout: BindingLayoutSource,
+    pub minimum_binding_sizes: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    pub immediates: naga::valid::ImmediateUsage,
+}
+
+impl PipelineResources {
+    pub fn new(layout: BindingLayoutSource) -> Self {
+        Self {
+            layout,
+            minimum_binding_sizes: FastHashMap::default(),
+            immediates: Default::default(),
+        }
+    }
+}
+
 /// Summary of one shader stage's outputs, presented as inputs to the next stage.
 ///
 /// Each stage in a pipeline produces one of these values, to be validated
@@ -1197,9 +1203,6 @@ pub struct StageIo {
     ///
     /// This is `None` if the prior stage was not a mesh shader.
     pub primitive_index: Option<bool>,
-
-    /// The set of immediate data slots the prior stage used.
-    pub immediates: naga::valid::ImmediateUsage,
 }
 
 impl Interface {
@@ -1511,34 +1514,6 @@ impl Interface {
             .unwrap_or_default()
     }
 
-    /// Select an entry point name, given an optional name and a shader stage.
-    ///
-    /// See [`ShaderModule::finalize_entry_point_name`] for details.
-    ///
-    /// [`ShaderModule::finalize_entry_point_name`]: crate::pipeline::ShaderModule::finalize_entry_point_name
-    pub fn finalize_entry_point_name(
-        &self,
-        stage: naga::ShaderStage,
-        entry_point_name: Option<&str>,
-    ) -> Result<String, StageError> {
-        entry_point_name
-            .map(|ep| ep.to_string())
-            .map(Ok)
-            .unwrap_or_else(|| {
-                let mut entry_points =
-                    self.entry_points
-                        .keys()
-                        .filter_map(|EntryPointKey(ep_stage, name)| {
-                            (ep_stage == &stage).then_some(name)
-                        });
-                let first = entry_points.next().ok_or(StageError::NoEntryPointFound)?;
-                if entry_points.next().is_some() {
-                    return Err(StageError::MultipleEntryPointsFound);
-                }
-                Ok(first.clone())
-            })
-    }
-
     /// Analyze and validate an entry point for use as a given shader stage.
     ///
     /// Validate the entry point named `entry_point_name` for use in
@@ -1562,8 +1537,7 @@ impl Interface {
     /// [validating inter-stage interfaces]: https://www.w3.org/TR/webgpu/#abstract-opdef-validating-inter-stage-interfaces
     pub fn check_stage(
         &self,
-        layouts: &mut BindingLayoutSource,
-        minimum_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+        resources: &mut PipelineResources,
         entry_point_name: &str,
         shader_stage: ShaderStageForValidation,
         inputs: StageIo,
@@ -1574,17 +1548,27 @@ impl Interface {
         let pair = EntryPointKeyRef(shader_stage.to_naga(), entry_point_name);
         let entry_point = match self.entry_points.get(&pair) {
             Some(some) => some,
-            None => return Err(StageError::MissingEntryPoint(pair.1.to_string())),
+            None => {
+                return Err(StageError::NoEntryPointWithNameForStage {
+                    name: pair.1.to_string(),
+                    stage: shader_stage.to_naga(),
+                })
+            }
         };
         let EntryPointKeyRef(_, entry_point_name) = pair;
 
         let stage_bit = shader_stage.to_wgt_bit();
+        let PipelineResources {
+            ref mut layout,
+            ref mut minimum_binding_sizes,
+            ref mut immediates,
+        } = *resources;
 
         // check resources visibility
         for &handle in entry_point.resources.iter() {
             let res = &self.resources[handle];
             let result = 'err: {
-                match layouts {
+                match layout {
                     BindingLayoutSource::Provided(pipeline_layout) => {
                         // update the required binding size for this buffer
                         if let ResourceType::Buffer {
@@ -1657,7 +1641,7 @@ impl Interface {
         //
         // We only need to do this if the binding layout is provided by the user, as derived
         // layouts will inherently be correctly tagged.
-        if let BindingLayoutSource::Provided(pipeline_layout) = layouts {
+        if let BindingLayoutSource::Provided(pipeline_layout) = layout {
             for &(texture_handle, sampler_handle) in entry_point.sampling_pairs.iter() {
                 let texture_bind = &self.resources[texture_handle].bind;
                 let sampler_bind = &self.resources[sampler_handle].bind;
@@ -2079,10 +2063,10 @@ impl Interface {
 
         let immediate_usage = self
             .immediate_usage(shader_stage.to_naga(), entry_point_name)
-            .merge(&inputs.immediates);
+            .merge(immediates);
 
         // Check pipeline layout immediate size
-        if let BindingLayoutSource::Provided(pipeline_layout) = layouts {
+        if let BindingLayoutSource::Provided(pipeline_layout) = layout {
             if pipeline_layout.immediate_size < immediate_usage.size() {
                 return Err(StageError::LayoutImmediateSize {
                     layout: pipeline_layout.immediate_size,
@@ -2090,6 +2074,8 @@ impl Interface {
                 });
             }
         }
+
+        *immediates = immediate_usage;
 
         Ok(StageIo {
             task_payload_size: entry_point.task_payload_size,
@@ -2099,7 +2085,6 @@ impl Interface {
             } else {
                 None
             },
-            immediates: immediate_usage,
         })
     }
 }
