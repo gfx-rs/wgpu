@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use wgpu_test::{fail, valid};
+use wgpu_test::{fail, fail_if, valid};
 
 /// Ensures that submitting a command buffer referencing an already destroyed texture
 /// results in an error.
@@ -579,6 +579,79 @@ fn copy_buffer_to_texture_forbidden_format_aspect() {
             Some(&format!(
                 "Copying to textures with format {format:?} and aspect {aspect:?} is forbidden"
             )),
+        );
+    }
+}
+
+/// Ensures that `bytes_per_row` of buffer-texture copies must be a multiple of 256, or only
+/// of the texel block copy size with [`wgpu::Features::UNRESTRICTED_BYTES_PER_ROW`].
+#[test]
+fn copy_bytes_per_row_alignment() {
+    for (features, format, should_fail) in [
+        (wgpu::Features::empty(), wgpu::TextureFormat::R8Unorm, true),
+        (
+            wgpu::Features::UNRESTRICTED_BYTES_PER_ROW,
+            wgpu::TextureFormat::R8Unorm,
+            false,
+        ),
+        (
+            wgpu::Features::UNRESTRICTED_BYTES_PER_ROW,
+            wgpu::TextureFormat::Rg8Unorm,
+            true,
+        ),
+    ] {
+        let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor {
+            required_features: features,
+            ..Default::default()
+        });
+        let size = wgpu::Extent3d {
+            width: 2,
+            height: 2,
+            depth_or_array_layers: 1,
+        };
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 256,
+            usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let buffer_copy = wgpu::TexelCopyBufferInfo {
+            buffer: &buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(101),
+                rows_per_image: None,
+            },
+        };
+
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        encoder.copy_buffer_to_texture(buffer_copy, texture.as_image_copy(), size);
+        fail_if(
+            &device,
+            should_fail,
+            || encoder.finish(),
+            Some("is not a multiple of"),
+        );
+
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        encoder.copy_texture_to_buffer(texture.as_image_copy(), buffer_copy, size);
+        fail_if(
+            &device,
+            should_fail,
+            || encoder.finish(),
+            Some("is not a multiple of"),
         );
     }
 }

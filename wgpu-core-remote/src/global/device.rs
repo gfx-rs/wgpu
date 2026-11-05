@@ -3,7 +3,7 @@ use core::ops::Deref;
 use wgpu_core_remote_types::{
     encoders::{RenderBundleDescriptor, RenderBundleEncoderDescriptor},
     pipelines::{ComputePipelineDescriptor, RenderPipelineDescriptor},
-    BufferDescriptor, ExternalTextureDescriptor, PipelineError, PipelineLayoutDescriptor,
+    BufferDescriptor, ExternalTextureDescriptor, MapMode, PipelineError, PipelineLayoutDescriptor,
     QuerySetDescriptor, SamplerDescriptor, ShaderModuleDescriptor, TextureDescriptor,
     TextureViewDescriptor,
 };
@@ -17,7 +17,7 @@ use wgpu_core::{
         self, ProgrammableStageDescriptor, RenderPipelineVertexProcessor,
         ResolvedGeneralRenderPipelineDescriptor,
     },
-    resource::{self, BufferAccessError, BufferMapOperation, BufferMapping, CreateBufferError},
+    resource::{self, BufferAccessError, BufferMapCallback, BufferMapping, CreateBufferError},
     Label, LabelHelpers, SubmissionIndex,
 };
 
@@ -163,14 +163,14 @@ impl Global {
         device_id: DeviceId,
         id_in: id::TextureId,
         desc: &TextureDescriptor,
-    ) -> id::TextureId {
+    ) {
         let mut hub = self.hub.borrow_mut();
         let Hub {
             textures, devices, ..
         } = &mut *hub;
         let device = devices.get(device_id);
         let texture = device.create_texture_error(desc);
-        textures.assign(id_in, texture)
+        textures.assign(id_in, texture);
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -1273,15 +1273,21 @@ impl Global {
     pub fn buffer_map_async(
         &self,
         buffer_id: id::BufferId,
+        mode: MapMode,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-        op: BufferMapOperation,
+        callback: Option<BufferMapCallback>,
     ) -> Option<SubmissionIndex> {
         let hub = self.hub.borrow();
 
         let buffer = hub.buffers.get(buffer_id);
 
-        buffer.map_async(offset, size, op)
+        buffer.map_async(
+            resource::MapModeFlags::from_bits_retain(mode.bits()),
+            offset,
+            size,
+            callback,
+        )
     }
 
     pub fn buffer_get_mapped_range(

@@ -27,9 +27,7 @@ use crate::{
     },
     pipeline_cache,
     resource::{InvalidResourceError, Labeled, ResourceState, TrackingData},
-    resource_log,
-    validation::{self, ShaderMetaData},
-    Label, LabelHelpers as _,
+    resource_log, validation, FastHashSet, Label, LabelHelpers as _,
 };
 
 /// Information about buffer bindings, which
@@ -68,9 +66,26 @@ pub type ShaderModuleDescriptorPassthrough<'a> =
     wgt::CreateShaderModuleDescriptorPassthrough<'a, Label<'a>>;
 
 #[derive(Debug)]
-pub(crate) struct ShaderModuleState {
-    pub(crate) raw: Box<dyn hal::DynShaderModule>,
-    pub(crate) interface: ShaderMetaData,
+pub struct PassthroughInterface {
+    pub entry_point_names: FastHashSet<String>,
+}
+
+// Most shaders will use a standard interface which is very large.
+// Passthrough shaders have a much smaller interface. No reason to
+// box the standard interface though.
+#[expect(clippy::large_enum_variant)]
+#[derive(Debug)]
+pub enum ShaderModuleState {
+    /// A Naga module, from which we generate a `wgpu_hal` shader module
+    /// for each pipeline stage that uses it.
+    NagaModule {
+        shader: hal::NagaShader,
+        runtime_checks: wgt::ShaderRuntimeChecks,
+    },
+    Passthrough {
+        raw: Box<dyn hal::DynShaderModule>,
+        interface: PassthroughInterface,
+    },
 }
 
 #[derive(Debug)]
@@ -99,8 +114,11 @@ impl Drop for ShaderModule {
         else {
             return;
         };
-        unsafe {
-            self.device.raw().destroy_shader_module(state.raw);
+        match state {
+            ShaderModuleState::NagaModule { .. } => {}
+            ShaderModuleState::Passthrough { raw, .. } => unsafe {
+                self.device.raw().destroy_shader_module(raw);
+            },
         }
     }
 }
@@ -137,21 +155,18 @@ impl ShaderModule {
 
     /// Select an entry point name, given an optional name and a shader stage.
     ///
-    /// This function takes care of turning the `Option<&str>`
-    /// [`ProgrammableStageDescriptor::entry_point`][ep] into a specific name.
+    /// This function resolves an `Option<&str>`
+    /// [`ProgrammableStageDescriptor::entry_point`][ep] value to the name of an
+    /// entry point in `self`.
     ///
-    /// For non-passthrough shaders, if `entry_point` is `Some`, then return it
-    /// as a `String`. Otherwise, return the name of the unique entry point in
-    /// `self`'s module for `stage`; if there is not exactly one such entry
-    /// point, return an error.
+    /// If `entry_point` is given, verify that `self` has an entry point by that
+    /// name for `stage`, and then return the name as an owned `String`.
     ///
-    /// The non-passthrough case counts on `Interface::check_stage` to verify
-    /// that an entry point with the given name actually exists.
+    /// If `entry_point` is `None`, verify that `self` has exactly one entry
+    /// point for `stage`, and return its name.
     ///
-    /// For passthrough shaders, if `entry_point` is `Some`, verify that an
-    /// entry point by that name exists (returning an error if not), and return
-    /// it as a `String`. Otherwise, if `entry_point` is `None`, then check that
-    /// this module has exactly one entry point, and return its name.
+    /// Passthrough modules do not record entry points' stages, so for those,
+    /// `stage` is ignored.
     ///
     /// [ep]: crate::pipeline::ProgrammableStageDescriptor::entry_point
     pub(crate) fn finalize_entry_point_name(
@@ -160,38 +175,63 @@ impl ShaderModule {
         entry_point: Option<&str>,
     ) -> Result<String, validation::StageError> {
         let state = self.state()?;
-        match state.interface {
-            ShaderMetaData::Interface(ref interface) => {
-                interface.finalize_entry_point_name(stage, entry_point)
+        match state {
+            ShaderModuleState::NagaModule { ref shader, .. } => {
+                finalize_naga_entry_point_name(&shader.module, stage, entry_point)
             }
-            ShaderMetaData::Passthrough(ref interface) => {
+            ShaderModuleState::Passthrough { ref interface, .. } => {
                 finalize_passthrough_entry_point_name(interface, entry_point)
             }
         }
     }
 }
 
+fn finalize_naga_entry_point_name(
+    module: &naga::Module,
+    stage: naga::ShaderStage,
+    entry_point: Option<&str>,
+) -> Result<String, validation::StageError> {
+    let mut candidates = module.entry_points.iter().filter(|ep| ep.stage == stage);
+    if let Some(name) = entry_point {
+        return match candidates.find(|ep| ep.name == name) {
+            Some(ep) => Ok(ep.name.clone()),
+            None => Err(validation::StageError::NoEntryPointWithNameForStage {
+                stage,
+                name: name.to_owned(),
+            }),
+        };
+    }
+
+    let Some(first) = candidates.next() else {
+        return Err(validation::StageError::NoEntryPointForStage(stage));
+    };
+    if candidates.next().is_some() {
+        return Err(validation::StageError::AmbiguousEntryPointForStage(stage));
+    }
+    Ok(first.name.clone())
+}
+
 fn finalize_passthrough_entry_point_name(
-    interface: &validation::PassthroughInterface,
+    interface: &PassthroughInterface,
     entry_point: Option<&str>,
 ) -> Result<String, validation::StageError> {
     if let Some(ep) = entry_point {
         return if interface.entry_point_names.contains(ep) {
             Ok(ep.to_owned())
         } else {
-            Err(validation::StageError::MissingEntryPoint(ep.to_owned()))
+            Err(validation::StageError::NoEntryPointWithName(ep.to_owned()))
         };
     }
 
     match interface.entry_point_names.len() {
-        0 => Err(validation::StageError::NoEntryPointFound),
+        0 => Err(validation::StageError::NoEntryPoints),
         1 => Ok(interface
             .entry_point_names
             .iter()
             .next()
             .unwrap()
             .to_owned()),
-        _ => Err(validation::StageError::MultipleEntryPointsFound),
+        _ => Err(validation::StageError::AmbiguousEntryPoint),
     }
 }
 
@@ -490,8 +530,6 @@ pub type ImplicitBindGroupCount = u8;
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImplicitLayoutError {
-    #[error("Unable to reflect the shader {0:?} interface")]
-    ReflectionError(wgt::ShaderStages),
     #[error(transparent)]
     BindGroup(#[from] CreateBindGroupLayoutError),
     #[error(transparent)]
@@ -503,7 +541,6 @@ pub enum ImplicitLayoutError {
 impl WebGpuError for ImplicitLayoutError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
-            Self::ReflectionError(_) => ErrorType::Validation,
             Self::BindGroup(e) => e.webgpu_error_type(),
             Self::Pipeline(e) => e.webgpu_error_type(),
             Self::Passthrough(_) => ErrorType::Validation,
@@ -1312,8 +1349,8 @@ impl RenderPipeline {
 mod tests {
     use super::*;
 
-    fn passthrough_interface(entry_point_names: &[&str]) -> validation::PassthroughInterface {
-        validation::PassthroughInterface {
+    fn passthrough_interface(entry_point_names: &[&str]) -> PassthroughInterface {
+        PassthroughInterface {
             entry_point_names: entry_point_names
                 .iter()
                 .map(|name| (*name).to_owned())
@@ -1326,7 +1363,7 @@ mod tests {
         let empty = passthrough_interface(&[]);
         assert!(matches!(
             finalize_passthrough_entry_point_name(&empty, None),
-            Err(validation::StageError::NoEntryPointFound)
+            Err(validation::StageError::NoEntryPoints)
         ));
 
         let single = passthrough_interface(&["main"]);
@@ -1338,7 +1375,7 @@ mod tests {
         let multiple = passthrough_interface(&["vertex", "fragment"]);
         assert!(matches!(
             finalize_passthrough_entry_point_name(&multiple, None),
-            Err(validation::StageError::MultipleEntryPointsFound)
+            Err(validation::StageError::AmbiguousEntryPoint)
         ));
     }
 
@@ -1351,7 +1388,7 @@ mod tests {
         );
         assert!(matches!(
             finalize_passthrough_entry_point_name(&interface, Some("missing")),
-            Err(validation::StageError::MissingEntryPoint(name)) if name == "missing"
+            Err(validation::StageError::NoEntryPointWithName(name)) if name == "missing"
         ));
     }
 }

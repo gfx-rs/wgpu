@@ -148,6 +148,9 @@ impl GPUDevice {
   #[undefined]
   fn destroy(&self) {
     self.wgpu_device.destroy();
+    // Poll the device to encourage it to process any pending operations
+    // and release resources associated with the destroyed device (and thus calling lost closure).
+    let _ = self.wgpu_device.poll(wgpu_types::PollType::Poll);
   }
 
   #[reentrant]

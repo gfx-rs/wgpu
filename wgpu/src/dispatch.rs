@@ -255,7 +255,10 @@ pub trait QueueInterface: CommonTraits {
     );
 
     /// Submit must always drain the iterator, even in the case of error.
-    fn submit(&self, command_buffers: &mut dyn Iterator<Item = DispatchCommandBuffer>) -> u64;
+    fn submit(
+        &self,
+        command_buffers: &mut dyn Iterator<Item = DispatchCommandBuffer>,
+    ) -> Option<u64>;
 
     fn get_timestamp_period(&self) -> f32;
     fn on_submitted_work_done(&self, callback: BoxSubmittedWorkDoneCallback);

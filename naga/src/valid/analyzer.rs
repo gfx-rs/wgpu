@@ -804,7 +804,7 @@ impl FunctionInfo {
                     requirements: UniformityRequirements::empty(),
                 }
             }
-            E::As { expr, .. } => Uniformity {
+            E::As { expr, .. } | E::Bitcast { expr, .. } => Uniformity {
                 non_uniform_result: self.add_ref(expr),
                 requirements: UniformityRequirements::empty(),
             },

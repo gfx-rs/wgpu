@@ -54,7 +54,7 @@ struct Test<'a> {
     actions: Vec<wgc::device::trace::Action<'a, PointerReferences>>,
 }
 
-fn map_callback(status: Result<(), wgc::resource::BufferAccessError>) {
+fn map_callback(status: Result<wgt::MapMode, wgc::resource::BufferAccessError>) {
     if let Err(e) = status {
         panic!("Buffer map error: {e}");
     }
@@ -97,12 +97,10 @@ impl Test<'_> {
             player
                 .resolve_buffer_id(expect.buffer)
                 .map_async(
+                    wgt::MapMode::Read,
                     expect.offset,
                     Some(expect.data.len() as u64),
-                    wgc::resource::BufferMapOperation {
-                        mode: wgt::MapMode::Read,
-                        callback: Some(Box::new(map_callback)),
-                    },
+                    Some(Box::new(map_callback)),
                 )
                 .unwrap();
         }

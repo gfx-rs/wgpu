@@ -139,10 +139,12 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 - Added `Utf16SourceLocation` which is analogue to `SourceLocation` but using UTF-16 code units. Added `Utf16SourceLocation::to_utf8` and `SourceLocation::to_utf16` to convert between them. By @sagudev in [#10294](https://github.com/gfx-rs/wgpu/pull/10294).
 - Add `as_core` and `from_core` methods on various wgpu resources. By @sagudev in [#10211](https://github.com/gfx-rs/wgpu/pull/10211).
+- Added `Features::UNRESTRICTED_BYTES_PER_ROW`: `bytes_per_row` in `copy_buffer_to_texture` and `copy_texture_to_buffer` need only be a multiple of the texel block copy size, not of 256. Supported on Vulkan, Metal, GL, and DX12 with `UnrestrictedBufferTextureCopyPitchSupported`. By @michael-dm in [#10619](https://github.com/gfx-rs/wgpu/pull/10619).
 
 #### Naga
 
 - Add `@builtin(hit_barycentrics)`, a `vec2<f32>` readable in `@any_hit` and `@closest_hit` ray tracing pipeline shaders, holding two of the barycentric coordinates of the hit point on the triangle (the third is `1.0 - x - y`). Currently only supported with the SPIR-V backend. By @JMS55 in [#10193](https://github.com/gfx-rs/wgpu/pull/10193).
+- Support WGSL `bitcast` between `vec2<f16>` and 32-bit scalars, between `vec4<f16>` and `vec2` of 32-bit scalars, between `f16` and `i16`/`u16` (with `wgpu_int16`), and the corresponding SPIR-V `OpBitcast`s. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
 
 #### Hal
 
@@ -151,11 +153,18 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Add `wgpu_hal::vulkan::Surface::set_next_present_chain`, which attaches a caller-provided `pNext` chain to the `VkPresentInfoKHR` of the surface's next presentation. With `Adapter::open_with_callback` to enable the device extension, this supports presentation extensions wgpu has no dedicated support for, such as [VK_NV_present_metering](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_present_metering.html) for metering the display timing of frame-generation frames. By @stuartparmenter in [#9847](https://github.com/gfx-rs/wgpu/pull/9847).
 - Add `wgpu_hal::vulkan::AccelerationStructure::raw_handle`, which returns the underlying `VkAccelerationStructureKHR`. Use it with `Adapter::open_with_callback` to record acceleration structure commands from extensions wgpu doesn't support, such as [VK_NV_cluster_acceleration_structure](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_cluster_acceleration_structure.html). Mark the result with `CommandEncoder::mark_acceleration_structures_built`. By @stuartparmenter in [#10187](https://github.com/gfx-rs/wgpu/pull/10187).
 - Add `wgpu_hal::vulkan::Surface::set_next_swapchain_create_chain` and `wgpu_hal::vulkan::Queue::set_next_submit_chain`. The first attaches a caller-provided `pNext` chain to the `VkSwapchainCreateInfoKHR` of the surface's next configuration. The second attaches one to the `VkSubmitInfo` of the queue's next submission. Together with `set_next_present_chain` and the existing raw-handle accessors, this makes [VK_NV_low_latency2](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_low_latency2.html) usable on a wgpu swapchain. That extension is the Vulkan interface for NVIDIA Reflex. By @stuartparmenter in [#10095](https://github.com/gfx-rs/wgpu/pull/10095).
+- Add `wgpu_hal::dx12::Adapter::device_from_raw` to create a device from an existing `ID3D12Device` and `ID3D12CommandQueue`. By @rdeioris in [#10662](https://github.com/gfx-rs/wgpu/pull/10662).
+
+#### DX12
+
+- Support `Features::SHADER_EARLY_DEPTH_TEST` on DX12. Naga's HLSL backend now emits `[earlydepthstencil]` for `@early_depth_test(force)`, `SV_DepthGreaterEqual`/`SV_DepthLessEqual` for `@early_depth_test(greater_equal/less_equal)` on pipelines that are not multisampled, and discards the depth output for `@early_depth_test(unchanged)`. Callers of Naga's HLSL backend can set the new `naga::back::hlsl::PipelineOptions::multisampled`. By @DouglasDwyer in [#10624](https://github.com/gfx-rs/wgpu/pull/10624).
 
 #### Metal
 
+- Support `Features::SHADER_EARLY_DEPTH_TEST` on Metal. Naga's MSL backend now emits `[[early_fragment_tests]]` for `@early_depth_test(force)`, `depth(greater)`/`depth(less)` for `@early_depth_test(greater_equal/less_equal)`, and discards the depth output for `@early_depth_test(unchanged)` and `@early_depth_test(force)`. By @DouglasDwyer in [#10625](https://github.com/gfx-rs/wgpu/pull/10625).
 - Fix Naga's Metal backend crashing when a storage texture was used as a function argument. By @ErichDonGubler in [#9867](https://github.com/gfx-rs/wgpu/pull/9867).
 - Fix `max_task_workgroup_count` being misreported on pre-Apple7 devices. By @inner-daemons in [#10065](https://github.com/gfx-rs/wgpu/pull/10065).
+- The value of the `max_binding_array_sampler_elements_per_shader_stage` on Apple7, Apple8, and Mac2 hardware is reduced from 1024 to 996, to match the latest Metal documentation. By @andyleiserson in [#10649](https://github.com/gfx-rs/wgpu/pull/10649).
 
 #### GLES
 
@@ -181,19 +190,23 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - [`immediate_address_space`](https://www.w3.org/TR/WGSL/#language_extension-immediate_address_space) WGSL language extension is implemented. By @beicause in [#9711](https://github.com/gfx-rs/wgpu/pull/9711).
 - `TextureFormat::is_srgb()` has been renamed to `TextureFormat::has_srgb_suffix()` to clarify its function. By @kpreid in [#9758](https://github.com/gfx-rs/wgpu/pull/9758).
 - Remove the never-constructed `CreateBlasError::InvalidAabbStride` variant. `create_blas` takes no stride, so it could never be produced; AABB stride is validated at build time as `BuildAccelerationStructureError::InvalidAabbStride`. By @mstampfli in [#9935](https://github.com/gfx-rs/wgpu/pull/9935).
-
 - Added `DownlevelFlags::LINEAR_INTERPOLATION`, indicating that the adapter supports `@interpolate(linear)`. It is absent on GLES/WebGL2, since GLSL ES has no `noperspective` qualifier. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - `Buffer::unmap` will not raise any validation errors anymore per specification. By @sagudev in [#10242](https://github.com/gfx-rs/wgpu/pull/10242).
 - `wgpu::Error::Validation::description` from `Device::create_shader_module` no longer include the shader source text and detailed compiler messages, per the WebGPU specification. These details remain accessible via `ShaderModule::get_compilation_info`. By @beicause and @sagudev in [#10173](https://github.com/gfx-rs/wgpu/pull/10173).
 - `BufferUsages` is now composed of `BufferUsagesWebGPU` and `BufferUsagesWGPU`, similarly to `Features`. In most cases this is not expected to be a breaking change, but changes might be required for converting `BufferUsages` to/from `u32`. By @sagudev in [#10195](https://github.com/gfx-rs/wgpu/pull/10195).
 - `ShaderStages` is now composed of `ShaderStagesWebGPU` and `ShaderStagesWGPU`, similarly to `Features`. In most cases this is not expected to be a breaking change, but changes might be required for converting `ShaderStages` to/from `u32`. By @sagudev in [#10313](https://github.com/gfx-rs/wgpu/pull/10313).
 - `request_adapter` will return error on `InstanceFlags::STRICT_WEBGPU_COMPLIANCE` if the adapter has already been consumed by a previous `request_device`. By @sagudev in [#10444](https://github.com/gfx-rs/wgpu/pull/10444).
+- The variants of `wgpu_core::validation::StageError` related to entry point selection have been reorganized. By @jimblandy in [#10544](https://github.com/gfx-rs/wgpu/pull/10544).
+- `clear_texture` now rejects a request to clear only some aspects of a texture. Previously such a request would clear all aspects of the texture. By @andyleiserson in [#10684](https://github.com/gfx-rs/wgpu/pull/10684).
+- `Queue::submit` now returns `Option<SubmissionIndex>`, and returns `None` if the submission failed. A `None` result means the submission never reached the driver, so fences/events/semaphores attached to HAL queues will never be signalled. By @teoxoy in [#10218](https://github.com/gfx-rs/wgpu/pull/10218).
+- `Device::poll` now always returns `PollError::CantWait` if called with `PollType::Wait` on the WebGPU backend. By @teoxoy in [#10218](https://github.com/gfx-rs/wgpu/pull/10218).
 
 #### naga
 
 - `naga::valid::ValidationError` is now always returned boxed, to avoid `clippy::large_result_err` warning. By @beicause in [#9612](https://github.com/gfx-rs/wgpu/pull/9612)
 - Added `naga::valid::Capabilities::LINEAR_INTERPOLATION`, which is now required in order to use `@interpolate(linear)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
 - The GLSL backend's `MissingFeatures` error now names the GLSL version that lacks the features, e.g. `GLSL 300 es doesn't support the required feature(s): NOPERSPECTIVE_QUALIFIER`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
+- Bit reinterpretation is now represented in the Naga IR by the new `naga::ir::Expression::Bitcast`, which names its result type. `naga::ir::Expression::As` now only converts, and its `kind` and `convert` fields are replaced by `target: Scalar`. By @DouglasDwyer in [#10613](https://github.com/gfx-rs/wgpu/pull/10613).
 
 #### Metal
 
@@ -201,6 +214,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### Vulkan
 
+- Removed the `VULKAN_GOOGLE_DISPLAY_TIMING`, `VULKAN_EXTERNAL_MEMORY_WIN32`, `VULKAN_EXTERNAL_MEMORY_FD`, and `VULKAN_EXTERNAL_MEMORY_DMA_BUF` features. wgpu enables the corresponding Vulkan extensions whenever the adapter supports them. To check for support, use `Adapter::as_hal::<wgpu::hal::api::Vulkan>()` and call `physical_device_capabilities().supports_extension()` with the extension name. By @andyleiserson in [#10635](https://github.com/gfx-rs/wgpu/pull/10635).
 - Sub-allocate `wgpu_hal::MemoryFlags::TRANSIENT` buffers and acceleration structure build scratch from a separate Vulkan memory pool, so short-lived allocations no longer pin memory blocks shared with long-lived resources. By @stuartparmenter in [#10232](https://github.com/gfx-rs/wgpu/pull/10232).
 - Allocate acceleration structures created with `AccelerationStructureFlags::ALLOW_COMPACTION` from the transient Vulkan memory pool, since they are usually replaced by their compacted copies. By @stuartparmenter in [#10233](https://github.com/gfx-rs/wgpu/pull/10233).
 
@@ -210,6 +224,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 - Zero-initialize padding (if any) at the end of a buffer allocation. This was application-visible in rare cases on Vulkan when a shader read beyond the valid range of a vertex buffer. By @andyleiserson in [#9791](https://github.com/gfx-rs/wgpu/pull/9791).
 - Fix required immediate slots calculation and remove `naga::valid::FunctionInfo::immediate_slots_used`. By @beicause in [#9725](https://github.com/gfx-rs/wgpu/pull/9725).
+- Fixed multiplanar textures not being zero initialized. By @inner-daemons in [#9700](https://github.com/gfx-rs/wgpu/pull/9700).
 - Fix a spurious assertion failure in `Device::maintain` when multiple threads race polling the same device. By @AdrianEddy in [#9958](https://github.com/gfx-rs/wgpu/pull/9958).
 - Fix `Buffer::unmap` failing with `NotMapped` when it races a `Buffer::map` running on another thread. By @AdrianEddy in [#9959](https://github.com/gfx-rs/wgpu/pull/9959).
 - Fix separate depth/stencil read-only state and `SYNC-HAZARD-WRITE-AFTER-WRITE` Vulkan validation error. By @beicause in [#9763](https://github.com/gfx-rs/wgpu/pull/9763).
@@ -220,6 +235,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Clean up resources properly when `Device::new` fails, to avoid a leak or panic. By @andyleiserson in [#10160](https://github.com/gfx-rs/wgpu/pull/10160).
 - Fix pending buffer mappings incorrectly succeeding when the device is lost before they are processed. By @jinleili in [#10301](https://github.com/gfx-rs/wgpu/pull/10301).
 - Fix initialization tracking for `external_texture` binding points, for both `ExternalTexture`s and `TextureView`s bound to them. By @ErichDonGubler in [#10276](https://github.com/gfx-rs/wgpu/pull/10276) and [#10366](https://github.com/gfx-rs/wgpu/pull/10366).
+- Make `TextureBlitter` respect the `sample_type` when performing downsampling. Previously, `FilterMode::Nearest` was always used when copying a larger texture to a smaller one. By @DouglasDwyer in [#10657](https://github.com/gfx-rs/wgpu/pull/10657)
 
 #### naga
 
@@ -233,6 +249,11 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Reject WGSL loads of structs and arrays that contain atomics, which previously caused a panic in the HLSL backend. By @drakeo338 in [#10458](https://github.com/gfx-rs/wgpu/issues/10458).
 - Panic when a SPIR-V's instruction's word count is greater than `u16::MAX`, instead of emitting a malformed instruction. By @ErichDonGubler in [#10537](https://github.com/gfx-rs/wgpu/pull/10537).
 - Accept a `ViewIndex` input declared as a signed integer in the SPIR-V frontend, as glslang and Slang emit it, by reading it as a `u32`. By @VoxelBoy in [#10568](https://github.com/gfx-rs/wgpu/pull/10568).
+- Fix the MSL backend generating wrong code for a loop's `continuing` block when it refers to a value computed by the loop body, such as `loop { let cmp = a < 8; ... continuing { break if cmp; } }`. The value was re-evaluated in place, reading whatever the body had left behind, and for values produced by statements (such as a function call result) the backend panicked instead. By @teoxoy in [#10459](https://github.com/gfx-rs/wgpu/pull/10459).
+- Fix invalid GLSL for `textureLoad` with a `u32` level or sample index under the `Restrict` and `ReadZeroSkipWrite` bounds check policies. By @ilyas-mallah in [#XXXXX](https://github.com/gfx-rs/wgpu/pull/XXXXX).
+- Fix `var<immediate>` members being read from the wrong offsets on DX12 when a nested struct is not 16-byte aligned. By @DouglasDwyer in [#10581](https://github.com/gfx-rs/wgpu/pull/10581).
+- Disallow usage of `ray_query` as a binding. By @szymros in [#10832](https://github.com/gfx-rs/wgpu/pull/10832)
+- Fix `@builtin(position).w` in fragment shaders on DX12. The HLSL backend now provides 1/w of the clip-space position, as WGSL specifies and the other backends already do, instead of w. By @abdymazhit in [#10733](https://github.com/gfx-rs/wgpu/pull/10733).
 
 #### Validation
 
@@ -245,6 +266,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Relaxed requirement that the pipeline scalar type for a color output be at least as wide as the shader output type. Now, only the scalar kind must match. By @andyleiserson in [#9999](https://github.com/gfx-rs/wgpu/pull/9999).
 - Disallow array types in `var<immediate>`. By @beicause in [#10081](https://github.com/gfx-rs/wgpu/pull/10081).
 - Mesh shader draws in a multiview render pass now require the highest view in the multiview mask to be less than `Limits::max_mesh_multiview_view_count`. Previously one view past the limit was accepted. By @apollo-2006 in [#10496](https://github.com/gfx-rs/wgpu/pull/10496).
+- `wgpu_core` now validates pipeline stage interfaces after pipeline constant values have been applied, per spec. For example, workgroup sizes set by overrides are now checked against device limits. By @jimblandy in [#10430](https://github.com/gfx-rs/wgpu/pull/10430).
 
 #### Naga
 
@@ -257,6 +279,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Prevent invalid IR from being generated when using a ray query in a loop. By @Vecvec in [#9945](https://github.com/gfx-rs/wgpu/pull/9945)
 - Raise a type error, rather than panic, for some cases of an invalid `select` argument type in WGSL constant evaluation. By @ErichDonGubler in [#10350](https://github.com/gfx-rs/wgpu/pull/10350).
 - Fix `sign` returning unexpected values for floating-point arguments in the HLSL backend. By @ErichDonGubler in [#10434](https://github.com/gfx-rs/wgpu/pull/10434).
+- Fix invalid MSL generated for `textureSampleGrad` with 3D and cube textures, which emitted `metal::gradient2d` for every texture dimension. By @ErichDonGubler in [#10573](https://github.com/gfx-rs/wgpu/pull/10573).
 
 #### DX12
 
@@ -275,7 +298,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Don't use timeline semaphores on VeriSilicon's proprietary driver, as on NXP's i.MX 8 SoCs, which crashes in `vkQueueSubmit` with them. wgpu falls back to binary fences there. By @tronical in [#10535](https://github.com/gfx-rs/wgpu/pull/10535).
 - Recover from `VK_ERROR_FRAGMENTED_POOL` and `VK_ERROR_OUT_OF_POOL_MEMORY` when allocating descriptor sets by resetting or retiring the offending pool and retrying on the next available (or a freshly created) pool instead of panicking. By @beicause in [#10264](https://github.com/gfx-rs/wgpu/pull/10264).
 - Enable the `depthBiasClamp` device feature when it is supported. Pipelines with a non-zero `DepthBiasState::clamp` previously failed Vulkan validation. By @VoxelBoy in [#10566](https://github.com/gfx-rs/wgpu/pull/10566).
-- Polyfill workgroup zero init in mesh and task shaders on AMD's proprietary driver, which crashes when they use `OpVariable` initializers. By @apollo-2006 in [#10692](https://github.com/gfx-rs/wgpu/pull/10692).
+- Polyfill workgroup zero init in mesh and task shaders on AMD's proprietary driver, which fails with `VK_ERROR_INITIALIZATION_FAILED` when they use `OpVariable` initializers. By @apollo-2006 in [#10692](https://github.com/gfx-rs/wgpu/pull/10692).
 
 #### Metal
 
@@ -293,6 +316,7 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 
 #### GLES
 
+- Enable `TEXTURE_CUBE_MAP_SEAMLESS` on desktop OpenGL so cube maps sample seamlessly across face edges, matching OpenGL ES 3.0+, WebGL 2, Vulkan, Metal, and Direct3D 12. By @kuntal-devrat in [#10628](https://github.com/gfx-rs/wgpu/pull/10628).
 - Fix black EGL surfaces on some platforms by selecting the default framebuffer's color buffer before presentation. By @valadaptive in [#10268](https://github.com/gfx-rs/wgpu/pull/10268).
 - Avoid duplicate `EGL_SURFACE_TYPE` attributes when selecting an EGL framebuffer configuration, which caused Mesa to return no matching configurations. By @BlueJayLouche and @scroix in [#10048](https://github.com/gfx-rs/wgpu/pull/10048).
 - `@interpolate(linear)` is now rejected by `Device::create_shader_module` on adapters that lack `DownlevelFlags::LINEAR_INTERPOLATION` (GLES/WebGL2), with a shader label and a source span. Previously such a shader validated fine and then failed at pipeline creation with `The selected version doesn't support Features(NOPERSPECTIVE_QUALIFIER)`. By @emilk in [#9972](https://github.com/gfx-rs/wgpu/pull/9972).
@@ -305,10 +329,20 @@ By @sagudev in [#10307](https://github.com/gfx-rs/wgpu/pull/10307).
 - Recognize `GPUInternalError` when converting a WebGPU error, mapping it to `Error::Internal` instead of panicking with "Unexpected error". By @evilpies in [#9919](https://github.com/gfx-rs/wgpu/pull/9919).
 - Fix `pop_error_scope` panics when it returns `null`. By @beicause in [#10039](https://github.com/gfx-rs/wgpu/pull/10039).
 - Fix `Device::on_uncaptured_error` never firing in browsers that do not implement `GPUDevice.onuncapturederror`, such as Safari, by listening for the `uncapturederror` event instead of assigning to that attribute. By @zemse in [#10270](https://github.com/gfx-rs/wgpu/pull/10270).
+- Pass `RenderPassColorAttachment::depth_slice` to the browser, so a render pass into a 3D texture no longer fails validation with "depthSlice is required for a 3D attachment". By @jheising in [#10693](https://github.com/gfx-rs/wgpu/pull/10693).
 
 ### Performance
 
 - Added explicit `Send` and `Sync` implementations to key `wgpu` types so that the compiler can do less work checking those bounds. If you previously added a `#![recursion_limit = ...]` attribute to your crate due to overflow errors involving `wgpu` types, you may now be able to remove it. By @kpreid in [#10177](https://github.com/gfx-rs/wgpu/pull/10177).
+- `Queue::write_buffer`, `Queue::write_texture` and buffer unmaps no longer record a separate barrier before each copy. The transitions for a whole batch of queue writes are now coalesced into a single barrier recorded ahead of the batch's copies, so a frame that updates N buffers costs one barrier instead of N. By @JMS55 in [#10319](https://github.com/gfx-rs/wgpu/pull/10319).
+
+#### WebGPU
+
+- Cache adapter and device limits, features, and adapter info on the browser WebGPU backend, so repeated calls no longer re-read those JavaScript objects. By @apetrock in [#10513](https://github.com/gfx-rs/wgpu/pull/10513).
+
+#### Metal
+
+- A render pipeline switch no longer allocates once per vertex buffer. By @samoylenkodmitry in [#10630](https://github.com/gfx-rs/wgpu/pull/10630).
 
 ### Documentation
 
