@@ -4,10 +4,10 @@ inputs:
   # Sourced from https://archive.mesa3d.org/. Bumping this requires
   # updating the mesa build in https://github.com/gfx-rs/ci-build and creating a new release.
   version:
-    default: "26.1.3"
+    default: "26.2.6"
   # Corresponds to https://github.com/gfx-rs/ci-build/releases
   ci-binary-build:
-    default: "build29"
+    default: "build30"
   target-dir:
     description: "The directory into which to install the Mesa libraries."
     default: "target/llvm-cov-target/debug"
@@ -38,7 +38,7 @@ runs:
         cat <<- EOF > icd.json
         {
           "ICD": {
-              "api_version": "1.4.348",
+              "api_version": "1.4.354",
               "library_arch": "64",
               "library_path": "$PWD/mesa/lib/x86_64-linux-gnu/libvulkan_lvp.so"
           },
