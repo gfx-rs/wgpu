@@ -77,7 +77,22 @@ pub fn install_agility_sdk(shell: &Shell) -> anyhow::Result<AgilitySDKInfo> {
     log::info!("Downloading Agility SDK from {url}");
     shell
         .cmd("curl.exe")
-        .args(["-L", "--retry", "5", &url, "-o", "target/agility-sdk.zip"])
+        .args([
+            "--fail",
+            "--show-error",
+            "-L",
+            "--retry",
+            "5",
+            "--retry-max-time",
+            "300",
+            "--connect-timeout",
+            "30",
+            "--max-time",
+            "120",
+            &url,
+            "-o",
+            "target/agility-sdk.zip",
+        ])
         .run()
         .context("Failed to download Agility SDK package")?;
 

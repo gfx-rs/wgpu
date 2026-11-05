@@ -1,8 +1,13 @@
 import hashlib
+import http.server
 import importlib.util
+import json
 import pathlib
+import re
+import shlex
 import subprocess
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -124,6 +129,71 @@ class Downloads(unittest.TestCase):
         self.assertIn("'label = \"merge: rebase\"'", config)
         self.assertIn("'-label = \"merge: rebase\"'", config)
         self.assertNotIn("branch_protection_injection_mode: none", config)
+
+
+class CurlDownloads(unittest.TestCase):
+    def commands(self):
+        repo = ROOT.parent.parent
+        commands = []
+        for path in [ROOT / "install-vulkan-sdk/action.yml", repo / ".github/workflows/lazy.yml"]:
+            for line in path.read_text().splitlines():
+                line = line.strip().removeprefix("run: ")
+                if line.startswith(("curl ", "curl.exe ")):
+                    args = shlex.split(line)
+                    args[0] = "curl"
+                    commands.append(args)
+        for filename in ["install_warp.rs", "install_agility_sdk.rs"]:
+            source = (repo / "xtask/src" / filename).read_text().split('.cmd("curl.exe")', 1)[1]
+            arguments = re.search(r"\.args\(\[(.*?)\]\)", source, re.S).group(1)
+            args = [json.loads(token) if token.startswith('"') else "https://fixture.invalid/archive" for token in re.findall(r'"[^"\\]*"|&(?:warp_url|url)', arguments)]
+            commands.append(["curl", *args])
+        self.assertEqual(len(commands), 6)
+        for args in commands:
+            for flag in ["--fail", "--show-error", "-L"]:
+                self.assertIn(flag, args)
+            for flag, value in [("--retry", "5"), ("--retry-max-time", "300"), ("--connect-timeout", "30"), ("--max-time", "120")]:
+                self.assertEqual(args[args.index(flag) + 1], value)
+        return commands
+
+    def check_http(self, statuses, success):
+        class Handler(http.server.BaseHTTPRequestHandler):
+            requests = 0
+            def do_GET(self):
+                status = statuses[min(type(self).requests, len(statuses) - 1)]
+                type(self).requests += 1
+                self.send_response(status)
+                self.end_headers()
+                self.wfile.write(b"archive" if status == 200 else b"error page")
+            def log_message(self, *args):
+                pass
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            for args in self.commands():
+                Handler.requests = 0
+                with tempfile.TemporaryDirectory() as temp:
+                    output = pathlib.Path(temp) / "archive"
+                    extracted = pathlib.Path(temp) / "extracted"
+                    url = next(i for i, arg in enumerate(args) if arg.startswith("https://"))
+                    args[url] = f"http://127.0.0.1:{server.server_port}/archive"
+                    args[args.index("-o") + 1] = str(output)
+                    args += ["--retry", "2", "--retry-max-time", "5"]
+                    script = shlex.join(args) + "; touch " + shlex.quote(str(extracted))
+                    result = subprocess.run(["bash", "-e", "-c", script], capture_output=True, timeout=10)
+                    self.assertEqual(result.returncode == 0, success, result.stderr)
+                    self.assertEqual(extracted.exists(), success)
+                    if success:
+                        self.assertEqual(output.read_bytes(), b"archive")
+                        self.assertEqual(Handler.requests, 3)
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_transient_errors_retry(self):
+        self.check_http([503, 503, 200], True)
+
+    def test_http_error_prevents_extraction(self):
+        self.check_http([404], False)
 
 
 if __name__ == "__main__":
