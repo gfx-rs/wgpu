@@ -1144,7 +1144,9 @@ impl super::Adapter {
                     .unwrap(),
                     ray_tracing_scratch_buffer_alignment:
                         Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
-                    // warp fails on this when a blas build and a tlas build are sharing a scratch buffer.
+                    // According to https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#inactive-primitives-and-instances
+                    // "Instances with NULL bottom level acceleration structure pointers are also considered legal but inactive."
+                    // However, warp fails on this when a blas build and a tlas build are sharing a scratch buffer.
                     null_acceleration_structure_allowed: !is_warp,
                     // Not yet implemented
                     ray_tracing_pipeline_group_data_size: 0,
