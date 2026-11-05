@@ -18,6 +18,8 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.push(PIPELINE_SWAP);
     tests.push(MISMATCHED_INTERSECTION_TYPES);
     tests.push(EMPTY_PIPELINE_USE);
+    tests.push(INTERSECTION_INDEX_BOUNDS);
+    tests.push(INTERSECTION_INDEX_NO_FEATURE);
 }
 
 #[apply(gpu_test!)]
@@ -901,4 +903,145 @@ fn empty_pipeline_use(ctx: TestingContext) {
     }
 
     ctx.queue.submit([encoder.finish()]);
+}
+
+#[apply(gpu_test!)]
+static INTERSECTION_INDEX_BOUNDS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::EXPERIMENTAL_RAY_TRACING_PIPELINES)
+            .limits(
+                Limits::defaults()
+                    .using_minimum_supported_acceleration_structure_values()
+                    .using_minimum_supported_ray_tracing_pipeline_values(),
+            ),
+    )
+    .run_sync(intersection_index_bounds);
+
+fn intersection_index_bounds(ctx: TestingContext) {
+    // A TLAS instance with intersection index 1 can be traced only with a pipeline
+    // that has at least 2 intersection groups.
+    let mut as_ctx = super::AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
+    as_ctx.tlas[0].as_mut().unwrap().intersection_index = 1;
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+    ctx.queue.submit([encoder.finish()]);
+
+    let shader = ctx.device.create_shader_module(ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+            "
+            enable wgpu_ray_tracing_pipeline;
+
+            @group(0) @binding(0) var acc_struct: acceleration_structure;
+
+            var<ray_payload> payload: u32;
+            var<incoming_ray_payload> incoming_payload: u32;
+
+            @ray_generation
+            fn gen() {
+                traceRay(acc_struct, RayDesc(0u, 0xFFu, 0.001, 100.0, vec3f(0.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0)), &payload);
+            }
+
+            @closest_hit
+            @incoming_payload(incoming_payload)
+            fn closest() {}
+
+            @miss
+            @incoming_payload(incoming_payload)
+            fn miss() {}
+            ",
+        )),
+    });
+
+    let stage = RayTracingStage {
+        module: &shader,
+        entry_point: None,
+        compilation_options: Default::default(),
+    };
+    let intersection = RayTracingIntersectionDescriptor::Triangle {
+        closest_hit: stage.clone(),
+        any_hit: None,
+    };
+
+    let trace = |intersections: &[RayTracingIntersectionDescriptor]| {
+        let pipeline = ctx
+            .device
+            .create_ray_tracing_pipeline(&RayTracingPipelineDescriptor {
+                label: None,
+                layout: None,
+                ray_generation: stage.clone(),
+                miss: stage.clone(),
+                intersections,
+                max_recursion_depth: 1,
+                cache: None,
+            });
+        let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: as_ctx.tlas.as_binding(),
+            }],
+        });
+        let mut encoder = ctx.device.create_command_encoder(&Default::default());
+        {
+            let mut pass = encoder.begin_ray_tracing_pass(&RayTracingPassDescriptor::default());
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.trace_rays(1, 1, 1);
+        }
+        encoder.finish()
+    };
+
+    ctx.queue
+        .submit([trace(&[intersection.clone(), intersection.clone()])]);
+
+    fail(
+        &ctx.device,
+        || {
+            ctx.queue.submit([trace(&[intersection])]);
+        },
+        Some("out of bounds of the length of the intersection array"),
+    );
+}
+
+#[apply(gpu_test!)]
+static INTERSECTION_INDEX_NO_FEATURE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::EXPERIMENTAL_RAY_QUERY)
+            .limits(Limits::defaults().using_minimum_supported_acceleration_structure_values())
+            .enable_noop(),
+    )
+    .run_sync(intersection_index_no_feature);
+
+fn intersection_index_no_feature(ctx: TestingContext) {
+    // A non-zero intersection index requires `EXPERIMENTAL_RAY_TRACING_PIPELINES`.
+    let mut as_ctx = super::AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
+    as_ctx.tlas[0].as_mut().unwrap().intersection_index = 1;
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+    encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+
+    fail(
+        &ctx.device,
+        || {
+            ctx.queue.submit([encoder.finish()]);
+        },
+        Some("EXPERIMENTAL_RAY_TRACING_PIPELINES"),
+    );
 }
