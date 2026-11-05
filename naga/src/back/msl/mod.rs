@@ -305,6 +305,12 @@ enum LocationMode {
 pub struct Options {
     /// (Major, Minor) target version of the Metal Shading Language.
     pub lang_version: (u8, u8),
+    /// Emit `max_total_threads_per_threadgroup` for compute entry points (MSL 2.1+).
+    /// If disabled, the caller must set `MTLComputePipelineDescriptor.maxTotalThreadsPerThreadgroup`
+    /// to the workgroup size to prevent Metal from choosing a lower limit.
+    pub emit_workgroup_size_attribute: bool,
+    /// Pass runtime-sized storage arrays as element pointers instead of array references.
+    pub use_runtime_array_pointers: bool,
     /// Map of entry-point resources, indexed by entry point function name, to slots.
     pub per_entry_point_map: EntryPointResourceMap,
     /// Samplers to be inlined into the code.
@@ -338,6 +344,8 @@ impl Default for Options {
     fn default() -> Self {
         Options {
             lang_version: (1, 0),
+            emit_workgroup_size_attribute: true,
+            use_runtime_array_pointers: false,
             per_entry_point_map: EntryPointResourceMap::default(),
             inline_samplers: Vec::new(),
             spirv_cross_compatibility: false,

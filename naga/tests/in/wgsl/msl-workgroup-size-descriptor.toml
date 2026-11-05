@@ -1,0 +1,10 @@
+targets = "METAL"
+
+[bounds_check_policies]
+index = "ReadZeroSkipWrite"
+buffer = "ReadZeroSkipWrite"
+
+[msl]
+lang_version = [2, 1]
+emit_workgroup_size_attribute = false
+use_runtime_array_pointers = true
