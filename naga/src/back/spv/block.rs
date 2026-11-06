@@ -2213,6 +2213,9 @@ impl BlockContext<'_> {
                 ));
                 id
             }
+            crate::Expression::HitObjectQuery { hit_object, query } => {
+                self.write_hit_object_query(hit_object, query, block)?
+            }
             crate::Expression::RayQueryVertexPositions { query, committed } => {
                 self.writer.require_any(
                     "RayQueryVertexPositions",
@@ -4301,7 +4304,13 @@ impl BlockContext<'_> {
                     };
                 }
                 Statement::RayPipelineFunction(ref fun) => {
-                    self.write_ray_tracing_pipeline_function(fun, &mut block);
+                    self.write_ray_tracing_pipeline_function(fun, &mut block)?;
+                }
+                Statement::HitObject {
+                    hit_object,
+                    ref fun,
+                } => {
+                    self.write_hit_object_function(hit_object, fun, &mut block)?;
                 }
                 Statement::DebugPrintf {
                     ref format,

@@ -1,0 +1,17 @@
+////////////////////////////////////////
+// Entry point: "ray_gen_main" (rgen) //
+////////////////////////////////////////
+// spirv-cross error:
+// SPIRV-Cross threw an exception: Currently no block to insert opcode.
+
+/////////////////////////////////////////////
+// Entry point: "closest_hit_main" (rchit) //
+/////////////////////////////////////////////
+// spirv-cross error:
+// SPIRV-Cross threw an exception: Currently no block to insert opcode.
+
+//////////////////////////////////////
+// Entry point: "miss_main" (rmiss) //
+//////////////////////////////////////
+// spirv-cross error:
+// SPIRV-Cross threw an exception: Currently no block to insert opcode.
